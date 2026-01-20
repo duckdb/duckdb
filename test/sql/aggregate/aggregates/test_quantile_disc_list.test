@@ -186,19 +186,24 @@ FROM VALUES (0), (1), (2), (10) AS tab(col);
 statement error
 SELECT quantile_disc(r, [-0.1, 0.5, 0.9]) FROM quantiles
 ----
+Binder Error: QUANTILE parameters must have consistent signs
 
 statement error
 SELECT quantile_disc(r, (0.1, 0.5, 1.1)) FROM quantiles
 ----
+<REGEX>:.*Binder Error: No function matches.*'quantile_disc.*
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, NULL]) FROM quantiles
 ----
+Binder Error: QUANTILE parameter cannot be NULL
 
 statement error
 SELECT quantile_disc(r, ["0.1", "0.5", "0.9"]) FROM quantiles
 ----
+Binder Error: Referenced column "0.1" not found in FROM clause
 
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, 0.9], 50) FROM quantiles
 ----
+<REGEX>:.*Binder Error: No function matches.*'quantile_disc.*

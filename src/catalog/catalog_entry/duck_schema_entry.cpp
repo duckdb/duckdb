@@ -391,7 +391,7 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::TYPE_ENTRY:
 		return types;
 	default:
-		throw InternalException("Unsupported catalog type in schema");
+		throw InternalException({{"catalog_type", CatalogTypeToString(type)}}, "Unsupported catalog type in schema");
 	}
 }
 

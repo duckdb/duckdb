@@ -22,6 +22,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
+class CoordinateReferenceSystem;
 
 struct string_t; // NOLINT: mimic std casing
 
@@ -230,6 +231,8 @@ enum class LogicalTypeId : uint8_t {
 	VALIDITY = 53,
 	UUID = 54,
 
+	GEOMETRY = 60,
+
 	STRUCT = 100,
 	LIST = 101,
 	MAP = 102,
@@ -349,6 +352,7 @@ struct LogicalType {
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right);
 	DUCKDB_API static bool TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right, LogicalType &result);
+	DUCKDB_API static bool TryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right, LogicalType &result);
 	//! Forcibly returns a maximum logical type - similar to MaxLogicalType but never throws. As a fallback either left or right are returned.
 	DUCKDB_API static LogicalType ForceMaxLogicalType(const LogicalType &left, const LogicalType &right);
 	//! Normalize a type - removing literals
@@ -430,6 +434,9 @@ public:
 	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);      // NOLINT
 	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
 	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
+	DUCKDB_API static LogicalType GEOMETRY(); // NOLINT
+	DUCKDB_API static LogicalType GEOMETRY(const string &crs);
+	DUCKDB_API static LogicalType GEOMETRY(const CoordinateReferenceSystem &crs);
 	// ANY but with special rules (default is LogicalType::ANY, 5)
 	DUCKDB_API static LogicalType ANY_PARAMS(LogicalType target, idx_t cast_score = 5); // NOLINT
 	DUCKDB_API static LogicalType TEMPLATE(const string &name);							// NOLINT
@@ -539,6 +546,11 @@ struct IntegerLiteral {
 struct TemplateType {
 	// Get the name of the template type
 	DUCKDB_API static const string &GetName(const LogicalType &type);
+};
+
+struct GeoType {
+	DUCKDB_API static bool HasCRS(const LogicalType &type);
+	DUCKDB_API static const CoordinateReferenceSystem &GetCRS(const LogicalType &type);
 };
 
 // **DEPRECATED**: Use EnumUtil directly instead.

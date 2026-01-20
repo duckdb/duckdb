@@ -297,6 +297,9 @@ void Relation::Create(const string &schema_name, const string &table_name, bool 
 
 void Relation::Create(const string &catalog_name, const string &schema_name, const string &table_name, bool temporary,
                       OnCreateConflict on_conflict) {
+	if (table_name.empty()) {
+		throw ParserException("Empty table name not supported");
+	}
 	auto create = CreateRel(catalog_name, schema_name, table_name, temporary, on_conflict);
 	auto res = create->Execute();
 	if (res->HasError()) {
@@ -353,7 +356,9 @@ unique_ptr<QueryResult> Relation::Query(const string &sql) const {
 }
 
 unique_ptr<QueryResult> Relation::Query(const string &name, const string &sql) {
-	CreateView(name);
+	bool replace = true;
+	bool temp = IsReadOnly();
+	CreateView(name, replace, temp);
 	return Query(sql);
 }
 

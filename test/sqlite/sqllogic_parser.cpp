@@ -87,16 +87,20 @@ vector<string> SQLLogicParser::ExtractExpectedResult() {
 	return result;
 }
 
-string SQLLogicParser::ExtractExpectedError(bool expect_ok, bool original_sqlite_test) {
+string SQLLogicParser::ExtractExpectedError(ExpectedResult expected_result, bool original_sqlite_test) {
+	bool expect_error_message =
+	    expected_result == ExpectedResult::RESULT_ERROR || expected_result == ExpectedResult::RESULT_UNKNOWN;
+
 	// check if there is an expected error at all
 	if (current_line >= lines.size() || lines[current_line] != "----") {
-		if (!expect_ok && !original_sqlite_test) {
-			Fail("Failed to parse statement: statement error needs to have an expected error message");
+		if (expect_error_message && !original_sqlite_test) {
+			Fail("Failed to parse statement: statement error and maybe needs to have an expected error message");
 		}
 		return string();
 	}
-	if (expect_ok) {
-		Fail("Failed to parse statement: only statement error can have an expected error message, not statement ok");
+	if (!expect_error_message) {
+		Fail("Failed to parse statement: only statement error or maybe can have an expected error message, not "
+		     "statement ok");
 	}
 	current_line++;
 	string error;
@@ -170,6 +174,7 @@ bool SQLLogicParser::IsSingleLineStatement(SQLLogicToken &token) {
 	case SQLLogicTokenType::SQLLOGIC_SLEEP:
 	case SQLLogicTokenType::SQLLOGIC_UNZIP:
 	case SQLLogicTokenType::SQLLOGIC_TAGS:
+	case SQLLogicTokenType::SQLLOGIC_CONTINUE:
 		return true;
 
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
@@ -211,6 +216,7 @@ bool SQLLogicParser::IsTestCommand(SQLLogicTokenType &type) {
 	case SQLLogicTokenType::SQLLOGIC_SKIP_IF:
 	case SQLLogicTokenType::SQLLOGIC_SLEEP:
 	case SQLLogicTokenType::SQLLOGIC_TAGS:
+	case SQLLogicTokenType::SQLLOGIC_CONTINUE:
 	case SQLLogicTokenType::SQLLOGIC_TEST_ENV:
 	case SQLLogicTokenType::SQLLOGIC_UNZIP:
 		return false;
@@ -267,6 +273,8 @@ SQLLogicTokenType SQLLogicParser::CommandToToken(const string &token) {
 		return SQLLogicTokenType::SQLLOGIC_UNZIP;
 	} else if (token == "tags") {
 		return SQLLogicTokenType::SQLLOGIC_TAGS;
+	} else if (token == "continue") {
+		return SQLLogicTokenType::SQLLOGIC_CONTINUE;
 	}
 	Fail("Unrecognized parameter %s", token);
 	return SQLLogicTokenType::SQLLOGIC_INVALID;

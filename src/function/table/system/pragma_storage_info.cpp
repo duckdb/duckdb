@@ -12,6 +12,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 #include <algorithm>
 
@@ -88,7 +89,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-	result->column_segments_info = table_entry.GetColumnSegmentInfo();
+	result->column_segments_info = table_entry.GetColumnSegmentInfo(context);
 	return std::move(result);
 }
 
@@ -155,6 +156,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		} else {
 			output.SetValue(col_idx++, count, Value());
 		}
+
 		count++;
 	}
 	output.SetCardinality(count);

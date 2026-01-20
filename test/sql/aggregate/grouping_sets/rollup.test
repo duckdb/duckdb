@@ -131,11 +131,14 @@ Math	Masters	1
 statement error
 select course, count(*) from students group by rollup () order by 1, 2;
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 select course, count(*) from students group by rollup (rollup (course)) order by 1, 2;
 ----
+Catalog Error: Scalar Function with name rollup does not exist
 
 statement error
 select course, count(*) from students group by rollup (grouping_sets (course)) order by 1, 2;
 ----
+Catalog Error: Scalar Function with name grouping_sets does not exist

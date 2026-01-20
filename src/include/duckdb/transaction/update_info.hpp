@@ -31,6 +31,8 @@ struct UpdateInfo {
 	DataTable *table;
 	//! The column index of which column we are updating
 	idx_t column_index;
+	//! The start index of the row group
+	idx_t row_group_start;
 	//! The version number
 	atomic<transaction_t> version_number;
 	//! The vector index within the uncompressed segment
@@ -90,7 +92,8 @@ struct UpdateInfo {
 	//! Returns the total allocation size for an UpdateInfo entry, together with space for the tuple data
 	static idx_t GetAllocSize(idx_t type_size);
 	//! Initialize an UpdateInfo struct that has been allocated using GetAllocSize (i.e. has extra space after it)
-	static void Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id);
+	static void Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id,
+	                       idx_t row_group_start);
 };
 
 } // namespace duckdb

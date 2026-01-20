@@ -88,7 +88,7 @@ SinkCombineResultType PhysicalArrowCollector::Combine(ExecutionContext &context,
 	return SinkCombineResultType::FINISHED;
 }
 
-unique_ptr<QueryResult> PhysicalArrowCollector::GetResult(GlobalSinkState &state_p) {
+unique_ptr<QueryResult> PhysicalArrowCollector::GetResult(GlobalSinkState &state_p) const {
 	auto &gstate = state_p.Cast<ArrowCollectorGlobalState>();
 	return std::move(gstate.result);
 }

@@ -50,6 +50,9 @@ public:
 	FileType GetFileType(FileHandle &handle) override {
 		return GetFileSystem().GetFileType(handle);
 	}
+	FileMetadata Stats(FileHandle &handle) override {
+		return GetFileSystem().Stats(handle);
+	}
 
 	void Truncate(FileHandle &handle, int64_t new_size) override {
 		GetFileSystem().Truncate(handle, new_size);
@@ -113,6 +116,14 @@ public:
 		return GetFileSystem().TryRemoveFile(filename, GetOpener());
 	}
 
+	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		for (const auto &filename : filenames) {
+			VerifyCanAccessFile(filename);
+		}
+		GetFileSystem().RemoveFiles(filenames, GetOpener());
+	}
+
 	string PathSeparator(const string &path) override {
 		return GetFileSystem().PathSeparator(path);
 	}
@@ -135,16 +146,16 @@ public:
 		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
 	}
 
-	void UnregisterSubSystem(const string &name) override {
-		GetFileSystem().UnregisterSubSystem(name);
-	}
-
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
 	}
 
 	bool SubSystemIsDisabled(const string &name) override {
 		return GetFileSystem().SubSystemIsDisabled(name);
+	}
+
+	bool IsDisabledForPath(const string &path) override {
+		return GetFileSystem().IsDisabledForPath(path);
 	}
 
 	vector<string> ListSubSystems() override {

@@ -303,7 +303,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 			logger.InternalException(result);
 			return false;
 		}
-		if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
+		if (expected_result == ExpectedResult::RESULT_UNKNOWN || expected_result == ExpectedResult::RESULT_DONT_CARE) {
 			error = false;
 		} else {
 			error = !error;

@@ -1616,6 +1616,8 @@ typedef struct PGCreateStmt {
 	PGTypeName *ofTypename;               /* OF typename */
 	PGList *constraints;                  /* constraints (list of PGConstraint nodes) */
 	PGList *options;                      /* options from WITH clause */
+	PGList *partition_list;               /* e.g. expression list for partitioned by */
+	PGList *sort_list;                    /* e.g. expression list for sort by */
 	PGOnCommitAction oncommit;            /* what do we do at COMMIT? */
 	char *tablespacename;                 /* table space to use, or NULL */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
@@ -2085,6 +2087,18 @@ typedef struct PGCopyDatabaseStmt {
 	const char *to_database;
 	const char *copy_database_flag;
 } PGCopyDatabaseStmt;
+
+typedef enum PGAlterDatabaseType {
+	PG_ALTER_DATABASE_RENAME
+} PGAlterDatabaseType;
+
+typedef struct PGAlterDatabaseStmt {
+	PGNodeTag type;
+	const char *dbname;
+	const char *new_name;
+	PGAlterDatabaseType alter_type;
+	bool missing_ok;
+} PGAlterDatabaseStmt;
 
 /* ----------------------
  *		Interval Constant

@@ -1,0 +1,31 @@
+# name: test/sql/peg_parser/parser/map.test
+# description: Test create table syntax in peg parser
+# group: [parser]
+
+require autocomplete
+
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$INSERT INTO test VALUES         (MAP {ROW(3,3): ROW(1, 1)}),    (MAP {ROW(4,4): ROW(2, 2)})$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$create table unsupported_value as select val from (     select MAP {            '01010101000'::BIT: 'hello',            '11110111101'::BIT: 'world'     } val ), range(3);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT list_transform(l, lambda x: {'map1': MAP {x::VARCHAR:1::VARCHAR, 'b'::VARCHAR: x::VARCHAR}}) FROM i;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT DISTINCT MAP { * : ? IN ( SELECT TRUE ) } ;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT list_transform(l, lambda x: {'map1': MAP {x::VARCHAR:1::VARCHAR, 'b'::VARCHAR: x::VARCHAR}}) FROM i;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT MAP { [i]: [i + 1] } FROM range(5) t(i);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE MAP(i BIGINT);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT map([1,2])$TEST_PEG_PARSER$);
+

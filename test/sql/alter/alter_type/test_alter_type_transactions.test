@@ -20,6 +20,7 @@ ALTER TABLE test ALTER j TYPE VARCHAR
 statement error con2
 ALTER TABLE test ALTER i TYPE VARCHAR
 ----
+TransactionContext Error: Catalog write-write conflict on alter with "test"
 
 statement ok con1
 COMMIT
@@ -49,12 +50,13 @@ ALTER TABLE test ALTER i TYPE VARCHAR
 statement error con2
 INSERT INTO test (i, j) VALUES (3, 3)
 ----
+<REGEX>:.*TransactionContext Error: Transaction conflict.*altered by a different transaction.*
 
 # nor delete
 statement error con2
 DELETE FROM test WHERE i=1
 ----
-altered
+<REGEX>:.*TransactionContext Error: Failed to commit.*altered this table.*
 
 query TI con1
 SELECT * FROM test
@@ -72,10 +74,12 @@ SELECT * FROM test
 statement error con2
 UPDATE test SET i=1000
 ----
+<REGEX>:.*TransactionContext Error: Transaction conflict.*altered by a different transaction.*
 
 statement error con2
 UPDATE test SET j=100
 ----
+<REGEX>:.*TransactionContext Error: Transaction conflict.*altered by a different transaction.*
 
 query TI con1
 SELECT * FROM test
@@ -116,6 +120,7 @@ ALTER TABLE test ALTER i TYPE VARCHAR
 statement error con2
 COMMIT
 ----
+<REGEX>:.*TransactionContext Error: Failed to commit.*altered by a different transaction.*
 
 statement ok con1
 DROP TABLE test
@@ -136,6 +141,6 @@ ALTER TABLE test ALTER j TYPE VARCHAR
 
 # now con tries to add an index to that column: this should fail
 statement error con1
-CREATE INDEX i_index ON test(j
+CREATE INDEX i_index ON test(j)
 ----
-
+<REGEX>:.*TransactionContext Error: Transaction conflict.*altered or dropped.*

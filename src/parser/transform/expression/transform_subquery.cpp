@@ -24,7 +24,6 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	subquery_expr->subquery = TransformSelectStmt(*root.subselect);
 	SetQueryLocation(*subquery_expr, root.location);
 	D_ASSERT(subquery_expr->subquery);
-	D_ASSERT(!subquery_expr->subquery->node->GetSelectList().empty());
 
 	switch (root.subLinkType) {
 	case duckdb_libpgquery::PG_EXISTS_SUBLINK: {

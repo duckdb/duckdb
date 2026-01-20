@@ -79,8 +79,8 @@ public:
 	virtual bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                               LocalTableFunctionState &lstate) = 0;
 	//! Scan a chunk from the read state
-	virtual void Scan(ClientContext &context, GlobalTableFunctionState &global_state,
-	                  LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
+	virtual AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
+	                         LocalTableFunctionState &local_state, DataChunk &chunk) = 0;
 	//! Finish scanning a given file
 	DUCKDB_API virtual void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate);
 	//! Get progress within a given file

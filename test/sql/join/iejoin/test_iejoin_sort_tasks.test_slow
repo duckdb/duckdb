@@ -2,49 +2,51 @@
 # description: Test IEJoin
 # group: [iejoin]
 
-# No verification - it doesn't scale
-
-# Otherwise we run out of memory
+# Otherwise, we run out of memory.
 require 64bit
 
+require ram 8gb
+
 statement ok
-PRAGMA verify_parallelism
+PRAGMA memory_limit='8GB'
 
 statement ok
 SET merge_join_threshold=0
+
+statement ok
+CREATE TABLE lhs AS (
+    SELECT
+		i AS id,
+		i AS begin,
+		i + 1 AS end
+	FROM range(1, 10000002) tbl(i)
+)
+
+statement ok
+CREATE TABLE rhs AS (
+    SELECT
+        i - 100000000 AS id,
+        i AS begin,
+        i + 1 AS end
+    FROM range(10000001, 20000002) tbl(i)
+)
+
+# this will remove one of the join conditions
+statement ok
+SET disabled_optimizers TO 'statistics_propagation'
 
 # Stream tables with minimal overlap that require merge tasks on both sides.
 query II
 EXPLAIN
 SELECT lhs.begin, rhs.begin
-FROM (
-	SELECT
-		i AS id,
-		i AS begin,
-		i + 1 AS end
-	FROM range(1, 10000002) tbl(i)) lhs,
-	(SELECT
-		i - 100000000 AS id,
-		i AS begin,
-		i + 1 AS end
-	FROM range(10000001, 20000002) tbl(i)) rhs
+FROM lhs, rhs
 WHERE lhs.begin < rhs.end AND rhs.begin < lhs.end
 ----
 physical_plan	<REGEX>:.*IE_JOIN.*
 
 query II
 SELECT lhs.begin, rhs.begin
-FROM (
-	SELECT
-		i AS id,
-		i AS begin,
-		i + 1 AS end
-	FROM range(1, 10000002) tbl(i)) lhs,
-	(SELECT
-		i - 100000000 AS id,
-		i AS begin,
-		i + 1 AS end
-	FROM range(10000001, 20000002) tbl(i)) rhs
+FROM lhs, rhs
 WHERE lhs.begin < rhs.end AND rhs.begin < lhs.end
 ----
 10000001	10000001

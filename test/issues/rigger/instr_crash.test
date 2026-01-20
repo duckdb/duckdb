@@ -26,3 +26,4 @@ COMMIT;
 statement error
 SELECT t96.c0, t0.rowid, t0.c1, t96.c2 FROM t0, t96 WHERE (TIMESTAMP '1969-12-28 13:59:01' LIKE INSTR(t0.c1, t96.c0) ESCAPE RTRIM(DATE '1969-12-23')) UNION ALL SELECT t96.c0, t0.rowid, t0.c1, t96.c2 FROM t0, t96 WHERE (NOT (TIMESTAMP '1969-12-28 13:59:01' LIKE INSTR(t0.c1, t96.c0) ESCAPE RTRIM(DATE '1969-12-23'))) UNION ALL SELECT t96.c0, t0.rowid, t0.c1, t96.c2 FROM t0, t96 WHERE (((TIMESTAMP '1969-12-28 13:59:01' LIKE INSTR(t0.c1, t96.c0) ESCAPE RTRIM(DATE '1969-12-23'))) IS NULL);
 ----
+Binder Error: No function matches the given name and argument types 'instr

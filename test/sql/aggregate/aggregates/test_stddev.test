@@ -139,11 +139,14 @@ select stddev(0) from range(10)
 statement error
 select stddev(a) from (values (1e301), (-1e301)) tbl(a)
 ----
+Out of Range Error: STDDEV_SAMP is out of range
 
 statement error
 select var_samp(a) from (values (1e301), (-1e301)) tbl(a)
 ----
+Out of Range Error: VARSAMP is out of range
 
 statement error
 select var_pop(a) from (values (1e301), (-1e301)) tbl(a)
 ----
+Out of Range Error: VARPOP is out of range

@@ -1,19 +1,19 @@
-MergeIntoStatement <- WithClause? 'MERGE'i 'INTO'i TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
-MergeIntoUsingClause <- 'USING'i TableRef JoinQualifier
+MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
+MergeIntoUsingClause <- 'USING' TableRef JoinQualifier
 MergeMatch <- MatchedClause / NotMatchedClause
-MatchedClause <- 'WHEN'i 'MATCHED'i AndExpression? 'THEN'i MatchedClauseAction
+MatchedClause <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
 MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
-UpdateMatchClause <- 'UPDATE'i (UpdateMatchSetClause / ByNameOrPosition?)
-DeleteMatchClause <- 'DELETE'i
-InsertMatchClause <- 'INSERT'i (InsertValuesList / DefaultValues / InsertByNameOrPosition)?
+UpdateMatchClause <- 'UPDATE' (UpdateMatchSetClause / ByNameOrPosition?)
+DeleteMatchClause <- 'DELETE'
+InsertMatchClause <- 'INSERT' (InsertValuesList / DefaultValues / InsertByNameOrPosition)?
 InsertByNameOrPosition <- ByNameOrPosition? '*'?
-InsertValuesList <- InsertColumnList? 'VALUES'i Parens(List(Expression))
-DoNothingMatchClause <- 'DO'i 'NOTHING'i
-ErrorMatchClause <- 'ERROR'i Expression?
-UpdateMatchSetClause <- 'SET'i (UpdateSetClause / '*')
-AndExpression <- 'AND'i Expression
-NotMatchedClause <- 'WHEN'i 'NOT'i 'MATCHED'i BySourceOrTarget? AndExpression? 'THEN'i MatchedClauseAction
-BySourceOrTarget <- 'BY'i ('SOURCE'i / 'TARGET'i)
+InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
+DoNothingMatchClause <- 'DO' 'NOTHING'
+ErrorMatchClause <- 'ERROR' Expression?
+UpdateMatchSetClause <- 'SET' (UpdateSetClause / '*')
+AndExpression <- 'AND' Expression
+NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
+BySourceOrTarget <- 'BY' ('SOURCE' / 'TARGET')
 
 
 

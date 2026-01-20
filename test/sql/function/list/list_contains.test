@@ -224,6 +224,7 @@ SELECT list_contains([NULL,7], 7)
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3])
 ----
+Parser Error: syntax error at or near ")"
 
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3]])

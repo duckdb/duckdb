@@ -10,14 +10,17 @@
 
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
 class TemporaryMemoryManager;
+class ObjectCache;
 struct EvictionQueue;
 
 struct BufferEvictionNode {
@@ -41,7 +44,8 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	BufferPool(idx_t maximum_memory, bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold);
+	BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bool track_eviction_timestamps,
+	           idx_t allocator_bulk_deallocation_flush_threshold);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
@@ -62,6 +66,15 @@ public:
 
 	TemporaryMemoryManager &GetTemporaryMemoryManager();
 
+	//! Take per-database ObjectCache under buffer pool's memory management.
+	//! Notice, object cache should be registered for at most once, otherwise InvalidInput exception is thrown.
+	void SetObjectCache(ObjectCache *object_cache_p) {
+		if (object_cache != nullptr) {
+			throw InvalidInputException("Object cache has already been registered in buffer pool, cannot re-register!");
+		}
+		object_cache = object_cache_p;
+	}
+
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
@@ -77,6 +90,9 @@ protected:
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
 	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
 	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+
+	//! Evict object cache entries if needed.
+	EvictionResult EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit);
 
 	//! Purge all blocks that haven't been pinned within the last N seconds
 	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
@@ -160,6 +176,10 @@ protected:
 	//! and only updates the global counter when the cache value exceeds a threshold.
 	//! Therefore, the statistics may have slight differences from the actual memory usage.
 	mutable MemoryUsage memory_usage;
+	//! The block allocator
+	BlockAllocator &block_allocator;
+	//! Per-database singleton object cache managed by buffer pool.
+	optional_ptr<ObjectCache> object_cache = nullptr;
 };
 
 } // namespace duckdb

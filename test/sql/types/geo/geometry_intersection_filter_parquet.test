@@ -1,0 +1,51 @@
+# name: test/sql/types/geo/geometry_intersection_filter_parquet.test
+# group: [geo]
+
+require parquet
+
+statement ok
+COPY (
+	select
+		(x + y * 1000) as id,
+		printf('POINT(%d %d)', x, y)::GEOMETRY as g
+	from range(1000) xx(x), range(10) yy(y)
+) TO '__TEST_DIR__/points.parquet' (FORMAT 'parquet', GEOPARQUET_VERSION 'NONE', ROW_GROUP_SIZE 1000);
+
+
+query II
+explain select * from '__TEST_DIR__/points.parquet' where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))';
+----
+physical_plan	<REGEX>:.*Filters:.*
+
+query II rowsort res_1
+select * from '__TEST_DIR__/points.parquet' where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))' order by id;
+----
+
+statement ok
+set disabled_optimizers = 'filter_pushdown';
+
+query II
+explain select * from '__TEST_DIR__/points.parquet' where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))';
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+
+query II rowsort res_1
+select * from '__TEST_DIR__/points.parquet' where g && 'POLYGON((0 0, 100 0, 100 100, 0 100, 0 0))' order by id;
+----
+
+statement ok
+set disabled_optimizers = '';
+
+# If the polygon is large enough to cover all points, no filtering should occur
+query II
+explain select * from '__TEST_DIR__/points.parquet' where g && 'POLYGON((0 0, 2000 0, 2000 2000, 0 2000, 0 0))';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+
+# If the polygon is does not intersect any points, no filtering should occur either
+query II
+explain select * from '__TEST_DIR__/points.parquet' where g && 'POLYGON((5000 5000, 10000 5000, 10000 10000, 5000 10000, 5000 5000))';
+----
+physical_plan	<!REGEX>:.*Filters:.*

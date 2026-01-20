@@ -8,17 +8,18 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
+#include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "mbedtls_wrapper.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -27,6 +28,7 @@ namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 const char MainHeader::CANARY[] = "DUCKKEY";
+static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
 
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	data_t version[MainHeader::MAX_VERSION_SIZE];
@@ -54,6 +56,30 @@ void SerializeEncryptionMetadata(WriteStream &ser, data_ptr_t metadata_p, const 
 	ser.WriteData(metadata, MainHeader::ENCRYPTION_METADATA_LEN);
 }
 
+void SerializeIV(WriteStream &ser, data_ptr_t metadata_p, const bool encrypted) {
+	// Zero-initialize.
+	data_t iv[MainHeader::AES_IV_LEN];
+	memset(iv, 0, MainHeader::AES_IV_LEN);
+
+	// Write metadata, if encrypted.
+	if (encrypted) {
+		memcpy(iv, metadata_p, MainHeader::AES_IV_LEN);
+	}
+	ser.WriteData(iv, MainHeader::AES_IV_LEN);
+}
+
+void SerializeTag(WriteStream &ser, data_ptr_t metadata_p, const bool encrypted) {
+	// Zero-initialize.
+	data_t tag[MainHeader::AES_TAG_LEN];
+	memset(tag, 0, MainHeader::AES_TAG_LEN);
+
+	// Write metadata, if encrypted.
+	if (encrypted) {
+		memcpy(tag, metadata_p, MainHeader::AES_TAG_LEN);
+	}
+	ser.WriteData(tag, MainHeader::AES_TAG_LEN);
+}
+
 void DeserializeVersionNumber(ReadStream &stream, data_t *dest) {
 	memset(dest, 0, MainHeader::MAX_VERSION_SIZE);
 	stream.ReadData(dest, MainHeader::MAX_VERSION_SIZE);
@@ -72,18 +98,35 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
-
-	// we zero-out the iv and the (not yet) encrypted canary
-	uint8_t iv[MainHeader::AES_IV_LEN];
-	memset(iv, 0, MainHeader::AES_IV_LEN);
 	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
 
-	encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
-	                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+	uint8_t iv[MainHeader::AES_IV_LEN];
+
+	switch (main_header.GetEncryptionVersion()) {
+	case 0:
+		memset(iv, 0, MainHeader::AES_IV_LEN);
+		encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
+		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+		break;
+
+	case 1:
+		uint8_t tag[MainHeader::AES_TAG_LEN];
+		encryption_state->GenerateRandomData(iv, MainHeader::AES_IV_LEN);
+		main_header.SetCanaryIV(iv);
+		encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
+		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+		encryption_state->Finalize(canary_buffer, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
+		main_header.SetCanaryTag(tag);
+		break;
+
+	default:
+		throw InvalidInputException("No valid encryption version found!");
+	}
 
 	main_header.SetEncryptedCanary(canary_buffer);
 }
@@ -98,11 +141,36 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	data_t decrypted_canary[MainHeader::CANARY_BYTE_SIZE];
 	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
 
-	//! Decrypt the canary
-	encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
-	                          MainHeader::CANARY_BYTE_SIZE);
+	switch (main_header.GetEncryptionVersion()) {
+	case 0:
+		// zero-out the IV
+		memset(iv, 0, MainHeader::AES_IV_LEN);
+		//! Decrypt the canary
+		encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
+		                          MainHeader::CANARY_BYTE_SIZE);
+		break;
+	case 1:
+		uint8_t tag[MainHeader::AES_TAG_LEN];
+		// get the IV and the Tag
+		memcpy(iv, main_header.GetIV(), MainHeader::AES_IV_LEN);
+		memcpy(tag, main_header.GetTag(), MainHeader::AES_TAG_LEN);
+
+		//! Decrypt the canary
+		encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
+		                          MainHeader::CANARY_BYTE_SIZE);
+		try {
+			encryption_state->Finalize(decrypted_canary, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
+		} catch (const std::exception &e) {
+			throw InvalidInputException("Wrong encryption key used to open the database file");
+		}
+		break;
+	default:
+		throw InvalidInputException("No valid encryption version found!");
+	}
 
 	//! compare if the decrypted canary is correct
 	if (memcmp(decrypted_canary, MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE) != 0) {
@@ -127,6 +195,8 @@ void MainHeader::Write(WriteStream &ser) {
 	SerializeEncryptionMetadata(ser, encryption_metadata, encryption_enabled);
 	SerializeDBIdentifier(ser, db_identifier);
 	SerializeEncryptionMetadata(ser, encrypted_canary, encryption_enabled);
+	SerializeIV(ser, canary_iv, encryption_enabled);
+	SerializeTag(ser, canary_tag, encryption_enabled);
 }
 
 void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
@@ -177,7 +247,6 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
-
 	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
 
@@ -185,6 +254,8 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	DeserializeEncryptionData(source, header.encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
 	DeserializeEncryptionData(source, header.db_identifier, MainHeader::DB_IDENTIFIER_LEN);
 	DeserializeEncryptionData(source, header.encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
+	DeserializeEncryptionData(source, header.canary_iv, MainHeader::AES_IV_LEN);
+	DeserializeEncryptionData(source, header.canary_tag, MainHeader::AES_TAG_LEN);
 
 	return header;
 }
@@ -248,10 +319,15 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p,
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db_p), options.block_alloc_size, options.block_header_size),
-      db(db_p), path(path_p), header_buffer(Allocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
+      db(db_p), path(path_p), header_buffer(BlockAllocator::Get(db_p), FileBufferType::MANAGED_BUFFER,
                                             Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
                                             options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
+}
+
+SingleFileBlockManager::~SingleFileBlockManager() {
+	// flip the flag to not perform UnregisterBlock on the block manager that is being destructed
+	this->in_destruction = true;
 }
 
 FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
@@ -298,13 +374,25 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id) {
 	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(db.GetDatabase(), key_id);
 	// Encrypt canary with the derived key
-	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	shared_ptr<EncryptionState> encryption_state;
+	if (main_header.GetEncryptionVersion() > 0) {
+		// From Encryption Version 1+, always encrypt canary with GCM
+		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	} else {
+		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	}
 	EncryptCanary(main_header, encryption_state, key);
 }
 
 void SingleFileBlockManager::StoreDBIdentifier(MainHeader &main_header, data_ptr_t db_identifier) {
 	main_header.SetDBIdentifier(db_identifier);
+}
+
+template <typename T>
+void SingleFileBlockManager::WriteEncryptionData(MemoryStream &stream, const T &val) {
+	stream.WriteData(reinterpret_cast<const_data_ptr_t>(&val), sizeof(val));
 }
 
 void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) const {
@@ -313,20 +401,15 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	// The third byte is for the cipher.
 	// The subsequent byte is empty.
 	// The last 4 bytes are the key length.
+	auto metadata_stream = make_uniq<MemoryStream>(ENCRYPTION_METADATA_LEN);
 
-	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
-	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
-	data_ptr_t offset = metadata;
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.kdf);
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.additional_authenticated_data);
+	WriteEncryptionData<uint8_t>(*metadata_stream, db.GetStorageManager().GetCipher());
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.encryption_version);
+	WriteEncryptionData<uint32_t>(*metadata_stream, options.encryption_options.key_length);
 
-	Store<uint8_t>(options.encryption_options.kdf, offset);
-	offset++;
-	Store<uint8_t>(options.encryption_options.additional_authenticated_data, offset);
-	offset++;
-	Store<uint8_t>(db.GetStorageManager().GetCipher(), offset);
-	offset += 2;
-	Store<uint32_t>(options.encryption_options.key_length, offset);
-
-	main_header.SetEncryptionMetadata(metadata);
+	main_header.SetEncryptionMetadata(metadata_stream->GetData());
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key) {
@@ -340,10 +423,18 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 	EncryptionKeyManager::DeriveKey(user_key, db_identifier, derived_key);
 
-	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-	    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	shared_ptr<EncryptionState> encryption_state;
+	if (main_header.GetEncryptionVersion() > 0) {
+		// From Encryption Version 1+, always encrypt canary with GCM
+		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	} else {
+		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
+		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	}
+
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
-		throw IOException("Wrong encryption key used to open the database file");
+		throw InvalidInputException("Wrong encryption key used to open the database file");
 	}
 
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
@@ -405,6 +496,12 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 
 		// Set the encrypted DB bit to 1.
 		main_header.SetEncrypted();
+
+		if (options.encryption_options.encryption_version == EncryptionTypes::NONE) {
+			throw InvalidConfigurationException("No Encryption type set");
+		}
+
+		main_header.SetEncryptionVersion(options.encryption_options.encryption_version);
 
 		// The derived key is wiped in AddKeyToCache.
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
@@ -486,6 +583,9 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	memcpy(options.db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
+
+	// encryption version can be overridden by the real encryption version
+	options.encryption_options.encryption_version = main_header.GetEncryptionVersion();
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
@@ -650,7 +750,7 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
 		auto key_id = options.encryption_options.derived_key_id;
 		temp_buffer_manager =
-		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
+		    make_uniq<FileBuffer>(BlockAllocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptionEngine::EncryptBlock(db, key_id, block, *temp_buffer_manager, delta);
 		temp_buffer_manager->Write(context, *handle, location);
 	} else {
@@ -707,7 +807,6 @@ void SingleFileBlockManager::LoadFreeList(QueryContext context) {
 	for (idx_t i = 0; i < free_list_count; i++) {
 		auto block = reader.Read<block_id_t>(context);
 		free_list.insert(block);
-		newly_freed_list.insert(block);
 	}
 	auto multi_use_blocks_count = reader.Read<uint64_t>(context);
 	multi_use_blocks.clear();
@@ -724,19 +823,35 @@ bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
 	return root.block_pointer == meta_block;
 }
 
-block_id_t SingleFileBlockManager::GetFreeBlockId() {
-	lock_guard<mutex> lock(block_lock);
+block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
 	block_id_t block;
-	if (!free_list.empty()) {
-		// The free list is not empty, so we take its first element.
-		block = *free_list.begin();
-		// erase the entry from the free list again
-		free_list.erase(free_list.begin());
-		newly_freed_list.erase(block);
-	} else {
-		block = max_block++;
+	{
+		lock_guard<mutex> lock(block_lock);
+		if (!free_list.empty()) {
+			// The free list is not empty, so we take its first element.
+			block = *free_list.begin();
+			// erase the entry from the free list again
+			free_list.erase(free_list.begin());
+		} else {
+			block = max_block++;
+		}
+		// add the entry to the list of newly used blocks
+		if (type == FreeBlockType::NEWLY_USED_BLOCK) {
+			newly_used_blocks.insert(block);
+		}
+	}
+	if (BlockIsRegistered(block)) {
+		throw InternalException("Free block %d is already registered", block);
 	}
 	return block;
+}
+
+block_id_t SingleFileBlockManager::GetFreeBlockId() {
+	return GetFreeBlockIdInternal(FreeBlockType::NEWLY_USED_BLOCK);
+}
+
+block_id_t SingleFileBlockManager::GetFreeBlockIdForCheckpoint() {
+	return GetFreeBlockIdInternal(FreeBlockType::CHECKPOINTED_BLOCK);
 }
 
 block_id_t SingleFileBlockManager::PeekFreeBlockId() {
@@ -748,16 +863,10 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 	}
 }
 
-void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
+void SingleFileBlockManager::MarkBlockACheckpointed(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
-	D_ASSERT(block_id < max_block);
-	if (free_list.find(block_id) != free_list.end()) {
-		throw InternalException("MarkBlockAsFree called but block %llu was already freed!", block_id);
-	}
-	multi_use_blocks.erase(block_id);
-	free_list.insert(block_id);
-	newly_freed_list.insert(block_id);
+	newly_used_blocks.erase(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
@@ -776,7 +885,6 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 	} else if (free_list.find(block_id) != free_list.end()) {
 		// block is currently in the free list - erase
 		free_list.erase(block_id);
-		newly_freed_list.erase(block_id);
 	} else {
 		// block is already in use - increase reference count
 		IncreaseBlockReferenceCountInternal(block_id);
@@ -801,10 +909,27 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 		return;
 	}
 	// Check for multi-free
-	// TODO: Fix the bug that causes this assert to fire, then uncomment it.
-	// D_ASSERT(modified_blocks.find(block_id) == modified_blocks.end());
-	D_ASSERT(free_list.find(block_id) == free_list.end());
-	modified_blocks.insert(block_id);
+	if (modified_blocks.find(block_id) != modified_blocks.end()) {
+		throw InternalException("MarkBlockAsModified called with already modified block id %d", block_id);
+	}
+	if (free_list.find(block_id) != free_list.end()) {
+		throw InternalException("MarkBlockAsModified called with already freed block id %d", block_id);
+	}
+	auto newly_used_entry = newly_used_blocks.find(block_id);
+	if (newly_used_entry != newly_used_blocks.end()) {
+		// this block was newly used - and now we are labeling it as no longer being required
+		// we can directly add it back to the free list
+		newly_used_blocks.erase(block_id);
+		if (BlockIsRegistered(block_id)) {
+			free_blocks_in_use.insert(block_id);
+		} else {
+			free_list.insert(block_id);
+		}
+	} else {
+		// this block was used in storage, we cannot directly re-use it
+		// add it to the modified blocks indicating it will be re-usable after the next checkpoint
+		modified_blocks.insert(block_id);
+	}
 }
 
 void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t block_id) {
@@ -853,7 +978,13 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 			}
 		}
 	}
+	for (auto &newly_used_block : newly_used_blocks) {
+		referenced_blocks.insert(newly_used_block);
+	}
 	for (auto &free_block : free_list) {
+		referenced_blocks.insert(free_block);
+	}
+	for (auto &free_block : free_blocks_in_use) {
 		referenced_blocks.insert(free_block);
 	}
 	if (referenced_blocks.size() != NumericCast<idx_t>(max_block)) {
@@ -867,9 +998,39 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 				missing_blocks += to_string(i);
 			}
 		}
+		string free_list_str;
+		for (auto &block : free_list) {
+			if (!free_list_str.empty()) {
+				free_list_str += ", ";
+			}
+			free_list_str += to_string(block);
+		}
+		string block_usage_str;
+		for (auto &entry : block_usage_count) {
+			if (!block_usage_str.empty()) {
+				block_usage_str += ", ";
+			}
+			block_usage_str += to_string(entry.first);
+		}
+		string multi_use_blocks_str;
+		for (auto &entry : multi_use_blocks) {
+			if (!multi_use_blocks_str.empty()) {
+				multi_use_blocks_str += ", ";
+			}
+			multi_use_blocks_str += to_string(entry.first);
+		}
+		string newly_used_blocks_str;
+		for (auto &block : newly_used_blocks) {
+			if (!newly_used_blocks_str.empty()) {
+				newly_used_blocks_str += ", ";
+			}
+			newly_used_blocks_str += to_string(block);
+		}
+
 		throw InternalException(
-		    "Blocks %s were neither present in the free list or in the block_usage_count (max block %lld)",
-		    missing_blocks, max_block);
+		    "Block verification failed - blocks \"%s\" were not found as being used OR marked as free\nMax block: "
+		    "%d\nBlock usage: %s\nFree list: %s\nMulti-use blocks: %s\nNewly used blocks: %s",
+		    missing_blocks, max_block, block_usage_str, free_list_str, multi_use_blocks_str, newly_used_blocks_str);
 	}
 }
 
@@ -896,6 +1057,20 @@ bool SingleFileBlockManager::IsRemote() {
 	return !handle->OnDiskFile();
 }
 
+bool SingleFileBlockManager::Prefetch() {
+	switch (Settings::Get<StorageBlockPrefetchSetting>(db.GetDatabase())) {
+	case StorageBlockPrefetch::NEVER:
+		return false;
+	case StorageBlockPrefetch::DEBUG_FORCE_ALWAYS:
+	case StorageBlockPrefetch::ALWAYS_PREFETCH:
+		return !InMemory();
+	case StorageBlockPrefetch::REMOTE_ONLY:
+		return IsRemote();
+	default:
+		throw InternalException("Unknown StorageBlockPrefetch type");
+	}
+}
+
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
 	// FIXME; maybe we should pass the block header size explicitly
@@ -908,7 +1083,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, *this);
+		result = make_uniq<Block>(BlockAllocator::Get(db), block_id, *this);
 	}
 	result->Initialize(options.debug_initialize);
 	return result;
@@ -979,6 +1154,8 @@ void SingleFileBlockManager::Write(QueryContext context, FileBuffer &buffer, blo
 
 void SingleFileBlockManager::Truncate() {
 	BlockManager::Truncate();
+
+	lock_guard<mutex> guard(block_lock);
 	idx_t blocks_to_truncate = 0;
 	// reverse iterate over the free-list
 	for (auto entry = free_list.rbegin(); entry != free_list.rend(); entry++) {
@@ -995,7 +1172,6 @@ void SingleFileBlockManager::Truncate() {
 	}
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
-	newly_freed_list.erase(newly_freed_list.lower_bound(max_block), newly_freed_list.end());
 	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
 }
 
@@ -1052,13 +1228,28 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
 
-	lock_guard<mutex> lock(block_lock);
+	unique_lock<mutex> lock(block_lock);
 	// set the iteration count
 	header.iteration = ++iteration_count;
 
+	set<block_id_t> all_free_blocks = free_list;
+	set<block_id_t> fully_freed_blocks;
 	for (auto &block : modified_blocks) {
-		free_list.insert(block);
-		newly_freed_list.insert(block);
+		all_free_blocks.insert(block);
+		if (!BlockIsRegistered(block)) {
+			// if the block is no longer registered it is not in use - so it can be re-used after this point
+			free_list.insert(block);
+			fully_freed_blocks.insert(block);
+		} else {
+			// if the block is still registered it is still in use - keep it in the free_blocks_in_use list
+			free_blocks_in_use.insert(block);
+		}
+	}
+	auto written_multi_use_blocks = multi_use_blocks;
+	// newly used blocks are still free blocks for this checkpoint - so add them to the free list that we write
+	for (auto &newly_used_block : newly_used_blocks) {
+		all_free_blocks.insert(newly_used_block);
+		written_multi_use_blocks.erase(newly_used_block);
 	}
 	modified_blocks.clear();
 
@@ -1072,12 +1263,12 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		auto ptr = writer.GetMetaBlockPointer();
 		header.free_list = ptr.block_pointer;
 
-		writer.Write<uint64_t>(free_list.size());
-		for (auto &block_id : free_list) {
+		writer.Write<uint64_t>(all_free_blocks.size());
+		for (auto &block_id : all_free_blocks) {
 			writer.Write<block_id_t>(block_id);
 		}
-		writer.Write<uint64_t>(multi_use_blocks.size());
-		for (auto &entry : multi_use_blocks) {
+		writer.Write<uint64_t>(written_multi_use_blocks.size());
+		for (auto &entry : written_multi_use_blocks) {
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}
@@ -1087,11 +1278,16 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
 	}
+	lock.unlock();
 	metadata_manager.Flush();
+
+	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);
+	lock.unlock();
+
 	header.serialization_compatibility = options.storage_version.GetIndex();
 
-	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
+	auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
 		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}
@@ -1123,31 +1319,48 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk
 	handle->Sync();
-	// Release the free blocks to the filesystem.
-	TrimFreeBlocks();
+	// Release the free fully freed blocks to the filesystem.
+	TrimFreeBlocks(fully_freed_blocks);
 }
 
 void SingleFileBlockManager::FileSync() {
 	handle->Sync();
 }
 
-void SingleFileBlockManager::TrimFreeBlocks() {
-	if (DBConfig::Get(db).options.trim_free_blocks) {
-		for (auto itr = newly_freed_list.begin(); itr != newly_freed_list.end(); ++itr) {
-			block_id_t first = *itr;
-			block_id_t last = first;
-			// Find end of contiguous range.
-			for (++itr; itr != newly_freed_list.end() && (*itr == last + 1); ++itr) {
-				last = *itr;
-			}
-			// We are now one too far.
-			--itr;
-			// Trim the range.
-			handle->Trim(BLOCK_START + (NumericCast<idx_t>(first) * GetBlockAllocSize()),
-			             NumericCast<idx_t>(last + 1 - first) * GetBlockAllocSize());
-		}
+void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	// perform the actual unregistration
+	BlockManager::UnregisterBlock(id);
+	// check if it is part of the newly free list
+	lock_guard<mutex> lock(block_lock);
+	auto entry = free_blocks_in_use.find(id);
+	if (entry != free_blocks_in_use.end()) {
+		// it is! move it to the regular free list so the block can be re-used
+		free_list.insert(id);
+		free_blocks_in_use.erase(entry);
 	}
-	newly_freed_list.clear();
+}
+
+void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
+	auto block_count = NumericCast<idx_t>(end + 1 - start);
+	handle->Trim(BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize()), block_count * GetBlockAllocSize());
+}
+
+void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
+	if (!DBConfig::Get(db).options.trim_free_blocks) {
+		return;
+	}
+	for (auto itr = blocks.begin(); itr != blocks.end(); ++itr) {
+		block_id_t first = *itr;
+		block_id_t last = first;
+		// Find end of contiguous range.
+		for (++itr; itr != blocks.end() && (*itr == last + 1); ++itr) {
+			last = *itr;
+		}
+		// We are now one too far.
+		--itr;
+		// Trim the range.
+		TrimFreeBlockRange(first, last);
+	}
 }
 
 } // namespace duckdb

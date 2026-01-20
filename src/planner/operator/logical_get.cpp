@@ -126,8 +126,11 @@ const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
 			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
 		}
 		return entry->second.type;
+	} else if (index.HasType()) {
+		return index.GetScanType();
+	} else {
+		return returned_types[index.GetPrimaryIndex()];
 	}
-	return returned_types[index.GetPrimaryIndex()];
 }
 
 const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
@@ -181,6 +184,31 @@ void LogicalGet::ResolveTypes() {
 			types.push_back(children[0]->types[entry]);
 		}
 	}
+}
+
+bool LogicalGet::TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const {
+	if (column_index.IsRowIdColumn()) {
+		return false;
+	}
+	if (column_index.IsVirtualColumn()) {
+		return false;
+	}
+
+	auto table = GetTable();
+	if (!table) {
+		//! If there's no table we assume there's no mismatch between
+		//! logical/storage index
+		out_index = StorageIndex::FromColumnIndex(column_index);
+		return true;
+	}
+
+	auto &column = table->GetColumn(LogicalIndex(column_index.GetPrimaryIndex()));
+	if (column.Generated()) {
+		//! This is a generated column, can't use the row group pruner
+		return false;
+	}
+	out_index = table->GetStorageIndex(column_index);
+	return true;
 }
 
 idx_t LogicalGet::EstimateCardinality(ClientContext &context) {

@@ -184,8 +184,7 @@ void JSONReader::OpenJSONFile() {
 	if (!IsOpen()) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		auto regular_file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | options.compression);
-		file_handle = make_uniq<JSONFileHandle>(QueryContext(context), std::move(regular_file_handle),
-		                                        BufferAllocator::Get(context));
+		file_handle = make_uniq<JSONFileHandle>(context, std::move(regular_file_handle), BufferAllocator::Get(context));
 	}
 	Reset();
 }
@@ -369,11 +368,14 @@ bool JSONReader::HasThrown() {
 
 double JSONReader::GetProgress() const {
 	lock_guard<mutex> guard(lock);
-	if (HasFileHandle()) {
-		return 100.0 - 100.0 * double(file_handle->Remaining()) / double(file_handle->FileSize());
-	} else {
+	if (!HasFileHandle()) {
 		return 0;
 	}
+	const auto file_size = file_handle->FileSize();
+	if (file_size == 0) {
+		return 0;
+	}
+	return 100.0 - 100.0 * double(file_handle->Remaining()) / double(file_size);
 }
 
 static inline void TrimWhitespace(JSONString &line) {
@@ -616,7 +618,7 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(char *const bu
 	return make_pair(JSONFormat::ARRAY, JSONRecordType::VALUES);
 }
 
-void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
+bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
                            const idx_t remaining) {
 	yyjson_doc *doc;
 	yyjson_read_err err;
@@ -638,7 +640,7 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 		}
 		if (!can_ignore_this_error) {
 			AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, extra);
-			return;
+			return false;
 		}
 	}
 
@@ -650,7 +652,7 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 		err.msg = "unexpected end of data";
 		err.pos = json_size;
 		AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, "Try auto-detecting the JSON format");
-		return;
+		return false;
 	} else if (!options.ignore_errors && read_size < json_size) {
 		idx_t off = read_size;
 		idx_t rem = json_size;
@@ -660,20 +662,21 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 			err.msg = "unexpected content after document";
 			err.pos = read_size;
 			AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, "Try auto-detecting the JSON format");
-			return;
+			return false;
 		}
 	}
 
 	scan_state.lines_or_objects_in_buffer++;
 	if (!doc) {
 		scan_state.values[scan_state.scan_count] = nullptr;
-		return;
+		return true;
 	}
 
 	// Set the JSONLine and trim
 	scan_state.units[scan_state.scan_count] = JSONString(json_start, json_size);
 	TrimWhitespace(scan_state.units[scan_state.scan_count]);
 	scan_state.values[scan_state.scan_count] = doc->root;
+	return true;
 }
 
 void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
@@ -760,7 +763,7 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 	return true;
 }
 
-void JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
+bool JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 	const auto format = GetFormat();
 	auto &buffer_ptr = scan_state.buffer_ptr;
 	auto &buffer_offset = scan_state.buffer_offset;
@@ -794,7 +797,9 @@ void JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 		}
 
 		idx_t json_size = json_end - json_start;
-		ParseJSON(scan_state, json_start, json_size, remaining);
+		if (!ParseJSON(scan_state, json_start, json_size, remaining)) {
+			return false;
+		}
 		buffer_offset += json_size;
 
 		if (format == JSONFormat::ARRAY) {
@@ -807,11 +812,12 @@ void JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 				err.msg = "unexpected character";
 				err.pos = json_size;
 				AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err);
-				return;
+				return false;
 			}
 		}
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 	}
+	return true;
 }
 
 void JSONReader::Initialize(Allocator &allocator, idx_t buffer_size) {
@@ -866,7 +872,10 @@ idx_t JSONReader::Scan(JSONReaderScanState &scan_state) {
 				return 0;
 			}
 		}
-		ParseNextChunk(scan_state);
+		if (!ParseNextChunk(scan_state)) {
+			// found an error but we can't handle it - return
+			return 0;
+		}
 	}
 	return scan_state.scan_count;
 }

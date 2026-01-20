@@ -218,12 +218,20 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &deserializer) {
 void ColumnIndex::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(1, "index", index);
 	serializer.WritePropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", child_indexes);
+	serializer.WritePropertyWithDefault<ColumnIndexType>(3, "index_type", index_type, ColumnIndexType::FULL_READ);
+	serializer.WritePropertyWithDefault<LogicalType>(4, "type", type, LogicalType::INVALID);
+	serializer.WritePropertyWithDefault<string>(5, "field", field, "");
+	serializer.WritePropertyWithDefault<bool>(6, "has_index", has_index, true);
 }
 
 ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
 	ColumnIndex result;
 	deserializer.ReadPropertyWithDefault<idx_t>(1, "index", result.index);
 	deserializer.ReadPropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", result.child_indexes);
+	deserializer.ReadPropertyWithExplicitDefault<ColumnIndexType>(3, "index_type", result.index_type, ColumnIndexType::FULL_READ);
+	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(4, "type", result.type, LogicalType::INVALID);
+	deserializer.ReadPropertyWithExplicitDefault<string>(5, "field", result.field, "");
+	deserializer.ReadPropertyWithExplicitDefault<bool>(6, "has_index", result.has_index, true);
 	return result;
 }
 
@@ -252,7 +260,7 @@ ColumnList ColumnList::Deserialize(Deserializer &deserializer) {
 void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(100, "aliases", aliases);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", query);
-	serializer.WriteProperty<CTEMaterialize>(102, "materialized", materialized);
+	serializer.WriteProperty<CTEMaterialize>(102, "materialized", GetMaterializedForSerialization(serializer));
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
 }
 

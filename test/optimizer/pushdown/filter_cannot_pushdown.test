@@ -20,6 +20,15 @@ logical_opt	<REGEX>:.*rnd < 0.5.*
 statement ok
 CREATE TABLE t(a integer, b integer, c integer);
 
+# t is empty, so 'a > 1' is always false - so this becomes EMPTY_RESULT
+query II
+explain select rnd, a from (select random() as rnd, a from t) where rnd < 0.3 and a > 1;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+statement ok
+insert into t(a) select 2;
+
 query II
 explain select rnd, a from (select random() as rnd, a from t) where rnd < 0.3 and a > 1;
 ----

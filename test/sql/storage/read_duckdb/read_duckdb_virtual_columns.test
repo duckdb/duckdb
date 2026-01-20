@@ -1,0 +1,23 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_virtual_columns.test
+# description: Test basic usage of read_duckdb
+# group: [read_duckdb]
+
+foreach dbindex 1 2
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_virt${dbindex}.db' AS rd
+
+statement ok
+CREATE TABLE rd.my_tbl AS SELECT 42 + i AS v FROM range(0, ${dbindex}) t(i)
+
+statement ok
+DETACH rd
+
+endloop
+
+query III
+SELECT rowid, (filename.replace('\', '/').split('/'))[3], * FROM read_duckdb('__TEST_DIR__/read_duckdb_virt[1-2].db') ORDER BY filename, rowid
+----
+0	read_duckdb_virt1.db	42
+0	read_duckdb_virt2.db	42
+1	read_duckdb_virt2.db	43

@@ -108,6 +108,7 @@ public:
 		return selection_data;
 	}
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
+	idx_t SliceInPlace(const SelectionVector &sel, idx_t count);
 
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;

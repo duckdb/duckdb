@@ -1,0 +1,9 @@
+# name: test/sql/peg_parser/parser/show_table.test
+# description: Test create macro syntax in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SHOW TABLES FROM db.main$TEST_PEG_PARSER$);
+

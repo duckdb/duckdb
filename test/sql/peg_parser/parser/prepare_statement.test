@@ -1,0 +1,8 @@
+# name: test/sql/peg_parser/parser/prepare_statement.test
+# description: Test prepare statement in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$prepare p4 as select $name, $other_name$TEST_PEG_PARSER$);

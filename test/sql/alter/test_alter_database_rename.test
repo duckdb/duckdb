@@ -1,0 +1,46 @@
+# name: test/sql/alter/test_alter_database_rename.test
+# description: Test ALTER DATABASE ... RENAME TO
+# group: [alter]
+
+statement ok
+ATTACH ':memory:' AS test_db;
+
+statement ok
+CREATE TABLE test_db.sample AS SELECT i FROM range(100) t(i);
+
+query I
+SELECT COUNT(*) FROM test_db.sample
+----
+100
+
+statement ok
+ALTER DATABASE test_db RENAME TO renamed_db;
+
+query I
+SELECT COUNT(*) FROM renamed_db.sample
+----
+100
+
+statement error
+ALTER DATABASE non_existent RENAME TO something_else;
+----
+
+statement ok
+ALTER DATABASE IF EXISTS non_existent RENAME TO something_else;
+
+statement ok
+ATTACH ':memory:' AS another_db;
+
+statement error
+ALTER DATABASE another_db RENAME TO renamed_db;
+----
+
+statement error
+ALTER DATABSE renamed_db RENAME TO system;
+----
+Parser Error: syntax error at or near "DATABSE"
+
+statement error
+ALTER DATABSE renamed_db RENAME TO temp;
+----
+Parser Error: syntax error at or near "DATABSE"

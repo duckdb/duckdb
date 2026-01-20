@@ -14,3 +14,4 @@ INSERT INTO t0(c0, c1) VALUES (534898561, 1156365055), (524523641, '0.4668052595
 statement error
 SELECT NULL FROM t0 ORDER BY strptime(NOT(t0.c0 BETWEEN t0.rowid AND t0.rowid), 1407974306)
 ----
+Binder Error: No function matches the given name and argument types 'strptime

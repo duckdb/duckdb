@@ -1,0 +1,60 @@
+# name: test/optimizer/constant_order_normalization.test
+# description: Constant folding test
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(col0 INTEGER, col1 SMALLINT);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# addition
+query I nosort add_test
+EXPLAIN SELECT col0 + 1 + 2 FROM test
+----
+
+query I nosort add_test
+EXPLAIN SELECT 1 + col0 + 2 FROM test
+----
+
+query I nosort add_test
+EXPLAIN SELECT 1 + 2 + col0  FROM test
+----
+
+query I nosort add_test
+EXPLAIN SELECT 3 + col0  FROM test
+----
+
+# multiplication
+query I nosort mult_test
+EXPLAIN SELECT col0 * 1 * 2 FROM test
+----
+
+query I nosort mult_test
+EXPLAIN SELECT 1 * col0 * 2 FROM test
+----
+
+query I nosort mult_test
+EXPLAIN SELECT 1 * 2 * col0  FROM test
+----
+
+query I nosort mult_test
+EXPLAIN SELECT 2 * col0  FROM test
+----
+
+# addition mixed multiplication
+query I nosort add_mult
+EXPLAIN SELECT col0 * 1 * 2 + col1 + 1 + 2 FROM test
+----
+
+query I nosort add_mult
+EXPLAIN SELECT 1 * col0 * 2 + 1 + col1 + 2 FROM test
+----
+
+query I nosort add_mult
+EXPLAIN SELECT 1 * 2 * col0 + 1 + 2 + col1 FROM test
+----
+
+query I nosort add_mult
+EXPLAIN SELECT 3 + 2 * col0 + col1 FROM test
+----

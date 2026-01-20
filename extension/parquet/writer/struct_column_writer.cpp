@@ -2,6 +2,11 @@
 
 namespace duckdb {
 
+using namespace duckdb_parquet; // NOLINT
+
+using duckdb_parquet::ConvertedType;
+using duckdb_parquet::FieldRepetitionType;
+
 class StructColumnWriterState : public ColumnWriterState {
 public:
 	StructColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
@@ -67,7 +72,7 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 			                      parent->is_empty.end());
 		}
 	}
-	HandleRepeatLevels(state_p, parent, count, MaxRepeat());
+	HandleRepeatLevels(state_p, parent, count);
 	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, MaxDefine() - 1);
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
@@ -97,6 +102,35 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		// we add the null count of the struct to the null count of the children
 		state.child_states[child_idx]->null_count += state_p.null_count;
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
+	}
+}
+
+void StructColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+	idx_t schema_idx = schemas.size();
+
+	auto &schema = column_schema;
+	schema.SetSchemaIndex(schema_idx);
+
+	auto &repetition_type = schema.repetition_type;
+	auto &name = schema.name;
+	auto &field_id = schema.field_id;
+
+	// set up the schema element for this struct
+	duckdb_parquet::SchemaElement schema_element;
+	schema_element.repetition_type = repetition_type;
+	schema_element.num_children = child_writers.size();
+	schema_element.__isset.num_children = true;
+	schema_element.__isset.type = false;
+	schema_element.__isset.repetition_type = true;
+	schema_element.name = name;
+	if (field_id.IsValid()) {
+		schema_element.__isset.field_id = true;
+		schema_element.field_id = field_id.GetIndex();
+	}
+	schemas.push_back(std::move(schema_element));
+
+	for (auto &child_writer : child_writers) {
+		child_writer->FinalizeSchema(schemas);
 	}
 }
 

@@ -153,7 +153,6 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
                                               vector<unique_ptr<Expression>> &filters,
                                               const HivePartitioningFilterInfo &filter_info,
                                               MultiFilePushdownInfo &info) {
-
 	vector<OpenFileInfo> pruned_files;
 	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;

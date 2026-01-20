@@ -1,99 +1,251 @@
 #pragma once
 
 #include "duckdb/function/cast/variant/to_variant_fwd.hpp"
+#include "duckdb/common/types/variant_visitor.hpp"
 
 namespace duckdb {
 namespace variant {
 
-static bool VariantIsTrivialPrimitive(VariantLogicalType type) {
-	switch (type) {
-	case VariantLogicalType::INT8:
-	case VariantLogicalType::INT16:
-	case VariantLogicalType::INT32:
-	case VariantLogicalType::INT64:
-	case VariantLogicalType::INT128:
-	case VariantLogicalType::UINT8:
-	case VariantLogicalType::UINT16:
-	case VariantLogicalType::UINT32:
-	case VariantLogicalType::UINT64:
-	case VariantLogicalType::UINT128:
-	case VariantLogicalType::FLOAT:
-	case VariantLogicalType::DOUBLE:
-	case VariantLogicalType::UUID:
-	case VariantLogicalType::DATE:
-	case VariantLogicalType::TIME_MICROS:
-	case VariantLogicalType::TIME_NANOS:
-	case VariantLogicalType::TIMESTAMP_SEC:
-	case VariantLogicalType::TIMESTAMP_MILIS:
-	case VariantLogicalType::TIMESTAMP_MICROS:
-	case VariantLogicalType::TIMESTAMP_NANOS:
-	case VariantLogicalType::TIME_MICROS_TZ:
-	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-	case VariantLogicalType::INTERVAL:
-		return true;
-	default:
-		return false;
-	}
-}
+namespace {
 
-static uint32_t VariantTrivialPrimitiveSize(VariantLogicalType type) {
-	switch (type) {
-	case VariantLogicalType::INT8:
-		return sizeof(int8_t);
-	case VariantLogicalType::INT16:
-		return sizeof(int16_t);
-	case VariantLogicalType::INT32:
-		return sizeof(int32_t);
-	case VariantLogicalType::INT64:
-		return sizeof(int64_t);
-	case VariantLogicalType::INT128:
-		return sizeof(hugeint_t);
-	case VariantLogicalType::UINT8:
-		return sizeof(uint8_t);
-	case VariantLogicalType::UINT16:
-		return sizeof(uint16_t);
-	case VariantLogicalType::UINT32:
-		return sizeof(uint32_t);
-	case VariantLogicalType::UINT64:
-		return sizeof(uint64_t);
-	case VariantLogicalType::UINT128:
-		return sizeof(uhugeint_t);
-	case VariantLogicalType::FLOAT:
-		return sizeof(float);
-	case VariantLogicalType::DOUBLE:
-		return sizeof(double);
-	case VariantLogicalType::UUID:
-		return sizeof(hugeint_t);
-	case VariantLogicalType::DATE:
-		return sizeof(int32_t);
-	case VariantLogicalType::TIME_MICROS:
-		return sizeof(dtime_t);
-	case VariantLogicalType::TIME_NANOS:
-		return sizeof(dtime_ns_t);
-	case VariantLogicalType::TIMESTAMP_SEC:
-		return sizeof(timestamp_sec_t);
-	case VariantLogicalType::TIMESTAMP_MILIS:
-		return sizeof(timestamp_ms_t);
-	case VariantLogicalType::TIMESTAMP_MICROS:
-		return sizeof(timestamp_t);
-	case VariantLogicalType::TIMESTAMP_NANOS:
-		return sizeof(timestamp_ns_t);
-	case VariantLogicalType::TIME_MICROS_TZ:
-		return sizeof(dtime_tz_t);
-	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
-		return sizeof(timestamp_tz_t);
-	case VariantLogicalType::INTERVAL:
-		return sizeof(interval_t);
-	default:
-		throw InternalException("VariantLogicalType '%s' is not a trivial primitive", EnumUtil::ToString(type));
+struct AnalyzeState {
+public:
+	explicit AnalyzeState(uint32_t &children_offset) : children_offset(children_offset) {
 	}
-}
+
+public:
+	uint32_t &children_offset;
+};
+
+struct WriteState {
+public:
+	WriteState(uint32_t &keys_offset, uint32_t &children_offset, uint32_t &blob_offset, data_ptr_t blob_data,
+	           uint32_t &blob_size)
+	    : keys_offset(keys_offset), children_offset(children_offset), blob_offset(blob_offset), blob_data(blob_data),
+	      blob_size(blob_size) {
+	}
+
+public:
+	inline data_ptr_t GetDestination() {
+		return blob_data + blob_offset + blob_size;
+	}
+
+public:
+	uint32_t &keys_offset;
+	uint32_t &children_offset;
+	uint32_t &blob_offset;
+	data_ptr_t blob_data;
+	uint32_t &blob_size;
+};
+
+struct VariantToVariantSizeAnalyzer {
+	using result_type = uint32_t;
+
+	static uint32_t VisitNull(AnalyzeState &state) {
+		return 0;
+	}
+	static uint32_t VisitBoolean(bool, AnalyzeState &state) {
+		return 0;
+	}
+
+	template <typename T>
+	static uint32_t VisitInteger(T, AnalyzeState &state) {
+		return sizeof(T);
+	}
+
+	static uint32_t VisitFloat(float, AnalyzeState &state) {
+		return sizeof(float);
+	}
+	static uint32_t VisitDouble(double, AnalyzeState &state) {
+		return sizeof(double);
+	}
+	static uint32_t VisitUUID(hugeint_t, AnalyzeState &state) {
+		return sizeof(hugeint_t);
+	}
+	static uint32_t VisitDate(date_t, AnalyzeState &state) {
+		return sizeof(int32_t);
+	}
+	static uint32_t VisitInterval(interval_t, AnalyzeState &state) {
+		return sizeof(interval_t);
+	}
+
+	static uint32_t VisitTime(dtime_t, AnalyzeState &state) {
+		return sizeof(dtime_t);
+	}
+	static uint32_t VisitTimeNanos(dtime_ns_t, AnalyzeState &state) {
+		return sizeof(dtime_ns_t);
+	}
+	static uint32_t VisitTimeTZ(dtime_tz_t, AnalyzeState &state) {
+		return sizeof(dtime_tz_t);
+	}
+	static uint32_t VisitTimestampSec(timestamp_sec_t, AnalyzeState &state) {
+		return sizeof(timestamp_sec_t);
+	}
+	static uint32_t VisitTimestampMs(timestamp_ms_t, AnalyzeState &state) {
+		return sizeof(timestamp_ms_t);
+	}
+	static uint32_t VisitTimestamp(timestamp_t, AnalyzeState &state) {
+		return sizeof(timestamp_t);
+	}
+	static uint32_t VisitTimestampNanos(timestamp_ns_t, AnalyzeState &state) {
+		return sizeof(timestamp_ns_t);
+	}
+	static uint32_t VisitTimestampTZ(timestamp_tz_t, AnalyzeState &state) {
+		return sizeof(timestamp_tz_t);
+	}
+
+	static uint32_t VisitString(const string_t &str, AnalyzeState &state) {
+		auto length = static_cast<uint32_t>(str.GetSize());
+		return GetVarintSize(length) + length;
+	}
+
+	static uint32_t VisitBlob(const string_t &blob, AnalyzeState &state) {
+		return VisitString(blob, state);
+	}
+	static uint32_t VisitBignum(const string_t &bignum, AnalyzeState &state) {
+		return VisitString(bignum, state);
+	}
+	static uint32_t VisitGeometry(const string_t &geom, AnalyzeState &state) {
+		return VisitString(geom, state);
+	}
+	static uint32_t VisitBitstring(const string_t &bits, AnalyzeState &state) {
+		return VisitString(bits, state);
+	}
+
+	template <typename T>
+	static uint32_t VisitDecimal(T, uint32_t width, uint32_t scale, AnalyzeState &state) {
+		uint32_t size = GetVarintSize(width) + GetVarintSize(scale);
+		size += sizeof(T);
+		return size;
+	}
+
+	static uint32_t VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
+	                           AnalyzeState &state) {
+		uint32_t size = GetVarintSize(nested_data.child_count);
+		if (nested_data.child_count) {
+			size += GetVarintSize(nested_data.children_idx + state.children_offset);
+		}
+		return size;
+	}
+
+	static uint32_t VisitObject(const UnifiedVariantVectorData &variant, idx_t row,
+	                            const VariantNestedData &nested_data, AnalyzeState &state) {
+		return VisitArray(variant, row, nested_data, state);
+	}
+
+	static uint32_t VisitDefault(VariantLogicalType type_id, const_data_ptr_t, AnalyzeState &) {
+		throw InternalException("Unrecognized VariantLogicalType: %s", EnumUtil::ToString(type_id));
+	}
+};
+
+struct VariantToVariantDataWriter {
+	using result_type = void;
+
+	static void VisitNull(WriteState &state) {
+		return;
+	}
+	static void VisitBoolean(bool, WriteState &state) {
+		return;
+	}
+
+	template <typename T>
+	static void VisitInteger(T val, WriteState &state) {
+		Store<T>(val, state.GetDestination());
+		state.blob_size += sizeof(T);
+	}
+	static void VisitFloat(float val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitDouble(double val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitUUID(hugeint_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitDate(date_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitInterval(interval_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitTime(dtime_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitTimeNanos(dtime_ns_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitTimeTZ(dtime_tz_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitTimestampSec(timestamp_sec_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitTimestampMs(timestamp_ms_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitTimestamp(timestamp_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitTimestampNanos(timestamp_ns_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+	static void VisitTimestampTZ(timestamp_tz_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
+
+	static void VisitString(const string_t &str, WriteState &state) {
+		auto length = str.GetSize();
+		state.blob_size += VarintEncode(length, state.GetDestination());
+		memcpy(state.GetDestination(), str.GetData(), length);
+		state.blob_size += length;
+	}
+	static void VisitBlob(const string_t &blob, WriteState &state) {
+		return VisitString(blob, state);
+	}
+	static void VisitBignum(const string_t &bignum, WriteState &state) {
+		return VisitString(bignum, state);
+	}
+	static void VisitGeometry(const string_t &geom, WriteState &state) {
+		return VisitString(geom, state);
+	}
+	static void VisitBitstring(const string_t &bits, WriteState &state) {
+		return VisitString(bits, state);
+	}
+
+	template <typename T>
+	static void VisitDecimal(T val, uint32_t width, uint32_t scale, WriteState &state) {
+		state.blob_size += VarintEncode(width, state.GetDestination());
+		state.blob_size += VarintEncode(scale, state.GetDestination());
+		Store<T>(val, state.GetDestination());
+		state.blob_size += sizeof(T);
+	}
+
+	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
+	                       WriteState &state) {
+		state.blob_size += VarintEncode(nested_data.child_count, state.GetDestination());
+		if (nested_data.child_count) {
+			//! NOTE: The 'child_index' stored in the OBJECT/ARRAY data could require more bits
+			//! That's the reason we have to rewrite the data in VARIANT->VARIANT cast
+			state.blob_size += VarintEncode(nested_data.children_idx + state.children_offset, state.GetDestination());
+		}
+	}
+
+	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
+	                        WriteState &state) {
+		return VisitArray(variant, row, nested_data, state);
+	}
+
+	static void VisitDefault(VariantLogicalType type_id, const_data_ptr_t, WriteState &) {
+		throw InternalException("Unrecognized VariantLogicalType: %s", EnumUtil::ToString(type_id));
+	}
+};
+
+} // namespace
 
 template <bool WRITE_DATA, bool IGNORE_NULLS>
 bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalResultData &result_data, idx_t count,
                              optional_ptr<const SelectionVector> selvec,
                              optional_ptr<const SelectionVector> values_index_selvec, const bool is_root) {
-
 	auto keys_offset_data = OffsetData::GetKeys(result_data.offsets);
 	auto children_offset_data = OffsetData::GetChildren(result_data.offsets);
 	auto values_offset_data = OffsetData::GetValues(result_data.offsets);
@@ -168,99 +320,26 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 			}
 		}
 
-		auto source_blob_data = const_data_ptr_cast(source.GetData(source_index).GetData());
-
-		//! Then write all values
 		auto source_values_list_entry = source.GetValuesListEntry(source_index);
-		for (uint32_t source_value_index = 0; source_value_index < source_values_list_entry.length;
-		     source_value_index++) {
-			auto source_type_id = source.GetTypeId(source_index, source_value_index);
-			auto source_byte_offset = source.GetByteOffset(source_index, source_value_index);
 
-			//! NOTE: we have to deserialize these in both passes
-			//! because to figure out the size of the 'data' that is added by the VARIANT, we have to traverse the
-			//! VARIANT solely because the 'child_index' stored in the OBJECT/ARRAY data could require more bits
-			WriteVariantMetadata<WRITE_DATA>(result_data, result_index, values_offset_data, blob_offset + blob_size,
-			                                 nullptr, 0, source_type_id);
+		if (WRITE_DATA) {
+			WriteState write_state(keys_offset, children_offset, blob_offset, blob_data, blob_size);
+			for (uint32_t source_value_index = 0; source_value_index < source_values_list_entry.length;
+			     source_value_index++) {
+				auto source_type_id = source.GetTypeId(source_index, source_value_index);
+				WriteVariantMetadata<WRITE_DATA>(result_data, result_index, values_offset_data, blob_offset + blob_size,
+				                                 nullptr, 0, source_type_id);
 
-			if (source_type_id == VariantLogicalType::ARRAY || source_type_id == VariantLogicalType::OBJECT) {
-				auto source_nested_data = VariantUtils::DecodeNestedData(source, source_index, source_value_index);
-				if (WRITE_DATA) {
-					VarintEncode(source_nested_data.child_count, blob_data + blob_offset + blob_size);
-				}
-				blob_size += GetVarintSize(source_nested_data.child_count);
-				if (source_nested_data.child_count) {
-					auto new_child_index = source_nested_data.children_idx + children_offset;
-					if (WRITE_DATA) {
-						VarintEncode(new_child_index, blob_data + blob_offset + blob_size);
-					}
-					blob_size += GetVarintSize(new_child_index);
-				}
-			} else if (source_type_id == VariantLogicalType::VARIANT_NULL ||
-			           source_type_id == VariantLogicalType::BOOL_FALSE ||
-			           source_type_id == VariantLogicalType::BOOL_TRUE) {
-				// no-op
-			} else if (source_type_id == VariantLogicalType::DECIMAL) {
-				auto decimal_blob_data = source_blob_data + source_byte_offset;
-				auto width = static_cast<uint8_t>(VarintDecode<uint32_t>(decimal_blob_data));
-				auto width_varint_size = GetVarintSize(width);
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, decimal_blob_data - width_varint_size,
-					       width_varint_size);
-				}
-				blob_size += width_varint_size;
-				auto scale = static_cast<uint8_t>(VarintDecode<uint32_t>(decimal_blob_data));
-				auto scale_varint_size = GetVarintSize(scale);
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, decimal_blob_data - scale_varint_size,
-					       scale_varint_size);
-				}
-				blob_size += scale_varint_size;
-
-				if (width > DecimalWidth<int64_t>::max) {
-					if (WRITE_DATA) {
-						memcpy(blob_data + blob_offset + blob_size, decimal_blob_data, sizeof(hugeint_t));
-					}
-					blob_size += sizeof(hugeint_t);
-				} else if (width > DecimalWidth<int32_t>::max) {
-					if (WRITE_DATA) {
-						memcpy(blob_data + blob_offset + blob_size, decimal_blob_data, sizeof(int64_t));
-					}
-					blob_size += sizeof(int64_t);
-				} else if (width > DecimalWidth<int16_t>::max) {
-					if (WRITE_DATA) {
-						memcpy(blob_data + blob_offset + blob_size, decimal_blob_data, sizeof(int32_t));
-					}
-					blob_size += sizeof(int32_t);
-				} else {
-					if (WRITE_DATA) {
-						memcpy(blob_data + blob_offset + blob_size, decimal_blob_data, sizeof(int16_t));
-					}
-					blob_size += sizeof(int16_t);
-				}
-			} else if (source_type_id == VariantLogicalType::BITSTRING ||
-			           source_type_id == VariantLogicalType::BIGNUM || source_type_id == VariantLogicalType::VARCHAR ||
-			           source_type_id == VariantLogicalType::BLOB) {
-				auto str_blob_data = source_blob_data + source_byte_offset;
-				auto str_length = VarintDecode<uint32_t>(str_blob_data);
-				auto str_length_varint_size = GetVarintSize(str_length);
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, str_blob_data - str_length_varint_size,
-					       str_length_varint_size);
-				}
-				blob_size += str_length_varint_size;
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, str_blob_data, str_length);
-				}
-				blob_size += str_length;
-			} else if (VariantIsTrivialPrimitive(source_type_id)) {
-				auto size = VariantTrivialPrimitiveSize(source_type_id);
-				if (WRITE_DATA) {
-					memcpy(blob_data + blob_offset + blob_size, source_blob_data + source_byte_offset, size);
-				}
-				blob_size += size;
-			} else {
-				throw InternalException("Unrecognized VariantLogicalType: %s", EnumUtil::ToString(source_type_id));
+				VariantVisitor<VariantToVariantDataWriter>::Visit(source, source_index, source_value_index,
+				                                                  write_state);
+			}
+		} else {
+			AnalyzeState analyze_state(children_offset);
+			for (uint32_t source_value_index = 0; source_value_index < source_values_list_entry.length;
+			     source_value_index++) {
+				values_offset_data[result_index]++;
+				blob_size += VariantVisitor<VariantToVariantSizeAnalyzer>::Visit(source, source_index,
+				                                                                 source_value_index, analyze_state);
 			}
 		}
 

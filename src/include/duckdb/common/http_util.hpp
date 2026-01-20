@@ -139,7 +139,7 @@ struct BaseRequest {
 	const string &url;
 	string path;
 	string proto_host_port;
-	const HTTPHeaders &headers;
+	HTTPHeaders headers;
 	HTTPParams &params;
 	//! Whether or not to return failed requests (instead of throwing)
 	bool try_request = false;
@@ -156,6 +156,14 @@ struct BaseRequest {
 	template <class TARGET>
 	const TARGET &Cast() const {
 		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+	static HTTPHeaders MergeHeaders(const HTTPHeaders &headers, HTTPParams &params) {
+		HTTPHeaders result = headers;
+		for (const auto &header : params.extra_headers) {
+			result.Insert(header.first, header.second);
+		}
+		return result;
 	}
 };
 
@@ -211,6 +219,8 @@ struct PostRequestInfo : public BaseRequest {
 	const_data_ptr_t buffer_in;
 	idx_t buffer_in_len;
 	string buffer_out;
+	//! Used to send a GET request with a body (non-standard but supported by some servers)
+	bool send_post_as_get_request = false;
 };
 
 class HTTPClient {

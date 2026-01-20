@@ -5,6 +5,8 @@
 
 namespace duckdb {
 
+constexpr const char *ScalarFunctionCatalogEntry::Name;
+
 ScalarFunctionCatalogEntry::ScalarFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
                                                        CreateScalarFunctionInfo &info)
     : FunctionEntry(CatalogType::SCALAR_FUNCTION_ENTRY, catalog, schema, info), functions(info.functions) {

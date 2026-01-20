@@ -1,0 +1,23 @@
+# name: test/sql/peg_parser/parser/array_subquery.test
+# description: Test array syntax in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT i, ARRAY(        SELECT 42 ) top FROM integers i1 ORDER BY i$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT ARRAY[42]$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT ARRAY(SELECT 42)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT ARRAY((SELECT 42))$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT i, ARRAY(        SELECT * FROM integers WHERE i>i1.i ORDER BY i ) top FROM integers i1 ORDER BY i$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select   array(select distinct i from t order by i desc) as a,   array(select distinct i from t order by i desc) as b,   array(select distinct i from t order by i desc) as c;$TEST_PEG_PARSER$);

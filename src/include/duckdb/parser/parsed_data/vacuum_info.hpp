@@ -10,10 +10,6 @@
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/tableref.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 class Serializer;

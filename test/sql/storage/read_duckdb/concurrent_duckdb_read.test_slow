@@ -1,0 +1,37 @@
+# name: test/sql/storage/read_duckdb/concurrent_duckdb_read.test_slow
+# description: Test concurrent read of a DuckDB file
+# group: [read_duckdb]
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_concurrent.db'
+
+statement ok
+CREATE TABLE read_duckdb_concurrent.my_tbl AS SELECT * FROM range(1000000) t(i)
+
+statement ok
+DETACH read_duckdb_concurrent
+
+concurrentloop i 0 10
+
+loop x 0 100
+
+onlyif i=0
+query I
+SHOW DATABASES
+----
+memory
+
+onlyif i=0
+query I
+SHOW TABLES
+----
+
+endloop
+
+onlyif i>0
+query II
+SELECT COUNT(*), SUM(i) FROM read_duckdb('__TEST_DIR__/read_duckdb_concurrent.db')
+----
+1000000	499999500000
+
+endloop

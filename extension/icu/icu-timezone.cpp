@@ -164,7 +164,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMP to TIMESTAMPTZ cast.");
 		}
-		if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
+		if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
 			throw BinderException("Casting from TIMESTAMP to TIMESTAMP WITH TIME ZONE without an explicit time zone "
 			                      "has been disabled  - use \"AT TIME ZONE ...\"");
 		}
@@ -251,7 +251,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMPTZ to TIMESTAMP cast.");
 		}
-		if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
+		if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
 			throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to TIMESTAMP without an explicit time zone "
 			                      "has been disabled  - use \"AT TIME ZONE ...\"");
 		}
@@ -267,7 +267,6 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 };
 
 struct ICULocalTimestampFunc : public ICUDateFunc {
-
 	struct BindDataNow : public BindData {
 		explicit BindDataNow(ClientContext &context) : BindData(context) {
 			now = MetaTransaction::Get(context).start_timestamp;
@@ -452,7 +451,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 		set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
 		                               Execute<ICUToTimeTZ, dtime_tz_t>, Bind));
 		for (auto &func : set.functions) {
-			BaseScalarFunction::SetReturnsError(func);
+			func.SetFallible();
 		}
 		loader.RegisterFunction(set);
 	}

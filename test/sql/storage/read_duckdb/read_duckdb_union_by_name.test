@@ -1,0 +1,32 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_union_by_name.test
+# description: Test read_duckdb with union by name
+# group: [read_duckdb]
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_unionbyname1.db' AS rd
+
+statement ok
+CREATE TABLE rd.my_tbl AS SELECT 100 i, 84 col1
+
+statement ok
+DETACH rd
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_unionbyname2.db' AS rd
+
+statement ok
+CREATE TABLE rd.my_tbl AS SELECT 200 i, 84 col2
+
+statement ok
+DETACH rd
+
+query III
+SELECT * FROM read_duckdb(['__TEST_DIR__/read_duckdb_unionbyname1.db', '__TEST_DIR__/read_duckdb_unionbyname2.db'], union_by_name=true);
+----
+100	84	NULL
+200	NULL	84
+
+statement error
+SELECT * FROM read_duckdb(['__TEST_DIR__/read_duckdb_unionbyname1.db', '__TEST_DIR__/read_duckdb_unionbyname2.db']);
+----
+could not be found in file

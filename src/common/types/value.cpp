@@ -28,6 +28,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 #include <utility>
 #include <cmath>
@@ -919,6 +920,22 @@ Value Value::BIGNUM(const string &data) {
 	return result;
 }
 
+Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs) {
+	Value result;
+	result.type_ = LogicalType::GEOMETRY(crs); // construct type explicitly so that we get the ExtraTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
+	Value result;
+	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the ExtraTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
 Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
@@ -1611,6 +1628,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -1628,7 +1646,17 @@ string Value::ToSQLString() const {
 		}
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
-	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::VARIANT: {
+		string ret = "VARIANT(";
+		Vector tmp(*this);
+		RecursiveUnifiedVectorFormat format;
+		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		UnifiedVariantVectorData vector_data(format);
+		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+		ret += val.ToString();
+		ret += ")";
+		return ret;
+	}
 	case LogicalTypeId::STRUCT: {
 		bool is_unnamed = StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";

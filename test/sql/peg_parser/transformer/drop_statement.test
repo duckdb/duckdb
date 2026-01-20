@@ -1,0 +1,39 @@
+# name: test/sql/peg_parser/transformer/drop_statement.test
+# description: 
+# group: [transformer]
+
+require autocomplete
+
+statement ok
+CREATE TABLE integers (i bigint);
+
+statement ok
+set allow_parser_override_extension=strict_when_supported;
+
+statement ok
+DROP TABLE integers;
+
+statement error
+DROP SCHEMA s1;
+----
+Catalog Error: Schema with name s1 does not exist!
+
+statement error
+DROP INDEX test_index;
+----
+Catalog Error: Index with name test_index does not exist!
+
+statement error
+DROP MACRO plus1;
+----
+Catalog Error: Macro Function with name plus1 does not exist!
+
+statement error
+DROP SEQUENCE temp.t1;
+----
+Catalog Error: Sequence with name t1 does not exist!
+
+statement error
+DROP MACRO test.test_macro2;
+----
+Catalog Error: Macro Function with name test_macro2 does not exist!

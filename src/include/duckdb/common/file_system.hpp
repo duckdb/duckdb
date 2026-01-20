@@ -10,16 +10,19 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
-#include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
+
 #include <functional>
 
 #undef CreateDirectory
@@ -56,6 +59,15 @@ enum class FileType {
 	FILE_TYPE_INVALID,
 };
 
+struct FileMetadata {
+	int64_t file_size = -1;
+	timestamp_t last_modification_time = timestamp_t::ninfinity();
+	FileType file_type = FileType::FILE_TYPE_INVALID;
+
+	// A key-value pair of the extended file metadata, which could store any attributes.
+	unordered_map<string, Value> extended_file_info;
+};
+
 struct FileHandle {
 public:
 	DUCKDB_API FileHandle(FileSystem &file_system, string path, FileOpenFlags flags);
@@ -67,6 +79,7 @@ public:
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Write(QueryContext context, void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
@@ -88,6 +101,7 @@ public:
 	DUCKDB_API bool OnDiskFile();
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
+	DUCKDB_API FileMetadata Stats();
 
 	DUCKDB_API void TryAddLogger(FileOpener &opener);
 
@@ -159,6 +173,8 @@ public:
 	DUCKDB_API virtual string GetVersionTag(FileHandle &handle);
 	//! Returns the file type of the attached handle
 	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
+	//! Returns the file stats of the attached handle.
+	DUCKDB_API virtual FileMetadata Stats(FileHandle &handle);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);
@@ -191,6 +207,8 @@ public:
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remvoe a file from disk if it exists - if it does not exist, return false
 	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove multiple files from disk - does not error if any file does not exist
+	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Sets the working directory
@@ -242,9 +260,6 @@ public:
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
 	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
 
-	//! Unregister a sub-filesystem by name
-	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
-
 	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
 	// has been disabled.
 	DUCKDB_API virtual unique_ptr<FileSystem> ExtractSubSystem(const string &name);
@@ -284,6 +299,8 @@ public:
 
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
 	DUCKDB_API virtual bool SubSystemIsDisabled(const string &name);
+	//! Check if the filesystem that would handle this path is disabled
+	DUCKDB_API virtual bool IsDisabledForPath(const string &path);
 
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
 
