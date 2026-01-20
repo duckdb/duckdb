@@ -1890,6 +1890,8 @@ WindowFrame PEGTransformerFactory::TransformFrameClause(PEGTransformer &transfor
 				frame.boundary = WindowBoundary::EXPR_PRECEDING_ROWS;
 			} else if (frame.boundary == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 				frame.boundary = WindowBoundary::EXPR_FOLLOWING_ROWS;
+			} else if (frame.boundary == WindowBoundary::INVALID) {
+				frame.boundary = WindowBoundary::CURRENT_ROW_ROWS;
 			}
 		} else if (StringUtil::CIEquals(framing, "groups")) {
 			if (frame.boundary == WindowBoundary::CURRENT_ROW_RANGE) {
@@ -1898,9 +1900,13 @@ WindowFrame PEGTransformerFactory::TransformFrameClause(PEGTransformer &transfor
 				frame.boundary = WindowBoundary::EXPR_PRECEDING_GROUPS;
 			} else if (frame.boundary == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 				frame.boundary = WindowBoundary::EXPR_FOLLOWING_GROUPS;
+			} else if (frame.boundary == WindowBoundary::INVALID) {
+				frame.boundary = WindowBoundary::CURRENT_ROW_GROUPS;
 			}
 		} else if (StringUtil::CIEquals(framing, "range")) {
-			continue;
+			if (frame.boundary == WindowBoundary::INVALID) {
+				frame.boundary = WindowBoundary::CURRENT_ROW_RANGE;
+			}
 		} else {
 			throw ParserException("Invalid result from frame: %s", framing);
 		}
@@ -1947,7 +1953,7 @@ PEGTransformerFactory::TransformSingleFrameExtent(PEGTransformer &transformer, o
 	vector<WindowBoundaryExpression> result;
 	result.push_back(transformer.Transform<WindowBoundaryExpression>(list_pr.Child<ListParseResult>(0)));
 	WindowBoundaryExpression end_current_row;
-	end_current_row.boundary = WindowBoundary::CURRENT_ROW_ROWS;
+	end_current_row.boundary = WindowBoundary::INVALID;
 	result.push_back(std::move(end_current_row));
 	return result;
 }

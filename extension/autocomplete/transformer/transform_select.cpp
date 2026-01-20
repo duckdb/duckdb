@@ -133,6 +133,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 		for (auto &window_func : window_functions) {
 			D_ASSERT(!window_func->alias.empty());
 			string window_name(window_func->alias);
+			window_func->alias = "";
 			auto it = transformer.window_clauses.find(window_name);
 			if (it != transformer.window_clauses.end()) {
 				throw ParserException("window \"%s\" is already defined", window_name);
@@ -523,8 +524,14 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &tr
 	auto opt_table_alias = list_pr.Child<OptionalParseResult>(2);
 	if (opt_table_alias.HasResult()) {
 		auto table_alias = transformer.Transform<TableAlias>(opt_table_alias.optional_result);
-		inner_table_ref->alias = table_alias.name;
-		inner_table_ref->column_name_alias = table_alias.column_name_alias;
+		auto outer_select = make_uniq<SelectNode>();
+		outer_select->from_table = std::move(inner_table_ref);
+		outer_select->select_list.push_back(make_uniq<StarExpression>());
+		auto select_statement = make_uniq<SelectStatement>();
+		select_statement->node = std::move(outer_select);
+		auto subquery_ref = make_uniq<SubqueryRef>(std::move(select_statement), table_alias.name);
+		subquery_ref->column_name_alias = table_alias.column_name_alias;
+		inner_table_ref = std::move(subquery_ref);
 	}
 	return inner_table_ref;
 }

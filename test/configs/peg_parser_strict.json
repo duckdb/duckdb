@@ -15,7 +15,8 @@
         "test/sql/cast/cast_error_location.test",
         "test/sql/copy/parquet/copy_option_suggestion.test",
         "test/sql/copy/parquet/parquet_list.test",
-        "test/sql/copy/csv/glob/read_csv_glob.test"
+        "test/sql/copy/csv/glob/read_csv_glob.test",
+        "test/sql/error/qualified_column_error.test"
       ]
     },
     {
