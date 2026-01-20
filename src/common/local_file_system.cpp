@@ -1370,9 +1370,7 @@ static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";
 }
-static bool HasMultipleCrawl(const vector<string> &splits) {
-	return std::count(splits.begin(), splits.end(), "**") > 1;
-}
+
 static bool IsSymbolicLink(const string &path) {
 	auto normalized_path = LocalFileSystem::NormalizeLocalPath(path);
 #ifndef _WIN32
@@ -1485,12 +1483,30 @@ const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
 	return path.c_str() + GetFileUrlOffset(path);
 }
 
+struct PathSplit {
+	PathSplit(LocalFileSystem &fs, string path_p) : path(std::move(path_p)), has_glob(fs.HasGlob(path)) {
+	}
+
+	string path;
+	bool has_glob;
+};
+
+static bool HasMultipleCrawl(const vector<PathSplit> &splits) {
+	idx_t crawl_count = 0;
+	for (auto &split : splits) {
+		if (split.path == "**") {
+			crawl_count++;
+		}
+	}
+	return crawl_count > 1;
+}
+
 vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<OpenFileInfo>();
 	}
 	// split up the path into separate chunks
-	vector<string> splits;
+	vector<PathSplit> splits;
 
 	bool is_file_url = StringUtil::StartsWith(path, "file:/");
 	idx_t file_url_path_offset = GetFileUrlOffset(path);
@@ -1504,29 +1520,29 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 				continue;
 			}
 			if (splits.empty()) {
-				//				splits.push_back(path.substr(file_url_path_offset, i-file_url_path_offset));
-				splits.push_back(path.substr(0, i));
+				splits.emplace_back(*this, path.substr(0, i));
 			} else {
-				splits.push_back(path.substr(last_pos, i - last_pos));
+				splits.emplace_back(*this, path.substr(last_pos, i - last_pos));
 			}
 			last_pos = i + 1;
 		}
 	}
-	splits.push_back(path.substr(last_pos, path.size() - last_pos));
+	splits.emplace_back(*this, path.substr(last_pos, path.size() - last_pos));
 	// handle absolute paths
 	bool absolute_path = false;
 	if (IsPathAbsolute(path)) {
 		// first character is a slash -  unix absolute path
 		absolute_path = true;
-	} else if (StringUtil::Contains(splits[0], ":")) { // TODO: this is weird? shouldn't IsPathAbsolute handle this?
+	} else if (StringUtil::Contains(splits[0].path,
+	                                ":")) { // TODO: this is weird? shouldn't IsPathAbsolute handle this?
 		// first split has a colon -  windows absolute path
 		absolute_path = true;
-	} else if (splits[0] == "~") {
+	} else if (splits[0].path == "~") {
 		// starts with home directory
 		auto home_directory = GetHomeDirectory(opener);
 		if (!home_directory.empty()) {
 			absolute_path = true;
-			splits[0] = home_directory;
+			splits[0].path = home_directory;
 			D_ASSERT(path[0] == '~');
 			if (!HasGlob(path)) {
 				return Glob(home_directory + path.substr(1));
@@ -1541,7 +1557,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 	vector<OpenFileInfo> previous_directories;
 	if (absolute_path) {
 		// for absolute paths, we don't start by scanning the current directory
-		previous_directories.push_back(splits[0]);
+		previous_directories.push_back(splits[0].path);
 	} else {
 		// If file_search_path is set, use those paths as the first glob elements
 		Value value;
@@ -1567,25 +1583,26 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 
 	for (idx_t i = start_index ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
-		bool has_glob = HasGlob(splits[i]);
+		auto &split = splits[i].path;
+		bool has_glob = splits[i].has_glob;
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern
 		vector<OpenFileInfo> result;
 		if (!has_glob) {
 			// no glob, just append as-is
 			if (previous_directories.empty()) {
-				result.push_back(splits[i]);
+				result.push_back(split);
 			} else {
 				if (is_last_chunk) {
 					for (auto &prev_directory : previous_directories) {
-						const string filename = JoinPath(prev_directory.path, splits[i]);
+						const string filename = JoinPath(prev_directory.path, split);
 						if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
 							result.push_back(filename);
 						}
 					}
 				} else {
 					for (auto &prev_directory : previous_directories) {
-						result.push_back(JoinPath(prev_directory.path, splits[i]));
+						result.push_back(JoinPath(prev_directory.path, split));
 					}
 				}
 			}
@@ -1593,7 +1610,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 			if (previous_directories.empty()) {
 				previous_directories.emplace_back(".");
 			}
-			if (IsCrawl(splits[i])) {
+			if (IsCrawl(split)) {
 				if (!is_last_chunk) {
 					result = previous_directories;
 				}
@@ -1604,7 +1621,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 				// previous directories
 				// we iterate over each of the previous directories, and apply the glob of the current directory
 				for (auto &prev_directory : previous_directories) {
-					GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true);
+					GlobFilesInternal(*this, prev_directory.path, split, !is_last_chunk, result, true);
 				}
 			}
 		}
