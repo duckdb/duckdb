@@ -44,6 +44,13 @@ struct IndexSerializationInfo {
 	transaction_t checkpoint_id;
 };
 
+struct IndexSerializationResult {
+	//! The ordered list of references to serialize - preserves iteration order of index_entries
+	vector<reference<const IndexStorageInfo>> ordered_infos;
+	//! Storage for bound index infos (moved in from BoundIndex::SerializeToDisk)
+	vector<IndexStorageInfo> bound_infos;
+};
+
 class TableIndexList {
 public:
 	//! Scan the index entries, invoking the callback method for every entry.
@@ -109,7 +116,7 @@ public:
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of the table.
-	vector<IndexStorageInfo> SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
+	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 
 public:
 	//! Initialize an index_chunk from a table.

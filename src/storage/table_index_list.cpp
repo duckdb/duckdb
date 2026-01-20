@@ -249,24 +249,36 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
+IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
 	lock_guard<mutex> lock(index_entries_lock);
-	vector<IndexStorageInfo> infos;
+
+	IndexSerializationResult result;
+
+	idx_t bound_count = 0;
+	for (auto &entry : index_entries) {
+		if (entry->index->IsBound()) {
+			bound_count++;
+		}
+	}
+	result.bound_infos.reserve(bound_count);
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (!index.IsBound()) {
-			auto storage_info = index.Cast<UnboundIndex>().GetStorageInfo();
-			D_ASSERT(!storage_info.name.empty());
-			infos.push_back(storage_info);
-			continue;
+			// Unbound: reference existing storage info
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			D_ASSERT(!unbound_index.GetStorageInfo().name.empty());
+			result.ordered_infos.push_back(unbound_index.GetStorageInfo());
+		} else {
+			// Bound: move new storage info into bound_infos, then reference it
+			auto &bound_index = index.Cast<BoundIndex>();
+			auto storage_info = bound_index.SerializeToDisk(context, info.options);
+			D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
+			result.bound_infos.push_back(std::move(storage_info));
+			result.ordered_infos.push_back(result.bound_infos.back());
 		}
-		// serialize the index to disk
-		auto &bound_index = index.Cast<BoundIndex>();
-		auto storage_info = bound_index.SerializeToDisk(context, info.options);
-		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
-		infos.push_back(storage_info);
 	}
-	return infos;
+
+	return result;
 }
 
 void TableIndexList::MergeCheckpointDeltas(DataTable &storage, transaction_t checkpoint_id) {

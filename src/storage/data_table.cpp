@@ -45,6 +45,17 @@ bool DataTableInfo::IsTemporary() const {
 	return db.IsTemporary();
 }
 
+IndexStorageInfo DataTableInfo::ExtractIndexStorageInfo(const string &name) {
+	for (idx_t i = 0; i < index_storage_infos.size(); i++) {
+		if (index_storage_infos[i].name == name) {
+			auto result = std::move(index_storage_infos[i]);
+			index_storage_infos.erase_at(i);
+			return result;
+		}
+	}
+	throw InternalException("ExtractIndexStorageInfo: index storage info with name '%s' not found", name);
+}
+
 DataTable::DataTable(AttachedDatabase &db, shared_ptr<TableIOManager> table_io_manager_p, const string &schema,
                      const string &table, vector<ColumnDefinition> column_definitions_p,
                      unique_ptr<PersistentTableData> data)
@@ -1729,7 +1740,7 @@ vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &co
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
-                         const IndexConstraintType type, const IndexStorageInfo &index_info) {
+                         const IndexConstraintType type, IndexStorageInfo index_info) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
 		                           "%s by a different transaction",
