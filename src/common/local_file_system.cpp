@@ -1501,6 +1501,16 @@ static bool HasMultipleCrawl(const vector<PathSplit> &splits) {
 	return crawl_count > 1;
 }
 
+struct ExpandDirectory {
+	ExpandDirectory(string path_p, idx_t split_index, bool is_empty = false)
+	    : path(std::move(path_p)), split_index(split_index), is_empty(is_empty) {
+	}
+
+	string path;
+	idx_t split_index;
+	bool is_empty = false;
+};
+
 vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<OpenFileInfo>();
@@ -1554,10 +1564,13 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 		// no glob: return only the file (if it exists or is a pipe)
 		return FetchFileWithoutGlob(path, opener, absolute_path);
 	}
-	vector<OpenFileInfo> previous_directories;
+	vector<ExpandDirectory> expand_directories;
 	if (absolute_path) {
 		// for absolute paths, we don't start by scanning the current directory
-		previous_directories.push_back(splits[0].path);
+		// FIXME: we don't support /[GLOB]/.. - i.e. globs in the first level of an absolute path
+		if (splits.size() > 1) {
+			expand_directories.emplace_back(splits[0].path, 1);
+		}
 	} else {
 		// If file_search_path is set, use those paths as the first glob elements
 		Value value;
@@ -1565,8 +1578,11 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 			auto search_paths_str = value.ToString();
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
-				previous_directories.push_back(search_path);
+				expand_directories.emplace_back(search_path, 0);
 			}
+		}
+		if (expand_directories.empty()) {
+			expand_directories.emplace_back(".", 0, true);
 		}
 	}
 
@@ -1574,68 +1590,67 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 		throw IOException("Cannot use multiple \'**\' in one path");
 	}
 
-	idx_t start_index;
-	if (is_file_url || absolute_path) {
-		start_index = 1;
-	} else {
-		start_index = 0;
-	}
-
-	for (idx_t i = start_index ? 1 : 0; i < splits.size(); i++) {
-		bool is_last_chunk = i + 1 == splits.size();
-		auto &split = splits[i].path;
-		bool has_glob = splits[i].has_glob;
+	vector<OpenFileInfo> result;
+	for (idx_t expand_idx = 0; expand_idx < expand_directories.size(); expand_idx++) {
+		auto &expand_directory = expand_directories[expand_idx];
+		auto split_index = expand_directory.split_index;
+		auto &current_path = expand_directory.path;
+		auto &next_split = splits[split_index];
+		bool is_last_component = split_index + 1 == splits.size();
+		auto &next_component = next_split.path;
+		bool has_glob = next_split.has_glob;
 		// if it's the last chunk we need to find files, otherwise we find directories
 		// not the last chunk: gather a list of all directories that match the glob pattern
-		vector<OpenFileInfo> result;
 		if (!has_glob) {
 			// no glob, just append as-is
-			if (previous_directories.empty()) {
-				result.push_back(split);
+			if (expand_directory.is_empty) {
+				if (is_last_component) {
+					throw InternalException("No glob in only component - but entire split has globs?");
+				}
+				// no path yet - just append
+				expand_directories.emplace_back(next_component, split_index + 1);
 			} else {
-				if (is_last_chunk) {
-					for (auto &prev_directory : previous_directories) {
-						const string filename = JoinPath(prev_directory.path, split);
-						if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
-							result.push_back(filename);
-						}
+				if (is_last_component) {
+					// last component - we are emitting a result here
+					const string filename = JoinPath(current_path, next_component);
+					if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
+						result.push_back(filename);
 					}
 				} else {
-					for (auto &prev_directory : previous_directories) {
-						result.push_back(JoinPath(prev_directory.path, split));
-					}
+					// not the last component - add the next directory as "to-be-expanded"
+					expand_directories.emplace_back(JoinPath(current_path, next_component), split_index + 1);
 				}
 			}
 		} else {
-			if (previous_directories.empty()) {
-				previous_directories.emplace_back(".");
-			}
-			if (IsCrawl(split)) {
-				if (!is_last_chunk) {
-					result = previous_directories;
+			// glob - need to resolve the glob
+			vector<OpenFileInfo> glob_result;
+			if (IsCrawl(next_component)) {
+				if (!is_last_component) {
+					// ** also matches the current directory (i.e. dir/**/file.parquet also matches dir/file.parquet)
+					glob_result.emplace_back(current_path);
 				}
-				for (auto &prev_dir : previous_directories) {
-					RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true);
-				}
+				RecursiveGlobDirectories(*this, current_path, glob_result, !is_last_component, true);
 			} else {
-				// previous directories
-				// we iterate over each of the previous directories, and apply the glob of the current directory
-				for (auto &prev_directory : previous_directories) {
-					GlobFilesInternal(*this, prev_directory.path, split, !is_last_chunk, result, true);
+				// glob this directory according to the next component
+				GlobFilesInternal(*this, current_path, next_component, !is_last_component, glob_result, true);
+			}
+			for (auto &file : glob_result) {
+				if (is_last_component) {
+					// last component - add to result
+					result.push_back(std::move(file));
+				} else {
+					// not the last component - add to the list of to-be-expanded directories
+					expand_directories.emplace_back(std::move(file.path), split_index + 1);
 				}
 			}
 		}
-		if (result.empty()) {
-			// no result found that matches the glob
-			// last ditch effort: search the path as a string literal
-			return FetchFileWithoutGlob(path, opener, absolute_path);
-		}
-		if (is_last_chunk) {
-			return result;
-		}
-		previous_directories = std::move(result);
 	}
-	return vector<OpenFileInfo>();
+	if (result.empty()) {
+		// no result found that matches the glob
+		// last ditch effort: search the path as a string literal
+		return FetchFileWithoutGlob(path, opener, absolute_path);
+	}
+	return result;
 }
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {
