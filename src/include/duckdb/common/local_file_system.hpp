@@ -67,9 +67,6 @@ public:
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
 
-	//! Runs a glob on the file system, returning a list of matching files
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path
 		return false;
@@ -107,6 +104,12 @@ protected:
 	                       optional_ptr<FileOpener> opener) override;
 
 	bool SupportsListFilesExtended() const override {
+		return true;
+	}
+
+	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                            optional_ptr<FileOpener> opener) override;
+	bool SupportsGlobExtended() const override {
 		return true;
 	}
 

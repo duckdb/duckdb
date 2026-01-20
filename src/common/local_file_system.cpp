@@ -1384,7 +1384,8 @@ static bool IsSymbolicLink(const string &path) {
 #endif
 }
 
-vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener, bool absolute_path) {
+vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener,
+                                                           bool absolute_path) {
 	vector<OpenFileInfo> result;
 	if (FileExists(path, opener) || IsPipe(path, opener)) {
 		result.emplace_back(path);
@@ -1473,7 +1474,8 @@ struct ExpandDirectory {
 	bool is_empty = false;
 };
 
-static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr<vector<OpenFileInfo>> files, queue<ExpandDirectory> &directories, idx_t split_index) {
+static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr<vector<OpenFileInfo>> files,
+                                queue<ExpandDirectory> &directories, idx_t split_index) {
 	fs.ListFiles(path, [&](OpenFileInfo &info) {
 		info.path = fs.JoinPath(path, info.path);
 		if (IsSymbolicLink(info.path)) {
@@ -1489,7 +1491,7 @@ static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr
 }
 
 static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-							  vector<OpenFileInfo> &result) {
+                              vector<OpenFileInfo> &result) {
 	fs.ListFiles(path, [&](OpenFileInfo &info) {
 		bool is_directory = FileSystem::IsDirectory(info);
 		if (is_directory != match_directory) {
@@ -1501,7 +1503,6 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 		}
 	});
 }
-
 
 struct LocalGlobResult : public MultiFileList {
 public:
@@ -1519,7 +1520,7 @@ private:
 
 private:
 	LocalFileSystem &fs;
-	const string &path;
+	string path;
 	optional_ptr<FileOpener> opener;
 	vector<OpenFileInfo> result;
 	vector<PathSplit> splits;
@@ -1528,8 +1529,9 @@ private:
 	bool absolute_path = false;
 };
 
-LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobInput glob_input, optional_ptr<FileOpener> opener) :
-	MultiFileList({}, std::move(glob_input)), fs(fs), path(path_p), opener(opener) {
+LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobInput glob_input,
+                                 optional_ptr<FileOpener> opener)
+    : MultiFileList({}, std::move(glob_input)), fs(fs), path(path_p), opener(opener) {
 	if (path.empty()) {
 		finished = true;
 		return;
@@ -1720,9 +1722,9 @@ bool LocalGlobResult::ExpandNextFile() {
 	return true;
 }
 
-vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
-	LocalGlobResult glob_result(*this, path, FileGlobOptions::ALLOW_EMPTY, opener);
-	return glob_result.GetAllFiles();
+unique_ptr<MultiFileList> LocalFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
+                                                             optional_ptr<FileOpener> opener) {
+	return make_uniq<LocalGlobResult>(*this, path, FileGlobOptions::ALLOW_EMPTY, opener);
 }
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {
