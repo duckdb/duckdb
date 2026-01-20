@@ -266,6 +266,9 @@ private:
 	T &n;
 };
 
+//! ConstNodeHandle is a read-only wrapper to access a node.
+//! A segment handle is used for memory management, but it is not marked as modified.
+//! For mutable access, use NodeHandle instead.
 template <class T>
 class ConstNodeHandle {
 public:
