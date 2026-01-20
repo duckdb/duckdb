@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb {
 
@@ -866,7 +867,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(check_peg_parser_fun);
 
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	config.parser_extensions.push_back(PEGParserExtension());
+	ParserExtension::Register(config, PEGParserExtension());
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {

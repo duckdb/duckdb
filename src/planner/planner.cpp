@@ -17,6 +17,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
 
@@ -59,8 +60,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			parameters_resolved = false;
 		} else if (error.Type() != ExceptionType::INVALID) {
 			// different exception type - try operator_extensions
-			auto &config = DBConfig::GetConfig(context);
-			for (auto &extension_op : config.operator_extensions) {
+			for (auto &extension_op : OperatorExtension::Iterate(context)) {
 				auto bound_statement =
 				    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
 				if (bound_statement.plan != nullptr) {
