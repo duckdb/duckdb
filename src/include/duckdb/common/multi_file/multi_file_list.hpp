@@ -110,6 +110,8 @@ public:
 	virtual unique_ptr<MultiFileList> Copy();
 
 protected:
+	//! Whether or not the file at the index is available instantly - or if this requires additional I/O
+	virtual bool FileIsAvailable(idx_t i);
 	//! Get the i-th expanded file
 	virtual OpenFileInfo GetFile(idx_t i) = 0;
 
@@ -176,6 +178,7 @@ public:
 	idx_t GetTotalFileCount() override;
 
 protected:
+	bool FileIsAvailable(idx_t i) override;
 	//! Main MultiFileList API
 	OpenFileInfo GetFile(idx_t i) override;
 

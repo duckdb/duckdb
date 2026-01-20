@@ -885,16 +885,6 @@ struct GeometryMinimumShreddingSize {
 	static constexpr idx_t SettingIndex = 48;
 };
 
-struct ForceGlobOrderingSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "force_glob_ordering";
-	static constexpr const char *Description = "Whether glob results should be sorted alphabetically. When disabled, "
-	                                           "allows paginated globbing for faster file discovery.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "true";
-	static constexpr SetScope DefaultScope = SetScope::SESSION;
-};
-
 struct HomeDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "home_directory";

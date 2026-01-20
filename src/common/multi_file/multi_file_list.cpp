@@ -157,6 +157,10 @@ void MultiFileList::InitializeScan(MultiFileListScanData &iterator) {
 
 bool MultiFileList::Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file) {
 	D_ASSERT(iterator.current_file_idx != DConstants::INVALID_INDEX);
+	if (iterator.scan_type == MultiFileListScanType::FETCH_IF_AVAILABLE &&
+	    !FileIsAvailable(iterator.current_file_idx)) {
+		return false;
+	}
 	auto maybe_file = GetFile(iterator.current_file_idx);
 
 	if (maybe_file.path.empty()) {
@@ -199,6 +203,10 @@ bool MultiFileList::IsEmpty() {
 
 unique_ptr<MultiFileList> MultiFileList::Copy() {
 	return make_uniq<SimpleMultiFileList>(GetAllFiles());
+}
+
+bool MultiFileList::FileIsAvailable(idx_t i) {
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -352,6 +360,11 @@ FileExpandResult GlobMultiFileList::GetExpandResult() {
 	return FileExpandResult::NO_FILES;
 }
 
+bool GlobMultiFileList::FileIsAvailable(idx_t i) {
+	lock_guard<mutex> lck(lock);
+	return i < expanded_files.size();
+}
+
 OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
 	lock_guard<mutex> lck(lock);
 	return GetFileInternal(i);
@@ -402,7 +415,6 @@ bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileI
 	std::sort(glob_files.begin(), glob_files.end());
 	result.insert(result.end(), glob_files.begin(), glob_files.end());
 
-	current_path++;
 	return true;
 }
 

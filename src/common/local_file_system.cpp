@@ -1513,6 +1513,7 @@ public:
 	idx_t GetTotalFileCount() override;
 
 protected:
+	bool FileIsAvailable(idx_t i) override;
 	OpenFileInfo GetFile(idx_t i) override;
 
 private:
@@ -1635,6 +1636,10 @@ idx_t LocalGlobResult::GetTotalFileCount() {
 	while (ExpandNextFile()) {
 	}
 	return result.size();
+}
+
+bool LocalGlobResult::FileIsAvailable(idx_t i) {
+	return i < result.size();
 }
 
 OpenFileInfo LocalGlobResult::GetFile(idx_t i) {
