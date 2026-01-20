@@ -225,15 +225,6 @@ public:
 	inline void operator=(const IndexPointer &ptr) {
 		Set(ptr.Get());
 	}
-
-private:
-	template <class NODE>
-	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
-	                                          TransformToDeprecatedState &state) {
-		if (ptr) {
-			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, state); });
-		}
-	}
 };
 
 //! NodeChildren holds the extracted bytes of a node, and their respective children.

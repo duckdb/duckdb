@@ -1100,7 +1100,7 @@ scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 template <class OP>
 unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	if (DBConfig::GetSetting<IeeeFloatingPointOpsSetting>(context)) {
+	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
 		bound_function.SetFunctionCallback(

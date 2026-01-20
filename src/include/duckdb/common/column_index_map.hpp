@@ -9,7 +9,8 @@ namespace duckdb {
 
 struct ColumnIndexHashFunction {
 	uint64_t operator()(const ColumnIndex &index) const {
-		auto hasher = std::hash<idx_t>();
+		auto index_hasher = std::hash<idx_t>();
+		auto field_hasher = std::hash<string>();
 		queue<reference<const ColumnIndex>> to_hash;
 
 		hash_t result = 0;
@@ -20,7 +21,12 @@ struct ColumnIndexHashFunction {
 			for (auto &child : children) {
 				to_hash.push(child);
 			}
-			result ^= hasher(current.get().GetPrimaryIndex());
+
+			if (current.get().HasPrimaryIndex()) {
+				result ^= index_hasher(current.get().GetPrimaryIndex());
+			} else {
+				result ^= field_hasher(current.get().GetFieldName());
+			}
 			to_hash.pop();
 		}
 		return result;

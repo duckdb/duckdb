@@ -24,7 +24,7 @@ struct SortedAggregateBindData : public FunctionData {
 	SortedAggregateBindData(ClientContext &context, Expressions &children, AggregateFunction &aggregate,
 	                        BindInfoPtr &bind_info, OrderBys &order_bys)
 	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
-	      threshold(DBConfig::GetSetting<OrderedAggregateThresholdSetting>(context)) {
+	      threshold(Settings::Get<OrderedAggregateThresholdSetting>(context)) {
 		//	Describe the arguments.
 		for (const auto &child : children) {
 			buffered_cols.emplace_back(buffered_cols.size());

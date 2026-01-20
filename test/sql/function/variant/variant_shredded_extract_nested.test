@@ -1,0 +1,78 @@
+# name: test/sql/function/variant/variant_shredded_extract_nested.test
+# group: [variant]
+
+load __TEST_DIR__/nested_types.db
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+create table list_variant as select
+	{
+		'id': l_orderkey,
+		'my_list': [
+			l_orderkey,
+			l_orderkey + 1,
+			l_orderkey + 2
+		],
+		'my_struct': {
+			'a': l_orderkey,
+			'b': l_orderkey + 30
+		}
+	}::variant as list_variant
+from
+	range(5) t(l_orderkey)
+
+statement ok
+checkpoint
+
+# Extract of a LIST without a CAST
+query I
+select
+	list_variant.my_list
+from
+	list_variant
+limit
+	1;
+----
+[0, 1, 2]
+
+# Extract of a LIST with a CAST
+query I
+select
+	list_variant.my_list::BIGINT[]
+from
+	list_variant
+limit
+	1;
+----
+[0, 1, 2]
+
+# Extract of a STRUCT without a CAST
+query I
+select
+	list_variant.my_struct
+from
+	list_variant
+limit 1;
+----
+{'a': 0, 'b': 30}
+
+# Extract of a STRUCT with a CAST
+query I
+select
+	list_variant.my_struct::STRUCT(b BIGINT, a BIGINT)
+from
+	list_variant
+limit 1;
+----
+{'b': 30, 'a': 0}
+
+query I
+select
+	(list_variant.my_struct::STRUCT(b VARCHAR, a VARCHAR)).b[1]
+from
+	list_variant
+limit 1;
+----
+3

@@ -50,6 +50,8 @@ enum class AggregateOrderDependent : uint8_t;
 
 enum class AggregateType : uint8_t;
 
+enum class AllowParserOverride : uint8_t;
+
 enum class AlterDatabaseType : uint8_t;
 
 enum class AlterForeignKeyType : uint8_t;
@@ -189,6 +191,8 @@ enum class ExtensionLoadResult : uint8_t;
 enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
+
+enum class ExtraPersistentColumnDataType : uint8_t;
 
 enum class ExtraTypeInfoType : uint8_t;
 
@@ -517,6 +521,9 @@ template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
 
 template<>
+const char* EnumUtil::ToChars<AllowParserOverride>(AllowParserOverride value);
+
+template<>
 const char* EnumUtil::ToChars<AlterDatabaseType>(AlterDatabaseType value);
 
 template<>
@@ -725,6 +732,9 @@ const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ExtraPersistentColumnDataType>(ExtraPersistentColumnDataType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
@@ -1202,6 +1212,9 @@ template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
 
 template<>
+AllowParserOverride EnumUtil::FromString<AllowParserOverride>(const char *value);
+
+template<>
 AlterDatabaseType EnumUtil::FromString<AlterDatabaseType>(const char *value);
 
 template<>
@@ -1410,6 +1423,9 @@ ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const ch
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
+
+template<>
+ExtraPersistentColumnDataType EnumUtil::FromString<ExtraPersistentColumnDataType>(const char *value);
 
 template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
