@@ -10,12 +10,16 @@ use db2;
 statement ok
 pragma force_compression='zstd';
 
+###########################
+# Test CRUD Functionality #
+###########################
+
+# 1. Create
 statement ok
-create table tbl as
-select
-    i // 5_000 as num,
-    num::varchar || list_reduce([uuid()::varchar for x in range(10)], lambda x, y: concat(x, y)) str
-from range(20_000) t(i) order by num;
+CREATE TABLE tbl AS (
+  SELECT ('thisisalongstring' || i::VARCHAR) AS string_column
+  FROM range(10) AS numbers(i)
+);
 
 statement ok
 force checkpoint;
@@ -25,5 +29,48 @@ select distinct compression = 'ZSTD' from pragma_storage_info('tbl') where segme
 ----
 true
 
+# 2. Read
+query I
+FROM tbl;
+----
+thisisalongstring0
+thisisalongstring1
+thisisalongstring2
+thisisalongstring3
+thisisalongstring4
+thisisalongstring5
+thisisalongstring6
+thisisalongstring7
+thisisalongstring8
+thisisalongstring9
+
+# 3. Update
 statement ok
-from tbl;
+UPDATE tbl set string_column = 'quacc5' WHERE string_column = 'thisisalongstring5';
+
+query I
+FROM tbl;
+----
+thisisalongstring0
+thisisalongstring1
+thisisalongstring2
+thisisalongstring3
+thisisalongstring4
+quacc5
+thisisalongstring6
+thisisalongstring7
+thisisalongstring8
+thisisalongstring9
+
+# 4. Delete
+statement ok
+DELETE FROM tbl WHERE RIGHT(string_column, 1)::int%2=0;
+
+query I
+FROM tbl;
+----
+thisisalongstring1
+thisisalongstring3
+quacc5
+thisisalongstring7
+thisisalongstring9

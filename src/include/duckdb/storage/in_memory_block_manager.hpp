@@ -52,13 +52,13 @@ public:
 		throw InternalException("Cannot perform IO in in-memory database - IsRootBlock!");
 	}
 	void MarkBlockACheckpointed(block_id_t block_id) override {
-		throw InternalException("Cannot perform IO in in-memory database - MarkBlockACheckpointed!");
+		// NO OP
 	}
 	void MarkBlockAsUsed(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsUsed!");
 	}
 	void MarkBlockAsModified(block_id_t block_id) override {
-		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsModified!");
+		blocks.erase(block_id);
 	}
 	void IncreaseBlockReferenceCount(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - IncreaseBlockReferenceCount!");
