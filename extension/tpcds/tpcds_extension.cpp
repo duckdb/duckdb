@@ -2,7 +2,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
-
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "dsdgen.hpp"
 #include "tpcds_extension.hpp"
 
