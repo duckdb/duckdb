@@ -89,7 +89,7 @@
         "test/sql/storage/compression/alp/alp_many_segments_float.test_slow",
         "test/sql/storage/parallel/insert_order_preserving.test_slow",
         "test/sql/storage/test_purge_queue.test_slow",
-        "test/optimizer/pushdown/issue_18653.test",
+        "test/optimizer/pushdown/issue_18653.test_slow",
         "test/sql/parallelism/interquery/concurrent_checkpoint_wal_fk.test_slow",
         "test/sql/parallelism/interquery/concurrent_checkpoint_deletes.test_slow"
       ]

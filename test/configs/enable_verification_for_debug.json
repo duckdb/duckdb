@@ -138,7 +138,7 @@
         "test/sql/types/list/list_stats.test",
         "test/sql/types/nested/array/array_statistics.test",
         "test/sql/types/struct/struct_stats.test",
-        "test/sql/storage/types/variant/variant_shredding.test",
+        "test/sql/storage/types/variant/variant_shredding.test_slow",
         "test/sql/storage/types/variant/variant_stats_merging.test",
         "test/sql/storage/types/variant/variant_extract_stats.test",
         "test/sql/vacuum/test_analyze.test"
@@ -173,7 +173,7 @@
       "paths": [
         "test/extension/test_tags.test",
         "test/fuzzer/duckfuzz/array_list_gather_cast.test",
-        "test/fuzzer/duckfuzz/bind_limit_num.test",
+        "test/fuzzer/duckfuzz/bind_limit_num.test_slow",
         "test/fuzzer/duckfuzz/compressed_materialization_hugeint.test",
         "test/fuzzer/duckfuzz/duck_fuzz_column_binding_tests.test",
         "test/fuzzer/duckfuzz/empty_result_pullup_delim_joins.test",
