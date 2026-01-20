@@ -123,16 +123,6 @@ public:
 		return GetFileSystem().Glob(path, GetOpener().get());
 	}
 
-	unique_ptr<PaginatedResult<OpenFileInfo>> PaginatedGlob(const string &path, FileOpener *opener) override {
-		VerifyNoOpener(opener);
-		VerifyCanAccessFile(path);
-		return GetFileSystem().PaginatedGlob(path, GetOpener().get());
-	}
-
-	bool SupportsPaginatedGlobbing(const string &fpath, ClientContext &context) override {
-		return GetFileSystem().SupportsPaginatedGlobbing(fpath, context);
-	}
-
 	std::string GetName() const override {
 		return "OpenerFileSystem - " + GetFileSystem().GetName();
 	}
@@ -181,6 +171,16 @@ protected:
 	}
 
 	bool SupportsListFilesExtended() const override {
+		return true;
+	}
+
+	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(path);
+		return GetFileSystem().Glob(path, input, GetOpener());
+	}
+
+	bool SupportsGlobExtended() const override {
 		return true;
 	}
 

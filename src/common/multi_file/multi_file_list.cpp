@@ -4,8 +4,10 @@
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 
@@ -145,7 +147,7 @@ MultiFileList::MultiFileList(vector<OpenFileInfo> paths, FileGlobOptions options
 MultiFileList::~MultiFileList() {
 }
 
-const vector<OpenFileInfo> MultiFileList::GetPaths() const {
+const vector<OpenFileInfo> &MultiFileList::GetPaths() const {
 	return paths;
 }
 
@@ -272,11 +274,8 @@ idx_t SimpleMultiFileList::GetTotalFileCount() {
 //===--------------------------------------------------------------------===//
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
-GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> paths_p, FileGlobInput glob_input,
-                                     const bool _consistent_ordering)
-    : MultiFileList(std::move(paths_p), std::move(glob_input)), context(context_p), current_path(0),
-      consistent_ordering(_consistent_ordering) {
-	paginated_files.resize(paths.size());
+GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> paths_p, FileGlobInput glob_input)
+    : MultiFileList(std::move(paths_p), std::move(glob_input)), context(context_p), current_path(0) {
 }
 
 unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
@@ -314,10 +313,8 @@ GlobMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFile
 	// Expand all paths into a copy
 	// FIXME: lazy expansion and push filters into glob
 	idx_t path_index = current_path;
-	vector<unique_ptr<PaginatedResult<OpenFileInfo>>> paginated_files {};
-	paginated_files.resize(paths.size());
 	auto file_list = expanded_files;
-	while (ExpandPathInternal(path_index, file_list, paginated_files)) {
+	while (ExpandPathInternal(path_index, file_list)) {
 	}
 
 	auto res = PushdownInternal(context, options, names, types, column_ids, filters, file_list);
@@ -370,40 +367,24 @@ OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i) {
 	return expanded_files[i];
 }
 
-bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
-                                           vector<unique_ptr<PaginatedResult<OpenFileInfo>>> &paginated_files) const {
+bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result) const {
 	if (current_path >= paths.size()) {
 		return false;
 	}
-	auto &fs = FileSystem::GetFileSystem(context);
-	const auto &current_file_path = paths[current_path].path;
-	if (fs.SupportsPaginatedGlobbing(current_file_path, context) && !consistent_ordering) {
-		auto &pagination_result = paginated_files[current_path];
-		if (pagination_result == nullptr) {
-			pagination_result = fs.PaginatedGlobFiles(current_file_path, context, glob_input);
-		}
 
-		if (pagination_result->FetchNextPage()) {
-			auto next_page = pagination_result->ClaimNextPage();
-			result.insert(result.end(), next_page.begin(), next_page.end());
-		} else {
-			current_path++;
-		}
-		return true;
-	} else {
-		auto glob_files = fs.GlobFiles(current_file_path, context, glob_input);
-		if (consistent_ordering) {
-			std::sort(glob_files.begin(), glob_files.end());
-		}
+	throw InternalException("FIXME: GlobMultiFileList::ExpandPathInternal");
 
-		result.insert(result.end(), glob_files.begin(), glob_files.end());
-		current_path++;
-		return true;
-	}
+	// auto &fs = FileSystem::GetFileSystem(context);
+	// auto glob_files = fs.GlobFiles(paths[current_path].path, glob_input);
+	// std::sort(glob_files.begin(), glob_files.end());
+	// result.insert(result.end(), glob_files.begin(), glob_files.end());
+
+	current_path++;
+	return true;
 }
 
 bool GlobMultiFileList::ExpandNextPath() {
-	return ExpandPathInternal(current_path, expanded_files, paginated_files);
+	return ExpandPathInternal(current_path, expanded_files);
 }
 
 bool GlobMultiFileList::IsFullyExpanded() const {

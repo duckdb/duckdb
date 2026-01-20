@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/multi_file/union_by_name.hpp"
@@ -118,16 +119,10 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
 	vector<OpenFileInfo> open_files;
-	open_files.reserve(paths.size());
 	for (auto &path : paths) {
 		open_files.emplace_back(path);
 	}
-	// Read the force_glob_ordering setting to determine whether to sort glob results
-	Value force_glob_ordering_value = true;
-	context.TryGetCurrentSetting("force_glob_ordering", force_glob_ordering_value);
-	bool force_glob_ordering = force_glob_ordering_value.GetValue<bool>();
-
-	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input, force_glob_ordering);
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && glob_input.behavior != FileGlobOptions::ALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
@@ -305,7 +300,6 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
                                    const vector<MultiFileColumnDefinition> &global_columns,
                                    const vector<ColumnIndex> &global_column_ids, ClientContext &context,
                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
-
 	// create a map of name -> column index
 	auto &local_columns = reader_data.reader->GetColumns();
 	auto &filename = reader_data.reader->GetFileName();

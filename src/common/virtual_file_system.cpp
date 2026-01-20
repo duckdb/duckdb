@@ -140,16 +140,9 @@ string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path).PathSeparator(path);
 }
 
-vector<OpenFileInfo> VirtualFileSystem::Glob(const string &path, FileOpener *opener) {
-	return FindFileSystem(path, opener).Glob(path, opener);
-}
-
-unique_ptr<PaginatedResult<OpenFileInfo>> VirtualFileSystem::PaginatedGlob(const string &path, FileOpener *opener) {
-	return FindFileSystem(path, opener).PaginatedGlob(path, opener);
-}
-
-bool VirtualFileSystem::SupportsPaginatedGlobbing(const string &fpath, ClientContext &context) {
-	return FindFileSystem(fpath, context.db).SupportsPaginatedGlobbing(fpath, context);
+unique_ptr<MultiFileList> VirtualFileSystem::GlobFilesExtended(const string &path,
+										  const FileGlobInput &input, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(path, opener).Glob(path, input, opener);
 }
 
 void VirtualFileSystem::RegisterSubSystem(unique_ptr<FileSystem> fs) {

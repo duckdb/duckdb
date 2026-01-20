@@ -74,7 +74,7 @@ public:
 	virtual ~MultiFileList();
 
 	//! Returns the raw, unexpanded paths, pre-filter
-	const vector<OpenFileInfo> GetPaths() const;
+	const vector<OpenFileInfo> &GetPaths() const;
 
 	//! Get Iterator over the files for pretty for loops
 	MultiFileListIterationHelper Files();
@@ -158,8 +158,7 @@ protected:
 //! MultiFileList that takes a list of paths and produces a list of files with all globs expanded
 class GlobMultiFileList : public MultiFileList {
 public:
-	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> paths, FileGlobInput glob_input,
-	                  bool _consistent_ordering = true);
+	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> paths, FileGlobInput glob_input);
 	//! Calls ExpandAll, then prunes the expanded_files using the hive/filename filters
 	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
 	                                                MultiFilePushdownInfo &info,
@@ -183,8 +182,7 @@ protected:
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
 	bool ExpandNextPath();
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
-	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result,
-	                        vector<unique_ptr<PaginatedResult<OpenFileInfo>>> &paginated_files) const;
+	bool ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result) const;
 	//! Whether all files have been expanded
 	bool IsFullyExpanded() const;
 
@@ -192,12 +190,8 @@ protected:
 	ClientContext &context;
 	//! The current path to expand
 	idx_t current_path;
-	//! The paginated results for each path
-	vector<unique_ptr<PaginatedResult<OpenFileInfo>>> paginated_files;
 	//! The expanded files
 	vector<OpenFileInfo> expanded_files;
-	//! Force alphabetical oder -> no reliance on the underlying filesystem order
-	const bool consistent_ordering;
 
 	mutable mutex lock;
 };

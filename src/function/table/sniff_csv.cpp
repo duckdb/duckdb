@@ -135,7 +135,8 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	const CSVSniffFunctionData &data = data_p.bind_data->Cast<CSVSniffFunctionData>();
 	auto &fs = duckdb::FileSystem::GetFileSystem(context);
 
-	auto files = fs.GlobFiles(data.path, context, FileGlobOptions::DISALLOW_EMPTY);
+	auto result = fs.GlobFiles(data.path, FileGlobOptions::DISALLOW_EMPTY);
+	auto files = result->GetAllFiles();
 	if (files.size() > 1) {
 		throw NotImplementedException("sniff_csv does not operate on more than one file yet");
 	}
