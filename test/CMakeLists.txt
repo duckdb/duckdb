@@ -48,6 +48,8 @@ endif()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
+target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
+
 target_link_libraries(unittest duckdb_static test_helpers)
 
 link_extension_libraries(unittest "")

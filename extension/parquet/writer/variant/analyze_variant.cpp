@@ -87,8 +87,8 @@ namespace {
 
 struct ShredAnalysisState {
 	idx_t highest_count = 0;
-	LogicalTypeId type_id;
-	PhysicalType decimal_type;
+	LogicalTypeId type_id = LogicalTypeId::INVALID;
+	PhysicalType decimal_type = PhysicalType::INVALID;
 };
 
 } // namespace

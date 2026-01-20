@@ -271,11 +271,11 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 		auto &stats = stats_p->Cast<UUIDStatisticsState>();
 		if (!stats.has_stats ||
 		    memcmp(target_value.bytes, stats.min.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE) < 0) {
-			memcpy(stats.min.bytes, target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+			stats.min = target_value;
 		}
 		if (!stats.has_stats ||
 		    memcmp(target_value.bytes, stats.max.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE) > 0) {
-			memcpy(stats.max.bytes, target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+			stats.max = target_value;
 		}
 		stats.has_stats = true;
 	}
