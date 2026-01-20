@@ -24,12 +24,9 @@ def valid_timeout(value):
 
 def get_cpu_count():
     """Get the number of CPU cores available."""
-    try:
-        # Try to get the number of CPUs available to this process (respects cgroups/containers)
-        if hasattr(os, 'sched_getaffinity'):
-            return len(os.sched_getaffinity(0))
-    except (OSError, AttributeError):
-        pass
+    # Try to get the number of CPUs available to this process (respects cgroups/containers)
+    if hasattr(os, 'sched_getaffinity'):
+        return len(os.sched_getaffinity(0))
     # Fall back to total CPU count
     return os.cpu_count() or 1
 
@@ -81,7 +78,7 @@ parser.add_argument(
     '--parallel',
     action='store_true',
     help='Shorthand for --workers auto (use all CPU cores)',
-    default=False,
+    default=True,
 )
 
 args, extra_args = parser.parse_known_args()
