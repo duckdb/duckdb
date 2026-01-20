@@ -245,7 +245,7 @@ public:
 	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
 		handle.MarkModified();
 	}
-
+	NodeHandle() = delete;
 	NodeHandle(const NodeHandle &) = delete;
 	NodeHandle &operator=(const NodeHandle &) = delete;
 
