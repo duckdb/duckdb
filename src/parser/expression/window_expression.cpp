@@ -134,6 +134,32 @@ bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &
 	return true;
 }
 
+bool WindowExpression::HasBoundedParts() {
+	for (auto &child : children) {
+		if ((*child).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
+			return true;
+		}
+	}
+	for (auto &partition : partitions) {
+		if ((*partition).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
+			return true;
+		}
+	}
+
+	for (auto &o : orders) {
+		if ((*o.expression).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
+			return true;
+		}
+	}
+
+	for (auto &o : arg_orders) {
+		if ((*o.expression).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	auto new_window = make_uniq<WindowExpression>(type, catalog, schema, function_name);
 	new_window->CopyProperties(*this);

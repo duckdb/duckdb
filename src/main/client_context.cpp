@@ -183,7 +183,7 @@ void ClientContext::Destroy() {
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	error.FinalizeError();
-	if (config.errors_as_json) {
+	if (Settings::Get<ErrorsAsJSONSetting>(*this)) {
 		error.ConvertErrorToJSON();
 	} else {
 		error.AddErrorLocation(query);
@@ -942,9 +942,8 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
 		try {
 			string log_path(DUCKDB_FORCE_QUERY_LOG);
-			client_data->log_query_writer =
-			    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
-			                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data->file_opener.get());
+			client_data->log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
+			                                                              BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 		} catch (...) {
 			return;
 		}
@@ -1425,43 +1424,40 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSettingInternal(const string &key, Value &result) const {
-	// check the client session values
-	const auto &session_config_map = config.set_variables;
-
-	auto session_value = session_config_map.find(key);
-	bool found_session_value = session_value != session_config_map.end();
-	if (found_session_value) {
-		result = session_value->second;
+SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
+	optional_ptr<const ConfigurationOption> option;
+	// try to get the setting index
+	auto &db_config = DBConfig::GetConfig(*this);
+	auto setting_index = db_config.TryGetSettingIndex(key, option);
+	if (setting_index.IsValid()) {
+		// generic setting - try to fetch it
+		auto lookup_result =
+		    config.user_settings.TryGetSetting(db_config.user_settings, setting_index.GetIndex(), result);
+		if (lookup_result) {
+			return lookup_result;
+		}
+	}
+	if (option && option->get_setting) {
+		// legacy callback
+		result = option->get_setting(*this);
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
-	// finally check the global session values
-	return db->TryGetCurrentSetting(key, result);
+	// setting is not set - get the default value
+	return DBConfig::TryGetDefaultValue(option, result);
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
-	// first check the built-in settings
+SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index, Value &result) const {
 	auto &db_config = DBConfig::GetConfig(*this);
-	auto option = db_config.GetOptionByName(key);
-	if (option) {
-		if (option->get_setting) {
-			result = option->get_setting(*this);
-			return SettingLookupResult(SettingScope::LOCAL);
-		}
-		// alias - search for the default key
-		return TryGetCurrentSettingInternal(option->name, result);
-	}
-	return TryGetCurrentSettingInternal(key, result);
+	return config.user_settings.TryGetSetting(db_config.user_settings, setting_index, result);
 }
 
 ParserOptions ClientContext::GetParserOptions() const {
-	auto &client_config = ClientConfig::GetConfig(*this);
 	ParserOptions options;
-	options.preserve_identifier_case = DBConfig::GetSetting<PreserveIdentifierCaseSetting>(*this);
-	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
-	options.max_expression_depth = client_config.max_expression_depth;
+	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
+	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
+	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
-	options.parser_override_setting = DBConfig::GetConfig(*this).options.allow_parser_override_extension;
+	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	return options;
 }
 
@@ -1473,13 +1469,13 @@ ClientProperties ClientContext::GetClientProperties() {
 		timezone = result.ToString();
 	}
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
-	if (DBConfig::GetSetting<ArrowLargeBufferSizeSetting>(*this)) {
+	if (Settings::Get<ArrowLargeBufferSizeSetting>(*this)) {
 		arrow_offset_size = ArrowOffsetSize::LARGE;
 	}
-	bool arrow_use_list_view = DBConfig::GetSetting<ArrowOutputListViewSetting>(*this);
-	bool arrow_lossless_conversion = DBConfig::GetSetting<ArrowLosslessConversionSetting>(*this);
-	bool arrow_use_string_view = DBConfig::GetSetting<ProduceArrowStringViewSetting>(*this);
-	auto arrow_format_version = DBConfig::GetSetting<ArrowOutputVersionSetting>(*this);
+	bool arrow_use_list_view = Settings::Get<ArrowOutputListViewSetting>(*this);
+	bool arrow_lossless_conversion = Settings::Get<ArrowLosslessConversionSetting>(*this);
+	bool arrow_use_string_view = Settings::Get<ProduceArrowStringViewSetting>(*this);
+	auto arrow_format_version = Settings::Get<ArrowOutputVersionSetting>(*this);
 	return {timezone,
 	        arrow_offset_size,
 	        arrow_use_list_view,

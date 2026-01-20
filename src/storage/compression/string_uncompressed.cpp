@@ -1,6 +1,5 @@
 #include "duckdb/storage/string_uncompressed.hpp"
 
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"

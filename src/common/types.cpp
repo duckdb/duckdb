@@ -738,6 +738,7 @@ bool LogicalType::IsTemporal() const {
 	switch (id_) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -1277,10 +1278,15 @@ struct ForceGetTypeOperation {
 
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
                                        LogicalType &result) {
-	if (DBConfig::GetSetting<OldImplicitCastingSetting>(context)) {
+	if (Settings::Get<OldImplicitCastingSetting>(context)) {
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
+	return TryGetMaxLogicalTypeUnchecked(left, right, result);
+}
+
+bool LogicalType::TryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right,
+                                                LogicalType &result) {
 	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(left, right, result);
 }
 

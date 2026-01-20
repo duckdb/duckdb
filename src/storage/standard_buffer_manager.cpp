@@ -2,15 +2,14 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
-#include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/main/settings.hpp"
@@ -249,7 +248,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 	auto &block_manager = handles[0]->block_manager;
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
 	if (block_count == 1) {
-		if (DBConfig::GetSetting<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
+		if (Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
 			// prefetching with block_count == 1 has no performance impact since we can't batch reads
 			// skip the prefetch in this case
 			// we do it anyway if alternative_verify is on for extra testing
@@ -496,6 +495,10 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 	}
 }
 
+bool StandardBufferManager::EncryptTemporaryFiles() {
+	return Settings::Get<TempFileEncryptionSetting>(db);
+}
+
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
@@ -512,7 +515,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto path = GetTemporaryPath(block_id);
 
 	idx_t header_size = sizeof(idx_t) * 2;
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		header_size += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
@@ -529,7 +532,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 
 	idx_t offset = sizeof(idx_t) * 2;
 
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(), encryption_metadata);
 		//! Write the nonce (and tag for GCM).
@@ -567,7 +570,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer));
 
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		// encrypted
 		//! Read nonce and tag from file.
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
@@ -590,6 +593,9 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 }
 
 void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
+	if (!block.IsUnloaded()) {
+		return;
+	}
 	auto id = block.BlockId();
 	if (temporary_directory.path.empty()) {
 		// no temporary directory specified: nothing to delete

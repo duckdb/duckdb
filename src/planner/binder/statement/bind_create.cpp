@@ -49,34 +49,40 @@ namespace duckdb {
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
 	auto &context = retriever.GetContext();
-	if (catalog.empty() && !schema.empty()) {
-		// schema is specified - but catalog is not
-		// try searching for the catalog instead
-		auto &db_manager = DatabaseManager::Get(context);
-		auto database = db_manager.GetDatabase(context, schema);
-		if (database) {
-			// we have a database with this name
-			// check if there is a schema
-			auto &search_path = retriever.GetSearchPath();
-			auto catalog_names = search_path.GetCatalogsForSchema(schema);
-			if (catalog_names.empty()) {
-				catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
-			}
-			for (auto &catalog_name : catalog_names) {
-				auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
-				if (!catalog_ptr) {
-					continue;
-				}
-				if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
-					throw BinderException(
-					    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-					    schema, catalog_name, schema);
-				}
-			}
-			catalog = schema;
-			schema = string();
+	if (schema.empty()) {
+		return;
+	}
+	if (!catalog.empty()) {
+		return;
+	}
+	// schema is specified - but catalog is not
+	// try searching for the catalog instead
+	auto &db_manager = DatabaseManager::Get(context);
+	auto database = db_manager.GetDatabase(context, schema);
+	if (!database) {
+		//! No database by that name was found
+		return;
+	}
+	// we have a database with this name
+	// check if there is a schema
+	auto &search_path = retriever.GetSearchPath();
+	auto catalog_names = search_path.GetCatalogsForSchema(schema);
+	if (catalog_names.empty()) {
+		catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
+	}
+	for (auto &catalog_name : catalog_names) {
+		auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
+		if (!catalog_ptr) {
+			continue;
+		}
+		if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
+			throw BinderException(
+			    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"", schema,
+			    catalog_name, schema);
 		}
 	}
+	catalog = schema;
+	schema = string();
 }
 
 void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
@@ -160,7 +166,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	auto &dependencies = base.dependencies;
 	auto &catalog = Catalog::GetCatalog(context, base.catalog);
 
-	bool should_create_dependencies = DBConfig::GetSetting<EnableViewDependenciesSetting>(context);
+	bool should_create_dependencies = Settings::Get<EnableViewDependenciesSetting>(context);
 	if (should_create_dependencies) {
 		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
@@ -298,7 +304,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		macro_binding = this_macro_binding.get();
 
 		auto &dependencies = base.dependencies;
-		const auto should_create_dependencies = DBConfig::GetSetting<EnableMacroDependenciesSetting>(context);
+		const auto should_create_dependencies = Settings::Get<EnableMacroDependenciesSetting>(context);
 		const auto binder_callback = [&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
 				// Don't register any cross-catalog dependencies

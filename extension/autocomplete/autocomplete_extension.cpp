@@ -8,7 +8,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -332,7 +332,7 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 		AutoCompleteCandidate candidate(option_alias.alias, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
-	for (auto &entry : db_config.extension_parameters) {
+	for (auto &entry : db_config.GetExtensionSettings()) {
 		AutoCompleteCandidate candidate(entry.first, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
@@ -363,8 +363,7 @@ static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &con
 
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	vector<AutoCompleteCandidate> result;
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
 		// if enable_external_access is disabled we don't search the file system
 		return result;
 	}

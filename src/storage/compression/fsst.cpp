@@ -5,7 +5,6 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/settings.hpp"
@@ -650,7 +649,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 
 	bool enable_fsst_vectors;
 	if (ALLOW_FSST_VECTORS) {
-		enable_fsst_vectors = DBConfig::GetSetting<EnableFSSTVectorsSetting>(segment.db);
+		enable_fsst_vectors = Settings::Get<EnableFSSTVectorsSetting>(segment.db);
 	} else {
 		enable_fsst_vectors = false;
 	}

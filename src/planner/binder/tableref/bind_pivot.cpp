@@ -425,6 +425,36 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 
 	auto &aggregates = result.bound_pivot.aggregates;
 	ExtractPivotAggregates(result.child, aggregates);
+
+	if (aggregates.size() < ref.bound_aggregate_names.size()) {
+		vector<string> unique_names;
+		unordered_set<string> seen;
+		for (auto &name : ref.bound_aggregate_names) {
+			if (seen.find(name) == seen.end()) {
+				unique_names.push_back(name);
+				seen.insert(name);
+			}
+		}
+
+		if (unique_names.size() != aggregates.size()) {
+			throw InternalException("Pivot aggregate mismatch: %llu unique names, %llu aggregates", unique_names.size(),
+			                        aggregates.size());
+		}
+
+		unordered_map<string, idx_t> name_to_position;
+		for (idx_t i = 0; i < unique_names.size(); i++) {
+			name_to_position[unique_names[i]] = i;
+		}
+
+		vector<unique_ptr<Expression>> expanded_aggs;
+		for (auto &expected_name : ref.bound_aggregate_names) {
+			idx_t position = name_to_position[expected_name];
+			expanded_aggs.push_back(aggregates[position]->Copy());
+		}
+
+		result.bound_pivot.aggregates = std::move(expanded_aggs);
+	}
+
 	if (aggregates.size() != ref.bound_aggregate_names.size()) {
 		throw InternalException("Pivot aggregate count mismatch (expected %llu, found %llu)",
 		                        ref.bound_aggregate_names.size(), aggregates.size());
@@ -551,7 +581,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			pivots.insert(val);
 		}
 	}
-	auto pivot_limit = DBConfig::GetSetting<PivotLimitSetting>(context);
+	auto pivot_limit = Settings::Get<PivotLimitSetting>(context);
 	if (total_pivots >= pivot_limit) {
 		throw BinderException(ref, "Pivot column limit of %llu exceeded. Use SET pivot_limit=X to increase the limit.",
 		                      pivot_limit);
@@ -573,7 +603,7 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	// -> filtered aggregates are faster when there are FEW pivot values
 	// -> LIST is faster when there are MANY pivot values
 	// we switch dynamically based on the number of pivots to compute
-	auto pivot_filter_threshold = DBConfig::GetSetting<PivotFilterThresholdSetting>(context);
+	auto pivot_filter_threshold = Settings::Get<PivotFilterThresholdSetting>(context);
 	if (pivot_values.size() <= pivot_filter_threshold) {
 		// use a set of filtered aggregates
 		pivot_node =

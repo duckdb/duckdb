@@ -8,9 +8,12 @@
 
 #pragma once
 
-#include "duckdb/common/winapi.hpp"
+#include "duckdb/common/enable_shared_from_this_ipp.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/caching_mode.hpp"
 
 namespace duckdb {
 
@@ -21,27 +24,23 @@ class QueryContext;
 class CachingFileSystemWrapper;
 struct CachingFileHandle;
 
-//! Caching mode for CachingFileSystemWrapper.
-//! By default only remote files will be cached, but it's also allowed to cache local for direct IO use case.
-enum class CachingMode : uint8_t {
-	// Cache all files.
-	ALWAYS_CACHE = 0,
-	// Only cache remote files, bypass cache for local files.
-	CACHE_REMOTE_ONLY = 1,
-};
-
 //! CachingFileHandleWrapper wraps CachingFileHandle to conform to FileHandle API.
 class CachingFileHandleWrapper : public FileHandle {
 	friend class CachingFileSystemWrapper;
 
 public:
-	DUCKDB_API CachingFileHandleWrapper(CachingFileSystemWrapper &file_system, unique_ptr<CachingFileHandle> handle,
-	                                    FileOpenFlags flags);
+	DUCKDB_API CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
+	                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags);
+
 	DUCKDB_API ~CachingFileHandleWrapper() override;
 
 	DUCKDB_API void Close() override;
 
 private:
+	// CachingFileSystem is not kept within VFS as other filesystems, so sometimes it's necessary to pin it inside of
+	// file handle and ensure it's valid.
+	shared_ptr<CachingFileSystemWrapper> caching_file_system;
+
 	unique_ptr<CachingFileHandle> caching_handle;
 };
 
@@ -50,14 +49,13 @@ private:
 //! read, the wrapper class always copies requested byted into the provided address.
 //!
 //! NOTICE: Currently only read and seek operations are supported, write operations are disabled.
-class CachingFileSystemWrapper : public FileSystem {
+class CachingFileSystemWrapper : public FileSystem, public enable_shared_from_this<CachingFileSystemWrapper> {
 public:
 	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, DatabaseInstance &db,
 	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
+	DUCKDB_API CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener,
+	                                    CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 	DUCKDB_API ~CachingFileSystemWrapper() override;
-
-	DUCKDB_API static CachingFileSystemWrapper Get(ClientContext &context,
-	                                               CachingMode mode = CachingMode::CACHE_REMOTE_ONLY);
 
 	DUCKDB_API std::string GetName() const override;
 
@@ -103,7 +101,6 @@ public:
 
 	DUCKDB_API void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) override;
 	DUCKDB_API void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
-	DUCKDB_API void UnregisterSubSystem(const string &name) override;
 	DUCKDB_API unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
 	DUCKDB_API vector<string> ListSubSystems() override;
 	DUCKDB_API bool CanHandleFile(const string &fpath) override;

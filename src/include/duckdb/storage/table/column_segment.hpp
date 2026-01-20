@@ -12,11 +12,9 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
-#include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {

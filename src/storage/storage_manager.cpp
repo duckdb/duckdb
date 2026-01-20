@@ -2,10 +2,10 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
@@ -21,8 +21,65 @@
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
-
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
+
+void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided) {
+	// storage version < v1.4.0
+	if (!storage_version.IsValid() ||
+	    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+		if (!storage_version_user_provided.empty()) {
+			throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
+			                            "v1.4.0) are not compatible",
+			                            storage_version_user_provided);
+		}
+	}
+
+	auto target_encryption_version = encryption_version;
+
+	if (target_encryption_version == EncryptionTypes::NONE) {
+		target_encryption_version = EncryptionTypes::V0_1;
+	}
+
+	switch (target_encryption_version) {
+	case EncryptionTypes::V0_1:
+		// storage version not explicitly set
+		if (!storage_version.IsValid() && storage_version_user_provided.empty()) {
+			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+			break;
+		}
+		// storage version set, but v1.4.0 =< storage < v1.5.0
+		if (storage_version.GetIndex() < SerializationCompatibility::FromString("v1.5.0").serialization_version) {
+			if (!storage_version_user_provided.empty()) {
+				if (encryption_version == target_encryption_version) {
+					// encryption version is explicitly given, but not compatible with < v1.5.0
+					throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") is not compatible with "
+					                            "'debug_encryption_version = v1' (storage >= "
+					                            "v1.5.0)",
+					                            storage_version_user_provided);
+				}
+			} else {
+				// encryption version needs to be lowered, because storage version < v1.5.0
+				target_encryption_version = EncryptionTypes::V0_0;
+				break;
+			}
+		}
+
+		break;
+
+	case EncryptionTypes::V0_0:
+		// we set this to V0 to V1.5.0 if no explicit storage version provided
+		if (!storage_version.IsValid() && storage_version_user_provided.empty()) {
+			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+			break;
+		}
+		// if storage version is provided, we do nothing
+		break;
+	default:
+		throw InvalidConfigurationException("Encryption version is not set");
+	}
+
+	encryption_version = target_encryption_version;
+}
 
 void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 	string storage_version_user_provided = "";
@@ -62,20 +119,14 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			} else {
 				compress_in_memory = CompressInMemory::DO_NOT_COMPRESS;
 			}
+		} else if (entry.first == "debug_encryption_version") {
+			encryption_version = EncryptionTypes::StringToVersion(entry.second.ToString());
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
 	}
-	if (encryption &&
-	    (!storage_version.IsValid() ||
-	     storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version)) {
-		if (!storage_version_user_provided.empty()) {
-			throw InvalidInputException(
-			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible",
-			    storage_version_user_provided);
-		}
-		// set storage version to v1.4.0
-		storage_version = SerializationCompatibility::FromString("v1.4.0").serialization_version;
+	if (encryption) {
+		SetEncryptionVersion(storage_version_user_provided);
 	}
 }
 
@@ -324,6 +375,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		D_ASSERT(storage_options.block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.user_key = std::move(storage_options.user_key);
+		options.encryption_options.encryption_version = storage_options.encryption_version;
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
@@ -356,7 +408,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			options.block_alloc_size = storage_options.block_alloc_size;
 		} else {
 			// No explicit option provided: use the default option.
-			options.block_alloc_size = config.options.default_block_alloc_size;
+			options.block_alloc_size = Settings::Get<DefaultBlockSizeSetting>(config);
 		}
 		//! set the block header size for the encrypted database files
 		//! set the database to encrypted
