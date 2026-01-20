@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/array_column_data.hpp"
+#include "duckdb/storage/table/geo_column_data.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"

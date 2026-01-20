@@ -2,6 +2,7 @@
 
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
