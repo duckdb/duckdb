@@ -547,8 +547,10 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 		current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 		return;
 	}
-	if (threads.size() > new_thread_count) {
-		// we are reducing the number of threads: clear all threads first
+	if (threads.size() != new_thread_count) {
+		// we are changing the number of threads: clear all threads first
+		// we do this even when increasing the number of threads to make sure that all threads follow the current
+		// affinity mask
 		for (idx_t i = 0; i < threads.size(); i++) {
 			*markers[i] = false;
 		}
