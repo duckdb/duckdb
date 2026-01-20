@@ -344,7 +344,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 		// allocate an in-memory buffer for it
 		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size, false);
 		block = handle.GetBlockHandle();
-		state.overflow_blocks.insert(make_pair(block->BlockId(), reference<StringBlock>(*new_block)));
+		state.InsertOverflowBlock(block->BlockId(), reference<StringBlock>(*new_block));
 		new_block->block = std::move(block);
 		new_block->next = std::move(state.head);
 		state.head = std::move(new_block);
@@ -426,9 +426,8 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 	// read the overflow string from memory
 	// first pin the handle, if it is not pinned yet
-	auto entry = state.overflow_blocks.find(block);
-	D_ASSERT(entry != state.overflow_blocks.end());
-	auto handle = buffer_manager.Pin(entry->second.get().block);
+	auto string_block = state.FindOverflowBlock(block);
+	auto handle = buffer_manager.Pin(string_block.get().block);
 	auto final_buffer = handle.Ptr();
 	StringVector::AddHandle(result, std::move(handle));
 	return ReadStringWithLength(final_buffer, offset);
