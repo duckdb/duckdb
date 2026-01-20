@@ -529,7 +529,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 	auto expr_list_pr = ExtractParseResultsFromList(extract_parens);
 	vector<unique_ptr<ParsedExpression>> in_children;
 	for (auto &expr : expr_list_pr) {
-		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(std::move(expr)));
+		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
 	return std::move(result);
@@ -772,8 +772,6 @@ string GetRawText(optional_ptr<ParseResult> pr) {
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
-
 	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
 	auto base_expr_pr = list_pr.Child<ListParseResult>(1);
 
