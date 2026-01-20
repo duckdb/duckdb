@@ -4,4 +4,4 @@
 statement error
 CREATE TABLE T  (v TYPE);
 ----
-A table cannot be created from a TYPE column yet
+Invalid Input Error: A table cannot be created with a 'TYPE' column

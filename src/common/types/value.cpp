@@ -29,7 +29,6 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/serializer/const_stream.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
 
@@ -1816,10 +1815,9 @@ LogicalType TypeValue::GetType(const Value &value) {
 	D_ASSERT(value.type().id() == LogicalTypeId::TYPE);
 	D_ASSERT(value.value_info_);
 	auto &type_str = value.value_info_->Get<StringValueInfo>().GetString();
-
-	ConstReadStream stream(const_data_ptr_cast(type_str.data()), type_str.size());
+	auto str = string_t(type_str);
+	MemoryStream stream(data_ptr_cast(str.GetDataWriteable()), str.GetSize());
 	BinaryDeserializer deserializer(stream);
-
 	return LogicalType::Deserialize(deserializer);
 }
 
@@ -2071,7 +2069,7 @@ void Value::Reinterpret(LogicalType new_type) {
 	this->type_ = std::move(new_type);
 }
 
-const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
+static const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
 	switch (parent_type.InternalType()) {
 	case PhysicalType::LIST:
 		return ListType::GetChildType(parent_type);
@@ -2084,7 +2082,7 @@ const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
 	}
 }
 
-bool SerializeTypeMatches(const LogicalType &expected_type, const LogicalType &actual_type) {
+static bool SerializeTypeMatches(const LogicalType &expected_type, const LogicalType &actual_type) {
 	if (expected_type.id() != actual_type.id()) {
 		// type id needs to be the same
 		return false;
@@ -2124,6 +2122,14 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 	if (IsNull()) {
 		return;
 	}
+
+	if (type_.id() == LogicalTypeId::TYPE) {
+		// special case for TYPE values: serialize the type as a nested object
+		auto type_value = TypeValue::GetType(*this);
+		serializer.WriteProperty(102, "value", type_value);
+		return;
+	}
+
 	switch (type_.InternalType()) {
 	case PhysicalType::BIT:
 		throw InternalException("BIT type should not be serialized");
@@ -2207,6 +2213,13 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		return new_value;
 	}
 	new_value.is_null = false;
+
+	if (type.id() == LogicalTypeId::TYPE) {
+		// special case for TYPE values: deserialize the type as a nested object
+		auto type_value = deserializer.ReadProperty<LogicalType>(102, "value");
+		return Value::TYPE(type_value);
+	}
+
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
 		throw InternalException("BIT type should not be deserialized");

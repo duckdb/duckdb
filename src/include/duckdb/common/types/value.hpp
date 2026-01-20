@@ -474,7 +474,6 @@ struct UnionValue {
 
 struct TypeValue {
 	DUCKDB_API static LogicalType GetType(const Value &value);
-	DUCKDB_API static const string &GetSerializedType(const Value &value);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally

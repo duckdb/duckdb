@@ -54,7 +54,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
 		if (TypeVisitor::Contains(col_def.Type(), LogicalTypeId::TYPE)) {
-			throw NotImplementedException("A table cannot be created from a TYPE column yet");
+			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
 		}
 
 		column_defs.push_back(col_def.Copy());
