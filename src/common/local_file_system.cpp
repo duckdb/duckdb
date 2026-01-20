@@ -1559,9 +1559,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 	}
 
 	idx_t start_index;
-	if (is_file_url) {
-		start_index = 1;
-	} else if (absolute_path) {
+	if (is_file_url || absolute_path) {
 		start_index = 1;
 	} else {
 		start_index = 0;
@@ -1592,27 +1590,21 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 				}
 			}
 		} else {
+			if (previous_directories.empty()) {
+				previous_directories.emplace_back(".");
+			}
 			if (IsCrawl(splits[i])) {
 				if (!is_last_chunk) {
 					result = previous_directories;
 				}
-				if (previous_directories.empty()) {
-					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
-				} else {
-					for (auto &prev_dir : previous_directories) {
-						RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true);
-					}
+				for (auto &prev_dir : previous_directories) {
+					RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true);
 				}
 			} else {
-				if (previous_directories.empty()) {
-					// no previous directories: list in the current path
-					GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false);
-				} else {
-					// previous directories
-					// we iterate over each of the previous directories, and apply the glob of the current directory
-					for (auto &prev_directory : previous_directories) {
-						GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true);
-					}
+				// previous directories
+				// we iterate over each of the previous directories, and apply the glob of the current directory
+				for (auto &prev_directory : previous_directories) {
+					GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true);
 				}
 			}
 		}
