@@ -105,8 +105,7 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 		    encoding_function->GetLookupBytes() > encoded_buffer.GetSize() - encoded_buffer.cur_pos) {
 			// We don't have enough lookup bytes for it, if that's the case, we need to set off these bytes to the next
 			// buffer
-			for (idx_t i = encoded_buffer.GetSize() - encoded_buffer.cur_pos; i < encoding_function->GetLookupBytes();
-			     i++) {
+			for (idx_t i = encoded_buffer.cur_pos; i < encoded_buffer.GetSize(); i++) {
 				pass_on_buffer.push_back(encoded_buffer.Ptr()[i]);
 			}
 		}
