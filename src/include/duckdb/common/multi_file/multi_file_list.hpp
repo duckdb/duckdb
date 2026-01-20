@@ -17,7 +17,7 @@ namespace duckdb {
 class MultiFileList;
 
 enum class FileExpandResult : uint8_t { NO_FILES, SINGLE_FILE, MULTIPLE_FILES };
-enum class MultiFileListScanType : uint8_t { ALWAYS_FETCH, FETCH_IF_AVAILABLE };
+enum class MultiFileListScanType { ALWAYS_FETCH, FETCH_IF_AVAILABLE };
 
 struct MultiFileListScanData {
 	idx_t current_file_idx = DConstants::INVALID_INDEX;

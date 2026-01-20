@@ -11,6 +11,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 #include <cstdint>
 #include <cstdio>
