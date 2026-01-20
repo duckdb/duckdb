@@ -5,6 +5,7 @@
 #include "reader/variant/variant_binary_decoder.hpp"
 #include "parquet_shredding.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
