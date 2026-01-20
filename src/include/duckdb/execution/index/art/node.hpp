@@ -238,6 +238,9 @@ struct NodeChildren {
 	array_ptr<Node> children;
 };
 
+//! NodeHandle is a mutable wrapper to access and modify a node.
+//! A segment handle is used for memory management and marks memory as modified.
+//! For read-only access, use ConstNodeHandle instead.
 template <class T>
 class NodeHandle {
 public:
