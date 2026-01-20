@@ -34,6 +34,7 @@ struct DuckDBExtensionLoadState {
 	//! Create a DuckDBExtensionLoadState reference from a C API opaque pointer
 	static DuckDBExtensionLoadState &Get(duckdb_extension_info info) {
 		D_ASSERT(info);
+
 		return *reinterpret_cast<duckdb::DuckDBExtensionLoadState *>(info);
 	}
 
@@ -369,8 +370,10 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		filename = fs.ExpandPath(filename);
 	}
 	if (!StringUtil::EndsWith(filename, ".duckdb_extension")) {
-		throw PermissionException("Loading extensions from path not ending with '.duckdb_extension' is forbidden",
-		                          "consider 'INSTALL <path>; LOAD <name>;'");
+		throw PermissionException(
+		    "DuckDB extensions are files ending with '.duckdb_extension', loading different "
+		    "files is not possible, error while loading from '%s', consider 'INSTALL <path>; LOAD <name>;'",
+		    filename);
 	}
 	if (!fs.FileExists(filename)) {
 		string message;

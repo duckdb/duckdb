@@ -81,8 +81,11 @@ public:
 		VerifyCanAccessFile(source);
 		VerifyCanAccessFile(target);
 		if (StringUtil::EndsWith(target, "duckdb_extension") && !StringUtil::EndsWith(source, "duckdb_extension")) {
-			throw PermissionException("File '%s' cannot be moved to '%s' due to the suffix 'duckdb_extension'", source,
-			                          target);
+			throw PermissionException(
+			    "File '%s' cannot be moved to '%s', files ending with duckdb_extension are reserved for DuckDB "
+			    "extensions, and these can only be installed through the INSTALL command, or moved if both are "
+			    "extensions'",
+			    source, target);
 		}
 		GetFileSystem().MoveFile(source, target, GetOpener());
 	}
@@ -162,8 +165,10 @@ protected:
 		VerifyCanAccessFile(file.path);
 		if (flags.OpenForWriting() && !flags.EnableAsDuckDBExtension() &&
 		    StringUtil::EndsWith(file.path, "duckdb_extension")) {
-			throw PermissionException("File '%s' cannot be open in write mode due to the suffix 'duckdb_extension'",
-			                          file.path);
+			throw PermissionException(
+			    "File '%s' cannot be opened for writing since files ending with duckdb_extension are reserved for "
+			    "DuckDB extensions, and these can only be installed through the INSTALL command",
+			    file.path);
 		}
 		return GetFileSystem().OpenFile(file, flags, GetOpener());
 	}

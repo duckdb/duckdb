@@ -5,17 +5,17 @@
 statement error
 COPY (SELECT 42) TO 'name.duckdb_extension';
 ----
-Permission Error: File 'name.duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+Permission Error: File 'name.duckdb_extension' cannot be opened for writing since files ending with duckdb_extension are reserved for DuckDB extensions, and these can only be installed through the INSTALL command
 
 statement error
 COPY (SELECT 42) TO 'name_duckdb_extension';
 ----
-Permission Error: File 'name_duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+Permission Error: File 'name_duckdb_extension' cannot be opened for writing since files ending with duckdb_extension are reserved for DuckDB extensions, and these can only be installed through the INSTALL command
 
 statement error
 COPY (SELECT NULL::BLOB) TO 'name.duckdb_extension' (FORMAT BLOB);
 ----
-Permission Error: File 'name.duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+Permission Error: File 'name.duckdb_extension' cannot be opened for writing since files ending with duckdb_extension are reserved for DuckDB extensions, and these can only be installed through the INSTALL command
 
 statement ok
 COPY (SELECT NULL::BLOB) TO 'name.duckdb_extensionz' (FORMAT BLOB);
@@ -23,12 +23,12 @@ COPY (SELECT NULL::BLOB) TO 'name.duckdb_extensionz' (FORMAT BLOB);
 statement error
 ATTACH 'my_name.duckdb_extension'
 ----
-Permission Error: File 'my_name.duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+Permission Error: File 'my_name.duckdb_extension' cannot be opened for writing since files ending with duckdb_extension are reserved for DuckDB extensions, and these can only be installed through the INSTALL command
 
 statement error
 ATTACH 'my_name_duckdb_extension'
 ----
-Permission Error: File 'my_name_duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+Permission Error: File 'my_name_duckdb_extension' cannot be opened for writing since files ending with duckdb_extension are reserved for DuckDB extensions, and these can only be installed through the INSTALL command
 
 statement ok
 FROM read_blob('build/*/repository/*/*/parquet.duckdb_extension');

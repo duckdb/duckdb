@@ -5,4 +5,4 @@
 statement error
 LOAD 'folder/a.csv';
 ----
-Permission Error: Loading extensions from path not ending with '.duckdb_extension' is forbidden
+Permission Error: DuckDB extensions are files ending with '.duckdb_extension', loading different files is not possible
