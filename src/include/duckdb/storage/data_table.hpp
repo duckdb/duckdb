@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 
