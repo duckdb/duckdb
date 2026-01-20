@@ -25,7 +25,7 @@ on l.b100 < r.e100
 and l.k100 + r.k100 < 10
 order by 1
 ----
-physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*Predicate:.*
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*k100.*
 
 query II
 select l.k100 as lid, r.k100 as rid
@@ -75,7 +75,7 @@ on l.b100 < r.e100
 and l.k100 + r.k100 < 10
 order by 1
 ----
-physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*Predicate:.*
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*k100.*
 
 query II
 select l.k100 as lid, r.k100 as rid
@@ -130,7 +130,7 @@ on r.b100 < l.e100
 and l.k100 + r.k100 < 10
 order by 2
 ----
-physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*Predicate:.*
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*k100.*
 
 query II
 select l.k100 as lid, r.k100 as rid
@@ -185,7 +185,7 @@ on l.b100 < r.e100
 and l.k100 + r.k100 < 10
 order by all
 ----
-physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*Predicate:.*
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*k100.*
 
 query II
 select l.k100 as lid, r.k100 as rid

@@ -4,7 +4,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -323,28 +322,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		return std::move(any_join);
 	}
 
-	// Case 3: Has comparison conditions - check if has equality for optimization
-	bool has_equality = false;
-	for (auto &cond : all_conditions) {
-		if (cond.IsComparison()) {
-			auto comp_type = cond.GetComparisonType();
-			if (comp_type == ExpressionType::COMPARE_EQUAL || comp_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-				has_equality = true;
-				break;
-			}
-		}
-	}
-
-	if (!has_equality && !non_comparison_conditions.empty()) {
-		// No equality and has non-comparison - use any join
-		auto any_join = make_uniq<LogicalAnyJoin>(type);
-		any_join->condition = JoinCondition::CreateExpression(std::move(all_conditions));
-		any_join->children.push_back(std::move(left_child));
-		any_join->children.push_back(std::move(right_child));
-		return std::move(any_join);
-	}
-
-	// Case 4: Use comparison join (hash join path)
+	// Case 3: Has comparison conditions - Use comparison join
 	auto comp_join = make_uniq<LogicalComparisonJoin>(type, LogicalOperatorType::LOGICAL_COMPARISON_JOIN);
 	comp_join->conditions = std::move(all_conditions);
 	comp_join->children.push_back(std::move(left_child));
