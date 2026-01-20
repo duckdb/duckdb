@@ -220,6 +220,8 @@ void ColumnIndex::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", child_indexes);
 	serializer.WritePropertyWithDefault<ColumnIndexType>(3, "index_type", index_type, ColumnIndexType::FULL_READ);
 	serializer.WritePropertyWithDefault<LogicalType>(4, "type", type, LogicalType::INVALID);
+	serializer.WritePropertyWithDefault<string>(5, "field", field, "");
+	serializer.WritePropertyWithDefault<bool>(6, "has_index", has_index, true);
 }
 
 ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
@@ -228,6 +230,8 @@ ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", result.child_indexes);
 	deserializer.ReadPropertyWithExplicitDefault<ColumnIndexType>(3, "index_type", result.index_type, ColumnIndexType::FULL_READ);
 	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(4, "type", result.type, LogicalType::INVALID);
+	deserializer.ReadPropertyWithExplicitDefault<string>(5, "field", result.field, "");
+	deserializer.ReadPropertyWithExplicitDefault<bool>(6, "has_index", result.has_index, true);
 	return result;
 }
 

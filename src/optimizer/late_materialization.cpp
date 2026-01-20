@@ -21,7 +21,7 @@
 namespace duckdb {
 
 LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {
-	max_row_count = DBConfig::GetSetting<LateMaterializationMaxRowsSetting>(optimizer.context);
+	max_row_count = Settings::Get<LateMaterializationMaxRowsSetting>(optimizer.context);
 }
 
 vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op) {
@@ -371,7 +371,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 }
 
 bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset) {
-	if (!has_offset && !DBConfig::GetSetting<PreserveInsertionOrderSetting>(optimizer.context)) {
+	if (!has_offset && !Settings::Get<PreserveInsertionOrderSetting>(optimizer.context)) {
 		// we avoid optimizing large limits if preserve insertion order is false
 		// since the limit is executed in parallel anyway
 		return false;

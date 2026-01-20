@@ -1097,6 +1097,18 @@
         "name": "type",
         "type": "LogicalType",
         "default": "LogicalType::INVALID"
+      },
+      {
+        "id": 5,
+        "name": "field",
+        "type": "string",
+        "default": "\"\""
+      },
+      {
+        "id": 6,
+        "name": "has_index",
+        "type": "bool",
+        "default": "true"
       }
     ],
     "pointer_type": "none"
