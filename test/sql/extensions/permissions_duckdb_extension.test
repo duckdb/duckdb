@@ -1,0 +1,34 @@
+# name: test/sql/extensions/permissions_duckdb_extension.test
+# description: Test that writing (but not reading) into file ending with '.duckdb_extension' is forbidden
+# group: [extensions]
+
+statement error
+COPY (SELECT 42) TO 'name.duckdb_extension';
+----
+Permission Error: File 'name.duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+
+statement error
+COPY (SELECT 42) TO 'name_duckdb_extension';
+----
+Permission Error: File 'name_duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+
+statement error
+COPY (SELECT NULL::BLOB) TO 'name.duckdb_extension' (FORMAT BLOB);
+----
+Permission Error: File 'name.duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+
+statement ok
+COPY (SELECT NULL::BLOB) TO 'name.duckdb_extensionz' (FORMAT BLOB);
+
+statement error
+ATTACH 'my_name.duckdb_extension'
+----
+Permission Error: File 'my_name.duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+
+statement error
+ATTACH 'my_name_duckdb_extension'
+----
+Permission Error: File 'my_name_duckdb_extension' cannot be open in write mode due to the suffix 'duckdb_extension'
+
+statement ok
+FROM read_blob('build/*/repository/*/*/parquet.duckdb_extension');

@@ -80,6 +80,10 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(source);
 		VerifyCanAccessFile(target);
+		if (StringUtil::EndsWith(target, "duckdb_extension") && !StringUtil::EndsWith(source, "duckdb_extension")) {
+			throw PermissionException("File '%s' cannot be moved to '%s' due to the suffix 'duckdb_extension'", source,
+			                          target);
+		}
 		GetFileSystem().MoveFile(source, target, GetOpener());
 	}
 
@@ -156,6 +160,11 @@ protected:
 	                                        optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(file.path);
+		if (flags.OpenForWriting() && !flags.EnableAsDuckDBExtension() &&
+		    StringUtil::EndsWith(file.path, "duckdb_extension")) {
+			throw PermissionException("File '%s' cannot be open in write mode due to the suffix 'duckdb_extension'",
+			                          file.path);
+		}
 		return GetFileSystem().OpenFile(file, flags, GetOpener());
 	}
 
