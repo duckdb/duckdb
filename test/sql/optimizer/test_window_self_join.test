@@ -109,3 +109,33 @@ query II
 EXPLAIN FROM null_partition_test QUALIFY count(*) OVER(PARTITION BY category) = 1;
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
+
+# 9. Case with non-COUNT aggregate
+# Should be optimized to INNER JOIN
+query II
+EXPLAIN 
+FROM services QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 101;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+FROM services QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 101;
+----
+2024-01-01	101
+
+# 10. Case with multiple aggregates
+# Should be optimized to INNER JOIN
+query II
+EXPLAIN 
+FROM services 
+QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
+    AND count(*) OVER(PARTITION BY date, train_number) = 1;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+FROM services 
+QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
+    AND count(*) OVER(PARTITION BY date, train_number) = 1;
+----
+2024-01-02	100

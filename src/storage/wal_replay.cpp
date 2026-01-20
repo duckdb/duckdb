@@ -7,6 +7,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -418,8 +419,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 					            checkpoint_reader.FileSize());
 				}
 
-				auto debug_checkpoint_abort =
-				    DBConfig::GetSetting<DebugCheckpointAbortSetting>(storage_manager.GetDatabase());
+				auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(storage_manager.GetDatabase());
 
 				// move over the recovery WAL over the main WAL
 				recovery_handle->Sync();

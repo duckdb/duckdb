@@ -11,15 +11,17 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/common/thread.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -157,7 +159,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	ActiveCheckpointWrapper active_checkpoint(transaction_manager);
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options);
 
-	auto checkpoint_sleep_ms = DBConfig::GetSetting<DebugCheckpointSleepMsSetting>(db.GetDatabase());
+	auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
 	if (checkpoint_sleep_ms > 0) {
 		ThreadUtil::SleepMs(checkpoint_sleep_ms);
 	}
@@ -205,7 +207,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	metadata_writer->Flush();
 	table_metadata_writer->Flush();
 
-	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
+	auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
 		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
 	}
@@ -217,7 +219,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.vector_size = STANDARD_VECTOR_SIZE;
 	block_manager.WriteHeader(context, header);
 
-	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(db.GetDatabase());
+	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(db.GetDatabase());
 	if (debug_verify_blocks) {
 		// extend verify_block_usage_count
 		auto metadata_info = storage_manager.GetMetadataInfo();

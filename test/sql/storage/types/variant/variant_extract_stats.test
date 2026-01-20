@@ -42,10 +42,11 @@ select stats(col) from tbl limit 1;
 
 # ------------------------------ Extracting the child from the list is not possible for some rows ------------------------------
 
-statement error
-select stats(col[1]) from tbl offset 5;
+# Result is inconsistent, data isn't fully shredded
+query I
+select stats(col[1]) from tbl offset 5 limit 1;
 ----
-Invalid Input Error: Can't extract index 0 from a VARIANT(INT32)
+shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
 
 statement ok
 delete from tbl where not variant_typeof(col).starts_with('ARRAY')
@@ -63,7 +64,7 @@ checkpoint
 query I
 select stats(col[1]) from tbl offset 5 limit 1;
 ----
-<REGEX>:.*shredding_state: SHREDDED.*fully_shredded: false}.*
+shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
 
 statement ok
 delete from tbl;
@@ -83,6 +84,11 @@ shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
 statement ok
 delete from tbl;
 
+statement ok
+checkpoint
+
+restart
+
 # ------------------------------ Tests with OBJECT and the OBJECT's fields ------------------------------
 
 statement ok
@@ -94,6 +100,8 @@ insert into tbl select {'a': 'test', 'b': false}
 statement ok
 checkpoint
 
+restart
+
 # Field 'a' is fully shredded
 query I
 select stats(col.a) from tbl limit 1;
@@ -104,7 +112,7 @@ select stats(col.a) from tbl limit 1;
 query I
 select stats(col.b) from tbl limit 1;
 ----
-<REGEX>:.*shredding_state: SHREDDED.*fully_shredded: false}.*
+shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
 
 # OBJECT is fully shredded
 query I
@@ -134,7 +142,7 @@ select stats(col) from tbl limit 1;
 query I
 select stats(col.a) from tbl limit 1;
 ----
-<REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: false.*
+shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
 
 # Insert an object with additional field(s)
 statement ok
@@ -175,8 +183,8 @@ select stats(col) from tbl limit 1;
 ----
 <REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: false.*
 
-# We have no stats for field 'c' because it's not part of our shredding
+# Data is not fully shredded on the extracted field, result is inconsistent
 query I
-select stats(col.c) from tbl offset 2 limit 1;
+select stats(col.c) from tbl order by rowid offset 2 limit 1;
 ----
 shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
