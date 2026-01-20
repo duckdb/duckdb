@@ -154,7 +154,7 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < segment.block->GetBlockSize());
+		D_ASSERT(data_byte_offset < segment.GetBlockSize());
 
 		// Initialize the byte_reader with the data values for the group
 		group_state.Init(segment_data + data_byte_offset);

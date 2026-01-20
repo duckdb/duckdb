@@ -337,7 +337,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	if (!state.head || state.head->offset + total_length >= state.head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
-		auto alloc_size = MaxValue<idx_t>(total_length, segment.block->GetBlockSize());
+		auto alloc_size = MaxValue<idx_t>(total_length, segment.GetBlockSize());
 		auto new_block = make_uniq<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
@@ -370,7 +370,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 
 	D_ASSERT(block != INVALID_BLOCK);
-	D_ASSERT(offset < NumericCast<int32_t>(segment.block->GetBlockSize()));
+	D_ASSERT(offset < NumericCast<int32_t>(segment.GetBlockSize()));
 
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
@@ -386,7 +386,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		BufferHandle target_handle;
 		string_t overflow_string;
 		data_ptr_t target_ptr;
-		bool allocate_block = length >= segment.block->GetBlockSize();
+		bool allocate_block = length >= segment.GetBlockSize();
 		if (allocate_block) {
 			// overflow string is bigger than a block - allocate a temporary buffer for it
 			target_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, length);
@@ -399,7 +399,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 		// now append the string to the single buffer
 		while (remaining > 0) {
-			idx_t to_write = MinValue<idx_t>(remaining, segment.block->GetBlockSize() - sizeof(block_id_t) -
+			idx_t to_write = MinValue<idx_t>(remaining, segment.GetBlockSize() - sizeof(block_id_t) -
 			                                                UnsafeNumericCast<idx_t>(offset));
 			memcpy(target_ptr, handle.Ptr() + offset, to_write);
 			remaining -= to_write;

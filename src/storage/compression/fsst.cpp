@@ -573,7 +573,7 @@ struct FSSTScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto block_size = segment.block->GetBlockSize();
+	auto block_size = segment.GetBlockSize();
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -668,7 +668,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
 			result.SetVectorType(VectorType::FSST_VECTOR);
-			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.block->GetBlockSize());
+			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockSize());
 			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder, string_block_limit);
 			result_data = FSSTVector::GetCompressedData<string_t>(result);
 		} else {
@@ -745,7 +745,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 
 	duckdb_fsst_decoder_t decoder;
 	bitpacking_width_t width;
-	auto block_size = segment.block->GetBlockSize();
+	auto block_size = segment.GetBlockSize();
 	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width, block_size);
 
 	auto result_data = FlatVector::GetData<string_t>(result);

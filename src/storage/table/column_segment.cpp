@@ -70,7 +70,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 	}
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
-	D_ASSERT(!block || segment_size <= block->GetBlockSize());
+	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other)
@@ -79,7 +79,7 @@ ColumnSegment::ColumnSegment(ColumnSegment &other)
       block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
       segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
-	D_ASSERT(!block || segment_size <= block->GetBlockSize());
+	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
 
 ColumnSegment::~ColumnSegment() {
@@ -165,7 +165,7 @@ idx_t ColumnSegment::SegmentSize() const {
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > segment_size);
 	D_ASSERT(offset == 0);
-	D_ASSERT(block && new_size <= block->GetBlockSize());
+	D_ASSERT(block && new_size <= GetBlockSize());
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);

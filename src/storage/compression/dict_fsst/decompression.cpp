@@ -10,7 +10,7 @@ CompressedStringScanState::~CompressedStringScanState() {
 }
 
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx) {
-	D_ASSERT(dict_offset <= NumericCast<uint32_t>(segment.block->GetBlockSize()));
+	D_ASSERT(dict_offset <= NumericCast<uint32_t>(segment.GetBlockSize()));
 
 	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
@@ -69,7 +69,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
 
 	const auto total_space = segment.GetBlockOffset() + dictionary_indices_dest + dictionary_indices_space;
-	if (total_space > segment.block->GetBlockSize()) {
+	if (total_space > segment.GetBlockSize()) {
 		throw IOException(
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
 	}

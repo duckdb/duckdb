@@ -642,7 +642,7 @@ public:
 	//! depending on the bitpacking mode of that group.
 	void LoadNextGroup() {
 		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.block->GetBlockSize()));
+		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockSize()));
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 

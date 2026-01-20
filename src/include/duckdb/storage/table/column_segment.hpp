@@ -110,6 +110,11 @@ public:
 		return block_id;
 	}
 
+	//! Returns the size of the underlying block of the segment. It is size is the size available for usage on a block.
+	idx_t GetBlockSize() const {
+		return block->GetBlockSize();
+	}
+
 	idx_t GetBlockOffset() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
 		return offset;
