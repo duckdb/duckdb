@@ -453,6 +453,12 @@
         "name": "delim_flipped",
         "type": "bool",
         "default": "false"
+      },
+      {
+        "id": 208,
+        "name": "predicate",
+        "type": "Expression*",
+        "status": "deleted"
       }
     ],
     "constructor": [

@@ -78,6 +78,7 @@ public:
 			throw InternalException("Swap used on a JoinCondition that is not a left/right comparison");
 		}
 		std::swap(left, right);
+		comparison = FlipComparisonExpression(comparison);
 	}
 
 	unique_ptr<Expression> &LeftReference() {
