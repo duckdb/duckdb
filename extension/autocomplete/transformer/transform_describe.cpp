@@ -39,43 +39,73 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransform
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTransformer &transformer,
                                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto result = make_uniq<ShowRef>();
-	result->show_type = transformer.Transform<ShowType>(list_pr.Child<ListParseResult>(0));
+	auto showref = make_uniq<ShowRef>();
+
+	// 1. Determine the ShowType
+	showref->show_type = transformer.Transform<ShowType>(list_pr.Child<ListParseResult>(0));
+
 	auto opt_table_name_parens = list_pr.Child<OptionalParseResult>(1);
 	if (opt_table_name_parens.HasResult()) {
 		auto base_table_or_string = opt_table_name_parens.optional_result->Cast<ListParseResult>();
 		auto choice_pr = base_table_or_string.Child<ChoiceParseResult>(0);
+
 		if (choice_pr.result->type == ParseResultType::STRING) {
-			result->table_name = choice_pr.result->Cast<StringLiteralParseResult>().result;
+			// Case: SHOW 'something' or DESCRIBE 'something'
+			showref->table_name = choice_pr.result->Cast<StringLiteralParseResult>().result;
 		} else {
+			// Case: A relation/table reference
 			auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(choice_pr.result);
-			if (IsInvalidSchema(base_table->schema_name)) {
-				// Check for special table names
+
+			if (showref->show_type == ShowType::SHOW_FROM) {
+				// Logic for SHOW TABLES FROM [database].[schema]
+				if (IsInvalidSchema(base_table->schema_name)) {
+					showref->schema_name = base_table->table_name;
+				} else {
+					showref->catalog_name = base_table->schema_name;
+					showref->schema_name = base_table->table_name;
+				}
+			} else if (IsInvalidSchema(base_table->schema_name)) {
+				// Logic for unqualified relations (databases, tables, variables)
 				auto table_name = StringUtil::Lower(base_table->table_name);
 				if (table_name == "databases" || table_name == "tables" || table_name == "variables") {
-					result->table_name = "\"" + table_name + "\"";
+					showref->table_name = "\"" + table_name + "\"";
 				} else {
-					result->table_name = base_table->table_name;
+					showref->table_name = base_table->table_name;
 				}
 			} else {
-				result->catalog_name = base_table->catalog_name;
-				result->schema_name = base_table->schema_name;
-				result->table_name = base_table->table_name;
+				showref->catalog_name = base_table->catalog_name;
+				showref->schema_name = base_table->schema_name;
+				showref->table_name = base_table->table_name;
 			}
 		}
 	} else {
-		if (result->show_type == ShowType::SUMMARY) {
+		// Case: No relation specified (e.g., just "SHOW TABLES")
+		if (showref->show_type == ShowType::SUMMARY) {
 			throw ParserException("Expected table name with SUMMARIZE");
 		}
-		result->table_name = "__show_tables_expanded";
-		result->show_type = ShowType::DESCRIBE;
+		showref->table_name = "__show_tables_expanded";
+		showref->show_type = ShowType::DESCRIBE;
 	}
+
+	if (showref->table_name.empty() && showref->show_type != ShowType::SHOW_FROM) {
+		auto show_select_node = make_uniq<SelectNode>();
+		show_select_node->select_list.push_back(make_uniq<StarExpression>());
+
+		auto tableref = make_uniq<BaseTableRef>();
+		tableref->catalog_name = showref->catalog_name;
+		tableref->schema_name = showref->schema_name;
+		tableref->table_name = showref->table_name;
+
+		show_select_node->from_table = std::move(tableref);
+		showref->query = std::move(show_select_node);
+	}
+
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(result);
-	return select_node;
-}
+	select_node->from_table = std::move(showref);
 
+	return std::move(select_node);
+}
 ShowType PEGTransformerFactory::TransformShowOrDescribeOrSummarize(PEGTransformer &transformer,
                                                                    optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

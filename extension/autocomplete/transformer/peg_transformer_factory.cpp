@@ -875,7 +875,7 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("TildePrefixOperator", "~");
 
 	RegisterEnum<ShowType>("SummarizeRule", ShowType::SUMMARY);
-	RegisterEnum<ShowType>("ShowRule", ShowType::SHOW_FROM);
+	RegisterEnum<ShowType>("ShowRule", ShowType::DESCRIBE);
 	RegisterEnum<ShowType>("DescribeRule", ShowType::DESCRIBE);
 
 	RegisterEnum<InsertColumnOrder>("InsertByName", InsertColumnOrder::INSERT_BY_NAME);
