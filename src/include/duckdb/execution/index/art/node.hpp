@@ -272,4 +272,26 @@ private:
 	T &n;
 };
 
+template <class T>
+class ConstNodeHandle {
+public:
+	ConstNodeHandle(const ART &art, const Node node)
+	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
+	}
+
+	ConstNodeHandle(const ConstNodeHandle &) = delete;
+	ConstNodeHandle &operator=(const ConstNodeHandle &) = delete;
+	ConstNodeHandle(ConstNodeHandle &&other) noexcept = delete;
+	ConstNodeHandle &operator=(ConstNodeHandle &&other) noexcept = delete;
+
+public:
+	const T &Get() const {
+		return n;
+	}
+
+private:
+	SegmentHandle handle;
+	const T &n;
+};
+
 } // namespace duckdb
