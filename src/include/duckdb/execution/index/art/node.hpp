@@ -269,7 +269,7 @@ public:
 	ConstNodeHandle(const ART &art, const Node node)
 	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
 	}
-
+	ConstNodeHandle() = delete;
 	ConstNodeHandle(const ConstNodeHandle &) = delete;
 	ConstNodeHandle &operator=(const ConstNodeHandle &) = delete;
 	ConstNodeHandle(ConstNodeHandle &&other) noexcept = delete;
