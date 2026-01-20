@@ -1494,6 +1494,16 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 
 	bool is_file_url = StringUtil::StartsWith(path, "file:/");
 	idx_t file_url_path_offset = GetFileUrlOffset(path);
+#ifdef _WIN32
+	idx_t drive_root_offset = file_url_path_offset;
+	bool drive_root_path = path.size() >= drive_root_offset + 3 &&
+	                       StringUtil::CharacterIsAlpha(path[drive_root_offset]) &&
+	                       path[drive_root_offset + 1] == ':' &&
+	                       (path[drive_root_offset + 2] == '\\' || path[drive_root_offset + 2] == '/');
+#else
+	bool drive_root_path = false;
+	idx_t drive_root_offset = 0;
+#endif
 
 	idx_t last_pos = 0;
 	for (idx_t i = file_url_path_offset; i < path.size(); i++) {
@@ -1504,8 +1514,11 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 				continue;
 			}
 			if (splits.empty()) {
-				//				splits.push_back(path.substr(file_url_path_offset, i-file_url_path_offset));
-				splits.push_back(path.substr(0, i));
+				if (drive_root_path && i == drive_root_offset + 2) {
+					splits.push_back(path.substr(0, i + 1));
+				} else {
+					splits.push_back(path.substr(0, i));
+				}
 			} else {
 				splits.push_back(path.substr(last_pos, i - last_pos));
 			}

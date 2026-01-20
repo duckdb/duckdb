@@ -1,0 +1,97 @@
+# name: test/sql/function/string/path_join.test
+# group: [string]
+
+query I
+SELECT replace(path_join('dir//subdir/', './file'), chr(92), '/');
+----
+dir/subdir/file
+
+query I
+SELECT replace(path_join('dir/subdir', '../sibling'), chr(92), '/');
+----
+dir/sibling
+
+statement error
+SELECT replace(path_join('dir', '/abs/path'), chr(92), '/');
+----
+absolute RHS
+
+query I
+SELECT replace(path_join('dir///', 'nested///child'), chr(92), '/');
+----
+dir/nested/child
+
+query I
+SELECT replace(path_join('dir', 'subdir', 'file.txt'), chr(92), '/');
+----
+dir/subdir/file.txt
+
+query I
+SELECT replace(path_join('dir/..', '../..'), chr(92), '/');
+----
+../..
+
+query I
+SELECT replace(path_join('/usr/local', '../..'), chr(92), '/');
+----
+/
+
+query I
+SELECT replace(path_join('/', 'usr/local'), chr(92), '/');
+----
+/usr/local
+
+query I
+SELECT path_join('file:/usr/local', '../bin');
+----
+file:/usr/bin
+
+query I
+SELECT path_join('s3://foo', 'bar/baz');
+----
+s3://foo/bar/baz
+
+query I
+SELECT path_join('s3://foo', '..');
+----
+s3://
+
+query I
+SELECT path_join('s3://foo', '../..');
+----
+s3://
+
+statement error
+SELECT path_join('s3://foo', '/foo');
+----
+absolute RHS
+
+statement error
+SELECT path_join('/foo', 's3://foo');
+----
+cannot join absolute URI
+
+statement error
+SELECT path_join('s3://foo', 'az://foo');
+----
+incompatible URI schemes
+
+statement error
+SELECT path_join('dir', '/abs/path');
+----
+absolute RHS
+
+query I
+SELECT path_join(NULL, 'dir');
+----
+NULL
+
+query I
+SELECT path_join('dir', NULL);
+----
+NULL
+
+query I
+SELECT path_join('base', NULL, 'dir');
+----
+NULL

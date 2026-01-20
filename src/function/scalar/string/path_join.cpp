@@ -1,0 +1,117 @@
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+
+namespace duckdb {
+
+namespace {
+
+struct PathJoinBindData : public FunctionData {
+	explicit PathJoinBindData(idx_t path_count_p) : path_count(path_count_p) {
+	}
+
+	idx_t path_count;
+
+public:
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<PathJoinBindData>(path_count);
+	}
+
+	bool Equals(const FunctionData &other) const override {
+		auto &o = other.Cast<PathJoinBindData>();
+		return path_count == o.path_count;
+	}
+};
+
+// Process one output row; returns false if any input is NULL.
+static bool ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs, idx_t col_count, FileSystem &fs,
+                       string &out_result) {
+	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
+		auto &vdata = inputs[col_idx];
+		auto idx = vdata.sel->get_index(row_idx);
+		if (!vdata.validity.RowIsValid(idx)) {
+			return false;
+		}
+		auto input_value = UnifiedVectorFormat::GetData<string_t>(vdata)[idx].GetString();
+		if (col_idx == 0) {
+			out_result = input_value;
+		} else {
+			out_result = fs.JoinPath(out_result, input_value);
+		}
+	}
+	return true;
+}
+
+void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto count = args.size();
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind = func_expr.bind_info->Cast<PathJoinBindData>();
+	auto col_count = bind.path_count;
+	auto &context = state.GetContext();
+	auto &fs = FileSystem::GetFileSystem(context);
+
+	vector<UnifiedVectorFormat> inputs(args.ColumnCount());
+	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
+		args.data[col_idx].ToUnifiedFormat(count, inputs[col_idx]);
+	}
+
+	// constant fast path
+	bool all_constant = true;
+	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
+		if (args.data[col_idx].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			all_constant = false;
+			break;
+		}
+	}
+	if (all_constant && count > 0) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto &validity = ConstantVector::Validity(result);
+		auto result_data = ConstantVector::GetData<string_t>(result);
+		string joined;
+		if (!ProcessRow(0, inputs, col_count, fs, joined)) {
+			validity.SetInvalid(0);
+		} else {
+			result_data[0] = StringVector::AddString(result, joined);
+		}
+		return;
+	}
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto &validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::GetData<string_t>(result);
+
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		string joined;
+		if (!ProcessRow(row_idx, inputs, col_count, fs, joined)) {
+			validity.SetInvalid(row_idx);
+			continue;
+		}
+		result_data[row_idx] = StringVector::AddString(result, joined);
+	}
+}
+
+} // namespace
+
+unique_ptr<FunctionData> PathJoinBind(ClientContext &context, ScalarFunction &bound_function,
+                                      vector<unique_ptr<Expression>> &arguments) {
+	if (arguments.empty()) {
+		throw BinderException("path_join requires at least one argument");
+	}
+	idx_t path_count = arguments.size();
+	vector<LogicalType> arg_types(arguments.size(), LogicalType::VARCHAR);
+	bound_function.arguments = std::move(arg_types);
+	bound_function.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	return make_uniq<PathJoinBindData>(path_count);
+}
+
+ScalarFunction PathJoinFun::GetFunction() {
+	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
+	path_join.bind = PathJoinBind;
+	path_join.varargs = LogicalType::VARCHAR;
+	path_join.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	return path_join;
+}
+
+} // namespace duckdb
