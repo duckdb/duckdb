@@ -150,6 +150,8 @@ public:
 
 	case_insensitive_map_t<unique_ptr<WindowExpression>> window_clauses;
 
+	bool in_window_definition = false;
+
 	ParserOptions options;
 };
 

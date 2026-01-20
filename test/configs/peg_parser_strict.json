@@ -13,7 +13,9 @@
         "test/sql/error/error_position.test",
         "test/sql/catalog/table/test_default_values.test",
         "test/sql/cast/cast_error_location.test",
-        "test/sql/copy/parquet/copy_option_suggestion.test"
+        "test/sql/copy/parquet/copy_option_suggestion.test",
+        "test/sql/copy/parquet/parquet_list.test",
+        "test/sql/copy/csv/glob/read_csv_glob.test"
       ]
     },
     {
@@ -104,7 +106,8 @@
         "test/issues/general/test_3140.test",
         "test/sql/cast/string_to_struct_roundtrip.test",
         "test/sql/catalog/function/query_function.test",
-        "test/sql/cast/string_to_struct_escapes.test"
+        "test/sql/cast/string_to_struct_escapes.test",
+        "test/sql/copy/csv/test_thousands_separator.test"
       ]
     },
     {

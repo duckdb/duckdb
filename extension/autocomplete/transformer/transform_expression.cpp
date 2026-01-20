@@ -192,6 +192,9 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 
 	auto over_opt = list_pr.Child<OptionalParseResult>(5);
 	if (over_opt.HasResult()) {
+		if (transformer.in_window_definition) {
+			throw ParserException("window functions are not allowed in window definitions");
+		}
 		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
@@ -215,6 +218,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && has_ignore_nulls_result) {
 			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
 		}
+		transformer.in_window_definition = true;
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.optional_result);
 		expr->catalog = qualified_function.catalog;
 		expr->schema = qualified_function.schema;
@@ -271,6 +275,7 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		    (expr->arg_orders.size() > 1 || (expr->arg_orders.empty() && expr->orders.size() != 1))) {
 			throw BinderException("FILL functions must have only one ORDER BY expression");
 		}
+		transformer.in_window_definition = false;
 		return std::move(expr);
 	}
 
