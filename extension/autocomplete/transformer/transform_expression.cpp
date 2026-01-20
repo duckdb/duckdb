@@ -2072,7 +2072,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(P
 	auto expr =
 	    transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.Child<ListParseResult>(2)));
 	if (expr->GetExpressionType() == ExpressionType::STAR) {
-		result = unique_ptr_cast<ParsedExpression, StarExpression>(std::move(expr));
+		auto star_expr = unique_ptr_cast<ParsedExpression, StarExpression>(std::move(expr));
+		if (star_expr->columns) {
+			result->expr = std::move(star_expr);
+		} else {
+			result = std::move(star_expr);
+		}
 	} else if (expr->GetExpressionType() == ExpressionType::LAMBDA) {
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(make_uniq<StarExpression>());

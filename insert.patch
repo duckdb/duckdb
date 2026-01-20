@@ -1,0 +1,1199 @@
+commit 8aff1bce08290ac0556878244d672a05e59e7db9
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Thu Dec 11 14:31:47 2025 +0100
+
+    Fix issues with copy and empty qualifiedname
+
+diff --git a/extension/autocomplete/grammar/statements/copy.gram b/extension/autocomplete/grammar/statements/copy.gram
+index bdc26e6b64..259265526d 100644
+--- a/extension/autocomplete/grammar/statements/copy.gram
++++ b/extension/autocomplete/grammar/statements/copy.gram
+@@ -6,7 +6,7 @@ FromOrTo <- 'FROM' / 'TO'
+ CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?
+ 
+ CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
+-CopyOptions <- 'WITH'? (Parens(GenericCopyOptionList) / (SpecializedOptions*))
++CopyOptions <- 'WITH'? Parens(GenericCopyOptionList) / (SpecializedOptions*)
+ SpecializedOptions <-
+ 	'BINARY' / 'FREEZE' / 'OIDS' / 'CSV' / 'HEADER' /
+ 	SpecializedStringOption /
+diff --git a/extension/autocomplete/include/inlined_grammar.gram b/extension/autocomplete/include/inlined_grammar.gram
+index d9f0e605bf..b655bdb361 100644
+--- a/extension/autocomplete/include/inlined_grammar.gram
++++ b/extension/autocomplete/include/inlined_grammar.gram
+@@ -1212,7 +1212,7 @@ FromOrTo <- 'FROM' / 'TO'
+ CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?
+ 
+ CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
+-CopyOptions <- 'WITH'? (Parens(GenericCopyOptionList) / (SpecializedOptions*))
++CopyOptions <- 'WITH'? Parens(GenericCopyOptionList) / (SpecializedOptions*)
+ SpecializedOptions <-
+ 	'BINARY' / 'FREEZE' / 'OIDS' / 'CSV' / 'HEADER' /
+ 	SpecializedStringOption /
+diff --git a/extension/autocomplete/include/inlined_grammar.hpp b/extension/autocomplete/include/inlined_grammar.hpp
+index 93bcc7f15f..932023c469 100644
+--- a/extension/autocomplete/include/inlined_grammar.hpp
++++ b/extension/autocomplete/include/inlined_grammar.hpp
+@@ -1104,7 +1104,7 @@ const char INLINED_PEG_GRAMMAR[] = {
+ 	"FromOrTo <- 'FROM' / 'TO'\n"
+ 	"CopySelect <- Parens(SelectStatement) 'TO' CopyFileName CopyOptions?\n"
+ 	"CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)\n"
+-	"CopyOptions <- 'WITH'? (Parens(GenericCopyOptionList) / (SpecializedOptions*))\n"
++	"CopyOptions <- 'WITH'? Parens(GenericCopyOptionList) / (SpecializedOptions*)\n"
+ 	"SpecializedOptions <-\n"
+ 	"	'BINARY' / 'FREEZE' / 'OIDS' / 'CSV' / 'HEADER' /\n"
+ 	"	SpecializedStringOption /\n"
+diff --git a/extension/autocomplete/transformer/transform_comment.cpp b/extension/autocomplete/transformer/transform_comment.cpp
+index 6e1ca3ff1c..bc62824b05 100644
+--- a/extension/autocomplete/transformer/transform_comment.cpp
++++ b/extension/autocomplete/transformer/transform_comment.cpp
+@@ -19,6 +19,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
+ 		// Column type returned
+ 		column_name = dotted_identifier.back();
+ 		dotted_identifier.pop_back();
++		if (dotted_identifier.empty()) {
++			throw ParserException("Invalid column reference: '%s'", column_name);
++		}
+ 		auto qualified_name = StringToQualifiedName(dotted_identifier);
+ 		info = make_uniq<SetColumnCommentInfo>(qualified_name.catalog, qualified_name.schema, qualified_name.name,
+ 		                                       column_name, comment_value, OnEntryNotFound::THROW_EXCEPTION);
+diff --git a/extension/autocomplete/transformer/transform_copy.cpp b/extension/autocomplete/transformer/transform_copy.cpp
+index ccb4a4e333..dfd4ac4494 100644
+--- a/extension/autocomplete/transformer/transform_copy.cpp
++++ b/extension/autocomplete/transformer/transform_copy.cpp
+@@ -123,6 +123,18 @@ string PEGTransformerFactory::TransformCopyFileName(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
+ 	// TODO(dtenwolde) support stdin and stdout
+ 	auto &list_pr = parse_result->Cast<ListParseResult>();
++	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
++	if (choice_pr->name == "Expression") {
++		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
++		if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
++			throw ParserException("Expected a constant expression as file name");
++		}
++		auto &const_expr = expr->Cast<ConstantExpression>();
++		if (const_expr.value.type() != LogicalType::VARCHAR) {
++			throw ParserException("Expected a string as file name");
++		}
++		return const_expr.value.GetValue<string>();
++	}
+ 	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+ }
+ 
+@@ -138,7 +150,7 @@ string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transform
+ 
+ case_insensitive_map_t<vector<Value>>
+ PEGTransformerFactory::TransformCopyOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+-	// CopyOptions <- 'WITH'i? Parens(GenericCopyOptionList) / SpecializedOption+
++	// CopyOptions <- 'WITH'i? (Parens(GenericCopyOptionList) / SpecializedOption+)
+ 	auto &list_pr = parse_result->Cast<ListParseResult>();
+ 	auto copy_option_pr = list_pr.Child<ChoiceParseResult>(1).result;
+ 	return transformer.Transform<case_insensitive_map_t<vector<Value>>>(copy_option_pr);
+diff --git a/extension/autocomplete/transformer/transform_expression.cpp b/extension/autocomplete/transformer/transform_expression.cpp
+index e0856b2f4b..4211bb26ce 100644
+--- a/extension/autocomplete/transformer/transform_expression.cpp
++++ b/extension/autocomplete/transformer/transform_expression.cpp
+@@ -744,7 +744,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
+ 		auto prefix = transformer.Transform<string>(prefix_expr);
+ 		vector<unique_ptr<ParsedExpression>> children;
+ 		children.push_back(std::move(expr));
+-		expr = make_uniq<FunctionExpression>(prefix, std::move(children));
++		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
++		func_expr->is_operator = true;
++		expr = std::move(func_expr);
+ 	}
+ 	return expr;
+ }
+
+commit 01741c3a856d065d6cb8f4d1d023db0af4a1ceff
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Thu Dec 11 14:56:18 2025 +0100
+
+    Fix issue with export
+
+diff --git a/extension/autocomplete/transformer/transform_export.cpp b/extension/autocomplete/transformer/transform_export.cpp
+index 0561a18ac6..fdd3b511c6 100644
+--- a/extension/autocomplete/transformer/transform_export.cpp
++++ b/extension/autocomplete/transformer/transform_export.cpp
+@@ -15,10 +15,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(PEGTran
+ 	auto &parens = list_pr.Child<OptionalParseResult>(4);
+ 	if (parens.HasResult()) {
+ 		auto &generic_copy_option_list = parens.optional_result->Cast<ListParseResult>().Child<ListParseResult>(1);
+-		auto option_list = transformer.Transform<unordered_map<string, vector<Value>>>(generic_copy_option_list);
++		auto option_list = transformer.Transform<vector<GenericCopyOption>>(generic_copy_option_list);
+ 		case_insensitive_map_t<vector<Value>> option_result;
+ 		for (auto &option : option_list) {
+-			option_result[option.first] = option.second;
++			if (option.name == "format") {
++				info->format = option.children[0].GetValue<string>();
++				info->is_format_auto_detected = false;
++			} else {
++				option_result[option.name] = option.children;
++			}
+ 		}
+ 		info->options = option_result;
+ 	}
+
+commit 0a398d2f8f17d21173b35291ae1b3249056d6bbe
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Thu Dec 11 17:37:37 2025 +0100
+
+    Make option name upper case and regexp_full_match not operator
+
+diff --git a/extension/autocomplete/transformer/transform_export.cpp b/extension/autocomplete/transformer/transform_export.cpp
+index fdd3b511c6..655108b11f 100644
+--- a/extension/autocomplete/transformer/transform_export.cpp
++++ b/extension/autocomplete/transformer/transform_export.cpp
+@@ -22,7 +22,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(PEGTran
+ 				info->format = option.children[0].GetValue<string>();
+ 				info->is_format_auto_detected = false;
+ 			} else {
+-				option_result[option.name] = option.children;
++					option_result[StringUtil::Upper(option.name)] = option.children;
+ 			}
+ 		}
+ 		info->options = option_result;
+diff --git a/extension/autocomplete/transformer/transform_expression.cpp b/extension/autocomplete/transformer/transform_expression.cpp
+index 4211bb26ce..11b03b2b0a 100644
+--- a/extension/autocomplete/transformer/transform_expression.cpp
++++ b/extension/autocomplete/transformer/transform_expression.cpp
+@@ -566,7 +566,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLikeClause(PEGTrans
+ 		throw NotImplementedException("Escape is not yet implemented.");
+ 	}
+ 	auto result = make_uniq<FunctionExpression>(like_variation, std::move(like_children));
+-	result->is_operator = true;
++	if (like_variation != "regexp_full_match") {
++		result->is_operator = true;
++	}
+ 	return std::move(result);
+ }
+ 
+
+commit 30f083bd9e25afee629c28c4d42fdef9ca19102c
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Fri Dec 12 09:57:12 2025 +0100
+
+    Make format fix
+
+diff --git a/extension/autocomplete/transformer/transform_export.cpp b/extension/autocomplete/transformer/transform_export.cpp
+index 655108b11f..484e9ce0ad 100644
+--- a/extension/autocomplete/transformer/transform_export.cpp
++++ b/extension/autocomplete/transformer/transform_export.cpp
+@@ -22,7 +22,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(PEGTran
+ 				info->format = option.children[0].GetValue<string>();
+ 				info->is_format_auto_detected = false;
+ 			} else {
+-					option_result[StringUtil::Upper(option.name)] = option.children;
++				option_result[StringUtil::Upper(option.name)] = option.children;
+ 			}
+ 		}
+ 		info->options = option_result;
+
+commit 52be714c05238387af068153266e15cecbfc4b91
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Fri Dec 12 11:28:42 2025 +0100
+
+    Improve conversion of numbers
+
+diff --git a/extension/autocomplete/include/transformer/peg_transformer.hpp b/extension/autocomplete/include/transformer/peg_transformer.hpp
+index 2ac4b6af14..5c96cfc1ad 100644
+--- a/extension/autocomplete/include/transformer/peg_transformer.hpp
++++ b/extension/autocomplete/include/transformer/peg_transformer.hpp
+@@ -152,6 +152,7 @@ public:
+ 	static QualifiedName StringToQualifiedName(vector<string> input);
+ 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
+ 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
++	static bool TryNegateValue(Value &val);
+ 
+ 	// Registration methods
+ 	void RegisterAlter();
+diff --git a/extension/autocomplete/transformer/transform_common.cpp b/extension/autocomplete/transformer/transform_common.cpp
+index 378b984bf2..e6b625d802 100644
+--- a/extension/autocomplete/transformer/transform_common.cpp
++++ b/extension/autocomplete/transformer/transform_common.cpp
+@@ -397,6 +397,52 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
+ 	return transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+ }
+ 
++bool PEGTransformerFactory::TryNegateValue(Value &val) {
++    switch (val.type().id()) {
++    case LogicalTypeId::INTEGER:
++        if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
++             val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
++             return true;
++        }
++        val = Value::INTEGER(-val.GetValue<int32_t>());
++        return true;
++
++    case LogicalTypeId::BIGINT:
++        if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
++             val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
++             return true;
++        }
++        val = Value::BIGINT(-val.GetValue<int64_t>());
++        return true;
++
++    case LogicalTypeId::HUGEINT:
++        val = Value::HUGEINT(-val.GetValue<hugeint_t>());
++        return true;
++
++    case LogicalTypeId::UHUGEINT: {
++        auto uval = val.GetValue<uhugeint_t>();
++        uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
++
++        if (uval == abs_min_hugeint) {
++            val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
++            return true;
++        }
++        if (uval < abs_min_hugeint) {
++             val = Value::HUGEINT(-((hugeint_t)uval));
++             return true;
++        }
++
++        return false;
++    }
++
++    case LogicalTypeId::DOUBLE:
++        val = Value::DOUBLE(-val.GetValue<double>());
++        return true;
++    default:
++        return false;
++    }
++}
++
+ // NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
+ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
+diff --git a/extension/autocomplete/transformer/transform_expression.cpp b/extension/autocomplete/transformer/transform_expression.cpp
+index 11b03b2b0a..1105a53185 100644
+--- a/extension/autocomplete/transformer/transform_expression.cpp
++++ b/extension/autocomplete/transformer/transform_expression.cpp
+@@ -735,22 +735,32 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
+ // PrefixExpression <- PrefixOperator* BaseExpression
+ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
+-	auto &list_pr = parse_result->Cast<ListParseResult>();
+-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+-	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
+-	if (!prefix_opt.HasResult()) {
+-		return expr;
+-	}
+-	auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
+-	for (auto &prefix_expr : prefix_repeat.children) {
+-		auto prefix = transformer.Transform<string>(prefix_expr);
+-		vector<unique_ptr<ParsedExpression>> children;
+-		children.push_back(std::move(expr));
+-		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+-		func_expr->is_operator = true;
+-		expr = std::move(func_expr);
+-	}
+-	return expr;
++    auto &list_pr = parse_result->Cast<ListParseResult>();
++    auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
++
++    auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
++    if (!prefix_opt.HasResult()) {
++       return expr;
++    }
++
++    auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
++
++    for (auto &prefix_expr : prefix_repeat.children) {
++       auto prefix = transformer.Transform<string>(prefix_expr);
++
++       if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
++           auto &const_expr = expr->Cast<ConstantExpression>();
++           if (TryNegateValue(const_expr.value)) {
++               continue;
++           }
++       }
++       vector<unique_ptr<ParsedExpression>> children;
++       children.push_back(std::move(expr));
++       auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
++       func_expr->is_operator = true;
++       expr = std::move(func_expr);
++    }
++    return expr;
+ }
+ 
+ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
+diff --git a/test/configs/peg_parser_strict.json b/test/configs/peg_parser_strict.json
+index cd7fd44360..215b9ae95e 100644
+--- a/test/configs/peg_parser_strict.json
++++ b/test/configs/peg_parser_strict.json
+@@ -75,13 +75,6 @@
+         "test/sql/index/art/scan/test_random_uuid.test"
+       ]
+     },
+-    {
+-      "reason": "Conversion Error",
+-      "paths": [
+-        "test/sql/storage/types/struct/wal_struct_storage.test",
+-        "test/sql/storage/types/struct/struct_storage.test"
+-      ]
+-    },
+     {
+       "reason": "Error handling",
+       "paths": [
+
+commit 2a34ea756fb7f3830a49957587f444b9d18116ae
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Fri Dec 12 13:41:54 2025 +0100
+
+    Exclude test with quote for now
+
+diff --git a/test/configs/peg_parser_strict.json b/test/configs/peg_parser_strict.json
+index 215b9ae95e..0e4a5a3a12 100644
+--- a/test/configs/peg_parser_strict.json
++++ b/test/configs/peg_parser_strict.json
+@@ -169,7 +169,8 @@
+         "test/sql/catalog/function/query_function.test",
+         "test/sql/json/issues/large_quoted_string_constant.test",
+         "test/sql/storage/types/variant/test_all_types_single_table.test",
+-        "test/sql/cast/string_to_struct_cast.test"
++        "test/sql/cast/string_to_struct_cast.test",
++        "test/sql/copy/csv/test_timestamptz_12926.test"
+       ]
+     },
+     {
+
+commit 2db45281df726109a745ea879ebf58d01121ef28
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Fri Dec 12 13:45:09 2025 +0100
+
+    Format fix
+
+diff --git a/extension/autocomplete/transformer/transform_common.cpp b/extension/autocomplete/transformer/transform_common.cpp
+index e6b625d802..d54c11bd86 100644
+--- a/extension/autocomplete/transformer/transform_common.cpp
++++ b/extension/autocomplete/transformer/transform_common.cpp
+@@ -398,49 +398,49 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
+ }
+ 
+ bool PEGTransformerFactory::TryNegateValue(Value &val) {
+-    switch (val.type().id()) {
+-    case LogicalTypeId::INTEGER:
+-        if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
+-             val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
+-             return true;
+-        }
+-        val = Value::INTEGER(-val.GetValue<int32_t>());
+-        return true;
+-
+-    case LogicalTypeId::BIGINT:
+-        if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
+-             val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
+-             return true;
+-        }
+-        val = Value::BIGINT(-val.GetValue<int64_t>());
+-        return true;
+-
+-    case LogicalTypeId::HUGEINT:
+-        val = Value::HUGEINT(-val.GetValue<hugeint_t>());
+-        return true;
+-
+-    case LogicalTypeId::UHUGEINT: {
+-        auto uval = val.GetValue<uhugeint_t>();
+-        uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
+-
+-        if (uval == abs_min_hugeint) {
+-            val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
+-            return true;
+-        }
+-        if (uval < abs_min_hugeint) {
+-             val = Value::HUGEINT(-((hugeint_t)uval));
+-             return true;
+-        }
+-
+-        return false;
+-    }
+-
+-    case LogicalTypeId::DOUBLE:
+-        val = Value::DOUBLE(-val.GetValue<double>());
+-        return true;
+-    default:
+-        return false;
+-    }
++	switch (val.type().id()) {
++	case LogicalTypeId::INTEGER:
++		if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
++			val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
++			return true;
++		}
++		val = Value::INTEGER(-val.GetValue<int32_t>());
++		return true;
++
++	case LogicalTypeId::BIGINT:
++		if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
++			val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
++			return true;
++		}
++		val = Value::BIGINT(-val.GetValue<int64_t>());
++		return true;
++
++	case LogicalTypeId::HUGEINT:
++		val = Value::HUGEINT(-val.GetValue<hugeint_t>());
++		return true;
++
++	case LogicalTypeId::UHUGEINT: {
++		auto uval = val.GetValue<uhugeint_t>();
++		uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
++
++		if (uval == abs_min_hugeint) {
++			val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
++			return true;
++		}
++		if (uval < abs_min_hugeint) {
++			val = Value::HUGEINT(-((hugeint_t)uval));
++			return true;
++		}
++
++		return false;
++	}
++
++	case LogicalTypeId::DOUBLE:
++		val = Value::DOUBLE(-val.GetValue<double>());
++		return true;
++	default:
++		return false;
++	}
+ }
+ 
+ // NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
+diff --git a/extension/autocomplete/transformer/transform_expression.cpp b/extension/autocomplete/transformer/transform_expression.cpp
+index 1105a53185..b7192fe6fe 100644
+--- a/extension/autocomplete/transformer/transform_expression.cpp
++++ b/extension/autocomplete/transformer/transform_expression.cpp
+@@ -735,32 +735,32 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
+ // PrefixExpression <- PrefixOperator* BaseExpression
+ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
+-    auto &list_pr = parse_result->Cast<ListParseResult>();
+-    auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+-
+-    auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
+-    if (!prefix_opt.HasResult()) {
+-       return expr;
+-    }
+-
+-    auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
+-
+-    for (auto &prefix_expr : prefix_repeat.children) {
+-       auto prefix = transformer.Transform<string>(prefix_expr);
+-
+-       if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
+-           auto &const_expr = expr->Cast<ConstantExpression>();
+-           if (TryNegateValue(const_expr.value)) {
+-               continue;
+-           }
+-       }
+-       vector<unique_ptr<ParsedExpression>> children;
+-       children.push_back(std::move(expr));
+-       auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+-       func_expr->is_operator = true;
+-       expr = std::move(func_expr);
+-    }
+-    return expr;
++	auto &list_pr = parse_result->Cast<ListParseResult>();
++	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
++
++	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
++	if (!prefix_opt.HasResult()) {
++		return expr;
++	}
++
++	auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
++
++	for (auto &prefix_expr : prefix_repeat.children) {
++		auto prefix = transformer.Transform<string>(prefix_expr);
++
++		if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
++			auto &const_expr = expr->Cast<ConstantExpression>();
++			if (TryNegateValue(const_expr.value)) {
++				continue;
++			}
++		}
++		vector<unique_ptr<ParsedExpression>> children;
++		children.push_back(std::move(expr));
++		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
++		func_expr->is_operator = true;
++		expr = std::move(func_expr);
++	}
++	return expr;
+ }
+ 
+ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
+
+commit 87056c6bb4cfb6e4f107cf3bcfdedf9152b94f43
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Mon Dec 15 09:05:16 2025 +0100
+
+    Return stringliteral if single quoted identifier
+
+diff --git a/extension/autocomplete/matcher.cpp b/extension/autocomplete/matcher.cpp
+index 895a76c124..5b45e9ac95 100644
+--- a/extension/autocomplete/matcher.cpp
++++ b/extension/autocomplete/matcher.cpp
+@@ -435,7 +435,7 @@ public:
+ 		}
+ 		if (IsSingleQuoted(token_text) && SupportsStringLiteral()) {
+ 			auto string_token = token_text.substr(1, token_text.size() - 2);
+-			return state.allocator.Allocate(make_uniq<IdentifierParseResult>(string_token));
++			return state.allocator.Allocate(make_uniq<StringLiteralParseResult>(string_token));
+ 		}
+ 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
+ 	}
+diff --git a/test/configs/peg_parser_strict.json b/test/configs/peg_parser_strict.json
+index 0e4a5a3a12..215b9ae95e 100644
+--- a/test/configs/peg_parser_strict.json
++++ b/test/configs/peg_parser_strict.json
+@@ -169,8 +169,7 @@
+         "test/sql/catalog/function/query_function.test",
+         "test/sql/json/issues/large_quoted_string_constant.test",
+         "test/sql/storage/types/variant/test_all_types_single_table.test",
+-        "test/sql/cast/string_to_struct_cast.test",
+-        "test/sql/copy/csv/test_timestamptz_12926.test"
++        "test/sql/cast/string_to_struct_cast.test"
+       ]
+     },
+     {
+
+commit 2438be163c1a4f664f196dee7ec728b236c58aea
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Mon Dec 15 12:43:57 2025 +0100
+
+    Fix swallowing quotes
+
+diff --git a/extension/autocomplete/matcher.cpp b/extension/autocomplete/matcher.cpp
+index 5b45e9ac95..13fb613a0a 100644
+--- a/extension/autocomplete/matcher.cpp
++++ b/extension/autocomplete/matcher.cpp
+@@ -426,18 +426,19 @@ public:
+ 		if (state.token_index >= state.tokens.size()) {
+ 			return nullptr;
+ 		}
+-		auto &token_text = state.tokens[state.token_index].text;
++		const auto &token_text = state.tokens[state.token_index].text;
+ 		if (!MatchIdentifier(state)) {
+ 			return nullptr;
+ 		}
+-		if (IsQuoted(token_text)) {
+-			token_text = token_text.substr(1, token_text.size() - 2);
++
++		string result_text = token_text;
++		if (IsQuoted(result_text)) {
++			result_text = result_text.substr(1,result_text.size() - 2);
+ 		}
+-		if (IsSingleQuoted(token_text) && SupportsStringLiteral()) {
+-			auto string_token = token_text.substr(1, token_text.size() - 2);
+-			return state.allocator.Allocate(make_uniq<StringLiteralParseResult>(string_token));
++		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
++			result_text = result_text.substr(1, result_text.size() - 2);
+ 		}
+-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
++		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
+ 	}
+ 
+ 	bool SupportsStringLiteral() const {
+diff --git a/test/configs/peg_parser_strict.json b/test/configs/peg_parser_strict.json
+index 215b9ae95e..4b0fb96211 100644
+--- a/test/configs/peg_parser_strict.json
++++ b/test/configs/peg_parser_strict.json
+@@ -156,20 +156,13 @@
+     {
+       "reason": "Quotations",
+       "paths": [
+-        "test/sql/pragma/test_show_tables_from.test",
+-        "test/sql/attach/attach_dbname_quotes.test",
+         "test/sql/table_function/sqlite_master_quotes.test",
+         "test/sql/keywords/escaped_quotes_expressions.test",
+-        "test/sql/keywords/keywords_in_expressions.test",
+-        "test/sql/show_select/test_describe_quoted.test",
+-        "test/sql/show_select/test_summarize_quoted.test",
+-        "test/sql/pragma/test_show_tables.test",
+         "test/sql/export/export_quoted_enum.test",
+-        "test/sql/catalog/test_quoted_column_name.test",
+-        "test/sql/catalog/function/query_function.test",
+         "test/sql/json/issues/large_quoted_string_constant.test",
+-        "test/sql/storage/types/variant/test_all_types_single_table.test",
+-        "test/sql/cast/string_to_struct_cast.test"
++        "test/sql/attach/attach_dbname_quotes.test",
++        "test/sql/pragma/test_show_tables_from.test",
++        "test/sql/catalog/test_quoted_column_name.test"
+       ]
+     },
+     {
+
+commit 8eedd2e41d29f3504d95deb7fa11cf6e6471024e
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Mon Dec 15 12:48:26 2025 +0100
+
+    Format fix
+
+diff --git a/extension/autocomplete/matcher.cpp b/extension/autocomplete/matcher.cpp
+index 13fb613a0a..f01d8c6ac3 100644
+--- a/extension/autocomplete/matcher.cpp
++++ b/extension/autocomplete/matcher.cpp
+@@ -433,7 +433,7 @@ public:
+ 
+ 		string result_text = token_text;
+ 		if (IsQuoted(result_text)) {
+-			result_text = result_text.substr(1,result_text.size() - 2);
++			result_text = result_text.substr(1, result_text.size() - 2);
+ 		}
+ 		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
+ 			result_text = result_text.substr(1, result_text.size() - 2);
+
+commit 0d299a1a21088e8fc7120a11b98f389a3d237ac5
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Tue Dec 16 10:14:23 2025 +0100
+
+    Exclude test with quotations
+
+diff --git a/test/configs/peg_parser_strict.json b/test/configs/peg_parser_strict.json
+index 4b0fb96211..fe2a2a2481 100644
+--- a/test/configs/peg_parser_strict.json
++++ b/test/configs/peg_parser_strict.json
+@@ -162,7 +162,8 @@
+         "test/sql/json/issues/large_quoted_string_constant.test",
+         "test/sql/attach/attach_dbname_quotes.test",
+         "test/sql/pragma/test_show_tables_from.test",
+-        "test/sql/catalog/test_quoted_column_name.test"
++        "test/sql/catalog/test_quoted_column_name.test",
++        "test/sql/cast/string_to_struct_cast.test"
+       ]
+     },
+     {
+
+commit 9e6630822274fdbf70c7fc8f8d278d3d7cee7c51
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Tue Jan 6 15:11:24 2026 +0100
+
+    Move out NegateOperator to separate header
+
+diff --git a/extension/autocomplete/transformer/transform_common.cpp b/extension/autocomplete/transformer/transform_common.cpp
+index d54c11bd86..24e2f0c765 100644
+--- a/extension/autocomplete/transformer/transform_common.cpp
++++ b/extension/autocomplete/transformer/transform_common.cpp
+@@ -2,7 +2,9 @@
+ #include "duckdb/common/operator/cast_operators.hpp"
+ #include "duckdb/common/types/decimal.hpp"
+ #include "transformer/peg_transformer.hpp"
+-#include "duckdb/common/extra_type_info.hpp"
++#include "duckdb/common/types/hugeint.hpp"
++#include "duckdb/common/limits.hpp"
++#include "duckdb/common/operator/negate.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -255,9 +257,9 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
+ 		throw InternalException("Unexpected rule %s encountered in SimpleType", type_or_character_pr->name);
+ 	}
+ 	auto opt_modifiers = list_pr.Child<OptionalParseResult>(1);
+-	vector<unique_ptr<ParsedExpression>> modifiers;
+ 	if (opt_modifiers.HasResult()) {
+-		modifiers = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
++		vector<unique_ptr<ParsedExpression>> modifiers =
++		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_modifiers.optional_result);
+ 		for (const auto &modifier : modifiers) {
+ 			if (modifier->GetExpressionClass() == ExpressionClass::CONSTANT) {
+ 				continue;
+@@ -399,42 +401,47 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
+ 
+ bool PEGTransformerFactory::TryNegateValue(Value &val) {
+ 	switch (val.type().id()) {
+-	case LogicalTypeId::INTEGER:
+-		if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
+-			val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
+-			return true;
++	case LogicalTypeId::INTEGER: {
++		auto raw = val.GetValue<int32_t>();
++		if (!NegateOperator::CanNegate<int32_t>(raw)) {
++			val = Value::BIGINT(-static_cast<int64_t>(raw));
++		} else {
++			val = Value::INTEGER(-raw);
+ 		}
+-		val = Value::INTEGER(-val.GetValue<int32_t>());
+ 		return true;
+-
+-	case LogicalTypeId::BIGINT:
+-		if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
+-			val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
+-			return true;
++	}
++	case LogicalTypeId::BIGINT: {
++		auto raw = val.GetValue<int64_t>();
++		if (!NegateOperator::CanNegate<int64_t>(raw)) {
++			val = Value::HUGEINT(-static_cast<hugeint_t>(raw));
++		} else {
++			val = Value::BIGINT(-raw);
+ 		}
+-		val = Value::BIGINT(-val.GetValue<int64_t>());
+ 		return true;
+-
+-	case LogicalTypeId::HUGEINT:
+-		val = Value::HUGEINT(-val.GetValue<hugeint_t>());
++	}
++	case LogicalTypeId::HUGEINT: {
++		auto raw = val.GetValue<hugeint_t>();
++		if (!NegateOperator::CanNegate<hugeint_t>(raw)) {
++			return false;
++		}
++		val = Value::HUGEINT(-raw);
+ 		return true;
+-
++	}
+ 	case LogicalTypeId::UHUGEINT: {
+ 		auto uval = val.GetValue<uhugeint_t>();
+-		uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
++		uhugeint_t abs_min_hugeint = static_cast<uhugeint_t>(NumericLimits<hugeint_t>::Maximum()) + 1;
+ 
+ 		if (uval == abs_min_hugeint) {
+ 			val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
+ 			return true;
+ 		}
+ 		if (uval < abs_min_hugeint) {
+-			val = Value::HUGEINT(-((hugeint_t)uval));
++			val = Value::HUGEINT(-static_cast<hugeint_t>(uval));
+ 			return true;
+ 		}
+ 
+ 		return false;
+ 	}
+-
+ 	case LogicalTypeId::DOUBLE:
+ 		val = Value::DOUBLE(-val.GetValue<double>());
+ 		return true;
+diff --git a/src/function/scalar/operator/arithmetic.cpp b/src/function/scalar/operator/arithmetic.cpp
+index 83224332b3..b1719418f8 100644
+--- a/src/function/scalar/operator/arithmetic.cpp
++++ b/src/function/scalar/operator/arithmetic.cpp
+@@ -5,6 +5,7 @@
+ #include "duckdb/common/operator/add.hpp"
+ #include "duckdb/common/operator/interpolate.hpp"
+ #include "duckdb/common/operator/multiply.hpp"
++#include "duckdb/common/operator/negate.hpp"
+ #include "duckdb/common/operator/numeric_binary_operators.hpp"
+ #include "duckdb/common/operator/subtract.hpp"
+ #include "duckdb/common/serializer/deserializer.hpp"
+@@ -531,35 +532,6 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
+ //===--------------------------------------------------------------------===//
+ // - [subtract]
+ //===--------------------------------------------------------------------===//
+-namespace {
+-
+-struct NegateOperator {
+-	template <class T>
+-	static bool CanNegate(T input) {
+-		using Limits = NumericLimits<T>;
+-		return !(Limits::IsSigned() && Limits::Minimum() == input);
+-	}
+-
+-	template <class TA, class TR>
+-	static inline TR Operation(TA input) {
+-		auto cast = (TR)input;
+-		if (!CanNegate<TR>(cast)) {
+-			throw OutOfRangeException("Overflow in negation of integer!");
+-		}
+-		return -cast;
+-	}
+-};
+-
+-template <>
+-bool NegateOperator::CanNegate(float input) {
+-	return true;
+-}
+-
+-template <>
+-bool NegateOperator::CanNegate(double input) {
+-	return true;
+-}
+-
+ template <>
+ interval_t NegateOperator::Operation(interval_t input) {
+ 	interval_t result;
+@@ -670,8 +642,6 @@ unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, Function
+ 	return stats.ToUnique();
+ }
+ 
+-} // namespace
+-
+ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
+ 	if (type.id() == LogicalTypeId::INTERVAL) {
+ 		ScalarFunction func("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>);
+diff --git a/src/include/duckdb/common/operator/negate.hpp b/src/include/duckdb/common/operator/negate.hpp
+new file mode 100644
+index 0000000000..f5b1f3f7bb
+--- /dev/null
++++ b/src/include/duckdb/common/operator/negate.hpp
+@@ -0,0 +1,34 @@
++#pragma once
++
++#include "duckdb/common/limits.hpp"
++#include "duckdb/common/exception.hpp"
++
++namespace duckdb {
++
++struct NegateOperator {
++	template <class T>
++	static bool CanNegate(T input) {
++		using Limits = NumericLimits<T>;
++		return !(Limits::IsSigned() && Limits::Minimum() == input);
++	}
++
++	template <class TA, class TR>
++	static inline TR Operation(TA input) {
++		if (!CanNegate<TA>(input)) {
++			throw OutOfRangeException("Overflow in negation of numeric value!");
++		}
++		return -(TR)input;
++	}
++};
++
++// Specialization for floating point (always negatable)
++template <>
++inline bool NegateOperator::CanNegate(float input) {
++	return true;
++}
++template <>
++inline bool NegateOperator::CanNegate(double input) {
++	return true;
++}
++
++} // namespace duckdb
+
+commit 60bf8ff49de79a0b21fb53baacbd11f9b519fc57
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Wed Jan 7 16:37:47 2026 +0100
+
+    Fix conversion error with negative sign for largest numbers
+
+diff --git a/extension/autocomplete/include/inlined_grammar.gram b/extension/autocomplete/include/inlined_grammar.gram
+index 5642161ee0..8a5c5918fd 100644
+--- a/extension/autocomplete/include/inlined_grammar.gram
++++ b/extension/autocomplete/include/inlined_grammar.gram
+@@ -53,7 +53,7 @@ SecretName <- ColId
+ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
+ StringLiteral <- '\'' [^\']* '\''
+ 
+-Type <- (TimeType / IntervalType / BitType / RowType / MapType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
++Type <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
+ SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
+ CharacterType <- ('CHARACTER' 'VARYING'?) /
+                  ('CHAR' 'VARYING'?) /
+@@ -102,6 +102,8 @@ Interval <- YearKeyword /
+     (MinuteKeyword 'TO' SecondKeyword)
+ 
+ BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
++GeometryType <- 'GEOMETRY'
++VariantType <- 'VARIANT'
+ 
+ NumericType <- SimpleNumericType / DecimalNumericType
+ SimpleNumericType <- IntType / IntegerType / SmallintType /
+diff --git a/extension/autocomplete/include/transformer/peg_transformer.hpp b/extension/autocomplete/include/transformer/peg_transformer.hpp
+index 5c96cfc1ad..b6f101ae80 100644
+--- a/extension/autocomplete/include/transformer/peg_transformer.hpp
++++ b/extension/autocomplete/include/transformer/peg_transformer.hpp
+@@ -153,6 +153,7 @@ public:
+ 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
+ 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
+ 	static bool TryNegateValue(Value &val);
++	static unique_ptr<ParsedExpression> ConvertNumberToValue(string val);
+ 
+ 	// Registration methods
+ 	void RegisterAlter();
+diff --git a/extension/autocomplete/transformer/transform_common.cpp b/extension/autocomplete/transformer/transform_common.cpp
+index 24e2f0c765..d3901938aa 100644
+--- a/extension/autocomplete/transformer/transform_common.cpp
++++ b/extension/autocomplete/transformer/transform_common.cpp
+@@ -450,28 +450,25 @@ bool PEGTransformerFactory::TryNegateValue(Value &val) {
+ 	}
+ }
+ 
+-// NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
+-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer,
+-                                                                           optional_ptr<ParseResult> parse_result) {
+-	auto literal_pr = parse_result->Cast<NumberParseResult>();
+-	string_t str_val(literal_pr.number);
++unique_ptr<ParsedExpression> PEGTransformerFactory::ConvertNumberToValue(string val) {
++	string_t str_val(val);
+ 	bool try_cast_as_integer = true;
+ 	bool try_cast_as_decimal = true;
+ 	optional_idx decimal_position = optional_idx::Invalid();
+ 	idx_t num_underscores = 0;
+ 	idx_t num_integer_underscores = 0;
+ 	for (idx_t i = 0; i < str_val.GetSize(); i++) {
+-		if (literal_pr.number[i] == '.') {
++		if (val[i] == '.') {
+ 			// decimal point: cast as either decimal or double
+ 			try_cast_as_integer = false;
+ 			decimal_position = i;
+ 		}
+-		if (literal_pr.number[i] == 'e' || literal_pr.number[i] == 'E') {
++		if (val[i] == 'e' || val[i] == 'E') {
+ 			// found exponent, cast as double
+ 			try_cast_as_integer = false;
+ 			try_cast_as_decimal = false;
+ 		}
+-		if (literal_pr.number[i] == '_') {
++		if (val[i] == '_') {
+ 			num_underscores++;
+ 			if (!decimal_position.IsValid()) {
+ 				num_integer_underscores++;
+@@ -502,13 +499,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
+ 			return make_uniq<ConstantExpression>(Value::UHUGEINT(uhugeint_value));
+ 		}
+ 	}
+-	idx_t decimal_offset = literal_pr.number[0] == '-' ? 3 : 2;
++	idx_t decimal_offset = val[0] == '-' ? 3 : 2;
+ 	if (try_cast_as_decimal && decimal_position.IsValid() &&
+ 	    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
+ 		// figure out the width/scale based on the decimal position
+ 		auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
+ 		auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
+-		if (literal_pr.number[0] == '-') {
++		if (val[0] == '-') {
+ 			width--;
+ 		}
+ 		if (width <= Decimal::MAX_WIDTH_DECIMAL) {
+@@ -523,6 +520,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
+ 	return make_uniq<ConstantExpression>(Value::DOUBLE(dbl_value));
+ }
+ 
++// NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
++unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer,
++                                                                           optional_ptr<ParseResult> parse_result) {
++	auto literal_pr = parse_result->Cast<NumberParseResult>();
++	return ConvertNumberToValue(literal_pr.number);
++}
++
+ LogicalType PEGTransformerFactory::TransformSetofType(PEGTransformer &transformer,
+                                                       optional_ptr<ParseResult> parse_result) {
+ 	auto &list_pr = parse_result->Cast<ListParseResult>();
+diff --git a/extension/autocomplete/transformer/transform_expression.cpp b/extension/autocomplete/transformer/transform_expression.cpp
+index b7192fe6fe..8b9c43b2ce 100644
+--- a/extension/autocomplete/transformer/transform_expression.cpp
++++ b/extension/autocomplete/transformer/transform_expression.cpp
+@@ -732,37 +732,85 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
+ 	throw NotImplementedException("AT TIME ZONE has not yet been implemented");
+ }
+ 
+-// PrefixExpression <- PrefixOperator* BaseExpression
+-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
+-                                                                              optional_ptr<ParseResult> parse_result) {
+-	auto &list_pr = parse_result->Cast<ListParseResult>();
+-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+-
+-	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
+-	if (!prefix_opt.HasResult()) {
+-		return expr;
++bool IsNumberLiteral(optional_ptr<ParseResult> pr) {
++	if (!pr) return false;
++	if (pr->name == "BaseExpression") {
++		auto &list = pr->Cast<ListParseResult>();
++		if (list.GetChild(1)->Cast<OptionalParseResult>().HasResult()) {
++			return false;
++		}
++		return IsNumberLiteral(list.GetChild(0));
+ 	}
++	if (pr->name == "SingleExpression") {
++		auto &list = pr->Cast<ListParseResult>();
++		return IsNumberLiteral(list.GetChild(0)->Cast<ChoiceParseResult>().result);
++	}
++	if (pr->name == "LiteralExpression") {
++		auto &list = pr->Cast<ListParseResult>();
++		return IsNumberLiteral(list.GetChild(0)->Cast<ChoiceParseResult>().result);
++	}
++	return pr->name == "NumberLiteral";
++}
+ 
+-	auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
+-
+-	for (auto &prefix_expr : prefix_repeat.children) {
+-		auto prefix = transformer.Transform<string>(prefix_expr);
+-
+-		if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
+-			auto &const_expr = expr->Cast<ConstantExpression>();
+-			if (TryNegateValue(const_expr.value)) {
+-				continue;
+-			}
+-		}
+-		vector<unique_ptr<ParsedExpression>> children;
+-		children.push_back(std::move(expr));
+-		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+-		func_expr->is_operator = true;
+-		expr = std::move(func_expr);
++string GetRawText(optional_ptr<ParseResult> pr) {
++	if (pr->name == "NumberLiteral") {
++		return pr->Cast<NumberParseResult>().number;
+ 	}
+-	return expr;
++	if (pr->name == "BaseExpression") {
++		return GetRawText(pr->Cast<ListParseResult>().GetChild(0));
++	}
++	if (pr->name == "SingleExpression" || pr->name == "LiteralExpression") {
++		auto &list = pr->Cast<ListParseResult>();
++		return GetRawText(list.GetChild(0)->Cast<ChoiceParseResult>().result);
++	}
++	return "";
+ }
+ 
++// PrefixExpression <- PrefixOperator* BaseExpression
++unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
++                                                                              optional_ptr<ParseResult> parse_result) {
++    auto &list_pr = parse_result->Cast<ListParseResult>();
++    auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
++    auto base_expr_pr = list_pr.Child<ListParseResult>(1);
++
++    if (!prefix_opt.HasResult()) {
++        return transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
++    }
++
++    auto &prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
++
++    // --- SPECIAL CASE: Handle -<Number> atomically to prevent overflow/precision loss ---
++    // We only do this if there is exactly one prefix and it is a minus.
++    if (prefix_repeat.children.size() == 1) {
++        auto prefix = transformer.Transform<string>(prefix_repeat.children[0]);
++        if (prefix == "-" && IsNumberLiteral(base_expr_pr)) {
++            string raw_number = GetRawText(base_expr_pr);
++            string full_text = "-" + raw_number;
++            return ConvertNumberToValue(full_text);
++        }
++    }
++
++    auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
++
++    // Apply prefixes in order (from right to left, as they were parsed)
++    for (auto &prefix_expr : prefix_repeat.children) {
++        auto prefix = transformer.Transform<string>(prefix_expr);
++
++        if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
++            auto &const_expr = expr->Cast<ConstantExpression>();
++            if (TryNegateValue(const_expr.value)) {
++                continue;
++            }
++        }
++
++        vector<unique_ptr<ParsedExpression>> children;
++        children.push_back(std::move(expr));
++        auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
++        func_expr->is_operator = true;
++        expr = std::move(func_expr);
++    }
++    return expr;
++}
+ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
+                                                       optional_ptr<ParseResult> parse_result) {
+ 	auto &list_pr = parse_result->Cast<ListParseResult>();
+
+commit dbc617489c945e56c5349e1a3ebb59dcf3c8a652
+Author: dtenwolde <dljtw98@gmail.com>
+Date:   Wed Jan 7 16:43:45 2026 +0100
+
+    Format fix
+
+diff --git a/extension/autocomplete/transformer/transform_expression.cpp b/extension/autocomplete/transformer/transform_expression.cpp
+index 8b9c43b2ce..b26a48c544 100644
+--- a/extension/autocomplete/transformer/transform_expression.cpp
++++ b/extension/autocomplete/transformer/transform_expression.cpp
+@@ -733,7 +733,9 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
+ }
+ 
+ bool IsNumberLiteral(optional_ptr<ParseResult> pr) {
+-	if (!pr) return false;
++	if (!pr) {
++		return false;
++	}
+ 	if (pr->name == "BaseExpression") {
+ 		auto &list = pr->Cast<ListParseResult>();
+ 		if (list.GetChild(1)->Cast<OptionalParseResult>().HasResult()) {
+@@ -769,47 +771,47 @@ string GetRawText(optional_ptr<ParseResult> pr) {
+ // PrefixExpression <- PrefixOperator* BaseExpression
+ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
+                                                                               optional_ptr<ParseResult> parse_result) {
+-    auto &list_pr = parse_result->Cast<ListParseResult>();
+-    auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
+-    auto base_expr_pr = list_pr.Child<ListParseResult>(1);
+-
+-    if (!prefix_opt.HasResult()) {
+-        return transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
+-    }
+-
+-    auto &prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
+-
+-    // --- SPECIAL CASE: Handle -<Number> atomically to prevent overflow/precision loss ---
+-    // We only do this if there is exactly one prefix and it is a minus.
+-    if (prefix_repeat.children.size() == 1) {
+-        auto prefix = transformer.Transform<string>(prefix_repeat.children[0]);
+-        if (prefix == "-" && IsNumberLiteral(base_expr_pr)) {
+-            string raw_number = GetRawText(base_expr_pr);
+-            string full_text = "-" + raw_number;
+-            return ConvertNumberToValue(full_text);
+-        }
+-    }
+-
+-    auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
+-
+-    // Apply prefixes in order (from right to left, as they were parsed)
+-    for (auto &prefix_expr : prefix_repeat.children) {
+-        auto prefix = transformer.Transform<string>(prefix_expr);
+-
+-        if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
+-            auto &const_expr = expr->Cast<ConstantExpression>();
+-            if (TryNegateValue(const_expr.value)) {
+-                continue;
+-            }
+-        }
+-
+-        vector<unique_ptr<ParsedExpression>> children;
+-        children.push_back(std::move(expr));
+-        auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
+-        func_expr->is_operator = true;
+-        expr = std::move(func_expr);
+-    }
+-    return expr;
++	auto &list_pr = parse_result->Cast<ListParseResult>();
++	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
++	auto base_expr_pr = list_pr.Child<ListParseResult>(1);
++
++	if (!prefix_opt.HasResult()) {
++		return transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
++	}
++
++	auto &prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
++
++	// --- SPECIAL CASE: Handle -<Number> atomically to prevent overflow/precision loss ---
++	// We only do this if there is exactly one prefix and it is a minus.
++	if (prefix_repeat.children.size() == 1) {
++		auto prefix = transformer.Transform<string>(prefix_repeat.children[0]);
++		if (prefix == "-" && IsNumberLiteral(base_expr_pr)) {
++			string raw_number = GetRawText(base_expr_pr);
++			string full_text = "-" + raw_number;
++			return ConvertNumberToValue(full_text);
++		}
++	}
++
++	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
++
++	// Apply prefixes in order (from right to left, as they were parsed)
++	for (auto &prefix_expr : prefix_repeat.children) {
++		auto prefix = transformer.Transform<string>(prefix_expr);
++
++		if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
++			auto &const_expr = expr->Cast<ConstantExpression>();
++			if (TryNegateValue(const_expr.value)) {
++				continue;
++			}
++		}
++
++		vector<unique_ptr<ParsedExpression>> children;
++		children.push_back(std::move(expr));
++		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
++		func_expr->is_operator = true;
++		expr = std::move(func_expr);
++	}
++	return expr;
+ }
+ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
+                                                       optional_ptr<ParseResult> parse_result) {

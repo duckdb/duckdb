@@ -267,6 +267,11 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 		if (type != LogicalType::ANY) {
 			generated.expr = make_uniq<CastExpression>(type, std::move(generated.expr));
 		}
+		if (generated.expr->HasSubquery()) {
+			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			                      qualified_name.name);
+		}
+
 		ColumnDefinition col(qualified_name.name, type, std::move(generated.expr), TableColumnType::GENERATED);
 		col.SetCompressionType(compression_type);
 		if (column_constraint.default_value) {
