@@ -58,7 +58,11 @@ public:
 		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsUsed!");
 	}
 	void MarkBlockAsModified(block_id_t block_id) override {
-		blocks.erase(block_id);
+		multi_use_blocks[block_id]--;
+		if (multi_use_blocks[block_id] <= 1) {
+			blocks.erase(block_id);
+			multi_use_blocks.erase(block_id);
+		}
 	}
 	void IncreaseBlockReferenceCount(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - IncreaseBlockReferenceCount!");
@@ -122,6 +126,7 @@ public:
 
 		lock_guard<mutex> guard(lock);
 		blocks[block_id] = std::move(copy);
+		multi_use_blocks[block_id] = 1;
 	}
 	void WriteHeader(QueryContext context, DatabaseHeader header) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");
@@ -142,6 +147,8 @@ public:
 private:
 	mutable mutex lock;
 	mutable unordered_map<block_id_t, AllocatedData> blocks;
+
+	unordered_map<block_id_t, uint32_t> multi_use_blocks;
 
 	//! The current maximum block id
 	block_id_t max_block = 0;
