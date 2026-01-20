@@ -30,7 +30,7 @@ struct CreateIndexInfo : public CreateInfo {
 	case_insensitive_map_t<Value> options;
 
 	//! The index type (ART, B+-tree, Skip-List, ...)
-	string index_type_name;
+	string index_type;
 
 	//! The index constraint type
 	IndexConstraintType constraint_type;

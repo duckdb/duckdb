@@ -498,8 +498,8 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 	// we also need to make sure the index type is loaded
 	// backwards compatibility:
 	// if the index type is not specified, we default to ART
-	if (info.index_type_name.empty()) {
-		info.index_type_name = ART::TYPE_NAME;
+	if (info.index_type.empty()) {
+		info.index_type = ART::TYPE_NAME;
 	}
 
 	// now we can look for the index in the catalog and assign the table info

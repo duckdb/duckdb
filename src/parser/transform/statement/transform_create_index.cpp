@@ -44,7 +44,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
 	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname);
 
-	info->index_type_name = StringUtil::Upper(string(stmt.accessMethod));
+	info->index_type = StringUtil::Upper(string(stmt.accessMethod));
 
 	if (stmt.relation->schemaname) {
 		info->schema = stmt.relation->schemaname;

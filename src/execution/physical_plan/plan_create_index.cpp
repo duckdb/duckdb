@@ -120,10 +120,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	}
 
 	// If we get here and the index type is not valid index type, we throw an exception.
-	const auto index_type = context.db->config.GetIndexTypes().FindByName(op.info->index_type_name);
+	const auto index_type = context.db->config.GetIndexTypes().FindByName(op.info->index_type);
 
 	if (!index_type) {
-		throw BinderException("Unknown index type: " + op.info->index_type_name);
+		throw BinderException("Unknown index type: " + op.info->index_type);
 	}
 
 	// Add a dependency for the entire table on which we create the index.

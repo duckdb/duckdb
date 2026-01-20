@@ -96,7 +96,7 @@ void CreateIndexInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(206, "names", names);
 	serializer.WritePropertyWithDefault<vector<column_t>>(207, "column_ids", column_ids);
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<Value>>(208, "options", options);
-	serializer.WritePropertyWithDefault<string>(209, "index_type_name", index_type_name);
+	serializer.WritePropertyWithDefault<string>(209, "index_type_name", index_type);
 }
 
 unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) {
@@ -110,7 +110,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<string>>(206, "names", result->names);
 	deserializer.ReadPropertyWithDefault<vector<column_t>>(207, "column_ids", result->column_ids);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<Value>>(208, "options", result->options);
-	deserializer.ReadPropertyWithDefault<string>(209, "index_type_name", result->index_type_name);
+	deserializer.ReadPropertyWithDefault<string>(209, "index_type_name", result->index_type);
 	return std::move(result);
 }
 

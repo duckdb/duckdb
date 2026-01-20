@@ -947,8 +947,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// Ensure that the index type exists.
-	if (info.index_type_name.empty()) {
-		info.index_type_name = ART::TYPE_NAME;
+	if (info.index_type.empty()) {
+		info.index_type = ART::TYPE_NAME;
 	}
 
 	const auto schema_name = create_info->schema;
