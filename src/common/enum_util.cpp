@@ -174,7 +174,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
@@ -2940,19 +2940,21 @@ const StringUtil::EnumStringLiteral *GetMemoryTagValues() {
 		{ static_cast<uint32_t>(MemoryTag::EXTENSION), "EXTENSION" },
 		{ static_cast<uint32_t>(MemoryTag::TRANSACTION), "TRANSACTION" },
 		{ static_cast<uint32_t>(MemoryTag::EXTERNAL_FILE_CACHE), "EXTERNAL_FILE_CACHE" },
-		{ static_cast<uint32_t>(MemoryTag::WINDOW), "WINDOW" }
+		{ static_cast<uint32_t>(MemoryTag::WINDOW), "WINDOW" },
+		{ static_cast<uint32_t>(MemoryTag::OBJECT_CACHE), "OBJECT_CACHE" },
+		{ static_cast<uint32_t>(MemoryTag::UNKNOWN), "UNKNOWN" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MemoryTag>(MemoryTag value) {
-	return StringUtil::EnumToString(GetMemoryTagValues(), 15, "MemoryTag", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMemoryTagValues(), 17, "MemoryTag", static_cast<uint32_t>(value));
 }
 
 template<>
 MemoryTag EnumUtil::FromString<MemoryTag>(const char *value) {
-	return static_cast<MemoryTag>(StringUtil::StringToEnum(GetMemoryTagValues(), 15, "MemoryTag", value));
+	return static_cast<MemoryTag>(StringUtil::StringToEnum(GetMemoryTagValues(), 17, "MemoryTag", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMergeActionConditionValues() {

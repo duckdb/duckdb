@@ -31,6 +31,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 #include <utility>
 #include <cmath>
@@ -1667,7 +1668,17 @@ string Value::ToSQLString() const {
 		}
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
-	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::VARIANT: {
+		string ret = "VARIANT(";
+		Vector tmp(*this);
+		RecursiveUnifiedVectorFormat format;
+		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		UnifiedVariantVectorData vector_data(format);
+		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+		ret += val.ToString();
+		ret += ")";
+		return ret;
+	}
 	case LogicalTypeId::STRUCT: {
 		bool is_unnamed = StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";

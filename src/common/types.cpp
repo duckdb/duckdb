@@ -1237,6 +1237,11 @@ bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
+	return TryGetMaxLogicalTypeUnchecked(left, right, result);
+}
+
+bool LogicalType::TryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right,
+                                                LogicalType &result) {
 	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(left, right, result);
 }
 
