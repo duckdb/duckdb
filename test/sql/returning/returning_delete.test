@@ -323,7 +323,8 @@ statement ok
 DROP TABLE test_where_returning;
 
 # ============================================================
-# Tests for DELETE RETURNING with generated columns (fallback path)
+# Tests for DELETE RETURNING with generated columns
+# Generated columns are computed at execution time from physical columns
 # ============================================================
 
 # Test DELETE RETURNING with VIRTUAL generated column

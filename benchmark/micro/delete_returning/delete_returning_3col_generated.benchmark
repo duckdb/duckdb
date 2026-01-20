@@ -1,5 +1,5 @@
 # name: benchmark/micro/delete_returning/delete_returning_3col_generated.benchmark
-# description: DELETE RETURNING with 3 columns including generated (fallback fetch-by-rowid path)
+# description: DELETE RETURNING with 3 columns including generated column
 # group: [delete_returning]
 
 load
