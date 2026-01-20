@@ -60,7 +60,6 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 
 	// Create the unique indexes for the UNIQUE, PRIMARY KEY, and FOREIGN KEY constraints.
 	idx_t indexes_idx = 0;
-	vector<IndexStorageInfo> remaining_indexes;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto &constraint = constraints[i];
 		if (constraint->type == ConstraintType::UNIQUE) {
@@ -121,6 +120,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 
 	// Move any remaining unused IndexStorageInfos to storage.
 	// These are non-constraint indexes that are still unbound at this point.
+	vector<IndexStorageInfo> remaining_indexes;
 	while (indexes_idx < info.indexes.size()) {
 		remaining_indexes.push_back(std::move(info.indexes[indexes_idx++]));
 	}
