@@ -30,14 +30,15 @@ struct FileSystemRegistry {
 	const shared_ptr<FileSystemHandle> default_fs;
 	unordered_set<string> disabled_file_systems;
 	// Registered duckdb internal compression filesystem.
-	unordered_map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
+	unordered_map<FileCompressionType, shared_ptr<FileSystemHandle>> compressed_fs;
 	// Registered external compression filesystems (i.e., extensions).
-	vector<unique_ptr<FileSystem>> external_compressed_fs;
+	vector<shared_ptr<FileSystemHandle>> external_compressed_fs;
 
 public:
 	shared_ptr<FileSystemRegistry> RegisterSubSystem(unique_ptr<FileSystem> fs) const;
 	shared_ptr<FileSystemRegistry> RegisterSubSystem(FileCompressionType compression_type,
 	                                                 unique_ptr<FileSystem> fs) const;
+	shared_ptr<FileSystemRegistry> RegisterCompressionFilesystem(unique_ptr<FileSystem> fs) const;
 	shared_ptr<FileSystemRegistry> SetDisabledFileSystems(const vector<string> &names) const;
 	shared_ptr<FileSystemRegistry> ExtractSubSystem(const string &name, unique_ptr<FileSystem> &result) const;
 };
@@ -59,6 +60,12 @@ shared_ptr<FileSystemRegistry> FileSystemRegistry::RegisterSubSystem(FileCompres
                                                                      unique_ptr<FileSystem> fs) const {
 	auto new_registry = make_shared_ptr<FileSystemRegistry>(*this);
 	new_registry->compressed_fs[compression_type] = make_shared_ptr<FileSystemHandle>(std::move(fs));
+	return new_registry;
+}
+
+shared_ptr<FileSystemRegistry> FileSystemRegistry::RegisterCompressionFilesystem(unique_ptr<FileSystem> fs) const {
+	auto new_registry = make_shared_ptr<FileSystemRegistry>(*this);
+	new_registry->external_compressed_fs.emplace_back(make_shared_ptr<FileSystemHandle>(std::move(fs)));
 	return new_registry;
 }
 
@@ -113,7 +120,10 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
 	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
-FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType compression_type, const string &filepath) {
+VirtualFileSystem::~VirtualFileSystem() {
+}
+
+optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileCompressionType compression_type, const string &filepath) {
 	if (compression_type == FileCompressionType::UNCOMPRESSED) {
 		return nullptr;
 	}
@@ -135,9 +145,9 @@ FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType com
 	// If caller explicitly specifies a duckdb internal compression type to use, or a known pattern is detected, try to
 	// fetch it explicitly.
 	if (compression_type != FileCompressionType::AUTO_DETECT) {
-		auto iter = compressed_fs.find(compression_type);
-		if (iter != compressed_fs.end()) {
-			return iter->second.get();
+		auto iter = file_system_registry->compressed_fs.find(compression_type);
+		if (iter != file_system_registry->compressed_fs.end()) {
+			return iter->second->file_system.get();
 		}
 		if (compression_type == FileCompressionType::ZSTD) {
 			throw NotImplementedException(
@@ -150,9 +160,9 @@ FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType com
 
 	// We've checked over all duckdb internal compression types, fallback to try externally registered compression
 	// filesystems.
-	for (auto &cur_compressed_fs : external_compressed_fs) {
-		if (cur_compressed_fs->CanHandleFile(filepath)) {
-			return cur_compressed_fs.get();
+	for (auto &cur_compressed_fs : file_system_registry->external_compressed_fs) {
+		if (cur_compressed_fs->file_system->CanHandleFile(filepath)) {
+			return cur_compressed_fs->file_system.get();
 		}
 	}
 
@@ -163,7 +173,7 @@ FileSystem *VirtualFileSystem::FindCompressionFileSystem(FileCompressionType com
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
 	const auto compression = flags.Compression();
-	auto *compression_filesystem = FindCompressionFileSystem(compression, file.path);
+	auto compression_filesystem = FindCompressionFileSystem(compression, file.path);
 	// open the base file handle in UNCOMPRESSED mode
 	flags.SetCompression(FileCompressionType::UNCOMPRESSED);
 
@@ -190,7 +200,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 	const auto context = !flags.MultiClientAccess() ? FileOpener::TryGetClientContext(opener) : QueryContext();
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(context, std::move(file_handle));
-	} else if (compression_filesystem != nullptr) {
+	} else if (compression_filesystem) {
 		file_handle =
 		    compression_filesystem->OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
 	}
@@ -307,7 +317,9 @@ void VirtualFileSystem::RegisterSubSystem(FileCompressionType compression_type, 
 }
 
 void VirtualFileSystem::RegisterCompressionFilesystem(unique_ptr<FileSystem> fs) {
-	external_compressed_fs.emplace_back(std::move(fs));
+	const lock_guard<mutex> guard(registry_lock);
+	auto new_registry = file_system_registry->RegisterCompressionFilesystem(std::move(fs));
+	file_system_registry.atomic_store(new_registry);
 }
 
 void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {
