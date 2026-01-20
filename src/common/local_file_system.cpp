@@ -1475,7 +1475,7 @@ struct ExpandDirectory {
 	bool is_empty = false;
 
 	bool operator<(const ExpandDirectory &other) const {
-		return path < other.path;
+		return path > other.path;
 	}
 };
 
