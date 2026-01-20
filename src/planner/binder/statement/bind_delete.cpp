@@ -63,6 +63,34 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	// create the delete node
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->bound_constraints = BindConstraints(table);
+
+	// If RETURNING is present, add all table columns to the scan so we can pass them through
+	// instead of having to fetch them by row ID in PhysicalDelete
+	// Skip this optimization if the table has generated columns, as they need to be computed
+	// rather than scanned
+	if (!stmt.returning_list.empty() && !table.HasGeneratedColumns()) {
+		auto &column_ids = get.GetColumnIds();
+		auto column_count = table.GetColumns().LogicalColumnCount();
+
+		// Build a map of which table columns are already in the scan
+		// and track their indices in the input chunk
+		del->return_columns.resize(column_count, DConstants::INVALID_INDEX);
+		for (idx_t chunk_idx = 0; chunk_idx < column_ids.size(); chunk_idx++) {
+			auto &col_id = column_ids[chunk_idx];
+			if (!col_id.IsVirtualColumn() && col_id.GetPrimaryIndex() < column_count) {
+				del->return_columns[col_id.GetPrimaryIndex()] = chunk_idx;
+			}
+		}
+
+		// Add any missing columns to the scan
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			if (del->return_columns[col_idx] == DConstants::INVALID_INDEX) {
+				del->return_columns[col_idx] = column_ids.size();
+				get.AddColumnId(col_idx);
+			}
+		}
+	}
+
 	del->AddChild(std::move(root));
 
 	// bind the row id columns and add them to the projection list

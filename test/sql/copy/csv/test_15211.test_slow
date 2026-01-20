@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/test_15211.test
+# name: test/sql/copy/csv/test_15211.test_slow
 # description: Test for issue 15211
 # group: [csv]
 

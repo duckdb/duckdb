@@ -408,6 +408,7 @@ void LogicalDelete::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(201, "table_index", table_index);
 	serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
+	serializer.WritePropertyWithDefault<vector<idx_t>>(204, "return_columns", return_columns);
 }
 
 unique_ptr<LogicalOperator> LogicalDelete::Deserialize(Deserializer &deserializer) {
@@ -416,6 +417,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<bool>(202, "return_chunk", result->return_chunk);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", result->expressions);
+	deserializer.ReadPropertyWithDefault<vector<idx_t>>(204, "return_columns", result->return_columns);
 	return std::move(result);
 }
 
