@@ -1,0 +1,41 @@
+# name: test/sql/parallelism/interquery/concurrent_settings.test_slow
+# description: Test concurrent modification of settings
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT 1 FROM range(3);
+
+concurrentloop threadid 0 3
+
+loop x 0 100
+
+foreach order_type asc desc
+
+onlyif threadid=0
+statement ok
+SET GLOBAL default_order='${order_type}'
+
+endloop
+
+foreach null_order_type asc desc
+
+onlyif threadid=1
+statement ok
+SET GLOBAL default_order='${null_order_type}'
+
+endloop
+
+onlyif threadid>1
+query I
+FROM integers ORDER BY i
+----
+1
+1
+1
+
+endloop
+
+endloop

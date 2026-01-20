@@ -27,13 +27,7 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &showref = select_node.from_table->Cast<duckdb::ShowRef>();
-	if (showref.show_type == duckdb::ShowType::SUMMARY) {
-		return false;
-	}
-	if (showref.table_name == "\"databases\"" || showref.table_name == "\"tables\"" ||
-	    showref.table_name == "\"variables\"" || showref.table_name == "__show_tables_expanded") {
-		// ignore special cases in ShowRef
-		// TODO: this is ugly, should just be using the ShowType enum...
+	if (showref.show_type != duckdb::ShowType::DESCRIBE) {
 		return false;
 	}
 	describe_table_name = "Describe";

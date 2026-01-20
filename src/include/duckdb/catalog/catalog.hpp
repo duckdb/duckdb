@@ -328,6 +328,7 @@ public:
 	virtual string GetEncryptionCipher() const {
 		return string();
 	}
+	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
