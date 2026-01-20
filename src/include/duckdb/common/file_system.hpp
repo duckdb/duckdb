@@ -261,9 +261,6 @@ public:
 	//! Register an external compression filesystem (i.e., by extensions).
 	DUCKDB_API virtual void RegisterCompressionFilesystem(unique_ptr<FileSystem> fs);
 
-	//! Unregister a sub-filesystem by name
-	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
-
 	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
 	// has been disabled.
 	DUCKDB_API virtual unique_ptr<FileSystem> ExtractSubSystem(const string &name);

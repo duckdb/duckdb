@@ -9,18 +9,18 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
+struct FileSystemRegistry;
 
 // bunch of wrappers to allow registering protocol handlers
 class VirtualFileSystem : public FileSystem {
 public:
 	VirtualFileSystem();
 	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
+	~VirtualFileSystem() override;
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -55,9 +55,6 @@ public:
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
-
-	void UnregisterSubSystem(const string &name) override;
-
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
 
 	void RegisterCompressionFilesystem(unique_ptr<FileSystem> fs) override;
@@ -90,21 +87,16 @@ protected:
 
 private:
 	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
-	FileSystem &FindFileSystem(const string &path, optional_ptr<DatabaseInstance> database_instance);
-	FileSystem &FindFileSystem(const string &path);
-	optional_ptr<FileSystem> FindFileSystemInternal(const string &path);
+	FileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
+	                           optional_ptr<FileOpener> file_opener);
+	optional_ptr<FileSystem> FindFileSystemInternal(FileSystemRegistry &registry, const string &path);
 	// Return nullptr if compression is not involved, throw exception if compression is requested but no usable
 	// filesystem gets registered.
 	FileSystem *FindCompressionFileSystem(FileCompressionType compression_type, const string &path);
 
 private:
-	vector<unique_ptr<FileSystem>> sub_systems;
-	const unique_ptr<FileSystem> default_fs;
-	unordered_set<string> disabled_file_systems;
-	// Registered duckdb internal compression filesystem.
-	unordered_map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
-	// Registered external compression filesystems (i.e., extensions).
-	vector<unique_ptr<FileSystem>> external_compressed_fs;
+	mutex registry_lock;
+	shared_ptr<FileSystemRegistry> file_system_registry;
 };
 
 } // namespace duckdb
