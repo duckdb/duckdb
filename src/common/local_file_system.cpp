@@ -1473,10 +1473,14 @@ struct ExpandDirectory {
 	string path;
 	idx_t split_index;
 	bool is_empty = false;
+
+	bool operator<(const ExpandDirectory &other) const {
+		return path < other.path;
+	}
 };
 
 static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr<vector<OpenFileInfo>> files,
-                                queue<ExpandDirectory> &directories, idx_t split_index) {
+                                std::priority_queue<ExpandDirectory> &directories, idx_t split_index) {
 	fs.ListFiles(path, [&](OpenFileInfo &info) {
 		info.path = fs.JoinPath(path, info.path);
 		if (IsSymbolicLink(info.path)) {
@@ -1518,7 +1522,7 @@ private:
 	optional_ptr<FileOpener> opener;
 	vector<PathSplit> splits;
 	bool absolute_path = false;
-	mutable queue<ExpandDirectory> expand_directories;
+	mutable std::priority_queue<ExpandDirectory> expand_directories;
 	mutable bool finished = false;
 };
 
@@ -1618,7 +1622,7 @@ bool LocalGlobResult::ExpandNextPath() const {
 		finished = true;
 		return false;
 	}
-	auto expand_directory = std::move(expand_directories.front());
+	auto expand_directory = std::move(expand_directories.top());
 	expand_directories.pop();
 	bool is_empty = expand_directory.is_empty;
 	auto split_index = expand_directory.split_index;

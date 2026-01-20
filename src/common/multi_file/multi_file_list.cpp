@@ -316,7 +316,7 @@ OpenFileInfo LazyMultiFileList::GetFile(idx_t i) const {
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
 GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> globs_p, FileGlobInput glob_input_p)
-    : context(context_p), globs(std::move(globs_p)), glob_input(glob_input_p), current_glob(0) {
+    : context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)), current_glob(0) {
 }
 
 vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(idx_t max_files) const {
