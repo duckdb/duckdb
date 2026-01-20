@@ -775,6 +775,10 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
 	} else {
 		result.schema = INVALID_SCHEMA;
 	}
+	if (!result.catalog.empty() && result.schema.empty()) {
+		result.schema = result.catalog;
+		result.catalog = INVALID_CATALOG;
+	}
 	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
 	return result;
 }

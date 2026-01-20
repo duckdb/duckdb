@@ -1264,7 +1264,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(P
 			collate_string = const_expr.value.GetValue<string>();
 		} else if (collate_string_expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			auto &col_ref = collate_string_expr->Cast<ColumnRefExpression>();
-			collate_string = col_ref.GetColumnName();
+			collate_string = StringUtil::Join(col_ref.column_names, ".");
 		} else {
 			throw NotImplementedException("Unexpected expression encountered for collate, %s",
 			                              EnumUtil::ToString(collate_string_expr->GetExpressionClass()));
