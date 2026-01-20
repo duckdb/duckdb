@@ -128,6 +128,7 @@
     "class": "AggregateStateTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "AGGREGATE_STATE_TYPE_INFO",
+    "custom_implementation": true,
     "members": [
       {
         "id": 200,
@@ -154,6 +155,11 @@
         "property": "state_type.state_type",
         "default": "LogicalTypeId::INVALID",
         "version": "v1.5.0"
+      },
+      {
+        "id": 204,
+        "name": "child_types",
+        "type": "child_list_t<LogicalType>"
       }
     ]
   },

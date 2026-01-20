@@ -584,6 +584,13 @@ struct aggregate_state_t {
 	      bound_argument_types(std::move(bound_argument_types_p)), state_type(std::move(state_type)) {
 	}
 
+	aggregate_state_t(const aggregate_state_t &other) {
+		function_name = other.function_name;
+		return_type = other.return_type;
+		bound_argument_types = other.bound_argument_types;
+		state_type = other.state_type.DeepCopy();
+	}
+
 	string function_name;
 	LogicalType return_type;
 	vector<LogicalType> bound_argument_types;

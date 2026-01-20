@@ -1656,10 +1656,6 @@ const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &ty
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
 	         type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::AGGREGATE_STATE);
 
-	if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
-		return StructType::GetChildTypes(type.AuxInfo()->Cast<AggregateStateTypeInfo>().state_type.state_type);
-	}
-
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return info->Cast<StructTypeInfo>().child_types;
