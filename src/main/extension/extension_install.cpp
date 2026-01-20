@@ -267,11 +267,18 @@ static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, con
                                 const string &local_extension_path, void *in_buffer, idx_t file_size,
                                 ExtensionInstallInfo &info, DBConfig &config) {
 	// temp_path ends with 'duckdb_extension', but NOT preceded by a '.'
-	D_ASSERT(StringUtil::EndsWith(temp_path, "duckdb_extension") &&
-	         !StringUtil::EndsWith(temp_path, ".duckdb_extension"));
+	if (!StringUtil::EndsWith(temp_path, "duckdb_extension") || StringUtil::EndsWith(temp_path, ".duckdb_extension")) {
+		throw InternalException(
+		    "Extension install temp_path of '%s' is not valid, should end in 'duckdb_extension' not preceded by a '.'",
+		    temp_path);
+	}
 	// local_extension_path ends with '.duckdb_extension', and given it will be written only after signature checks,
 	// it's now loadable
-	D_ASSERT(StringUtil::EndsWith(local_extension_path, "duckdb_extension"));
+	if (!StringUtil::EndsWith(local_extension_path, ".duckdb_extension")) {
+		throw InternalException("Extension install local_extension_path of '%s' is not valid, should end in "
+		                        "'duckdb_extension' not preceded by a '.'",
+		                        temp_path);
+	}
 
 	// Write extension to tmp file
 	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size, config);
