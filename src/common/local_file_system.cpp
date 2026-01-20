@@ -1505,35 +1505,26 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 	});
 }
 
-struct LocalGlobResult : public MultiFileList {
+struct LocalGlobResult : public LazyMultiFileList {
 public:
-	LocalGlobResult(LocalFileSystem &fs, const string &path, FileGlobInput glob_input, optional_ptr<FileOpener> opener);
-
-	vector<OpenFileInfo> GetAllFiles() override;
-	FileExpandResult GetExpandResult() override;
-	idx_t GetTotalFileCount() override;
+	LocalGlobResult(LocalFileSystem &fs, const string &path, FileGlobOptions options, optional_ptr<FileOpener> opener);
 
 protected:
-	bool FileIsAvailable(idx_t i) override;
-	OpenFileInfo GetFile(idx_t i) override;
-
-private:
-	bool ExpandNextFile();
+	bool ExpandNextPath() const override;
 
 private:
 	LocalFileSystem &fs;
 	string path;
 	optional_ptr<FileOpener> opener;
-	vector<OpenFileInfo> result;
 	vector<PathSplit> splits;
-	queue<ExpandDirectory> expand_directories;
-	bool finished = false;
 	bool absolute_path = false;
+	mutable queue<ExpandDirectory> expand_directories;
+	mutable bool finished = false;
 };
 
-LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobInput glob_input,
+LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p,
                                  optional_ptr<FileOpener> opener)
-    : MultiFileList({}, std::move(glob_input)), fs(fs), path(path_p), opener(opener) {
+    : fs(fs), path(path_p), opener(opener) {
 	if (path.empty()) {
 		finished = true;
 		return;
@@ -1575,7 +1566,7 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 			splits[0].path = home_directory;
 			D_ASSERT(path[0] == '~');
 			if (!fs.HasGlob(path)) {
-				result = fs.FetchFileWithoutGlob(home_directory + path.substr(1), opener, absolute_path);
+				expanded_files = fs.FetchFileWithoutGlob(home_directory + path.substr(1), opener, absolute_path);
 				finished = true;
 				return;
 			}
@@ -1584,7 +1575,7 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	// Check if the path has a glob at all
 	if (!fs.HasGlob(path)) {
 		// no glob: return only the file (if it exists or is a pipe)
-		result = fs.FetchFileWithoutGlob(path, opener, absolute_path);
+		expanded_files = fs.FetchFileWithoutGlob(path, opener, absolute_path);
 		finished = true;
 		return;
 	}
@@ -1614,53 +1605,15 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	}
 }
 
-vector<OpenFileInfo> LocalGlobResult::GetAllFiles() {
-	while (ExpandNextFile()) {
-	}
-	return result;
-}
-
-FileExpandResult LocalGlobResult::GetExpandResult() {
-	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
-	GetFile(1);
-
-	if (result.size() > 1) {
-		return FileExpandResult::MULTIPLE_FILES;
-	} else if (result.size() == 1) {
-		return FileExpandResult::SINGLE_FILE;
-	}
-
-	return FileExpandResult::NO_FILES;
-}
-
-idx_t LocalGlobResult::GetTotalFileCount() {
-	while (ExpandNextFile()) {
-	}
-	return result.size();
-}
-
-bool LocalGlobResult::FileIsAvailable(idx_t i) {
-	return i < result.size();
-}
-
-OpenFileInfo LocalGlobResult::GetFile(idx_t i) {
-	while (i >= result.size() && ExpandNextFile()) {
-	}
-	if (i < result.size()) {
-		return result[i];
-	}
-	return OpenFileInfo("");
-}
-
-bool LocalGlobResult::ExpandNextFile() {
+bool LocalGlobResult::ExpandNextPath() const {
 	if (finished) {
 		return false;
 	}
 	if (expand_directories.empty()) {
-		if (result.empty()) {
+		if (expanded_files.empty()) {
 			// no result found that matches the glob
 			// last ditch effort: search the path as a string literal
-			result = fs.FetchFileWithoutGlob(path, opener, absolute_path);
+			expanded_files = fs.FetchFileWithoutGlob(path, opener, absolute_path);
 		}
 		finished = true;
 		return false;
@@ -1689,7 +1642,7 @@ bool LocalGlobResult::ExpandNextFile() {
 				// last component - we are emitting a result here
 				const string filename = fs.JoinPath(current_path, next_component);
 				if (fs.FileExists(filename, opener) || fs.DirectoryExists(filename, opener)) {
-					result.push_back(filename);
+					expanded_files.push_back(filename);
 				}
 			} else {
 				// not the last component - add the next directory as "to-be-expanded"
@@ -1702,7 +1655,7 @@ bool LocalGlobResult::ExpandNextFile() {
 			if (is_last_component) {
 				// the crawl is the last component - we are looking for files in this directory
 				// any directories we encounter are added to the expand directories
-				CrawlDirectoryLevel(fs, current_path, result, expand_directories, split_index);
+				CrawlDirectoryLevel(fs, current_path, expanded_files, expand_directories, split_index);
 			} else {
 				// not the last crawl
 				// ** also matches the current directory (i.e. dir/**/file.parquet also matches dir/file.parquet)
@@ -1714,7 +1667,7 @@ bool LocalGlobResult::ExpandNextFile() {
 			// glob this directory according to the next component
 			if (is_last_component) {
 				// last component - match files and place them in the result
-				GlobFilesInternal(fs, current_path, next_component, false, result);
+				GlobFilesInternal(fs, current_path, next_component, false, expanded_files);
 			} else {
 				// not the last component - match directories and add to expansion list
 				vector<OpenFileInfo> child_directories;
