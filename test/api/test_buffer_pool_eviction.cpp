@@ -114,7 +114,6 @@ TEST_CASE("Test buffer pool eviction: pinned pages can evict object cache", "[st
 	const idx_t actual_page_alloc_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
 
 	// Set limit to hold all pages, some objects, and initial overhead
-	const idx_t before_eviction_memory = num_objects * obj_size + num_pages * actual_page_alloc_size;
 	const idx_t after_eviction_memory = (num_objects - 2) * obj_size + num_pages * actual_page_alloc_size;
 	const idx_t total_memory_limit = initial_memory + after_eviction_memory;
 	buffer_pool.SetLimit(total_memory_limit, EXCEPTION_POSTSCRIPT);
@@ -171,7 +170,6 @@ TEST_CASE("Test buffer pool eviction: non-evictable objects are kept", "[storage
 	const idx_t actual_page_alloc_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
 
 	// Set limit to hold all pages, some objects, and initial overhead
-	const idx_t before_eviction_memory = num_evictable_objects * obj_size + num_pages * actual_page_alloc_size;
 	const idx_t after_eviction_memory = (num_evictable_objects - 2) * obj_size + num_pages * actual_page_alloc_size;
 	const idx_t total_memory_limit = initial_memory + after_eviction_memory;
 	buffer_pool.SetLimit(total_memory_limit, EXCEPTION_POSTSCRIPT);
@@ -228,7 +226,6 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 
 	// Set a memory limit that will force eviction
 	constexpr idx_t page_size = 1024 * 1024; // 1MiB per page
-	constexpr idx_t obj_size = 1024 * 1024;  // 1MiB per object cache entry
 	constexpr idx_t num_non_evictable_objects = 5;
 	constexpr idx_t num_pages = 6;
 	const idx_t actual_page_alloc_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
