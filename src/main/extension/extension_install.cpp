@@ -178,7 +178,7 @@ static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs
                                      idx_t data_size, DBConfig &config) {
 	// Open target_file, at this points ending with '?duckdb_extension' (but not '.')
 	auto target_file =
-	    fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
+	    fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_APPEND |
 	                          FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_ENABLE_DUCKDB_EXTENSION);
 	// Write content to the file
 	target_file->Write(query_context, data, data_size);
