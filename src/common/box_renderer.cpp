@@ -2129,7 +2129,7 @@ void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<Rend
 					if (config.large_number_rendering == LargeNumberRendering::FOOTER) {
 						// when rendering the large number footer we align to the middle
 						alignment = ValueRenderAlignment::MIDDLE;
-						if (row_idx == 1) {
+						if (row_idx + r == 1) {
 							// large number footers should be rendered as NULL values
 							render_type = ResultRenderType::NULL_VALUE;
 						}
