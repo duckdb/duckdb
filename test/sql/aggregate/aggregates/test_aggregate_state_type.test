@@ -2,6 +2,11 @@
 # description: Test the AGGREGATE_STATE type name with get_state_type callback
 # group: [aggregates]
 
+# We would like to serialize the type info with the latest storage version
+# Forward compatability won't be harmed, as older DuckDB versions are used in CI
+statement ok
+SET storage_compatibility_version = 'latest';
+
 foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
 
 # avg() has the new get_state_type callback
@@ -18,13 +23,7 @@ CREATE TABLE t1_${type} AS SELECT avg(range::${type}) EXPORT_STATE as state FROM
 # The first case is for tests with older storage versions that do not support structured aggregate states (wal_verification, etc.)
 # The second case is for storage versions that do support.
 query T
-SELECT 
-  CASE WHEN current_setting('storage_compatibility_version') NOT IN ('latest') 
-                        AND current_setting('storage_compatibility_version') < 'v1.5.0'
-  THEN column_type = 'AGGREGATE_STATE<avg(${type})::DOUBLE>'
-  ELSE column_type = 'AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>'
-  END
-FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
+SELECT column_type='AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>' FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
 ----
 true
 
