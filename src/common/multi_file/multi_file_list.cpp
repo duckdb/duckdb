@@ -335,7 +335,7 @@ bool GlobMultiFileList::ExpandNextPath() const {
 	if (current_glob >= file_lists.size()) {
 		// glob is not yet started for this file - start it and initiate the scan over this file
 		auto &fs = FileSystem::GetFileSystem(context);
-		auto glob_result = fs.GlobFiles(globs[current_glob], glob_input);
+		auto glob_result = fs.GlobFileList(globs[current_glob], glob_input);
 		scan_state = MultiFileListScanData();
 		glob_result->InitializeScan(scan_state);
 		file_lists.push_back(std::move(glob_result));

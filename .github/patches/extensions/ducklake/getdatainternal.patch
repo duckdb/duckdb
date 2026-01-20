@@ -112,6 +112,82 @@ index 7460cb7..29c419a 100644
  
  	bool IsSource() const override {
  		return true;
+diff --git a/src/include/storage/ducklake_multi_file_list.hpp b/src/include/storage/ducklake_multi_file_list.hpp
+index bddd741..3cc202f 100644
+--- a/src/include/storage/ducklake_multi_file_list.hpp
++++ b/src/include/storage/ducklake_multi_file_list.hpp
+@@ -29,54 +29,50 @@ public:
+ 	DuckLakeMultiFileList(DuckLakeFunctionInfo &read_info, vector<DuckLakeFileListEntry> files_to_scan);
+ 	DuckLakeMultiFileList(DuckLakeFunctionInfo &read_info, const DuckLakeInlinedTableInfo &inlined_table);
+ 
+-	unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+-	                                                MultiFilePushdownInfo &info,
+-	                                                vector<unique_ptr<Expression>> &filters) override;
+-
+ 	unique_ptr<MultiFileList> DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+ 	                                                const vector<string> &names, const vector<LogicalType> &types,
+ 	                                                const vector<column_t> &column_ids,
+ 	                                                TableFilterSet &filters) const override;
+ 
+-	vector<OpenFileInfo> GetAllFiles() override;
+-	FileExpandResult GetExpandResult() override;
+-	idx_t GetTotalFileCount() override;
+-	unique_ptr<NodeStatistics> GetCardinality(ClientContext &context) override;
++	vector<OpenFileInfo> GetAllFiles() const override;
++	FileExpandResult GetExpandResult() const override;
++	idx_t GetTotalFileCount() const override;
++	unique_ptr<NodeStatistics> GetCardinality(ClientContext &context) const override;
+ 	DuckLakeTableEntry &GetTable();
+-	unique_ptr<MultiFileList> Copy() override;
++	unique_ptr<MultiFileList> Copy() const override;
+ 	bool HasTransactionLocalData() const {
+ 		return !transaction_local_files.empty() || transaction_local_data;
+ 	}
+-	vector<DuckLakeFileListExtendedEntry> GetFilesExtended();
+-	const vector<DuckLakeFileListEntry> &GetFiles();
+-	const DuckLakeFileListEntry &GetFileEntry(idx_t file_idx);
++	vector<DuckLakeFileListExtendedEntry> GetFilesExtended() const;
++	const vector<DuckLakeFileListEntry> &GetFiles() const;
++	const DuckLakeFileListEntry &GetFileEntry(idx_t file_idx) const;
+ 
+ 	bool IsDeleteScan() const;
+ 	const DuckLakeDeleteScanEntry &GetDeleteScanEntry(idx_t file_idx);
+ 
+ protected:
+ 	//! Get the i-th expanded file
+-	OpenFileInfo GetFile(idx_t i) override;
++	OpenFileInfo GetFile(idx_t i) const override;
+ 
+ private:
+-	void GetFilesForTable();
+-	void GetTableInsertions();
+-	void GetTableDeletions();
++	void GetFilesForTable() const;
++	void GetTableInsertions() const;
++	void GetTableDeletions() const;
+ 
+ private:
+-	mutex file_lock;
++	mutable mutex file_lock;
+ 	DuckLakeFunctionInfo &read_info;
+ 	//! The set of files to read
+-	vector<DuckLakeFileListEntry> files;
+-	bool read_file_list;
++	mutable vector<DuckLakeFileListEntry> files;
++	mutable bool read_file_list;
+ 	//! The set of transaction-local files
+ 	vector<DuckLakeDataFile> transaction_local_files;
+ 	//! Inlined transaction-local data
+ 	shared_ptr<DuckLakeInlinedData> transaction_local_data;
+ 	//! Inlined data tables
+-	vector<DuckLakeInlinedTableInfo> inlined_data_tables;
++	mutable vector<DuckLakeInlinedTableInfo> inlined_data_tables;
+ 	//! The set of delete scans, only used when scanning deleted tuples using ducklake_table_deletions
+-	vector<DuckLakeDeleteScanEntry> delete_scans;
++	mutable vector<DuckLakeDeleteScanEntry> delete_scans;
+ 	//! The filter to apply
+ 	string filter;
+ };
 diff --git a/src/include/storage/ducklake_update.hpp b/src/include/storage/ducklake_update.hpp
 index c2e2972..4dbb737 100644
 --- a/src/include/storage/ducklake_update.hpp
@@ -251,6 +327,148 @@ index 7ebb3ed..5fe0a8e 100644
  		result.push_back(std::move(info));
  	}
  	return result;
+diff --git a/src/storage/ducklake_multi_file_list.cpp b/src/storage/ducklake_multi_file_list.cpp
+index 7a826f8..0c74636 100644
+--- a/src/storage/ducklake_multi_file_list.cpp
++++ b/src/storage/ducklake_multi_file_list.cpp
+@@ -25,20 +25,20 @@ namespace duckdb {
+ DuckLakeMultiFileList::DuckLakeMultiFileList(DuckLakeFunctionInfo &read_info,
+                                              vector<DuckLakeDataFile> transaction_local_files_p,
+                                              shared_ptr<DuckLakeInlinedData> transaction_local_data_p, string filter_p)
+-    : MultiFileList(vector<OpenFileInfo> {}, FileGlobOptions::ALLOW_EMPTY), read_info(read_info), read_file_list(false),
++    : read_info(read_info), read_file_list(false),
+       transaction_local_files(std::move(transaction_local_files_p)),
+       transaction_local_data(std::move(transaction_local_data_p)), filter(std::move(filter_p)) {
+ }
+ 
+ DuckLakeMultiFileList::DuckLakeMultiFileList(DuckLakeFunctionInfo &read_info,
+                                              vector<DuckLakeFileListEntry> files_to_scan)
+-    : MultiFileList(vector<OpenFileInfo> {}, FileGlobOptions::ALLOW_EMPTY), read_info(read_info),
++    : read_info(read_info),
+       files(std::move(files_to_scan)), read_file_list(true) {
+ }
+ 
+ DuckLakeMultiFileList::DuckLakeMultiFileList(DuckLakeFunctionInfo &read_info,
+                                              const DuckLakeInlinedTableInfo &inlined_table)
+-    : MultiFileList(vector<OpenFileInfo> {}, FileGlobOptions::ALLOW_EMPTY), read_info(read_info), read_file_list(true) {
++    : read_info(read_info), read_file_list(true) {
+ 	DuckLakeFileListEntry file_entry;
+ 	file_entry.file.path = inlined_table.table_name;
+ 	file_entry.row_id_start = 0;
+@@ -47,13 +47,6 @@ DuckLakeMultiFileList::DuckLakeMultiFileList(DuckLakeFunctionInfo &read_info,
+ 	inlined_data_tables.push_back(inlined_table);
+ }
+ 
+-unique_ptr<MultiFileList> DuckLakeMultiFileList::ComplexFilterPushdown(ClientContext &context,
+-                                                                       const MultiFileOptions &options,
+-                                                                       MultiFilePushdownInfo &info,
+-                                                                       vector<unique_ptr<Expression>> &filters) {
+-	return nullptr;
+-}
+-
+ bool ValueIsFinite(const Value &val) {
+ 	if (val.type().id() != LogicalTypeId::FLOAT && val.type().id() != LogicalTypeId::DOUBLE) {
+ 		return true;
+@@ -299,7 +292,7 @@ DuckLakeMultiFileList::DynamicFilterPushdown(ClientContext &context, const Multi
+ 	return nullptr;
+ }
+ 
+-vector<OpenFileInfo> DuckLakeMultiFileList::GetAllFiles() {
++vector<OpenFileInfo> DuckLakeMultiFileList::GetAllFiles() const {
+ 	vector<OpenFileInfo> file_list;
+ 	for (idx_t i = 0; i < GetTotalFileCount(); i++) {
+ 		file_list.push_back(GetFile(i));
+@@ -307,15 +300,15 @@ vector<OpenFileInfo> DuckLakeMultiFileList::GetAllFiles() {
+ 	return file_list;
+ }
+ 
+-FileExpandResult DuckLakeMultiFileList::GetExpandResult() {
++FileExpandResult DuckLakeMultiFileList::GetExpandResult() const {
+ 	return FileExpandResult::MULTIPLE_FILES;
+ }
+ 
+-idx_t DuckLakeMultiFileList::GetTotalFileCount() {
++idx_t DuckLakeMultiFileList::GetTotalFileCount() const {
+ 	return GetFiles().size();
+ }
+ 
+-unique_ptr<NodeStatistics> DuckLakeMultiFileList::GetCardinality(ClientContext &context) {
++unique_ptr<NodeStatistics> DuckLakeMultiFileList::GetCardinality(ClientContext &context) const {
+ 	auto stats = read_info.table.GetTableStats(context);
+ 	if (!stats) {
+ 		return nullptr;
+@@ -327,7 +320,7 @@ DuckLakeTableEntry &DuckLakeMultiFileList::GetTable() {
+ 	return read_info.table;
+ }
+ 
+-OpenFileInfo DuckLakeMultiFileList::GetFile(idx_t i) {
++OpenFileInfo DuckLakeMultiFileList::GetFile(idx_t i) const {
+ 	auto &files = GetFiles();
+ 	if (i >= files.size()) {
+ 		return OpenFileInfo();
+@@ -393,7 +386,7 @@ OpenFileInfo DuckLakeMultiFileList::GetFile(idx_t i) {
+ 	return result;
+ }
+ 
+-unique_ptr<MultiFileList> DuckLakeMultiFileList::Copy() {
++unique_ptr<MultiFileList> DuckLakeMultiFileList::Copy() const {
+ 	auto result = make_uniq<DuckLakeMultiFileList>(read_info, transaction_local_files, transaction_local_data, filter);
+ 	result->files = GetFiles();
+ 	result->read_file_list = read_file_list;
+@@ -401,7 +394,7 @@ unique_ptr<MultiFileList> DuckLakeMultiFileList::Copy() {
+ 	return std::move(result);
+ }
+ 
+-const DuckLakeFileListEntry &DuckLakeMultiFileList::GetFileEntry(idx_t file_idx) {
++const DuckLakeFileListEntry &DuckLakeMultiFileList::GetFileEntry(idx_t file_idx) const {
+ 	auto &files = GetFiles();
+ 	return files[file_idx];
+ }
+@@ -428,7 +421,7 @@ DuckLakeFileData GetDeleteData(const DuckLakeDataFile &file) {
+ 	return result;
+ }
+ 
+-vector<DuckLakeFileListExtendedEntry> DuckLakeMultiFileList::GetFilesExtended() {
++vector<DuckLakeFileListExtendedEntry> DuckLakeMultiFileList::GetFilesExtended() const {
+ 	lock_guard<mutex> l(file_lock);
+ 	vector<DuckLakeFileListExtendedEntry> result;
+ 	auto transaction_ref = read_info.GetTransaction();
+@@ -500,7 +493,7 @@ vector<DuckLakeFileListExtendedEntry> DuckLakeMultiFileList::GetFilesExtended()
+ 	return result;
+ }
+ 
+-void DuckLakeMultiFileList::GetFilesForTable() {
++void DuckLakeMultiFileList::GetFilesForTable() const {
+ 	auto transaction_ref = read_info.GetTransaction();
+ 	auto &transaction = *transaction_ref;
+ 	if (!read_info.table_id.IsTransactionLocal()) {
+@@ -550,7 +543,7 @@ void DuckLakeMultiFileList::GetFilesForTable() {
+ 	}
+ }
+ 
+-void DuckLakeMultiFileList::GetTableInsertions() {
++void DuckLakeMultiFileList::GetTableInsertions() const {
+ 	if (read_info.table_id.IsTransactionLocal()) {
+ 		throw InternalException("Cannot get changes between snapshots for transaction-local files");
+ 	}
+@@ -569,7 +562,7 @@ void DuckLakeMultiFileList::GetTableInsertions() {
+ 	}
+ }
+ 
+-void DuckLakeMultiFileList::GetTableDeletions() {
++void DuckLakeMultiFileList::GetTableDeletions() const {
+ 	if (read_info.table_id.IsTransactionLocal()) {
+ 		throw InternalException("Cannot get changes between snapshots for transaction-local files");
+ 	}
+@@ -604,7 +597,7 @@ const DuckLakeDeleteScanEntry &DuckLakeMultiFileList::GetDeleteScanEntry(idx_t f
+ 	return delete_scans[file_idx];
+ }
+ 
+-const vector<DuckLakeFileListEntry> &DuckLakeMultiFileList::GetFiles() {
++const vector<DuckLakeFileListEntry> &DuckLakeMultiFileList::GetFiles() const {
+ 	lock_guard<mutex> l(file_lock);
+ 	if (!read_file_list) {
+ 		// we have not read the file list yet - read it
 diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
 index 29634fd..147ba95 100644
 --- a/src/storage/ducklake_transaction.cpp

@@ -659,9 +659,8 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-unique_ptr<MultiFileList> FileSystem::GlobFiles(const string &pattern, const FileGlobInput &input,
-                                                optional_ptr<FileOpener> opener) {
-	auto result = GlobFilesExtended(pattern, input, opener);
+unique_ptr<MultiFileList> FileSystem::GlobFileList(const string &pattern, const FileGlobInput &input) {
+	auto result = GlobFilesExtended(pattern, input);
 	if (result->IsEmpty()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
@@ -670,7 +669,7 @@ unique_ptr<MultiFileList> FileSystem::GlobFiles(const string &pattern, const Fil
 					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
 				}
 				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				result = GlobFiles(new_pattern, FileGlobOptions::ALLOW_EMPTY, opener);
+				result = GlobFileList(new_pattern, FileGlobOptions::ALLOW_EMPTY);
 				if (!result->IsEmpty()) {
 					// we found files by globbing the target as if it was a directory - return them
 					return result;
@@ -682,6 +681,11 @@ unique_ptr<MultiFileList> FileSystem::GlobFiles(const string &pattern, const Fil
 		}
 	}
 	return result;
+}
+
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, const FileGlobInput &input) {
+	auto file_list = GlobFileList(pattern, input);
+	return file_list->GetAllFiles();
 }
 
 void FileSystem::Seek(FileHandle &handle, idx_t location) {
