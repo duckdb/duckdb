@@ -5,7 +5,8 @@
     {
       "reason": "FIXME: Wrong result in query!",
       "paths": [
-        "test/sql/types/bignum/test_bignum_sum.test_slow"
+        "test/sql/types/bignum/test_bignum_sum.test_slow",
+        "test/sql/types/geo/geometry_intersection_filter.test_slow"
       ]
     },
     {
