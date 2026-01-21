@@ -1166,8 +1166,10 @@ private:
 	                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformTableUnpivotClause(PEGTransformer &transformer,
 	                                                        optional_ptr<ParseResult> parse_result);
-	static vector<string> TransformUnpivotValueList(PEGTransformer &transformer,
-	                                                optional_ptr<ParseResult> parse_result);
+	static PivotColumn TransformUnpivotValueList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<PivotColumnEntry> TransformUnpivotTargetList(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
+
 	static unique_ptr<TableRef> TransformTablePivotClause(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 	static PivotColumn TransformPivotValueList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
