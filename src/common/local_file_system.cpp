@@ -1622,8 +1622,7 @@ bool LocalGlobResult::ExpandNextPath() const {
 		finished = true;
 		return false;
 	}
-	auto expand_directory = std::move(expand_directories.top());
-	expand_directories.pop();
+	auto &expand_directory = expand_directories.top();
 	bool is_empty = expand_directory.is_empty;
 	auto split_index = expand_directory.split_index;
 	auto &current_path = expand_directory.path;
@@ -1682,6 +1681,7 @@ bool LocalGlobResult::ExpandNextPath() const {
 			}
 		}
 	}
+	expand_directories.pop();
 	return true;
 }
 
