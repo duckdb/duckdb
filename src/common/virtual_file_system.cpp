@@ -123,7 +123,8 @@ VirtualFileSystem::VirtualFileSystem(unique_ptr<FileSystem> &&inner)
 VirtualFileSystem::~VirtualFileSystem() {
 }
 
-optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileCompressionType compression_type, const string &filepath) {
+optional_ptr<FileSystem> VirtualFileSystem::FindCompressionFileSystem(FileCompressionType compression_type,
+                                                                      const string &filepath) {
 	if (compression_type == FileCompressionType::UNCOMPRESSED) {
 		return nullptr;
 	}
