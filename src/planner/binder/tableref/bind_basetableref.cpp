@@ -111,16 +111,6 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 	return view_search_path;
 }
 
-static vector<LogicalType> ExchangeAllNullTypes(const vector<LogicalType> &types) {
-	vector<LogicalType> result = types;
-	for (auto &type : result) {
-		if (ExpressionBinder::ContainsNullType(type)) {
-			type = ExpressionBinder::ExchangeNullType(type);
-		}
-	}
-	return result;
-}
-
 BoundStatement Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
