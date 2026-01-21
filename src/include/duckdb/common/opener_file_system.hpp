@@ -21,6 +21,18 @@ public:
 	void VerifyNoOpener(optional_ptr<FileOpener> opener);
 	void VerifyCanAccessDirectory(const string &path);
 	void VerifyCanAccessFile(const string &path);
+	void VerifyCanAccessExtension(const string &path, const FileOpenFlags &flags) {
+		if (flags.OpenForWriting() && !flags.EnableExtensionInstall()) {
+			throw PermissionException(
+			    "File '%s' cannot be opened for writing since files ending with duckdb_extension are reserved for "
+			    "DuckDB extensions, and these can only be installed through the INSTALL command",
+			    path);
+		}
+	}
+
+	bool IsDuckDBExtensionName(const string &path) {
+		return StringUtil::EndsWith(path, "duckdb_extension");
+	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
@@ -80,7 +92,7 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(source);
 		VerifyCanAccessFile(target);
-		if (StringUtil::EndsWith(target, "duckdb_extension") && !StringUtil::EndsWith(source, "duckdb_extension")) {
+		if (IsDuckDBExtensionName(target) && !IsDuckDBExtensionName(source)) {
 			throw PermissionException(
 			    "File '%s' cannot be moved to '%s', files ending with duckdb_extension are reserved for DuckDB "
 			    "extensions, and these can only be installed through the INSTALL command, or moved if both are "
@@ -163,12 +175,8 @@ protected:
 	                                        optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(file.path);
-		if (flags.OpenForWriting() && !flags.EnableExtensionInstall() &&
-		    StringUtil::EndsWith(file.path, "duckdb_extension")) {
-			throw PermissionException(
-			    "File '%s' cannot be opened for writing since files ending with duckdb_extension are reserved for "
-			    "DuckDB extensions, and these can only be installed through the INSTALL command",
-			    file.path);
+		if (IsDuckDBExtensionName(file.path)) {
+			VerifyCanAccessExtension(file.path, flags);
 		}
 		return GetFileSystem().OpenFile(file, flags, GetOpener());
 	}
