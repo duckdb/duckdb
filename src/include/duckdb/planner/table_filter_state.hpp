@@ -65,4 +65,9 @@ struct BFTableFilterState final : public TableFilterState {
 	}
 };
 
+struct ExtensionFilterState : public TableFilterState {
+public:
+	virtual ~ExtensionFilterState() = default;
+};
+
 } // namespace duckdb

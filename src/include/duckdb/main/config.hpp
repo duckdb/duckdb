@@ -34,6 +34,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/planner/table_filter_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
@@ -202,6 +203,8 @@ public:
 	vector<unique_ptr<OperatorExtension>> operator_extensions;
 	//! Extensions made to storage
 	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
+	//! Extensions made to table filters
+	vector<unique_ptr<TableFilterExtension>> table_filter_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
 	//! Provide a custom buffer manager implementation (if desired).

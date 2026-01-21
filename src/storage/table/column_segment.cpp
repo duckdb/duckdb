@@ -13,6 +13,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
+#include "duckdb/planner/filter/extension_table_filter.hpp"
 
 #include <cstring>
 
@@ -558,6 +559,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		auto &bloom_filter = filter.Cast<BFTableFilter>();
 		auto &state = filter_state.Cast<BFTableFilterState>();
 		return bloom_filter.Filter(vector, sel, approved_tuple_count, state);
+	}
+	case TableFilterType::EXTENSION: {
+		auto &extension_filter = filter.Cast<ExtensionTableFilter>();
+		return extension_filter.Filter(vector, sel, approved_tuple_count, filter_state);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();
