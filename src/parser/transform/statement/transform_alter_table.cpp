@@ -9,6 +9,7 @@
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -66,6 +67,27 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
 	 * value would be different from that of the original run. By now doing an UPDATE, we force materialization of these
 	 * values, which makes WAL replays consistent.
 	 */
+
+	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &fun = expression->Cast<FunctionExpression>();
+		if (fun.function_name == "nextval" || fun.function_name == "currval" && !fun.children.empty() &&
+		                                          fun.children[0]->GetExpressionClass() == ExpressionClass::CONSTANT) {
+			for (size_t i = 0; i < fun.children.size(); i++) {
+				auto &constant_expr = fun.children[i]->Cast<ConstantExpression>();
+				if (constant_expr.value.type().id() == LogicalTypeId::VARCHAR) {
+					auto seq_name = constant_expr.value.GetValue<string>();
+					if (seq_name.find('.') == string::npos && !data.schema.empty()) {
+						auto qualified_seq_name = data.schema + "." + seq_name;
+						if (!data.catalog.empty()) {
+							qualified_seq_name = data.catalog + "." + qualified_seq_name;
+						}
+						fun.children[i] = make_uniq<ConstantExpression>(Value(qualified_seq_name));
+					}
+				}
+			}
+		}
+		expression = make_uniq<FunctionExpression>(std::move(fun));
+	}
 
 	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
 	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
