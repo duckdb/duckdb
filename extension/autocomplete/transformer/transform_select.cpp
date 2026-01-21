@@ -576,7 +576,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClause(PEGTransfo
 	if (!group_by.group_expressions.empty()) {
 		throw NotImplementedException("Groups in pivot clause has not yet been implemented");
 	}
-	transformer.TransformOptional<string>(list_pr, 2, result->alias);
+	TableAlias table_alias;
+	transformer.TransformOptional<TableAlias>(list_pr, 2, table_alias);
+	result->alias = table_alias.name;
 	return result;
 }
 
