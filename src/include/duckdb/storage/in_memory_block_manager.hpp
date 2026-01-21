@@ -30,13 +30,15 @@ public:
 		return make_uniq<Block>(source_buffer, block_id, GetBlockHeaderSize());
 	}
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override {
+		auto &db = buffer_manager.GetDatabase();
+
 		unique_ptr<Block> result;
 		if (source_buffer) {
 			result = ConvertBlock(block_id, *source_buffer);
 		} else {
-			result = make_uniq<Block>(BlockAllocator::Get(buffer_manager.GetDatabase()), block_id, *this);
+			result = make_uniq<Block>(BlockAllocator::Get(db), block_id, *this);
 		}
-		result->Initialize(DebugInitialize::DEBUG_ZERO_INITIALIZE);
+		result->Initialize(db.config.options.debug_initialize);
 		return result;
 	}
 	block_id_t GetFreeBlockId() override {
