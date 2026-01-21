@@ -22,6 +22,8 @@ CREATE TABLE t1_${type} AS SELECT avg(range::${type}) EXPORT_STATE as state FROM
 
 # The first case is for tests with older storage versions that do not support structured aggregate states (wal_verification, etc.)
 # The second case is for storage versions that do support.
+skipif wal_verification
+skipif force_storage_restart
 query T
 SELECT column_type='AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>' FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
 ----
