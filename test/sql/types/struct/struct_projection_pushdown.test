@@ -24,17 +24,32 @@ statement ok
 CREATE OR REPLACE TABLE test_structs(id INT, s VARIANT);
 
 statement ok
-INSERT INTO test_structs
-	VALUES (1, {
-		'a': 42,
-		'b': true
-	}),
-	(2, NULL),
-	(3, {
-		'a': 84,
-		'b': NULL
-	}),
-	(4, {'a': NULL, 'b': false});
+INSERT INTO test_structs VALUES
+	(
+		1,
+		{
+			'a': 42,
+			'b': true
+		}
+	),
+	(
+		2,
+		NULL
+	),
+	(
+		3,
+		{
+			'a': 84,
+			'b': NULL
+		}
+	),
+	(
+		4,
+		{
+			'a': NULL,
+			'b': false
+		}
+	);
 
 statement ok
 checkpoint
@@ -44,7 +59,7 @@ restart
 statement ok
 COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
 
-foreach source test_structs read_parquet('__TEST_DIR__/test_structs.parquet')
+foreach source read_parquet('__TEST_DIR__/test_structs.parquet')
 
 query I
 SELECT s.b FROM ${source}

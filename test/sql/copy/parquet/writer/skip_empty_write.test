@@ -28,12 +28,12 @@ statement ok
 SET preserve_insertion_order=${preserve_order}
 
 # no file name returned
-query IIIIII
+query IIIIIII
 copy (select 42 where 42=84) to '__TEST_DIR__/empty.parquet' (WRITE_EMPTY_FILE false, RETURN_STATS)
 ----
 
 # now with a table
-query IIIIII
+query IIIIIII
 copy empty_tbl to '__TEST_DIR__/empty.parquet' (WRITE_EMPTY_FILE false, RETURN_STATS)
 ----
 
@@ -42,7 +42,7 @@ copy empty_tbl to '__TEST_DIR__/empty.parquet' (WRITE_EMPTY_FILE false, RETURN_F
 ----
 0	[]
 
-query IIIIII
+query IIIIIII
 copy (from tbl where i = 20000) to '__TEST_DIR__/empty.parquet' (WRITE_EMPTY_FILE false, RETURN_STATS)
 ----
 

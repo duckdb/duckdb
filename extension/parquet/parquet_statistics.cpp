@@ -465,6 +465,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			//! Couldn't convert the stats, or there are no stats
 			return nullptr;
 		}
+		//! Set validity to UNKNOWN
+		variant_stats.SetHasNoNull();
+		variant_stats.SetHasNull();
 		return variant_stats.ToUnique();
 	}
 
