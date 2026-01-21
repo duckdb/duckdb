@@ -353,7 +353,15 @@ def run_batch_process(task, config):
     }
 
     try:
-        test_cmd = [unittest_program, '-f', tests_file, '--start-offset', str(start_offset), '--end-offset', str(end_offset)]
+        test_cmd = [
+            unittest_program,
+            '-f',
+            tests_file,
+            '--start-offset',
+            str(start_offset),
+            '--end-offset',
+            str(end_offset),
+        ]
         if valgrind:
             test_cmd = ['valgrind'] + test_cmd
 
@@ -420,7 +428,7 @@ def run_batch_process(task, config):
 
 def run_tests_parallel(num_workers, batch_size=1):
     """Run tests in parallel using a process pool.
-    
+
     Args:
         num_workers: Number of parallel worker processes
         batch_size: Number of tests per invocation (1 = single test mode, >1 = batch mode)
@@ -484,7 +492,10 @@ def run_tests_parallel(num_workers, batch_size=1):
                     if time_execution:
                         additional_info += f" (Time: {duration:.4f}s)"
 
-                    print(f"[Batch {completed_batches}/{total_batches}] [Tests {start_off}-{end_off}/{test_count}] [Worker {worker_id}]: {status}{additional_info}", flush=True)
+                    print(
+                        f"[Batch {completed_batches}/{total_batches}] [Tests {start_off}-{end_off}/{test_count}] [Worker {worker_id}]: {status}{additional_info}",
+                        flush=True,
+                    )
 
                     if not passed:
                         all_passed_local = False
@@ -525,7 +536,10 @@ def run_tests_parallel(num_workers, batch_size=1):
                     if time_execution:
                         additional_info += f" (Time: {duration:.4f}s)"
 
-                    print(f"[{completed_tests}/{test_count}] [Worker {worker_id}] {test_case}: {status}{additional_info}", flush=True)
+                    print(
+                        f"[{completed_tests}/{test_count}] [Worker {worker_id}] {test_case}: {status}{additional_info}",
+                        flush=True,
+                    )
 
                     if not passed:
                         all_passed_local = False
