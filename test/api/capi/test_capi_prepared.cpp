@@ -686,11 +686,11 @@ TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[c
 	duckdb_connection conn;
 	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
 
-	std::atomic<int> failures {0};
-	std::atomic<int> completed {0};
+	std::atomic<idx_t> failures {0};
+	std::atomic<idx_t> completed {0};
 
-	constexpr int NUM_THREADS = 4;
-	constexpr int ITERATIONS = 1000;
+	constexpr idx_t NUM_THREADS = 4;
+	constexpr idx_t ITERATIONS = 1000;
 
 	duckdb::vector<std::thread> threads;
 	for (int t = 0; t < NUM_THREADS; t++) {
