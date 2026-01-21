@@ -1622,17 +1622,12 @@ bool LocalGlobResult::ExpandNextPath() const {
 		finished = true;
 		return false;
 	}
-	bool is_empty;
-	idx_t split_index;
-	string current_path;
-	// pop the top-most element from the list of directories to expand
-	{
-		auto &next_dir = expand_directories.top();
-		is_empty = next_dir.is_empty;
-		split_index = next_dir.split_index;
-		current_path = std::move(next_dir.path);
-		expand_directories.pop();
-	}
+
+	auto next_dir = expand_directories.top();
+	auto is_empty = next_dir.is_empty;
+	auto split_index = next_dir.split_index;
+	auto &current_path = next_dir.path;
+	expand_directories.pop();
 
 	auto &next_split = splits[split_index];
 	bool is_last_component = split_index + 1 == splits.size();
