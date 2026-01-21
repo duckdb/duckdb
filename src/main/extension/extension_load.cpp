@@ -222,6 +222,26 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 	*res = state.Finalize();
 }
 
+template <typename T, typename F>
+static void ComputeHashesOnSegments(F ComputeHashFun, T handle, const vector<idx_t> &splits,
+                                    vector<string> &hash_chunks) {
+#ifndef DUCKDB_NO_THREADS
+	vector<std::thread> threads;
+	threads.reserve(hash_chunks.size());
+	for (idx_t i = 0; i < hash_chunks.size(); i++) {
+		threads.emplace_back(ComputeHashFun, handle, splits[i], splits[i + 1], &hash_chunks[i]);
+	}
+
+	for (auto &thread : threads) {
+		thread.join();
+	}
+#else
+	for (idx_t i = 0; i < hash_chunks.size(); i++) {
+		ComputeHashFun(handle, splits[i], splits[i + 1], &hash_chunks[i]);
+	}
+#endif // DUCKDB_NO_THREADS
+}
+
 static string FilterZeroAtEnd(string s) {
 	while (!s.empty() && s.back() == '\0') {
 		s.pop_back();
@@ -309,21 +329,7 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	vector<idx_t> splits;
 	IntializeAncillaryData(hash_chunks, splits, signature_offset);
 
-#ifndef DUCKDB_NO_THREADS
-	vector<std::thread> threads;
-	threads.reserve(hash_chunks.size());
-	for (idx_t i = 0; i < hash_chunks.size(); i++) {
-		threads.emplace_back(ComputeSHA256FileSegment, &handle, splits[i], splits[i + 1], &hash_chunks[i]);
-	}
-
-	for (auto &thread : threads) {
-		thread.join();
-	}
-#else
-	for (idx_t i = 0; i < hash_chunks.size(); i++) {
-		ComputeSHA256FileSegment(&handle, splits[i], splits[i + 1], &hash_chunks[i]);
-	}
-#endif // DUCKDB_NO_THREADS
+	ComputeHashesOnSegments(ComputeSHA256FileSegment, &handle, splits, hash_chunks);
 
 	const string resulting_hash = ComputeFinalHash(hash_chunks);
 
@@ -339,21 +345,7 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t bu
 	vector<idx_t> splits;
 	IntializeAncillaryData(hash_chunks, splits, buffer_length);
 
-#ifndef DUCKDB_NO_THREADS
-	vector<std::thread> threads;
-	threads.reserve(hash_chunks.size());
-	for (idx_t i = 0; i < hash_chunks.size(); i++) {
-		threads.emplace_back(ComputeSHA256Buffer, buffer, splits[i], splits[i + 1], &hash_chunks[i]);
-	}
-
-	for (auto &thread : threads) {
-		thread.join();
-	}
-#else
-	for (idx_t i = 0; i < numChunks; i++) {
-		ComputeSHA256Buffer(buffer, splits[i], splits[i + 1], &hash_chunks[i]);
-	}
-#endif // DUCKDB_NO_THREADS
+	ComputeHashesOnSegments(ComputeSHA256Buffer, buffer, splits, hash_chunks);
 
 	const string resulting_hash = ComputeFinalHash(hash_chunks);
 
