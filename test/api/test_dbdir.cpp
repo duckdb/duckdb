@@ -20,7 +20,7 @@ static void test_in_memory_initialization(string dbdir) {
 
 	// cannot create an in-memory database using ":memory:" argument
 	DBConfig config;
-    config.options.temporary_directory = in_memory_tmp;
+	config.options.temporary_directory = in_memory_tmp;
 	REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir, &config));
 	REQUIRE_NOTHROW(con = make_uniq<Connection>(*db));
 

@@ -22,26 +22,9 @@ def valid_timeout(value):
         raise argparse.ArgumentTypeError("Timeout value must be a float")
 
 
-def get_cpu_count():
+def get_cpu_count() -> int:
     """Get the number of CPU cores available."""
-    # Try to get the number of CPUs available to this process (respects cgroups/containers)
-    if hasattr(os, 'sched_getaffinity'):
-        return len(os.sched_getaffinity(0))
-    # Fall back to total CPU count
-    return os.cpu_count() or 1
-
-
-def valid_workers(value):
-    """Parse workers argument: integer, 'auto', or 0 (meaning auto)."""
-    if value.lower() == 'auto':
-        return 0  # 0 means auto-detect
-    try:
-        workers_int = int(value)
-        if workers_int < 0:
-            raise argparse.ArgumentTypeError("Workers must be a non-negative integer or 'auto'")
-        return workers_int
-    except ValueError:
-        raise argparse.ArgumentTypeError("Workers must be a non-negative integer or 'auto'")
+    return len(os.sched_getaffinity(0))
 
 
 parser = argparse.ArgumentParser(description='Run tests one by one with optional flags.')
@@ -70,8 +53,8 @@ parser.add_argument('--valgrind', action='store_true', help='Run the tests with 
 parser.add_argument("--test-config", action='store', help='Path to the test configuration file', default=None)
 parser.add_argument(
     '--workers',
-    type=valid_workers,
-    help="Number of parallel workers to run tests. Use 'auto' or 0 to use all CPU cores. (default: auto)",
+    type=int,
+    help="Number of parallel workers to run tests. Use 0 to auto-detect CPU cores. (default: 0)",
     default=0,
 )
 parser.add_argument(
@@ -153,26 +136,21 @@ test_count = len(test_cases)
 if args.list:
     for test_number, test_case in enumerate(test_cases):
         print(f"[{test_number}/{test_count}]: {test_case}")
-    exit(0)
 
-# For sequential execution
+# Used to record errors in tests
 all_passed = True
-all_passed_lock = threading.Lock()
 error_list = []
-error_list_lock = threading.Lock()
 
 
 def fail():
     global all_passed
-    with all_passed_lock:
-        all_passed = False
+    all_passed = False
     if fast_fail:
         exit(1)
 
 
 def add_error(error_data):
-    with error_list_lock:
-        error_list.append(error_data)
+    error_list.append(error_data)
 
 
 def parse_assertions(stdout):
@@ -223,25 +201,44 @@ def get_worker_temp_dir(worker_id, base_unittest_program):
     return base_dir
 
 
-def run_single_test_process(task, config):
+def run_test_task(task, config):
     """
     Worker function for parallel test execution (runs in separate process).
-    Runs a single test case.
+    Task is a dict with 'test_cmd' (list) and 'worker_id', plus optional batch info.
     Returns a result dict with test outcome.
     """
-    test_number, test_case, worker_id = task
     unittest_program = config['unittest_program']
-    timeout = config['timeout']
+    base_timeout = config['timeout']
     valgrind = config['valgrind']
-    test_config = config['test_config']
-    time_execution = config['time_execution']
+    test_config_path = config['test_config']
     assertions = config['assertions']
-    test_count = config['test_count']
 
-    start = time.time()
+    # Extract task info
+    test_cmd = task['test_cmd']
+    worker_id = task['worker_id']
+    test_name = task['test_name']
+    is_batch = task.get('is_batch', False)
+    batch_size = task.get('batch_size', 1)
+    start_offset = task.get('start_offset', 0)
+    end_offset = task.get('end_offset', 0)
+
+    # Build full command
+    if valgrind:
+        test_cmd = ['valgrind'] + test_cmd
+    if test_config_path:
+        test_cmd = test_cmd + ['--test-config', test_config_path]
+
+    # Set up environment
+    env = os.environ.copy()
+    env['SUMMARIZE_FAILURES'] = '0'
+    env['NO_DUPLICATING_HEADERS'] = '1'
+    worker_temp_dir = get_worker_temp_dir(worker_id, unittest_program)
+    env['DUCKDB_UNITTEST_TEMP_DIR'] = worker_temp_dir
+
+    # Initialize result
+    effective_timeout = base_timeout * batch_size
     result = {
-        'test_number': test_number,
-        'test_case': test_case,
+        'test_case': test_name,
         'worker_id': worker_id,
         'passed': False,
         'error': None,
@@ -249,145 +246,26 @@ def run_single_test_process(task, config):
         'assertions': '',
         'stdout': '',
         'stderr': '',
-        'return_code': None,
-        'is_batch': False,
-        'batch_size': 1,
-    }
-
-    try:
-        test_cmd = [unittest_program, test_case]
-        if valgrind:
-            test_cmd = ['valgrind'] + test_cmd
-
-        env = os.environ.copy()
-        env['SUMMARIZE_FAILURES'] = '0'
-        env['NO_DUPLICATING_HEADERS'] = '1'
-
-        # Set unique temp directory for this worker
-        worker_temp_dir = get_worker_temp_dir(worker_id, unittest_program)
-        env['DUCKDB_UNITTEST_TEMP_DIR'] = worker_temp_dir
-
-        if test_config:
-            test_cmd = test_cmd + ['--test-config', test_config]
-
-        res = subprocess.run(test_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, env=env)
-        result['return_code'] = res.returncode
-        result['stdout'] = res.stdout.decode('utf8')
-        result['stderr'] = res.stderr.decode('utf8')
-
-        if res.returncode is None or res.returncode == 0:
-            result['passed'] = True
-        else:
-            result['error'] = {
-                'test': test_case,
-                'return_code': res.returncode,
-                'stdout': result['stdout'],
-                'stderr': get_clean_error_message_from(result['stderr']),
-            }
-
-        if assertions:
-            result['assertions'] = parse_assertions(result['stdout'])
-
-    except subprocess.TimeoutExpired:
-        result['error'] = {
-            'test': test_case,
-            'return_code': 1,
-            'stdout': '',
-            'stderr': f'TIMEOUT - exceeded specified timeout of {timeout} seconds',
-        }
-
-    except Exception as e:
-        result['error'] = {
-            'test': test_case,
-            'return_code': 1,
-            'stdout': '',
-            'stderr': str(e),
-        }
-
-    end = time.time()
-    result['duration'] = end - start
-
-    # Clean up temp directory if test failed
-    if not result['passed']:
-        worker_temp_dir = get_worker_temp_dir(worker_id, unittest_program)
-        if os.path.exists(worker_temp_dir) and os.listdir(worker_temp_dir):
-            try:
-                shutil.rmtree(worker_temp_dir)
-            except Exception:
-                pass
-
-    return result
-
-
-def run_batch_process(task, config):
-    """
-    Worker function for parallel batch execution (runs in separate process).
-    Runs a batch of tests using the -f flag with start/end offsets.
-    Returns a result dict with batch outcome.
-    """
-    batch_number, start_offset, end_offset, worker_id, tests_file = task
-    unittest_program = config['unittest_program']
-    timeout = config['timeout']
-    valgrind = config['valgrind']
-    test_config = config['test_config']
-    time_execution = config['time_execution']
-    test_count = config['test_count']
-
-    batch_size = end_offset - start_offset
-    start = time.time()
-    result = {
-        'test_number': start_offset,
-        'test_case': f'batch[{start_offset}:{end_offset}]',
-        'worker_id': worker_id,
-        'passed': False,
-        'error': None,
-        'duration': 0,
-        'assertions': '',
-        'stdout': '',
-        'stderr': '',
-        'return_code': None,
-        'is_batch': True,
+        'is_batch': is_batch,
         'batch_size': batch_size,
         'start_offset': start_offset,
         'end_offset': end_offset,
     }
 
+    start = time.time()
     try:
-        test_cmd = [
-            unittest_program,
-            '-f',
-            tests_file,
-            '--start-offset',
-            str(start_offset),
-            '--end-offset',
-            str(end_offset),
-        ]
-        if valgrind:
-            test_cmd = ['valgrind'] + test_cmd
-
-        env = os.environ.copy()
-        env['SUMMARIZE_FAILURES'] = '0'
-        env['NO_DUPLICATING_HEADERS'] = '1'
-
-        # Set unique temp directory for this worker
-        worker_temp_dir = get_worker_temp_dir(worker_id, unittest_program)
-        env['DUCKDB_UNITTEST_TEMP_DIR'] = worker_temp_dir
-
-        if test_config:
-            test_cmd = test_cmd + ['--test-config', test_config]
-
-        # Scale timeout by batch size
-        batch_timeout = timeout * batch_size
-        res = subprocess.run(test_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=batch_timeout, env=env)
-        result['return_code'] = res.returncode
+        res = subprocess.run(
+            test_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=effective_timeout, env=env
+        )
         result['stdout'] = res.stdout.decode('utf8')
         result['stderr'] = res.stderr.decode('utf8')
 
         if res.returncode is None or res.returncode == 0:
             result['passed'] = True
         else:
-            # Try to extract the failing test name from stderr
-            failing_test = get_test_name_from(result['stderr']) or f'batch[{start_offset}:{end_offset}]'
+            failing_test = test_name
+            if is_batch:
+                failing_test = get_test_name_from(result['stderr']) or test_name
             result['error'] = {
                 'test': failing_test,
                 'return_code': res.returncode,
@@ -395,33 +273,32 @@ def run_batch_process(task, config):
                 'stderr': get_clean_error_message_from(result['stderr']),
             }
 
+        if assertions and not is_batch:
+            result['assertions'] = parse_assertions(result['stdout'])
+
     except subprocess.TimeoutExpired:
         result['error'] = {
-            'test': f'batch[{start_offset}:{end_offset}]',
+            'test': test_name,
             'return_code': 1,
             'stdout': '',
-            'stderr': f'TIMEOUT - batch exceeded timeout of {timeout * batch_size} seconds',
+            'stderr': f'TIMEOUT - exceeded timeout of {effective_timeout} seconds',
         }
-
     except Exception as e:
         result['error'] = {
-            'test': f'batch[{start_offset}:{end_offset}]',
+            'test': test_name,
             'return_code': 1,
             'stdout': '',
             'stderr': str(e),
         }
 
-    end = time.time()
-    result['duration'] = end - start
+    result['duration'] = time.time() - start
 
-    # Clean up temp directory if batch failed
-    if not result['passed']:
-        worker_temp_dir = get_worker_temp_dir(worker_id, unittest_program)
-        if os.path.exists(worker_temp_dir) and os.listdir(worker_temp_dir):
-            try:
-                shutil.rmtree(worker_temp_dir)
-            except Exception:
-                pass
+    # Clean up temp directory if test failed
+    if not result['passed'] and os.path.exists(worker_temp_dir) and os.listdir(worker_temp_dir):
+        try:
+            shutil.rmtree(worker_temp_dir)
+        except Exception:
+            pass
 
     return result
 
@@ -438,15 +315,12 @@ def run_tests_parallel(num_workers, batch_size=1):
     else:
         print(f"Running {test_count} tests with {num_workers} parallel worker processes...")
 
-    # Prepare configuration to pass to worker processes
     config = {
         'unittest_program': unittest_program,
         'timeout': timeout,
         'valgrind': args.valgrind,
         'test_config': args.test_config,
-        'time_execution': time_execution,
         'assertions': assertions,
-        'test_count': test_count,
     }
 
     all_passed_local = True
@@ -455,103 +329,80 @@ def run_tests_parallel(num_workers, batch_size=1):
     tests_file = None
 
     try:
+        # Create tasks based on mode
         if batch_size > 1:
-            # Batch mode: create temp file with test cases and prepare batch tasks
+            # Batch mode: create temp file and batch tasks
             tmp = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt')
             tests_file = tmp.name
             for test_case in test_cases:
                 tmp.write(escape_test_case(test_case) + '\n')
             tmp.close()
 
-            # Create batch tasks: (batch_number, start_offset, end_offset, worker_id, tests_file)
             tasks = []
-            batch_number = 0
-            for start_offset in range(0, test_count, batch_size):
+            for i, start_offset in enumerate(range(0, test_count, batch_size)):
                 end_offset = min(start_offset + batch_size, test_count)
-                tasks.append((batch_number, start_offset, end_offset, batch_number % num_workers, tests_file))
-                batch_number += 1
-
-            total_batches = len(tasks)
-            completed_batches = 0
-
-            with Pool(processes=num_workers) as pool:
-                worker_func = partial(run_batch_process, config=config)
-
-                for result in pool.imap_unordered(worker_func, tasks):
-                    completed_batches += 1
-                    batch_size_actual = result['batch_size']
-                    completed_tests += batch_size_actual
-                    worker_id = result['worker_id']
-                    passed = result['passed']
-                    duration = result['duration']
-                    start_off = result['start_offset']
-                    end_off = result['end_offset']
-
-                    status = "PASS" if passed else "FAIL"
-                    additional_info = ""
-                    if time_execution:
-                        additional_info += f" (Time: {duration:.4f}s)"
-
-                    print(
-                        f"[Batch {completed_batches}/{total_batches}] [Tests {start_off}-{end_off}/{test_count}] [Worker {worker_id}]: {status}{additional_info}",
-                        flush=True,
-                    )
-
-                    if not passed:
-                        all_passed_local = False
-                        if result['error']:
-                            errors_collected.append(result['error'])
-                        # Print failure details immediately
-                        print(f"  FAILURE in batch {start_off}-{end_off}:", flush=True)
-                        if result['stderr']:
-                            # Print first few lines of error
-                            error_lines = result['stderr'].strip().split('\n')[:10]
-                            for line in error_lines:
-                                print(f"    {line}", flush=True)
-                            if len(result['stderr'].strip().split('\n')) > 10:
-                                print("    ...", flush=True)
-
-                        if fast_fail:
-                            pool.terminate()
-                            break
+                tasks.append(
+                    {
+                        'test_cmd': [
+                            unittest_program,
+                            '-f',
+                            tests_file,
+                            '--start-offset',
+                            str(start_offset),
+                            '--end-offset',
+                            str(end_offset),
+                        ],
+                        'test_name': f'batch[{start_offset}:{end_offset}]',
+                        'worker_id': i % num_workers,
+                        'is_batch': True,
+                        'batch_size': end_offset - start_offset,
+                        'start_offset': start_offset,
+                        'end_offset': end_offset,
+                    }
+                )
         else:
-            # Single test mode: prepare individual test tasks
-            # Prepare tasks: (test_number, test_case, worker_id)
-            tasks = [(i, test_case, i % num_workers) for i, test_case in enumerate(test_cases)]
+            # Single test mode
+            tasks = [
+                {'test_cmd': [unittest_program, tc], 'test_name': tc, 'worker_id': i % num_workers}
+                for i, tc in enumerate(test_cases)
+            ]
 
-            with Pool(processes=num_workers) as pool:
-                worker_func = partial(run_single_test_process, config=config)
+        # Run tasks in parallel
+        with Pool(processes=num_workers) as pool:
+            worker_func = partial(run_test_task, config=config)
 
-                for result in pool.imap_unordered(worker_func, tasks):
-                    completed_tests += 1
-                    test_case = result['test_case']
-                    worker_id = result['worker_id']
-                    passed = result['passed']
-                    duration = result['duration']
+            for result in pool.imap_unordered(worker_func, tasks):
+                completed_tests += result['batch_size']
+                passed = result['passed']
+                duration = result['duration']
+                worker_id = result['worker_id']
 
-                    status = "PASS" if passed else "FAIL"
-                    additional_info = ""
-                    if assertions and result['assertions']:
-                        additional_info += f" ({result['assertions']})"
-                    if time_execution:
-                        additional_info += f" (Time: {duration:.4f}s)"
+                status = "PASS" if passed else "FAIL"
+                additional_info = f" (Time: {duration:.4f}s)" if time_execution else ""
 
+                if result['is_batch']:
+                    start_off, end_off = result['start_offset'], result['end_offset']
                     print(
-                        f"[{completed_tests}/{test_count}] [Worker {worker_id}] {test_case}: {status}{additional_info}",
+                        f"[Tests {start_off}-{end_off}/{test_count}] [Worker {worker_id}]: {status}{additional_info}",
+                        flush=True,
+                    )
+                else:
+                    if assertions and result['assertions']:
+                        additional_info = f" ({result['assertions']})" + additional_info
+                    print(
+                        f"[{completed_tests}/{test_count}] [Worker {worker_id}] {result['test_case']}: {status}{additional_info}",
                         flush=True,
                     )
 
-                    if not passed:
-                        all_passed_local = False
-                        if result['error']:
-                            errors_collected.append(result['error'])
-
-                        if fast_fail:
-                            pool.terminate()
-                            break
+                if not passed:
+                    all_passed_local = False
+                    if result['error']:
+                        errors_collected.append(result['error'])
+                    if fast_fail:
+                        pool.terminate()
+                        break
 
     finally:
-        # Clean up temp file if created
         if tests_file and os.path.exists(tests_file):
             try:
                 os.unlink(tests_file)
@@ -562,7 +413,7 @@ def run_tests_parallel(num_workers, batch_size=1):
 
 
 def launch_test_sequential(test, list_of_tests=False):
-    """Sequential test execution (original behavior)."""
+    """Sequential test execution."""
     global is_active
 
     is_active = True
@@ -681,7 +532,7 @@ def run_tests_batched(batch_count):
 # Main execution
 if __name__ == '__main__':
     if num_workers > 1:
-        # Parallel execution mode using multiprocessing (supports batching)
+        # Parallel execution mode using multiprocessing, which supports batching
         all_passed, errors_collected = run_tests_parallel(num_workers, tests_per_invocation)
         error_list = errors_collected
     elif tests_per_invocation == 1:
