@@ -11,7 +11,7 @@ struct DBConfig;
 
 class TypeManager {
 public:
-	TypeManager(DBConfig &config);
+	explicit TypeManager(DBConfig &config);
 
 	~TypeManager();
 
