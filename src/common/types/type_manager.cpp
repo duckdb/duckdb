@@ -2,6 +2,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

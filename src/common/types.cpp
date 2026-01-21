@@ -25,6 +25,8 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <cmath>
 
