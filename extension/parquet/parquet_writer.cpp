@@ -315,6 +315,7 @@ struct ColumnStatsUnifier {
 	string global_min;
 	string global_max;
 	idx_t null_count = 0;
+	idx_t num_values = 0;
 	bool all_min_max_set = true;
 	bool all_nulls_set = true;
 	bool min_is_set = false;
@@ -904,6 +905,7 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 			stats_unifier->UnifyGeoStats(*writer_stats->GetGeoStats());
 		}
 		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
+		stats_unifier->num_values += column.meta_data.num_values;
 	}
 }
 
@@ -1033,6 +1035,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 		auto &stats_unifier = stats_accumulator->stats_unifiers[c];
 		case_insensitive_map_t<Value> column_stats;
 		column_stats["column_size_bytes"] = Value::UBIGINT(stats_unifier->column_size_bytes);
+		column_stats["num_values"] = Value::UBIGINT(stats_unifier->num_values);
 		if (stats_unifier->all_min_max_set) {
 			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
 			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
