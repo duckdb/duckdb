@@ -63,12 +63,12 @@ MetadataResult EnableEcho(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult AllowUnredacted(ShellState &state, const vector<string> &args) {
-	state.config.options.allow_unredacted_secrets = true;
+	state.config.SetOptionByName("allow_unredacted_secrets", true);
 	return MetadataResult::SUCCESS;
 }
 
 MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
-	state.config.options.allow_unsigned_extensions = true;
+	state.config.SetOptionByName("allow_unsigned_extensions", true);
 	return MetadataResult::SUCCESS;
 }
 

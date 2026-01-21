@@ -155,6 +155,7 @@ public:
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
 	static bool TryNegateValue(Value &val);
+	static unique_ptr<ParsedExpression> ConvertNumberToValue(string val);
 
 	// Registration methods
 	void RegisterAlter();

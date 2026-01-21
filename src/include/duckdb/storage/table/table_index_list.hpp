@@ -10,7 +10,6 @@
 
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/parser/constraint.hpp"
 #include "duckdb/storage/index.hpp"
 
 namespace duckdb {
@@ -34,6 +33,8 @@ struct IndexEntry {
 	unique_ptr<BoundIndex> deleted_rows_in_use;
 	//! Data that was added to the index during the last checkpoint
 	unique_ptr<BoundIndex> added_data_during_checkpoint;
+	//! Data that was removed from the index during the last checkpoint
+	unique_ptr<BoundIndex> removed_data_during_checkpoint;
 	//! The last checkpoint index that was written with this index
 	optional_idx last_written_checkpoint;
 };
@@ -98,7 +99,7 @@ public:
 		index_entries = std::move(other.index_entries);
 	}
 	//! Merge any changes added to deltas during a checkpoint back into the main indexes
-	void MergeCheckpointDeltas(transaction_t checkpoint_id);
+	void MergeCheckpointDeltas(DataTable &storage, transaction_t checkpoint_id);
 	//! Returns true, if all indexes
 	//! Find the foreign key matching the keys.
 	optional_ptr<IndexEntry> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);

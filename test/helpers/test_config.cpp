@@ -244,6 +244,11 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 }
 
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
+	if (test_name.find('/') == 0) {
+		// Full path specified, strip down to base path so the extension config lookup still works
+		const string stripped_test_name = test_name.c_str() + test_name.find("test/sql");
+		return tests_to_be_skipped.count(stripped_test_name);
+	}
 	return tests_to_be_skipped.count(test_name);
 }
 
@@ -481,7 +486,8 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 }
 
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
-	if (test_env.empty() && options.find("test_env") != options.end()) {
+	if (!test_env_from_config_loaded && options.find("test_env") != options.end()) {
+		test_env_from_config_loaded = true;
 		auto entry = options["test_env"];
 		auto list_children = ListValue::GetChildren(entry);
 		for (const auto &value : list_children) {

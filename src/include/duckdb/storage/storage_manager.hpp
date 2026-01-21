@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
@@ -77,7 +76,7 @@ public:
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
 	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options);
 	//! Finishes a checkpoint
-	void WALFinishCheckpoint();
+	void WALFinishCheckpoint(lock_guard<mutex> &wal_lock);
 	// Get the WAL lock
 	unique_ptr<lock_guard<mutex>> GetWALLock();
 
@@ -131,6 +130,9 @@ public:
 	}
 	bool IsEncrypted() const {
 		return storage_options.encryption;
+	}
+	uint8_t GetEncryptionVersion() const {
+		return storage_options.encryption_version;
 	}
 
 protected:

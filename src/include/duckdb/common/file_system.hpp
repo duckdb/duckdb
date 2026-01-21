@@ -78,6 +78,7 @@ public:
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Write(QueryContext context, void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
@@ -205,6 +206,8 @@ public:
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remvoe a file from disk if it exists - if it does not exist, return false
 	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
+	//! Remove multiple files from disk - does not error if any file does not exist
+	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Sets the working directory
@@ -254,9 +257,6 @@ public:
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
 	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
-
-	//! Unregister a sub-filesystem by name
-	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
 
 	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
 	// has been disabled.

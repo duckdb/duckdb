@@ -116,6 +116,14 @@ public:
 		return GetFileSystem().TryRemoveFile(filename, GetOpener());
 	}
 
+	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		for (const auto &filename : filenames) {
+			VerifyCanAccessFile(filename);
+		}
+		GetFileSystem().RemoveFiles(filenames, GetOpener());
+	}
+
 	string PathSeparator(const string &path) override {
 		return GetFileSystem().PathSeparator(path);
 	}
@@ -136,10 +144,6 @@ public:
 
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
 		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
-	}
-
-	void UnregisterSubSystem(const string &name) override {
-		GetFileSystem().UnregisterSubSystem(name);
 	}
 
 	void SetDisabledFileSystems(const vector<string> &names) override {

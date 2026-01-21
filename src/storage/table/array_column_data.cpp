@@ -82,11 +82,6 @@ idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, Col
 	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                     idx_t scan_count) {
-	return ScanCount(state, result, scan_count);
-}
-
 idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	// Scan validity
 	auto scan_count = validity->ScanCount(state.child_states[0], result, count, result_offset);
@@ -241,15 +236,15 @@ unique_ptr<BaseStatistics> ArrayColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                               idx_t result_idx) {
+void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                               row_t row_id, Vector &result, idx_t result_idx) {
 	// Create state for validity & child column
 	if (state.child_states.empty()) {
 		state.child_states.push_back(make_uniq<ColumnFetchState>());
 	}
 
 	// Fetch validity
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 
 	// Fetch child column
 	auto &child_vec = ArrayVector::GetEntry(result);
@@ -271,6 +266,14 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 void ArrayColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	validity->VisitBlockIds(visitor);
 	child_column->VisitBlockIds(visitor);
+}
+
+const BaseStatistics &ArrayColumnData::GetChildStats(const ColumnData &child) const {
+	if (!RefersToSameObject(child, *child_column)) {
+		throw InternalException("ArrayColumnData::GetChildStats provided column data is not a child of this array");
+	}
+	auto &stats = GetStatisticsRef();
+	return ArrayStats::GetChildStats(stats);
 }
 
 void ArrayColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
@@ -338,11 +341,13 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::CreateCheckpointState(const R
 }
 
 unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(const RowGroup &row_group,
-                                                              ColumnCheckpointInfo &checkpoint_info) {
+                                                              ColumnCheckpointInfo &checkpoint_info,
+                                                              const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info);
-	checkpoint_state->child_state = child_column->Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
+	checkpoint_state->child_state =
+	    child_column->Checkpoint(row_group, checkpoint_info, ArrayStats::GetChildStats(old_stats));
 	return std::move(checkpoint_state);
 }
 

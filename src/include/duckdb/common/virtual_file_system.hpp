@@ -14,12 +14,14 @@
 #include "duckdb/main/extension_helper.hpp"
 
 namespace duckdb {
+struct FileSystemRegistry;
 
 // bunch of wrappers to allow registering protocol handlers
 class VirtualFileSystem : public FileSystem {
 public:
 	VirtualFileSystem();
 	explicit VirtualFileSystem(unique_ptr<FileSystem> &&inner_file_system);
+	~VirtualFileSystem() override;
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
@@ -49,13 +51,11 @@ public:
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override;
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
+	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
 
 	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
-
-	void UnregisterSubSystem(const string &name) override;
-
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
 
 	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
@@ -86,15 +86,13 @@ protected:
 
 private:
 	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
-	FileSystem &FindFileSystem(const string &path, optional_ptr<DatabaseInstance> database_instance);
-	FileSystem &FindFileSystem(const string &path);
-	optional_ptr<FileSystem> FindFileSystemInternal(const string &path);
+	FileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
+	                           optional_ptr<FileOpener> file_opener);
+	optional_ptr<FileSystem> FindFileSystemInternal(FileSystemRegistry &registry, const string &path);
 
 private:
-	vector<unique_ptr<FileSystem>> sub_systems;
-	map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
-	const unique_ptr<FileSystem> default_fs;
-	unordered_set<string> disabled_file_systems;
+	mutex registry_lock;
+	shared_ptr<FileSystemRegistry> file_system_registry;
 };
 
 } // namespace duckdb

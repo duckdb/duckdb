@@ -1,9 +1,7 @@
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -225,12 +223,6 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = reinterpret_cast<validity_t *>(input);
 
-#ifdef DEBUG
-	// this method relies on all the bits we are going to write to being set to valid
-	for (idx_t i = 0; i < scan_count; i++) {
-		D_ASSERT(result_mask.RowIsValid(result_offset + i));
-	}
-#endif
 #if STANDARD_VECTOR_SIZE < 128
 	// fallback for tiny vector sizes
 	// the bitwise ops we use below don't work if the vector size is too small

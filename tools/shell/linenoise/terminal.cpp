@@ -1,7 +1,6 @@
 #include "terminal.hpp"
 #include "history.hpp"
 #include "linenoise.hpp"
-#include "duckdb/common/operator/numeric_cast.hpp"
 #if defined(_WIN32) || defined(WIN32)
 #include <io.h>
 #define STDIN_FILENO  0
@@ -240,7 +239,7 @@ int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
 	// no timeout: return immediately
 	struct timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = NumericCast<int>(timeout_micros);
+	tv.tv_usec = static_cast<int>(timeout_micros);
 	return select(1, &rfds, NULL, NULL, &tv);
 #endif
 }
@@ -442,8 +441,8 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 		idx_t i = 0;
 		while (i < sizeof(buf) - 1) {
 			// check if we have data to read
-			// wait up till 1ms
-			if (!HasMoreData(ifd, 10000)) {
+			// wait up till 1s
+			if (!HasMoreData(ifd, 1000000)) {
 				// no more data available - done
 				break;
 			}
@@ -453,7 +452,7 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 			if (buf[i] == '\a') {
 				break;
 			}
-			if (i > 2 && buf[i - 1] == '\e' && buf[i] == '\\') {
+			if (i > 2 && buf[i - 1] == '\x1b' && buf[i] == '\\') {
 				i--;
 				break;
 			}

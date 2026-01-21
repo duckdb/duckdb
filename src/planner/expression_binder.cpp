@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -47,11 +48,11 @@ void ExpressionBinder::InitializeStackCheck() {
 
 StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpression &expr, idx_t extra_stack) {
 	D_ASSERT(stack_depth != DConstants::INVALID_INDEX);
-	auto &options = ClientConfig::GetConfig(context);
-	if (stack_depth + extra_stack >= options.max_expression_depth) {
+	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(context);
+	if (stack_depth + extra_stack >= max_expression_depth) {
 		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
-		                      options.max_expression_depth);
+		                      max_expression_depth);
 	}
 	return StackChecker<ExpressionBinder>(*this, extra_stack);
 }
@@ -79,6 +80,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<ConjunctionExpression>(), depth);
 	case ExpressionClass::CONSTANT:
 		return BindExpression(expr_ref.Cast<ConstantExpression>(), depth);
+	case ExpressionClass::TYPE:
+		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
 		if (IsUnnestFunction(function.function_name)) {
@@ -364,6 +367,16 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
 		return ErrorData();
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::WINDOW) {
+		auto &w = expression.Cast<WindowExpression>();
+		if (w.HasBoundedParts()) {
+			BindResult result =
+			    BindResult(BinderException::Unsupported(*expr, "window expression is not supported here"));
+			if (result.HasError()) {
+				return std::move(result.error);
+			}
+		}
 	}
 	// bind the expression
 	BindResult result = BindExpression(expr, depth, root_expression);

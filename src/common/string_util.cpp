@@ -11,6 +11,7 @@
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -74,6 +75,14 @@ bool StringUtil::Contains(const string &haystack, const char &needle_char) {
 
 idx_t StringUtil::ToUnsigned(const string &str) {
 	return std::stoull(str);
+}
+
+int64_t StringUtil::ToSigned(const string &str) {
+	return std::stoll(str);
+}
+
+double StringUtil::ToDouble(const string &str) {
+	return std::stod(str);
 }
 
 void StringUtil::LTrim(string &str) {
@@ -264,6 +273,89 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes, idx_t multiplier) {
 	}
 
 	return to_string(array[0]) + (bytes == 1 ? " byte" : " bytes");
+}
+
+string StringUtil::TryParseFormattedBytes(const string &arg, idx_t &result) {
+	// split based on the number/non-number
+	idx_t idx = 0;
+	while (StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+	idx_t num_start = idx;
+	while ((arg[idx] >= '0' && arg[idx] <= '9') || arg[idx] == '.' || arg[idx] == 'e' || arg[idx] == 'E' ||
+	       arg[idx] == '-') {
+		idx++;
+	}
+	if (idx == num_start) {
+		return "Memory must have a number (e.g. 1GB)";
+	}
+	string number = arg.substr(num_start, idx - num_start);
+
+	// try to parse the number
+	double limit;
+	bool success = TryCast::Operation<string_t, double>(string_t(number), limit);
+	if (!success) {
+		return StringUtil::Format("Invalid memory limit: '%s'", number);
+	}
+
+	// now parse the memory limit unit (e.g. bytes, gb, etc)
+	while (StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+	idx_t start = idx;
+	while (idx < arg.size() && !StringUtil::CharacterIsSpace(arg[idx])) {
+		idx++;
+	}
+
+	if (limit < 0) {
+		return "Memory cannot be negative";
+	}
+
+	string unit = StringUtil::Lower(arg.substr(start, idx - start));
+	idx_t multiplier;
+	if (unit == "byte" || unit == "bytes" || unit == "b") {
+		multiplier = 1;
+	} else if (unit == "kilobyte" || unit == "kilobytes" || unit == "kb" || unit == "k") {
+		multiplier = 1000LL;
+	} else if (unit == "megabyte" || unit == "megabytes" || unit == "mb" || unit == "m") {
+		multiplier = 1000LL * 1000LL;
+	} else if (unit == "gigabyte" || unit == "gigabytes" || unit == "gb" || unit == "g") {
+		multiplier = 1000LL * 1000LL * 1000LL;
+	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
+		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
+	} else if (unit == "kib") {
+		multiplier = 1024LL;
+	} else if (unit == "mib") {
+		multiplier = 1024LL * 1024LL;
+	} else if (unit == "gib") {
+		multiplier = 1024LL * 1024LL * 1024LL;
+	} else if (unit == "tib") {
+		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
+	} else {
+		return StringUtil::Format("Unknown unit for memory: '%s' (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                          "MiB, GiB, TiB for 1024^i units)",
+		                          unit);
+	}
+
+	// Make sure the result is not greater than `idx_t` max value
+	constexpr double max_value = static_cast<double>(NumericLimits<idx_t>::Maximum());
+	const double double_multiplier = static_cast<double>(multiplier);
+
+	if (limit > (max_value / double_multiplier)) {
+		return "Memory value out of range: value is too large";
+	}
+
+	result = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	return string();
+}
+
+idx_t StringUtil::ParseFormattedBytes(const string &arg) {
+	idx_t result;
+	const string error = TryParseFormattedBytes(arg, result);
+	if (!error.empty()) {
+		throw InvalidInputException(error);
+	}
+	return result;
 }
 
 string StringUtil::Upper(const string &str) {

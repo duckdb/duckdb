@@ -13,7 +13,6 @@
 
 #include "duckdb/common/bitpacking.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"

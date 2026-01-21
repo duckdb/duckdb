@@ -152,6 +152,10 @@ public:
 	}
 	SegmentHandle &operator=(SegmentHandle &&other) noexcept {
 		if (this != &other) {
+			// Decrement reader count for existing handle if it exists
+			if (buffer_ptr) {
+				buffer_ptr->readers--;
+			}
 			buffer_ptr = other.buffer_ptr;
 			ptr = other.ptr;
 			other.buffer_ptr = nullptr;

@@ -322,7 +322,7 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		if (has_json_stats) {
 			// Add the geospatial statistics to the extra GeoParquet metadata
 			writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
-			                                              *state.stats_state->GetGeoStats());
+			                                              *state.stats_state->GetGeoStats(), gpq_version);
 		}
 	}
 

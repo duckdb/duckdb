@@ -1,4 +1,5 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
+
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
@@ -6,6 +7,7 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
 namespace duckdb {
@@ -23,11 +25,15 @@ static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(const ve
 	return res;
 }
 
-static JoinCondition CreateNotDistinctComparison(const LogicalType &type, idx_t i) {
+static JoinCondition CreateNotDistinctComparison(ClientContext &context, const LogicalType &type, idx_t i) {
 	JoinCondition cond;
 	cond.left = make_uniq<BoundReferenceExpression>(type, i);
 	cond.right = make_uniq<BoundReferenceExpression>(type, i);
 	cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+
+	ExpressionBinder::PushCollation(context, cond.left, type);
+	ExpressionBinder::PushCollation(context, cond.right, type);
+
 	return cond;
 }
 
@@ -59,7 +65,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
 		for (idx_t i = 0; i < types.size(); i++) {
-			conditions.push_back(CreateNotDistinctComparison(types[i], i));
+			conditions.push_back(CreateNotDistinctComparison(context, types[i], i));
 		}
 		// For EXCEPT ALL / INTERSECT ALL we push a window operator with a ROW_NUMBER into the scans and join to get bag
 		// semantics.
@@ -80,7 +86,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 			right = right_window;
 
 			// add window expression result to join condition
-			conditions.push_back(CreateNotDistinctComparison(LogicalType::BIGINT, types.size()));
+			conditions.push_back(CreateNotDistinctComparison(context, LogicalType::BIGINT, types.size()));
 			// join (created below) now includes the row number result column
 			op.types.push_back(LogicalType::BIGINT);
 		}

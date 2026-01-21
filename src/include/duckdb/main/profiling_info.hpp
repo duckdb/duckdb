@@ -23,6 +23,7 @@ struct yyjson_mut_val;
 } // namespace duckdb_yyjson
 
 namespace duckdb {
+enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, MODE, METRICS };
 
 class ProfilingInfo {
 public:

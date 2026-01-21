@@ -9,13 +9,15 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/attached_database.hpp"
-
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/operator_extension.hpp"
 
 namespace duckdb {
 
@@ -58,8 +60,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			parameters_resolved = false;
 		} else if (error.Type() != ExceptionType::INVALID) {
 			// different exception type - try operator_extensions
-			auto &config = DBConfig::GetConfig(context);
-			for (auto &extension_op : config.operator_extensions) {
+			for (auto &extension_op : OperatorExtension::Iterate(context)) {
 				auto bound_statement =
 				    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
 				if (bound_statement.plan != nullptr) {
@@ -77,7 +78,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		}
 	}
 	if (this->plan) {
-		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
+		auto max_tree_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 		CheckTreeDepth(*plan, max_tree_depth);
 
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));

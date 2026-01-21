@@ -252,7 +252,7 @@ struct IEJoinSourceTask {
 	//! The thread index (for local state)
 	idx_t thread_idx = 0;
 	//! The chunk range
-	ChunkRange l_range;
+	ChunkRange range;
 };
 
 class IEJoinLocalSourceState;
@@ -992,43 +992,9 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 	// Because downstream operators may be using our internal buffers,
 	// we can't "finish" a task until we are about to get the next one.
 	if (task) {
-		switch (task->stage) {
-		case IEJoinSourceStage::SINK_L1:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::FINALIZE_L1:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::MATERIALIZE_L1:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::EXTRACT_LI:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::SINK_L2:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::FINALIZE_L2:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::MATERIALIZE_L2:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::EXTRACT_P:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::INNER:
-			++gsource.GetStageNext(task->stage);
-			break;
-		case IEJoinSourceStage::OUTER:
-			++gsource.GetStageNext(task->stage);
-			left_matches = nullptr;
-			right_matches = nullptr;
-			break;
-		case IEJoinSourceStage::INIT:
-		case IEJoinSourceStage::DONE:
-			break;
-		}
+		++gsource.GetStageNext(task->stage);
+		left_matches = nullptr;
+		right_matches = nullptr;
 	}
 
 	if (!gsource.TryNextTask(task, task_local)) {
@@ -1057,18 +1023,18 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 		right_block_index = 0;
 		right_base = 0;
 
-		joiner = make_uniq<IEJoinUnion>(gsource, task->l_range);
+		joiner = make_uniq<IEJoinUnion>(gsource, task->range);
 		break;
 	case IEJoinSourceStage::OUTER:
 		if (task->thread_idx < gsource.left_outers) {
-			left_block_index = task->l_range.first;
+			left_block_index = task->range.first;
 			left_base = left_table.BlockStart(left_block_index);
 
 			left_matches = left_table.found_match.get() + left_base;
 			outer_idx = 0;
 			outer_count = left_table.BlockSize(left_block_index);
 		} else {
-			right_block_index = task->l_range.first;
+			right_block_index = task->range.first;
 			right_base = right_table.BlockStart(right_block_index);
 
 			right_matches = right_table.found_match.get() + right_base;
@@ -1096,8 +1062,8 @@ void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, Interr
 	auto &l1 = gsource.l1;
 
 	//	Process the LHS sub-range
-	if (task->l_range.first < gsource.left_blocks) {
-		auto range = task->l_range;
+	if (task->range.first < gsource.left_blocks) {
+		auto range = task->range;
 		range.second = MinValue(gsource.left_blocks, range.second);
 
 		// LHS has positive rids
@@ -1112,8 +1078,8 @@ void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, Interr
 	}
 
 	//	Process the RHS sub-range
-	if (task->l_range.second > gsource.left_blocks) {
-		auto range = task->l_range;
+	if (task->range.second > gsource.left_blocks) {
+		auto range = task->range;
 		range.first = MaxValue(gsource.left_blocks, range.first) - gsource.left_blocks;
 		range.second -= gsource.left_blocks;
 
@@ -1147,8 +1113,8 @@ void IEJoinLocalSourceState::ExecuteSinkL2Task(ExecutionContext &context, Interr
 
 	ExpressionExecutor executor(context.client);
 	executor.AddExpression(*ref);
-	const auto rid = UnsafeNumericCast<int64_t>(l1.BlockStart(task->l_range.first));
-	IEJoinUnion::AppendKey(context, interrupt, l1, executor, l2, 1, rid, task->l_range);
+	const auto rid = UnsafeNumericCast<int64_t>(l1.BlockStart(task->range.first));
+	IEJoinUnion::AppendKey(context, interrupt, l1, executor, l2, 1, rid, task->range);
 }
 
 void IEJoinLocalSourceState::ExecuteFinalizeL2Task(ExecutionContext &context, InterruptState &interrupt) {
@@ -1367,75 +1333,15 @@ bool IEJoinGlobalSourceState::TryPrepareNextStage() {
 	//	Inside lock
 	const auto stage_count = GetStageCount(stage);
 	const auto stage_next = GetStageNext(stage).load();
-	switch (stage.load()) {
-	case IEJoinSourceStage::INIT:
-		stage = IEJoinSourceStage::SINK_L1;
-		return true;
-	case IEJoinSourceStage::SINK_L1:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::FINALIZE_L1;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::FINALIZE_L1:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::MATERIALIZE_L1;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::MATERIALIZE_L1:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::EXTRACT_LI;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::EXTRACT_LI:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::SINK_L2;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::SINK_L2:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::FINALIZE_L2;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::FINALIZE_L2:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::MATERIALIZE_L2;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::MATERIALIZE_L2:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::EXTRACT_P;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::EXTRACT_P:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::INNER;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::INNER:
-		if (stage_next >= stage_count) {
-			if (GetStageCount(IEJoinSourceStage::OUTER)) {
-				stage = IEJoinSourceStage::OUTER;
-			} else {
-				stage = IEJoinSourceStage::DONE;
+	if (stage_next >= stage_count) {
+		auto stage_curr = stage.load();
+		while (stage_curr < IEJoinSourceStage::DONE) {
+			stage_curr = IEJoinSourceStage(size_t(stage_curr) + 1);
+			if (GetStageCount(stage_curr)) {
+				break;
 			}
-			return true;
 		}
-		break;
-	case IEJoinSourceStage::OUTER:
-		if (stage_next >= stage_count) {
-			stage = IEJoinSourceStage::DONE;
-			return true;
-		}
-		break;
-	case IEJoinSourceStage::DONE:
+		stage = stage_curr;
 		return true;
 	}
 
@@ -1443,9 +1349,8 @@ bool IEJoinGlobalSourceState::TryPrepareNextStage() {
 }
 
 idx_t IEJoinGlobalSourceState::MaxThreads() {
-	// We can't leverage any more threads than block pairs.
-	const auto &sink_state = (op.sink_state->Cast<IEJoinGlobalState>());
-	return sink_state.tables[0]->BlockCount() * sink_state.tables[1]->BlockCount();
+	// We can't leverage any more threads than tasks.
+	return *max_element(stage_tasks.begin(), stage_tasks.end());
 }
 
 void IEJoinGlobalSourceState::FinishTask(TaskPtr task) {
@@ -1502,35 +1407,35 @@ bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
 
 	switch (stage.load()) {
 	case IEJoinSourceStage::SINK_L1:
-		task.l_range.first = MinValue(task.thread_idx * per_thread, left_blocks + right_blocks);
-		task.l_range.second = MinValue(task.l_range.first + per_thread, left_blocks + right_blocks);
+		task.range.first = MinValue(task.thread_idx * per_thread, left_blocks + right_blocks);
+		task.range.second = MinValue(task.range.first + per_thread, left_blocks + right_blocks);
 		break;
 	case IEJoinSourceStage::FINALIZE_L1:
 	case IEJoinSourceStage::MATERIALIZE_L1:
 	case IEJoinSourceStage::EXTRACT_LI:
 		break;
 	case IEJoinSourceStage::SINK_L2:
-		task.l_range.first = MinValue(task.thread_idx * per_thread, l1->BlockCount());
-		task.l_range.second = MinValue(task.l_range.first + per_thread, l1->BlockCount());
+		task.range.first = MinValue(task.thread_idx * per_thread, l1->BlockCount());
+		task.range.second = MinValue(task.range.first + per_thread, l1->BlockCount());
 		break;
 	case IEJoinSourceStage::FINALIZE_L2:
 	case IEJoinSourceStage::MATERIALIZE_L2:
 	case IEJoinSourceStage::EXTRACT_P:
 		break;
 	case IEJoinSourceStage::INNER: {
-		task.l_range.first = task.thread_idx * per_thread;
-		task.l_range.second = MinValue(task.l_range.first + per_thread, l2_blocks);
+		task.range.first = task.thread_idx * per_thread;
+		task.range.second = MinValue(task.range.first + per_thread, l2_blocks);
 		break;
 	}
 	case IEJoinSourceStage::OUTER:
 		if (task.thread_idx < left_outers) {
 			// Left outer blocks
 			const auto left_task = task.thread_idx;
-			task.l_range = {left_task, left_task + 1};
+			task.range = {left_task, left_task + 1};
 		} else {
 			// Right outer blocks
 			const auto right_task = task.thread_idx - left_outers;
-			task.l_range = {right_task, right_task + 1};
+			task.range = {right_task, right_task + 1};
 		}
 		break;
 	case IEJoinSourceStage::INIT:
