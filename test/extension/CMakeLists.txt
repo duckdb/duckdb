@@ -20,7 +20,7 @@ if(NOT WIN32 AND NOT SUN)
     ""
     ${PARAMETERS}
     ../extension/loadable_extension_optimizer_demo.cpp)
-    
+
   build_loadable_extension_directory(
     loadable_extension_table_filter_demo
     "CPP"
