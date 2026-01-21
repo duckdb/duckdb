@@ -1622,10 +1622,18 @@ bool LocalGlobResult::ExpandNextPath() const {
 		finished = true;
 		return false;
 	}
-	auto &expand_directory = expand_directories.top();
-	bool is_empty = expand_directory.is_empty;
-	auto split_index = expand_directory.split_index;
-	auto &current_path = expand_directory.path;
+	bool is_empty;
+	idx_t split_index;
+	string current_path;
+	// pop the top-most element from the list of directories to expand
+	{
+		auto &next_dir = expand_directories.top();
+		is_empty = next_dir.is_empty;
+		split_index = next_dir.split_index;
+		current_path = std::move(next_dir.path);
+		expand_directories.pop();
+	}
+
 	auto &next_split = splits[split_index];
 	bool is_last_component = split_index + 1 == splits.size();
 	auto &next_component = next_split.path;
@@ -1643,9 +1651,9 @@ bool LocalGlobResult::ExpandNextPath() const {
 		} else {
 			if (is_last_component) {
 				// last component - we are emitting a result here
-				const string filename = fs.JoinPath(current_path, next_component);
+				auto filename = fs.JoinPath(current_path, next_component);
 				if (fs.FileExists(filename, opener) || fs.DirectoryExists(filename, opener)) {
-					expanded_files.push_back(filename);
+					expanded_files.emplace_back(std::move(filename));
 				}
 			} else {
 				// not the last component - add the next directory as "to-be-expanded"
@@ -1681,7 +1689,6 @@ bool LocalGlobResult::ExpandNextPath() const {
 			}
 		}
 	}
-	expand_directories.pop();
 	return true;
 }
 
