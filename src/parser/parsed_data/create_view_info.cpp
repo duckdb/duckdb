@@ -63,10 +63,6 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, un
 	D_ASSERT(!info->query);
 
 	info->query = ParseSelect(info->sql);
-
-	auto binder = Binder::CreateBinder(context);
-	binder->BindCreateViewInfo(*info);
-
 	return info;
 }
 
