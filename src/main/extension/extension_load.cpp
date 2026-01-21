@@ -165,15 +165,15 @@ static T TryLoadFunctionFromDLL(void *dll, const string &function_name, const st
 	return (T)function;
 }
 
-static void ComputeSHA256Buffer(const char *buffer, const idx_t length, string *res) {
+static void ComputeSHA256Buffer(const char *buffer, const idx_t start, const idx_t end, string *res) {
 	// Invoke MbedTls function to actually compute sha256
 	char hash[duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES];
-	duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(buffer, length, hash);
+	duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(buffer + start, end - start, hash);
 	*res = std::string(hash, duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 }
 
 static void ComputeSHA256String(const string &to_hash, string *res) {
-	ComputeSHA256Buffer(to_hash.data(), to_hash.length(), res);
+	ComputeSHA256Buffer(to_hash.data(), 0, to_hash.length(), res);
 }
 
 static string ComputeFinalHash(const vector<string> &chunks) {
@@ -343,7 +343,7 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t bu
 	vector<std::thread> threads;
 	threads.reserve(hash_chunks.size());
 	for (idx_t i = 0; i < hash_chunks.size(); i++) {
-		threads.emplace_back(ComputeSHA256Buffer, buffer + splits[i], splits[i + 1] - splits[i], &hash_chunks[i]);
+		threads.emplace_back(ComputeSHA256Buffer, buffer, splits[i], splits[i + 1], &hash_chunks[i]);
 	}
 
 	for (auto &thread : threads) {
@@ -351,7 +351,7 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t bu
 	}
 #else
 	for (idx_t i = 0; i < numChunks; i++) {
-		ComputeSHA256Buffer(buffer + splits[i], splits[i + 1] - splits[i], &hash_chunks[i]);
+		ComputeSHA256Buffer(buffer, splits[i], splits[i + 1], &hash_chunks[i]);
 	}
 #endif // DUCKDB_NO_THREADS
 
