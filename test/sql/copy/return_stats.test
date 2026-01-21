@@ -109,7 +109,7 @@ COPY bools TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
 query IIIIIII
 COPY multi_column_test TO '__TEST_DIR__/multi_column_copy.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"i"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}, '"j"'={column_size_bytes=\d+, max=9, min=0, null_count=0}, '"k"'={column_size_bytes=\d+, max=2499, min=1, null_count=1250}}	NULL	{k=BIGINT, j=BIGINT, i=BIGINT}
+<REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"i"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}, '"j"'={column_size_bytes=\d+, max=9, min=0, null_count=0}, '"k"'={column_size_bytes=\d+, max=2499, min=1, null_count=1250}}	NULL	{i=BIGINT, j=BIGINT, k=BIGINT}
 
 # strings
 query IIIIIII
@@ -121,7 +121,7 @@ COPY string_test TO '__TEST_DIR__/string_test.parquet' (RETURN_STATS);
 query IIIIIII
 COPY date_test TO '__TEST_DIR__/date_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*date_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dt"'={column_size_bytes=\d+, max=2006-11-04, min=2000-01-01, null_count=0}, '"t"'={column_size_bytes=\d+, max='06:56:30', min='00:00:00', null_count=0}, '"ts"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123456', min='2000-01-01 12:12:12.123456', null_count=0}, '"ts_ms"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123', min='2000-01-01 12:12:12.123', null_count=0}, '"ts_ns"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123456789', min='2000-01-01 12:12:12.123456789', null_count=0}, '"ts_s"'={column_size_bytes=\d+, max='2006-11-04 12:12:12', min='2000-01-01 12:12:12', null_count=0}}	NULL	{t=TIME, ts_ns=TIMESTAMP_NS, ts_ms=TIMESTAMP_MS, ts_s=TIMESTAMP_S, ts=TIMESTAMP, dt=DATE}
+<REGEX>:.*date_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dt"'={column_size_bytes=\d+, max=2006-11-04, min=2000-01-01, null_count=0}, '"t"'={column_size_bytes=\d+, max='06:56:30', min='00:00:00', null_count=0}, '"ts"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123456', min='2000-01-01 12:12:12.123456', null_count=0}, '"ts_ms"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123', min='2000-01-01 12:12:12.123', null_count=0}, '"ts_ns"'={column_size_bytes=\d+, max='2006-11-04 12:12:12.123456789', min='2000-01-01 12:12:12.123456789', null_count=0}, '"ts_s"'={column_size_bytes=\d+, max='2006-11-04 12:12:12', min='2000-01-01 12:12:12', null_count=0}}	NULL	{dt=DATE, t=TIME, ts=TIMESTAMP, ts_ms=TIMESTAMP_MS, ts_ns=TIMESTAMP_NS, ts_s=TIMESTAMP_S}
 
 # empty table
 query IIIIIII
@@ -139,7 +139,7 @@ COPY blob_test TO '__TEST_DIR__/blob_test.parquet' (RETURN_STATS);
 query IIIIIII
 COPY decimal_test TO '__TEST_DIR__/decimal_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dec_i128"'={column_size_bytes=57, max=12345678912345678912345678912345678.912, min=4.567, null_count=0}, '"dec_i16"'={column_size_bytes=33, max=25.3, min=1.1, null_count=0}, '"dec_i32"'={column_size_bytes=33, max=123456.789, min=2.123, null_count=0}, '"dec_i64"'={column_size_bytes=41, max=123456789123.456, min=3.456, null_count=0}}	NULL	{dec_i128='DECIMAL(38,3)', dec_i64='DECIMAL(18,3)', dec_i32='DECIMAL(9,3)', dec_i16='DECIMAL(4,1)'}
+<REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dec_i128"'={column_size_bytes=57, max=12345678912345678912345678912345678.912, min=4.567, null_count=0}, '"dec_i16"'={column_size_bytes=33, max=25.3, min=1.1, null_count=0}, '"dec_i32"'={column_size_bytes=33, max=123456.789, min=2.123, null_count=0}, '"dec_i64"'={column_size_bytes=41, max=123456789123.456, min=3.456, null_count=0}}	NULL	{dec_i128='DECIMAL(38,3)', dec_i16='DECIMAL(4,1)', dec_i32='DECIMAL(9,3)', dec_i64='DECIMAL(18,3)'}
 
 # floating point numbers
 query IIIIIII
@@ -185,7 +185,7 @@ COPY struct_test TO '__TEST_DIR__/struct_test.parquet' (RETURN_STATS);
 query IIIIIII
 COPY list_test TO '__TEST_DIR__/list_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*list_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"l1"."element"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}, '"l2"."element"'={column_size_bytes=\d+, max=2598, min=102, null_count=1500}}	NULL	{l2='BIGINT[]', l1='BIGINT[]'}
+<REGEX>:.*list_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"l1"."element"'={column_size_bytes=\d+, max=2499, min=0, null_count=0}, '"l2"."element"'={column_size_bytes=\d+, max=2598, min=102, null_count=1500}}	NULL	{l1='BIGINT[]', l2='BIGINT[]'}
 
 # nested struct
 query IIIIIII
