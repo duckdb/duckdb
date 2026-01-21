@@ -14,7 +14,8 @@
 #include "duckdb/common/checksum.hpp"
 #include <unordered_map>
 #include <string>
-
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/main/config.hpp"
 namespace duckdb {
 
 //! InMemoryBlockManager is an implementation for a BlockManager
