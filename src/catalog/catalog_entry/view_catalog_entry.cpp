@@ -90,6 +90,27 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 	}
 }
 
+const vector<string> &ViewCatalogEntry::GetNames() {
+	if (!HasTypes()) {
+		throw InternalException("ViewCatalogEntry::GetNames called - but view does not have names defined");
+	}
+	return names;
+}
+
+const vector<LogicalType> &ViewCatalogEntry::GetTypes() {
+	if (!HasTypes()) {
+		throw InternalException("ViewCatalogEntry::GetTypes called - but view does not have types defined");
+	}
+	return types;
+}
+
+void ViewCatalogEntry::BindView(ClientContext &context) {
+	if (HasTypes()) {
+		return;
+	}
+	Binder::BindView(context, *query, ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases, types, names);
+}
+
 string ViewCatalogEntry::ToSQL() const {
 	if (sql.empty()) {
 		//! Return empty sql with view name so pragma view_tables don't complain

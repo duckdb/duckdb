@@ -293,12 +293,16 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(query)));
 
 		subquery.alias = ref.alias;
-		// construct view names by first (1) taking the view aliases, (2) adding the view names, then (3) applying
-		// subquery aliases
+		// construct view names by taking the view aliases
 		vector<string> view_names = view_catalog_entry.aliases;
-		for (idx_t n = view_names.size(); n < view_catalog_entry.names.size(); n++) {
-			view_names.push_back(view_catalog_entry.names[n]);
+		if (view_catalog_entry.HasTypes()) {
+			// if the view has stored names - use them as base names
+			auto &stored_names = view_catalog_entry.GetNames();
+			for (idx_t n = view_names.size(); n < stored_names.size(); n++) {
+				view_names.push_back(stored_names[n]);
+			}
 		}
+		// now apply the subquery column aliases
 		subquery.column_name_alias = BindContext::AliasColumnNames(ref.table_name, view_names, ref.column_name_alias);
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
@@ -321,8 +325,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			// we bind the view subquery and the original view with different "can_contain_nulls",
 			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
 			// so we exchange all SQLNULL with INTEGER here before comparing
+			auto &stored_names = view_catalog_entry.GetNames();
 			auto bound_types = ExchangeAllNullTypes(bound_child.types);
-			auto view_types = ExchangeAllNullTypes(view_catalog_entry.types);
+			auto view_types = ExchangeAllNullTypes(view_catalog_entry.GetTypes());
 			if (bound_types != view_types) {
 				auto actual_types = StringUtil::ToString(bound_types, ", ");
 				auto expected_types = StringUtil::ToString(view_types, ", ");
@@ -330,10 +335,9 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
 				    expected_types, actual_types);
 			}
-			if (bound_child.names.size() == view_catalog_entry.names.size() &&
-			    bound_child.names != view_catalog_entry.names) {
+			if (bound_child.names.size() == stored_names.size() && bound_child.names != stored_names) {
 				auto actual_names = StringUtil::Join(bound_child.names, ", ");
-				auto expected_names = StringUtil::Join(view_catalog_entry.names, ", ");
+				auto expected_names = StringUtil::Join(stored_names, ", ");
 				throw BinderException(
 				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
 				    expected_names, actual_names);

@@ -34,12 +34,12 @@ public:
 	string sql;
 	//! The set of aliases associated with the view
 	vector<string> aliases;
-	//! The returned types of the view
-	vector<LogicalType> types;
-	//! The returned names of the view
-	vector<string> names;
 	//! The comments on the columns of the view: can be empty if there are no comments
 	vector<Value> column_comments;
+
+	const vector<string> &GetNames();
+	const vector<LogicalType> &GetTypes();
+	void BindView(ClientContext &context);
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
@@ -50,12 +50,18 @@ public:
 
 	virtual const SelectStatement &GetQuery();
 
+	// Whether or not the view has types/names defined
 	virtual bool HasTypes() const {
-		// Whether or not the view has types/names defined
-		return true;
+		return !types.empty();
 	}
 
 	string ToSQL() const override;
+
+private:
+	//! The returned types of the view
+	vector<LogicalType> types;
+	//! The returned names of the view
+	vector<string> names;
 
 private:
 	void Initialize(CreateViewInfo &info);

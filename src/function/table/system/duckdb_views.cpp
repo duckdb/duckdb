@@ -86,6 +86,7 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 			continue;
 		}
 		auto &view = entry.Cast<ViewCatalogEntry>();
+		view.BindView(context);
 
 		// return values:
 		idx_t col = 0;
@@ -110,7 +111,7 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// temporary, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(view.temporary));
 		// column_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.types.size())));
+		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.GetTypes().size())));
 		// sql, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(view.ToSQL()));
 
