@@ -529,7 +529,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 	auto expr_list_pr = ExtractParseResultsFromList(extract_parens);
 	vector<unique_ptr<ParsedExpression>> in_children;
 	for (auto &expr : expr_list_pr) {
-		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(std::move(expr)));
+		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
 	return std::move(result);
@@ -804,7 +804,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 				continue;
 			}
 		}
-
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(expr));
 		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
