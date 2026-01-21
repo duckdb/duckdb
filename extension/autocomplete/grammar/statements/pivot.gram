@@ -14,5 +14,9 @@ IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 
 ValueOrValues <- 'VALUE' / 'VALUES'
 
-IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
-UnpivotHeader <- ColIdOrString / Parens(List(ColIdOrString))
+IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
+IncludeNulls <- 'INCLUDE' 'NULLS'
+ExcludeNulls <- 'EXCLUDE' 'NULLS'
+UnpivotHeader <- UnpivotHeaderSingle / UnpivotHeaderList
+UnpivotHeaderSingle <- ColIdOrString
+UnpivotHeaderList <- Parens(List(ColIdOrString))

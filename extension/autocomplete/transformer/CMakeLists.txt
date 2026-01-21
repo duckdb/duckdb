@@ -32,6 +32,7 @@ add_library_unity(
   transform_insert.cpp
   transform_load.cpp
   transform_merge_into.cpp
+  transform_pivot.cpp
   transform_pragma.cpp
   transform_prepare.cpp
   transform_select.cpp

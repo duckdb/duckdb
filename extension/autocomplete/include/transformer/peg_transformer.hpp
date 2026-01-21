@@ -213,6 +213,7 @@ public:
 	void RegisterInsert();
 	void RegisterLoad();
 	void RegisterMergeInto();
+	void RegisterPivot();
 	void RegisterPragma();
 	void RegisterPrepare();
 	void RegisterSelect();
@@ -1029,6 +1030,15 @@ private:
 	static unique_ptr<MergeIntoAction> TransformInsertValuesList(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
 
+	// pivot.gram
+	static vector<string> TransformUnpivotHeader(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformUnpivotHeaderSingle(PEGTransformer &transformer,
+	                                                   optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformUnpivotHeaderList(PEGTransformer &transformer,
+	                                                 optional_ptr<ParseResult> parse_result);
+
+	static bool TransformIncludeOrExcludeNulls(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
 	// pragma.gram
 	static unique_ptr<SQLStatement> TransformPragmaStatement(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
@@ -1153,6 +1163,10 @@ private:
 	static JoinPrefix TransformCrossJoinPrefix(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static JoinPrefix TransformNaturalJoinPrefix(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static JoinPrefix TransformPositionalJoinPrefix(PEGTransformer &transformer,
+	                                                optional_ptr<ParseResult> parse_result);
+	static unique_ptr<TableRef> TransformTableUnpivotClause(PEGTransformer &transformer,
+	                                                        optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformUnpivotValueList(PEGTransformer &transformer,
 	                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformTablePivotClause(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);

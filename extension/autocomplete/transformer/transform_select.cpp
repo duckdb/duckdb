@@ -542,6 +542,23 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformJoinOrPivot(PEGTransformer 
 	return transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
+unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClause(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	bool include_nulls = false;
+	transformer.TransformOptional<bool>(list_pr, 1, include_nulls);
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(2));
+	auto inner_list = extract_parens->Cast<ListParseResult>();
+	auto result = make_uniq<PivotRef>();
+	result->unpivot_names = transformer.Transform<vector<string>>(inner_list.GetChild(0));
+	auto pivot_values_list = inner_list.Child<RepeatParseResult>(2);
+	for (auto pivot_value : pivot_values_list.children) {
+		result->pivots.push_back(transformer.Transform<PivotColumn>(pivot_value));
+	}
+	transformer.TransformOptional<string>(list_pr, 3, result->alias);
+	return result;
+}
+
 unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClause(PEGTransformer &transformer,
                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -559,6 +576,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClause(PEGTransfo
 	if (!group_by.group_expressions.empty()) {
 		throw NotImplementedException("Groups in pivot clause has not yet been implemented");
 	}
+	transformer.TransformOptional<string>(list_pr, 2, result->alias);
 	return result;
 }
 
@@ -592,11 +610,13 @@ vector<PivotColumnEntry> PEGTransformerFactory::TransformPivotTargetList(PEGTran
 		auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(extract_target_list);
 		for (auto &target : target_list) {
 			PivotColumnEntry pivot_entry;
-			if (target->GetExpressionClass() != ExpressionClass::CONSTANT) {
-				throw NotImplementedException("Expected constant entries for the pivot targets");
+			if (target->GetExpressionClass() == ExpressionClass::CONSTANT) {
+				auto const_expr = target->Cast<ConstantExpression>();
+				pivot_entry.values.push_back(const_expr.value);
+			} else if (target->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+				auto col_ref = target->Cast<ColumnRefExpression>();
+				pivot_entry.values.push_back(col_ref.GetColumnName());
 			}
-			auto const_expr = target->Cast<ConstantExpression>();
-			pivot_entry.values.push_back(const_expr.value);
 			result.push_back(std::move(pivot_entry));
 		}
 	}

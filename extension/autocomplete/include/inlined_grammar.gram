@@ -686,8 +686,12 @@ IntoNameValues <- 'INTO' 'NAME' ColIdOrString ValueOrValues List(Identifier)
 
 ValueOrValues <- 'VALUE' / 'VALUES'
 
-IncludeExcludeNulls <- ('INCLUDE' / 'EXCLUDE') 'NULLS'
-UnpivotHeader <- ColIdOrString / Parens(List(ColIdOrString))
+IncludeOrExcludeNulls <- IncludeNulls / ExcludeNulls
+IncludeNulls <- 'INCLUDE' 'NULLS'
+ExcludeNulls <- 'EXCLUDE' 'NULLS'
+UnpivotHeader <- UnpivotHeaderSingle / UnpivotHeaderList
+UnpivotHeaderSingle <- ColIdOrString
+UnpivotHeaderList <- Parens(List(ColIdOrString))
 
 ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
 CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName
@@ -1234,11 +1238,13 @@ ParensTableRef <- TableAliasColon? Parens(TableRef) SampleClause?
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
 TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ GroupByClause?) TableAlias?
-TableUnpivotClause <- 'UNPIVOT' IncludeExcludeNulls? Parens(UnpivotHeader 'FOR' PivotValueList+) TableAlias?
+TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(UnpivotHeader 'FOR' UnpivotValueList+) TableAlias?
 
 PivotHeader <- BaseExpression
 PivotValueList <- PivotHeader 'IN' PivotTargetList
+UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
 PivotTargetList <- Identifier / Parens(TargetList)
+UnpivotTargetList <- Parens(TargetList)
 
 Lateral <- 'LATERAL'
 

@@ -51,11 +51,13 @@ ParensTableRef <- TableAliasColon? Parens(TableRef) SampleClause?
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
 TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ GroupByClause?) TableAlias?
-TableUnpivotClause <- 'UNPIVOT' IncludeExcludeNulls? Parens(UnpivotHeader 'FOR' PivotValueList+) TableAlias?
+TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(UnpivotHeader 'FOR' UnpivotValueList+) TableAlias?
 
 PivotHeader <- BaseExpression
 PivotValueList <- PivotHeader 'IN' PivotTargetList
+UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
 PivotTargetList <- Identifier / Parens(TargetList)
+UnpivotTargetList <- Parens(TargetList)
 
 Lateral <- 'LATERAL'
 

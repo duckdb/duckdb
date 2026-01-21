@@ -575,6 +575,7 @@ void PEGTransformerFactory::RegisterLoad() {
 }
 
 void PEGTransformerFactory::RegisterMergeInto() {
+	// merge_into.gram
 	REGISTER_TRANSFORM(TransformMergeIntoStatement);
 	REGISTER_TRANSFORM(TransformMergeIntoUsingClause);
 	REGISTER_TRANSFORM(TransformMergeMatch);
@@ -594,6 +595,14 @@ void PEGTransformerFactory::RegisterMergeInto() {
 	REGISTER_TRANSFORM(TransformInsertDefaultValues);
 	REGISTER_TRANSFORM(TransformInsertByNameOrPosition);
 	REGISTER_TRANSFORM(TransformInsertValuesList);
+}
+
+void PEGTransformerFactory::RegisterPivot() {
+	// pivot.gram
+	REGISTER_TRANSFORM(TransformUnpivotHeader);
+	REGISTER_TRANSFORM(TransformUnpivotHeaderSingle);
+	REGISTER_TRANSFORM(TransformUnpivotHeaderList);
+	REGISTER_TRANSFORM(TransformIncludeOrExcludeNulls);
 }
 
 void PEGTransformerFactory::RegisterPragma() {
@@ -676,6 +685,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformCrossJoinPrefix);
 	REGISTER_TRANSFORM(TransformNaturalJoinPrefix);
 	REGISTER_TRANSFORM(TransformPositionalJoinPrefix);
+	REGISTER_TRANSFORM(TransformTableUnpivotClause);
 	REGISTER_TRANSFORM(TransformTablePivotClause);
 	REGISTER_TRANSFORM(TransformPivotValueList);
 	REGISTER_TRANSFORM(TransformPivotHeader);
@@ -943,6 +953,9 @@ void PEGTransformerFactory::RegisterEnums() {
 
 	RegisterEnum<bool>("IgnoreNulls", true);
 	RegisterEnum<bool>("RespectNulls", false);
+
+	RegisterEnum<bool>("IncludeNulls", true);
+	RegisterEnum<bool>("ExcludeNulls", false);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
@@ -976,6 +989,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterInsert();
 	RegisterLoad();
 	RegisterMergeInto();
+	RegisterPivot();
 	RegisterPragma();
 	RegisterPrepare();
 	RegisterSelect();
