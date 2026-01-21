@@ -176,34 +176,23 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 
 static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
                                      idx_t data_size, DBConfig &config) {
-	// Open target_file, at this points ending with '?duckdb_extension' (but not '.')
+	if (!config.options.allow_unsigned_extensions) {
+		const bool signature_valid = ExtensionHelper::CheckExtensionBufferSignature(
+		    (const char *)data, data_size, config.options.allow_community_extensions);
+		if (!signature_valid) {
+			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
+			                  "https://duckdb.org/docs/stable/operations_manual/securing_duckdb/securing_extensions");
+		}
+	}
+
+	// Now signature has been checked (if signature checking is enabled)
+
+	// Open target_file, at this points ending with '.duckdb_extension'
 	auto target_file =
 	    fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_APPEND |
 	                          FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 	// Write content to the file
 	target_file->Write(query_context, data, data_size);
-
-	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(*target_file);
-
-	if (!config.options.allow_unsigned_extensions) {
-		bool signature_valid;
-		if (parsed_metadata.AppearsValid()) {
-			signature_valid = ExtensionHelper::CheckExtensionSignature(*target_file, parsed_metadata,
-			                                                           config.options.allow_community_extensions);
-		} else {
-			signature_valid = false;
-		}
-
-		if (!signature_valid) {
-			target_file->Close();
-			target_file.reset();
-			fs.TryRemoveFile(path);
-			throw IOException("Attempting to install an extension file that hasn't a valid signature, see "
-			                  "https://duckdb.org/docs/stable/operations_manual/securing_duckdb/securing_extensions");
-		}
-	}
-
-	// Now signature has been checked
 
 	target_file->Close();
 	target_file.reset();
@@ -266,17 +255,16 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, const string &temp_path,
                                 const string &local_extension_path, void *in_buffer, idx_t file_size,
                                 ExtensionInstallInfo &info, DBConfig &config) {
-	// temp_path ends with 'duckdb_extension', but NOT preceded by a '.'
-	if (!StringUtil::EndsWith(temp_path, "duckdb_extension") || StringUtil::EndsWith(temp_path, ".duckdb_extension")) {
-		throw InternalException(
-		    "Extension install temp_path of '%s' is not valid, should end in 'duckdb_extension' not preceded by a '.'",
-		    temp_path);
+	// temp_path ends with '.duckdb_extension'
+	if (!StringUtil::EndsWith(temp_path, ".duckdb_extension")) {
+		throw InternalException("Extension install temp_path of '%s' is not valid, should end in '.duckdb_extension'",
+		                        temp_path);
 	}
 	// local_extension_path ends with '.duckdb_extension', and given it will be written only after signature checks,
 	// it's now loadable
 	if (!StringUtil::EndsWith(local_extension_path, ".duckdb_extension")) {
 		throw InternalException("Extension install local_extension_path of '%s' is not valid, should end in "
-		                        "'duckdb_extension' not preceded by a '.'",
+		                        "'.duckdb_extension'",
 		                        temp_path);
 	}
 
@@ -531,9 +519,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
 	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 	string temp_path =
-	    local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID()) + "-duckdb_extension";
-
-	// Note the missing '.', this is NOT yet a valid extension
+	    local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID()) + ".duckdb_extension";
 
 	if (fs.FileExists(local_extension_path) && !options.force_install) {
 		// File exists: throw error if origin mismatches

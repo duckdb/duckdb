@@ -126,8 +126,15 @@ public:
 	static string GetExtensionDirectoryPath(ClientContext &context);
 	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
+	// Check signature of an Extension stored as FileHandle
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added
+	static bool CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
+	                                          const bool allow_community_extensions);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length
+	static bool CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
+	                                          const bool allow_community_extensions);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 

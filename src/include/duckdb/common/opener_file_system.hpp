@@ -24,14 +24,14 @@ public:
 	void VerifyCanAccessExtension(const string &path, const FileOpenFlags &flags) {
 		if (flags.OpenForWriting() && !flags.EnableExtensionInstall()) {
 			throw PermissionException(
-			    "File '%s' cannot be opened for writing since files ending with duckdb_extension are reserved for "
+			    "File '%s' cannot be opened for writing since files ending with '.duckdb_extension' are reserved for "
 			    "DuckDB extensions, and these can only be installed through the INSTALL command",
 			    path);
 		}
 	}
 
 	bool IsDuckDBExtensionName(const string &path) {
-		return StringUtil::EndsWith(path, "duckdb_extension");
+		return StringUtil::EndsWith(path, ".duckdb_extension");
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -94,7 +94,7 @@ public:
 		VerifyCanAccessFile(target);
 		if (IsDuckDBExtensionName(target) && !IsDuckDBExtensionName(source)) {
 			throw PermissionException(
-			    "File '%s' cannot be moved to '%s', files ending with duckdb_extension are reserved for DuckDB "
+			    "File '%s' cannot be moved to '%s', files ending with '.duckdb_extension' are reserved for DuckDB "
 			    "extensions, and these can only be installed through the INSTALL command, or moved if both are "
 			    "extensions'",
 			    source, target);

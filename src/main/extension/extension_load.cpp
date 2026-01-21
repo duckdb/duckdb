@@ -165,9 +165,15 @@ static T TryLoadFunctionFromDLL(void *dll, const string &function_name, const st
 	return (T)function;
 }
 
-static void ComputeSHA256String(const string &to_hash, string *res) {
+static void ComputeSHA256Buffer(const char *buffer, const idx_t length, string *res) {
 	// Invoke MbedTls function to actually compute sha256
-	*res = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(to_hash);
+	char hash[duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES];
+	duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(buffer, length, hash);
+	*res = std::string(hash, duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
+}
+
+static void ComputeSHA256String(const string &to_hash, string *res) {
+	ComputeSHA256Buffer(to_hash.data(), to_hash.length(), res);
 }
 
 static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, string *res) {
@@ -258,6 +264,17 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 	return ParseExtensionMetaData(metadata_segment.data());
 }
 
+static bool CheckKnownSignatures(const string &two_level_hash, const string &signature,
+                                 const bool allow_community_extensions) {
+	for (auto &key : ExtensionHelper::GetPublicKeys(allow_community_extensions)) {
+		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, two_level_hash)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
                                               const bool allow_community_extensions) {
 	auto signature_offset = handle.GetFileSize() - ParsedExtensionMetaData::SIGNATURE_SIZE;
@@ -301,14 +318,59 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 	// TODO maybe we should do a stream read / hash update here
 	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
 
-	for (auto &key : ExtensionHelper::GetPublicKeys(allow_community_extensions)) {
-		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, parsed_metadata.signature, two_level_hash)) {
-			return true;
-			break;
-		}
+	return CheckKnownSignatures(two_level_hash, parsed_metadata.signature, allow_community_extensions);
+}
+
+bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
+                                                    const bool allow_community_extensions) {
+	const idx_t maxLenChunks = 1024ULL * 1024ULL;
+	const idx_t numChunks = (buffer_length + maxLenChunks - 1) / maxLenChunks;
+	vector<string> hash_chunks(numChunks);
+	vector<idx_t> splits(numChunks + 1);
+
+	for (idx_t i = 0; i < numChunks; i++) {
+		splits[i] = maxLenChunks * i;
+	}
+	splits.back() = buffer_length;
+
+#ifndef DUCKDB_NO_THREADS
+	vector<std::thread> threads;
+	threads.reserve(numChunks);
+	for (idx_t i = 0; i < numChunks; i++) {
+		threads.emplace_back(ComputeSHA256Buffer, buffer + splits[i], splits[i + 1] - splits[i], &hash_chunks[i]);
 	}
 
-	return false;
+	for (auto &thread : threads) {
+		thread.join();
+	}
+#else
+	for (idx_t i = 0; i < numChunks; i++) {
+		ComputeSHA256Buffer(buffer + splits[i], splits[i + 1] - splits[i], &hash_chunks[i]);
+	}
+#endif // DUCKDB_NO_THREADS
+
+	string hash_concatenation;
+	hash_concatenation.reserve(32 * numChunks); // 256 bits -> 32 bytes per chunk
+
+	for (auto &hash_chunk : hash_chunks) {
+		hash_concatenation += hash_chunk;
+	}
+
+	string two_level_hash;
+	ComputeSHA256String(hash_concatenation, &two_level_hash);
+
+	// TODO maybe we should do a stream read / hash update here
+	//	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
+
+	return CheckKnownSignatures(two_level_hash, signature, allow_community_extensions);
+}
+
+bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
+                                                    const bool allow_community_extensions) {
+	auto signature_offset = total_buffer_length - ParsedExtensionMetaData::SIGNATURE_SIZE;
+	string signature = std::string(buffer + signature_offset, ParsedExtensionMetaData::SIGNATURE_SIZE);
+
+	return CheckExtensionBufferSignature(buffer, signature_offset, signature, allow_community_extensions);
 }
 
 bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,

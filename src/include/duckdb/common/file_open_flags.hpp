@@ -163,7 +163,7 @@ public:
 	//! Disables logging to avoid infinite loops when using FileHandle-backed log storage
 	static constexpr FileOpenFlags FILE_FLAGS_DISABLE_LOGGING =
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
-	//! Opened file might be a duckdb_extension file
+	//! Opened file is allowed to be a duckdb_extension
 	static constexpr FileOpenFlags FILE_FLAGS_ENABLE_EXTENSION_INSTALL =
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 };
