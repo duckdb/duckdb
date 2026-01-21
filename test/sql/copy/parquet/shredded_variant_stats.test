@@ -15,7 +15,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_primitive.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: true}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: true}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -29,7 +29,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_primitive_with_nulls.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: true}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: true}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -42,7 +42,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/not_fully_shredded_primitive.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: false}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER, stats: {fully_shredded: false}}[Has Null: true, Has No Null: true]
 
 # ARRAY
 
@@ -56,7 +56,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_list.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -71,7 +71,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_list_with_nulls.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: INTEGER[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -87,7 +87,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/not_fully_shredded_list.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: false, child: fully_shredded: true}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: false, child: fully_shredded: true}}[Has Null: true, Has No Null: true]
 
 # ARRAY - Element
 
@@ -101,7 +101,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_list_element.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: true}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: true}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -113,7 +113,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_list_element_with_nulls.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: true}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: true}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -125,7 +125,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/not_fully_shredded_list_element.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: VARCHAR[], stats: {fully_shredded: true, child: fully_shredded: false}}[Has Null: true, Has No Null: true]
 
 # OBJECT
 
@@ -139,7 +139,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_object.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: true, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: true}}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: true, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: true}}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -153,7 +153,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_object_with_nulls.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: true, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: true}}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: true, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: true}}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -168,7 +168,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/not_fully_shredded_object.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: false, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: true}}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: false, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: true}}}[Has Null: true, Has No Null: true]
 
 # OBJECT - field
 
@@ -184,7 +184,7 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/not_fully_shredded_object_field.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: true, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: false}}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: true, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: false}}}[Has Null: true, Has No Null: true]
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -198,4 +198,4 @@ COPY (SELECT * from (VALUES
 query I
 select stats(col) from '__TEST_DIR__/fully_shredded_object_field_with_nulls.parquet' limit 1;
 ----
-shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: true, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: true}}}[Has Null: false, Has No Null: false]
+shredding_state: SHREDDED, shredding: {typed_value_type: STRUCT(c VARCHAR, b BOOLEAN, a INTEGER), stats: {fully_shredded: true, children: {c: fully_shredded: true, b: fully_shredded: true, a: fully_shredded: true}}}[Has Null: true, Has No Null: true]
