@@ -2,6 +2,8 @@
 # description: Test the AGGREGATE_STATE type name with get_state_type callback
 # group: [aggregates]
 
+require noforcestorage
+
 # We would like to serialize the type info with the latest storage version
 # Forward compatability won't be harmed, as older DuckDB versions are used in CI
 statement ok
@@ -22,7 +24,6 @@ CREATE TABLE t1_${type} AS SELECT avg(range::${type}) EXPORT_STATE as state FROM
 
 # Test reading from the table
 # We cannot run in force storage mode, as this configuration still uses the old serialization version
-require noforcestorage
 query T
 SELECT column_type='AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>' FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
 ----
