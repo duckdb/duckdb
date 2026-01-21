@@ -122,7 +122,7 @@ public:
 				if (!result->file_options.union_by_name && bound_on_first_file) {
 					file_string = result->file_list->GetFirstFile().path;
 				} else {
-					for (auto &file : result->file_list->GetPaths()) {
+					for (auto &file : result->file_list->GetAllFiles()) {
 						if (!file_string.empty()) {
 							file_string += ",";
 						}
@@ -812,7 +812,7 @@ public:
 		result.insert(make_pair("Total Files Read", std::to_string(files_loaded)));
 
 		constexpr size_t FILE_NAME_LIST_LIMIT = 5;
-		auto file_paths = gstate.file_list.GetPaths();
+		auto file_paths = gstate.file_list.GetDisplayFileList(FILE_NAME_LIST_LIMIT + 1);
 		if (!file_paths.empty()) {
 			vector<std::string> file_path_names;
 			for (idx_t i = 0; i < MinValue<idx_t>(file_paths.size(), FILE_NAME_LIST_LIMIT); i++) {
