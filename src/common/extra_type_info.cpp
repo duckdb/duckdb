@@ -290,7 +290,7 @@ void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	}
 }
 
-shared_ptr<StructTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
+shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
 	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);

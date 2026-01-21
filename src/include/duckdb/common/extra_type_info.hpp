@@ -149,7 +149,7 @@ struct AggregateStateTypeInfo : public StructTypeInfo {
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static shared_ptr<StructTypeInfo> Deserialize(Deserializer &source);
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
 	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
 
