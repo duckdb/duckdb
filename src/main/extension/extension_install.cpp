@@ -178,7 +178,7 @@ static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs
                                      idx_t data_size, DBConfig &config) {
 	if (!config.options.allow_unsigned_extensions) {
 		const bool signature_valid = ExtensionHelper::CheckExtensionBufferSignature(
-		    (const char *)data, data_size, config.options.allow_community_extensions);
+		    static_cast<char *>(data), data_size, config.options.allow_community_extensions);
 		if (!signature_valid) {
 			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
 			                  "https://duckdb.org/docs/stable/operations_manual/securing_duckdb/securing_extensions");

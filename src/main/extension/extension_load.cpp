@@ -176,6 +176,32 @@ static void ComputeSHA256String(const string &to_hash, string *res) {
 	ComputeSHA256Buffer(to_hash.data(), to_hash.length(), res);
 }
 
+static string ComputeFinalHash(const vector<string> &chunks) {
+	string hash_concatenation;
+	hash_concatenation.reserve(32 * chunks.size()); // 256 bits -> 32 bytes per chunk
+
+	for (auto &chunk : chunks) {
+		hash_concatenation += chunk;
+	}
+
+	string two_level_hash;
+	ComputeSHA256String(hash_concatenation, &two_level_hash);
+
+	return two_level_hash;
+}
+
+static void IntializeAncillaryData(vector<string> &hash_chunks, vector<idx_t> &splits, idx_t length) {
+	const idx_t maxLenChunks = 1024ULL * 1024ULL;
+	const idx_t numChunks = (length + maxLenChunks - 1) / maxLenChunks;
+	hash_chunks.resize(numChunks);
+	splits.resize(numChunks + 1);
+
+	for (idx_t i = 0; i < numChunks; i++) {
+		splits[i] = maxLenChunks * i;
+	}
+	splits.back() = length;
+}
+
 static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, string *res) {
 	idx_t iter = start;
 	const idx_t segment_size = 1024ULL * 8ULL;
@@ -279,20 +305,14 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
                                               const bool allow_community_extensions) {
 	auto signature_offset = handle.GetFileSize() - ParsedExtensionMetaData::SIGNATURE_SIZE;
 
-	const idx_t maxLenChunks = 1024ULL * 1024ULL;
-	const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
-	vector<string> hash_chunks(numChunks);
-	vector<idx_t> splits(numChunks + 1);
-
-	for (idx_t i = 0; i < numChunks; i++) {
-		splits[i] = maxLenChunks * i;
-	}
-	splits.back() = signature_offset;
+	vector<string> hash_chunks;
+	vector<idx_t> splits;
+	IntializeAncillaryData(hash_chunks, splits, signature_offset);
 
 #ifndef DUCKDB_NO_THREADS
 	vector<std::thread> threads;
-	threads.reserve(numChunks);
-	for (idx_t i = 0; i < numChunks; i++) {
+	threads.reserve(hash_chunks.size());
+	for (idx_t i = 0; i < hash_chunks.size(); i++) {
 		threads.emplace_back(ComputeSHA256FileSegment, &handle, splits[i], splits[i + 1], &hash_chunks[i]);
 	}
 
@@ -300,43 +320,29 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 		thread.join();
 	}
 #else
-	for (idx_t i = 0; i < numChunks; i++) {
+	for (idx_t i = 0; i < hash_chunks.size(); i++) {
 		ComputeSHA256FileSegment(&handle, splits[i], splits[i + 1], &hash_chunks[i]);
 	}
 #endif // DUCKDB_NO_THREADS
 
-	string hash_concatenation;
-	hash_concatenation.reserve(32 * numChunks); // 256 bits -> 32 bytes per chunk
-
-	for (auto &hash_chunk : hash_chunks) {
-		hash_concatenation += hash_chunk;
-	}
-
-	string two_level_hash;
-	ComputeSHA256String(hash_concatenation, &two_level_hash);
+	const string resulting_hash = ComputeFinalHash(hash_chunks);
 
 	// TODO maybe we should do a stream read / hash update here
 	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
 
-	return CheckKnownSignatures(two_level_hash, parsed_metadata.signature, allow_community_extensions);
+	return CheckKnownSignatures(resulting_hash, parsed_metadata.signature, allow_community_extensions);
 }
 
 bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
                                                     const bool allow_community_extensions) {
-	const idx_t maxLenChunks = 1024ULL * 1024ULL;
-	const idx_t numChunks = (buffer_length + maxLenChunks - 1) / maxLenChunks;
-	vector<string> hash_chunks(numChunks);
-	vector<idx_t> splits(numChunks + 1);
-
-	for (idx_t i = 0; i < numChunks; i++) {
-		splits[i] = maxLenChunks * i;
-	}
-	splits.back() = buffer_length;
+	vector<string> hash_chunks;
+	vector<idx_t> splits;
+	IntializeAncillaryData(hash_chunks, splits, buffer_length);
 
 #ifndef DUCKDB_NO_THREADS
 	vector<std::thread> threads;
-	threads.reserve(numChunks);
-	for (idx_t i = 0; i < numChunks; i++) {
+	threads.reserve(hash_chunks.size());
+	for (idx_t i = 0; i < hash_chunks.size(); i++) {
 		threads.emplace_back(ComputeSHA256Buffer, buffer + splits[i], splits[i + 1] - splits[i], &hash_chunks[i]);
 	}
 
@@ -349,20 +355,9 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t bu
 	}
 #endif // DUCKDB_NO_THREADS
 
-	string hash_concatenation;
-	hash_concatenation.reserve(32 * numChunks); // 256 bits -> 32 bytes per chunk
+	const string resulting_hash = ComputeFinalHash(hash_chunks);
 
-	for (auto &hash_chunk : hash_chunks) {
-		hash_concatenation += hash_chunk;
-	}
-
-	string two_level_hash;
-	ComputeSHA256String(hash_concatenation, &two_level_hash);
-
-	// TODO maybe we should do a stream read / hash update here
-	//	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
-
-	return CheckKnownSignatures(two_level_hash, signature, allow_community_extensions);
+	return CheckKnownSignatures(resulting_hash, signature, allow_community_extensions);
 }
 
 bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
