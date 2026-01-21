@@ -64,6 +64,7 @@ jobs:
       CRASH_ON_ASSERT: 1
       FORCE_DEBUG: 1
       FORCE_ASSERT: 1
+      REDUCE_SYMBOLS: 1
 
     steps:
     - uses: actions/checkout@v4
