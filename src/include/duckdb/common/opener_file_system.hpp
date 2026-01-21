@@ -163,7 +163,7 @@ protected:
 	                                        optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(file.path);
-		if (flags.OpenForWriting() && !flags.EnableAsDuckDBExtension() &&
+		if (flags.OpenForWriting() && !flags.EnableExtensionInstall() &&
 		    StringUtil::EndsWith(file.path, "duckdb_extension")) {
 			throw PermissionException(
 			    "File '%s' cannot be opened for writing since files ending with duckdb_extension are reserved for "
