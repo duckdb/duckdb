@@ -750,7 +750,12 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 		                            value.type().ToString());
 	}
 
-	auto logical_type = TransformStringToLogicalType(value.GetValue<string>());
+	auto logical_type = UnboundType::TryParseAndDefaultBind(value.GetValue<string>());
+	if (logical_type.id() == LogicalTypeId::INVALID) {
+		throw InvalidInputException("Could not parse the argument '%s' to 'force_variant_shredding' as a built in type",
+		                            value.GetValue<string>());
+	}
+
 	TypeVisitor::Contains(logical_type, [](const LogicalType &type) {
 		if (type.IsNested()) {
 			if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::LIST) {
