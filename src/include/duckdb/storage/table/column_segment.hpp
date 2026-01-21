@@ -110,11 +110,9 @@ public:
 		return block_id;
 	}
 
-	//! Returns the block manager handling this segment. For transient segments, this might be the temporary block
-	//! manager. Later, we possibly convert this (transient) segment to a persistent segment. In that case, there
-	//! exists another block manager handling the ColumnData, of which this segment is a part.
-	BlockManager &GetBlockManager() const {
-		return block->block_manager;
+	//! Returns the size of the underlying block of the segment. It is size is the size available for usage on a block.
+	idx_t GetBlockSize() const {
+		return block->GetBlockSize();
 	}
 
 	idx_t GetBlockOffset() {

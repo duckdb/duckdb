@@ -7,18 +7,32 @@ index 1064250..5a6fc2b 100644
  #include "functions/ducklake_table_functions.hpp"
  #include "storage/ducklake_secret.hpp"
 +#include "duckdb/storage/storage_extension.hpp"
- 
+
  namespace duckdb {
- 
+
 @@ -12,7 +13,7 @@ static void LoadInternal(ExtensionLoader &loader) {
  	loader.SetDescription("Adds support for DuckLake, SQL as a Lakehouse Format");
- 
+
  	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 -	config.storage_extensions["ducklake"] = make_uniq<DuckLakeStorageExtension>();
 +	StorageExtension::Register(config, "ducklake", make_shared_ptr<DuckLakeStorageExtension>());
- 
+
  	config.AddExtensionOption("ducklake_max_retry_count",
  	                          "The maximum amount of retry attempts for a ducklake transaction", LogicalType::UBIGINT,
+diff --git a/src/common/ducklake_types.cpp b/src/common/ducklake_types.cpp
+index 6749529..9a87e04 100644
+--- a/src/common/ducklake_types.cpp
++++ b/src/common/ducklake_types.cpp
+@@ -73,8 +73,7 @@ static string ToStringBaseType(const LogicalType &type) {
+
+ // Only GEOMETRY type needs special handling, to cast to WKB_BLOB
+ bool DuckLakeTypes::IsGeoType(const LogicalType &type) {
+-	return type.HasAlias() && StringUtil::CIEquals(type.GetAlias(), "GEOMETRY") &&
+-	       (type.id() == LogicalTypeId::BLOB || type.id() == LogicalTypeId::USER);
++	return type.HasAlias() && StringUtil::CIEquals(type.GetAlias(), "GEOMETRY") && (type.id() == LogicalTypeId::BLOB);
+ }
+
+ bool DuckLakeTypes::RequiresCast(const LogicalType &type) {
 diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
 index 27f3051..5264af9 100644
 --- a/src/functions/ducklake_add_data_files.cpp
@@ -243,9 +257,9 @@ index d14f968..fc1ab36 100644
  #include "duckdb/function/function_binder.hpp"
  #include "duckdb/planner/operator/logical_projection.hpp"
 +#include "duckdb/planner/binder.hpp"
- 
+
  namespace duckdb {
- 
+
 @@ -205,7 +207,7 @@ SinkResultType DuckLakeInsert::Sink(ExecutionContext &context, DataChunk &chunk,
  //===--------------------------------------------------------------------===//
  // GetData
@@ -474,7 +488,7 @@ index 29634fd..147ba95 100644
 --- a/src/storage/ducklake_transaction.cpp
 +++ b/src/storage/ducklake_transaction.cpp
 @@ -2,6 +2,7 @@
- 
+
  #include "common/ducklake_types.hpp"
  #include "common/ducklake_util.hpp"
 +#include "duckdb/catalog/catalog_search_path.hpp"
