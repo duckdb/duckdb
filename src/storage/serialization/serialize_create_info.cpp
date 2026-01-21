@@ -202,9 +202,13 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "view_name", view_name);
 	serializer.WritePropertyWithDefault<vector<string>>(201, "aliases", aliases);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
+	if (!serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
+	}
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
-	serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
+	if (!serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
+	}
 	serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", column_comments, vector<Value>());
 }
 
@@ -212,9 +216,9 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateViewInfo>(new CreateViewInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "view_name", result->view_name);
 	deserializer.ReadPropertyWithDefault<vector<string>>(201, "aliases", result->aliases);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types", result->types);
+	deserializer.ReadDeletedProperty<vector<LogicalType>>(202, "types");
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
-	deserializer.ReadPropertyWithDefault<vector<string>>(204, "names", result->names);
+	deserializer.ReadDeletedProperty<vector<string>>(204, "names");
 	deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(205, "column_comments", result->column_comments, vector<Value>());
 	return std::move(result);
 }
