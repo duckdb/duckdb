@@ -166,16 +166,13 @@ void Binder::BindView(ClientContext &context, SelectStatement &stmt, const strin
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
 	if (dependencies) {
-		bool should_create_dependencies = Settings::Get<EnableViewDependenciesSetting>(context);
-		if (should_create_dependencies) {
-			view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
-				if (&catalog != &entry.ParentCatalog()) {
-					// Don't register dependencies between catalogs
-					return;
-				}
-				dependencies->AddDependency(entry);
-			});
-		}
+		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+			if (&catalog != &entry.ParentCatalog()) {
+				// Don't register dependencies between catalogs
+				return;
+			}
+			dependencies->AddDependency(entry);
+		});
 	}
 	view_binder->can_contain_nulls = true;
 
@@ -192,7 +189,11 @@ void Binder::BindView(ClientContext &context, SelectStatement &stmt, const strin
 }
 
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
-	BindView(context, *base.query, base.catalog, base.schema, base.dependencies, base.aliases, base.types, base.names);
+	optional_ptr<LogicalDependencyList> dependencies;
+	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
+		dependencies = base.dependencies;
+	}
+	BindView(context, *base.query, base.catalog, base.schema, dependencies, base.aliases, base.types, base.names);
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {

@@ -318,31 +318,6 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}
-
-		// verify that the types and names match up with the expected types and names if the view has type info defined
-		if (GetBindingMode() != BindingMode::EXTRACT_NAMES &&
-		    GetBindingMode() != BindingMode::EXTRACT_QUALIFIED_NAMES && view_catalog_entry.HasTypes()) {
-			// we bind the view subquery and the original view with different "can_contain_nulls",
-			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
-			// so we exchange all SQLNULL with INTEGER here before comparing
-			auto &stored_names = view_catalog_entry.GetNames();
-			auto bound_types = ExchangeAllNullTypes(bound_child.types);
-			auto view_types = ExchangeAllNullTypes(view_catalog_entry.GetTypes());
-			if (bound_types != view_types) {
-				auto actual_types = StringUtil::ToString(bound_types, ", ");
-				auto expected_types = StringUtil::ToString(view_types, ", ");
-				throw BinderException(
-				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
-				    expected_types, actual_types);
-			}
-			if (bound_child.names.size() == stored_names.size() && bound_child.names != stored_names) {
-				auto actual_names = StringUtil::Join(bound_child.names, ", ");
-				auto expected_names = StringUtil::Join(stored_names, ", ");
-				throw BinderException(
-				    "Contents of view were altered: names don't match! Expected [%s], but found [%s] instead",
-				    expected_names, actual_names);
-			}
-		}
 		bind_context.AddView(bound_child.plan->GetRootIndex(), subquery.alias, subquery, bound_child,
 		                     view_catalog_entry);
 		return bound_child;
