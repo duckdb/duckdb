@@ -1649,6 +1649,10 @@ const LogicalType &AggregateStateType::GetStateChildType(const LogicalType &type
 	return GetStateType(type).state_type;
 }
 
+bool LogicalType::IsAggregateStateStructType() const {
+	return id() == LogicalTypeId::AGGREGATE_STATE && InternalType() == PhysicalType::STRUCT;
+}
+
 //===--------------------------------------------------------------------===//
 // Struct Type
 //===--------------------------------------------------------------------===//

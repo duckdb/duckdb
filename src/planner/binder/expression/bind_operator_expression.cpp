@@ -176,8 +176,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
 		    extract_expr_type.id() != LogicalTypeId::MAP && extract_expr_type.id() != LogicalTypeId::SQLNULL &&
 		    !extract_expr_type.IsJSONType() && extract_expr_type.id() != LogicalTypeId::VARIANT &&
-		    (extract_expr_type.id() != LogicalTypeId::AGGREGATE_STATE &&
-		     extract_expr_type.InternalType() != PhysicalType::STRUCT)) {
+		    !extract_expr_type.IsAggregateStateStructType()) {
 			return BindResult(StringUtil::Format(
 			    "Cannot extract field %s from expression \"%s\" because it is not a struct, union, map, or json",
 			    name_exp->ToString(), extract_exp->ToString()));
