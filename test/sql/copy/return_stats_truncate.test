@@ -5,10 +5,10 @@
 require parquet
 
 # we cannot truncate blobs that are all 0xFF - so stats are omitted
-query IIIIII
+query IIIIIII
 COPY (SELECT repeat('\xFF', 300)::BLOB as blob) TO '__TEST_DIR__/test_truncate_blob.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_truncate_blob.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"blob"'={column_size_bytes=\d+, null_count=0}}	NULL
+<REGEX>:.*test_truncate_blob.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"blob"'={column_size_bytes=\d+, null_count=0}}	NULL	{blob=BLOB}
 
 query II
 SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_truncate_blob.parquet');
@@ -16,10 +16,10 @@ SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_trunc
 NULL	NULL
 
 # if there is any byte that is less than 0xFF we can truncate
-query IIIIII
+query IIIIIII
 COPY (SELECT ('\xFE' || repeat('\xFF', 300))::BLOB as blob) TO '__TEST_DIR__/test_truncate_blob.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_truncate_blob.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"blob"'={column_size_bytes=\d+, max=FF, min=FEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, null_count=0}}	NULL
+<REGEX>:.*test_truncate_blob.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"blob"'={column_size_bytes=\d+, max=FF, min=FEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, null_count=0}}	NULL	{blob=BLOB}
 
 query II
 SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_truncate_blob.parquet');
@@ -27,10 +27,10 @@ SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_trunc
 false	false
 
 # for strings we don't truncate unicode characters
-query IIIIII
+query IIIIIII
 COPY (SELECT repeat('🦆', 300) as str) TO '__TEST_DIR__/test_truncate_string.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_truncate_string.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"str"'={column_size_bytes=\d+, null_count=0}}	NULL
+<REGEX>:.*test_truncate_string.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"str"'={column_size_bytes=\d+, null_count=0}}	NULL	{str=VARCHAR}
 
 query II
 SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_truncate_string.parquet');
@@ -38,10 +38,10 @@ SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_trunc
 NULL	NULL
 
 # but we can truncate if there is a single ascii character in the string
-query IIIIII
+query IIIIIII
 COPY (SELECT 'B' || repeat('🦆', 300) as str) TO '__TEST_DIR__/test_truncate_string.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_truncate_string.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"str"'={column_size_bytes=\d+, max=C, min=B🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆, null_count=0}}	NULL
+<REGEX>:.*test_truncate_string.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"str"'={column_size_bytes=\d+, max=C, min=B🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆🦆, null_count=0}}	NULL	{str=VARCHAR}
 
 query II
 SELECT min_is_exact, max_is_exact FROM parquet_metadata('__TEST_DIR__/test_truncate_string.parquet');
