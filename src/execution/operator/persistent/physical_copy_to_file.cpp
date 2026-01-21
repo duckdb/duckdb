@@ -723,8 +723,8 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyT
 		vector<Value> keys;
 		vector<Value> values;
 		for (auto &entry : file_stats.column_types) {
-			keys.emplace_back(Value(entry.first));
-			values.emplace_back(Value(entry.second.ToString()));
+			keys.emplace_back(entry.first);
+			values.emplace_back(entry.second.ToString());
 		}
 		chunk.SetValue(6, row_idx,
 		               Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values)));
