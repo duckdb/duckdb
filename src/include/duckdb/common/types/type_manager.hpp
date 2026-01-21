@@ -7,7 +7,7 @@ namespace duckdb {
 
 class ClientContext;
 class CastFunctionSet;
-class DBConfig;
+struct DBConfig;
 
 class TypeManager {
 public:
