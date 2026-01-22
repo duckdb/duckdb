@@ -81,6 +81,7 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) override;
 		DUCKDB_API void FinalizeGCM(duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
 		DUCKDB_API const mbedtls_cipher_info_t *GetCipher(size_t key_len);
+		DUCKDB_API static void SecureClearData(duckdb::data_ptr_t data, duckdb::idx_t len);
 
 	private:
 		DUCKDB_API void InitializeInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len);
@@ -98,6 +99,10 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		}
 
 		~AESStateMBEDTLSFactory() override {} //
+
+		DUCKDB_API bool SupportsEncryption() override {
+			return false;
+		}
 	};
 };
 

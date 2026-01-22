@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # null padding with a header
 query IIII
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True, comment = '')
+FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_header.csv', null_padding=True, comment = '')
 ----
 one	two	three	four
 1	a	alice	NULL
@@ -15,7 +15,7 @@ one	two	three	four
 
 # without null padding we can only read one column
 query I
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, header = 0)
+FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_header.csv', null_padding=False, header = 0)
 ----
 # this file has a bunch of gunk at the top
 one,two,three,four
@@ -23,20 +23,20 @@ one,two,three,four
 2,b,bob
 
 query I
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=1, header = 0, comment = '')
+FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_header.csv', null_padding=False, skip=1, header = 0, comment = '')
 ----
 one,two,three,four
 1,a,alice
 2,b,bob
 
 query III
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=False, skip=2)
+FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_header.csv', null_padding=False, skip=2)
 ----
 1	a	alice
 2	b	bob
 
 query I
-FROM read_csv_auto('data/csv/blank_line.csv', null_padding=True)
+FROM read_csv_auto('{DATA_DIR}/csv/blank_line.csv', null_padding=True)
 ----
 1
 2

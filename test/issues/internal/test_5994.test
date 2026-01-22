@@ -5,6 +5,6 @@
 require parquet
 
 query I
-SELECT COUNT(*) FROM 'data/parquet-testing/internal_5994.parquet' WHERE eventName != 'ListObjects';
+SELECT COUNT(*) FROM '{DATA_DIR}/parquet-testing/internal_5994.parquet' WHERE eventName != 'ListObjects';
 ----
 118

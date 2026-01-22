@@ -2,6 +2,9 @@
 # description: test encrypted wal debug PRAGMAS
 # group: [wal]
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 foreach cipher GCM CTR
 
 
@@ -41,7 +44,7 @@ DETACH enc
 
 # WAL replay succeeds
 statement ok
-ATTACH '__TEST_DIR__/encrypted_wal_restart_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted_wal_restart_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 statement ok
 DETACH enc
@@ -75,7 +78,7 @@ SELECT * FROM enc.test ORDER BY 1
 restart
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_wal_restart_new_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/encrypted_wal_restart_new_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 query IT
 SELECT * FROM enc.test ORDER BY 1

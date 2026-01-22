@@ -8,12 +8,12 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT count(*) FROM 'data/parquet-testing/spark-store.parquet'
+SELECT count(*) FROM '{DATA_DIR}/parquet-testing/spark-store.parquet'
 ----
 12
 
 query III
-SELECT s_store_sk, s_floor_space, trim(s_street_name) FROM 'data/parquet-testing/spark-store.parquet'
+SELECT s_store_sk, s_floor_space, trim(s_street_name) FROM '{DATA_DIR}/parquet-testing/spark-store.parquet'
 ----
 1	5250760	Spring
 2	5285950	Sycamore
@@ -30,7 +30,7 @@ SELECT s_store_sk, s_floor_space, trim(s_street_name) FROM 'data/parquet-testing
 
 
 query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-SELECT * FROM 'data/parquet-testing/spark-ontime.parquet'
+SELECT * FROM '{DATA_DIR}/parquet-testing/spark-ontime.parquet'
 ----
 2017	1	2	26	7	2017-02-26	DL	19790.0	DL	30	11298	1129804	30194	DFW	Dallas/Fort Worth, TX	TX	48	Texas	74.0	10397	1039705	30397	ATL	Atlanta, GA	GA	13	Georgia	34.0	1715.0	1711.0	-4.0	0.0	0.0	-1.0	1700-1759	2024.0	2011.0	-13.0	0.0	0.0	-1.0	2000-2059	0	0	129.0	120.0	1.0	731.0	3
 2017	1	2	26	7	2017-02-26	DL	19790.0	DL	31	10397	1039705	30397	ATL	Atlanta, GA	GA	13	Georgia	34.0	11298	1129804	30194	DFW	Dallas/Fort Worth, TX	TX	48	Texas	74.0	1910.0	1924.0	14.0	14.0	0.0	0.0	1900-1959	2039.0	2059.0	20.0	20.0	1.0	1.0	2000-2059	0	0	149.0	155.0	1.0	731.0	3

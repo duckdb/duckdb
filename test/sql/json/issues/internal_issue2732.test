@@ -8,4 +8,4 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-select * from read_json('data/json/internal_2732.json', map_inference_threshold=0);
+select * from read_json('{DATA_DIR}/json/internal_2732.json', map_inference_threshold=0);

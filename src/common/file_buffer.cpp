@@ -1,6 +1,6 @@
 #include "duckdb/common/file_buffer.hpp"
 
-#include "duckdb/common/allocator.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, idx_t block_header_size)
+FileBuffer::FileBuffer(BlockAllocator &allocator, FileBufferType type, uint64_t user_size, idx_t block_header_size)
     : allocator(allocator), type(type) {
 	Init();
 	if (user_size) {
@@ -20,7 +20,7 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_
 	}
 }
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, BlockManager &block_manager)
+FileBuffer::FileBuffer(BlockAllocator &allocator, FileBufferType type, BlockManager &block_manager)
     : allocator(allocator), type(type) {
 	Init();
 	Resize(block_manager);

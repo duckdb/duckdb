@@ -24,7 +24,6 @@ public:
 	SQLStatement &stmt;
 
 public:
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override;
 	//! Convert the query node to a string
 	string ToString() const override;
 

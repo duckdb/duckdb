@@ -10,48 +10,48 @@ statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER, c INTEGER);
 
 query I
-INSERT INTO test SELECT * FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=True)
+INSERT INTO test SELECT * FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', null_padding=True)
 ----
 2501
 
 query I
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=True)
+SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', null_padding=True)
 ----
 2501
 
 # one line that requires null padding
 query I
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True)
+SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', null_padding=False, ignore_errors=True)
 ----
 2500
 
 statement error
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv')
+SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv')
 ----
-Error when sniffing file "data/csv/nullpadding_big_mixed.csv".
+Error when sniffing file "{DATA_DIR}/csv/nullpadding_big_mixed.csv".
 
 statement ok
 CREATE TABLE test2 (a VARCHAR, b INTEGER, c INTEGER, d INTEGER);
 
 # all nulls, several lines require NULL padding
 query I
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_commas.csv', null_padding=True)
+SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_commas.csv', null_padding=True)
 ----
 2500
 
 query I
-SELECT COUNT(*) FROM read_csv('data/csv/nullpadding_commas.csv', sep=',',  columns={'a': INT, 'b': INT, 'c': INT, 'd': INT}, ignore_errors=True, null_padding=False)
+SELECT COUNT(*) FROM read_csv('{DATA_DIR}/csv/nullpadding_commas.csv', sep=',',  columns={'a': INT, 'b': INT, 'c': INT, 'd': INT}, ignore_errors=True, null_padding=False)
 ----
 2492
 
 require notwindows
 
 statement error
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', buffer_size=55)
+SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', buffer_size=55)
 ----
 It was not possible to automatically detect the CSV parsing dialect
 
 statement error
-SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', buffer_size=55, null_padding=False)
+SELECT COUNT(*) FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_big_mixed.csv', buffer_size=55, null_padding=False)
 ----
 It was not possible to automatically detect the CSV parsing dialect

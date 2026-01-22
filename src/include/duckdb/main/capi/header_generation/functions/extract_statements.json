@@ -1,6 +1,6 @@
 {
     "group": "extract_statements",
-    "description": "// A query string can be extracted into multiple SQL statements. Each statement can be prepared and executed separately.",
+    "description": "A query string can be extracted into multiple SQL statements. Each statement should be prepared and executed separately.",
     "deprecated": false,
     "entries": [
         {

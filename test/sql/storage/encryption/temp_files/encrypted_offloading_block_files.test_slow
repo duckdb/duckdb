@@ -1,8 +1,10 @@
 # name: test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow
 # group: [temp_files]
 
-foreach cipher GCM CTR
+# We need httpfs to do encrypted writes
+require httpfs
 
+foreach cipher GCM CTR
 
 require block_size 262144
 
@@ -10,17 +12,14 @@ load __TEST_DIR__/offloading_block_files.db
 
 # ATTACH DB
 statement ok
-ATTACH '__TEST_DIR__/encrypted.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
+ATTACH '__TEST_DIR__/encrypted_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
 
 statement ok
 SET temp_file_encryption=true;
 
-statement ok
-USE enc;
-
 # 500M row table.
 statement ok
-CREATE TABLE tbl AS FROM
+CREATE TABLE enc.tbl AS FROM
 	range(100) t1(i)
 	CROSS JOIN range(100) t2(j)
 	CROSS JOIN range(100) t3(k)
@@ -35,7 +34,7 @@ statement ok
 SET memory_limit = '1GB';
 
 statement error
-SELECT * FROM tbl ORDER BY random_value;
+SELECT * FROM enc.tbl ORDER BY random_value;
 ----
 
 restart

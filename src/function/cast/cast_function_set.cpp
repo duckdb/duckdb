@@ -179,12 +179,14 @@ int64_t CastFunctionSet::ImplicitCastCost(optional_ptr<ClientContext> context, c
 	if (score < 0 && source.id() != LogicalTypeId::BLOB && target.id() == LogicalTypeId::VARCHAR) {
 		bool old_implicit_casting = false;
 		if (context) {
-			old_implicit_casting = DBConfig::GetSetting<OldImplicitCastingSetting>(*context);
+			old_implicit_casting = Settings::Get<OldImplicitCastingSetting>(*context);
 		} else if (config) {
-			old_implicit_casting = DBConfig::GetSetting<OldImplicitCastingSetting>(*config);
+			old_implicit_casting = Settings::Get<OldImplicitCastingSetting>(*config);
 		}
 		if (old_implicit_casting) {
-			score = 149;
+			// very high cost to avoid choosing this cast if any other option is available
+			// (it should be more costly than casting to TEMPLATE if that is available)
+			score = 10000000000;
 		}
 	}
 	return score;

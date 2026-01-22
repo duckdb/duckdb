@@ -55,7 +55,7 @@ bool Binder::TryFindBinding(const string &using_column, const string &join_side,
 			}
 			throw BinderException(error);
 		} else {
-			result = binding.get().alias;
+			result = binding.get().GetBindingAlias();
 		}
 	}
 	return true;
@@ -188,7 +188,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		case_insensitive_set_t lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
-			for (auto &column_name : binding->names) {
+			for (auto &column_name : binding->GetColumnNames()) {
 				lhs_columns.insert(column_name);
 			}
 		}
@@ -215,7 +215,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			auto &rhs_binding_list = right_binder.bind_context.GetBindingsList();
 			for (auto &binding_ref : lhs_binding_list) {
 				auto &binding = *binding_ref;
-				for (auto &column_name : binding.names) {
+				for (auto &column_name : binding.GetColumnNames()) {
 					if (!left_candidates.empty()) {
 						left_candidates += ", ";
 					}
@@ -224,7 +224,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 			}
 			for (auto &binding_ref : rhs_binding_list) {
 				auto &binding = *binding_ref;
-				for (auto &column_name : binding.names) {
+				for (auto &column_name : binding.GetColumnNames()) {
 					if (!right_candidates.empty()) {
 						right_candidates += ", ";
 					}

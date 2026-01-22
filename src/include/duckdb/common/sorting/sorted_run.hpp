@@ -26,6 +26,7 @@ public:
 
 public:
 	void Scan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count, DataChunk &chunk);
+	void Clear();
 
 private:
 	template <SortKeyType sort_key_type>
@@ -38,6 +39,7 @@ private:
 	DataChunk key;
 	DataChunk decoded_key;
 	TupleDataScanState payload_state;
+	vector<char> key_buffer;
 };
 
 class SortedRun {

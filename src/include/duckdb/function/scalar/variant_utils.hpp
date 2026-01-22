@@ -16,6 +16,20 @@
 
 namespace duckdb {
 
+struct VariantExtractBindData : public FunctionData {
+public:
+	explicit VariantExtractBindData(const string &str);
+	explicit VariantExtractBindData(uint32_t index);
+	VariantExtractBindData(const VariantExtractBindData &other) = default;
+
+public:
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other) const override;
+
+public:
+	VariantPathComponent component;
+};
+
 struct VariantNestedDataCollectionResult {
 public:
 	VariantNestedDataCollectionResult() : success(true) {
@@ -70,18 +84,24 @@ struct VariantUtils {
 	                                            uint32_t value_index);
 	DUCKDB_API static vector<string> GetObjectKeys(const UnifiedVariantVectorData &variant, idx_t row,
 	                                               const VariantNestedData &nested_data);
-	DUCKDB_API static VariantChildDataCollectionResult FindChildValues(const UnifiedVariantVectorData &variant,
-	                                                                   const VariantPathComponent &component,
-	                                                                   optional_idx row, SelectionVector &res,
-	                                                                   VariantNestedData *nested_data, idx_t count);
+	DUCKDB_API static void FindChildValues(const UnifiedVariantVectorData &variant,
+	                                       const VariantPathComponent &component,
+	                                       optional_ptr<const SelectionVector> sel, SelectionVector &res,
+	                                       ValidityMask &res_validity, const VariantNestedData *nested_data,
+	                                       const ValidityMask &validity, idx_t count);
 	DUCKDB_API static VariantNestedDataCollectionResult
 	CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
-	                  const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,
+	                  const SelectionVector &value_index_sel, idx_t count, optional_idx row, idx_t offset,
 	                  VariantNestedData *child_data, ValidityMask &validity);
 	DUCKDB_API static vector<uint32_t> ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
 	                                               idx_t count, optional_idx row);
-	DUCKDB_API static Value ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, idx_t values_idx);
+	DUCKDB_API static Value ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row,
+	                                              uint32_t values_idx);
 	DUCKDB_API static bool Verify(Vector &variant, const SelectionVector &sel_p, idx_t count);
+	DUCKDB_API static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
+	                                           SelectionVector &sel, idx_t sel_size);
+	DUCKDB_API static void VariantExtract(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
+	                                      idx_t count);
 };
 
 } // namespace duckdb

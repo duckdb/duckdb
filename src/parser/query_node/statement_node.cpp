@@ -5,9 +5,6 @@ namespace duckdb {
 StatementNode::StatementNode(SQLStatement &stmt_p) : QueryNode(QueryNodeType::STATEMENT_NODE), stmt(stmt_p) {
 }
 
-const vector<unique_ptr<ParsedExpression>> &StatementNode::GetSelectList() const {
-	throw InternalException("StatementNode has no select list");
-}
 //! Convert the query node to a string
 string StatementNode::ToString() const {
 	return stmt.ToString();

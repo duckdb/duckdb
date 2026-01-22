@@ -8,12 +8,12 @@ PRAGMA enable_verification
 require json
 
 statement error
-FROM read_csv('data/csv/error/json.csv', columns={'a':'JSON'})
+FROM read_csv('{DATA_DIR}/csv/error/json.csv', columns={'a':'JSON'})
 ----
 Error when converting column "a". Could not convert string "[not a json]" to 'JSON'
 
 query I
-FROM read_csv('data/csv/error/json.csv', columns={'a':'JSON'}, ignore_errors = true)
+FROM read_csv('{DATA_DIR}/csv/error/json.csv', columns={'a':'JSON'}, ignore_errors = true)
 ----
 {"col_a":0,"col_b":0}
 {"col_a":1,"col_b":2}
@@ -23,7 +23,7 @@ statement ok
 create table t (a json);
 
 statement ok
-insert into t  FROM read_csv('data/csv/error/json.csv', columns={'a':'JSON'}, ignore_errors = true)
+insert into t  FROM read_csv('{DATA_DIR}/csv/error/json.csv', columns={'a':'JSON'}, ignore_errors = true)
 
 query I
 FROM t

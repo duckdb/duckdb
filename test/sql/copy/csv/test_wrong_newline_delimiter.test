@@ -6,21 +6,21 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r', strict_mode=false)
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r', strict_mode=false)
 ----
 new_line = \r (Set By User)
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n', strict_mode=false)
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n', strict_mode=false)
 ----
 new_line = \n (Set By User)
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n', auto_detect = false, strict_mode=false)
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n', auto_detect = false, strict_mode=false)
 ----
 new_line = \r\n (Set By User)
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n\r', strict_mode=false)
+FROM read_csv('{DATA_DIR}/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n\r', strict_mode=false)
 ----
 This is not accepted as a newline: \n\r

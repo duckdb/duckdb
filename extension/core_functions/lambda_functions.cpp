@@ -5,6 +5,7 @@
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -18,15 +19,15 @@ struct LambdaExecuteInfo {
 	LambdaExecuteInfo(ClientContext &context, const Expression &lambda_expr, const DataChunk &args,
 	                  const bool has_index, const Vector &child_vector)
 	    : has_index(has_index) {
-
 		expr_executor = make_uniq<ExpressionExecutor>(context, lambda_expr);
 
 		// get the input types for the input chunk
 		vector<LogicalType> input_types;
+
+		input_types.push_back(child_vector.GetType());
 		if (has_index) {
 			input_types.push_back(LogicalType::BIGINT);
 		}
-		input_types.push_back(child_vector.GetType());
 		for (idx_t i = 1; i < args.ColumnCount(); i++) {
 			input_types.push_back(args.data[i].GetType());
 		}
@@ -103,7 +104,6 @@ struct ListFilterFunctor {
 	//! Uses the lambda vector to filter the incoming list and to append the filtered list to the result vector
 	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *result_entries,
 	                         ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
-
 		idx_t count = 0;
 		SelectionVector sel(elem_cnt);
 		UnifiedVectorFormat lambda_data;
@@ -154,8 +154,9 @@ struct ListFilterFunctor {
 
 		// slice the input chunk's corresponding vector to get the new lists
 		// and append them to the result
-		idx_t source_list_idx = execute_info.has_index ? 1 : 0;
-		Vector result_lists(execute_info.input_chunk.data[source_list_idx], sel, count);
+
+		// The first vector in the input chunk is always the list vector
+		Vector result_lists(execute_info.input_chunk.data[0], sel, count);
 		ListVector::Append(result, result_lists, count, 0);
 	}
 };
@@ -184,7 +185,6 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
                               const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
                               LambdaExecuteInfo &info) {
-
 	info.input_chunk.SetCardinality(elem_cnt);
 	info.lambda_chunk.SetCardinality(elem_cnt);
 
@@ -193,8 +193,8 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 
 	// reference the child vector (and the index vector)
 	if (info.has_index) {
-		info.input_chunk.data[0].Reference(index_vector);
-		info.input_chunk.data[1].Reference(slice);
+		info.input_chunk.data[0].Reference(slice);
+		info.input_chunk.data[1].Reference(index_vector);
 	} else {
 		info.input_chunk.data[0].Reference(slice);
 	}
@@ -203,7 +203,6 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 	// (slice and) reference the other columns
 	vector<Vector> slices;
 	for (idx_t i = 0; i < column_infos.size(); i++) {
-
 		if (column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// only reference constant vectorsl
 			info.input_chunk.data[i + slice_offset].Reference(column_infos[i].vector);
@@ -251,7 +250,8 @@ LogicalType LambdaFunctions::DetermineListChildType(const LogicalType &child_typ
 		} else if (child_type.id() == LogicalTypeId::LIST) {
 			return ListType::GetChildType(child_type);
 		}
-		throw InternalException("The first argument must be a list or array type");
+
+		throw BinderException("Invalid LIST argument during lambda function binding!");
 	}
 
 	return child_type;
@@ -273,7 +273,6 @@ LogicalType LambdaFunctions::BindBinaryChildren(const vector<LogicalType> &funct
 
 template <class FUNCTION_FUNCTOR>
 static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	bool result_is_null = false;
 	LambdaFunctions::LambdaInfo info(args, state, result, result_is_null);
 	if (result_is_null) {
@@ -302,7 +301,6 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	idx_t elem_cnt = 0;
 	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < info.row_count; row_idx++) {
-
 		auto list_idx = info.list_column_format.sel->get_index(row_idx);
 		const auto &list_entry = info.list_entries[list_idx];
 
@@ -322,10 +320,8 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 
 		// iterate the elements of the current list and create the corresponding selection vectors
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
-
 				execute_info.lambda_chunk.Reset();
 				ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
 				auto &lambda_vector = execute_info.lambda_chunk.data[0];
@@ -368,8 +364,8 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
 	// NULL list parameter
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<ListLambdaBindData>(bound_function.return_type, nullptr);
+		bound_function.SetReturnType(LogicalType::SQLNULL);
+		return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), nullptr);
 	}
 	// prepared statements
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -393,7 +389,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
 
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr), has_index);
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(lambda_expr), has_index);
 }
 
 void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {

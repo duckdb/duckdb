@@ -1,6 +1,7 @@
 {
     "group": "table_description",
     "deprecated": false,
+    "description": "Functions to create and access a `duckdb_table_description` instance.",
     "entries": [
         {
             "name": "duckdb_table_description_create",
@@ -132,6 +133,23 @@
             }
         },
         {
+            "name": "duckdb_table_description_get_column_count",
+            "return_type": "idx_t",
+            "params": [
+                {
+                    "type": "duckdb_table_description",
+                    "name": "table_description"
+                }
+            ],
+            "comment": {
+                "description": "Return the number of columns of the described table.\n\n",
+                "param_comments": {
+                    "table_description": "The table_description to query."
+                },
+                "return_value": "The column count."
+            }
+        },
+        {
             "name": "duckdb_table_description_get_column_name",
             "return_type": "char *",
             "params": [
@@ -151,6 +169,28 @@
                     "index": "The index of the column to query."
                 },
                 "return_value": "The column name."
+            }
+        },
+        {
+            "name": "duckdb_table_description_get_column_type",
+            "return_type": "duckdb_logical_type",
+            "params": [
+                {
+                    "type": "duckdb_table_description",
+                    "name": "table_description"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                }
+            ],
+            "comment": {
+                "description": "Obtain the column type at 'index'.\nThe return value must be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "param_comments": {
+                    "table_description": "The table_description to query.",
+                    "index": "The index of the column to query."
+                },
+                "return_value": "The column type."
             }
         }
     ]

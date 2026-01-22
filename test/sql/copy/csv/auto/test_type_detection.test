@@ -8,7 +8,7 @@ PRAGMA enable_verification
 
 # a CSV file with many strings
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/large_mixed_data.csv', SAMPLE_SIZE=-1);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/large_mixed_data.csv', SAMPLE_SIZE=-1);
 
 query ITR
 SELECT linenr, mixed_string, mixed_double FROM test LIMIT 3;
@@ -39,7 +39,7 @@ DROP TABLE test;
 
 # a CSV file containing time, date and timestamp columns
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/time_date_timestamp.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp.csv');
 
 query ITTTT
 SELECT a, b, t, d, ts FROM test ORDER BY a;
@@ -59,7 +59,7 @@ DROP TABLE test;
 
 # a CSV file containing time and date columns with leading/trailing chars
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/time_date_timestamp_trailing.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_trailing.csv');
 
 query ITTTTT
 SELECT a, b, t, tf, d, df FROM test ORDER BY a;
@@ -78,7 +78,7 @@ DROP TABLE test;
 
 # a CSV file containing time, date and timestamp columns in mm-dd-yyyy (12 hour)
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/time_date_timestamp_mm-dd-yyyy.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_mm-dd-yyyy.csv');
 
 query ITTTT
 SELECT a, b, t, d, ts FROM test ORDER BY a;
@@ -97,7 +97,7 @@ DROP TABLE test;
 
 # a CSV file containing time, date and timestamp columns in mm-dd-yy format (12 hour)
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/time_date_timestamp_mm-dd-yy.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_mm-dd-yy.csv');
 
 query ITTTT
 SELECT a, b, t, d, ts FROM test ORDER BY a;
@@ -116,7 +116,7 @@ DROP TABLE test;
 
 # a CSV file containing time, date and timestamp columns in dd-mm-yyyy format
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/time_date_timestamp_dd-mm-yyyy.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_dd-mm-yyyy.csv');
 
 query ITTTT
 SELECT a, b, t, d, ts FROM test ORDER BY a;
@@ -135,7 +135,7 @@ DROP TABLE test;
 
 # a CSV file containing time, date and timestamp columns in dd-mm-yy format
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/time_date_timestamp_dd-mm-yy.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_dd-mm-yy.csv');
 
 query ITTTT
 SELECT a, b, t, d, ts FROM test ORDER BY a;
@@ -154,7 +154,7 @@ DROP TABLE test;
 
 # a CSV file containing time, date and timestamp columns in yyyy.mm.dd format
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/time_date_timestamp_yyyy.mm.dd.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_yyyy.mm.dd.csv');
 
 query ITTTT
 SELECT a, b, t, d, ts FROM test ORDER BY a;
@@ -174,7 +174,7 @@ DROP TABLE test;
 
 # a CSV file containing time, date and timestamp columns in yy.mm.dd format
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/time_date_timestamp_yy.mm.dd.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/time_date_timestamp_yy.mm.dd.csv');
 
 query ITTTT
 SELECT a, b, t, d, ts FROM test ORDER BY a;
@@ -193,7 +193,7 @@ DROP TABLE test;
 
 # a CSV file containing integer bool value
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv_auto ('data/csv/auto/int_bol.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/auto/int_bol.csv');
 
 query I
 SELECT i FROM test ORDER BY i;

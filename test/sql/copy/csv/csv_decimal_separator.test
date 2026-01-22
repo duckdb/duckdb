@@ -7,12 +7,12 @@ PRAGMA enable_verification
 
 # period-separated decimal doesn't parse
 statement error
-CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', column_types={'commas': 'double', 'periods': 'double'}, delim=';', decimal_separator=',')
+CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/decimal_separators.csv', column_types={'commas': 'double', 'periods': 'double'}, delim=';', decimal_separator=',')
 ----
 Line: 2
 
 statement ok
-CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', column_types={'commas': 'double'}, delim=';', decimal_separator=',')
+CREATE TABLE decimal_separators AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/decimal_separators.csv', column_types={'commas': 'double'}, delim=';', decimal_separator=',')
 
 query II
 SELECT commas, periods FROM decimal_separators;
@@ -30,18 +30,18 @@ DOUBLE	VARCHAR
 
 # reading the commas column as decimal fails when decimal separator is set to '.'
 statement error
-CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv',  column_types={'commas': 'decimal', 'periods': 'decimal'}, delim=';', decimal_separator='.')
+CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/decimal_separators.csv',  column_types={'commas': 'decimal', 'periods': 'decimal'}, delim=';', decimal_separator='.')
 ----
 Line: 2
 
 # reading the commas column as float fails when decimal separator is set to '.'
 statement error
-CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv',  column_types={'commas': 'float', 'periods': 'decimal'}, delim=';', decimal_separator='.')
+CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/decimal_separators.csv',  column_types={'commas': 'float', 'periods': 'decimal'}, delim=';', decimal_separator='.')
 ----
 Line: 2
 
 statement ok
-CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv', column_types={'commas': 'decimal'}, delim=';', decimal_separator=',')
+CREATE TABLE decimal_separators2 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/decimal_separators.csv', column_types={'commas': 'decimal'}, delim=';', decimal_separator=',')
 
 query II
 SELECT commas, periods FROM decimal_separators2;
@@ -60,7 +60,7 @@ DECIMAL(18,3)	VARCHAR
 
 # no separator specified => commas get read as varchar
 statement ok
-CREATE TABLE decimal_separators3 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators.csv',  column_types={'periods': 'decimal'}, delim=';')
+CREATE TABLE decimal_separators3 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/decimal_separators.csv',  column_types={'periods': 'decimal'}, delim=';')
 
 query II
 SELECT commas, periods FROM decimal_separators3;
@@ -74,7 +74,7 @@ SELECT commas, periods FROM decimal_separators3;
 
 # in a comma-delimited file, comma as decimal separator is OK when quoted
 statement ok
-CREATE TABLE decimal_separators4 AS SELECT * FROM read_csv_auto('data/csv/decimal_separators/decimal_separators_csv.csv', column_types={'commas': 'double'}, quote='"',delim=',',decimal_separator=',')
+CREATE TABLE decimal_separators4 AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/decimal_separators_csv.csv', column_types={'commas': 'double'}, quote='"',delim=',',decimal_separator=',')
 
 query II
 SELECT commas, periods FROM decimal_separators4;
@@ -89,12 +89,12 @@ DOUBLE	VARCHAR
 
 # unsupported separator characters result in error
 statement error
-SELECT * FROM read_csv_auto('data/csv/decimal_separators/invalid_char.csv', column_types={'foo': 'double'}, decimal_separator='ö')
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/invalid_char.csv', column_types={'foo': 'double'}, decimal_separator='ö')
 ----
 Binder Error: Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','
 
 # data with mixed separators will fail reading
 statement error
-SELECT * FROM read_csv_auto('data/csv/decimal_separators/mixed_format_fail.csv', column_types={'foo': 'double'}, decimal_separator=',', skip=0)
+SELECT * FROM read_csv_auto('{DATA_DIR}/csv/decimal_separators/mixed_format_fail.csv', column_types={'foo': 'double'}, decimal_separator=',', skip=0)
 ----
 Line: 4

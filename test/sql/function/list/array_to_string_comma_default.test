@@ -36,7 +36,7 @@ SELECT array_to_string_comma_default([1, 2, 3], sep:=NULL)
 query I
 SELECT array_to_string_comma_default([], sep:='-')
 ----
-NULL
+(empty)
 
 query I
 SELECT array_to_string_comma_default([i, i + 1], sep:='-') FROM range(6) t(i) WHERE i<=2 OR i>4

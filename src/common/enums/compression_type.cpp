@@ -17,60 +17,60 @@ vector<string> ListCompressionTypes(void) {
 	return compression_types;
 }
 
-bool CompressionTypeIsDeprecated(CompressionType compression_type, optional_ptr<StorageManager> storage_manager) {
-	vector<CompressionType> types({CompressionType::COMPRESSION_PATAS, CompressionType::COMPRESSION_CHIMP});
-	if (storage_manager) {
-		if (storage_manager->GetStorageVersion() >= 5) {
-			//! NOTE: storage_manager is an optional_ptr because it's called from ForceCompressionSetting, which doesn't
-			//! have guaranteed access to a StorageManager The introduction of DICT_FSST deprecates Dictionary and FSST
-			//! compression methods
-			types.emplace_back(CompressionType::COMPRESSION_DICTIONARY);
-			types.emplace_back(CompressionType::COMPRESSION_FSST);
-		} else {
-			types.emplace_back(CompressionType::COMPRESSION_DICT_FSST);
-		}
-	}
-	for (auto &type : types) {
-		if (type == compression_type) {
-			return true;
-		}
-	}
-	return false;
-}
+namespace {
+struct CompressionMethodRequirements {
+	CompressionType type;
+	optional_idx minimum_storage_version;
+	optional_idx maximum_storage_version;
+};
+} // namespace
 
-CompressionType CompressionTypeFromString(const string &str) {
-	auto compression = StringUtil::Lower(str);
-	//! NOTE: this explicitly does not include 'constant' and 'empty validity', these are internal compression functions
-	//! not general purpose
-	if (compression == "uncompressed") {
-		return CompressionType::COMPRESSION_UNCOMPRESSED;
-	} else if (compression == "rle") {
-		return CompressionType::COMPRESSION_RLE;
-	} else if (compression == "dictionary") {
-		return CompressionType::COMPRESSION_DICTIONARY;
-	} else if (compression == "pfor") {
-		return CompressionType::COMPRESSION_PFOR_DELTA;
-	} else if (compression == "bitpacking") {
-		return CompressionType::COMPRESSION_BITPACKING;
-	} else if (compression == "fsst") {
-		return CompressionType::COMPRESSION_FSST;
-	} else if (compression == "chimp") {
-		return CompressionType::COMPRESSION_CHIMP;
-	} else if (compression == "patas") {
-		return CompressionType::COMPRESSION_PATAS;
-	} else if (compression == "zstd") {
-		return CompressionType::COMPRESSION_ZSTD;
-	} else if (compression == "alp") {
-		return CompressionType::COMPRESSION_ALP;
-	} else if (compression == "alprd") {
-		return CompressionType::COMPRESSION_ALPRD;
-	} else if (compression == "roaring") {
-		return CompressionType::COMPRESSION_ROARING;
-	} else if (compression == "dict_fsst") {
-		return CompressionType::COMPRESSION_DICT_FSST;
-	} else {
-		return CompressionType::COMPRESSION_AUTO;
+CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compression_type,
+                                                         optional_ptr<StorageManager> storage_manager) {
+	//! Max storage compatibility
+	vector<CompressionMethodRequirements> candidates({{CompressionType::COMPRESSION_PATAS, optional_idx(), 0},
+	                                                  {CompressionType::COMPRESSION_CHIMP, optional_idx(), 0},
+	                                                  {CompressionType::COMPRESSION_DICTIONARY, 0, 4},
+	                                                  {CompressionType::COMPRESSION_FSST, 0, 4},
+	                                                  {CompressionType::COMPRESSION_DICT_FSST, 5, optional_idx()}});
+
+	optional_idx current_storage_version;
+	if (storage_manager && storage_manager->HasStorageVersion()) {
+		current_storage_version = storage_manager->GetStorageVersion();
 	}
+	for (auto &candidate : candidates) {
+		auto &type = candidate.type;
+		if (type != compression_type) {
+			continue;
+		}
+		auto &min = candidate.minimum_storage_version;
+		auto &max = candidate.maximum_storage_version;
+
+		if (!min.IsValid()) {
+			//! Used to signal: always deprecated
+			return CompressionAvailabilityResult::Deprecated();
+		}
+
+		if (!current_storage_version.IsValid()) {
+			//! Can't determine in this call whether it's available or not, default to available
+			return CompressionAvailabilityResult();
+		}
+
+		auto current_version = current_storage_version.GetIndex();
+		D_ASSERT(min.IsValid());
+		if (min.GetIndex() > current_version) {
+			//! Minimum required storage version is higher than the current storage version, this method isn't available
+			//! yet
+			return CompressionAvailabilityResult::NotAvailableYet();
+		}
+		if (max.IsValid() && max.GetIndex() < current_version) {
+			//! Maximum supported storage version is lower than the current storage version, this method is no longer
+			//! available
+			return CompressionAvailabilityResult::Deprecated();
+		}
+		return CompressionAvailabilityResult();
+	}
+	return CompressionAvailabilityResult();
 }
 
 string CompressionTypeToString(CompressionType type) {

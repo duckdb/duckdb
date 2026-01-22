@@ -54,13 +54,29 @@ true
 
 # test parsing hive partitioning scheme
 query IIII
-select parse_path(filename), size, part, date from read_blob('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
+select parse_path(filename)[-6:], size, part, date from read_blob('{DATA_DIR}/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
 ----
-[data, parquet-testing, hive-partitioning, simple, 'part=a', 'date=2012-01-01', test.parquet]	266	a	2012-01-01
-[data, parquet-testing, hive-partitioning, simple, 'part=b', 'date=2013-01-01', test.parquet]	266	b	2013-01-01
+[parquet-testing, hive-partitioning, simple, 'part=a', 'date=2012-01-01', test.parquet]	266	a	2012-01-01
+[parquet-testing, hive-partitioning, simple, 'part=b', 'date=2013-01-01', test.parquet]	266	b	2013-01-01
 
 query IIII
-select parse_path(filename), size, part, date from read_text('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
+select parse_path(filename)[-6:], size, part, date from read_text('{DATA_DIR}/parquet-testing/hive-partitioning/simple/*/*/test.parquet') order by filename
 ----
-[data, parquet-testing, hive-partitioning, simple, 'part=a', 'date=2012-01-01', test.parquet]	266	a	2012-01-01
-[data, parquet-testing, hive-partitioning, simple, 'part=b', 'date=2013-01-01', test.parquet]	266	b	2013-01-01
+[parquet-testing, hive-partitioning, simple, 'part=a', 'date=2012-01-01', test.parquet]	266	a	2012-01-01
+[parquet-testing, hive-partitioning, simple, 'part=b', 'date=2013-01-01', test.parquet]	266	b	2013-01-01
+
+
+# Union by name is not supported
+statement error
+select filename from read_blob('.*', union_by_name := true);
+----
+Binder Error: Invalid named parameter "union_by_name" for function read_blob
+
+
+# Searching for non-existing remote file should return empty result set (like local files)
+# This is probably wrong behavior in our httpfs implementation, but at least its consistent in this case.
+require httpfs
+
+query I
+select filename from read_blob('s3://does-not-exist1144/date=2025-10-11/file.parquet');
+----

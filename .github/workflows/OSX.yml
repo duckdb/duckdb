@@ -42,11 +42,12 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
 
 jobs:
   xcode-debug:
     name: OSX Debug
-    runs-on: macos-14
+    runs-on: macos-latest
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
@@ -67,7 +68,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
     - name: Install ninja
       shell: bash
@@ -102,7 +103,7 @@ jobs:
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
-    runs-on: macos-14
+    runs-on: macos-latest
     needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
@@ -128,7 +129,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - name: Install pytest
         run: |
@@ -173,14 +174,26 @@ jobs:
       - name: Deploy
         shell: bash
         env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
           python scripts/amalgamation.py
+          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+
+          mkdir build/release_arm64 build/release_amd64
+          lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
+          lipo -extract x86_64 -output build/release_amd64/duckdb build/release/duckdb
+
           zip -j duckdb_cli-osx-universal.zip build/release/duckdb
+          zip -j duckdb_cli-osx-arm64.zip build/release_arm64/duckdb
+          zip -j duckdb_cli-osx-amd64.zip build/release_amd64/duckdb
+
           gzip -9 -k -n -c build/release/duckdb > duckdb_cli-osx-universal.gz
-          zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz
+          gzip -9 -k -n -c build/release_arm64/duckdb > duckdb_cli-osx-arm64.gz
+          gzip -9 -k -n -c build/release_amd64/duckdb > duckdb_cli-osx-amd64.gz
+
+          ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz duckdb_cli-osx-arm64.zip duckdb_cli-osx-arm64.gz duckdb_cli-osx-amd64.zip duckdb_cli-osx-amd64.gz
 
       - uses: actions/upload-artifact@v4
         with:

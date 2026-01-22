@@ -4,6 +4,9 @@
 
 require tpch
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 statement ok
 pragma verify_external
 

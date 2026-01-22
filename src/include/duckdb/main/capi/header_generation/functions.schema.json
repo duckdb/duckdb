@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "DuckDB C-API Functions Definition Schema",
+  "description": "Schema for DuckDB C API function definitions",
+  "required": ["group", "deprecated", "entries"],
+  "properties": {
+    "group": {
+      "type": "string",
+      "description": "The group name for this set of functions"
+    },
+    "deprecated": {
+      "type": "boolean",
+      "description": "Whether this group of functions is deprecated"
+    },
+    "entries": {
+      "type": "array",
+      "description": "Array of function definitions",
+      "items": {
+        "type": "object",
+        "required": ["name", "return_type", "params"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The function name"
+          },
+          "return_type": {
+            "type": "string",
+            "description": "The return type of the function"
+          },
+          "params": {
+            "type": "array",
+            "description": "Array of function parameters",
+            "items": {
+              "type": "object",
+              "required": ["type", "name"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "The parameter type"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "The parameter name"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "comment": {
+            "type": "object",
+            "description": "Documentation for the function",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "Function description"
+              },
+              "param_comments": {
+                "type": "object",
+                "description": "Comments for each parameter",
+                "patternProperties": {
+                  ".*": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "return_value": {
+                "type": "string",
+                "description": "Description of the return value"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

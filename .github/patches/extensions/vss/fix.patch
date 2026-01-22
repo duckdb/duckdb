@@ -1,0 +1,131 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 218aa0e..89e909d 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -566,8 +566,12 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void HNSWIndex::Vacuum(IndexLock &state) {
+ }
+ 
+-string HNSWIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+-	throw NotImplementedException("HNSWIndex::VerifyAndToString() not implemented");
++void HNSWIndex::Verify(IndexLock &l) {
++	throw NotImplementedException("HNSWIndex::Verify() not implemented");
++}
++
++string HNSWIndex::ToString(IndexLock &l, bool display_ascii) {
++	throw NotImplementedException("HNSWIndex::ToString() not implemented");
+ }
+ 
+ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+diff --git a/src/hnsw/hnsw_optimize_expr.cpp b/src/hnsw/hnsw_optimize_expr.cpp
+index f3856e9..9c1890a 100644
+--- a/src/hnsw/hnsw_optimize_expr.cpp
++++ b/src/hnsw/hnsw_optimize_expr.cpp
+@@ -6,8 +6,8 @@
+ #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+ #include "duckdb/optimizer/column_binding_replacer.hpp"
+ #include "duckdb/optimizer/optimizer.hpp"
++#include "duckdb/optimizer/optimizer_extension.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+-
+ #include "hnsw/hnsw.hpp"
+ #include "hnsw/hnsw_index.hpp"
+ 
+@@ -93,7 +93,7 @@ public:
+ 
+ void HNSWModule::RegisterExprOptimizer(DatabaseInstance &db) {
+ 	// Register the TopKOptimizer
+-	db.config.optimizer_extensions.push_back(HNSWExprOptimizer());
++	OptimizerExtension::Register(db.config, HNSWExprOptimizer());
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index fc19ed7..394259a 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -20,6 +20,7 @@
+ #include "duckdb/storage/table/scan_state.hpp"
+ #include "duckdb/transaction/duck_transaction.hpp"
+ #include "duckdb/storage/storage_index.hpp"
++#include "duckdb/optimizer/optimizer_extension.hpp"
+ 
+ #include "hnsw/hnsw.hpp"
+ #include "hnsw/hnsw_index.hpp"
+@@ -719,7 +720,7 @@ void HNSWIndexJoinOptimizer::Optimize(OptimizerExtensionInput &input, unique_ptr
+ 
+ void HNSWModule::RegisterJoinOptimizer(DatabaseInstance &db) {
+ 	// Register the JoinOptimizer
+-	db.config.optimizer_extensions.push_back(HNSWIndexJoinOptimizer());
++	OptimizerExtension::Register(db.config, HNSWIndexJoinOptimizer());
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
+index 1f84af0..89e7ff3 100644
+--- a/src/hnsw/hnsw_optimize_scan.cpp
++++ b/src/hnsw/hnsw_optimize_scan.cpp
+@@ -261,7 +261,7 @@ public:
+ //-----------------------------------------------------------------------------
+ void HNSWModule::RegisterScanOptimizer(DatabaseInstance &db) {
+ 	// Register the optimizer extension
+-	db.config.optimizer_extensions.push_back(HNSWIndexScanOptimizer());
++	OptimizerExtension::Register(db.config, HNSWIndexScanOptimizer());
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
+index d7b1fc4..3126a14 100644
+--- a/src/hnsw/hnsw_optimize_topk.cpp
++++ b/src/hnsw/hnsw_optimize_topk.cpp
+@@ -6,6 +6,7 @@
+ #include "duckdb/planner/operator/logical_get.hpp"
+ #include "duckdb/planner/operator/logical_filter.hpp"
+ #include "duckdb/optimizer/optimizer.hpp"
++#include "duckdb/optimizer/optimizer_extension.hpp"
+ #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+ #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
+@@ -236,7 +237,7 @@ public:
+ 
+ void HNSWModule::RegisterTopKOptimizer(DatabaseInstance &db) {
+ 	// Register the TopKOptimizer
+-	db.config.optimizer_extensions.push_back(HNSWTopKOptimizer());
++	OptimizerExtension::Register(db.config, HNSWTopKOptimizer());
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 83fb9e7..a22a0b8 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -91,8 +91,14 @@ public:
+ 	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+ 
+-	//! Returns the string representation of the HNSWIndex, or only traverses and verifies the index.
+-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
++	//! Traverses and verifies the index.
++	//! Currently not implemented.
++	void Verify(IndexLock &l) override;
++
++	//! Returns the string representation of an index.
++	//! Currently not implemented.
++	string ToString(IndexLock &l, bool display_ascii = false) override;
++
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
+ 
+diff --git a/src/include/hnsw/hnsw_index_physical_create.hpp b/src/include/hnsw/hnsw_index_physical_create.hpp
+index 2b1cc6a..0be2536 100644
+--- a/src/include/hnsw/hnsw_index_physical_create.hpp
++++ b/src/include/hnsw/hnsw_index_physical_create.hpp
+@@ -29,7 +29,7 @@ public:
+ 
+ public:
+ 	//! Source interface, NOOP for this operator
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override {
++	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override {
+ 		return SourceResultType::FINISHED;
+ 	}
+ 	bool IsSource() const override {

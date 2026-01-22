@@ -94,7 +94,7 @@ public:
 
 				while (true) {
 					scan_chunk.Reset();
-					scan_state.local_state.ScanCommitted(scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+					scan_state.local_state.Scan(scan_chunk, TableScanType::TABLE_SCAN_ALL_ROWS);
 					if (scan_chunk.size() == 0) {
 						break;
 					}
@@ -689,8 +689,8 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 // Source
 //===--------------------------------------------------------------------===//
 
-SourceResultType PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk,
-                                              OperatorSourceInput &input) const {
+SourceResultType PhysicalBatchInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                      OperatorSourceInput &input) const {
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 
 	chunk.SetCardinality(1);

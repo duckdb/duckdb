@@ -33,14 +33,14 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
 	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
 	if (segment.GetBlockOffset() + index_buffer_offset + sizeof(uint32_t) * index_buffer_count >
-	    segment.GetBlockManager().GetBlockSize()) {
+	    segment.GetBlockSize()) {
 		throw IOException(
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
 	}
 	index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 	base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
 
-	block_size = segment.GetBlockManager().GetBlockSize();
+	block_size = segment.GetBlockSize();
 
 	dict = DictionaryCompression::GetDictionary(segment, *handle);
 	if (!initialize_dictionary) {
@@ -48,10 +48,10 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		return;
 	}
 
-	dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, index_buffer_count);
 	dictionary_size = index_buffer_count;
-	auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
-	FlatVector::SetNull(*dictionary, 0, true);
+	auto dict_child_data = FlatVector::GetData<string_t>(dictionary->data);
+	FlatVector::SetNull(dictionary->data, 0, true);
 	for (uint32_t i = 1; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(i);
@@ -114,8 +114,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 		}
 	}
 
-	result.Dictionary(*(dictionary), dictionary_size, *sel_vec, scan_count);
-	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
+	result.Dictionary(dictionary, *sel_vec);
 }
 
 } // namespace duckdb

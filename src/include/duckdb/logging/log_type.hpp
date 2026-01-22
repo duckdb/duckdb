@@ -20,6 +20,7 @@ class PhysicalOperator;
 class AttachedDatabase;
 class RowGroup;
 struct DataTableInfo;
+enum class MetricType : uint8_t;
 
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
@@ -32,6 +33,9 @@ public:
 	//! Construct a structured type
 	LogType(const string &name_p, const LogLevel &level_p, LogicalType structured_type)
 	    : name(name_p), level(level_p), is_structured(true), type(std::move(structured_type)) {
+		if (!type.IsNested()) {
+			throw InternalException("LogType must be nested if the type is explicitly set");
+		}
 	}
 
 	string name;
@@ -106,6 +110,19 @@ public:
 	                                  const vector<pair<string, string>> &info);
 };
 
+class MetricsLogType : public LogType {
+public:
+	static constexpr const char *NAME = "Metrics";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	//! Construct the log type
+	MetricsLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const MetricType &type, const Value &value);
+};
+
 class CheckpointLogType : public LogType {
 public:
 	static constexpr const char *NAME = "Checkpoint";
@@ -121,11 +138,25 @@ public:
 	                                  idx_t merge_count, idx_t target_count, idx_t merge_rows, idx_t row_start);
 	//! Checkpoint
 	static string ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
-	                                  RowGroup &row_group);
+	                                  RowGroup &row_group, idx_t row_group_start);
 
 private:
 	static string CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op, vector<Value> map_keys,
 	                        vector<Value> map_values);
+};
+
+class TransactionLogType : public LogType {
+public:
+	static constexpr const char *NAME = "Transaction";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	//! Construct the log type
+	TransactionLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const AttachedDatabase &db, const char *log_type,
+	                                  transaction_t transaction_id = MAX_TRANSACTION_ID);
 };
 
 } // namespace duckdb

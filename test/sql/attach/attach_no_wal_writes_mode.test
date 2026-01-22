@@ -1,0 +1,95 @@
+# name: test/sql/attach/attach_no_wal_writes_mode.test
+# description: Test the NO_WAL_WRITES recovery mode.
+# group: [attach]
+
+require noforcestorage
+
+require skip_reload
+
+# If we enable alternative verification, then we disable checkpointing on shutdown.
+# Thus, we won't persist data on DETACH, as we no longer have a WAL.
+require no_alternative_verify
+
+statement ok
+SET threads = 1;
+
+statement ok
+ATTACH '__TEST_DIR__/no_wal_writes.db' AS no_wal_writes (RECOVERY_MODE NO_WAL_WRITES);
+
+statement ok
+CREATE TABLE no_wal_writes.tbl AS SELECT range AS id, 0 AS v FROM range(5_000);
+
+statement ok
+UPDATE no_wal_writes.tbl SET v = id;
+
+# We CHECKPOINT on DETACH.
+
+statement ok
+DETACH no_wal_writes;
+
+# Verify no WAL creation.
+
+query I
+SELECT COUNT(*) FROM glob('__TEST_DIR__/no_wal_writes.db.wal')
+----
+0
+
+# Ensure that the changes are persisted.
+
+statement ok
+ATTACH '__TEST_DIR__/no_wal_writes.db' AS no_wal_writes (RECOVERY_MODE NO_WAL_WRITES);
+
+query I
+SELECT COUNT(*) FROM no_wal_writes.tbl WHERE v = 0;
+----
+1
+
+statement ok
+DETACH no_wal_writes;
+
+# Now test without persisting changes.
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+ATTACH '__TEST_DIR__/other_no_wal_writes.db' AS no_wal_writes (RECOVERY_MODE NO_WAL_WRITES);
+
+statement ok
+CREATE TABLE no_wal_writes.tbl AS SELECT range AS id, 0 AS v FROM range(5_000);
+
+statement ok
+CHECKPOINT no_wal_writes;
+
+# Perform update that will NOT be persisted.
+
+statement ok
+UPDATE no_wal_writes.tbl SET v = id;
+
+# Verify no WAL creation.
+
+query I
+SELECT COUNT(*) FROM glob('__TEST_DIR__/other_no_wal_writes.db.wal')
+----
+0
+
+statement ok
+DETACH no_wal_writes;
+
+query I
+SELECT COUNT(*) FROM glob('__TEST_DIR__/other_no_wal_writes.db.wal')
+----
+0
+
+# Ensure that the changes are not present in the other_no_wal_writes file.
+
+statement ok
+ATTACH '__TEST_DIR__/other_no_wal_writes.db' AS no_wal_writes (RECOVERY_MODE NO_WAL_WRITES);
+
+query I
+SELECT COUNT(*) FROM no_wal_writes.tbl WHERE v = 0;
+----
+5_000

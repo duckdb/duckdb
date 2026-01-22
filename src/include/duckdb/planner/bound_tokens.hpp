@@ -16,8 +16,6 @@ namespace duckdb {
 class BoundQueryNode;
 class BoundSelectNode;
 class BoundSetOperationNode;
-class BoundRecursiveCTENode;
-class BoundCTENode;
 
 //===--------------------------------------------------------------------===//
 // Expressions

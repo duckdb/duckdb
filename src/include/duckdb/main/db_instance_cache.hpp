@@ -26,6 +26,8 @@ struct DatabaseCacheEntry {
 	mutex update_database_mutex;
 };
 
+enum class CacheBehavior { AUTOMATIC, ALWAYS_CACHE, NEVER_CACHE };
+
 class DBInstanceCache {
 public:
 	DBInstanceCache();
@@ -40,6 +42,9 @@ public:
 
 	//! Either returns an existing entry, or creates and caches a new DB Instance
 	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict, bool cache_instance,
+	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
+	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict,
+	                                       CacheBehavior cache_behavior = CacheBehavior::AUTOMATIC,
 	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
 
 private:

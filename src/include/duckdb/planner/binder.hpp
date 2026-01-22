@@ -69,7 +69,8 @@ struct UnpivotEntry;
 struct CopyInfo;
 struct CopyOption;
 struct BoundSetOpChild;
-
+struct BoundCTEData;
+enum class CopyToType : uint8_t;
 template <class T, class INDEX_TYPE>
 class IndexVector;
 
@@ -173,14 +174,14 @@ struct GlobalBinderState {
 	case_insensitive_map_t<unique_ptr<TableRef>> replacement_scans;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
+	//! The set of parameter expressions bound by this binder
+	optional_ptr<BoundParameterMap> parameters;
 };
 
 // QueryBinderState is state shared WITHIN a query, a new query-binder state is created when binding inside e.g. a view
 struct QueryBinderState {
 	//! The vector of active binders
 	vector<reference<ExpressionBinder>> active_binders;
-	//! The set of parameter expressions bound by this binder
-	optional_ptr<BoundParameterMap> parameters;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -199,8 +200,6 @@ public:
 
 	//! The client context
 	ClientContext &context;
-	//! A mapping of names to common table expressions
-	case_insensitive_set_t CTE_bindings; // NOLINT
 	//! The bind context
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
@@ -260,12 +259,8 @@ public:
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
-	//! Add a common table expression to the binder
-	void AddCTE(const string &name);
 	//! Find all candidate common table expression by name; returns empty vector if none exists
-	optional_ptr<Binding> GetCTEBinding(const string &name);
-
-	bool CTEExists(const string &name);
+	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);
 
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);
@@ -293,8 +288,8 @@ public:
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
-	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
-	                     const string &schema = INVALID_SCHEMA);
+
+	void BindLogicalType(LogicalType &type);
 
 	optional_ptr<Binding> GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
 	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name,
@@ -325,6 +320,8 @@ public:
 	                                  optional_ptr<duckdb_re2::RE2> regex);
 
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+
+	void SetSearchPath(Catalog &catalog, const string &schema);
 
 private:
 	//! The parent binder (if any)
@@ -409,24 +406,20 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
-	BoundStatement BindCTE(CTENode &statement);
+	BoundStatement BindCTE(const string &ctename, CommonTableExpressionInfo &info);
 
 	BoundStatement BindNode(SelectNode &node);
 	BoundStatement BindNode(SetOperationNode &node);
 	BoundStatement BindNode(RecursiveCTENode &node);
-	BoundStatement BindNode(CTENode &node);
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
-	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);
-	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
-	BoundSetOpChild BindSetOpChild(QueryNode &child);
-	unique_ptr<BoundSetOperationNode> BindSetOpNode(SetOperationNode &statement);
+	void BuildUnionByNameInfo(BoundSetOperationNode &result);
 
 	BoundStatement BindJoin(Binder &parent, TableRef &ref);
 	BoundStatement Bind(BaseTableRef &ref);
@@ -514,11 +507,9 @@ private:
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const string &schema_name);
 
-	LogicalType BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog, const string &schema);
+	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
-	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement);
-	unique_ptr<BoundSelectNode> BindSelectNodeInternal(SelectNode &statement, BoundStatement from_table);
 
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);
@@ -545,6 +536,9 @@ private:
 
 	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
 	                                           const string &tname);
+
+	BoundCTEData PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement);
+	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

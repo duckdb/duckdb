@@ -5,6 +5,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/logging/log_type.hpp"
@@ -30,10 +31,7 @@
 #include <unistd.h>
 
 #ifdef __MVS__
-#define _XOPEN_SOURCE_EXTENDED 1
 #include <sys/resource.h>
-// enjoy - https://reviews.llvm.org/D92110
-#define PATH_MAX _XOPEN_PATH_MAX
 #endif
 
 #else
@@ -231,7 +229,7 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 
 string FileSystem::NormalizeAbsolutePath(const string &path) {
 	D_ASSERT(IsPathAbsolute(path));
-	auto result = StringUtil::Lower(FileSystem::ConvertSeparators(path));
+	auto result = FileSystem::ConvertSeparators(path);
 	if (StartsWithSingleBackslash(result)) {
 		// Path starts with a single backslash or forward slash
 		// prepend drive letter
@@ -415,6 +413,10 @@ bool FileSystem::SupportsListFilesExtended() const {
 	return false;
 }
 
+bool FileSystem::SupportsGlobExtended() const {
+	return false;
+}
+
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
@@ -451,6 +453,10 @@ string FileSystem::GetVersionTag(FileHandle &handle) {
 
 FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
+}
+
+FileMetadata FileSystem::Stats(FileHandle &handle) {
+	throw NotImplementedException("%s: Stats is not implemented!", GetName());
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -574,6 +580,12 @@ bool FileSystem::TryRemoveFile(const string &filename, optional_ptr<FileOpener> 
 	return false;
 }
 
+void FileSystem::RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) {
+	for (const auto &filename : filenames) {
+		TryRemoveFile(filename, opener);
+	}
+}
+
 void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
@@ -593,7 +605,26 @@ bool FileSystem::HasGlob(const string &str) {
 }
 
 vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
+	if (SupportsGlobExtended()) {
+		auto result = GlobFilesExtended(path, FileGlobOptions::ALLOW_EMPTY, opener);
+		return result->GetAllFiles();
+	}
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
+}
+
+unique_ptr<MultiFileList> FileSystem::Glob(const string &path, const FileGlobInput &input,
+                                           optional_ptr<FileOpener> opener) {
+	if (!SupportsGlobExtended()) {
+		auto result = Glob(path, opener.get());
+		return make_uniq<SimpleMultiFileList>(std::move(result));
+	} else {
+		return GlobFilesExtended(path, input, opener);
+	}
+}
+
+unique_ptr<MultiFileList> FileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
+                                                        optional_ptr<FileOpener> opener) {
+	throw NotImplementedException("%s: GlobFilesExtended is not implemented!", GetName());
 }
 
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
@@ -602,10 +633,6 @@ void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 
 void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> sub_fs) {
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
-}
-
-void FileSystem::UnregisterSubSystem(const string &name) {
-	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
 }
 
 unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
@@ -620,6 +647,10 @@ bool FileSystem::SubSystemIsDisabled(const string &name) {
 	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
 }
 
+bool FileSystem::IsDisabledForPath(const string &path) {
+	throw NotImplementedException("%s: Non-virtual file system does not have subsystems", GetName());
+}
+
 vector<string> FileSystem::ListSubSystems() {
 	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
 }
@@ -628,9 +659,9 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
-vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, const FileGlobInput &input) {
-	auto result = Glob(pattern);
-	if (result.empty()) {
+unique_ptr<MultiFileList> FileSystem::GlobFileList(const string &pattern, const FileGlobInput &input) {
+	auto result = GlobFilesExtended(pattern, input);
+	if (result->IsEmpty()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
 			if (!HasGlob(pattern)) {
@@ -638,8 +669,8 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
 				}
 				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				result = GlobFiles(new_pattern, context, FileGlobOptions::ALLOW_EMPTY);
-				if (!result.empty()) {
+				result = GlobFileList(new_pattern, FileGlobOptions::ALLOW_EMPTY);
+				if (!result->IsEmpty()) {
 					// we found files by globbing the target as if it was a directory - return them
 					return result;
 				}
@@ -650,6 +681,11 @@ vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext 
 		}
 	}
 	return result;
+}
+
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, const FileGlobInput &input) {
+	auto file_list = GlobFileList(pattern, input);
+	return file_list->GetAllFiles();
 }
 
 void FileSystem::Seek(FileHandle &handle, idx_t location) {
@@ -694,7 +730,7 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -708,13 +744,21 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
 }
 
+int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
+	if (context.GetClientContext() != nullptr) {
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
+	}
+
+	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
+}
+
 void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesRead(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -722,7 +766,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddBytesWritten(nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
 	}
 
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -798,6 +842,10 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+FileMetadata FileHandle::Stats() {
+	return file_system.Stats(*this);
 }
 
 void FileHandle::TryAddLogger(FileOpener &opener) {

@@ -5,11 +5,11 @@
 require parquet
 
 query I
-SELECT COUNT(*) FROM 'data/parquet-testing/out_of_range_stats.parquet'
+SELECT COUNT(*) FROM '{DATA_DIR}/parquet-testing/out_of_range_stats.parquet'
 ----
 1
 
 query I
-select COUNT(*) from parquet_scan('data/parquet-testing/glob*/t?.parquet')
+select COUNT(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob*/t?.parquet')
 ----
 3

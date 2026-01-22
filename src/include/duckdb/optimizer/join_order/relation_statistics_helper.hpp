@@ -20,7 +20,19 @@ struct DistinctCount {
 };
 
 struct ExpressionBinding {
-	bool found_expression = false;
+public:
+	bool FoundExpression() const {
+		return expression;
+	}
+	bool FoundColumnRef() const {
+		if (!FoundExpression()) {
+			return false;
+		}
+		return expression->type == ExpressionType::BOUND_COLUMN_REF;
+	}
+
+public:
+	optional_ptr<Expression> expression;
 	ColumnBinding child_binding;
 	bool expression_is_constant = false;
 };
@@ -45,7 +57,7 @@ public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 public:
-	static idx_t InspectTableFilter(idx_t cardinality, idx_t column_index, TableFilter &filter,
+	static idx_t InspectTableFilter(idx_t cardinality, idx_t column_index, const TableFilter &filter,
 	                                BaseStatistics &base_stats);
 	//	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
 	//	                                  BaseStatistics &base_stats);
@@ -70,7 +82,7 @@ public:
 	static void CopyRelationStats(RelationStats &to, const RelationStats &from);
 
 private:
-	static idx_t GetDistinctCount(LogicalGet &get, ClientContext &context, idx_t column_id);
+	static idx_t GetDistinctCount(LogicalGet &get, ClientContext &context, const ColumnIndex &column_id);
 };
 
 } // namespace duckdb

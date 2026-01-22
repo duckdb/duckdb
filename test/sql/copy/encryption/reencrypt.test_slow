@@ -5,6 +5,9 @@ require skip_reload
 
 require tpch
 
+# We need httpfs to do encrypted writes
+require httpfs
+
 statement ok
 PRAGMA enable_verification
 
@@ -45,7 +48,7 @@ DETACH reencrypted
 statement error
 ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'asdf');
 ----
-Wrong encryption key used to open the database file
+Invalid Input Error: Wrong encryption key used to open the database file
 
 statement ok
 ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');

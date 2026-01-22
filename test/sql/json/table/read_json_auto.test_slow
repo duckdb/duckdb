@@ -12,52 +12,52 @@ pragma enable_verification
 # instead of adding all of these files to data/test we just create them on the fly here
 # whenever we add a '' at the end it's just to check we skip the newline at the end that's sometimes there
 statement ok
-copy (select * from (values ('{"a": 1, "b": 2}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0);
+copy (select * from (values ('{"a": 1, "b": 2}'), (''))) to '{TEMP_DIR}/my_file.json' (format csv, quote '', header 0);
 
 query II
-select * from '__TEST_DIR__/my_file.json'
+select * from '{TEMP_DIR}/my_file.json'
 ----
 1	2
 
 statement ok
-copy (select * from (values ('{"a": 1}'), ('{"a": 2}'), ('{"a": 3}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
+copy (select * from (values ('{"a": 1}'), ('{"a": 2}'), ('{"a": 3}'))) to '{TEMP_DIR}/my_file.json' (format csv, quote '', header 0)
 
 query I
-select * from '__TEST_DIR__/my_file.json'
+select * from '{TEMP_DIR}/my_file.json'
 ----
 1
 2
 3
 
 query I
-select count(*) from '__TEST_DIR__/my_file.json'
+select count(*) from '{TEMP_DIR}/my_file.json'
 ----
 3
 
 statement ok
-copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
+copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '{TEMP_DIR}/my_file.json' (format csv, quote '', header 0)
 
 query III
-select * from '__TEST_DIR__/my_file.json'
+select * from '{TEMP_DIR}/my_file.json'
 ----
 1	2	3
 4	5	6
 
 statement ok
-copy (select * from (values ('{"a": 1,"b": 2, "c": "3", "d": false}'), ('{"a": 4.0, "b": -5, "c": "foo", "d": true}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
+copy (select * from (values ('{"a": 1,"b": 2, "c": "3", "d": false}'), ('{"a": 4.0, "b": -5, "c": "foo", "d": true}'), (''))) to '{TEMP_DIR}/my_file.json' (format csv, quote '', header 0)
 
 query IIII
-select * from '__TEST_DIR__/my_file.json'
+select * from '{TEMP_DIR}/my_file.json'
 ----
 1.0	2	3	false
 4.0	-5	foo	true
 
 # mixed types that cannot be resolved, defaults to JSON (column 3)
 statement ok
-copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'), ('{"a": null, "b": -5, "c": "foo", "d": null, "e": true}'), ('{"a": 4.5, "b": null, "c": "nan", "d": null,"e": false}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
+copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'), ('{"a": null, "b": -5, "c": "foo", "d": null, "e": true}'), ('{"a": 4.5, "b": null, "c": "nan", "d": null,"e": false}'), (''))) to '{TEMP_DIR}/my_file.json' (format csv, quote '', header 0)
 
 query IIIII
-select * from '__TEST_DIR__/my_file.json'
+select * from '{TEMP_DIR}/my_file.json'
 ----
 1.0	2	NULL	NULL	NULL
 NULL	-5	foo	NULL	true
@@ -65,10 +65,10 @@ NULL	-5	foo	NULL	true
 
 # mixed types are resolved to DOUBLE here
 statement ok
-copy (select * from (values ('{"a": 1}'), ('{"a": 1.45}'), ('{"a": -23.456}'), ('{}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
+copy (select * from (values ('{"a": 1}'), ('{"a": 1.45}'), ('{"a": -23.456}'), ('{}'), (''))) to '{TEMP_DIR}/my_file.json' (format csv, quote '', header 0)
 
 query II
-select typeof(a), a from '__TEST_DIR__/my_file.json'
+select typeof(a), a from '{TEMP_DIR}/my_file.json'
 ----
 DOUBLE	1.0
 DOUBLE	1.45
@@ -76,67 +76,67 @@ DOUBLE	-23.456
 DOUBLE	NULL
 
 statement ok
-copy (select * from (values ('{"foo": "bar", "num": 0}'), ('{"foo": "baz", "num": 1}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
+copy (select * from (values ('{"foo": "bar", "num": 0}'), ('{"foo": "baz", "num": 1}'), (''))) to '{TEMP_DIR}/my_file.json' (format csv, quote '', header 0)
 
 query II
-select * from '__TEST_DIR__/my_file.json'
+select * from '{TEMP_DIR}/my_file.json'
 ----
 bar	0
 baz	1
 
 # we can read values from a top-level list
 query I
-select * from 'data/json/top_level_array.json'
+select * from '{DATA_DIR}/json/top_level_array.json'
 ----
 cancelled
 cancelled
 
 query I
-select count(*) from 'data/json/top_level_array.json'
+select count(*) from '{DATA_DIR}/json/top_level_array.json'
 ----
 2
 
 # for maximum_depth=0 this is two records of JSON
 query I
-select * from read_json_auto('data/json/top_level_array.json', maximum_depth=0)
+select * from read_json_auto('{DATA_DIR}/json/top_level_array.json', maximum_depth=0)
 ----
 {"conclusion":"cancelled"}
 {"conclusion":"cancelled"}
 
 # for 1 it's 1 column of JSON
 query I
-select * from read_json_auto('data/json/top_level_array.json', maximum_depth=1)
+select * from read_json_auto('{DATA_DIR}/json/top_level_array.json', maximum_depth=1)
 ----
 "cancelled"
 "cancelled"
 
 # if we read this with records='false', we get the struct instead of the unpacked columns
 query I
-select typeof(json) from read_json_auto('data/json/top_level_array.json', records='false')
+select typeof(json) from read_json_auto('{DATA_DIR}/json/top_level_array.json', records='false')
 ----
 STRUCT(conclusion VARCHAR)
 STRUCT(conclusion VARCHAR)
 
 # however, if there are multiple top-level arrays, we default to reading them as lists
 query I
-select * from 'data/json/top_level_two_arrays.json'
+select * from '{DATA_DIR}/json/top_level_two_arrays.json'
 ----
 [{'conclusion': cancelled}, {'conclusion': cancelled}]
 [{'conclusion': cancelled}, {'conclusion': cancelled}]
 
 # if we read a top-level array as if it is a record, then we get an error
 statement error
-select * from read_json_auto('data/json/top_level_array.json', format='unstructured', records='true')
+select * from read_json_auto('{DATA_DIR}/json/top_level_array.json', format='unstructured', records='true')
 ----
 Binder Error: json_read expected records
 
 # issue Mark found when analyzing a JSON dump of our CI - projection pushdown wasn't working properly
 statement ok
-select * from 'data/json/projection_pushdown_example.json' WHERE status <> 'completed'
+select * from '{DATA_DIR}/json/projection_pushdown_example.json' WHERE status <> 'completed'
 
 # different schema's - this one should work regardless of sampling 1 or all lines
 query II
-select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=1)
+select * from read_json_auto('{DATA_DIR}/json/different_schemas.ndjson', sample_size=1)
 ----
 1	O Brother, Where Art Thou?
 2	NULL
@@ -145,7 +145,7 @@ select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=1
 5	Raising Arizona
 
 query II
-select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-1)
+select * from read_json_auto('{DATA_DIR}/json/different_schemas.ndjson', sample_size=-1)
 ----
 1	O Brother, Where Art Thou?
 2	NULL
@@ -155,12 +155,12 @@ select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-
 
 # if we require fields to appear in all objects by setting field_appearance_threshold=1, we default to MAP
 query I
-select typeof(COLUMNS(*)) from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=1) limit 1
+select typeof(COLUMNS(*)) from read_json_auto('{DATA_DIR}/json/different_schemas.ndjson', field_appearance_threshold=1) limit 1
 ----
 MAP(VARCHAR, JSON)
 
 query I
-select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=1)
+select * from read_json_auto('{DATA_DIR}/json/different_schemas.ndjson', field_appearance_threshold=1)
 ----
 {id=1, name='"O Brother, Where Art Thou?"'}
 {id=2}
@@ -170,7 +170,7 @@ select * from read_json_auto('data/json/different_schemas.ndjson', field_appeara
 
 # if we set it to 0.5 it should work already since "name" appears in 3/5 objects, which is greater than 0.5
 query II
-select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=0.5)
+select * from read_json_auto('{DATA_DIR}/json/different_schemas.ndjson', field_appearance_threshold=0.5)
 ----
 1	O Brother, Where Art Thou?
 2	NULL
@@ -180,24 +180,24 @@ select * from read_json_auto('data/json/different_schemas.ndjson', field_appeara
 
 # can't set it to less than 0 or more than 1
 statement error
-select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=-1)
+select * from read_json_auto('{DATA_DIR}/json/different_schemas.ndjson', field_appearance_threshold=-1)
 ----
 Binder Error: read_json_auto "field_appearance_threshold" parameter must be between 0 and 1
 
 statement error
-select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=2)
+select * from read_json_auto('{DATA_DIR}/json/different_schemas.ndjson', field_appearance_threshold=2)
 ----
 Binder Error: read_json_auto "field_appearance_threshold" parameter must be between 0 and 1
 
 # inconsistent schema's - if we only sample 1 row, we get an error, because we only see a NULL value for the 2nd column
 statement error
-select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1, convert_strings_to_integers=true)
+select * from read_json_auto('{DATA_DIR}/json/inconsistent_schemas.ndjson', sample_size=1, convert_strings_to_integers=true)
 ----
-Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 3
+Invalid Input Error: JSON transform error in file "{DATA_DIR}/json/inconsistent_schemas.ndjson", in line 3
 
 # if we increase the sample size to 2, we can read it just fine
 query II
-select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=2)
+select * from read_json_auto('{DATA_DIR}/json/inconsistent_schemas.ndjson', sample_size=2)
 ----
 "1"	NULL
 2	Home for the Holidays
@@ -207,18 +207,18 @@ select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_siz
 
 # we can also find bigint in strings (happens a lot in JSON for some reason ...)
 statement ok
-copy (select * from (values ('{"id": "26941143801"}'), ('{"id": "26941143807"}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
+copy (select * from (values ('{"id": "26941143801"}'), ('{"id": "26941143807"}'))) to '{TEMP_DIR}/my_file.json' (format csv, quote '', header 0)
 
 # but only if we set the parameter to true
 query T
-select typeof(id) from read_json('__TEST_DIR__/my_file.json', convert_strings_to_integers=true)
+select typeof(id) from read_json('{TEMP_DIR}/my_file.json', convert_strings_to_integers=true)
 ----
 BIGINT
 BIGINT
 
 # empty array and the example file works
 query II
-select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson']);
+select * from read_json_auto(['{DATA_DIR}/json/empty_array.json', '{DATA_DIR}/json/example_n.ndjson']);
 ----
 1	O Brother, Where Art Thou?
 2	Home for the Holidays
@@ -228,96 +228,96 @@ select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n
 
 # Simple map inference with default threshold
 query T
-select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl')
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/simple_map.jsonl')
 ----
 MAP(VARCHAR, BIGINT)
 
 # Test setting map_inference_threshold high
 query T
-select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=1000)
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/simple_map.jsonl', map_inference_threshold=1000)
 ----
 MAP(VARCHAR, BIGINT)
 
 # Map inference can be disabled
 query T
-select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=-1, field_appearance_threshold=0)
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/simple_map.jsonl', map_inference_threshold=-1, field_appearance_threshold=0)
 ----
 STRUCT("1" JSON, "2" BIGINT, "3" BIGINT, "4" BIGINT, "5" BIGINT, "6" BIGINT, "7" BIGINT, "8" BIGINT, "9" BIGINT, "10" BIGINT, "11" BIGINT, "12" BIGINT, "13" BIGINT, "14" BIGINT, "15" BIGINT, "16" JSON, "17" BIGINT, "18" BIGINT, "19" BIGINT, "20" BIGINT, "21" BIGINT, "22" BIGINT, "23" BIGINT, "24" BIGINT, "25" BIGINT, "26" BIGINT, "27" BIGINT, "28" BIGINT, "29" BIGINT, "30" BIGINT, "31" BIGINT, "32" BIGINT, "33" BIGINT, "34" BIGINT, "35" BIGINT, "36" BIGINT, "37" BIGINT, "38" BIGINT, "39" BIGINT, "40" BIGINT, "41" BIGINT, "42" BIGINT, "43" BIGINT, "44" BIGINT, "45" BIGINT, "46" BIGINT, "47" BIGINT, "48" BIGINT, "49" BIGINT, "50" BIGINT, "51" BIGINT, "52" BIGINT, "53" BIGINT, "54" BIGINT, "55" BIGINT, "56" BIGINT, "57" BIGINT, "58" BIGINT, "59" BIGINT, "60" BIGINT, "61" BIGINT, "62" BIGINT, "63" BIGINT, "64" BIGINT, "65" BIGINT, "66" BIGINT, "67" BIGINT, "68" BIGINT, "69" BIGINT, "70" BIGINT, "71" BIGINT, "72" BIGINT, "73" BIGINT, "74" BIGINT, "75" BIGINT, "76" BIGINT, "77" BIGINT, "78" BIGINT, "79" BIGINT, "80" BIGINT, "81" BIGINT, "82" BIGINT, "83" BIGINT, "84" BIGINT, "85" BIGINT, "86" BIGINT, "87" BIGINT, "88" BIGINT, "89" BIGINT, "90" BIGINT, "91" BIGINT, "92" BIGINT, "93" BIGINT, "94" BIGINT, "95" BIGINT, "96" BIGINT, "97" BIGINT, "98" BIGINT, "99" BIGINT, "100" BIGINT)
 
 # Map inference with max_depth works as expected
 query T
-select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', maximum_depth=2)
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/simple_map.jsonl', maximum_depth=2)
 ----
 MAP(VARCHAR, JSON)
 
 query T
-select distinct typeof(a) from read_json_auto('data/json/simple_map.jsonl', maximum_depth=1)
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/simple_map.jsonl', maximum_depth=1)
 ----
 JSON
 
 # Map where all values are null
 query T
-select distinct typeof(a) from read_json_auto('data/json/map_of_nulls.jsonl')
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_nulls.jsonl')
 ----
 MAP(VARCHAR, JSON)
 
 # Map type can be inferred at the top level
 query T
-select distinct typeof(json) from read_json_auto('data/json/top_level_map.jsonl')
+select distinct typeof(json) from read_json_auto('{DATA_DIR}/json/top_level_map.jsonl')
 ----
 MAP(VARCHAR, BIGINT)
 
 # Map type can be inferred for struct value type
 query T
-select distinct typeof(a) from read_json_auto('data/json/map_of_structs.jsonl')
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_structs.jsonl')
 ----
 MAP(VARCHAR, STRUCT(b BIGINT))
 
 # Map 80% similarity check works
 query T
-select distinct typeof(a) from read_json_auto('data/json/map_50_50.jsonl', map_inference_threshold=10)
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_50_50.jsonl', map_inference_threshold=10)
 ----
 STRUCT(s1 STRUCT(f1 BIGINT[]), s2 STRUCT(f2 BIGINT[]), s3 STRUCT(f1 BIGINT[]), s4 STRUCT(f2 BIGINT[]), s5 STRUCT(f1 BIGINT[]), s6 STRUCT(f2 BIGINT[]), s7 STRUCT(f1 BIGINT[]), s8 STRUCT(f2 BIGINT[]), s9 STRUCT(f1 BIGINT[]), s10 STRUCT(f2 BIGINT[]))
 
 # Map of maps
 query T
-select distinct typeof(a) from read_json_auto('data/json/map_of_map.jsonl', map_inference_threshold=10)
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_map.jsonl', map_inference_threshold=10)
 ----
 MAP(VARCHAR, MAP(VARCHAR, BIGINT))
 
 # All NULL types get converted to JSON if we do map inference
 query T
-select distinct typeof(a) from read_json_auto('data/json/map_of_struct_with_nulls.jsonl', map_inference_threshold=10)
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_struct_with_nulls.jsonl', map_inference_threshold=10)
 ----
 MAP(VARCHAR, STRUCT(a JSON[]))
 
 # Candidate types are properly handled for map inference
 query I
-SELECT distinct typeof(a) FROM read_json_auto('data/json/map_of_dates.jsonl', map_inference_threshold=25)
+SELECT distinct typeof(a) FROM read_json_auto('{DATA_DIR}/json/map_of_dates.jsonl', map_inference_threshold=25)
 ----
 MAP(VARCHAR, DATE)
 
 # Mixed candidate types are also handled
 query I
-SELECT distinct typeof(a) FROM read_json_auto('data/json/map_of_mixed_date_timestamps.jsonl', map_inference_threshold=25)
+SELECT distinct typeof(a) FROM read_json_auto('{DATA_DIR}/json/map_of_mixed_date_timestamps.jsonl', map_inference_threshold=25)
 ----
 MAP(VARCHAR, VARCHAR)
 
 # Incompatible types are handled correctly
 query T
-select distinct typeof(a) from read_json_auto('data/json/map_incompatible.jsonl', map_inference_threshold=10)
+select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_incompatible.jsonl', map_inference_threshold=10)
 ----
 STRUCT(s1 STRUCT("1" JSON), s2 STRUCT("1" MAP(VARCHAR, JSON)), s3 STRUCT("1" VARCHAR), s4 STRUCT("1" BIGINT[]), s5 STRUCT("1" BIGINT), s6 STRUCT("1" VARCHAR), s7 STRUCT("1" BIGINT[]), s8 STRUCT("1" BIGINT), s9 STRUCT("1" VARCHAR), s10 STRUCT("1" BIGINT[]))
 
 # Can't set map_inference_threshold to a negative value (except -1)
 statement error
-select * from read_json_auto('data/json/simple_map.jsonl', map_inference_threshold=-10)
+select * from read_json_auto('{DATA_DIR}/json/simple_map.jsonl', map_inference_threshold=-10)
 ----
 Binder Error: read_json_auto "map_inference_threshold" parameter must be 0 or positive, or -1 to disable map inference for consistent objects.
 
 # if we only sample the first file, we default to a single JSON column
 query I
-select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=1);
+select * from read_json_auto(['{DATA_DIR}/json/empty_array.json', '{DATA_DIR}/json/example_n.ndjson'], maximum_sample_files=1);
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}
 {"id":2,"name":"Home for the Holidays"}
@@ -327,7 +327,7 @@ select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n
 
 # -1 is unlimited
 query II
-select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=-1);
+select * from read_json_auto(['{DATA_DIR}/json/empty_array.json', '{DATA_DIR}/json/example_n.ndjson'], maximum_sample_files=-1);
 ----
 1	O Brother, Where Art Thou?
 2	Home for the Holidays
@@ -337,18 +337,18 @@ select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n
 
 # can't be -2 or lower
 statement error
-select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=-2);
+select * from read_json_auto(['{DATA_DIR}/json/empty_array.json', '{DATA_DIR}/json/example_n.ndjson'], maximum_sample_files=-2);
 ----
 Binder Error
 
 # can't be 0
 statement error
-select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=0);
+select * from read_json_auto(['{DATA_DIR}/json/empty_array.json', '{DATA_DIR}/json/example_n.ndjson'], maximum_sample_files=0);
 ----
 Binder Error
 
 # cannot be NULL either
 statement error
-select * from read_json_auto(['data/json/empty_array.json', 'data/json/example_n.ndjson'], maximum_sample_files=NULL);
+select * from read_json_auto(['{DATA_DIR}/json/empty_array.json', '{DATA_DIR}/json/example_n.ndjson'], maximum_sample_files=NULL);
 ----
 Binder Error

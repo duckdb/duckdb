@@ -20,22 +20,21 @@ bool CastDecimalCInternal(duckdb_result *source, RESULT_TYPE &result, idx_t col,
 	auto &source_type = query_result->types[col];
 	auto width = duckdb::DecimalType::GetWidth(source_type);
 	auto scale = duckdb::DecimalType::GetScale(source_type);
-	void *source_address = UnsafeFetchPtr<hugeint_t>(source, col, row);
-
+	auto source_value = UnsafeFetch<hugeint_t>(source, col, row);
 	CastParameters parameters;
 	switch (source_type.InternalType()) {
 	case duckdb::PhysicalType::INT16:
-		return duckdb::TryCastFromDecimal::Operation<int16_t, RESULT_TYPE>(UnsafeFetchFromPtr<int16_t>(source_address),
-		                                                                   result, parameters, width, scale);
+		return duckdb::TryCastFromDecimal::Operation<int16_t, RESULT_TYPE>(static_cast<int16_t>(source_value), result,
+		                                                                   parameters, width, scale);
 	case duckdb::PhysicalType::INT32:
-		return duckdb::TryCastFromDecimal::Operation<int32_t, RESULT_TYPE>(UnsafeFetchFromPtr<int32_t>(source_address),
-		                                                                   result, parameters, width, scale);
+		return duckdb::TryCastFromDecimal::Operation<int32_t, RESULT_TYPE>(static_cast<int32_t>(source_value), result,
+		                                                                   parameters, width, scale);
 	case duckdb::PhysicalType::INT64:
-		return duckdb::TryCastFromDecimal::Operation<int64_t, RESULT_TYPE>(UnsafeFetchFromPtr<int64_t>(source_address),
-		                                                                   result, parameters, width, scale);
+		return duckdb::TryCastFromDecimal::Operation<int64_t, RESULT_TYPE>(static_cast<int64_t>(source_value), result,
+		                                                                   parameters, width, scale);
 	case duckdb::PhysicalType::INT128:
-		return duckdb::TryCastFromDecimal::Operation<hugeint_t, RESULT_TYPE>(
-		    UnsafeFetchFromPtr<hugeint_t>(source_address), result, parameters, width, scale);
+		return duckdb::TryCastFromDecimal::Operation<hugeint_t, RESULT_TYPE>(source_value, result, parameters, width,
+		                                                                     scale);
 	default:
 		throw duckdb::InternalException("Unimplemented internal type for decimal");
 	}

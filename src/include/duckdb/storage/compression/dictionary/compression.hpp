@@ -1,9 +1,9 @@
 #pragma once
 
+#include "duckdb/common/primitive_dictionary.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/compression/dictionary/common.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
@@ -23,10 +23,11 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 public:
-	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info);
+	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info,
+	                                   idx_t max_unique_count_across_all_segments);
 
 public:
-	void CreateEmptySegment(idx_t row_start);
+	void CreateEmptySegment();
 	void Verify() override;
 	bool LookupString(string_t str) override;
 	void AddNewString(string_t str) override;
@@ -47,7 +48,7 @@ public:
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	string_map_t<uint32_t> current_string_map;
+	PrimitiveDictionary<string_t> current_string_map;
 	vector<uint32_t> index_buffer;
 	vector<uint32_t> selection_buffer;
 

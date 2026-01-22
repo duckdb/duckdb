@@ -403,7 +403,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 }
 
 TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
-
 	auto elem_type = duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER);
 	auto array_type = duckdb_create_array_type(elem_type, 3);
 	duckdb_logical_type schema[] = {array_type};
@@ -546,4 +545,39 @@ TEST_CASE("Test DataChunk write BIGNUM", "[capi]") {
 	REQUIRE(string_value[3] == (char)0x2a);
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&type);
+}
+
+TEST_CASE("Test writing invalid UTF-8 to VARCHAR vector in data chunk", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type types[] = {type};
+
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_destroy_logical_type(&type);
+	duckdb_data_chunk_set_size(chunk, 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	string valid_utf8 = "é";
+	// strlen does not include NULL-termination. Remove the first byte only.
+	idx_t len = strlen(valid_utf8.c_str());
+	auto invalid_utf8 = static_cast<char *>(malloc(len));
+	memcpy(invalid_utf8, valid_utf8.c_str() + 1, len);
+
+	// Write a valid string to initialize the data.
+	auto error_data = duckdb_vector_safe_assign_string_element(vector, 0, valid_utf8.c_str());
+	REQUIRE(!error_data);
+	// Write an invalid string and ensure it does not overwrite.
+	error_data = duckdb_vector_safe_assign_string_element(vector, 0, invalid_utf8);
+	free(invalid_utf8);
+	REQUIRE(error_data);
+	REQUIRE(duckdb_error_data_has_error(error_data));
+	auto err_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(err_type == DUCKDB_ERROR_INVALID_INPUT);
+	auto err_msg = duckdb_error_data_message(error_data);
+	REQUIRE(StringUtil::Contains(err_msg, "invalid Unicode detected, str must be valid UTF-8"));
+	duckdb_destroy_error_data(&error_data);
+
+	// Ensure that nothing was written and the vector still contains the valid data.
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE((string_data[0].value.inlined.length == valid_utf8.length()));
+	duckdb_destroy_data_chunk(&chunk);
 }

@@ -33,7 +33,7 @@ public:
 			// Traverse the prefix.
 			if (ref.get().GetType() == NType::PREFIX) {
 				Prefix prefix(art, ref.get());
-				for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 					if (prefix.data[i] != key[depth]) {
 						// The key and the prefix don't match.
 						return nullptr;
@@ -62,11 +62,65 @@ public:
 		return nullptr;
 	}
 
+	//! LookupInLeaf returns true if the rowid is in the leaf:
+	//! 1) If the leaf is an inlined leaf, check if the rowid matches.
+	//! 2) If the leaf is a gate node, perform a search in the nested ART for the rowid.
+	static bool LookupInLeaf(ART &art, const Node &node, const ARTKey &rowid) {
+		reference<const Node> ref(node);
+		idx_t depth = 0;
+
+		while (ref.get().HasMetadata()) {
+			const auto type = ref.get().GetType();
+			switch (type) {
+			case NType::LEAF_INLINED: {
+				return ref.get().GetRowId() == rowid.GetRowId();
+			}
+			case NType::LEAF: {
+				throw InternalException("Invalid node type (LEAF) for ARTOperator::NestedLookup.");
+			}
+			case NType::NODE_7_LEAF:
+			case NType::NODE_15_LEAF:
+			case NType::NODE_256_LEAF: {
+				D_ASSERT(depth + 1 == Prefix::ROW_ID_SIZE);
+				const auto byte = rowid[Prefix::ROW_ID_COUNT];
+				return ref.get().HasByte(art, byte);
+			}
+			case NType::NODE_4:
+			case NType::NODE_16:
+			case NType::NODE_48:
+			case NType::NODE_256: {
+				D_ASSERT(depth < Prefix::ROW_ID_SIZE);
+				auto child = ref.get().GetChild(art, rowid[depth]);
+				if (child) {
+					// Continue in the child.
+					ref = *child;
+					depth++;
+					D_ASSERT(ref.get().HasMetadata());
+					continue;
+				}
+				return false;
+			}
+			case NType::PREFIX: {
+				Prefix prefix(art, ref.get());
+				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
+					if (prefix.data[i] != rowid[depth]) {
+						// The key and the prefix don't match.
+						return false;
+					}
+					depth++;
+				}
+				ref = *prefix.ptr;
+			}
+			}
+		}
+		return false;
+	}
+
 	//! Insert a key and its row ID into the node.
 	//! Starts at depth (in the key).
 	//! status indicates if the insert happens inside a gate or not.
 	static ARTConflictType Insert(ArenaAllocator &arena, ART &art, Node &node, const ARTKey &key, idx_t depth,
-	                              const ARTKey &row_id, GateStatus status, optional_ptr<ART> delete_art,
+	                              const ARTKey &row_id, GateStatus status, DeleteIndexInfo delete_index_info,
 	                              const IndexAppendMode append_mode) {
 		reference<Node> active_node_ref(node);
 		reference<const ARTKey> active_key_ref(key);
@@ -110,7 +164,8 @@ public:
 			const auto type = active_node.GetType();
 			switch (type) {
 			case NType::LEAF_INLINED: {
-				return InsertIntoInlined(arena, art, active_node, key, row_id, depth, status, delete_art, append_mode);
+				return InsertIntoInlined(arena, art, active_node, key, row_id, depth, status, delete_index_info,
+				                         append_mode);
 			}
 			case NType::LEAF: {
 				Leaf::TransformToNested(art, active_node);
@@ -142,7 +197,7 @@ public:
 			}
 			case NType::PREFIX: {
 				Prefix prefix(art, active_node, true);
-				for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 					if (prefix.data[i] != active_key[depth]) {
 						// The active key and the prefix don't match.
 						InsertIntoPrefix(art, active_node_ref, active_key, row_id, i, depth, status);
@@ -163,7 +218,7 @@ public:
 
 	//! Delete a key and its row ID.
 	//! Assumes that deletion starts at the root of the tree.
-	static void Delete(ART &art, Node &node, const ARTKey &key, const ARTKey &row_id) {
+	static bool Delete(ART &art, Node &node, const ARTKey &key, const ARTKey &row_id) {
 		// If we need to compress a Node4 into a one-way node,
 		// then we need the previous prefix before the Node4.
 		Node empty;
@@ -192,22 +247,24 @@ public:
 			switch (type) {
 			case NType::LEAF_INLINED: {
 				if (current.get().GetRowId() != row_id.GetRowId()) {
-					return;
+					return false;
 				}
 				if (!passed_node && parent.get().GetType() == NType::PREFIX) {
 					// The tree contains exactly one element with a prefix.
 					Node::FreeTree(art, parent);
-					return;
+					return true;
 				}
 				if (parent.get().GetType() == NType::PREFIX) {
 					// We might have to compress:
 					// PREFIX (greatgrandparent) - Node4 (grandparent) - PREFIX - INLINED_LEAF.
+					// The parent does not have to be passed in, as it is a child of the possibly being compressed N4.
+					// Then, when we delete that child, we also free it.
 					Node::DeleteChild(art, grandparent, greatgrandparent, current_key.get()[grandparent_depth], status,
 					                  row_id);
-					return;
+					return true;
 				}
 				Node::DeleteChild(art, parent, grandparent, current_key.get()[parent_depth], status, row_id);
-				return;
+				return true;
 			}
 			case NType::LEAF: {
 				D_ASSERT(status == GateStatus::GATE_NOT_SET);
@@ -224,9 +281,9 @@ public:
 				// Traverse a prefix chain until the next non-prefix node or gate.
 				while (current.get().GetType() == NType::PREFIX) {
 					Prefix prefix(art, current, true);
-					for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+					for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 						if (prefix.data[i] != current_key.get()[depth]) {
-							return;
+							return false;
 						}
 						depth++;
 					}
@@ -251,7 +308,7 @@ public:
 				auto child = current.get().GetChildMutable(art, current_key.get()[depth]);
 				if (!child) {
 					// No child at the byte: nothing to erase.
-					return;
+					return false;
 				}
 
 				current = *child;
@@ -265,16 +322,17 @@ public:
 				if (current.get().HasByte(art, byte)) {
 					Node::DeleteChild(art, current, parent, byte, status, row_id);
 				}
-				return;
+				return true;
 			}
 			}
 		}
+		return false;
 	}
 
 private:
 	static ARTConflictType InsertIntoInlined(ArenaAllocator &arena, ART &art, Node &node, const ARTKey &key,
 	                                         const ARTKey &row_id, const idx_t depth, const GateStatus status,
-	                                         optional_ptr<ART> delete_art, const IndexAppendMode append_mode) {
+	                                         DeleteIndexInfo delete_index_info, const IndexAppendMode append_mode) {
 		Node row_id_node;
 		Leaf::New(row_id_node, row_id.GetRowId());
 
@@ -283,31 +341,33 @@ private:
 			return ARTConflictType::NO_CONFLICT;
 		}
 
-		if (!delete_art) {
-			if (append_mode == IndexAppendMode::IGNORE_DUPLICATES) {
+		if (delete_index_info.delete_indexes) {
+			// Lookup in the delete_art.
+			for (auto &delete_index : *delete_index_info.delete_indexes) {
+				auto &delete_art = delete_index.get().Cast<ART>();
+				auto delete_leaf = Lookup(delete_art, delete_art.tree, key, 0);
+				if (!delete_leaf) {
+					continue;
+				}
+
+				// The row ID has changed.
+				// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
+				D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
+				auto deleted_row_id = delete_leaf->GetRowId();
+				auto this_row_id = node.GetRowId();
+				if (deleted_row_id != this_row_id) {
+					continue;
+				}
+
+				// The deleted key and its row ID match the current key and its row ID.
+				Leaf::MergeInlined(arena, art, node, row_id_node, status, depth);
 				return ARTConflictType::NO_CONFLICT;
 			}
-			return ARTConflictType::CONSTRAINT;
 		}
-
-		// Lookup in the delete_art.
-		auto delete_leaf = Lookup(*delete_art, delete_art->tree, key, 0);
-		if (!delete_leaf) {
-			return ARTConflictType::CONSTRAINT;
+		if (append_mode == IndexAppendMode::IGNORE_DUPLICATES) {
+			return ARTConflictType::NO_CONFLICT;
 		}
-
-		// The row ID has changed.
-		// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
-		D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
-		auto deleted_row_id = delete_leaf->GetRowId();
-		auto this_row_id = node.GetRowId();
-		if (deleted_row_id != this_row_id) {
-			return ARTConflictType::CONSTRAINT;
-		}
-
-		// The deleted key and its row ID match the current key and its row ID.
-		Leaf::MergeInlined(arena, art, node, row_id_node, status, depth);
-		return ARTConflictType::NO_CONFLICT;
+		return ARTConflictType::CONSTRAINT;
 	}
 
 	static void InsertIntoNode(ART &art, Node &node, const ARTKey &key, const ARTKey &row_id, const idx_t depth,
@@ -336,7 +396,6 @@ private:
 
 	static void InsertIntoPrefix(ART &art, reference<Node> &node_ref, const ARTKey &key, const ARTKey &row_id,
 	                             const idx_t pos, const idx_t depth, const GateStatus status) {
-
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos);
 		const auto byte = Prefix::GetByte(art, node_ref, cast_pos);
 

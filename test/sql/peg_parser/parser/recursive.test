@@ -1,0 +1,23 @@
+# name: test/sql/peg_parser/parser/recursive.test
+# description: Test recursive cte in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$CREATE RECURSIVE VIEW nums (n) AS VALUES (1) UNION ALL SELECT n+1;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS a) SELECT * FROM tbl;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FROM (WITH foo2 AS ((WITH a AS (SELECT 1) (FROM a))) TABLE foo2);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FROM (WITH foo AS (SELECT 1) (FROM foo)) foo;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$(FROM foo);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$FROM (WITH foo AS (SELECT 1) FROM foo) foo;$TEST_PEG_PARSER$);

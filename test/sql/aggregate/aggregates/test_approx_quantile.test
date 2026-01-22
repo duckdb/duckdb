@@ -115,6 +115,19 @@ SELECT approx_quantile('1:02:03.000000+05:30'::TIMETZ, 0.5);
 ----
 01:02:42+05:30:39
 
+# TIME test, fixes issue 19874
+query I
+SELECT
+  APPROX_QUANTILE(a, [0.43::float, 0.64::float, 0.7::float]) AS call_0_result
+FROM (
+  VALUES (
+  (CAST('12:13:14' AS TIME)),          
+  (CAST('12:13:14' AS TIME)),    
+  (CAST('12:13:14' AS TIME))
+  )) AS t(a);
+----
+['12:13:14', '12:13:14', '12:13:14']
+
 # List versions
 query I
 SELECT [

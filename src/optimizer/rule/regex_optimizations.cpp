@@ -184,6 +184,13 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		if (!escaped_like_string.exists) {
 			return nullptr;
 		}
+
+		// if regexp had options, remove them so the new Contains Expression can be matched for other optimizers.
+		if (root.children.size() == 3) {
+			root.children.pop_back();
+			D_ASSERT(root.children.size() == 2);
+		}
+
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
 		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, GetStringContains(),
 		                                                   std::move(root.children), nullptr);

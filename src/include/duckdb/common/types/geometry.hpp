@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/time.hpp
+// duckdb/common/types/geometry.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -35,6 +35,7 @@ struct VertexXY {
 	static constexpr auto TYPE = VertexType::XY;
 	static constexpr auto HAS_Z = false;
 	static constexpr auto HAS_M = false;
+	static constexpr auto WIDTH = 2;
 
 	double x;
 	double y;
@@ -48,6 +49,7 @@ struct VertexXYZ {
 	static constexpr auto TYPE = VertexType::XYZ;
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = false;
+	static constexpr auto WIDTH = 3;
 
 	double x;
 	double y;
@@ -61,6 +63,7 @@ struct VertexXYM {
 	static constexpr auto TYPE = VertexType::XYM;
 	static constexpr auto HAS_M = true;
 	static constexpr auto HAS_Z = false;
+	static constexpr auto WIDTH = 3;
 
 	double x;
 	double y;
@@ -75,6 +78,7 @@ struct VertexXYZM {
 	static constexpr auto TYPE = VertexType::XYZM;
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = true;
+	static constexpr auto WIDTH = 4;
 
 	double x;
 	double y;
@@ -173,6 +177,19 @@ public:
 		m_max = MaxValue(m_max, other.m_max);
 	}
 
+	bool IntersectsXY(const GeometryExtent &other) const {
+		return !(x_min > other.x_max || x_max < other.x_min || y_min > other.y_max || y_max < other.y_min);
+	}
+
+	bool IntersectsXYZM(const GeometryExtent &other) const {
+		return !(x_min > other.x_max || x_max < other.x_min || y_min > other.y_max || y_max < other.y_min ||
+		         z_min > other.z_max || z_max < other.z_min || m_min > other.m_max || m_max < other.m_min);
+	}
+
+	bool ContainsXY(const GeometryExtent &other) const {
+		return x_min <= other.x_min && x_max >= other.x_max && y_min <= other.y_min && y_max >= other.y_max;
+	}
+
 	double x_min;
 	double y_min;
 	double z_min;
@@ -186,7 +203,7 @@ public:
 
 class Geometry {
 public:
-	static constexpr auto MAX_RECURSION_DEPTH = 16;
+	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
 
 	//! Convert from WKT
 	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict);
@@ -194,11 +211,29 @@ public:
 	//! Convert to WKT
 	DUCKDB_API static string_t ToString(Vector &result, const string_t &geom);
 
+	//! Convert from WKB
+	DUCKDB_API static bool FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict);
+	DUCKDB_API static bool FromBinary(Vector &source, Vector &result, idx_t count, bool strict);
+
+	//! Convert to WKB
+	DUCKDB_API static void ToBinary(Vector &source, Vector &result, idx_t count);
+
 	//! Get the geometry type and vertex type from the WKB
 	DUCKDB_API static pair<GeometryType, VertexType> GetType(const string_t &wkb);
 
 	//! Update the bounding box, return number of vertices processed
 	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent);
+	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty);
+
+	//! Convert to vectorized format
+	DUCKDB_API static void ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+	                                          VertexType vert_type);
+	//! Convert from vectorized format
+	DUCKDB_API static void FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+	                                            VertexType vert_type, idx_t result_offset);
+
+	//! Get the vectorized logical type for a given geometry and vertex type
+	DUCKDB_API static LogicalType GetVectorizedType(GeometryType geom_type, VertexType vert_type);
 };
 
 } // namespace duckdb

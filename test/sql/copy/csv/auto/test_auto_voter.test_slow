@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 
 statement ok
-CREATE TABLE voters AS SELECT * FROM read_csv_auto ('data/csv/real/voter.tsv');
+CREATE TABLE voters AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/real/voter.tsv');
 
 query I
 SELECT COUNT(*) FROM voters;
@@ -15,7 +15,7 @@ SELECT COUNT(*) FROM voters;
 5300
 
 query I
-SELECT COUNT(*) FROM "data/csv/real/voter.tsv";
+SELECT COUNT(*) FROM "{DATA_DIR}/csv/real/voter.tsv";
 ----
 5300
 
@@ -30,7 +30,7 @@ statement ok
 PRAGMA verify_parallelism
 
 statement ok
-CREATE TABLE voters2 AS SELECT * FROM read_csv_auto ('data/csv/real/voter.tsv');
+CREATE TABLE voters2 AS SELECT * FROM read_csv_auto ('{DATA_DIR}/csv/real/voter.tsv');
 
 query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
 (SELECT * FROM voters EXCEPT SELECT * FROM voters2)

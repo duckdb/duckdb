@@ -1,18 +1,13 @@
 # name: test/sql/storage/encryption/temp_files/encrypted_tmp_file_setting.test
 # group: [temp_files]
 
-foreach cipher GCM CTR
-
 require block_size 262144
+
+# httpfs require to write encrypted data
+require httpfs
 
 statement ok
 SET temp_directory='__TEST_DIR__/test_temp_dir'
-
-statement ok
-ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
-
-statement ok
-USE enc;
 
 # we do not encrypt temporary files at all
 statement ok
@@ -47,6 +42,3 @@ SET temp_file_encryption = true;
 ----
 Permission Error: Existing temporary files found: Modifying the temp_file_encryption setting while there are existing temporary files is disabled.
 
-restart
-
-endloop

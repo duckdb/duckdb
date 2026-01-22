@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <string>
 
+#ifndef __MVS__
 #define fprintf(...)
+#endif
 
 #include "pg_definitions.hpp"
 

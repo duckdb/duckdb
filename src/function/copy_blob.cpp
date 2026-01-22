@@ -2,6 +2,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -61,7 +62,6 @@ struct WriteBlobGlobalState final : public GlobalFunctionData {
 
 unique_ptr<GlobalFunctionData> WriteBlobInitializeGlobal(ClientContext &context, FunctionData &bind_data,
                                                          const string &file_path) {
-
 	auto &bdata = bind_data.Cast<WriteBlobBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
 
@@ -99,17 +99,18 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 	input.data[0].ToUnifiedFormat(input.size(), vdata);
 	const auto blobs = UnifiedVectorFormat::GetData<string_t>(vdata);
 
+	QueryContext query_context(context.client);
+
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		const auto out_idx = vdata.sel->get_index(row_idx);
 		if (vdata.validity.RowIsValid(out_idx)) {
-
 			auto &blob = blobs[out_idx];
 			auto blob_len = blob.GetSize();
 			auto blob_ptr = blob.GetDataWriteable();
 			auto blob_end = blob_ptr + blob_len;
 
 			while (blob_ptr < blob_end) {
-				auto written = handle->Write(blob_ptr, blob_len);
+				auto written = handle->Write(query_context, blob_ptr, blob_len);
 				if (written <= 0) {
 					throw IOException("Failed to write to file!");
 				}

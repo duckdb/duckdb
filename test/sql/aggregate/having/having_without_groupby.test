@@ -1,0 +1,42 @@
+# name: test/sql/aggregate/having/having_without_groupby.test
+# group: [having]
+
+query I
+SELECT 1 AS one FROM (
+	values
+	(1,2),
+	(3,2)
+) t(a, b)
+HAVING 1 < 2;
+----
+1
+
+query I
+SELECT 1 AS one FROM (
+	values
+	(1,2),
+	(3,2)
+) t(a, b)
+HAVING false;
+----
+
+statement error
+select a FROM (
+	values
+	(1,2),
+	(3,2)
+) t(a, b)
+HAVING true
+----
+column "a" must appear in the GROUP BY clause
+
+query I
+select sum(a) FROM (
+	values
+	(1,2),
+	(3,2)
+) t(a, b)
+HAVING true
+----
+4
+

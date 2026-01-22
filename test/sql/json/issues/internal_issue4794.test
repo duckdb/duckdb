@@ -8,6 +8,6 @@ statement ok
 pragma enable_verification
 
 statement error
-FROM read_json('data/json/format_string_key.json');
+FROM read_json('{DATA_DIR}/json/format_string_key.json');
 ----
 Invalid Input Error

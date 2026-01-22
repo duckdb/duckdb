@@ -7,13 +7,13 @@ PRAGMA enable_verification
 
 query IIIIIIIIIIIII
 SELECT typeof(#1), typeof(#2), typeof(#3), typeof(#4), typeof(#5), typeof(#6), typeof(#7), typeof(#8), typeof(#9), typeof(#10), typeof(#11), typeof(#12), typeof(#13)
-FROM read_csv(['data/csv/union-by-name/gabor/Post/*.csv', 'data/csv/union-by-name/gabor/Comment/*.csv'], union_by_name=true)
+FROM read_csv(['{DATA_DIR}/csv/union-by-name/gabor/Post/*.csv', '{DATA_DIR}/csv/union-by-name/gabor/Comment/*.csv'], union_by_name=true)
 LIMIT 1;
 ----
 TIMESTAMP WITH TIME ZONE	BIGINT	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	BIGINT	BIGINT	BIGINT	BIGINT	BIGINT	BIGINT
 
 query IIIIIIIIIIIII
-FROM read_csv(['data/csv/union-by-name/gabor/Post/*.csv', 'data/csv/union-by-name/gabor/Comment/*.csv'], union_by_name=true)
+FROM read_csv(['{DATA_DIR}/csv/union-by-name/gabor/Post/*.csv', '{DATA_DIR}/csv/union-by-name/gabor/Comment/*.csv'], union_by_name=true)
 ORDER BY ALL
 LIMIT 1;
 ----

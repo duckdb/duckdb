@@ -17,11 +17,15 @@ import shutil
 import traceback
 from python_helpers import open_utf8
 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from format_test_benchmark import format_file_content
+
 try:
     ver = subprocess.check_output(('black', '--version'), text=True)
     if int(ver.split(' ')[1].split('.')[0]) < 24:
         print('you need to run `pip install "black>=24"`', ver)
-        exit(-1)
+        if 'DUCKDB_FORMAT_SKIP_VERSION_CHECKS' not in os.environ:
+            exit(-1)
 except Exception as e:
     print('you need to run `pip install "black>=24"`', e)
     exit(-1)
@@ -30,7 +34,8 @@ try:
     ver = subprocess.check_output(('clang-format', '--version'), text=True)
     if '11.' not in ver:
         print('you need to run `pip install clang_format==11.0.1 - `', ver)
-        exit(-1)
+        if 'DUCKDB_FORMAT_SKIP_VERSION_CHECKS' not in os.environ:
+            exit(-1)
 except Exception as e:
     print('you need to run `pip install clang_format==11.0.1 - `', e)
     exit(-1)
@@ -65,7 +70,6 @@ ignored_files = [
     'tpch_constants.hpp',
     'tpcds_constants.hpp',
     '_generated',
-    'tpce_flat_input.hpp',
     'test_csv_header.hpp',
     'duckdb.cpp',
     'duckdb.hpp',
@@ -293,38 +297,15 @@ def get_formatted_text(f, full_path, directory, ext):
                 text += line
 
     if ext == '.test' or ext == '.test_slow' or ext == '.test_coverage' or ext == '.benchmark':
-        f = open_utf8(full_path, 'r')
-        lines = f.readlines()
-        f.close()
-
-        found_name = False
-        found_group = False
-        group_name = full_path.split('/')[-2]
-        new_path_line = '# name: ' + full_path + '\n'
-        new_group_line = '# group: [' + group_name + ']' + '\n'
-        found_diff = False
-        # Find description.
-        found_description = False
-        for line in lines:
-            if line.lower().startswith('# description:') or line.lower().startswith('#description:'):
-                if found_description:
-                    print("Error formatting file " + full_path + ", multiple lines starting with # description found")
-                    exit(1)
-                found_description = True
-                new_description_line = '# description: ' + line.split(':', 1)[1].strip() + '\n'
-        # Filter old meta.
-        meta = ['#name:', '# name:', '#description:', '# description:', '#group:', '# group:']
-        lines = [line for line in lines if not any(line.lower().startswith(m) for m in meta)]
-        # Clean up empty leading lines.
-        while lines and not lines[0].strip():
-            lines.pop(0)
-        # Ensure header is prepended.
-        header = [new_path_line]
-        if found_description:
-            header.append(new_description_line)
-        header.append(new_group_line)
-        header.append('\n')
-        return ''.join(header + lines)
+        # optimization: import and call the function directly
+        # instead of running a subprocess
+        with open(full_path, "r", encoding="utf-8") as f:
+            original_lines = f.readlines()
+        formatted, status = format_file_content(full_path, original_lines)
+        if formatted is None:
+            print(f"Failed to format {full_path}: {status}")
+            sys.exit(1)
+        return formatted
     proc_command = format_commands[ext].split(' ') + [full_path]
     proc = subprocess.Popen(
         proc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=open(full_path) if ext == '.py' else None
@@ -380,7 +361,7 @@ def format_file(f, full_path, directory, ext):
             difference_files.append(full_path)
     else:
         tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
-        with open_utf8(tmpfile, 'w+') as f:
+        with open_utf8(tmpfile, 'w+', newline='\n') as f:
             f.write(new_text)
         shutil.move(tmpfile, full_path)
 

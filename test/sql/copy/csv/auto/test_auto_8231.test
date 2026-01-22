@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-create view locations_header_trailing_comma as SELECT * from read_csv_auto('data/csv/locations_row_trailing_comma.csv', null_padding=True)
+create view locations_header_trailing_comma as SELECT * from read_csv_auto('{DATA_DIR}/csv/locations_row_trailing_comma.csv', null_padding=True)
 
 query IIIII
 SELECT * from locations_header_trailing_comma

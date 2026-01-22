@@ -1,5 +1,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -141,12 +142,27 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				}
 			}
 			order_binder.SetQueryComponent("DISTINCT ON");
+			auto &order_binders = order_binder.GetBinders();
 			for (auto &distinct_on_target : distinct.distinct_on_targets) {
-				auto expr = BindOrderExpression(order_binder, std::move(distinct_on_target));
-				if (!expr) {
-					continue;
+				vector<unique_ptr<ParsedExpression>> target_list;
+				order_binders[0].get().ExpandStarExpression(std::move(distinct_on_target), target_list);
+				for (auto &target : target_list) {
+					auto expr = BindOrderExpression(order_binder, std::move(target));
+					if (!expr) {
+						continue;
+					}
+					// Skip duplicates
+					bool duplicate = false;
+					for (auto &existing : bound_distinct->target_distincts) {
+						if (expr->Equals(*existing)) {
+							duplicate = true;
+							break;
+						}
+					}
+					if (!duplicate) {
+						bound_distinct->target_distincts.push_back(std::move(expr));
+					}
 				}
-				bound_distinct->target_distincts.push_back(std::move(expr));
 			}
 			order_binder.SetQueryComponent();
 
@@ -154,7 +170,6 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-
 			auto &order = mod->Cast<OrderModifier>();
 			auto bound_order = make_uniq<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
@@ -372,15 +387,6 @@ BoundStatement Binder::BindNode(SelectNode &statement) {
 	return BindSelectNode(statement, std::move(from_table));
 }
 
-unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement) {
-	D_ASSERT(statement.from_table);
-
-	// first bind the FROM table statement
-	auto from = std::move(statement.from_table);
-	auto from_table = Bind(*from);
-	return BindSelectNodeInternal(statement, std::move(from_table));
-}
-
 void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
@@ -412,7 +418,7 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	}
 }
 
-unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement, BoundStatement from_table) {
+BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {
 	D_ASSERT(from_table.plan);
 	D_ASSERT(!statement.from_table);
 	auto result_ptr = make_uniq<BoundSelectNode>();
@@ -476,8 +482,10 @@ unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement
 		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(group_expressions.size());
 		GroupBinder group_binder(*this, context, statement, result.group_index, bind_state, info.alias_map);
+		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
+		auto prev_can_contain_nulls = this->can_contain_nulls;
+		this->can_contain_nulls = true;
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
-
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
 			// the reason we want the unbound copy is because we want to figure out whether an expression
@@ -521,6 +529,7 @@ unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement
 			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
 			info.map[*unbound_groups[i]] = i;
 		}
+		this->can_contain_nulls = prev_can_contain_nulls;
 	}
 	result.groups.grouping_sets = std::move(statement.groups.grouping_sets);
 
@@ -688,16 +697,12 @@ unique_ptr<BoundSelectNode> Binder::BindSelectNodeInternal(SelectNode &statement
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions
 	BindModifiers(result, result.projection_index, result.names, internal_sql_types, bind_state);
-	return result_ptr;
-}
-
-BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {
-	auto result = BindSelectNodeInternal(statement, std::move(from_table));
 
 	BoundStatement result_statement;
-	result_statement.types = result->types;
-	result_statement.names = result->names;
-	result_statement.plan = CreatePlan(*result);
+	result_statement.types = result.types;
+	result_statement.names = result.names;
+	result_statement.plan = CreatePlan(result);
+	result_statement.extra_info.original_expressions = std::move(result.bind_state.original_expressions);
 	return result_statement;
 }
 

@@ -8,6 +8,6 @@ statement ok
 pragma enable_verification
 
 statement error
-SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: NULL::VARCHAR, name: NULL::VARCHAR})
+SELECT * FROM read_json('{DATA_DIR}/json/example_n.ndjson', columns={id: NULL::VARCHAR, name: NULL::VARCHAR})
 ----
 Binder Error

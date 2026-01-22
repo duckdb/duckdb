@@ -1,0 +1,31 @@
+# name: test/sql/merge/merge_into_join_as_filter.test
+# description: Test MERGE INTO with joins that are effectively just filters
+# group: [merge]
+
+statement ok
+create table foo (bar integer);
+
+statement ok
+insert into foo values (1);
+
+statement ok
+merge into foo as f using (select 2 as bar) b on f.bar is not null when matched then update when not matched then insert;
+
+query I
+FROM foo
+----
+2
+
+statement ok
+create or replace table aaa (id int, status varchar, flag int, starttime datetime, endtime datetime);
+
+statement ok
+merge into aaa
+    using (
+    	select 	1 as id, 'xx' as status, 1 as flag, now() as starttime, null as endtime
+    ) as upserts
+    on  (upserts.id = aaa.id and aaa.flag =1::int and aaa.status = upserts.status)
+    when matched then
+        update set endtime = upserts.starttime
+    when not matched then
+        insert by name;

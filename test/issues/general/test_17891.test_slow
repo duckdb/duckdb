@@ -5,10 +5,10 @@
 require parquet
 
 statement ok
-create view seqs_table_a as from 'data/parquet-testing/seqs_table.parquet';
+create view seqs_table_a as from '{DATA_DIR}/parquet-testing/seqs_table.parquet';
 
 statement ok
-create view seqs_table_b as from 'data/parquet-testing/seqs_table.parquet';
+create view seqs_table_b as from '{DATA_DIR}/parquet-testing/seqs_table.parquet';
 
 query I
 WITH orig AS (

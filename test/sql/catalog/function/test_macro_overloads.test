@@ -94,4 +94,4 @@ CREATE MACRO error_in_definition
 	(a) AS a,
 	(a, b) AS a + y
 ----
-Referenced column "y" not found in FROM clause
+Referenced column "y" was not found because the FROM clause is missing

@@ -1090,9 +1090,15 @@ uprv_tzname(int n)
         if (tzid[0] == ':') {
             tzid++;
         }
-        /* This might be a good Olson ID. */
-        skipZoneIDPrefix(&tzid);
-        return tzid;
+#if defined(TZDEFAULT)
+        if (uprv_strcmp(tzid, TZDEFAULT) != 0) {
+#endif
+        	/* This might be a good Olson ID. */
+			skipZoneIDPrefix(&tzid);
+			return tzid;
+#if defined(TZDEFAULT)
+		}
+#endif
     }
     /* else U_TZNAME will give a better result. */
 #endif

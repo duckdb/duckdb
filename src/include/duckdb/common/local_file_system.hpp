@@ -38,8 +38,12 @@ public:
 	int64_t GetFileSize(FileHandle &handle) override;
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
 	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+	//! Returns a tag that uniquely identifies the version of the file
+	string GetVersionTag(FileHandle &handle) override;
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
 	FileType GetFileType(FileHandle &handle) override;
+	//! Returns the file stats of the attached handle.
+	FileMetadata Stats(FileHandle &handle) override;
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	void Truncate(FileHandle &handle, int64_t new_size) override;
@@ -62,9 +66,6 @@ public:
 	void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
-
-	//! Runs a glob on the file system, returning a list of matching files
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path
@@ -96,6 +97,8 @@ public:
 	// returns a C-string of the path that trims any file:/ prefix
 	static const char *NormalizeLocalPath(const string &path);
 
+	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener, bool absolute_path);
+
 protected:
 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
 	                       optional_ptr<FileOpener> opener) override;
@@ -104,12 +107,16 @@ protected:
 		return true;
 	}
 
+	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                            optional_ptr<FileOpener> opener) override;
+	bool SupportsGlobExtended() const override {
+		return true;
+	}
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
 	idx_t GetFilePointer(FileHandle &handle);
-
-	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
 };
 
 } // namespace duckdb

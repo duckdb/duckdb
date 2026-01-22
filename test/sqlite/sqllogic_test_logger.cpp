@@ -108,6 +108,8 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 		switch (token.type) {
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR:
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_EMPHASIS:
+		case SimplifiedTokenType::SIMPLIFIED_TOKEN_ERROR_SUGGESTION:
 			break;
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
 		case SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT:
@@ -256,7 +258,6 @@ void SQLLogicTestLogger::WrongRowCount(idx_t expected_rows, MaterializedQueryRes
 
 void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expected_columns, idx_t expected_column_count,
                                                           MaterializedQueryResult &result) {
-
 	std::ostringstream oss;
 	PrintErrorHeader("Wrong column count in query!");
 	oss << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got "
@@ -280,7 +281,6 @@ void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expecte
 }
 
 void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count) {
-
 	std::ostringstream oss;
 	PrintLineSep();
 	PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " + to_string(row_number) +

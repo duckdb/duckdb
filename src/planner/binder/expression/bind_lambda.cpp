@@ -12,31 +12,30 @@
 
 namespace duckdb {
 
-idx_t GetLambdaParamCount(const vector<DummyBinding> &lambda_bindings) {
+static idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 	idx_t count = 0;
 	for (auto &binding : lambda_bindings) {
-		count += binding.names.size();
+		count += binding.GetColumnCount();
 	}
 	return count;
 }
 
-idx_t GetLambdaParamIndex(const vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
-                          const BoundLambdaRefExpression &bound_lambda_ref_expr) {
+static idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
+                                 const BoundLambdaRefExpression &bound_lambda_ref_expr) {
 	D_ASSERT(bound_lambda_ref_expr.lambda_idx < lambda_bindings.size());
 	idx_t offset = 0;
 	// count the remaining lambda parameters BEFORE the current lambda parameter,
 	// as these will be in front of the current lambda parameter in the input chunk
 	for (idx_t i = bound_lambda_ref_expr.lambda_idx + 1; i < lambda_bindings.size(); i++) {
-		offset += lambda_bindings[i].names.size();
+		offset += lambda_bindings[i].GetColumnCount();
 	}
-	offset +=
-	    lambda_bindings[bound_lambda_ref_expr.lambda_idx].names.size() - bound_lambda_ref_expr.binding.column_index - 1;
+	offset += bound_lambda_ref_expr.binding.column_index;
 	offset += bound_lambda_expr.parameter_count;
 	return offset;
 }
 
-void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
-
+static void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names,
+                             vector<string> &column_aliases) {
 	auto &column_ref = expr.Cast<ColumnRefExpression>();
 	if (column_ref.IsQualified()) {
 		throw BinderException(LambdaExpression::InvalidParametersErrorMessage());
@@ -46,8 +45,7 @@ void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names
 	column_aliases.push_back(column_ref.ToString());
 }
 
-void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
-
+static void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
 	// extract the lambda parameters, which are a single column
 	// reference, or a list of column references (ROW function)
 	string error_message;
@@ -136,28 +134,26 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
                                                      BoundLambdaExpression &bound_lambda_expr,
                                                      const optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                                      const vector<LogicalType> &function_child_types) {
-
 	// check if the original expression is a lambda parameter
 	if (original->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
-
 		auto &bound_lambda_ref = original->Cast<BoundLambdaRefExpression>();
 		auto alias = bound_lambda_ref.GetAlias();
 
 		// refers to a lambda parameter outside the current lambda function
 		// so the lambda parameter will be inside the lambda_bindings
 		if (lambda_bindings && bound_lambda_ref.lambda_idx != lambda_bindings->size()) {
-
 			auto &binding = (*lambda_bindings)[bound_lambda_ref.lambda_idx];
-			D_ASSERT(binding.names.size() == binding.types.size());
+			auto &column_names = binding.GetColumnNames();
+			auto &column_types = binding.GetColumnTypes();
+			D_ASSERT(column_names.size() == column_types.size());
 
 			// find the matching dummy column in the lambda binding
-			for (idx_t column_idx = 0; column_idx < binding.names.size(); column_idx++) {
+			for (idx_t column_idx = 0; column_idx < binding.GetColumnCount(); column_idx++) {
 				if (column_idx == bound_lambda_ref.binding.column_index) {
-
 					// now create the replacement
 					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_expr, bound_lambda_ref);
-					replacement = make_uniq<BoundReferenceExpression>(binding.names[column_idx],
-					                                                  binding.types[column_idx], index);
+					replacement =
+					    make_uniq<BoundReferenceExpression>(column_names[column_idx], column_types[column_idx], index);
 					return;
 				}
 			}
@@ -168,7 +164,9 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		// refers to a lambda parameter inside the current lambda function
 		auto logical_type =
 		    (*bind_lambda_function)(context, function_child_types, bound_lambda_ref.binding.column_index);
-		auto index = bound_lambda_expr.parameter_count - bound_lambda_ref.binding.column_index - 1;
+
+		const auto index = bound_lambda_ref.binding.column_index;
+
 		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, index);
 		return;
 	}
@@ -188,7 +186,6 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_expr, unique_ptr<Expression> &expr,
                                             const optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                             const vector<LogicalType> &function_child_types) {
-
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
 		throw BinderException("subqueries in lambda expressions are not supported");
 	}
@@ -206,7 +203,6 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF ||
 	    expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER ||
 	    expr->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
-
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			// Search for UNNEST.
 			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;

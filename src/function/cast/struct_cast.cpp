@@ -12,8 +12,8 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	auto &source_children = StructType::GetChildTypes(source);
 	auto &target_children = StructType::GetChildTypes(target);
 
-	auto target_is_unnamed = StructType::IsUnnamed(target);
-	auto source_is_unnamed = StructType::IsUnnamed(source);
+	auto target_is_unnamed = target_children.empty() || StructType::IsUnnamed(target);
+	auto source_is_unnamed = source_children.empty() || StructType::IsUnnamed(source);
 
 	auto is_unnamed = target_is_unnamed || source_is_unnamed;
 	if (is_unnamed && source_children.size() != target_children.size()) {
@@ -268,7 +268,6 @@ StructToMapBoundCastData::InitStructToMapCastLocalState(CastLocalStateParameters
 }
 
 static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Optimization: if the source vector is constant, we only have a single physical element, so we can set the
 		// result vectortype to ConstantVector as well and set the (logical) count to 1

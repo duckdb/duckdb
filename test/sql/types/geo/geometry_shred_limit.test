@@ -1,0 +1,53 @@
+# name: test/sql/types/geo/geometry_shred_limit.test
+# group: [geo]
+
+require vector_size 2048
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+SET geometry_minimum_shredding_size = 3;
+
+# Setup test table
+statement ok
+CREATE TABLE t1(g GEOMETRY);
+
+# Insert point
+statement ok
+INSERT INTO t1 VALUES ('POINT(0 0)'::GEOMETRY);
+
+# Another point
+statement ok
+INSERT INTO t1 VALUES ('POINT(1 1)'::GEOMETRY);
+
+# Check segments
+query I rowsort
+select distinct segment_type from pragma_storage_info('t1') order by all;
+----
+GEOMETRY
+VALIDITY
+
+statement ok
+CHECKPOINT
+
+# Check segments - should be unshredded as below threshold
+query I rowsort
+select distinct segment_type from pragma_storage_info('t1') order by all;
+----
+GEOMETRY
+VALIDITY
+
+# Now insert third point to exceed threshold
+statement ok
+INSERT INTO t1 VALUES ('POINT(2 2)'::GEOMETRY);
+
+statement ok
+CHECKPOINT
+
+# Now it should be shredded
+query I rowsort
+select distinct segment_type from pragma_storage_info('t1') order by all;
+----
+DOUBLE
+VALIDITY

@@ -9,7 +9,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+SourceResultType PhysicalAlter::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSourceInput &input) const {
 	if (info->type == AlterType::ALTER_DATABASE) {
 		auto &db_info = info->Cast<AlterDatabaseInfo>();
 		auto &db_manager = DatabaseManager::Get(context.client);

@@ -70,7 +70,7 @@ public:
 	void FindMinimum(const Node &node);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower
 	//! bound exceeds the maximum value of the ART.
-	bool LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth);
+	bool LowerBound(const Node &node, const ARTKey &key, const bool equal);
 
 	//! Returns the nested depth.
 	uint8_t GetNestedDepth() const {

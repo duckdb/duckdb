@@ -9,8 +9,8 @@ PRAGMA enable_verification
 
 # original from the issue
 statement ok
-FROM 'data/json/15601/fragment*.json'
+FROM '{DATA_DIR}/json/15601/fragment*.json'
 
 # created an even worse example
 statement ok
-FROM 'data/json/15601/bunch_of_key_collisions.json'
+FROM '{DATA_DIR}/json/15601/bunch_of_key_collisions.json'

@@ -11,7 +11,6 @@
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
 
@@ -28,8 +27,6 @@ public:
 	bool setop_all = false;
 	//! The children of the set operation
 	vector<unique_ptr<QueryNode>> children;
-
-	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override;
 
 public:
 	//! Convert the query node to a string

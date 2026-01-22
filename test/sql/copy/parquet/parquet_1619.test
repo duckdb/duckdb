@@ -5,19 +5,19 @@
 require parquet
 
 query I
-select struct_extract("inner", 'f64_field') from parquet_scan('data/parquet-testing/struct.parquet');
+select struct_extract("inner", 'f64_field') from parquet_scan('{DATA_DIR}/parquet-testing/struct.parquet');
 ----
 NULL
 1.23
 
 query I
-select ("inner")."f64_field" from parquet_scan('data/parquet-testing/struct.parquet');
+select ("inner")."f64_field" from parquet_scan('{DATA_DIR}/parquet-testing/struct.parquet');
 ----
 NULL
 1.23
 
 query I
-select "inner"['f64_field'] from parquet_scan('data/parquet-testing/struct.parquet');
+select "inner"['f64_field'] from parquet_scan('{DATA_DIR}/parquet-testing/struct.parquet');
 ----
 NULL
 1.23

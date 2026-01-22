@@ -41,6 +41,14 @@ idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
 	return wrapper->statements.size();
 }
 
+static void duckdb_prepare_param_index_to_name_map_internal(PreparedStatementWrapper *wrapper) {
+	auto &named_param_map = wrapper->statement->named_param_map;
+	auto &cache = wrapper->param_index_to_name;
+	for (auto &kv : named_param_map) {
+		cache[kv.second] = kv.first;
+	}
+}
+
 duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
                                                 duckdb_extracted_statements extracted_statements, idx_t index,
                                                 duckdb_prepared_statement *out_prepared_statement) {
@@ -54,7 +62,11 @@ duckdb_state duckdb_prepare_extracted_statement(duckdb_connection connection,
 	try {
 		wrapper->statement = conn->Prepare(std::move(source_wrapper->statements[index]));
 		*out_prepared_statement = (duckdb_prepared_statement)wrapper;
-		return wrapper->statement->HasError() ? DuckDBError : DuckDBSuccess;
+		if (wrapper->statement->HasError()) {
+			return DuckDBError;
+		}
+		duckdb_prepare_param_index_to_name_map_internal(wrapper);
+		return DuckDBSuccess;
 	} catch (...) {
 		delete wrapper;
 		return DuckDBError;
@@ -79,7 +91,11 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 	try {
 		wrapper->statement = conn->Prepare(query);
 		*out_prepared_statement = reinterpret_cast<duckdb_prepared_statement>(wrapper);
-		return !wrapper->statement->HasError() ? DuckDBSuccess : DuckDBError;
+		if (wrapper->statement->HasError()) {
+			return DuckDBError;
+		}
+		duckdb_prepare_param_index_to_name_map_internal(wrapper);
+		return DuckDBSuccess;
 	} catch (...) {
 		delete wrapper;
 		return DuckDBError;
@@ -88,7 +104,13 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 
 const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
-	if (!wrapper || !wrapper->statement || !wrapper->statement->HasError()) {
+	if (!wrapper) {
+		return nullptr;
+	}
+	if (!wrapper->success) {
+		return wrapper->error_data.Message().c_str();
+	}
+	if (!wrapper->statement || !wrapper->statement->HasError()) {
 		return nullptr;
 	}
 	return wrapper->statement->error.Message().c_str();
@@ -107,19 +129,12 @@ static duckdb::string duckdb_parameter_name_internal(duckdb_prepared_statement p
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return duckdb::string();
 	}
-	if (index > wrapper->statement->named_param_map.size()) {
+	auto &cache = wrapper->param_index_to_name;
+	auto it = cache.find(index);
+	if (it == cache.end()) {
 		return duckdb::string();
 	}
-	for (auto &item : wrapper->statement->named_param_map) {
-		auto &identifier = item.first;
-		auto &param_idx = item.second;
-		if (param_idx == index) {
-			// Found the matching parameter
-			return identifier;
-		}
-	}
-	// No parameter was found with this index
-	return duckdb::string();
+	return it->second;
 }
 
 const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index) {
@@ -191,7 +206,7 @@ const char *duckdb_prepared_statement_column_name(duckdb_prepared_statement prep
 	}
 	auto &names = wrapper->statement->GetNames();
 
-	if (col_idx < 0 || col_idx >= names.size()) {
+	if (col_idx >= names.size()) {
 		return nullptr;
 	}
 	return strdup(names[col_idx].c_str());
@@ -204,7 +219,7 @@ duckdb_logical_type duckdb_prepared_statement_column_logical_type(duckdb_prepare
 		return nullptr;
 	}
 	auto types = wrapper->statement->GetTypes();
-	if (col_idx < 0 || col_idx >= types.size()) {
+	if (col_idx >= types.size()) {
 		return nullptr;
 	}
 	return reinterpret_cast<duckdb_logical_type>(new LogicalType(types[col_idx]));
@@ -229,9 +244,10 @@ duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx
 		return DuckDBError;
 	}
 	if (param_idx <= 0 || param_idx > wrapper->statement->named_param_map.size()) {
-		wrapper->statement->error =
+		wrapper->error_data =
 		    duckdb::InvalidInputException("Can not bind to parameter number %d, statement only has %d parameter(s)",
 		                                  param_idx, wrapper->statement->named_param_map.size());
+		wrapper->success = false;
 		return DuckDBError;
 	}
 	auto identifier = duckdb_parameter_name_internal(prepared_statement, param_idx);

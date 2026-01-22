@@ -6,12 +6,12 @@ require parquet
 
 # file_index
 query I
-SELECT file_index FROM 'data/parquet-testing/glob/t1.parquet'
+SELECT file_index FROM '{DATA_DIR}/parquet-testing/glob/t1.parquet'
 ----
 0
 
 query III
-SELECT file_index, i, j FROM read_parquet(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet', 'data/parquet-testing/glob2/t1.parquet'])
+SELECT file_index, i, j FROM read_parquet(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet', '{DATA_DIR}/parquet-testing/glob2/t1.parquet'])
 ----
 0	1	a
 1	2	b
@@ -19,25 +19,25 @@ SELECT file_index, i, j FROM read_parquet(['data/parquet-testing/glob/t1.parquet
 
 query III
 SELECT file_index, i, j
-FROM read_parquet(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet', 'data/parquet-testing/glob2/t1.parquet'])
+FROM read_parquet(['{DATA_DIR}/parquet-testing/glob/t1.parquet', '{DATA_DIR}/parquet-testing/glob/t2.parquet', '{DATA_DIR}/parquet-testing/glob2/t1.parquet'])
 WHERE file_index=1
 ----
 1	2	b
 
 # Filename without the filename option
 statement ok
-select filename from 'data/parquet-testing/glob/t1.parquet'
+select filename from '{DATA_DIR}/parquet-testing/glob/t1.parquet'
 
 query III
-select i, j, replace(filename, '\', '/') from 'data/parquet-testing/glob*/t?.parquet' order by i;
+select i, j, parse_path(filename)[-2:] from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' order by i;
 ----
-1	a	data/parquet-testing/glob/t1.parquet
-2	b	data/parquet-testing/glob/t2.parquet
-3	c	data/parquet-testing/glob2/t1.parquet
+1	a	[glob, t1.parquet]
+2	b	[glob, t2.parquet]
+3	c	[glob2, t1.parquet]
 
 # not projected in *
 query II
-select * from 'data/parquet-testing/glob*/t?.parquet' order by i;
+select * from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' order by i;
 ----
 1	a
 2	b
@@ -47,6 +47,6 @@ require notwindows
 
 # filename in filter
 query III
-select i, j, replace(filename, '\', '/') from 'data/parquet-testing/glob*/t?.parquet' where filename='data/parquet-testing/glob/t1.parquet'
+select i, j, parse_path(filename)[-2:] from '{DATA_DIR}/parquet-testing/glob*/t?.parquet' where filename='{DATA_DIR}/parquet-testing/glob/t1.parquet'
 ----
-1	a	data/parquet-testing/glob/t1.parquet
+1	a	[glob, t1.parquet]

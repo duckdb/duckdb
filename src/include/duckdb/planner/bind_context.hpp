@@ -54,7 +54,7 @@ public:
 	//! matching ones
 	vector<string> GetSimilarBindings(const string &column_name);
 
-	optional_ptr<Binding> GetCTEBinding(const string &ctename);
+	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &ctename);
 	//! Binds a column expression to the base table. Returns the bound expression
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
@@ -116,8 +116,9 @@ public:
 
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.
-	void AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                   bool using_key = false);
+	void AddCTEBinding(idx_t index, BindingAlias alias, const vector<string> &names, const vector<LogicalType> &types,
+	                   CTEType cte_type = CTEType::CAN_BE_REFERENCED);
+	void AddCTEBinding(unique_ptr<CTEBinding> binding);
 
 	//! Add an implicit join condition (e.g. USING (x))
 	void AddUsingBinding(const string &column_name, UsingColumnSet &set);
@@ -173,6 +174,6 @@ private:
 	//! The set of columns used in USING join conditions
 	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
 	//! The set of CTE bindings
-	case_insensitive_map_t<unique_ptr<Binding>> cte_bindings;
+	vector<unique_ptr<CTEBinding>> cte_bindings;
 };
 } // namespace duckdb

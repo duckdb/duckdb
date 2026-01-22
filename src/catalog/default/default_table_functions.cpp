@@ -69,7 +69,18 @@ FROM histogram_values(source, col_name, bin_count := bin_count, technique := tec
 	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {}, R"(
 SELECT * EXCLUDE (message), UNNEST(parse_duckdb_log_message(log_type, message))
 FROM duckdb_logs(denormalized_table=1)
-WHERE type = log_type
+WHERE type ILIKE log_type
+)"},
+	{DEFAULT_SCHEMA, "duckdb_profiling_settings", {}, {}, R"(
+SELECT * EXCLUDE(input_type, scope, aliases)
+  FROM duckdb_settings()
+  WHERE name IN (
+      'enable_profiling',
+      'profiling_coverage',
+      'profiling_output',
+      'profiling_mode',
+      'custom_profiling_settings'
+  );
 )"},
 	{nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}
 	};

@@ -8,6 +8,6 @@ statement ok
 PRAGMA enable_verification
 
 query III
-SELECT my_map['A'], * FROM parquet_scan('data/parquet-testing/struct_skip_test.parquet') where filter == '0'
+SELECT my_map['A'], * FROM parquet_scan('{DATA_DIR}/parquet-testing/struct_skip_test.parquet') where filter == '0'
 ----
 NULL	{A=NULL}	0

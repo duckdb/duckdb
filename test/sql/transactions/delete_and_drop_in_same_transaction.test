@@ -1,0 +1,23 @@
+# name: test/sql/transactions/delete_and_drop_in_same_transaction.test
+# group: [transactions]
+
+statement ok
+CREATE OR REPLACE TABLE SampleTable AS
+SELECT DISTINCT id
+FROM (VALUES
+    ('one'),
+    ('two'),
+    ('three')
+) AS t(id);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DELETE FROM sampletable;
+
+statement ok
+DROP TABLE SampleTable;
+
+statement ok
+COMMIT TRANSACTION;

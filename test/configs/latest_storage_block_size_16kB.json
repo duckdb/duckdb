@@ -3,6 +3,9 @@
   "on_init": "ATTACH '__TEST_DIR__/{BASE_TEST_NAME}__test__config__latest_storage_block_size_16kB.db' AS __test__config__latest_storage_block_size_16kB (STORAGE_VERSION 'latest'); SET storage_compatibility_version='latest';",
   "on_new_connection": "USE __test__config__latest_storage_block_size_16kB;",
   "on_load": "skip",
+  "settings": [
+    {"name": "storage_compatibility_version", "value": "latest"}
+  ],
   "skip_compiled": "true",
   "block_size": "16384",
   "skip_tests": [
@@ -15,7 +18,6 @@
         "test/sql/attach/attach_show_all_tables.test",
         "test/sql/attach/attach_table_info.test",
         "test/sql/attach/attach_views.test",
-        "test/sql/attach/show_databases.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_set_search_path.test",
         "test/sql/catalog/test_temporary.test",
@@ -35,6 +37,13 @@
       "reason": "ALP is disabled for non-default block sizes.",
       "paths": [
         "test/sql/storage/compression/alp/alp_min_max.test"
+      ]
+    },
+    {
+      "reason": "Expects db with name 'memory'",
+      "paths": [
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/show_schemas.test"
       ]
     }
   ]

@@ -30,6 +30,10 @@ unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddIndex(Binder &binder, Table
 
 BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry,
                                          unique_ptr<AlterInfo> alter_info) {
+	if (entry.type != CatalogType::TABLE_ENTRY) {
+		throw BinderException("Cannot execute the `ALTER TABLE` statement on `%s`, only `Table` entries are accepted.",
+		                      CatalogTypeToString(entry.type));
+	}
 	auto &table_info = alter_info->Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
 	auto &table = entry.Cast<TableCatalogEntry>();
@@ -72,6 +76,28 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	return std::move(result);
 }
 
+static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
+	if (stmt.info->type == AlterType::ALTER_TABLE) {
+		auto &table_info = stmt.info->Cast<AlterTableInfo>();
+		switch (table_info.alter_table_type) {
+		case AlterTableType::ADD_COLUMN: {
+			auto &add_info = table_info.Cast<AddColumnInfo>();
+			binder.BindLogicalType(add_info.new_column.TypeMutable());
+		} break;
+		case AlterTableType::ADD_FIELD: {
+			auto &add_info = table_info.Cast<AddFieldInfo>();
+			binder.BindLogicalType(add_info.new_field.TypeMutable());
+		} break;
+		case AlterTableType::ALTER_COLUMN_TYPE: {
+			auto &alter_column_info = table_info.Cast<ChangeColumnTypeInfo>();
+			binder.BindLogicalType(alter_column_info.target_type);
+		} break;
+		default:
+			break;
+		}
+	}
+}
+
 BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
@@ -81,7 +107,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	if (stmt.info->type == AlterType::ALTER_DATABASE) {
 		auto &properties = GetStatementProperties();
 		properties.return_type = StatementReturnType::NOTHING;
-		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context);
+		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context, DatabaseModificationType::ALTER_TABLE);
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 		return result;
 	}
@@ -93,7 +119,6 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// Extra step for column comments: They can alter a table or a view, and we resolve that here.
 		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
 		entry = info.TryResolveCatalogEntry(entry_retriever);
-
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
 		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->name);
@@ -103,18 +128,28 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	if (!entry) {
+		// Bind types in this binder
+		BindAlterTypes(*this, stmt);
+
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 		return result;
 	}
 
 	D_ASSERT(!entry->deleted);
 	auto &catalog = entry->ParentCatalog();
+
+	// Bind types in the same catalog as the entry
+	auto type_binder = Binder::CreateBinder(context, *this);
+	type_binder->SetSearchPath(catalog, stmt.info->schema);
+
+	BindAlterTypes(*type_binder, stmt);
+
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Can not comment on System Catalog entries");
 	}
 	if (!entry->temporary) {
 		// We can only alter temporary tables and views in read-only mode.
-		properties.RegisterDBModify(catalog, context);
+		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	}
 	stmt.info->catalog = catalog.GetName();
 	stmt.info->schema = entry->ParentSchema().name;

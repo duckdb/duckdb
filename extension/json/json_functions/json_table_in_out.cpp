@@ -284,7 +284,6 @@ static void InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 template <JSONTableInOutType TYPE>
 static bool JSONTableInOutHandleValue(JSONTableInOutLocalState &lstate, JSONTableInOutResult &result,
                                       idx_t &child_index, size_t &idx, yyjson_val *child_key, yyjson_val *child_val) {
-
 	if (idx < child_index) {
 		return false; // Continue: Get back to where we left off
 	}

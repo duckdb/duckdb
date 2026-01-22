@@ -210,19 +210,28 @@ public:
 			// use original error
 			return ParserExtensionParseResult();
 		}
-		auto splits = StringUtil::Split(lcase, "quack");
-		for (auto &split : splits) {
-			StringUtil::Trim(split);
-			if (!split.empty()) {
-				// we only accept quacks here
-				if (StringUtil::CIEquals(split, ";")) {
-					continue;
-				}
-				return ParserExtensionParseResult("This is not a quack: " + split);
+
+		idx_t count = 0;
+		size_t pos = 0;
+		size_t last_end = 0;
+		while ((pos = lcase.find("quack", last_end)) != string::npos) {
+			string between = lcase.substr(last_end, pos - last_end);
+			StringUtil::Trim(between);
+			if (!between.empty() && !StringUtil::CIEquals(between, ";")) {
+				return ParserExtensionParseResult("This is not a quack: " + between);
 			}
+			count++;
+			last_end = pos + 5;
 		}
+
+		string after = lcase.substr(last_end);
+		StringUtil::Trim(after);
+		if (!after.empty() && !StringUtil::CIEquals(after, ";")) {
+			return ParserExtensionParseResult("This is not a quack: " + after);
+		}
+
 		// QUACK
-		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size()));
+		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(count));
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
@@ -250,12 +259,15 @@ public:
 				select_statement->node = std::move(select_node);
 				statements.push_back(std::move(select_statement));
 			}
-			if (StringUtil::CIEquals(query_input, "over")) {
-				return ParserOverrideResult("Parser overridden, query equaled \"over\" but not \"override\"");
+			if (StringUtil::CIEquals(query_input, "overri")) {
+				auto exception = ParserException("Parser overridden, query equaled \"overri\" but not \"override\"");
+				return ParserOverrideResult(exception);
 			}
 		}
 		if (statements.empty()) {
-			return ParserOverrideResult();
+			auto not_implemented_exception =
+			    NotImplementedException("QuackParser has not yet implemented the statements to transform this query");
+			return ParserOverrideResult(not_implemented_exception);
 		}
 		return ParserOverrideResult(std::move(statements));
 	}
@@ -284,19 +296,19 @@ static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &st
 //===--------------------------------------------------------------------===//
 
 struct BoundedType {
-	static LogicalType Bind(const BindLogicalTypeInput &input) {
+	static LogicalType Bind(BindLogicalTypeInput &input) {
 		auto &modifiers = input.modifiers;
 
 		if (modifiers.size() != 1) {
 			throw BinderException("BOUNDED type must have one modifier");
 		}
-		if (modifiers[0].type() != LogicalType::INTEGER) {
+		if (modifiers[0].GetValue().type() != LogicalType::INTEGER) {
 			throw BinderException("BOUNDED type modifier must be integer");
 		}
-		if (modifiers[0].IsNull()) {
+		if (modifiers[0].GetValue().IsNull()) {
 			throw BinderException("BOUNDED type modifier cannot be NULL");
 		}
-		auto bound_val = modifiers[0].GetValue<int32_t>();
+		auto bound_val = modifiers[0].GetValue().GetValue<int32_t>();
 		return Get(bound_val);
 	}
 
@@ -359,7 +371,7 @@ static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFun
 		auto new_max_val = left_max_val + right_max_val;
 		bound_function.arguments[0] = arguments[0]->return_type;
 		bound_function.arguments[1] = arguments[1]->return_type;
-		bound_function.return_type = BoundedType::Get(new_max_val);
+		bound_function.SetReturnType(BoundedType::Get(new_max_val));
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
 	}
@@ -385,12 +397,12 @@ static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
 		bound_function.arguments[0] = arguments[0]->return_type;
-		bound_function.return_type = arguments[0]->return_type;
+		bound_function.SetReturnType(arguments[0]->return_type);
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");
 	}
 	auto result = make_uniq<BoundedFunctionData>();
-	result->max_val = BoundedType::GetMaxValue(bound_function.return_type);
+	result->max_val = BoundedType::GetMaxValue(bound_function.GetReturnType());
 	return std::move(result);
 }
 
@@ -457,21 +469,22 @@ static bool IntToBoundedCast(Vector &source, Vector &result, idx_t count, CastPa
 // to verify that the range is valid
 
 struct MinMaxType {
-	static LogicalType Bind(const BindLogicalTypeInput &input) {
+	static LogicalType Bind(BindLogicalTypeInput &input) {
 		auto &modifiers = input.modifiers;
 
 		if (modifiers.size() != 2) {
 			throw BinderException("MINMAX type must have two modifiers");
 		}
-		if (modifiers[0].type() != LogicalType::INTEGER || modifiers[1].type() != LogicalType::INTEGER) {
+		if (modifiers[0].GetValue().type() != LogicalType::INTEGER ||
+		    modifiers[1].GetValue().type() != LogicalType::INTEGER) {
 			throw BinderException("MINMAX type modifiers must be integers");
 		}
-		if (modifiers[0].IsNull() || modifiers[1].IsNull()) {
+		if (modifiers[0].GetValue().IsNull() || modifiers[1].GetValue().IsNull()) {
 			throw BinderException("MINMAX type modifiers cannot be NULL");
 		}
 
-		const auto min_val = modifiers[0].GetValue<int32_t>();
-		const auto max_val = modifiers[1].GetValue<int32_t>();
+		const auto min_val = modifiers[0].GetValue().GetValue<int32_t>();
+		const auto max_val = modifiers[1].GetValue().GetValue<int32_t>();
 
 		if (min_val >= max_val) {
 			throw BinderException("MINMAX type min value must be less than max value");
@@ -598,8 +611,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
-	config.parser_extensions.push_back(QuackExtension());
-	config.extension_callbacks.push_back(make_uniq<QuackLoadExtension>());
+	ParserExtension::Register(config, QuackExtension());
+	ExtensionCallback::Register(config, make_shared_ptr<QuackLoadExtension>());
 
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();

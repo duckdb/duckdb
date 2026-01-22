@@ -3,6 +3,9 @@
   "on_init": "ATTACH '__TEST_DIR__/{BASE_TEST_NAME}__test__config__latest__storage.db' AS __test__config__latest__storage (STORAGE_VERSION 'latest'); SET storage_compatibility_version='latest';",
   "on_new_connection": "USE __test__config__latest__storage;",
   "on_load": "skip",
+  "settings": [
+    {"name": "storage_compatibility_version", "value": "latest"}
+  ],
   "skip_compiled": "true",
   "skip_tests": [
     {
@@ -25,7 +28,6 @@
         "test/sql/pg_catalog/system_functions.test",
         "test/sql/attach/attach_table_info.test",
         "test/sql/attach/attach_did_you_mean.test",
-        "test/sql/attach/show_databases.test",
         "test/sql/attach/attach_show_all_tables.test",
         "test/sql/attach/attach_default_table.test",
         "test/sql/attach/attach_icu_collation.test",
@@ -43,6 +45,13 @@
       "reason": "Attached databases have a main schema, which is not implicit.",
       "paths": [
         "test/fuzzer/sqlsmith/current_schemas_null.test"
+      ]
+    },
+    {
+      "reason": "Requires a specific set of databases and schemas",
+      "paths": [
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/show_schemas.test"
       ]
     }
   ]

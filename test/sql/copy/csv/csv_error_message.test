@@ -8,32 +8,32 @@ PRAGMA enable_verification
 # Test columns error
 
 statement error
-FROM read_csv('data/csv/15473.csv', delim = ',', columns = {'A' : 'VARCHAR','B' : 'VARCHAR','C' : 'VARCHAR','D' : 'VARCHAR'})
+FROM read_csv('{DATA_DIR}/csv/15473.csv', delim = ',', columns = {'A' : 'VARCHAR','B' : 'VARCHAR','C' : 'VARCHAR','D' : 'VARCHAR'})
 ----
 Columns are set as: "columns = { 'A' : 'VARCHAR', 'B' : 'VARCHAR', 'C' : 'VARCHAR', 'D' : 'VARCHAR'}", and they contain: 4 columns. It does not match the number of columns found by the sniffer: 3. Verify the columns parameter is correctly set.
 
 statement ok
-COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '__TEST_DIR__/int_parse_error.csv' (HEADER, DELIMITER '|')
+COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '{TEMP_DIR}/int_parse_error.csv' (HEADER, DELIMITER '|')
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'})
+SELECT * FROM read_csv('{TEMP_DIR}/int_parse_error.csv', columns={'i': 'INT'})
 ----
 Column at position: 0 Set type: INTEGER Sniffed type: VARCHAR
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=True, auto_detect=false)
+SELECT * FROM read_csv('{TEMP_DIR}/int_parse_error.csv', columns={'i': 'INT'}, header=True, auto_detect=false)
 ----
 Line: 105
 
 statement ok
-COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '__TEST_DIR__/int_parse_error.csv' (HEADER 0, DELIMITER '|')
+COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '{TEMP_DIR}/int_parse_error.csv' (HEADER 0, DELIMITER '|')
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False, auto_detect=false)
+SELECT * FROM read_csv('{TEMP_DIR}/int_parse_error.csv', columns={'i': 'INT'}, header=False, auto_detect=false)
 ----
 Line: 104
 
 statement error
-SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False, auto_detect=false)
+SELECT * FROM read_csv('{TEMP_DIR}/int_parse_error.csv', columns={'i': 'INT'}, header=False, auto_detect=false)
 ----
 Original Line: hello

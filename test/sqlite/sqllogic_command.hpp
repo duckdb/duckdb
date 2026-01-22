@@ -15,7 +15,7 @@
 namespace duckdb {
 class SQLLogicTestRunner;
 
-enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN };
+enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN, RESULT_DONT_CARE };
 
 struct LoopDefinition {
 	string loop_iterator_name;
@@ -24,6 +24,7 @@ struct LoopDefinition {
 	int loop_end;
 	bool is_parallel;
 	vector<string> tokens;
+	bool is_skipped = false;
 };
 
 struct ExecuteContext {
@@ -152,6 +153,15 @@ public:
 
 	void ExecuteInternal(ExecuteContext &context) const override;
 
+	bool SupportsConcurrent() const override;
+};
+
+class ContinueCommand : public Command {
+public:
+	explicit ContinueCommand(SQLLogicTestRunner &runner);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
 	bool SupportsConcurrent() const override;
 };
 

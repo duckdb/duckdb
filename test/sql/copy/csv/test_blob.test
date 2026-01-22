@@ -14,7 +14,7 @@ CREATE TABLE blobs (b BYTEA);
 
 # We must set auto_detect to 0 since blobs are not supported in auto-detection
 query I
-COPY blobs FROM 'data/csv/test/blob.csv' (HEADER 0, AUTO_DETECT 0);
+COPY blobs FROM '{DATA_DIR}/csv/test/blob.csv' (HEADER 0, AUTO_DETECT 0);
 ----
 1
 
@@ -26,7 +26,7 @@ SELECT b FROM blobs
 
 # testing copying to a file and copying them back in
 query I
-COPY blobs TO '__TEST_DIR__/blob.csv';
+COPY blobs TO '{TEMP_DIR}/blob.csv';
 ----
 1
 
@@ -34,7 +34,7 @@ statement ok
 DELETE FROM blobs
 
 query I
-COPY blobs FROM '__TEST_DIR__/blob.csv';
+COPY blobs FROM '{TEMP_DIR}/blob.csv';
 ----
 1
 
@@ -45,7 +45,7 @@ SELECT b FROM blobs
 
 # now test it with a delimiter that occurs IN the blob
 query I
-COPY blobs TO '__TEST_DIR__/blob.csv' DELIMITER 'A' QUOTE 'B' ESCAPE 'C';
+COPY blobs TO '{TEMP_DIR}/blob.csv' DELIMITER 'A' QUOTE 'B' ESCAPE 'C';
 ----
 1
 
@@ -53,7 +53,7 @@ statement ok
 DELETE FROM blobs
 
 query I
-COPY blobs FROM '__TEST_DIR__/blob.csv' (DELIMITER 'A', QUOTE 'B', ESCAPE 'C');
+COPY blobs FROM '{TEMP_DIR}/blob.csv' (DELIMITER 'A', QUOTE 'B', ESCAPE 'C');
 ----
 1
 

@@ -83,7 +83,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 		throw BinderException("Could not find key \"%s\" in struct\n%s", key, message);
 	}
 
-	bound_function.return_type = std::move(return_type);
+	bound_function.SetReturnType(std::move(return_type));
 	return StructExtractAtFun::GetBindData(key_index);
 }
 
@@ -120,7 +120,7 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
 		throw BinderException("Key index %lld for struct_extract out of range - expected an index between 1 and %llu",
 		                      index, struct_children.size());
 	}
-	bound_function.return_type = struct_children[NumericCast<idx_t>(index - 1)].second;
+	bound_function.SetReturnType(struct_children[NumericCast<idx_t>(index - 1)].second);
 	return StructExtractAtFun::GetBindData(NumericCast<idx_t>(index - 1));
 }
 
