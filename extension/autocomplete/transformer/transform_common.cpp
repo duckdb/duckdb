@@ -266,7 +266,7 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 	if (type_or_character_pr->name == "QualifiedTypeName") {
 		auto qualified_type_name = transformer.Transform<QualifiedName>(type_or_character_pr);
 		result = LogicalType(TransformStringToLogicalTypeId(qualified_type_name.name));
-		if (modifiers.size() > 9) {
+		if (modifiers.size() > 9 && result.id() != LogicalTypeId::ENUM) {
 			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", qualified_type_name.name);
 		}
 		if (qualified_type_name.schema.empty()) {
