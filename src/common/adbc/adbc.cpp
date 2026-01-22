@@ -8,6 +8,7 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
@@ -132,7 +133,7 @@ static bool IsInterruptError(const char *message) {
 	if (!message) {
 		return false;
 	}
-	return std::strcmp(message, "Interrupted!") == 0;
+	return std::strcmp(message, duckdb::InterruptException::INTERRUPT_MESSAGE) == 0;
 }
 
 static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
