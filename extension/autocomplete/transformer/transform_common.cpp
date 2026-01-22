@@ -266,13 +266,14 @@ LogicalType PEGTransformerFactory::TransformSimpleType(PEGTransformer &transform
 		if (modifiers.size() > 9) {
 			throw ParserException("'%s': a maximum of 9 type modifiers is allowed", qualified_type_name.name);
 		}
-		if (qualified_type_name.schema.empty()) {
-			qualified_type_name.schema = qualified_type_name.catalog;
-			qualified_type_name.catalog = INVALID_CATALOG;
-		}
-		if (result.id() == LogicalTypeId::USER) {
-			result = LogicalType::USER(qualified_type_name.catalog, qualified_type_name.schema,
-			                           qualified_type_name.name, std::move(modifiers));
+		if (result.id() == LogicalTypeId::UNBOUND) {
+			if (qualified_type_name.schema.empty()) {
+				qualified_type_name.schema = qualified_type_name.catalog;
+				qualified_type_name.catalog = INVALID_CATALOG;
+			}
+			result = LogicalType::UNBOUND(
+			    make_uniq<TypeExpression>(qualified_type_name.catalog, qualified_type_name.schema,
+			                              qualified_type_name.name, vector<unique_ptr<ParsedExpression>> {}));
 		} else if (result.id() == LogicalTypeId::ENUM) {
 			Vector enum_vector(LogicalType::VARCHAR, NumericCast<idx_t>(modifiers.size()));
 			auto string_data = FlatVector::GetData<string_t>(enum_vector);

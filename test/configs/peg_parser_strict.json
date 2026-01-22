@@ -235,6 +235,21 @@
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
       ]
+    },
+    {
+      "reason": "New CREATE TABLE option syntax",
+      "paths": [
+        "test/sql/create/create_table_extra_options.test"
+      ]
+    },
+    {
+      "reason": "Type refactoring",
+      "paths": [
+        "test/fuzzer/pedro/decimal_with_invalid_scale.test",
+        "test/sql/types/test_user_type_errors_18452.test",
+        "test/sql/types/union/union_ambiguous.test",
+        "test/sql/types/nested/array/array_invalid.test"
+      ]
     }
   ]
 }

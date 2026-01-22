@@ -383,7 +383,7 @@ CompressionType PEGTransformerFactory::TransformColumnCompression(PEGTransformer
                                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto compression_string = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
-	return CompressionTypeFromString(StringUtil::Lower(compression_string));
+	return EnumUtil::FromString<CompressionType>(StringUtil::Lower(compression_string));
 }
 
 unique_ptr<ForeignKeyConstraint>

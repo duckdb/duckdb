@@ -955,9 +955,6 @@ DescribeRule <- 'DESCRIBE' / 'DESC'
 VacuumStatement <- 'VACUUM' VacuumOptions? AnalyzeTarget?
 VacuumOptions <- VacuumParensOptions / VacuumLegacyOptions
 
-VacuumStatement <- 'VACUUM' VacuumOptions? AnalyzeTarget?
-VacuumOptions <- VacuumParensOptions / VacuumLegacyOptions
-
 VacuumParensOptions <- Parens(List(VacuumOption))
 VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
 VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier

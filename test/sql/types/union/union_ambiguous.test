@@ -6,12 +6,12 @@
 statement error
 CREATE TABLE tbl(a UNION(b INT, b INT));
 ----
-Parser Error: Duplicate union type tag name "b"
+Duplicate union type tag name "b"
 
 statement error
 CREATE TABLE tbl(a UNION(b INT, B INT));
 ----
-Parser Error: Duplicate union type tag name "B"
+Duplicate union type tag name "B"
 
 # allow members with same type
 statement ok
