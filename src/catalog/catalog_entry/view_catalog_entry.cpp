@@ -26,10 +26,13 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->comment = info.comment;
 	this->tags = info.tags;
 	this->column_comments = info.column_comments;
+	if (!types.empty()) {
+		bind_state = ViewBindState::BOUND;
+	}
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
-    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name) {
+    : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name), bind_state(ViewBindState::UNBOUND) {
 	Initialize(info);
 }
 
@@ -92,25 +95,39 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 	}
 }
 
+bool ViewCatalogEntry::HasTypes() const {
+	return bind_state == ViewBindState::BOUND;
+}
+
 const vector<string> &ViewCatalogEntry::GetNames() {
-	if (!HasTypes()) {
-		throw InternalException("ViewCatalogEntry::GetNames called - but view does not have names defined");
+	if (bind_state != ViewBindState::BOUND) {
+		throw InternalException("ViewCatalogEntry::GetNames called - but view has not been bound yet");
 	}
 	return names;
 }
 
 const vector<LogicalType> &ViewCatalogEntry::GetTypes() {
-	if (!HasTypes()) {
-		throw InternalException("ViewCatalogEntry::GetTypes called - but view does not have types defined");
+	if (bind_state != ViewBindState::BOUND) {
+		throw InternalException("ViewCatalogEntry::GetTypes called - but view has not been bound yet");
 	}
 	return types;
 }
 
 void ViewCatalogEntry::BindView(ClientContext &context) {
-	if (HasTypes()) {
+	if (bind_state == ViewBindState::BINDING && bind_thread == ThreadUtil::GetThreadId()) {
+		throw InvalidInputException("View \"%s\" was requested to be bound but this thread is already binding that "
+		                            "view - this likely means the view was attempted to be bound recursively",
+		                            name);
+	}
+	lock_guard<mutex> guard(bind_lock);
+	if (bind_state == ViewBindState::BOUND) {
+		// already bound
 		return;
 	}
+	bind_state = ViewBindState::BINDING;
+	bind_thread = ThreadUtil::GetThreadId();
 	Binder::BindView(context, *query, ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases, types, names);
+	bind_state = ViewBindState::BOUND;
 }
 
 string ViewCatalogEntry::ToSQL() const {

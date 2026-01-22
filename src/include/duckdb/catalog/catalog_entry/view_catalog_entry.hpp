@@ -12,11 +12,14 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
 class DataTable;
 struct CreateViewInfo;
+
+enum class ViewBindState { BOUND, BINDING, UNBOUND };
 
 //! A view catalog entry
 class ViewCatalogEntry : public StandardEntry {
@@ -37,9 +40,9 @@ public:
 	//! The comments on the columns of the view: can be empty if there are no comments
 	vector<Value> column_comments;
 
-	const vector<string> &GetNames();
-	const vector<LogicalType> &GetTypes();
-	void BindView(ClientContext &context);
+	virtual const vector<string> &GetNames();
+	virtual const vector<LogicalType> &GetTypes();
+	virtual void BindView(ClientContext &context);
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
@@ -51,17 +54,20 @@ public:
 	virtual const SelectStatement &GetQuery();
 
 	// Whether or not the view has types/names defined
-	virtual bool HasTypes() const {
-		return !types.empty();
-	}
+	virtual bool HasTypes() const;
 
 	string ToSQL() const override;
 
 private:
+	mutable mutex bind_lock;
 	//! The returned types of the view
 	vector<LogicalType> types;
 	//! The returned names of the view
 	vector<string> names;
+	//! The current bind state of the view
+	atomic<ViewBindState> bind_state;
+	//! Current binding thread
+	atomic<thread_id> bind_thread;
 
 private:
 	void Initialize(CreateViewInfo &info);
