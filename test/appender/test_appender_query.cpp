@@ -9,9 +9,6 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test UPSERT through the query appender", "[appender]") {
-	// Test once with setting the types, and once with type inference.
-	duckdb::vector<LogicalType> types = {LogicalType::INTEGER, LogicalType::VARCHAR};
-
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -19,15 +16,13 @@ TEST_CASE("Test UPSERT through the query appender", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(i INTEGER PRIMARY KEY, value VARCHAR)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl VALUES (1, 'hello')"));
 
+	duckdb::vector<LogicalType> types;
+	types.push_back(LogicalType::INTEGER);
+	types.push_back(LogicalType::VARCHAR);
+
 	QueryAppender appender(con, "INSERT OR REPLACE INTO tbl FROM appended_data", types);
-	appender.BeginRow();
 	appender.AppendRow(1, "world");
-	appender.EndRow();
-
-	appender.BeginRow();
 	appender.AppendRow(2, "again");
-	appender.EndRow();
-
 	appender.Flush();
 
 	result = con.Query("SELECT * FROM tbl ORDER BY i");
