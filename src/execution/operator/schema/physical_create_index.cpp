@@ -78,7 +78,6 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 // Sink
 //-------------------------------------------------------------
 
-// build_sink
 SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
@@ -107,7 +106,6 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-// build_sink_combine
 SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
@@ -135,13 +133,6 @@ public:
 public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		auto &work_state = gstate.work_states[thread_id];
-
-		// TODO // what to do with this?
-		// I think we should abstract this, otherwise we might complicate it for the user
-		// if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
-		// 	return TaskExecutionResult::TASK_NOT_FINISHED;
-		// }
-
 		// execute build_work (do work per task)
 		IndexBuildWorkInput build_work_input {gstate.gstate, work_state, thread_id};
 
@@ -151,7 +142,7 @@ public:
 				// Are we done?
 				keep_going = index_op.index_type.build_work(build_work_input);
 			} catch (std::exception &ex) {
-				// Catch any exceptions and return errors!
+				// Catch any exceptions and return errors
 				ErrorData err(ex);
 				executor.PushError(err);
 				return TaskExecutionResult::TASK_ERROR;
@@ -246,9 +237,6 @@ public:
 	}
 
 	void FinishEvent() override {
-		// global and local states
-		// TODO; itterate over this; this is not correct yet
-
 		if (op.index_type.build_work_combine) {
 			auto &g_workstate = gstate.gstate;
 			// Combine each local work state into the global work state

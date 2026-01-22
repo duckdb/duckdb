@@ -50,7 +50,6 @@ public:
 	unique_ptr<BoundIndex> global_index;
 };
 
-// build_sink_init
 unique_ptr<IndexBuildState> ARTBuildGlobalInit(IndexBuildInitStateInput &input) {
 	auto state = make_uniq<ARTBuildGlobalState>();
 	auto &storage = input.table.GetStorage();
@@ -74,7 +73,6 @@ public:
 	explicit ARTBuildLocalState(ClientContext &context) : arena_allocator(Allocator::Get(context)) {};
 };
 
-// build_sink_init
 unique_ptr<IndexBuildSinkState> ARTBuildLocalInit(IndexBuildInitSinkInput &input) {
 	// Create the local sink state and add the local index.
 	auto state = make_uniq<ARTBuildLocalState>(input.context);
@@ -131,7 +129,6 @@ void ARTBuildSinkSorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataCh
 	}
 }
 
-// build_sink
 void ARTBuildSink(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk) {
 	auto &bind_data = input.bind_data->Cast<ARTBuildBindData>();
 	auto &lstate = input.local_state->Cast<ARTBuildLocalState>();

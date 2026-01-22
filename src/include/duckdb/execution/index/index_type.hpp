@@ -179,7 +179,6 @@ struct IndexBuildSinkInput {
 };
 
 struct IndexBuildSinkCombineInput {
-	// for combines we need local and global states
 	optional_ptr<IndexBuildBindData> bind_data;
 	optional_ptr<IndexBuildState> global_state;
 	optional_ptr<IndexBuildSinkState> local_state;
@@ -268,38 +267,32 @@ public:
 
 	// Callbacks
 	index_build_bind_t build_bind = nullptr;
-	index_build_sort_t build_sort = nullptr;
-	// former global init
+	index_build_sort_t build_sort = nullptr; // optional
 	index_build_init_t build_init = nullptr;
 
-	//! Sink phase; former local init
-	index_build_sink_init_t build_sink_init = nullptr;
+	//! Sink phase
+	index_build_sink_init_t build_sink_init = nullptr; // optional
 	index_build_sink_t build_sink = nullptr;
-
-	//! Optional Callbacks
-	// -----------------------------------------------------
-	index_build_sink_combine_t build_sink_combine = nullptr;
+	index_build_sink_combine_t build_sink_combine = nullptr; // optional
 
 	//! Midpoint
-	index_build_prepare_t build_prepare = nullptr;
+	index_build_prepare_t build_prepare = nullptr; // optional
 
 	//! Work phase
-	index_build_work_init_t build_work_init = nullptr;
-	index_build_work_t build_work = nullptr;
-	index_build_work_combine_t build_work_combine = nullptr;
-
-	// -----------------------------------------------------
+	index_build_work_init_t build_work_init = nullptr;       // optional
+	index_build_work_t build_work = nullptr;                 // optional
+	index_build_work_combine_t build_work_combine = nullptr; // optional
 
 	// Finalize
 	index_build_finalize_t build_finalize = nullptr;
 
 	//! Extra information for the index type
-	shared_ptr<IndexTypeInfo> index_info = nullptr;
+	shared_ptr<IndexTypeInfo> index_info = nullptr; // optional
 
 	index_build_plan_t create_plan = nullptr; // escape hatch for creating the physical plan
 	index_create_function_t create_instance = nullptr;
 
-	index_build_progress_t build_sink_progress = nullptr;
+	index_build_progress_t build_sink_progress = nullptr; // optional
 
 	// function to create an instance of the index
 };
