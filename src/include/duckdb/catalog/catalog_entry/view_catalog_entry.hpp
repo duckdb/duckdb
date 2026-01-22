@@ -13,6 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 
