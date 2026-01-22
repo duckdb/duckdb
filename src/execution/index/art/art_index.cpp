@@ -11,8 +11,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/execution/index/art/art_operator.hpp"
-
-#include <duckdb/planner/operator/logical_create_index.hpp>
+#include "duckdb/planner/operator/logical_create_index.hpp"
 
 namespace duckdb {
 namespace {
