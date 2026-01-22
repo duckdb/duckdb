@@ -39,10 +39,9 @@ struct ExportAggregateBindData : public FunctionData {
 
 struct AggregateStateLayout {
 	AggregateStateLayout(const LogicalType &type, idx_t state_size) : state_size(state_size) {
-		auto nested_type = AggregateStateType::GetStateChildType(type);
-		is_struct = nested_type.id() == LogicalTypeId::STRUCT;
+		is_struct = type.IsAggregateStateStructType();
 		if (is_struct) {
-			child_types = &StructType::GetChildTypes(nested_type);
+			child_types = &AggregateStateType::GetChildTypes(type);
 		}
 	}
 
@@ -328,19 +327,14 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
 	auto state_ptrs = FlatVector::GetData<data_ptr_t>(state);
 
-	bool should_result_as_struct = false;
-	LogicalType aggregate_state_type = LogicalType::INVALID;
-	if (bind_data.aggregate->function.HasGetStateTypeCallback()) {
-		aggregate_state_type = bind_data.aggregate->function.GetStateType();
-		should_result_as_struct =
-			aggregate_state_type.id() == LogicalTypeId::STRUCT;
-	}
-
+	LogicalType underlying_state_struct = bind_data.aggregate->function.GetStateType();
+	// Note: The underlying state type should always be a struct (we have a D_ASSERT for that in `GetStateType`
+	bool should_result_as_struct = bind_data.aggregate->function.HasGetStateTypeCallback();
 	if (should_result_as_struct) {
 		result.Flatten(count);
 
 		auto &children = StructVector::GetEntries(result);
-		auto &struct_fields = StructType::GetChildTypes(aggregate_state_type);
+		auto &struct_fields = StructType::GetChildTypes(underlying_state_struct);
 
 		idx_t offset_in_state = 0;
 		for (idx_t field_idx = 0; field_idx < struct_fields.size(); field_idx++) {
@@ -416,15 +410,16 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	}
 #endif
 	auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
-	LogicalType state_layout = LogicalType::INVALID;
-
-	if (bound_function.HasGetStateTypeCallback()) {
-		state_layout = bound_function.GetStateType();
-	}
 	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.GetReturnType(),
-	                             child_aggregate->function.arguments, state_layout);
+	                             child_aggregate->function.arguments);
 
-	const auto return_type = LogicalType::AGGREGATE_STATE(std::move(state_type));
+	child_list_t<LogicalType> struct_child_types = {};
+	if (bound_function.HasGetStateTypeCallback()) {
+		LogicalType state_layout = bound_function.GetStateType();
+		struct_child_types = StructType::GetChildTypes(state_layout);
+	}
+
+	const auto return_type = LogicalType::AGGREGATE_STATE(std::move(state_type), std::move(struct_child_types));
 
 	auto export_function =
 	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.arguments, return_type,

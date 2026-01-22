@@ -80,10 +80,9 @@ static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count
 }
 
 static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-	auto info = source.AuxInfo()->Cast<AggregateStateTypeInfo>();
-	auto exported_state_type = info.state_type.state_type;
-	if (exported_state_type.IsValid()) {
-		return input.GetCastFunction(exported_state_type, target);
+	if (source.IsAggregateStateStructType()) {
+		LogicalType dummy_struct = LogicalType::STRUCT(AggregateStateType::GetChildTypes(source));
+		return input.GetCastFunction(dummy_struct, target);
 	}
 	return AggregateStateToBlobCast;
 }

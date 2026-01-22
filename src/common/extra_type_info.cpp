@@ -216,7 +216,8 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::DeepCopy() const {
 StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {
 }
 
-StructTypeInfo::StructTypeInfo(ExtraTypeInfoType type) : ExtraTypeInfo(type) {
+StructTypeInfo::StructTypeInfo(ExtraTypeInfoType type, child_list_t<LogicalType> child_types_p)
+    : ExtraTypeInfo(type), child_types(std::move(child_types_p)) {
 }
 
 StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
@@ -247,7 +248,7 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::DeepCopy() const {
  * NOTE: In types.json, AggregateStateTypeInfo inherits directly from ExtraTypeInfo
  * instead of StructTypeInfo. This is intentional for several reasons:
  *
- * 1. Backward Compatibility: In older storage versions (pre-v1.5.0),
+ * 1. In older storage versions (pre-v1.5.0),
  *    AggregateStateTypeInfo was a direct child of ExtraTypeInfo and did not contain
  *    the 'child_types' field (ID 200). Flattening the JSON hierarchy allows us to
  *    manually branch on the storage version and handle the 'child_types' field
@@ -266,15 +267,12 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::DeepCopy() const {
  *    the 'type' property is readily available.
  */
 
-AggregateStateTypeInfo::AggregateStateTypeInfo() : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO) {
+AggregateStateTypeInfo::AggregateStateTypeInfo() : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, {}) {
 }
 
-AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p)
-    : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO),
+AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p)
+    : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, std::move(child_types_p)),
       state_type(std::move(state_type_p)) {
-	if (state_type_p.state_type != LogicalTypeId::INVALID) {
-		child_types = StructType::GetChildTypes(state_type_p.state_type);
-	}
 }
 
 void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
@@ -308,16 +306,16 @@ bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
-	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type);
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, child_types);
 	result->alias = alias;
 	return std::move(result);
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
-	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type);
-	result->state_type.state_type = state_type.state_type.DeepCopy();
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, child_types);
 	result->alias = alias;
-	return std::move(result);}
+	return std::move(result);
+}
 
 //===--------------------------------------------------------------------===//
 // User Type Info

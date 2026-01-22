@@ -293,7 +293,10 @@ public:
 
 	LogicalType GetStateType() const {
 		D_ASSERT(get_state_type);
-		return get_state_type(*this);
+		const auto result = get_state_type(*this);
+		// The underlying type of the AggregateState should be a struct
+		D_ASSERT(result.id() == LogicalTypeId::STRUCT);
+		return result;
 	}
 
 	//! Additional function info, passed to the bind

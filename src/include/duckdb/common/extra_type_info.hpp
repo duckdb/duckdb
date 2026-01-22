@@ -125,7 +125,7 @@ private:
 
 struct StructTypeInfo : public ExtraTypeInfo {
 	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p);
-	explicit StructTypeInfo(ExtraTypeInfoType type);
+	explicit StructTypeInfo(ExtraTypeInfoType type, child_list_t<LogicalType> child_types_p);
 
 	child_list_t<LogicalType> child_types;
 
@@ -143,7 +143,7 @@ private:
 };
 
 struct AggregateStateTypeInfo : public StructTypeInfo {
-	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p);
+	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p);
 
 	aggregate_state_t state_type;
 

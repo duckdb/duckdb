@@ -161,15 +161,15 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::USER:
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE: {
-		auto info = type_info_;
-		if (!info) {
+		if (!type_info_) {
 			return PhysicalType::VARCHAR;
 		}
 		auto aggregate_state_info = AuxInfo()->Cast<AggregateStateTypeInfo>();
-		if (aggregate_state_info.state_type.state_type.id() == LogicalTypeId::INVALID) {
+		if (aggregate_state_info.child_types.empty()) {
+			// Legacy aggregate state - opaque BLOB,
 			return PhysicalType::VARCHAR;
 		}
-		return aggregate_state_info.state_type.state_type.InternalType();
+		return PhysicalType::STRUCT;
 	}
 	case LogicalTypeId::GEOMETRY:
 		return PhysicalType::VARCHAR;
@@ -1635,18 +1635,18 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 		return "AGGREGATE_STATE<?>";
 	}
 	auto aggr_state = info->Cast<AggregateStateTypeInfo>().state_type;
-	bool is_nested_type = aggr_state.state_type.IsValid();
+	bool is_struct = type.IsAggregateStateStructType();
+	LogicalType struct_type;
+	if (is_struct) {
+		struct_type = LogicalType::STRUCT(GetChildTypes(type));
+	}
 	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
 	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
 	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
 	       ")" + "::" +
-	       (is_nested_type ? aggr_state.return_type.ToString() + ", " + aggr_state.state_type.ToString()
+	       (is_struct ? aggr_state.return_type.ToString() + ", " + struct_type.ToString()
 	                       : aggr_state.return_type.ToString()) +
 	       ">";
-}
-
-const LogicalType &AggregateStateType::GetStateChildType(const LogicalType &type) {
-	return GetStateType(type).state_type;
 }
 
 bool LogicalType::IsAggregateStateStructType() const {
@@ -1658,7 +1658,7 @@ bool LogicalType::IsAggregateStateStructType() const {
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
-	         type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::AGGREGATE_STATE);
+	         type.id() == LogicalTypeId::VARIANT || type.IsAggregateStateStructType());
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
@@ -1703,8 +1703,9 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
-LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
-	auto info = make_shared_ptr<AggregateStateTypeInfo>(std::move(state_type));
+LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type,
+                                         child_list_t<LogicalType> struct_child_types) { // NOLINT
+	auto info = make_shared_ptr<AggregateStateTypeInfo>(std::move(state_type), std::move(struct_child_types));
 	return LogicalType(LogicalTypeId::AGGREGATE_STATE, std::move(info));
 }
 
