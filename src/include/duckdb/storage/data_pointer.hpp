@@ -8,17 +8,20 @@
 
 #pragma once
 
+#include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/winapi.hpp"
+#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/storage_info.hpp"
-#include "duckdb/storage/block.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/enums/compression_type.hpp"
 
 namespace duckdb {
 
 class Serializer;
 class Deserializer;
-class QueryContext;
 
 struct ColumnSegmentState {
 	virtual ~ColumnSegmentState() {
