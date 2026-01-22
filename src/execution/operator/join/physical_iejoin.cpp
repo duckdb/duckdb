@@ -1363,7 +1363,7 @@ void IEJoinGlobalSourceState::FinishTask(TaskPtr task) {
 }
 
 bool IEJoinGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	auto guard = Lock();
+	const lock_guard<mutex> guard{lock};
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1372,7 +1372,7 @@ bool IEJoinGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	}
 
 	if (TryPrepareNextStage()) {
-		UnblockTasks(guard);
+		UnblockTasks();
 	}
 
 	if (TryNextTask(task_local)) {
@@ -1489,11 +1489,11 @@ SourceResultType PhysicalIEJoin::GetDataInternal(ExecutionContext &context, Data
 		if (!lsource.TaskFinished() || lsource.TryAssignTask()) {
 			lsource.ExecuteTask(context, result, input.interrupt_state);
 		} else {
-			auto guard = gsource.Lock();
+			const lock_guard<mutex> guard{gsource.lock};
 			if (gsource.TryPrepareNextStage() || gsource.stage == IEJoinSourceStage::DONE) {
-				gsource.UnblockTasks(guard);
+				gsource.UnblockTasks();
 			} else {
-				return gsource.BlockSource(guard, input.interrupt_state);
+				return gsource.BlockSource(input.interrupt_state);
 			}
 		}
 	}

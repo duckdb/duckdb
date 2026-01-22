@@ -179,7 +179,7 @@ public:
 	bool AssignTask(SortedRunMergerLocalState &lstate) {
 		D_ASSERT(!lstate.partition_idx.IsValid());
 		D_ASSERT(lstate.task == SortedRunMergerTask::FINISHED);
-		auto guard = Lock();
+		const lock_guard<mutex> guard{lock};
 		if (next_partition_idx == num_partitions) {
 			return false; // Nothing left to do
 		}
@@ -837,7 +837,7 @@ SortedRunMerger::~SortedRunMerger() {
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
                                                                   GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
-	auto guard = gstate.Lock();
+	const lock_guard<mutex> guard{gstate.lock};
 	return make_uniq<SortedRunMergerLocalState>(gstate);
 }
 

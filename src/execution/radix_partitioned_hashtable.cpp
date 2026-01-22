@@ -252,7 +252,7 @@ void RadixHTGlobalSinkState::Destroy() {
 	}
 
 	// There are aggregates with destructors: Call the destructor for each of the aggregates
-	auto guard = Lock();
+	const lock_guard<mutex> guard{lock};
 	RowOperationsState row_state(*stored_allocators.back());
 	for (auto &partition : partitions) {
 		auto &data_collection = *partition->data;
@@ -297,7 +297,7 @@ void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external
 		return;
 	}
 
-	auto guard = sink.Lock();
+	const lock_guard<mutex> guard{sink.lock};
 	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
 		return;
 	}
@@ -472,7 +472,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 		// We're over the thread memory limit
 		if (!gstate.external) {
 			// We haven't yet triggered out-of-core behavior, but maybe we don't have to, grab the lock and check again
-			auto guard = gstate.Lock();
+			const lock_guard<mutex> guard{gstate.lock};
 			thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
 			if (total_size > thread_limit) {
 				// Out-of-core would be triggered below, update minimum reservation and try to increase the reservation
@@ -612,7 +612,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	// Eagerly destroy the HT
 	lstate.ht.reset();
 
-	auto guard = gstate.Lock();
+	const lock_guard<mutex> guard{gstate.lock};
 	D_ASSERT(!gstate.finalized);
 	if (gstate.uncombined_data) {
 		gstate.uncombined_data->Combine(*lstate.abandoned_data);
@@ -625,7 +625,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 
 void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
-	auto guard = gstate.Lock();
+	const lock_guard<mutex> guard{gstate.lock};
 	D_ASSERT(!gstate.finalized);
 
 	if (gstate.uncombined_data) {
@@ -783,7 +783,7 @@ SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &si
 
 	// We got a partition index
 	auto &partition = *sink.partitions[lstate.task_idx];
-	auto partition_guard = partition.Lock();
+	const lock_guard<mutex> partition_guard{partition.lock};
 	switch (partition.state) {
 	case AggregatePartitionState::READY_TO_FINALIZE:
 		partition.state = AggregatePartitionState::FINALIZE_IN_PROGRESS;
@@ -792,7 +792,7 @@ SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &si
 	case AggregatePartitionState::FINALIZE_IN_PROGRESS:
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.scan_status = RadixHTScanStatus::INIT;
-		return partition.BlockSource(partition_guard, interrupt_state);
+		return partition.BlockSource(interrupt_state);
 	case AggregatePartitionState::READY_TO_SCAN:
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.scan_status = RadixHTScanStatus::INIT;
@@ -864,7 +864,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	partition.data->Combine(*ht->AcquirePartitionedData()->GetPartitions()[0]);
 
 	// Update thread-global state
-	auto guard = sink.Lock();
+	const lock_guard<mutex> guard{sink.lock};
 	sink.stored_allocators.emplace_back(ht->GetAggregateAllocator());
 	if (task_idx == sink.partitions.size()) {
 		ht.reset();
@@ -877,9 +877,9 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	// Update partition state
-	auto partition_guard = partition.Lock();
+	const lock_guard<mutex> partition_guard{partition.lock};
 	partition.state = AggregatePartitionState::READY_TO_SCAN;
-	partition.UnblockTasks(partition_guard);
+	partition.UnblockTasks();
 
 	// This thread will scan the partition
 	task = RadixHTSourceTaskType::SCAN;
@@ -904,7 +904,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 			data_collection.Reset();
 		}
 		scan_status = RadixHTScanStatus::DONE;
-		auto guard = sink.Lock();
+		const lock_guard<mutex> guard{sink.lock};
 		if (++gstate.task_done == sink.partitions.size()) {
 			gstate.finished = true;
 		}
