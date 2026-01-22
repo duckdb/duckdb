@@ -61,14 +61,19 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[interquery][.]") {
 	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		threads[i].join();
 	}
-	// now we sort the output data
-	std::sort(seq_data.results.begin(), seq_data.results.end());
-	std::sort(data.results.begin(), data.results.end());
-	// the sequential and threaded data should be the same
-	REQUIRE(seq_data.results == data.results);
-
-	seq_data.results.clear();
-	data.results.clear();
+	
+	{
+		// now we sort the output data
+		const duckdb::lock_guard<duckdb::mutex> seq_data_guard {seq_data.lock};
+		const duckdb::lock_guard<duckdb::mutex> data_guard {data.lock};
+		std::sort(seq_data.results.begin(), seq_data.results.end());
+		std::sort(data.results.begin(), data.results.end());
+		// the sequential and threaded data should be the same
+		REQUIRE(seq_data.results == data.results);
+		seq_data.results.clear();
+		data.results.clear();
+	}
+	
 	// now do the same but for a cyclic sequence
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq MAXVALUE 10 CYCLE;"));
@@ -84,9 +89,15 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[interquery][.]") {
 	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		threads[i].join();
 	}
-	// now we sort the output data
-	std::sort(seq_data.results.begin(), seq_data.results.end());
-	std::sort(data.results.begin(), data.results.end());
-	// the sequential and threaded data should be the same
-	REQUIRE(seq_data.results == data.results);
+
+	{
+		const duckdb::lock_guard<duckdb::mutex> seq_data_guard {seq_data.lock};
+		const duckdb::lock_guard<duckdb::mutex> data_guard {data.lock};
+
+		// now we sort the output data
+		std::sort(seq_data.results.begin(), seq_data.results.end());
+		std::sort(data.results.begin(), data.results.end());
+		// the sequential and threaded data should be the same
+		REQUIRE(seq_data.results == data.results);
+	}
 }
