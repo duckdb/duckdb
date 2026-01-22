@@ -172,6 +172,7 @@ public:
 	static void WrapRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> inner_node);
 	static void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node);
 	static void VerifyColumnRefs(const ParsedExpression &expr);
+	static unique_ptr<ParsedExpression> ConvertNumberToValue(string val);
 
 	// Registration methods
 	void RegisterAlter();
@@ -309,6 +310,11 @@ private:
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
 	static string TransformDatabasePath(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// analyze.gram
+	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// analyze.gram
 	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,

@@ -2,7 +2,10 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "transformer/peg_transformer.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/negate.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -432,42 +435,47 @@ DatePartSpecifier PEGTransformerFactory::TransformInterval(PEGTransformer &trans
 
 bool PEGTransformerFactory::TryNegateValue(Value &val) {
 	switch (val.type().id()) {
-	case LogicalTypeId::INTEGER:
-		if (val.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum()) {
-			val = Value::BIGINT(-(int64_t)val.GetValue<int32_t>());
-			return true;
+	case LogicalTypeId::INTEGER: {
+		auto raw = val.GetValue<int32_t>();
+		if (!NegateOperator::CanNegate<int32_t>(raw)) {
+			val = Value::BIGINT(-static_cast<int64_t>(raw));
+		} else {
+			val = Value::INTEGER(-raw);
 		}
-		val = Value::INTEGER(-val.GetValue<int32_t>());
 		return true;
-
-	case LogicalTypeId::BIGINT:
-		if (val.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
-			val = Value::HUGEINT(-((hugeint_t)val.GetValue<int64_t>()));
-			return true;
+	}
+	case LogicalTypeId::BIGINT: {
+		auto raw = val.GetValue<int64_t>();
+		if (!NegateOperator::CanNegate<int64_t>(raw)) {
+			val = Value::HUGEINT(-static_cast<hugeint_t>(raw));
+		} else {
+			val = Value::BIGINT(-raw);
 		}
-		val = Value::BIGINT(-val.GetValue<int64_t>());
 		return true;
-
-	case LogicalTypeId::HUGEINT:
-		val = Value::HUGEINT(-val.GetValue<hugeint_t>());
+	}
+	case LogicalTypeId::HUGEINT: {
+		auto raw = val.GetValue<hugeint_t>();
+		if (!NegateOperator::CanNegate<hugeint_t>(raw)) {
+			return false;
+		}
+		val = Value::HUGEINT(-raw);
 		return true;
-
+	}
 	case LogicalTypeId::UHUGEINT: {
 		auto uval = val.GetValue<uhugeint_t>();
-		uhugeint_t abs_min_hugeint = (uhugeint_t)NumericLimits<hugeint_t>::Maximum() + 1;
+		uhugeint_t abs_min_hugeint = static_cast<uhugeint_t>(NumericLimits<hugeint_t>::Maximum()) + 1;
 
 		if (uval == abs_min_hugeint) {
 			val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 			return true;
 		}
 		if (uval < abs_min_hugeint) {
-			val = Value::HUGEINT(-((hugeint_t)uval));
+			val = Value::HUGEINT(-static_cast<hugeint_t>(uval));
 			return true;
 		}
 
 		return false;
 	}
-
 	case LogicalTypeId::DOUBLE:
 		val = Value::DOUBLE(-val.GetValue<double>());
 		return true;
@@ -476,28 +484,25 @@ bool PEGTransformerFactory::TryNegateValue(Value &val) {
 	}
 }
 
-// NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer,
-                                                                           optional_ptr<ParseResult> parse_result) {
-	auto literal_pr = parse_result->Cast<NumberParseResult>();
-	string_t str_val(literal_pr.number);
+unique_ptr<ParsedExpression> PEGTransformerFactory::ConvertNumberToValue(string val) {
+	string_t str_val(val);
 	bool try_cast_as_integer = true;
 	bool try_cast_as_decimal = true;
 	optional_idx decimal_position = optional_idx::Invalid();
 	idx_t num_underscores = 0;
 	idx_t num_integer_underscores = 0;
 	for (idx_t i = 0; i < str_val.GetSize(); i++) {
-		if (literal_pr.number[i] == '.') {
+		if (val[i] == '.') {
 			// decimal point: cast as either decimal or double
 			try_cast_as_integer = false;
 			decimal_position = i;
 		}
-		if (literal_pr.number[i] == 'e' || literal_pr.number[i] == 'E') {
+		if (val[i] == 'e' || val[i] == 'E') {
 			// found exponent, cast as double
 			try_cast_as_integer = false;
 			try_cast_as_decimal = false;
 		}
-		if (literal_pr.number[i] == '_') {
+		if (val[i] == '_') {
 			num_underscores++;
 			if (!decimal_position.IsValid()) {
 				num_integer_underscores++;
@@ -528,13 +533,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
 			return make_uniq<ConstantExpression>(Value::UHUGEINT(uhugeint_value));
 		}
 	}
-	idx_t decimal_offset = literal_pr.number[0] == '-' ? 3 : 2;
+	idx_t decimal_offset = val[0] == '-' ? 3 : 2;
 	if (try_cast_as_decimal && decimal_position.IsValid() &&
 	    str_val.GetSize() - num_underscores < Decimal::MAX_WIDTH_DECIMAL + decimal_offset) {
 		// figure out the width/scale based on the decimal position
 		auto width = NumericCast<uint8_t>(str_val.GetSize() - 1 - num_underscores);
 		auto scale = NumericCast<uint8_t>(width - decimal_position.GetIndex() + num_integer_underscores);
-		if (literal_pr.number[0] == '-') {
+		if (val[0] == '-') {
 			width--;
 		}
 		if (width <= Decimal::MAX_WIDTH_DECIMAL) {
@@ -547,6 +552,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTr
 	// if there is a decimal or the value is too big to cast as either hugeint or bigint
 	double dbl_value = Cast::Operation<string_t, double>(str_val);
 	return make_uniq<ConstantExpression>(Value::DOUBLE(dbl_value));
+}
+
+// NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberLiteral(PEGTransformer &transformer,
+                                                                           optional_ptr<ParseResult> parse_result) {
+	auto literal_pr = parse_result->Cast<NumberParseResult>();
+	return ConvertNumberToValue(literal_pr.number);
 }
 
 LogicalType PEGTransformerFactory::TransformSetofType(PEGTransformer &transformer,

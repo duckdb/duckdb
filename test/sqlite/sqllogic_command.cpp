@@ -14,9 +14,11 @@
 #include "sqllogic_test_logger.hpp"
 #include "catch.hpp"
 
-#include <list>
-#include <thread>
+#include <algorithm>
 #include <chrono>
+#include <list>
+#include <random>
+#include <thread>
 
 namespace duckdb {
 
@@ -322,6 +324,9 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
     : Command(runner), definition(std::move(definition_p)) {
 }
 
+ContinueCommand::ContinueCommand(SQLLogicTestRunner &runner) : Command(runner) {
+}
+
 ModeCommand::ModeCommand(SQLLogicTestRunner &runner, string parameter_p)
     : Command(runner), parameter(std::move(parameter_p)) {
 }
@@ -407,7 +412,9 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 				break;
 			}
 		}
-		std::random_shuffle(loop_indexes.begin(), loop_indexes.end());
+		std::random_device rd;
+		std::mt19937 g(rd());
+		std::shuffle(loop_indexes.begin(), loop_indexes.end(), g);
 
 		// parallel loop: launch threads
 		std::list<ParallelExecuteContext> contexts;
@@ -437,9 +444,15 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		bool finished = false;
 		while (!finished && !runner.finished_processing_file) {
 			// execute the current iteration of the loop
+			idx_t loop_index = context.running_loops.size();
 			context.running_loops.push_back(loop_def);
+
 			for (auto &statement : loop_commands) {
 				statement->Execute(context);
+				if (context.running_loops[loop_index].is_skipped) {
+					//! Executed a CONTINUE statement
+					break;
+				}
 			}
 			context.running_loops.pop_back();
 			loop_def.loop_idx++;
@@ -449,6 +462,16 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 			}
 		}
 	}
+}
+
+void ContinueCommand::ExecuteInternal(ExecuteContext &context) const {
+	D_ASSERT(!context.running_loops.empty());
+	auto &deepest_loop = context.running_loops.back();
+	deepest_loop.is_skipped = true;
+}
+
+bool ContinueCommand::SupportsConcurrent() const {
+	return false;
 }
 
 bool LoopCommand::SupportsConcurrent() const {
@@ -497,6 +520,7 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	}
 	// We save the main connection configurations to pass it to the new connection
 	runner.config->options = runner.con->context->db->config.options;
+	runner.config->user_settings = runner.con->context->db->config.user_settings;
 	auto client_config = runner.con->context->config;
 	auto catalog_search_paths = runner.con->context->client_data->catalog_search_path->GetSetPaths();
 	string low_query_writer_path;

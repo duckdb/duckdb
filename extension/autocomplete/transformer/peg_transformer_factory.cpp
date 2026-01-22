@@ -113,6 +113,12 @@ void PEGTransformerFactory::RegisterAnalyze() {
 	REGISTER_TRANSFORM(TransformAnalyzeTarget);
 }
 
+void PEGTransformerFactory::RegisterAnalyze() {
+	// analyze.gram
+	REGISTER_TRANSFORM(TransformAnalyzeStatement);
+	REGISTER_TRANSFORM(TransformAnalyzeTarget);
+}
+
 void PEGTransformerFactory::RegisterCall() {
 	// call.gram
 	REGISTER_TRANSFORM(TransformCallStatement);

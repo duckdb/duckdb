@@ -566,7 +566,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 	auto expr_list_pr = ExtractParseResultsFromList(extract_parens);
 	vector<unique_ptr<ParsedExpression>> in_children;
 	for (auto &expr : expr_list_pr) {
-		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(std::move(expr)));
+		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
 	return std::move(result);
@@ -780,19 +780,69 @@ PEGTransformerFactory::TransformAtTimeZoneExpression(PEGTransformer &transformer
 	return expr;
 }
 
+bool IsNumberLiteral(optional_ptr<ParseResult> pr) {
+	if (!pr) {
+		return false;
+	}
+	if (pr->name == "BaseExpression") {
+		auto &list = pr->Cast<ListParseResult>();
+		if (list.GetChild(1)->Cast<OptionalParseResult>().HasResult()) {
+			return false;
+		}
+		return IsNumberLiteral(list.GetChild(0));
+	}
+	if (pr->name == "SingleExpression") {
+		auto &list = pr->Cast<ListParseResult>();
+		return IsNumberLiteral(list.GetChild(0)->Cast<ChoiceParseResult>().result);
+	}
+	if (pr->name == "LiteralExpression") {
+		auto &list = pr->Cast<ListParseResult>();
+		return IsNumberLiteral(list.GetChild(0)->Cast<ChoiceParseResult>().result);
+	}
+	return pr->name == "NumberLiteral";
+}
+
+string GetRawText(optional_ptr<ParseResult> pr) {
+	if (pr->name == "NumberLiteral") {
+		return pr->Cast<NumberParseResult>().number;
+	}
+	if (pr->name == "BaseExpression") {
+		return GetRawText(pr->Cast<ListParseResult>().GetChild(0));
+	}
+	if (pr->name == "SingleExpression" || pr->name == "LiteralExpression") {
+		auto &list = pr->Cast<ListParseResult>();
+		return GetRawText(list.GetChild(0)->Cast<ChoiceParseResult>().result);
+	}
+	return "";
+}
+
 // PrefixExpression <- PrefixOperator* BaseExpression
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
-
 	auto prefix_opt = list_pr.Child<OptionalParseResult>(0);
+	auto base_expr_pr = list_pr.Child<ListParseResult>(1);
+
 	if (!prefix_opt.HasResult()) {
-		return expr;
+		return transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
 	}
 
-	auto prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
+	auto &prefix_repeat = prefix_opt.optional_result->Cast<RepeatParseResult>();
 
+	// --- SPECIAL CASE: Handle -<Number> atomically to prevent overflow/precision loss ---
+	// We only do this if there is exactly one prefix and it is a minus.
+	if (prefix_repeat.children.size() == 1) {
+		auto prefix = transformer.Transform<string>(prefix_repeat.children[0]);
+		if (prefix == "-" && IsNumberLiteral(base_expr_pr)) {
+			string raw_number = GetRawText(base_expr_pr);
+			string full_text = "-" + raw_number;
+			return ConvertNumberToValue(full_text);
+		}
+	}
+
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
+
+	// Apply prefixes in order (from right to left, as they were parsed)
 	for (auto &prefix_expr : prefix_repeat.children) {
 		auto prefix = transformer.Transform<string>(prefix_expr);
 
@@ -810,7 +860,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 	}
 	return expr;
 }
-
 string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transformer,
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -1654,8 +1703,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto colid = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto type = LogicalType(TransformStringToLogicalTypeId(colid));
-	if (type == LogicalTypeId::USER) {
-		type = LogicalType::USER(colid);
+	if (type == LogicalTypeId::UNBOUND) {
+		type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
 	}
 	auto string_literal = list_pr.Child<StringLiteralParseResult>(1).result;
 	auto child = make_uniq<ConstantExpression>(Value(string_literal));

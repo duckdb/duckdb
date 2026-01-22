@@ -154,7 +154,7 @@ private:
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	bool is_initial_database = false;
 	bool is_closed = false;
-	mutex close_lock;
+	shared_ptr<mutex> close_lock;
 	unordered_map<string, Value> attach_options;
 
 private:

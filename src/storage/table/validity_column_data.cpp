@@ -1,8 +1,6 @@
 #include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/storage/table/standard_column_data.hpp"
 
 namespace duckdb {
 

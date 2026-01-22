@@ -39,6 +39,7 @@
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -89,6 +90,10 @@ bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) 
 }
 
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
+	if (context.IsInterrupted()) {
+		throw InterruptException();
+	}
+
 	if (OptimizerDisabled(type)) {
 		// optimizer is marked as disabled: skip
 		return;
@@ -321,7 +326,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	this->plan = std::move(plan_p);
 
-	for (auto &pre_optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
+	for (auto &pre_optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get()};
 			if (pre_optimizer_extension.pre_optimize_function) {
@@ -332,7 +337,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	RunBuiltInOptimizers();
 
-	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
+	for (auto &optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
 			if (optimizer_extension.optimize_function) {
