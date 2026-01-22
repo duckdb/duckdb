@@ -14,7 +14,7 @@
 namespace duckdb {
 class Deserializer;
 
-//! The TableFilterExtensionInfo holds static information relevant to txhe table filter extension
+//! The TableFilterExtensionInfo holds static information relevant to the table filter extension
 struct TableFilterExtensionInfo {
 	virtual ~TableFilterExtensionInfo() {
 	}
