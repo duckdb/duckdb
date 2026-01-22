@@ -146,12 +146,15 @@ void MultiFileList::InitializeScan(MultiFileListScanData &iterator) const {
 	iterator.current_file_idx = 0;
 }
 
-vector<OpenFileInfo> MultiFileList::GetDisplayFileList(idx_t max_files) const {
+vector<OpenFileInfo> MultiFileList::GetDisplayFileList(optional_idx max_files) const {
 	vector<OpenFileInfo> files;
-	for (idx_t i = 0; i < max_files; i++) {
+	for (idx_t i = 0;; i++) {
+		if (max_files.IsValid() && files.size() >= max_files.GetIndex()) {
+			break;
+		}
 		auto file = GetFile(i);
 		if (file.path.empty()) {
-			continue;
+			break;
 		}
 		files.push_back(std::move(file));
 	}
@@ -319,10 +322,13 @@ GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> gl
     : context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)), current_glob(0) {
 }
 
-vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(idx_t max_files) const {
+vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(optional_idx max_files) const {
 	// for globs we display the actual globs in the ToString() - instead of expanding to the files read
 	vector<OpenFileInfo> result;
 	for (auto &glob : globs) {
+		if (max_files.IsValid() && result.size() >= max_files.GetIndex()) {
+			break;
+		}
 		result.emplace_back(glob);
 	}
 	return result;

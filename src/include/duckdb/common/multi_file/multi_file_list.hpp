@@ -100,8 +100,9 @@ public:
 
 	virtual vector<OpenFileInfo> GetAllFiles() const = 0;
 	virtual FileExpandResult GetExpandResult() const = 0;
+	//! Get the total file count - forces all files to be expanded / known so the exact count can be computed
 	virtual idx_t GetTotalFileCount() const = 0;
-	virtual vector<OpenFileInfo> GetDisplayFileList(idx_t max_files) const;
+	virtual vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files = optional_idx()) const;
 
 	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context) const;
 	virtual unique_ptr<MultiFileList> Copy() const;
@@ -173,7 +174,7 @@ class GlobMultiFileList : public LazyMultiFileList {
 public:
 	GlobMultiFileList(ClientContext &context, vector<string> globs, FileGlobInput input);
 
-	vector<OpenFileInfo> GetDisplayFileList(idx_t max_files) const override;
+	vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files = optional_idx()) const override;
 
 protected:
 	bool ExpandNextPath() const override;

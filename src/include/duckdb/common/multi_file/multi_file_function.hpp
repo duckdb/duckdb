@@ -776,7 +776,7 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
-		for (const auto &file : bind_data.file_list->Files()) {
+		for (const auto &file : bind_data.file_list->GetDisplayFileList()) {
 			file_path.emplace_back(file.path);
 		}
 
