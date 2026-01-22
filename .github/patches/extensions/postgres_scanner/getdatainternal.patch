@@ -37,6 +37,18 @@ index d22b4f1..4bd0e29 100644
  
  	bool IsSource() const override {
  		return true;
+diff --git a/src/include/storage/postgres_optimizer.hpp b/src/include/storage/postgres_optimizer.hpp
+index 1e573f0..832a5d8 100644
+--- a/src/include/storage/postgres_optimizer.hpp
++++ b/src/include/storage/postgres_optimizer.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+ 
+ #include "duckdb/main/config.hpp"
++#include "duckdb/optimizer/optimizer_extension.hpp"
+ 
+ namespace duckdb {
+ 
 diff --git a/src/include/storage/postgres_update.hpp b/src/include/storage/postgres_update.hpp
 index 12b5e5e..dd25e75 100644
 --- a/src/include/storage/postgres_update.hpp
@@ -50,6 +62,31 @@ index 12b5e5e..dd25e75 100644
  
  	bool IsSource() const override {
  		return true;
+diff --git a/src/postgres_extension.cpp b/src/postgres_extension.cpp
+index 4246555..95b0112 100644
+--- a/src/postgres_extension.cpp
++++ b/src/postgres_extension.cpp
+@@ -160,7 +160,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	loader.RegisterFunction(postgres_secret_function);
+ 
+ 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+-	config.storage_extensions["postgres_scanner"] = make_uniq<PostgresStorageExtension>();
++	StorageExtension::Register(config, "postgres_scanner", make_shared_ptr<PostgresStorageExtension>());
+ 
+ 	config.AddExtensionOption("pg_use_binary_copy", "Whether or not to use BINARY copy to read data",
+ 	                          LogicalType::BOOLEAN, Value::BOOLEAN(true));
+@@ -190,9 +190,9 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 
+ 	OptimizerExtension postgres_optimizer;
+ 	postgres_optimizer.optimize_function = PostgresOptimizer::Optimize;
+-	config.optimizer_extensions.push_back(std::move(postgres_optimizer));
++	OptimizerExtension::Register(config, std::move(postgres_optimizer));
+ 
+-	config.extension_callbacks.push_back(make_uniq<PostgresExtensionCallback>());
++	ExtensionCallback::Register(config, make_shared_ptr<PostgresExtensionCallback>());
+ 	for (auto &connection : ConnectionManager::Get(loader.GetDatabaseInstance()).GetConnectionList()) {
+ 		connection->registered_state->Insert("postgres_extension", make_shared_ptr<PostgresExtensionState>());
+ 	}
 diff --git a/src/postgres_storage.cpp b/src/postgres_storage.cpp
 index cfff746..7963170 100644
 --- a/src/postgres_storage.cpp
@@ -97,6 +134,18 @@ index d2de80e..eae13de 100644
                                                OperatorSourceInput &input) const {
  	auto &catalog = table.catalog;
  	auto &schema = table.schema;
+diff --git a/src/storage/postgres_index_set.cpp b/src/storage/postgres_index_set.cpp
+index aacdb83..f49a233 100644
+--- a/src/storage/postgres_index_set.cpp
++++ b/src/storage/postgres_index_set.cpp
+@@ -4,6 +4,7 @@
+ #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+ #include "storage/postgres_index_entry.hpp"
+ #include "duckdb/parser/parsed_expression_iterator.hpp"
++#include "duckdb/parser/expression/columnref_expression.hpp"
+ 
+ namespace duckdb {
+ 
 diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
 index e3961e4..385351d 100644
 --- a/src/storage/postgres_insert.cpp

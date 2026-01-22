@@ -453,8 +453,8 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 		return LogicalType::STRUCT(struct_members);
 	}
 
-	LogicalType type_id = StringUtil::CIEquals(type, "ANY") ? LogicalType::ANY : TransformStringToLogicalTypeId(type);
-	if (type_id == LogicalTypeId::USER) {
+	const auto type_id = StringUtil::CIEquals(type, "ANY") ? LogicalTypeId::ANY : TransformStringToLogicalTypeId(type);
+	if (type_id == LogicalTypeId::UNBOUND) {
 		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
 		                        type);
 	}
@@ -762,6 +762,14 @@ const string DBConfig::UserAgent() const {
 		user_agent += " " + options.custom_user_agent;
 	}
 	return user_agent;
+}
+
+ExtensionCallbackManager &DBConfig::GetCallbackManager() {
+	return *callback_manager;
+}
+
+const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
+	return *callback_manager;
 }
 
 string DBConfig::SanitizeAllowedPath(const string &path) const {

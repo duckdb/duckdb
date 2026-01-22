@@ -13,6 +13,7 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
