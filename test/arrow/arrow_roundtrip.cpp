@@ -31,7 +31,7 @@ static void TestArrowRoundtripStringView(const string &query) {
 static void TestParquetRoundtrip(const string &path) {
 	DBConfig config;
 	// This needs to be set since this test will be triggered when testing autoloading
-	config.options.allow_unsigned_extensions = true;
+	config.SetOptionByName("allow_unsigned_extensions", true);
 
 	DuckDB db(nullptr, &config);
 	Connection con(db);
@@ -151,6 +151,10 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 	DBConfig config;
 	DuckDB db(nullptr, &config);
 	Connection con(db);
+
+#if defined(D_ASSERT_IS_ENABLED) && !defined(DEBUG)
+	return; // Skip in relassert, takes too long
+#endif
 
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;

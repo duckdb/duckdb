@@ -146,10 +146,6 @@ public:
 		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
 	}
 
-	void UnregisterSubSystem(const string &name) override {
-		GetFileSystem().UnregisterSubSystem(name);
-	}
-
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
 	}

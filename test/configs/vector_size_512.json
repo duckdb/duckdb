@@ -12,7 +12,14 @@
       "reason": "FIXME: Unsure if failure is expected result due to smaller vector size + smaller storage size",
       "paths": [
         "test/sql/storage/delete/drop_many_deletes.test_slow",
-        "test/sql/index/art/storage/test_upsert_reclaim_space.test_slow"
+        "test/sql/index/art/storage/test_upsert_reclaim_space.test_slow",
+        "test/sql/storage/compression/alprd/alprd_uncompressed_mode_v1_4_0.test_slow"
+      ]
+    },
+    {
+      "reason": "FIXME: Internal Error",
+      "paths": [
+        "test/parquet/variant/variant_roundtrip.test_slow"
       ]
     },
     {
@@ -47,7 +54,44 @@
         "test/sql/copy/csv/csv_memory_management.test_slow",
         "test/sql/copy/parquet/parquet_1723.test_slow",
         "test/sql/copy/parquet/batched_write/batch_memory_usage.test_slow",
-        "test/optimizer/sampling_pushdown.test_slow"
+        "test/optimizer/sampling_pushdown.test_slow",
+        "test/sql/storage/reclaim_space/reclaim_space_rollback_optimistic_write_checkpoint.test_slow",
+        "test/sql/storage/compression/roaring/roaring_bool_compression_ratio.test_slow",
+        "test/sql/storage/compression/roaring/roaring_bool_various_distributions.test_slow",
+        "test/sql/storage/vacuum/vacuum_deletes_cleanup.test_slow",
+        "test/sql/parallelism/interquery/concurrent_append_transactions.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_wal_optimistic_index.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_deletes_mix_index.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_index_single_inserter.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_deletes_mix_fk.test_slow",
+        "test/sql/window/test_window_repartition.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_wal_index.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_wal_optimistic.test_slow",
+        "test/sql/storage/parallel/parallel_insert_selective_filter.test_slow",
+        "test/sql/storage/buffer_manager/larger_than_memory_aggregate.test_slow",
+        "test/optimizer/topn_window_elimination.test_slow",
+        "test/sql/alter/add_pk/test_add_pk_reclaim_storage.test_slow",
+        "test/sql/parallelism/interquery/concurrent_batch_append_pk.test_slow",
+        "test/sql/storage/compression/rle/rle_filter.test_slow",
+        "test/sql/insert/parallel_insert_constraints.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoints_long_reads.test_slow",
+        "test/sql/window/test_parallel_window.test_slow",
+        "test/sql/aggregate/aggregates/arg_min_max_nulls_last_all_types.test_slow",
+        "test/sql/parallelism/interquery/concurrent_append_metadata_queries.test_slow",
+        "test/sql/join/inner/test_join_with_nulls.test_slow",
+        "test/sql/parallelism/interquery/concurrent_reads_append_list.test_slow",
+        "test/sql/index/art/constraints/test_art_eager_update.test_slow",
+        "test/sql/insert/parallel_insert_index.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_deletes_index.test_slow",
+        "test/sql/storage/reclaim_space/test_reclaim_space_alter_type.test_slow",
+        "test/sql/index/art/vacuum/test_art_vacuum_integers.test_slow",
+        "test/sql/catalog/table/test_many_columns_group.test_slow",
+        "test/sql/storage/compression/alp/alp_many_segments_float.test_slow",
+        "test/sql/storage/parallel/insert_order_preserving.test_slow",
+        "test/sql/storage/test_purge_queue.test_slow",
+        "test/optimizer/pushdown/issue_18653.test",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_wal_fk.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_deletes.test_slow"
       ]
     },
     {

@@ -64,29 +64,38 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->bound_constraints = BindConstraints(table);
 
-	// If RETURNING is present, add all table columns to the scan so we can pass them through
-	// instead of having to fetch them by row ID in PhysicalDelete
-	// Skip this optimization if the table has generated columns, as they need to be computed
-	// rather than scanned
-	if (!stmt.returning_list.empty() && !table.HasGeneratedColumns()) {
+	// If RETURNING is present, add all physical table columns to the scan so we can pass them through
+	// instead of having to fetch them by row ID in PhysicalDelete.
+	// Generated columns will be computed in the RETURNING projection by the binder.
+	if (!stmt.returning_list.empty()) {
 		auto &column_ids = get.GetColumnIds();
-		auto column_count = table.GetColumns().LogicalColumnCount();
+		auto &columns = table.GetColumns();
+		auto physical_count = columns.PhysicalColumnCount();
 
-		// Build a map of which table columns are already in the scan
-		// and track their indices in the input chunk
-		del->return_columns.resize(column_count, DConstants::INVALID_INDEX);
+		// Build a map from storage index -> input chunk index
+		// return_columns[storage_idx] = input_chunk_idx
+		del->return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+		// First, map columns already in the scan to their storage indices
 		for (idx_t chunk_idx = 0; chunk_idx < column_ids.size(); chunk_idx++) {
 			auto &col_id = column_ids[chunk_idx];
-			if (!col_id.IsVirtualColumn() && col_id.GetPrimaryIndex() < column_count) {
-				del->return_columns[col_id.GetPrimaryIndex()] = chunk_idx;
+			if (col_id.IsVirtualColumn()) {
+				continue;
+			}
+			// Get the column by logical index, then get its storage index
+			auto logical_idx = col_id.GetPrimaryIndex();
+			if (!columns.GetColumn(LogicalIndex(logical_idx)).Generated()) {
+				auto storage_idx = columns.GetColumn(LogicalIndex(logical_idx)).StorageOid();
+				del->return_columns[storage_idx] = chunk_idx;
 			}
 		}
 
-		// Add any missing columns to the scan
-		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-			if (del->return_columns[col_idx] == DConstants::INVALID_INDEX) {
-				del->return_columns[col_idx] = column_ids.size();
-				get.AddColumnId(col_idx);
+		// Add any missing physical columns to the scan
+		for (auto &col : columns.Physical()) {
+			auto storage_idx = col.StorageOid();
+			if (del->return_columns[storage_idx] == DConstants::INVALID_INDEX) {
+				del->return_columns[storage_idx] = column_ids.size();
+				get.AddColumnId(col.Logical().index);
 			}
 		}
 	}

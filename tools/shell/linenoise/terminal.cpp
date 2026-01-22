@@ -104,7 +104,7 @@ int Terminal::EnableRawMode() {
 	raw.c_iflag |= IUTF8;
 #endif
 	raw.c_cflag |= CS8;
-	/* local modes - choing off, canonical off, no extended functions,
+	/* local modes - echoing off, canonical off, no extended functions,
 	 * no signal chars (^Z,^C) */
 	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 	/* control chars - set return condition: min number of bytes and timer.

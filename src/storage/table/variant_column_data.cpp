@@ -1,10 +1,14 @@
 #include "duckdb/storage/table/variant_column_data.hpp"
+#include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -27,6 +31,106 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
 	}
 }
 
+bool FindShreddedColumnInternal(const StructColumnData &shredded, reference<const BaseStatistics> &stats,
+                                reference<const StorageIndex> &path_iter, ColumnIndex &out) {
+	auto &path = path_iter.get();
+	D_ASSERT(!path.HasPrimaryIndex());
+	auto &field_name = path.GetFieldName();
+
+	D_ASSERT(shredded.type.id() == LogicalTypeId::STRUCT);
+	auto &typed_value = shredded.GetChildColumn(1);
+	auto &parent_stats = stats.get();
+
+	stats = StructStats::GetChildStats(parent_stats, 1);
+	if (typed_value.type.id() != LogicalTypeId::STRUCT) {
+		//! Not shredded on an OBJECT, but we're looking for a specific OBJECT field
+		return false;
+	}
+	if (!VariantShreddedStats::IsFullyShredded(parent_stats)) {
+		//! Can't push down to the shredded data, stats are inconsistent
+		return false;
+	}
+	//! shredded.typed_value
+	out.AddChildIndex(ColumnIndex(1));
+	auto &typed_value_index = out.GetChildIndex(0);
+
+	auto &object_children = StructType::GetChildTypes(typed_value.type);
+	optional_idx opt_index;
+	for (idx_t i = 0; i < object_children.size(); i++) {
+		if (StringUtil::CIEquals(field_name, object_children[i].first)) {
+			opt_index = i;
+			break;
+		}
+	}
+	if (!opt_index.IsValid()) {
+		//! OBJECT doesn't contain a field with this name
+		return false;
+	}
+
+	auto child_index = opt_index.GetIndex();
+	auto &typed_value_struct = typed_value.Cast<StructColumnData>();
+	auto &object_field = typed_value_struct.GetChildColumn(child_index);
+	stats = StructStats::GetChildStats(stats.get(), child_index);
+
+	//! typed_value.<child_name>
+	typed_value_index.AddChildIndex(ColumnIndex(child_index));
+	auto &child_column = typed_value_index.GetChildIndex(0);
+
+	if (!path.HasChildren()) {
+		if (!VariantShreddedStats::IsFullyShredded(stats.get())) {
+			//! Child isn't fully shredded, can't use it
+			return false;
+		}
+		//! We're done, we've found the field referenced by the path!
+		//! typed_value_index.<child_name>.typed_value
+		child_column.AddChildIndex(ColumnIndex(1));
+		stats = StructStats::GetChildStats(stats.get(), 1);
+		return true;
+	}
+	path_iter = path.GetChildIndex(0);
+
+	//! Child of object is always a STRUCT(untyped_value_index UINTEGER, typed_value <...>)
+	D_ASSERT(object_field.type.id() == LogicalTypeId::STRUCT);
+	auto &struct_field = object_field.Cast<StructColumnData>();
+
+	return FindShreddedColumnInternal(struct_field, stats, path_iter, child_column);
+}
+
+bool VariantColumnData::PushdownShreddedFieldExtract(const StorageIndex &variant_extract,
+                                                     StorageIndex &out_struct_extract) const {
+	D_ASSERT(IsShredded());
+	auto &shredded = *sub_columns[1];
+	D_ASSERT(shredded.type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(StructType::GetChildCount(shredded.type) == 2);
+	D_ASSERT(StructType::GetChildTypes(shredded.type)[0].second.id() == LogicalTypeId::UINTEGER);
+	auto &variant_stats = GetStatisticsRef();
+
+	if (!VariantStats::IsShredded(variant_stats)) {
+		//! FIXME: this happens when we Checkpoint but don't restart, the stats of the ColumnData aren't updated by
+		//! Checkpoint The variant is shredded, but there are no stats / the stats are cluttered (?)
+		return false;
+	}
+
+	//! shredded.typed_value
+	ColumnIndex column_index(0);
+	auto &struct_column = shredded.Cast<StructColumnData>();
+
+	reference<const BaseStatistics> shredded_stats(VariantStats::GetShreddedStats(variant_stats));
+	reference<const StorageIndex> path_iter(variant_extract);
+	if (!FindShreddedColumnInternal(struct_column, shredded_stats, path_iter, column_index)) {
+		return false;
+	}
+	if (shredded_stats.get().GetType().IsNested()) {
+		//! Can't push down an extract if the leaf we're extracting is not a primitive
+		//! (Since the shredded representation for OBJECT/ARRAY is interleaved with 'untyped_value_index' fields)
+		return false;
+	}
+
+	column_index.SetPushdownExtractType(shredded.type, path_iter.get().GetType());
+	out_struct_extract = StorageIndex::FromColumnIndex(column_index);
+	return true;
+}
+
 void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	//! Re-initialize the scan state, since VARIANT can have a different shape for every RowGroup
 	state.child_states.clear();
@@ -37,9 +141,22 @@ void VariantColumnData::CreateScanStates(ColumnScanState &state) {
 	auto unshredded_type = VariantShredding::GetUnshreddedType();
 	state.child_states.emplace_back(state.parent);
 	state.child_states[1].Initialize(state.context, unshredded_type, state.scan_options);
+
+	const bool is_pushed_down_cast =
+	    state.storage_index.HasType() && state.storage_index.GetScanType().id() != LogicalTypeId::VARIANT;
 	if (IsShredded()) {
 		auto &shredded_column = sub_columns[1];
 		state.child_states.emplace_back(state.parent);
+		if (state.storage_index.IsPushdownExtract() && is_pushed_down_cast) {
+			StorageIndex struct_extract;
+			if (PushdownShreddedFieldExtract(state.storage_index.GetChildIndex(0), struct_extract)) {
+				//! Shredded field exists and is fully shredded,
+				//! add the storage index to create a pushed-down 'struct_extract' to get the leaf
+				state.child_states[2].Initialize(state.context, shredded_column->type, struct_extract,
+				                                 state.scan_options);
+				return;
+			}
+		}
 		state.child_states[2].Initialize(state.context, shredded_column->type, state.scan_options);
 	}
 }
@@ -49,6 +166,7 @@ idx_t VariantColumnData::GetMaxEntry() {
 }
 
 void VariantColumnData::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) {
+	//! FIXME: does this also need CreateScanStates ??
 	validity->InitializePrefetch(prefetch_state, scan_state.child_states[0], rows);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->InitializePrefetch(prefetch_state, scan_state.child_states[i + 1], rows);
@@ -81,7 +199,7 @@ void VariantColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t r
 	}
 }
 
-Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) {
+Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) const {
 	D_ASSERT(IsShredded());
 	D_ASSERT(sub_columns.size() == 2);
 
@@ -93,26 +211,119 @@ Vector VariantColumnData::CreateUnshreddingIntermediate(idx_t count) {
 	return intermediate;
 }
 
-idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                              idx_t target_count) {
-	if (IsShredded()) {
-		auto intermediate = CreateUnshreddingIntermediate(target_count);
-		auto &child_vectors = StructVector::GetEntries(intermediate);
-		sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], *child_vectors[0], target_count);
-		sub_columns[1]->Scan(transaction, vector_index, state.child_states[2], *child_vectors[1], target_count);
-		auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], intermediate, target_count);
+idx_t VariantColumnData::ScanWithCallback(
+    ColumnScanState &state, Vector &result, idx_t target_count,
+    const std::function<idx_t(ColumnData &column, ColumnScanState &child_state, Vector &target_vector, idx_t count)>
+        &callback) const {
+	if (state.storage_index.IsPushdownExtract()) {
+		if (IsShredded() && state.child_states[2].storage_index.IsPushdownExtract()) {
+			//! FIXME: We could also push down the extract if we're returning VARIANT
+			//! Then we can do the unshredding on the extracted data, rather than falling back to unshredding+extracting
+			//! This invariant is ensured by CreateScanStates
+			D_ASSERT(result.GetType().id() != LogicalTypeId::VARIANT);
 
-		VariantColumnData::UnshredVariantData(intermediate, result, target_count);
+			//! In the initialize we have verified that the field exists and the data is fully shredded (for this
+			//! rowgroup) We have created a scan state that performs a 'struct_extract' in the shredded data, to extract
+			//! the requested field.s
+			auto res = callback(*sub_columns[1], state.child_states[2], result, target_count);
+			if (result.GetType().id() == LogicalTypeId::LIST) {
+				//! Shredded ARRAY Variant looks like:
+				//! LIST(STRUCT(untyped_value_index UINTEGER, typed_value <child_type>))
+				//! We need to transform this to:
+				//! LIST(<child_type>)
+
+				auto &list_child = ListVector::GetEntry(result);
+				D_ASSERT(list_child.GetType().id() == LogicalTypeId::STRUCT);
+				D_ASSERT(StructType::GetChildCount(list_child.GetType()) == 2);
+
+				auto &typed_value = *StructVector::GetEntries(list_child)[1];
+				auto list_res = Vector(LogicalType::LIST(typed_value.GetType()));
+				ListVector::SetListSize(list_res, ListVector::GetListSize(result));
+				list_res.CopyBuffer(result);
+				ListVector::GetEntry(list_res).Reference(typed_value);
+				return res;
+			}
+			return res;
+		}
+		//! Fall back to unshredding
+		Vector intermediate(LogicalType::VARIANT(), target_count);
+		idx_t scan_count;
+		if (IsShredded()) {
+			auto unshredding_intermediate = CreateUnshreddingIntermediate(target_count);
+			auto &child_vectors = StructVector::GetEntries(unshredding_intermediate);
+
+			callback(*sub_columns[0], state.child_states[1], *child_vectors[0], target_count);
+			callback(*sub_columns[1], state.child_states[2], *child_vectors[1], target_count);
+			scan_count = callback(*validity, state.child_states[0], unshredding_intermediate, target_count);
+
+			VariantColumnData::UnshredVariantData(unshredding_intermediate, intermediate, target_count);
+		} else {
+			scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
+			callback(*sub_columns[0], state.child_states[1], intermediate, target_count);
+		}
+
+		Vector extract_intermediate(LogicalType::VARIANT(), target_count);
+		vector<VariantPathComponent> components;
+		reference<const StorageIndex> path_iter(state.storage_index.GetChildIndex(0));
+
+		while (true) {
+			auto &current = path_iter.get();
+			auto &field_name = current.GetFieldName();
+			components.emplace_back(field_name);
+			if (!current.HasChildren()) {
+				break;
+			}
+			path_iter = current.GetChildIndex(0);
+		}
+		VariantUtils::VariantExtract(intermediate, components, extract_intermediate, target_count);
+
+		if (state.expression_state) {
+			auto &expression_state = *state.expression_state;
+			auto &executor = expression_state.executor;
+
+			auto &input = expression_state.input;
+			auto &target = expression_state.target;
+			input.Reset();
+			target.Reset();
+			input.data[0].Reference(extract_intermediate);
+			input.SetCardinality(scan_count);
+			executor.Execute(input, target);
+			result.Reference(target.data[0]);
+		} else {
+			result.Reference(extract_intermediate);
+		}
+		return scan_count;
+	} else {
+		if (IsShredded()) {
+			auto intermediate = CreateUnshreddingIntermediate(target_count);
+			auto &child_vectors = StructVector::GetEntries(intermediate);
+
+			callback(*sub_columns[0], state.child_states[1], *child_vectors[0], target_count);
+			callback(*sub_columns[1], state.child_states[2], *child_vectors[1], target_count);
+			auto scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
+
+			VariantColumnData::UnshredVariantData(intermediate, result, target_count);
+			return scan_count;
+		}
+		auto scan_count = callback(*validity, state.child_states[0], result, target_count);
+		callback(*sub_columns[0], state.child_states[1], result, target_count);
 		return scan_count;
 	}
-	auto scan_count = validity->Scan(transaction, vector_index, state.child_states[0], result, target_count);
-	sub_columns[0]->Scan(transaction, vector_index, state.child_states[1], result, target_count);
-	return scan_count;
+}
+
+idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                              idx_t target_count) {
+	return ScanWithCallback(state, result, target_count,
+	                        [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
+		                        return col.Scan(transaction, vector_index, child_state, target_vector, count);
+	                        });
 }
 
 idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	auto scan_count = sub_columns[0]->ScanCount(state.child_states[1], result, count, result_offset);
-	return scan_count;
+	return ScanWithCallback(state, result, count,
+	                        [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
+		                        return col.ScanCount(child_state, target_vector, count, result_offset);
+	                        });
 }
 
 void VariantColumnData::Skip(ColumnScanState &state, idx_t count) {
@@ -242,35 +453,73 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 
 void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
-	// insert any child states that are required
-	for (idx_t i = state.child_states.size(); i < sub_columns.size() + 1; i++) {
-		auto child_state = make_uniq<ColumnFetchState>();
-		state.child_states.push_back(std::move(child_state));
+	if (storage_index.IsPushdownExtract() && IsShredded()) {
+		StorageIndex struct_extract;
+		if (PushdownShreddedFieldExtract(storage_index.GetChildIndex(0), struct_extract)) {
+			//! Shredded field exists and is fully shredded,
+			//! add the storage index to create a pushed-down 'struct_extract' to get the leaf
+			sub_columns[1]->FetchRow(transaction, state, struct_extract, row_id, result, result_idx);
+			return;
+		}
 	}
-
+	Vector variant_vec(LogicalType::VARIANT(), result_idx + 1);
+	validity->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
 	if (IsShredded()) {
 		auto intermediate = CreateUnshreddingIntermediate(result_idx + 1);
 		auto &child_vectors = StructVector::GetEntries(intermediate);
 		// fetch the validity state
-		validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 		// fetch the sub-column states
+		StorageIndex empty(0);
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			sub_columns[i]->FetchRow(transaction, *state.child_states[i + 1], storage_index, row_id, *child_vectors[i],
-			                         result_idx);
+			sub_columns[i]->FetchRow(transaction, state, empty, row_id, *child_vectors[i], result_idx);
 		}
 		if (result_idx) {
 			intermediate.SetValue(0, intermediate.GetValue(result_idx));
 		}
 
-		//! FIXME: adjust UnshredVariantData so we can write the value in place into 'result' directly.
-		Vector unshredded(result.GetType(), 1);
+		//! FIXME: adjust UnshredVariantData so we can write the value in place directly.
+		Vector unshredded(variant_vec.GetType(), 1);
 		VariantColumnData::UnshredVariantData(intermediate, unshredded, 1);
-		result.SetValue(result_idx, unshredded.GetValue(0));
+		variant_vec.SetValue(0, unshredded.GetValue(0));
+	} else {
+		sub_columns[0]->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
+		if (result_idx) {
+			variant_vec.SetValue(0, variant_vec.GetValue(result_idx));
+		}
+	}
+
+	if (!storage_index.IsPushdownExtract()) {
+		//! No extract required
+		D_ASSERT(result.GetType().id() == LogicalTypeId::VARIANT);
+		result.SetValue(result_idx, variant_vec.GetValue(0));
 		return;
 	}
 
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
-	sub_columns[0]->FetchRow(transaction, *state.child_states[1], storage_index, row_id, result, result_idx);
+	Vector extracted_variant(variant_vec.GetType(), 1);
+	vector<VariantPathComponent> components;
+	reference<const StorageIndex> path_iter(storage_index.GetChildIndex(0));
+
+	while (true) {
+		auto &current = path_iter.get();
+		auto &field_name = current.GetFieldName();
+		components.emplace_back(field_name);
+		if (!current.HasChildren()) {
+			break;
+		}
+		path_iter = current.GetChildIndex(0);
+	}
+	VariantUtils::VariantExtract(variant_vec, components, extracted_variant, 1);
+
+	if (result.GetType().id() == LogicalTypeId::VARIANT) {
+		//! No cast required
+		result.SetValue(result_idx, extracted_variant.GetValue(0));
+		return;
+	}
+
+	//! Need to perform the cast here as well
+	auto context = transaction.transaction->context.lock();
+	auto fetched_row = extracted_variant.GetValue(0).CastAs(*context, result.GetType());
+	result.SetValue(result_idx, fetched_row);
 }
 
 void VariantColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
@@ -345,11 +594,13 @@ public:
 
 	PersistentColumnData ToPersistentData() override {
 		PersistentColumnData data(original_column.type);
-		auto &variant_column_data = GetResultColumn().Cast<VariantColumnData>();
 		if (child_states.size() == 2) {
-			D_ASSERT(variant_column_data.sub_columns.size() == 2);
-			D_ASSERT(variant_column_data.sub_columns[1]->type.id() == LogicalTypeId::STRUCT);
-			data.SetVariantShreddedType(variant_column_data.sub_columns[1]->type);
+			//! Use the type of the column data we used to create the Checkpoint
+			//! This will either be a pointer to shredded_data[1] if we decided to shred
+			//! Or to the existing shredded column data if we didn't decide to reshred
+			auto &shredded_state = child_states[1];
+			D_ASSERT(shredded_state->original_column.type.id() == LogicalTypeId::STRUCT);
+			data.extra_data = make_uniq<VariantPersistentColumnData>(shredded_state->original_column.type);
 		}
 		data.child_columns.push_back(validity_state->ToPersistentData());
 		for (auto &child_state : child_states) {
@@ -452,27 +703,28 @@ static bool EnableShredding(int64_t minimum_size, idx_t current_size) {
 }
 
 unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &row_group,
-                                                                ColumnCheckpointInfo &checkpoint_info) {
+                                                                ColumnCheckpointInfo &checkpoint_info,
+                                                                const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<VariantColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info);
+	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
 
 	auto &table_info = row_group.GetTableInfo();
 	auto &db = table_info.GetDB();
-	auto &config_options = DBConfig::Get(db).options;
+	auto &config = DBConfig::Get(db);
 
 	bool should_shred = true;
 	if (!HasAnyChanges()) {
 		should_shred = false;
 	}
-	if (!EnableShredding(config_options.variant_minimum_shredding_size, row_group.count.load())) {
+	if (!EnableShredding(Settings::Get<VariantMinimumShreddingSizeSetting>(config), row_group.count.load())) {
 		should_shred = false;
 	}
 
 	LogicalType shredded_type;
 	if (should_shred) {
-		if (config_options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
-			shredded_type = config_options.force_variant_shredding;
+		if (config.options.force_variant_shredding.id() != LogicalTypeId::INVALID) {
+			shredded_type = config.options.force_variant_shredding;
 		} else {
 			shredded_type = GetShreddedType();
 		}
@@ -485,8 +737,11 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	}
 
 	if (!should_shred) {
-		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			checkpoint_state->child_states.push_back(sub_columns[i]->Checkpoint(row_group, checkpoint_info));
+		checkpoint_state->child_states.push_back(
+		    sub_columns[0]->Checkpoint(row_group, checkpoint_info, VariantStats::GetUnshreddedStats(old_stats)));
+		if (sub_columns.size() > 1) {
+			checkpoint_state->child_states.push_back(
+			    sub_columns[1]->Checkpoint(row_group, checkpoint_info, VariantStats::GetShreddedStats(old_stats)));
 		}
 		return std::move(checkpoint_state);
 	}
@@ -499,8 +754,10 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	auto &shredded = checkpoint_state->shredded_data[1];
 
 	//! Now checkpoint the shredded data
-	checkpoint_state->child_states.push_back(unshredded->Checkpoint(row_group, checkpoint_info));
-	checkpoint_state->child_states.push_back(shredded->Checkpoint(row_group, checkpoint_info));
+	checkpoint_state->child_states.push_back(
+	    unshredded->Checkpoint(row_group, checkpoint_info, VariantStats::GetUnshreddedStats(column_stats)));
+	checkpoint_state->child_states.push_back(
+	    shredded->Checkpoint(row_group, checkpoint_info, VariantStats::GetShreddedStats(column_stats)));
 
 	return std::move(checkpoint_state);
 }
@@ -534,7 +791,8 @@ bool VariantColumnData::HasAnyChanges() const {
 PersistentColumnData VariantColumnData::Serialize() {
 	PersistentColumnData persistent_data(type);
 	if (IsShredded()) {
-		persistent_data.SetVariantShreddedType(sub_columns[1]->type);
+		// Set the extra data to indicate that this is shredded data
+		persistent_data.extra_data = make_uniq<VariantPersistentColumnData>(sub_columns[1]->type);
 	}
 	persistent_data.child_columns.push_back(validity->Serialize());
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
@@ -552,7 +810,10 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 		auto &unshredded_stats = VariantStats::GetUnshreddedStats(target_stats);
 		sub_columns[0]->InitializeColumn(column_data.child_columns[1], unshredded_stats);
 
-		auto &shredded_type = column_data.variant_shredded_type;
+		// TODO:
+		D_ASSERT(column_data.extra_data);
+		auto &variant_extra_data = column_data.extra_data->Cast<VariantPersistentColumnData>();
+		auto &shredded_type = variant_extra_data.logical_type;
 		if (!IsShredded()) {
 			VariantStats::SetShreddedStats(target_stats, BaseStatistics::CreateEmpty(shredded_type));
 			sub_columns.push_back(ColumnData::CreateColumn(block_manager, info, 2, shredded_type, GetDataType(), this));
