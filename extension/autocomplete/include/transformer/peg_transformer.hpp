@@ -1174,6 +1174,8 @@ private:
 	static unique_ptr<TableRef> TransformTablePivotClause(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 	static PivotColumn TransformPivotValueList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformPivotGroupByList(PEGTransformer &transformer,
+	                                                optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformPivotHeader(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
 	static vector<PivotColumnEntry> TransformPivotTargetList(PEGTransformer &transformer,

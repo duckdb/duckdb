@@ -692,6 +692,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformTablePivotClause);
 	REGISTER_TRANSFORM(TransformPivotValueList);
 	REGISTER_TRANSFORM(TransformPivotHeader);
+	REGISTER_TRANSFORM(TransformPivotGroupByList);
 	REGISTER_TRANSFORM(TransformPivotTargetList);
 
 	REGISTER_TRANSFORM(TransformInnerTableRef);

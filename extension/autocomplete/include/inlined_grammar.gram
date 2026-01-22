@@ -1237,13 +1237,14 @@ ParensTableRef <- TableAliasColon? Parens(TableRef) SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
-TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ GroupByClause?) TableAlias?
+TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ PivotGroupByList?) TableAlias?
+PivotGroupByList <- 'GROUP' 'BY' List(ColIdOrString)
 TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(UnpivotHeader 'FOR' UnpivotValueList+) TableAlias?
 
 PivotHeader <- BaseExpression
-PivotValueList <- PivotHeader 'IN' PivotTargetList
+PivotValueList <- PivotHeader 'IN' (Identifier / PivotTargetList)
 UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
-PivotTargetList <- Identifier / Parens(TargetList)
+PivotTargetList <- Parens(TargetList)
 UnpivotTargetList <- Parens(TargetList)
 
 Lateral <- 'LATERAL'
