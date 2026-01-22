@@ -708,7 +708,22 @@ public:
 	                                const GlobalTableFunctionState *global_state) {
 		auto &gstate = global_state->Cast<MultiFileGlobalState>();
 
-		auto total_count = gstate.file_list.GetTotalFileCount();
+		// get the file count - for >100 files we allow a lower bound to be given instead
+		auto count_info = gstate.file_list.GetFileCount(100);
+		while (count_info.type != FileExpansionType::ALL_FILES_EXPANDED) {
+			// the entire glob has not yet been expanded - we don't know how many files there are exactly
+			// we try to postpone expanding the glob by only expanding it once we have scanned 1% of the files
+			// check if we have reached AT LEAST 1% of progress
+			idx_t one_percent_min = count_info.count / 100;
+			if (gstate.completed_file_index < one_percent_min) {
+				// we have not - just report 0%
+				return 0.0;
+			}
+			// we have reached 1% given the currently known (incomplete) list of files
+			// retrieve more files to scan
+			count_info = gstate.file_list.GetFileCount(count_info.count + 1);
+		}
+		auto total_count = count_info.count;
 		if (total_count == 0) {
 			return 100.0;
 		}
@@ -754,7 +769,14 @@ public:
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
-		return data.interface->GetCardinality(data, data.file_list->GetTotalFileCount());
+		// get the file count - for >500 files we allow an estimate
+		auto count_info = data.file_list->GetFileCount(500);
+		idx_t estimated_file_count = count_info.count;
+		if (count_info.type != FileExpansionType::ALL_FILES_EXPANDED) {
+			// not all files have been expanded - it's probably twice as many files
+			estimated_file_count *= 2;
+		}
+		return data.interface->GetCardinality(data, estimated_file_count);
 	}
 
 	static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
@@ -776,7 +798,7 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
-		for (const auto &file : bind_data.file_list->Files()) {
+		for (const auto &file : bind_data.file_list->GetDisplayFileList()) {
 			file_path.emplace_back(file.path);
 		}
 
