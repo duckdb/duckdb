@@ -61,7 +61,7 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[interquery][.]") {
 	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		threads[i].join();
 	}
-	
+
 	{
 		// now we sort the output data
 		const duckdb::lock_guard<duckdb::mutex> seq_data_guard {seq_data.lock};
@@ -73,7 +73,7 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[interquery][.]") {
 		seq_data.results.clear();
 		data.results.clear();
 	}
-	
+
 	// now do the same but for a cyclic sequence
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq MAXVALUE 10 CYCLE;"));
