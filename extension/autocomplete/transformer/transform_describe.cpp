@@ -41,7 +41,6 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto showref = make_uniq<ShowRef>();
 
-	// 1. Determine the ShowType
 	showref->show_type = transformer.Transform<ShowType>(list_pr.Child<ListParseResult>(0));
 
 	auto opt_table_name_parens = list_pr.Child<OptionalParseResult>(1);
@@ -69,14 +68,22 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 				auto table_name = StringUtil::Lower(base_table->table_name);
 				if (table_name == "databases" || table_name == "tables" || table_name == "variables") {
 					showref->table_name = "\"" + table_name + "\"";
-				} else {
-					showref->table_name = base_table->table_name;
 				}
-			} else {
-				showref->catalog_name = base_table->catalog_name;
-				showref->schema_name = base_table->schema_name;
-				showref->table_name = base_table->table_name;
 			}
+		}
+		if (showref->table_name.empty() && showref->show_type != ShowType::SHOW_FROM) {
+			auto show_select_node = make_uniq<SelectNode>();
+			show_select_node->select_list.push_back(make_uniq<StarExpression>());
+			if (choice_pr.result->type == ParseResultType::STRING) {
+				// Case: SHOW 'something' or DESCRIBE 'something'
+				auto table_ref = make_uniq<BaseTableRef>();
+				table_ref->table_name = choice_pr.result->Cast<StringLiteralParseResult>().result;
+				show_select_node->from_table = std::move(table_ref);
+			} else {
+				// Case: A relation/table reference
+				show_select_node->from_table = transformer.Transform<unique_ptr<BaseTableRef>>(choice_pr.result);
+			}
+			showref->query = std::move(show_select_node);
 		}
 	} else {
 		// Case: No relation specified (e.g., just "SHOW TABLES")
@@ -85,19 +92,6 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 		}
 		showref->table_name = "__show_tables_expanded";
 		showref->show_type = ShowType::DESCRIBE;
-	}
-
-	if (showref->table_name.empty() && showref->show_type != ShowType::SHOW_FROM) {
-		auto show_select_node = make_uniq<SelectNode>();
-		show_select_node->select_list.push_back(make_uniq<StarExpression>());
-
-		auto tableref = make_uniq<BaseTableRef>();
-		tableref->catalog_name = showref->catalog_name;
-		tableref->schema_name = showref->schema_name;
-		tableref->table_name = showref->table_name;
-
-		show_select_node->from_table = std::move(tableref);
-		showref->query = std::move(show_select_node);
 	}
 
 	auto select_node = make_uniq<SelectNode>();

@@ -108,7 +108,8 @@
         "test/sql/cast/string_to_struct_roundtrip.test",
         "test/sql/catalog/function/query_function.test",
         "test/sql/cast/string_to_struct_escapes.test",
-        "test/sql/copy/csv/test_thousands_separator.test"
+        "test/sql/copy/csv/test_thousands_separator.test",
+        "test/sql/show_select/show_quote_identifier.test"
       ]
     },
     {
