@@ -54,6 +54,9 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	if (PhysicalLimit::HandleOffset(input, current_offset, offset.GetIndex(), limit.GetIndex())) {
 		chunk.Reference(input);
 	}
+	if (current_offset >= limit.GetIndex() + offset.GetIndex()) {
+		return OperatorResultType::HAVE_MORE_OUTPUT;
+	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
