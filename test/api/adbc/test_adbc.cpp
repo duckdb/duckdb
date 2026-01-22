@@ -313,6 +313,74 @@ TEST_CASE("ADBC - Cancel statement while consuming stream", "[adbc]") {
 	REQUIRE(db.QueryAndCheck("SELECT 1"));
 }
 
+TEST_CASE("ADBC - Cancel unhappy paths", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	SECTION("Cancel on uninitialized connection") {
+		AdbcError adbc_error = {};
+		AdbcConnection adbc_connection = {};
+
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+		// Connection is created but not initialized (Init not called)
+		// Cancel should fail with INVALID_STATE
+		REQUIRE(AdbcConnectionCancel(&adbc_connection, &adbc_error) == ADBC_STATUS_INVALID_STATE);
+		if (adbc_error.release) {
+			adbc_error.release(&adbc_error);
+		}
+		// Release the connection (no Init was called, so this should still work)
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	}
+
+	SECTION("Cancel on released connection") {
+		ADBCTestDatabase db;
+
+		// Create and initialize a new connection
+		AdbcConnection adbc_connection = {};
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &db.adbc_database, &db.adbc_error)));
+
+		// Release the connection
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &db.adbc_error)));
+
+		// Cancel on released connection should fail
+		REQUIRE(AdbcConnectionCancel(&adbc_connection, &db.adbc_error) == ADBC_STATUS_INVALID_STATE);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	SECTION("Cancel on idle statement (no active query)") {
+		ADBCTestDatabase db;
+
+		AdbcStatement adbc_statement = {};
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+
+		// Cancel on a statement with no active query should succeed (no-op)
+		REQUIRE(AdbcStatementCancel(&adbc_statement, &db.adbc_error) == ADBC_STATUS_OK);
+
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+	}
+
+	SECTION("Cancel on released statement") {
+		ADBCTestDatabase db;
+
+		AdbcStatement adbc_statement = {};
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+
+		// Cancel on released statement should fail
+		// Driver manager returns INVALID_STATE when statement->private_driver is nullptr
+		REQUIRE(AdbcStatementCancel(&adbc_statement, &db.adbc_error) == ADBC_STATUS_INVALID_STATE);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+}
+
 TEST_CASE("ADBC - Test ingestion", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
