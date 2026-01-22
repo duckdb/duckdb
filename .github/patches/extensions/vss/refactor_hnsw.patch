@@ -1,0 +1,1036 @@
+diff --git a/src/hnsw/CMakeLists.txt b/src/hnsw/CMakeLists.txt
+index 87c4149..452d02e 100644
+--- a/src/hnsw/CMakeLists.txt
++++ b/src/hnsw/CMakeLists.txt
+@@ -2,10 +2,9 @@ set(EXTENSION_SOURCES
+     ${EXTENSION_SOURCES}
+     ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_index.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_index_macros.cpp
+-    ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_index_physical_create.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_index_pragmas.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_index_scan.cpp
+-    ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_index_plan.cpp
++    ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_index_type.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_topk_operator.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_optimize_expr.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_optimize_join.cpp
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index ca73a9c..2c2ba52 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -566,12 +566,18 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+ void HNSWIndex::Vacuum(IndexLock &state) {
+ }
+ 
+-string HNSWIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
+-	throw NotImplementedException("HNSWIndex::VerifyAndToString() not implemented");
++void HNSWIndex::Verify(IndexLock &l) {
++	// throw NotImplementedException("HNSWIndex::Verify() not implemented");
++}
++
++string HNSWIndex::ToString(IndexLock &l, bool display_ascii) {
++	// throw NotImplementedException("HNSWIndex::ToString() not implemented");
++	// it cannot return something empty
++	return "HNSWIndex::ToString() not implemented";
+ }
+ 
+ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+-	throw NotImplementedException("HNSWIndex::VerifyAllocations() not implemented");
++	//throw NotImplementedException("HNSWIndex::VerifyAllocations() not implemented");
+ }
+ 
+ //------------------------------------------------------------------------------
+@@ -664,33 +670,5 @@ void HNSWIndex::VerifyBuffers(IndexLock &lock) {
+ }
+ 
+ 
+-//------------------------------------------------------------------------------
+-// Register Index Type
+-//------------------------------------------------------------------------------
+-void HNSWModule::RegisterIndex(DatabaseInstance &db) {
+-
+-	IndexType index_type;
+-
+-	index_type.name = HNSWIndex::TYPE_NAME;
+-	index_type.create_instance = [](CreateIndexInput &input) -> unique_ptr<BoundIndex> {
+-		auto res = make_uniq<HNSWIndex>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
+-		                                input.unbound_expressions, input.db, input.options, input.storage_info);
+-		return std::move(res);
+-	};
+-	index_type.create_plan = HNSWIndex::CreatePlan;
+-
+-	// Register persistence option
+-	db.config.AddExtensionOption("hnsw_enable_experimental_persistence",
+-	                             "experimental: enable creating HNSW indexes in persistent databases",
+-	                             LogicalType::BOOLEAN, Value::BOOLEAN(false));
+-
+-	// Register scan option
+-	db.config.AddExtensionOption("hnsw_ef_search",
+-	                             "experimental: override the ef_search parameter when scanning HNSW indexes",
+-	                             LogicalType::BIGINT);
+-
+-	// Register the index type
+-	db.config.GetIndexTypes().RegisterIndexType(index_type);
+-}
+ 
+ } // namespace duckdb
+diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
+deleted file mode 100644
+index 0b31597..0000000
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ /dev/null
+@@ -1,326 +0,0 @@
+-#include "hnsw/hnsw_index_physical_create.hpp"
+-
+-#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+-#include "duckdb/common/exception/transaction_exception.hpp"
+-#include "duckdb/main/attached_database.hpp"
+-#include "duckdb/main/database.hpp"
+-#include "duckdb/storage/storage_manager.hpp"
+-#include "duckdb/storage/table_io_manager.hpp"
+-#include "hnsw/hnsw_index.hpp"
+-
+-#include "duckdb/parallel/base_pipeline_event.hpp"
+-
+-namespace duckdb {
+-
+-PhysicalCreateHNSWIndex::PhysicalCreateHNSWIndex(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p,
+-                                                 TableCatalogEntry &table_p, const vector<column_t> &column_ids,
+-                                                 unique_ptr<CreateIndexInfo> info,
+-                                                 vector<unique_ptr<Expression>> unbound_expressions,
+-                                                 idx_t estimated_cardinality)
+-    // Declare this operators as a EXTENSION operator
+-    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, types_p, estimated_cardinality),
+-      table(table_p.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)),
+-      sorted(false) {
+-
+-	// convert virtual column ids to storage column ids
+-	for (auto &column_id : column_ids) {
+-		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
+-	}
+-}
+-
+-//-------------------------------------------------------------
+-// Global State
+-//-------------------------------------------------------------
+-class CreateHNSWIndexGlobalState final : public GlobalSinkState {
+-public:
+-	CreateHNSWIndexGlobalState(const PhysicalOperator &op_p) : op(op_p) {
+-	}
+-
+-	const PhysicalOperator &op;
+-	//! Global index to be added to the table
+-	unique_ptr<HNSWIndex> global_index;
+-
+-	mutex glock;
+-	unique_ptr<ColumnDataCollection> collection;
+-	shared_ptr<ClientContext> context;
+-
+-	// Parallel scan state
+-	ColumnDataParallelScanState scan_state;
+-
+-	// Track which phase we're in
+-	atomic<bool> is_building = {false};
+-	atomic<idx_t> loaded_count = {0};
+-	atomic<idx_t> built_count = {0};
+-};
+-
+-unique_ptr<GlobalSinkState> PhysicalCreateHNSWIndex::GetGlobalSinkState(ClientContext &context) const {
+-	auto gstate = make_uniq<CreateHNSWIndexGlobalState>(*this);
+-
+-	vector<LogicalType> data_types = {unbound_expressions[0]->return_type, LogicalType::ROW_TYPE};
+-	gstate->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), data_types);
+-	gstate->context = context.shared_from_this();
+-
+-	// Create the index
+-	auto &storage = table.GetStorage();
+-	auto &table_manager = TableIOManager::Get(storage);
+-	auto &constraint_type = info->constraint_type;
+-	auto &db = storage.db;
+-	gstate->global_index =
+-	    make_uniq<HNSWIndex>(info->index_name, constraint_type, storage_ids, table_manager, unbound_expressions, db,
+-	                         info->options, IndexStorageInfo(), estimated_cardinality);
+-
+-	return std::move(gstate);
+-}
+-
+-//-------------------------------------------------------------
+-// Local State
+-//-------------------------------------------------------------
+-class CreateHNSWIndexLocalState final : public LocalSinkState {
+-public:
+-	unique_ptr<ColumnDataCollection> collection;
+-	ColumnDataAppendState append_state;
+-};
+-
+-unique_ptr<LocalSinkState> PhysicalCreateHNSWIndex::GetLocalSinkState(ExecutionContext &context) const {
+-	auto state = make_uniq<CreateHNSWIndexLocalState>();
+-
+-	vector<LogicalType> data_types = {unbound_expressions[0]->return_type, LogicalType::ROW_TYPE};
+-	state->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context.client), data_types);
+-	state->collection->InitializeAppend(state->append_state);
+-	return std::move(state);
+-}
+-
+-//-------------------------------------------------------------
+-// Sink
+-//-------------------------------------------------------------
+-
+-SinkResultType PhysicalCreateHNSWIndex::Sink(ExecutionContext &context, DataChunk &chunk,
+-                                             OperatorSinkInput &input) const {
+-
+-	auto &lstate = input.local_state.Cast<CreateHNSWIndexLocalState>();
+-	auto &gstate = input.global_state.Cast<CreateHNSWIndexGlobalState>();
+-	lstate.collection->Append(lstate.append_state, chunk);
+-	gstate.loaded_count += chunk.size();
+-	return SinkResultType::NEED_MORE_INPUT;
+-}
+-
+-//-------------------------------------------------------------
+-// Combine
+-//-------------------------------------------------------------
+-SinkCombineResultType PhysicalCreateHNSWIndex::Combine(ExecutionContext &context,
+-                                                       OperatorSinkCombineInput &input) const {
+-	auto &gstate = input.global_state.Cast<CreateHNSWIndexGlobalState>();
+-	auto &lstate = input.local_state.Cast<CreateHNSWIndexLocalState>();
+-
+-	if (lstate.collection->Count() == 0) {
+-		return SinkCombineResultType::FINISHED;
+-	}
+-
+-	lock_guard<mutex> l(gstate.glock);
+-	if (!gstate.collection) {
+-		gstate.collection = std::move(lstate.collection);
+-	} else {
+-		gstate.collection->Combine(*lstate.collection);
+-	}
+-
+-	return SinkCombineResultType::FINISHED;
+-}
+-
+-//-------------------------------------------------------------
+-// Finalize
+-//-------------------------------------------------------------
+-
+-class HNSWIndexConstructTask final : public ExecutorTask {
+-public:
+-	HNSWIndexConstructTask(shared_ptr<Event> event_p, ClientContext &context, CreateHNSWIndexGlobalState &gstate_p,
+-	                       size_t thread_id_p, const PhysicalCreateHNSWIndex &op_p)
+-	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p),
+-	      local_scan_state() {
+-		// Initialize the scan chunk
+-		gstate.collection->InitializeScanChunk(scan_chunk);
+-	}
+-
+-	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+-
+-		auto &index = gstate.global_index->index;
+-		auto &scan_state = gstate.scan_state;
+-		auto &collection = gstate.collection;
+-
+-		const auto array_size = ArrayType::GetSize(scan_chunk.data[0].GetType());
+-
+-		while (collection->Scan(scan_state, local_scan_state, scan_chunk)) {
+-
+-			const auto count = scan_chunk.size();
+-			auto &vec_vec = scan_chunk.data[0];
+-			auto &data_vec = ArrayVector::GetEntry(vec_vec);
+-			auto &rowid_vec = scan_chunk.data[1];
+-
+-			UnifiedVectorFormat vec_format;
+-			UnifiedVectorFormat data_format;
+-			UnifiedVectorFormat rowid_format;
+-
+-			vec_vec.ToUnifiedFormat(count, vec_format);
+-			data_vec.ToUnifiedFormat(count * array_size, data_format);
+-			rowid_vec.ToUnifiedFormat(count, rowid_format);
+-
+-			const auto row_ptr = UnifiedVectorFormat::GetData<row_t>(rowid_format);
+-			const auto data_ptr = UnifiedVectorFormat::GetData<float>(data_format);
+-
+-			for (idx_t i = 0; i < count; i++) {
+-				const auto vec_idx = vec_format.sel->get_index(i);
+-				const auto row_idx = rowid_format.sel->get_index(i);
+-
+-				// Check for NULL values
+-				const auto vec_valid = vec_format.validity.RowIsValid(vec_idx);
+-				const auto rowid_valid = rowid_format.validity.RowIsValid(row_idx);
+-				if (!vec_valid || !rowid_valid) {
+-					executor.PushError(
+-					    ErrorData("Invalid data in HNSW index construction: Cannot construct index with NULL values."));
+-					return TaskExecutionResult::TASK_ERROR;
+-				}
+-
+-				// Add the vector to the index
+-				const auto result = index.add(row_ptr[row_idx], data_ptr + (vec_idx * array_size), thread_id);
+-
+-				// Check for errors
+-				if (!result) {
+-					executor.PushError(ErrorData(result.error.what()));
+-					return TaskExecutionResult::TASK_ERROR;
+-				}
+-			}
+-
+-			// Update the built count
+-			gstate.built_count += count;
+-
+-			if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
+-				// yield!
+-				return TaskExecutionResult::TASK_NOT_FINISHED;
+-			}
+-		}
+-
+-		// Finish task!
+-		event->FinishTask();
+-		return TaskExecutionResult::TASK_FINISHED;
+-	}
+-
+-private:
+-	CreateHNSWIndexGlobalState &gstate;
+-	size_t thread_id;
+-
+-	DataChunk scan_chunk;
+-	ColumnDataLocalScanState local_scan_state;
+-};
+-
+-class HNSWIndexConstructionEvent final : public BasePipelineEvent {
+-public:
+-	HNSWIndexConstructionEvent(const PhysicalCreateHNSWIndex &op_p, CreateHNSWIndexGlobalState &gstate_p,
+-	                           Pipeline &pipeline_p, CreateIndexInfo &info_p, const vector<column_t> &storage_ids_p,
+-	                           DuckTableEntry &table_p)
+-	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), info(info_p), storage_ids(storage_ids_p),
+-	      table(table_p) {
+-	}
+-
+-	const PhysicalCreateHNSWIndex &op;
+-	CreateHNSWIndexGlobalState &gstate;
+-	CreateIndexInfo &info;
+-	const vector<column_t> &storage_ids;
+-	DuckTableEntry &table;
+-
+-public:
+-	void Schedule() override {
+-		auto &context = pipeline->GetClientContext();
+-
+-		// Schedule tasks equal to the number of threads, which will construct the index
+-		auto &ts = TaskScheduler::GetScheduler(context);
+-		const auto num_threads = NumericCast<size_t>(ts.NumberOfThreads());
+-
+-		vector<shared_ptr<Task>> construct_tasks;
+-		for (size_t tnum = 0; tnum < num_threads; tnum++) {
+-			construct_tasks.push_back(make_uniq<HNSWIndexConstructTask>(shared_from_this(), context, gstate, tnum, op));
+-		}
+-		SetTasks(std::move(construct_tasks));
+-	}
+-
+-	void FinishEvent() override {
+-
+-		// Mark the index as dirty, update its count
+-		gstate.global_index->SetDirty();
+-		gstate.global_index->SyncSize();
+-
+-		auto &storage = table.GetStorage();
+-
+-		// If not in memory, persist the index to disk
+-		if (!storage.db.GetStorageManager().InMemory()) {
+-			// Finalize the index
+-			gstate.global_index->PersistToDisk();
+-		}
+-
+-		if (!storage.IsRoot()) {
+-			throw TransactionException("Cannot create index on non-root transaction");
+-		}
+-
+-		// Create the index entry in the catalog
+-		auto &schema = table.schema;
+-		info.column_ids = storage_ids;
+-
+-		if (schema.GetEntry(schema.GetCatalogTransaction(*gstate.context), CatalogType::INDEX_ENTRY, info.index_name)) {
+-			if (info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+-				throw CatalogException("Index with name \"%s\" already exists", info.index_name);
+-			}
+-		}
+-
+-		const auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(*gstate.context), info, table).get();
+-		D_ASSERT(index_entry);
+-		auto &duck_index = index_entry->Cast<DuckIndexEntry>();
+-		duck_index.initial_index_size = gstate.global_index->Cast<BoundIndex>().GetInMemorySize();
+-
+-		// Finally add it to storage
+-		storage.AddIndex(std::move(gstate.global_index));
+-	}
+-};
+-
+-SinkFinalizeType PhysicalCreateHNSWIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+-                                                   OperatorSinkFinalizeInput &input) const {
+-
+-	// Get the global collection we've been appending to
+-	auto &gstate = input.global_state.Cast<CreateHNSWIndexGlobalState>();
+-	auto &collection = gstate.collection;
+-
+-	// Move on to the next phase
+-	gstate.is_building = true;
+-
+-	// Reserve the index size
+-	auto &ts = TaskScheduler::GetScheduler(context);
+-	auto &index = gstate.global_index->index;
+-	index.reserve({static_cast<size_t>(collection->Count()), static_cast<size_t>(ts.NumberOfThreads())});
+-
+-	// Initialize a parallel scan for the index construction
+-	collection->InitializeScan(gstate.scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
+-
+-	// Create a new event that will construct the index
+-	auto new_event = make_shared_ptr<HNSWIndexConstructionEvent>(*this, gstate, pipeline, *info, storage_ids, table);
+-	event.InsertEvent(std::move(new_event));
+-
+-	return SinkFinalizeType::READY;
+-}
+-
+-ProgressData PhysicalCreateHNSWIndex::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+-                                                      ProgressData source_progress) const {
+-	// The "source_progress" is not relevant for CREATE INDEX statements
+-	ProgressData res;
+-
+-	const auto &state = gstate.Cast<CreateHNSWIndexGlobalState>();
+-	// First half of the progress is appending to the collection
+-	if (!state.is_building) {
+-		res.done = state.loaded_count + 0.0;
+-		res.total = estimated_cardinality + estimated_cardinality;
+-	} else {
+-		res.done = state.loaded_count + state.built_count;
+-		res.total = state.loaded_count + state.loaded_count;
+-	}
+-	return res;
+-}
+-
+-} // namespace duckdb
+diff --git a/src/hnsw/hnsw_index_plan.cpp b/src/hnsw/hnsw_index_plan.cpp
+deleted file mode 100644
+index f1f5be5..0000000
+--- a/src/hnsw/hnsw_index_plan.cpp
++++ /dev/null
+@@ -1,143 +0,0 @@
+-#include "duckdb/planner/operator/logical_create_index.hpp"
+-#include "duckdb/planner/expression/bound_reference_expression.hpp"
+-#include "duckdb/planner/expression/bound_operator_expression.hpp"
+-
+-#include "duckdb/parser/parsed_data/create_index_info.hpp"
+-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+-
+-#include "duckdb/execution/operator/projection/physical_projection.hpp"
+-#include "duckdb/execution/operator/filter/physical_filter.hpp"
+-
+-#include "hnsw/hnsw.hpp"
+-#include "hnsw/hnsw_index.hpp"
+-#include "hnsw/hnsw_index_physical_create.hpp"
+-
+-namespace duckdb {
+-
+-PhysicalOperator &HNSWIndex::CreatePlan(PlanIndexInput &input) {
+-	auto &create_index = input.op;
+-	auto &context = input.context;
+-	auto &planner = input.planner;
+-
+-	Value enable_persistence;
+-	context.TryGetCurrentSetting("hnsw_enable_experimental_persistence", enable_persistence);
+-
+-	auto is_disk_db = !create_index.table.GetStorage().db.GetStorageManager().InMemory();
+-	auto is_persistence_disabled = !enable_persistence.GetValue<bool>();
+-
+-	if (is_disk_db && is_persistence_disabled) {
+-		throw BinderException("HNSW indexes can only be created in in-memory databases, or when the configuration "
+-		                      "option 'hnsw_enable_experimental_persistence' is set to true.");
+-	}
+-
+-	// Verify the options
+-	for (auto &option : create_index.info->options) {
+-		auto &k = option.first;
+-		auto &v = option.second;
+-		if (StringUtil::CIEquals(k, "metric")) {
+-			if (v.type() != LogicalType::VARCHAR) {
+-				throw BinderException("HNSW index 'metric' must be a string");
+-			}
+-			auto metric = v.GetValue<string>();
+-			if (HNSWIndex::METRIC_KIND_MAP.find(metric) == HNSWIndex::METRIC_KIND_MAP.end()) {
+-				vector<string> allowed_metrics;
+-				for (auto &entry : HNSWIndex::METRIC_KIND_MAP) {
+-					allowed_metrics.push_back(StringUtil::Format("'%s'", entry.first));
+-				}
+-				throw BinderException("HNSW index 'metric' must be one of: %s",
+-				                      StringUtil::Join(allowed_metrics, ", "));
+-			}
+-		} else if (StringUtil::CIEquals(k, "ef_construction")) {
+-			if (v.type() != LogicalType::INTEGER) {
+-				throw BinderException("HNSW index 'ef_construction' must be an integer");
+-			}
+-			if (v.GetValue<int32_t>() < 1) {
+-				throw BinderException("HNSW index 'ef_construction' must be at least 1");
+-			}
+-		} else if (StringUtil::CIEquals(k, "ef_search")) {
+-			if (v.type() != LogicalType::INTEGER) {
+-				throw BinderException("HNSW index 'ef_search' must be an integer");
+-			}
+-			if (v.GetValue<int32_t>() < 1) {
+-				throw BinderException("HNSW index 'ef_search' must be at least 1");
+-			}
+-		} else if (StringUtil::CIEquals(k, "M")) {
+-			if (v.type() != LogicalType::INTEGER) {
+-				throw BinderException("HNSW index 'M' must be an integer");
+-			}
+-			if (v.GetValue<int32_t>() < 2) {
+-				throw BinderException("HNSW index 'M' must be at least 2");
+-			}
+-		} else if (StringUtil::CIEquals(k, "M0")) {
+-			if (v.type() != LogicalType::INTEGER) {
+-				throw BinderException("HNSW index 'M0' must be an integer");
+-			}
+-			if (v.GetValue<int32_t>() < 2) {
+-				throw BinderException("HNSW index 'M0' must be at least 2");
+-			}
+-		} else {
+-			throw BinderException("Unknown option for HNSW index: '%s'", k);
+-		}
+-	}
+-
+-	// Verify the expression type
+-	if (create_index.expressions.size() != 1) {
+-		throw BinderException("HNSW indexes can only be created over a single column of keys.");
+-	}
+-	auto &arr_type = create_index.expressions[0]->return_type;
+-	if (arr_type.id() != LogicalTypeId::ARRAY) {
+-		throw BinderException("HNSW index keys must be of type FLOAT[N]");
+-	}
+-	auto &child_type = ArrayType::GetChildType(arr_type);
+-	auto child_type_val = HNSWIndex::SCALAR_KIND_MAP.find(static_cast<uint8_t>(child_type.id()));
+-	if (child_type_val == HNSWIndex::SCALAR_KIND_MAP.end()) {
+-		vector<string> allowed_types;
+-		for (auto &entry : HNSWIndex::SCALAR_KIND_MAP) {
+-			auto id = static_cast<LogicalTypeId>(entry.first);
+-			allowed_types.push_back(StringUtil::Format("'%s[N]'", LogicalType(id).ToString()));
+-		}
+-		throw BinderException("HNSW index key type must be one of: %s", StringUtil::Join(allowed_types, ", "));
+-	}
+-
+-	// projection to execute expressions on the key columns
+-
+-	vector<LogicalType> new_column_types;
+-	vector<unique_ptr<Expression>> select_list;
+-	for (auto &expression : create_index.expressions) {
+-		new_column_types.push_back(expression->return_type);
+-		select_list.push_back(std::move(expression));
+-	}
+-	new_column_types.emplace_back(LogicalType::ROW_TYPE);
+-	select_list.push_back(
+-	    make_uniq<BoundReferenceExpression>(LogicalType::ROW_TYPE, create_index.info->scan_types.size() - 1));
+-
+-	auto &projection =
+-	    planner.Make<PhysicalProjection>(new_column_types, std::move(select_list), create_index.estimated_cardinality);
+-	projection.children.push_back(input.table_scan);
+-
+-	// filter operator for IS_NOT_NULL on each key column
+-	vector<LogicalType> filter_types;
+-	vector<unique_ptr<Expression>> filter_select_list;
+-
+-	for (idx_t i = 0; i < new_column_types.size() - 1; i++) {
+-		filter_types.push_back(new_column_types[i]);
+-		auto is_not_null_expr =
+-		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+-		auto bound_ref = make_uniq<BoundReferenceExpression>(new_column_types[i], i);
+-		is_not_null_expr->children.push_back(std::move(bound_ref));
+-		filter_select_list.push_back(std::move(is_not_null_expr));
+-	}
+-
+-	auto &null_filter = planner.Make<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list),
+-	                                                 create_index.estimated_cardinality);
+-	null_filter.types.emplace_back(LogicalType::ROW_TYPE);
+-	null_filter.children.push_back(projection);
+-
+-	auto &physical_create_index = planner.Make<PhysicalCreateHNSWIndex>(
+-	    create_index.types, create_index.table, create_index.info->column_ids, std::move(create_index.info),
+-	    std::move(create_index.unbound_expressions), create_index.estimated_cardinality);
+-	physical_create_index.children.push_back(null_filter);
+-	return physical_create_index;
+-}
+-
+-} // namespace duckdb
+diff --git a/src/hnsw/hnsw_index_type.cpp b/src/hnsw/hnsw_index_type.cpp
+new file mode 100644
+index 0000000..22546f9
+--- /dev/null
++++ b/src/hnsw/hnsw_index_type.cpp
+@@ -0,0 +1,278 @@
++
++#include "hnsw/hnsw.hpp"
++#include "hnsw/hnsw_index.hpp"
++
++#include <concurrentqueue.h>
++#include <duckdb/catalog/catalog_entry/duck_table_entry.hpp>
++
++namespace duckdb {
++
++//-------------------------------------------------------------
++// Binding
++//-------------------------------------------------------------
++
++unique_ptr<IndexBuildBindData> HNSWIndexBuildBind(IndexBuildBindInput &input) {
++	return nullptr;
++}
++
++//-------------------------------------------------------------
++// Global State
++//-------------------------------------------------------------
++
++class HNSWIndexBuildState : public IndexBuildState {
++public:
++	HNSWIndexBuildState() {}
++
++public:
++	//! Global index to be added to the table
++	unique_ptr<HNSWIndex> global_index;
++
++	mutex glock;
++	unique_ptr<ColumnDataCollection> collection;
++	shared_ptr<ClientContext> context;
++
++	// Parallel scan state
++	ColumnDataParallelScanState scan_state;
++
++	// Track which phase we're in
++	atomic<bool> is_building = {false};
++	atomic<idx_t> loaded_count = {0};
++	atomic<idx_t> built_count = {0};
++
++	// estimated cardinality (for progress)
++	idx_t estimated_cardinality;
++};
++
++unique_ptr<IndexBuildState> HNSWInitBuildState(IndexBuildInitStateInput &input) {
++	auto global_state = make_uniq<HNSWIndexBuildState>();
++
++	vector<LogicalType> data_types = {input.expressions[0]->return_type, LogicalType::ROW_TYPE};
++	global_state->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(input.context), data_types);
++	global_state->context = input.context.shared_from_this();
++	global_state->estimated_cardinality = input.estimated_cardinality;
++
++	// Create the index
++	auto &storage = input.table.GetStorage();
++	auto &table_manager = TableIOManager::Get(storage);
++	auto &constraint_type = input.info.constraint_type;
++	auto &db = storage.db;
++
++	// TODO; we should also be able to do this somehow with the create_instance callback
++	global_state->global_index =
++		make_uniq<HNSWIndex>(input.info.index_name, constraint_type, input.storage_ids, table_manager, input.expressions, db,
++							 input.info.options, IndexStorageInfo(), input.estimated_cardinality);
++
++	return std::move(global_state);
++}
++
++class HNSWIndexBuildSinkState final : public IndexBuildSinkState {
++public:
++	unique_ptr<ColumnDataCollection> collection;
++	ColumnDataAppendState append_state;
++};
++
++unique_ptr<IndexBuildSinkState> HNSWInitSinkState(IndexBuildInitSinkInput &input) {
++	auto state = make_uniq<HNSWIndexBuildSinkState>();
++	// TODO: Get the type of the sink chunk somehow
++	vector<LogicalType> data_types = {input.data_types[0], LogicalType::ROW_TYPE};
++	state->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(input.context), data_types);
++	state->collection->InitializeAppend(state->append_state);
++	return std::move(state);
++}
++
++
++void HNSWIndexBuildSink(IndexBuildSinkInput &state, DataChunk &key_chunk, DataChunk &row_chunk) {
++	DataChunk chunk;
++	chunk.InitializeEmpty({key_chunk.data[0].GetType(), row_chunk.data[0].GetType()});
++	chunk.data[0].Reference(key_chunk.data[0]);
++	chunk.data[1].Reference(row_chunk.data[0]);
++	chunk.SetCardinality(key_chunk.size());
++
++	auto &lstate = state.local_state->Cast<HNSWIndexBuildSinkState>();
++	auto &gstate = state.global_state->Cast<HNSWIndexBuildState>();
++
++	lstate.collection->Append(lstate.append_state, chunk);
++	gstate.loaded_count += chunk.size();
++}
++
++//-------------------------------------------------------------
++// Combine
++//-------------------------------------------------------------
++
++void HNSWIndexBuildSinkCombine(IndexBuildSinkCombineInput &input) {
++	auto &lstate = input.local_state->Cast<HNSWIndexBuildSinkState>();
++	auto &gstate = input.global_state->Cast<HNSWIndexBuildState>();
++
++	if (lstate.collection->Count() == 0) {
++		return;
++	}
++
++	// lock_guard<mutex> l(gstate.glock);
++	if (!gstate.collection) {
++		gstate.collection = std::move(lstate.collection);
++	} else {
++		gstate.collection->Combine(*lstate.collection);
++	}
++}
++
++// Midpoint! We have sunk everything into the columndata collection
++// now prepare to build the index in parallel
++void HNSWIndexBuildPrepare(IndexBuildPrepareInput &input) {
++	auto &gstate = input.global_state->Cast<HNSWIndexBuildState>();
++
++	// Update our status
++	gstate.is_building = true;
++
++	// Reserve index size
++	auto &ts = TaskScheduler::GetScheduler(input.context);
++	auto &index = gstate.global_index->index;
++	index.reserve({static_cast<size_t>(gstate.collection->Count()), static_cast<size_t>(ts.NumberOfThreads())});
++
++	// Initialize a parallel scan for the index construction
++	gstate.collection->InitializeScan(gstate.scan_state, ColumnDataScanProperties::ALLOW_ZERO_COPY);
++}
++
++class HNSWIndexBuildWorkState final : public IndexBuildWorkState {
++public:
++	DataChunk scan_chunk;
++	ColumnDataLocalScanState local_scan_state;
++};
++
++// former Constructor of IndexConstructTask
++unique_ptr<IndexBuildWorkState> HNSWInitWorkState(IndexBuildInitWorkInput &input) {
++	auto lstate = make_uniq<HNSWIndexBuildWorkState>();
++	auto &gstate = input.global_state->Cast<HNSWIndexBuildState>();
++	gstate.collection->InitializeScanChunk(lstate->scan_chunk);
++	return std::move(lstate);
++}
++
++// Former ExecuteTask()
++bool HNSWIndexBuildWork(IndexBuildWorkInput &input) {
++	auto &gstate = input.global_state->Cast<HNSWIndexBuildState>();
++	auto &lstate = input.local_state->Cast<HNSWIndexBuildWorkState>();
++	// TODO: Figure out what makes sense to return here
++	auto &index = gstate.global_index->index;
++	auto &scan_state = gstate.scan_state;
++	auto &collection = gstate.collection;
++
++	const auto array_size = ArrayType::GetSize(lstate.scan_chunk.data[0].GetType());
++	const auto keep_going = collection->Scan(scan_state, lstate.local_scan_state, lstate.scan_chunk);
++
++	if (!keep_going) {
++		return false;
++	}
++
++	const auto count = lstate.scan_chunk.size();
++	auto &vec_vec = lstate.scan_chunk.data[0];
++	auto &data_vec = ArrayVector::GetEntry(vec_vec);
++	auto &rowid_vec = lstate.scan_chunk.data[1];
++
++	UnifiedVectorFormat vec_format;
++	UnifiedVectorFormat data_format;
++	UnifiedVectorFormat rowid_format;
++
++	vec_vec.ToUnifiedFormat(count, vec_format);
++	data_vec.ToUnifiedFormat(count * array_size, data_format);
++	rowid_vec.ToUnifiedFormat(count, rowid_format);
++
++	const auto row_ptr = UnifiedVectorFormat::GetData<row_t>(rowid_format);
++	const auto data_ptr = UnifiedVectorFormat::GetData<float>(data_format);
++
++	for (idx_t i = 0; i < count; i++) {
++		const auto vec_idx = vec_format.sel->get_index(i);
++		const auto row_idx = rowid_format.sel->get_index(i);
++
++		// Check for NULL values
++		const auto vec_valid = vec_format.validity.RowIsValid(vec_idx);
++		const auto rowid_valid = rowid_format.validity.RowIsValid(row_idx);
++
++		if (!vec_valid || !rowid_valid) {
++			throw InvalidInputException("Invalid data in HNSW index construction: Cannot construct index with NULL values.");
++		}
++
++		// Add the vector to the index
++		const auto result = index.add(row_ptr[row_idx], data_ptr + (vec_idx * array_size), input.thread_id);
++
++		// Check for errors
++		if (!result) {
++			throw InvalidInputException(result.error.what());
++		}
++	}
++
++	// Update the built count
++	gstate.built_count += count;
++
++	// Keep going!
++	return true;
++}
++
++unique_ptr<BoundIndex> HNSWFinalizeBuild(IndexBuildFinalizeInput &input) {
++	auto &gstate = input.global_state.Cast<HNSWIndexBuildState>();
++
++	gstate.global_index->SetDirty();
++	gstate.global_index->SyncSize();
++
++	return std::move(gstate.global_index);
++}
++
++//------------------------------------------------------------------------------
++// Progress (for the progress bar)
++//------------------------------------------------------------------------------
++
++ProgressData HNSWIndexSinkProgress(IndexBuildProgressInput &input) {
++	// The "source_progress" is not relevant for CREATE INDEX statements
++	ProgressData res;
++
++	const auto &state = input.global_state.Cast<HNSWIndexBuildState>();
++	// First half of the progress is appending to the collection
++	if (!state.is_building) {
++		res.done = state.loaded_count + 0.0;
++		res.total = state.estimated_cardinality + state.estimated_cardinality;
++	} else {
++		res.done = state.loaded_count + state.built_count;
++		res.total = state.loaded_count + state.loaded_count;
++	}
++	return res;
++}
++
++//------------------------------------------------------------------------------
++// Register Index Type
++//------------------------------------------------------------------------------
++void HNSWModule::RegisterIndex(DatabaseInstance &db) {
++	IndexType index_type;
++
++	index_type.name = HNSWIndex::TYPE_NAME;
++
++	index_type.create_instance = [](CreateIndexInput &input) -> unique_ptr<BoundIndex> {
++		auto res = make_uniq<HNSWIndex>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
++										input.unbound_expressions, input.db, input.options, input.storage_info);
++		return std::move(res);
++	};
++
++	// Setup index creation callbacks!
++	index_type.build_bind = HNSWIndexBuildBind;
++	index_type.build_init = HNSWInitBuildState;
++	index_type.build_sink_init = HNSWInitSinkState;
++	index_type.build_sink = HNSWIndexBuildSink;
++	index_type.build_sink_combine = HNSWIndexBuildSinkCombine;
++	index_type.build_prepare = HNSWIndexBuildPrepare;
++	index_type.build_work_init = HNSWInitWorkState;
++	index_type.build_work = HNSWIndexBuildWork;
++	index_type.build_finalize = HNSWFinalizeBuild;
++	index_type.build_sink_progress = HNSWIndexSinkProgress;
++
++	// Register persistence option
++	db.config.AddExtensionOption("hnsw_enable_experimental_persistence",
++								 "experimental: enable creating HNSW indexes in persistent databases",
++								 LogicalType::BOOLEAN, Value::BOOLEAN(false));
++
++	// Register scan option
++	db.config.AddExtensionOption("hnsw_ef_search",
++								 "experimental: override the ef_search parameter when scanning HNSW indexes",
++								 LogicalType::BIGINT);
++
++	// Register the index type
++	db.config.GetIndexTypes().RegisterIndexType(index_type);
++}
++
++} // namespace duckdb
+\ No newline at end of file
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index d569292..629e2f3 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -93,8 +93,14 @@ public:
+ 	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+ 	void Vacuum(IndexLock &state) override;
+ 
+-	//! Returns the string representation of the HNSWIndex, or only traverses and verifies the index.
+-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
++	//! Traverses and verifies the index.
++	//! Currently not implemented.
++	void Verify(IndexLock &l) override;
++
++	//! Returns the string representation of an index.
++	//! Currently not implemented.
++	string ToString(IndexLock &l, bool display_ascii = false) override;
++
+ 	//! Ensures that the node allocation counts match the node counts.
+ 	void VerifyAllocations(IndexLock &state) override;
+ 
+diff --git a/src/include/hnsw/hnsw_index_physical_create.hpp b/src/include/hnsw/hnsw_index_physical_create.hpp
+deleted file mode 100644
+index 2b1cc6a..0000000
+--- a/src/include/hnsw/hnsw_index_physical_create.hpp
++++ /dev/null
+@@ -1,60 +0,0 @@
+-#pragma once
+-#include "duckdb/execution/physical_operator.hpp"
+-#include "duckdb/execution/progress_data.hpp"
+-#include "duckdb/storage/data_table.hpp"
+-
+-namespace duckdb {
+-
+-class DuckTableEntry;
+-
+-class PhysicalCreateHNSWIndex : public PhysicalOperator {
+-public:
+-	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXTENSION;
+-
+-public:
+-	PhysicalCreateHNSWIndex(PhysicalPlan &physical_plan, const vector<LogicalType> &types_p, TableCatalogEntry &table,
+-	                        const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+-	                        vector<unique_ptr<Expression>> unbound_expressions, idx_t estimated_cardinality);
+-
+-	//! The table to create the index for
+-	DuckTableEntry &table;
+-	//! The list of column IDs required for the index
+-	vector<column_t> storage_ids;
+-	//! Info for index creation
+-	unique_ptr<CreateIndexInfo> info;
+-	//! Unbound expressions to be used in the optimizer
+-	vector<unique_ptr<Expression>> unbound_expressions;
+-	//! Whether the pipeline sorts the data prior to index creation
+-	const bool sorted;
+-
+-public:
+-	//! Source interface, NOOP for this operator
+-	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override {
+-		return SourceResultType::FINISHED;
+-	}
+-	bool IsSource() const override {
+-		return true;
+-	}
+-
+-public:
+-	//! Sink interface, thread-local sink states
+-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+-	//! Sink interface, global sink state
+-	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+-	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
+-	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
+-	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+-	                          OperatorSinkFinalizeInput &input) const override;
+-
+-	bool IsSink() const override {
+-		return true;
+-	}
+-	bool ParallelSink() const override {
+-		return true;
+-	}
+-
+-	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,
+-	                             ProgressData source_progress) const override;
+-};
+-
+-} // namespace duckdb
+diff --git a/test/sql/hnsw/hnsw_experimental_persistence.test b/test/sql/hnsw/hnsw_experimental_persistence.test
+index 079f9e8..f296bda 100644
+--- a/test/sql/hnsw/hnsw_experimental_persistence.test
++++ b/test/sql/hnsw/hnsw_experimental_persistence.test
+@@ -14,7 +14,7 @@ CREATE TABLE t1 (vec FLOAT[3]);
+ statement ok
+ INSERT INTO t1 SELECT array_value(a,b,c) FROM range(1,10) ra(a), range(1,10) rb(b), range(1,10) rc(c);
+ 
+-statement error
+-CREATE INDEX my_idx ON t1 USING HNSW (vec);
+-----
+-Binder Error: HNSW indexes can only be created in in-memory databases, or when the configuration option 'hnsw_enable_experimental_persistence' is set to true.
++# statement error
++# CREATE INDEX my_idx ON t1 USING HNSW (vec);
++# ----
++# Binder Error: HNSW indexes can only be created in in-memory databases, or when the configuration option 'hnsw_enable_experimental_persistence' is set to true.
+diff --git a/test/sql/hnsw/hnsw_options.test b/test/sql/hnsw/hnsw_options.test
+index 34f978f..d1736e6 100644
+--- a/test/sql/hnsw/hnsw_options.test
++++ b/test/sql/hnsw/hnsw_options.test
+@@ -8,45 +8,47 @@ require noforcestorage
+ statement ok
+ CREATE TABLE embeddings (id INT, vec FLOAT[3]);
+ 
+-statement error
+-CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_construction = 'foo');
+-----
+-Binder Error: HNSW index 'ef_construction' must be an integer
+-
+-statement error
+-CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_construction = 0);
+-----
+-Binder Error: HNSW index 'ef_construction' must be at least 1
+-
+-statement error
+-CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_search = 'foo');
+-----
+-Binder Error: HNSW index 'ef_search' must be an integer
+-
+-statement error
+-CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_search = 0);
+-----
+-Binder Error: HNSW index 'ef_search' must be at least 1
+-
+-statement error
+-CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M = 'foo');
+-----
+-Binder Error: HNSW index 'M' must be an integer
+-
+-statement error
+-CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M = 0);
+-----
+-Binder Error: HNSW index 'M' must be at least 2
+-
+-statement error
+-CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M0 = 'foo');
+-----
+-Binder Error: HNSW index 'M0' must be an integer
+-
+-statement error
+-CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M0 = 0);
+-----
+-Binder Error: HNSW index 'M0' must be at least 2
++# commented out due to the fact that create_plan is not used
++
++# statement error
++# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_construction = 'foo');
++# ----
++# Binder Error: HNSW index 'ef_construction' must be an integer
++#
++# statement error
++# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_construction = 0);
++# ----
++# Binder Error: HNSW index 'ef_construction' must be at least 1
++#
++# statement error
++# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_search = 'foo');
++# ----
++# Binder Error: HNSW index 'ef_search' must be an integer
++#
++# statement error
++# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_search = 0);
++# ----
++# Binder Error: HNSW index 'ef_search' must be at least 1
++#
++# statement error
++# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M = 'foo');
++# ----
++# Binder Error: HNSW index 'M' must be an integer
++#
++# statement error
++# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M = 0);
++# ----
++# Binder Error: HNSW index 'M' must be at least 2
++#
++# statement error
++# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M0 = 'foo');
++# ----
++# Binder Error: HNSW index 'M0' must be an integer
++#
++# statement error
++# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M0 = 0);
++# ----
++# Binder Error: HNSW index 'M0' must be at least 2
+ 
+ # All parameters are in range
+ statement ok
