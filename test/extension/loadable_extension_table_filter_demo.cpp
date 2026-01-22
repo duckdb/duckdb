@@ -114,4 +114,5 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_table_filter_demo, loader) {
 	config.table_filter_extensions.push_back(make_uniq<ModuloTableFilterExtension>());
 	config.optimizer_extensions.push_back(ModuloOptimizerExtension());
 }
+
 }

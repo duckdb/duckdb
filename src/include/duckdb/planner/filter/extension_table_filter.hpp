@@ -42,15 +42,15 @@ public:
 		throw InternalException("ExtensionTableFilter::Serialize() not implemented");
 	}
 
-	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
-
+    static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
+	
 public:
 	virtual unique_ptr<TableFilterState> InitializeState(ClientContext &context) const {
 		return make_uniq<ExtensionFilterState>();
 	}
 
 	virtual idx_t Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
-	                     TableFilterState &state) const {
+			    TableFilterState &state) const {
 		throw InternalException("ExtensionTableFilter::Filter() not implemented");
 	}
 };
