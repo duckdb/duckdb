@@ -5,6 +5,7 @@
 #include "duckdb/common/tree_renderer/text_tree_renderer.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
+#include "duckdb/execution/operator/schema/physical_create_index.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -85,10 +86,18 @@ bool Pipeline::GetProgress(ProgressData &progress) {
 		return true;
 	}
 	auto &client = executor.context;
-
 	progress = source->GetProgress(client, *source_state);
 	progress.Normalize(double(source_cardinality));
-	progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+
+	if (sink->type == PhysicalOperatorType::CREATE_INDEX) {
+		const auto &create_index = sink->Cast<PhysicalCreateIndex>();
+		const auto &global_sink_state = sink->sink_state->Cast<CreateIndexGlobalSinkState>();
+		IndexBuildProgressInput input {client, *global_sink_state.gstate, progress};
+		progress = create_index.index_type.build_sink_progress(input);
+	} else {
+		progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+	}
+
 	return progress.IsValid();
 }
 

@@ -220,6 +220,12 @@ struct IndexBuildFinalizeInput {
 	idx_t exact_count = 0;
 };
 
+struct IndexBuildProgressInput {
+	ClientContext &context;
+	IndexBuildState &global_state;
+	ProgressData source_progress;
+};
+
 typedef unique_ptr<IndexBuildBindData> (*index_build_bind_t)(IndexBuildBindInput &input);
 typedef bool (*index_build_sort_t)(IndexBuildSortInput &input);
 
@@ -233,6 +239,7 @@ typedef void (*index_build_prepare_t)(IndexBuildPrepareInput &input);
 typedef unique_ptr<IndexBuildWorkState> (*index_build_work_init_t)(IndexBuildInitWorkInput &input);
 typedef bool (*index_build_work_t)(IndexBuildWorkInput &input); // TODO: Figure out what makes sense to return here
 typedef void (*index_build_work_combine_t)(IndexBuildWorkCombineInput &input);
+typedef ProgressData (*index_build_progress_t)(IndexBuildProgressInput &input);
 
 typedef unique_ptr<BoundIndex> (*index_build_finalize_t)(IndexBuildFinalizeInput &input);
 
@@ -291,6 +298,8 @@ public:
 
 	index_build_plan_t create_plan = nullptr; // escape hatch for creating the physical plan
 	index_create_function_t create_instance = nullptr;
+
+	index_build_progress_t build_sink_progress = nullptr;
 
 	// function to create an instance of the index
 };
