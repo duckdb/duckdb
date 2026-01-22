@@ -187,9 +187,6 @@ public:
 	                         const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~QueryAppender() override;
 
-public:
-	unique_ptr<TableRef> GetUnknownParameterTableRef();
-
 private:
 	//! A shared pointer to the context of this appender.
 	weak_ptr<ClientContext> context;

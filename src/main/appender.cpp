@@ -436,8 +436,8 @@ void BaseAppender::ClearColumns() {
 unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
                                                          const vector<string> &expected_names) {
 	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
-	string alias = table_name.empty() ? "appended_data" : table_name;
-	column_data_ref->alias = alias;
+	column_data_ref->alias = table_name.empty() ? "appended_data" : table_name;
+	;
 	column_data_ref->expected_names = expected_names;
 	return std::move(column_data_ref);
 }
@@ -698,39 +698,7 @@ QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType
                              string table_name_p, const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context),
       query(std::move(query_p)), names(std::move(names_p)), table_name(std::move(table_name_p)) {
-
 	types = std::move(types_p);
-	bool infer_types = true;
-	for (const auto &t : types) {
-		if (t.id() != LogicalTypeId::ANY) {
-			infer_types = false;
-			break;
-		}
-	}
-
-	if (infer_types) {
-		auto context_ref = context.lock();
-		if (!context_ref) {
-			throw InvalidInputException("Attempting to create query appender on a closed connection");
-		}
-
-		// We need to parse and bind the query.
-		auto table_ref = GetUnknownParameterTableRef();
-		auto stmt = ParseStatement(std::move(table_ref), query, table_name);
-		auto prepared_stmt = context_ref->Prepare(std::move(stmt));
-
-		if (prepared_stmt->HasError()) {
-			throw InvalidInputException(prepared_stmt->GetError());
-		}
-
-		types = prepared_stmt->GetTypes();
-		for (const auto &t : types) {
-			if (t.IsUnknown()) {
-				throw InvalidInputException("failed to create query appender: cannot infer types");
-			}
-		}
-	}
-
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
@@ -739,22 +707,6 @@ QueryAppender::QueryAppender(Connection &con, string query_p, vector<LogicalType
 }
 
 QueryAppender::~QueryAppender() {
-}
-
-unique_ptr<TableRef> QueryAppender::GetUnknownParameterTableRef() {
-	auto expr_list_ref = make_uniq<ExpressionListRef>();
-
-	// Create the parameters as a VALUES list.
-	vector<unique_ptr<ParsedExpression>> parameters;
-	for (idx_t i = 0; i < types.size(); i++) {
-		auto param_expr = make_uniq<ParameterExpression>();
-		param_expr->identifier = StringUtil::Format("%d", i);
-		parameters.push_back(std::move(param_expr));
-	}
-
-	expr_list_ref->values.push_back(std::move(parameters));
-	expr_list_ref->alias = "valueslist";
-	return std::move(expr_list_ref);
 }
 
 void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
