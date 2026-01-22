@@ -13,6 +13,7 @@
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <cstring>
 
@@ -561,6 +562,17 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();
+		if (state.executor.expressions[0]->type == ExpressionType::BOUND_FUNCTION) {
+			auto &func_expr = state.executor.expressions[0]->Cast<BoundFunctionExpression>();
+			if (func_expr.function.HasFilterRowPruneCallback()) {
+				// Extensible Filter: we have a filter prune callback
+				filter_row_prune_t row_prune = func_expr.function.GetFilterRowPruneCallback();
+				const FunctionData *bind_data = func_expr.bind_info.get();
+				approved_tuple_count = row_prune(bind_data, *state.row_prune_state, vector, sel, approved_tuple_count);
+				return approved_tuple_count;
+			}
+		}
+
 		SelectionVector result_sel(approved_tuple_count);
 		if (scan_count > STANDARD_VECTOR_SIZE) {
 			// scan count is > vector size - split up the vector into multiple chunks
