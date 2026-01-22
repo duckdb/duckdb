@@ -617,7 +617,6 @@ void LogicalMergeInto::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<optional_idx>(204, "source_marker", source_marker);
 	serializer.WritePropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", actions);
 	serializer.WritePropertyWithDefault<bool>(206, "return_chunk", return_chunk);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(207, "delete_return_columns", delete_return_columns);
 }
 
 unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserializer) {
@@ -629,7 +628,6 @@ unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserial
 	deserializer.ReadProperty<optional_idx>(204, "source_marker", result->source_marker);
 	deserializer.ReadPropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", result->actions);
 	deserializer.ReadPropertyWithDefault<bool>(206, "return_chunk", result->return_chunk);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(207, "delete_return_columns", result->delete_return_columns);
 	return std::move(result);
 }
 
