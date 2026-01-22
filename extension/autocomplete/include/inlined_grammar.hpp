@@ -901,7 +901,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)\n"
 	"SubstringArguments <- SubstringParameters / SubstringExpressionList\n"
 	"SubstringExpressionList <- List(Expression)\n"
-	"SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral\n"
+	"SubstringParameters <- Expression 'FROM' Expression 'FOR' Expression\n"
 	"TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))\n"
 	"TrimDirection <- TrimBoth / TrimLeading / TrimTrailing\n"
 	"TrimBoth <- 'BOTH'\n"

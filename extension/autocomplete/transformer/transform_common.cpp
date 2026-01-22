@@ -346,10 +346,13 @@ LogicalType PEGTransformerFactory::TransformGeometryType(PEGTransformer &transfo
 	if (crs_opt.HasResult()) {
 		auto extract_parens = ExtractResultFromParens(crs_opt.optional_result);
 		auto crs = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
-		if (!(crs->GetExpressionClass() == ExpressionClass::CONSTANT)) {
+		if (crs->GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw ParserException("Geometry CRS expected a constant expression");
 		}
 		auto &const_crs = crs->Cast<ConstantExpression>();
+		if (const_crs.value.type() != LogicalType::VARCHAR) {
+			throw ParserException("GEOMETRY type modifier must be a string with a coordinate system definition");
+		}
 		return LogicalType::GEOMETRY(const_crs.value.GetValue<string>());
 	}
 	return LogicalType::GEOMETRY();

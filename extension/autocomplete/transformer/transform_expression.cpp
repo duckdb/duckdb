@@ -608,9 +608,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructField(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
-	if (StringUtil::CharacterIsDigit(alias[0])) {
-		throw ParserException("Keys in a struct cannot start with a number: %s", alias);
-	}
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	expr->SetAlias(alias);
 	return expr;
@@ -2250,9 +2247,9 @@ PEGTransformerFactory::TransformSubstringParameters(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<NumberParseResult>(2)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<NumberParseResult>(4)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(4)));
 	return results;
 }
 

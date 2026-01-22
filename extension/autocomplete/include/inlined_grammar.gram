@@ -932,7 +932,7 @@ RowExpression <- 'ROW' Parens(List(Expression))
 SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
 SubstringArguments <- SubstringParameters / SubstringExpressionList
 SubstringExpressionList <- List(Expression)
-SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
+SubstringParameters <- Expression 'FROM' Expression 'FOR' Expression
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
 TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
 TrimBoth <- 'BOTH'
