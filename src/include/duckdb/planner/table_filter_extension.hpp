@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 class Deserializer;
 
-//! The TableFilterExtensionInfo holds static information relevant to the table filter extension
+//! The TableFilterExtensionInfo holds static information relevant to txhe table filter extension
 struct TableFilterExtensionInfo {
 	virtual ~TableFilterExtensionInfo() {
 	}

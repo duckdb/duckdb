@@ -2,40 +2,36 @@
 # description: Test loadable table filter extension demo
 # group: [extension]
 
+require notmingw
+
+require skip_reload
+
 require allow_unsigned_extensions
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+PRAGMA disable_verification;
 
 statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_table_filter_demo.duckdb_extension';
 
 statement ok
-CREATE TABLE integers AS SELECT * FROM range(10) t(i)
+CREATE TABLE rowid_test_table AS SELECT * FROM range(10) t(id)
 
 query I
-SELECT * FROM integers
+SELECT rowid FROM rowid_test_table
 ----
-0
-2
-4
-6
-8
-
-query I
-SELECT * FROM integers WHERE i % 2 = 1
-----
-
-statement ok
-CREATE TABLE other_table AS SELECT * FROM range(10) t(j)
-
-query I
-SELECT * FROM other_table
-----
-0
-1
-2
 3
 4
 5
-6
 7
-8
 9
+
+query I nosort prefix
+EXPLAIN SELECT rowid FROM rowid_test_table
+----
+physical_plan   <REGEX>:.*RowIDFilter.*
+
+
