@@ -22,7 +22,6 @@ class BaseStatistics;
 class Expression;
 class PhysicalOperator;
 class PhysicalTableScan;
-class Deserializer;
 
 enum class TableFilterType : uint8_t {
 	CONSTANT_COMPARISON = 0, // constant comparison (e.g. =C, >C, >=C, <C, <=C)
@@ -36,7 +35,6 @@ enum class TableFilterType : uint8_t {
 	DYNAMIC_FILTER = 8,      // dynamic filters can be updated at run-time
 	EXPRESSION_FILTER = 9,   // an arbitrary expression
 	BLOOM_FILTER = 10,       // a probabilistic filter that can test whether a value is in a set of other value
-	EXTENSION = 11           // custom extension filter
 };
 
 //! TableFilter represents a filter pushed down into the table scan.
