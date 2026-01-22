@@ -145,6 +145,8 @@ private:
 struct AggregateStateTypeInfo : public StructTypeInfo {
 	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p);
 
+	void VerifyStateAsStructSerialization(Serializer &serializer) const;
+
 	aggregate_state_t state_type;
 
 public:

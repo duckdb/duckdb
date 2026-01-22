@@ -275,16 +275,33 @@ AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p, c
       state_type(std::move(state_type_p)) {
 }
 
+void AggregateStateTypeInfo::VerifyStateAsStructSerialization(Serializer &serializer) const {
+	// We don't preserve forward compatibility for the new AggregateStateTypeInfo that inherits from StructTypeInfo.
+	// Therefore, we will have to throw an error when serializing to an older storage
+	// Forward compatibility will not be preserved since the whole Vector serialization is different when writing the
+	// new Struct-based AggregateState. Which means that even if we manage to restore the right AggregateStateTypeInfo,
+	// we will not be able to restore the DataChunk correctly unless we retrigger the whole EXPORT_STATE.
+	// However, we do preserve forward compatibility for Opaque AggregateStates
+	if (!serializer.ShouldSerialize(7) && !child_types.empty()) {
+		throw InternalException("AggregateState as a Struct can only be serialized to storage versions >= 7");
+	}
+}
+
 void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
-	// We intentionally don't call `StructTypeInfo::Serialize" to maintain forward / backword compatibility with ID 200
-	// as function_name.
+	VerifyStateAsStructSerialization(serializer);
+
+	// We intentionally don't call `StructTypeInfo::Serialize`, since we have a different ID for child_types, to
+	// maintain backward compatibility (forwards compatibility is not maintained here)
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
 	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
+	                                                         state_type.bound_argument_types);
+
+	// This way we can still preserve forward compatibility for the legacy opaque aggregate state
 	if (serializer.ShouldSerialize(7)) {
-		serializer.WritePropertyWithDefault<LogicalType>(203, "state_type", state_type.state_type, LogicalTypeId::INVALID);
-		serializer.WritePropertyWithDefault<child_list_t<LogicalType>>(204, "child_types", child_types, child_list_t<LogicalType>{});
+		serializer.WritePropertyWithDefault<child_list_t<LogicalType>>(203, "child_types", child_types,
+																	   child_list_t<LogicalType> {});
 	}
 }
 
@@ -292,9 +309,11 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
 	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
-	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(203, "state_type", result->state_type.state_type, LogicalTypeId::INVALID);
-	deserializer.ReadPropertyWithExplicitDefault(204, "child_types", result->child_types, child_list_t<LogicalType>{});
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
+	                                                          result->state_type.bound_argument_types);
+	// Backward compatibility - in older storage versions it will just be empty, leading to a `PhysicalType::VARCHAR`,
+	// as in older versions.
+	deserializer.ReadPropertyWithExplicitDefault(203, "child_types", result->child_types, child_list_t<LogicalType> {});
 	return std::move(result);
 }
 
