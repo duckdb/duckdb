@@ -506,7 +506,11 @@ bool DBConfig::IsInMemoryDatabase(const char *database_path) {
 }
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
-	return *cast_functions;
+	return type_manager->GetCastFunctions();
+}
+
+TypeManager &DBConfig::GetTypeManager() {
+	return *type_manager;
 }
 
 CollationBinding &DBConfig::GetCollationBinding() {

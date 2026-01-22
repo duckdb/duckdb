@@ -36,6 +36,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/common/types/type_manager.hpp"
 
 namespace duckdb {
 
@@ -57,6 +58,7 @@ class EncryptionUtil;
 class HTTPUtil;
 class DatabaseFilePathManager;
 class ExtensionCallbackManager;
+class TypeManager;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -275,6 +277,7 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
@@ -306,7 +309,7 @@ private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
-	unique_ptr<CastFunctionSet> cast_functions;
+	unique_ptr<TypeManager> type_manager;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
 	unique_ptr<ExtensionCallbackManager> callback_manager;
