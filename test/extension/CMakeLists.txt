@@ -30,15 +30,6 @@ if(NOT WIN32 AND NOT SUN)
     ${PARAMETERS}
     loadable_extension_table_filter_demo.cpp)
 
-  build_loadable_extension_directory(
-    loadable_extension_row_id_filter_demo
-    "CPP"
-    test/extension
-    "default-version"
-    ""
-    ${PARAMETERS}
-    loadable_extension_row_id_filter_demo.cpp)
-
   if(${ENABLE_UNITTEST_CPP_TESTS} AND NOT (${ENABLE_THREAD_SANITIZER}))
     set(TEST_EXT_OBJECTS test_remote_optimizer.cpp
                          test_splitting_extension_statements.cpp)

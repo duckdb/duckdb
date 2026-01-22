@@ -12,8 +12,6 @@ struct ModuloFilterState : public ExtensionFilterState {
 	int modulus;
 };
 
-// ModuloFilter is a custom TableFilter that filters rows based on a modulo operation.
-// It keeps rows where (column_value % modulus == remainder).
 class ModuloFilter : public ExtensionTableFilter {
 public:
 	ModuloFilter(int modulus, int remainder) : modulus(modulus), remainder(remainder) {
@@ -22,7 +20,6 @@ public:
 	int modulus;
 	int remainder;
 
-	// ToString returns a string representation of the filter, used for EXPLAIN output.
 	string ToString(const string &column_name) const override {
 		return column_name + " % " + std::to_string(modulus) + " = " + std::to_string(remainder);
 	}
@@ -78,8 +75,6 @@ public:
 	}
 };
 
-// ModuloOptimizerExtension injects the ModuloFilter into the logical plan.
-// It targets LogicalGet operators where the first column name is "i".
 class ModuloOptimizerExtension : public OptimizerExtension {
 public:
 	ModuloOptimizerExtension() {
