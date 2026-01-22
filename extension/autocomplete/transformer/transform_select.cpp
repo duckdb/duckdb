@@ -555,7 +555,10 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClause(PEGTrans
 	for (auto pivot_value : pivot_values_list.children) {
 		result->pivots.push_back(transformer.Transform<PivotColumn>(pivot_value));
 	}
-	transformer.TransformOptional<string>(list_pr, 3, result->alias);
+	TableAlias pivot_alias;
+	transformer.TransformOptional<TableAlias>(list_pr, 3, pivot_alias);
+	result->alias = pivot_alias.name;
+	result->column_name_alias = pivot_alias.column_name_alias;
 	return result;
 }
 
@@ -564,8 +567,30 @@ PivotColumn PEGTransformerFactory::TransformUnpivotValueList(PEGTransformer &tra
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	PivotColumn result;
 	result.unpivot_names = transformer.Transform<vector<string>>(list_pr.GetChild(0));
+	if (result.unpivot_names.size() != 1) {
+		throw ParserException("UNPIVOT requires a single column name for the PIVOT IN clause");
+	}
 	result.entries = transformer.Transform<vector<PivotColumnEntry>>(list_pr.GetChild(2));
 	return result;
+}
+
+void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> &expr, vector<Value> &result) {
+	if (expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
+		auto &const_expr = expr->Cast<ConstantExpression>();
+		result.push_back(const_expr.value);
+	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
+		for (auto &col : col_ref_expr.column_names) {
+			result.push_back(Value(col));
+		}
+	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &func_expr = expr->Cast<FunctionExpression>();
+		if (func_expr.function_name == "row") {
+			for (auto &col : func_expr.children) {
+				GetValueFromExpression(col, result);
+			}
+		}
+	}
 }
 
 vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
@@ -577,17 +602,8 @@ vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTr
 	for (auto &target : target_list) {
 		PivotColumnEntry pivot_entry;
 		pivot_entry.alias = target->alias;
-		if (target->GetExpressionClass() == ExpressionClass::CONSTANT) {
-			auto &const_expr = target->Cast<ConstantExpression>();
-			pivot_entry.values.push_back(const_expr.value);
-		} else if (target->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-			auto &col_ref_expr = target->Cast<ColumnRefExpression>();
-			for (auto col : col_ref_expr.column_names) {
-				pivot_entry.values.push_back(Value(col));
-			}
-		} else {
-			pivot_entry.expr = std::move(target);
-		}
+		GetValueFromExpression(target, pivot_entry.values);
+		result.push_back(std::move(pivot_entry));
 	}
 	return result;
 }

@@ -182,6 +182,7 @@ public:
 	static void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node);
 	static void VerifyColumnRefs(const ParsedExpression &expr);
 	static void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr);
+	static void GetValueFromExpression(unique_ptr<ParsedExpression> &expr, vector<Value> &result);
 
 	// Registration methods
 	void RegisterAlter();
