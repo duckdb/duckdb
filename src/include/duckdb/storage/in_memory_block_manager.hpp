@@ -61,7 +61,7 @@ public:
 		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsUsed!");
 	}
 	void MarkBlockAsModified(block_id_t block_id) override {
-		blocks.erase(block_id);
+		block_handles.erase(block_id);
 	}
 	void IncreaseBlockReferenceCount(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - IncreaseBlockReferenceCount!");
@@ -86,14 +86,19 @@ public:
 			context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ,
 			                                                                block.AllocSize());
 		}
-		lock_guard<mutex> guard(lock);
-		auto it = blocks.find(block.id);
-		if (it == blocks.end()) {
-			throw InternalException("Trying to read a block that does not exist in-memory: " + to_string(block.id));
-		}
+		shared_ptr<BlockHandle> block_handle;
+		{
+			lock_guard<mutex> guard(lock);
+			auto it = block_handles.find(block.id);
+			if (it == block_handles.end()) {
+				throw InternalException("Trying to read a block that does not exist in-memory: " + to_string(block.id));
+			}
 
+			block_handle = it->second;
+		}
+		// Lock is now released
 		// copy from our stored block to the block provided by the buffer manager
-		memcpy(block.InternalBuffer(), it->second.get(), GetBlockAllocSize());
+		memcpy(block.InternalBuffer(), block_handle.get(), GetBlockAllocSize());
 
 		CheckChecksum(block, location);
 	}
@@ -118,13 +123,14 @@ public:
 		uint64_t checksum = Checksum(block.buffer, block.Size());
 		Store<uint64_t>(checksum, block.InternalBuffer());
 
-		// copy the block to our own storage
-		auto &allocator = BufferAllocator::Get(buffer_manager.GetDatabase());
-		auto copy = allocator.Allocate(GetBlockAllocSize());
-		memcpy(copy.get(), block.InternalBuffer(), GetBlockAllocSize());
-
-		lock_guard<mutex> guard(lock);
-		blocks[block_id] = std::move(copy);
+		// // copy the block to our own storage
+		// auto &allocator = BufferAllocator::Get(buffer_manager.GetDatabase());
+		// auto copy = allocator.Allocate(GetBlockAllocSize());
+		// memcpy(copy.get(), block.InternalBuffer(), GetBlockAllocSize());
+		auto handle = make_shared_ptr<BlockHandle>(*this, block_id, MemoryTag::IN_MEMORY_TABLE);
+		handle->Load(context, make_uniq<FileBuffer>(block));
+		// lock_guard<mutex> guard(lock);
+		// block_handles[block_id] = std::move(copy);
 	}
 	void WriteHeader(QueryContext context, DatabaseHeader header) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");
@@ -144,7 +150,7 @@ public:
 	// LCOV_EXCL_STOP
 private:
 	mutable mutex lock;
-	mutable unordered_map<block_id_t, AllocatedData> blocks;
+	unordered_map<block_id_t, shared_ptr<BlockHandle>> block_handles;
 
 	//! The current maximum block id
 	block_id_t max_block = 0;
