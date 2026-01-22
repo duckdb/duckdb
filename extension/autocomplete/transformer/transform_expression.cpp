@@ -594,15 +594,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto struct_children_pr = list_pr.Child<OptionalParseResult>(1);
-
 	auto func_name = "struct_pack";
 	vector<unique_ptr<ParsedExpression>> struct_children;
-	if (struct_children_pr.HasResult()) {
-		auto struct_children_list = ExtractParseResultsFromList(struct_children_pr.optional_result);
-		for (auto struct_child : struct_children_list) {
-			struct_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(struct_child));
-		}
+	auto struct_children_list = ExtractParseResultsFromList(list_pr.GetChild(1));
+	for (auto struct_child : struct_children_list) {
+		struct_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(struct_child));
 	}
 
 	return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", func_name, std::move(struct_children));
@@ -612,6 +608,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructField(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	if (StringUtil::CharacterIsDigit(alias[0])) {
+		throw ParserException("Keys in a struct cannot start with a number: %s", alias);
+	}
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	expr->SetAlias(alias);
 	return expr;

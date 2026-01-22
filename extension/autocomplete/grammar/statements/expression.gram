@@ -76,7 +76,7 @@ ListExpression <- ArrayBoundedListExpression / ArrayParensSelect
 ArrayBoundedListExpression <- 'ARRAY'? BoundedListExpression
 ArrayParensSelect <- 'ARRAY' Parens(SelectStatementInternal)
 BoundedListExpression <- '[' List(Expression)? ']'
-StructExpression <- '{' List(StructField)? '}'
+StructExpression <- '{' List(StructField) '}'
 StructField <- ColIdOrString ':' Expression
 MapExpression <- 'MAP' MapStructExpression
 MapStructExpression <- '{' List(MapStructField)? '}'
