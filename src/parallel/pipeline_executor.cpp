@@ -287,12 +287,12 @@ void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	in_process_operators = stack<idx_t>();
 
 	if (pipeline.GetSource()) {
-		const lock_guard<mutex> guard{pipeline.source_state->lock};
+		const lock_guard<mutex> guard {pipeline.source_state->lock};
 		pipeline.source_state->PreventBlocking();
 		pipeline.source_state->UnblockTasks();
 	}
 	if (pipeline.GetSink()) {
-		const lock_guard<mutex> guard{pipeline.GetSink()->sink_state->lock};
+		const lock_guard<mutex> guard {pipeline.GetSink()->sink_state->lock};
 		pipeline.GetSink()->sink_state->PreventBlocking();
 		pipeline.GetSink()->sink_state->UnblockTasks();
 	}

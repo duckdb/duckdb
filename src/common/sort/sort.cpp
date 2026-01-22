@@ -241,8 +241,8 @@ unique_ptr<GlobalSinkState> Sort::GetGlobalSinkState(ClientContext &context) con
 }
 
 //! Returns true if the Sink call is done (either because run size is small or because run was finalized)
-static bool TryFinishSink(SortGlobalSinkState &gstate, SortLocalSinkState &lstate, unique_lock<mutex> &guard) 
-	DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+static bool TryFinishSink(SortGlobalSinkState &gstate, SortLocalSinkState &lstate,
+                          unique_lock<mutex> &guard) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	// Check if we exceed the limit
 	const auto sorted_run_size = lstate.sorted_run->SizeInBytes();
 	if (sorted_run_size < lstate.maximum_run_size) {
@@ -315,7 +315,7 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 	}
 
 	// Set any_combined under lock
-	unique_lock<mutex> guard{gstate.lock};
+	unique_lock<mutex> guard {gstate.lock};
 	gstate.any_combined = true;
 	guard.unlock();
 
@@ -381,7 +381,7 @@ public:
 		if (!merger_global_state) {
 			return;
 		}
-		const lock_guard<mutex> guard{merger_global_state->lock};
+		const lock_guard<mutex> guard {merger_global_state->lock};
 		merger.sorted_runs.clear();
 		sink.temporary_memory_state.reset();
 	}
@@ -487,7 +487,7 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 
 	// Merge into global output collection
 	{
-		const lock_guard<mutex> guard{gstate.lock};
+		const lock_guard<mutex> guard {gstate.lock};
 		if (!gstate.column_data) {
 			gstate.column_data = std::move(local_column_data);
 		} else {
@@ -510,7 +510,7 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 
 unique_ptr<ColumnDataCollection> Sort::GetColumnData(OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSourceState>();
-	const lock_guard<mutex> guard{gstate.lock};
+	const lock_guard<mutex> guard {gstate.lock};
 	return gstate.column_data->FetchCollection();
 }
 

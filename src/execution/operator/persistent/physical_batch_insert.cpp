@@ -476,7 +476,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 
 		bool any_unblocked;
 		{
-			const lock_guard<mutex> guard{memory_manager.lock};
+			const lock_guard<mutex> guard {memory_manager.lock};
 			any_unblocked = memory_manager.UnblockTasks();
 		}
 		if (!any_unblocked) {
@@ -487,7 +487,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 	lstate.current_index = batch_index;
 
 	// unblock any blocked tasks
-	const lock_guard<mutex> guard{memory_manager.lock};
+	const lock_guard<mutex> guard {memory_manager.lock};
 	memory_manager.UnblockTasks();
 
 	return SinkNextBatchType::READY;
@@ -517,7 +517,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &i
 			// execute tasks while we wait (if any are available)
 			ExecuteTasks(context.client, gstate, lstate);
 
-			const lock_guard<mutex> guard{memory_manager.lock};
+			const lock_guard<mutex> guard {memory_manager.lock};
 			if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
 				//  we are not the minimum batch index and we have no memory available to buffer - block the task for
 				//  now
@@ -587,7 +587,7 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 	}
 
 	// unblock any blocked tasks
-	const lock_guard<mutex> guard{memory_manager.lock};
+	const lock_guard<mutex> guard {memory_manager.lock};
 	memory_manager.UnblockTasks();
 
 	return SinkCombineResultType::FINISHED;

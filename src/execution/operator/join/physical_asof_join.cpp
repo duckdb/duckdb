@@ -1452,7 +1452,7 @@ bool AsOfLocalSourceState::TryAssignTask() {
 }
 
 bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	const lock_guard<mutex> guard{lock};
+	const lock_guard<mutex> guard {lock};
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1592,7 +1592,7 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 				throw;
 			}
 		} else {
-			const lock_guard<mutex> guard{gsource.lock};
+			const lock_guard<mutex> guard {gsource.lock};
 			if (!gsource.HasMoreTasks()) {
 				gsource.UnblockTasks();
 			} else {

@@ -883,7 +883,7 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	unique_lock<mutex> guard{lock};
+	unique_lock<mutex> guard {lock};
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1122,7 +1122,7 @@ SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, Data
 				throw;
 			}
 		} else {
-			const lock_guard<mutex> guard{gsource.lock};
+			const lock_guard<mutex> guard {gsource.lock};
 			if (!gsource.HasMoreTasks()) {
 				// no more tasks - exit
 				gsource.UnblockTasks();

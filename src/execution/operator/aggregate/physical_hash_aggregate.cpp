@@ -887,7 +887,7 @@ SourceResultType PhysicalHashAggregate::GetDataInternal(ExecutionContext &contex
 		}
 
 		// move to the next table
-		const lock_guard<mutex> guard{gstate.lock};
+		const lock_guard<mutex> guard {gstate.lock};
 		lstate.radix_idx = lstate.radix_idx.GetIndex() + 1;
 		if (lstate.radix_idx.GetIndex() > gstate.state_index) {
 			// we have not yet worked on the table

@@ -93,13 +93,11 @@ public:
 		return true;
 	}
 
-	SinkResultType BlockSink(const InterruptState &interrupt_state) 
-		DUCKDB_REQUIRES(lock) {
+	SinkResultType BlockSink(const InterruptState &interrupt_state) DUCKDB_REQUIRES(lock) {
 		return BlockTask(interrupt_state) ? SinkResultType::BLOCKED : SinkResultType::FINISHED;
 	}
 
-	SourceResultType BlockSource(const InterruptState &interrupt_state)
-		DUCKDB_REQUIRES(lock) {
+	SourceResultType BlockSource(const InterruptState &interrupt_state) DUCKDB_REQUIRES(lock) {
 		return BlockTask(interrupt_state) ? SourceResultType::BLOCKED : SourceResultType::FINISHED;
 	}
 

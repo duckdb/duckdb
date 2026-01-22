@@ -186,7 +186,7 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 		switch (output_async_result) {
 		case AsyncResultType::BLOCKED: {
 			D_ASSERT(data.async_result.HasTasks());
-			const lock_guard<mutex> guard{g_state.lock};
+			const lock_guard<mutex> guard {g_state.lock};
 			if (g_state.CanBlock()) {
 				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
 				return SourceResultType::BLOCKED;
@@ -215,7 +215,7 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
 	case OperatorResultType::BLOCKED: {
-		const lock_guard<mutex> guard{g_state.lock};
+		const lock_guard<mutex> guard {g_state.lock};
 		return g_state.BlockSource(input.interrupt_state);
 	}
 	default:
