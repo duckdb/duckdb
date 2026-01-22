@@ -20,6 +20,28 @@
             }
         },
         {
+            "name": "duckdb_safe_create_varchar",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "text"
+                },
+                {
+                    "type": "duckdb_error_data *",
+                    "name": "out_error_data"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a null-terminated string. Supersedes `duckdb_create_varchar`. The input must be valid UTF-8. Otherwise, `out_error_data` contains an invalid Unicode error.\n\n",
+                "param_comments": {
+                    "text": "The null-terminated string.",
+                    "out_error_data": "If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the parameter must be destroyed with `duckdb_destroy_error_data`."
+                },
+                "return_value": "The value, which must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
             "name": "duckdb_create_varchar",
             "return_type": "duckdb_value",
             "params": [
@@ -29,11 +51,38 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a null-terminated string\n\n",
+                "description": "Creates a value from a null-terminated string. The input must be valid UTF-8. Otherwise, undefined behavior is expected at later stages.\n\n",
                 "param_comments": {
                     "text": "The null-terminated string"
                 },
-                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+                "return_value": "The value, which must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_safe_create_varchar_length",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "text"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "length"
+                },
+                {
+                    "type": "duckdb_error_data *",
+                    "name": "out_error_data"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a string. Supersedes `duckdb_create_varchar_length`. The input must be valid UTF-8. Otherwise, `out_error_data` contains an invalid Unicode error.\n\n",
+                "param_comments": {
+                    "text": "The string.",
+                    "length": "The length of the string.",
+                    "out_error_data": "If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the parameter must be destroyed with `duckdb_destroy_error_data`."
+                },
+                "return_value": "The value, which must be destroyed with `duckdb_destroy_value`."
             }
         },
         {
@@ -50,12 +99,12 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a string\n\n",
+                "description": "Creates a value from a string. The input must be valid UTF-8. Otherwise, undefined behavior is expected at later stages.\n\n",
                 "param_comments": {
-                    "text": "The text",
-                    "length": "The length of the text"
+                    "text": "The string.",
+                    "length": "The length of the string."
                 },
-                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+                "return_value": "The value, which must be destroyed with `duckdb_destroy_value`."
             }
         },
         {

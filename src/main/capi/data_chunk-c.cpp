@@ -2,7 +2,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "utf8proc_wrapper.hpp"
 
 #include <string.h>
 
@@ -138,30 +137,32 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 }
 
 duckdb_error_data duckdb_vector_safe_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
-	if (!vector) {
-		return nullptr;
-	}
-
-	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	idx_t str_len = strlen(str);
-
-	// UTF-8 analysis for VARCHAR vectors, which expect valid UTF-8.
-	if (v->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
-		duckdb::UnicodeInvalidReason reason;
-		size_t pos;
-		auto utf_type = duckdb::Utf8Proc::Analyze(str, str_len, &reason, &pos);
-		if (utf_type == duckdb::UnicodeType::INVALID) {
-			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
-			                                "invalid Unicode detected, str must be valid UTF-8");
-		}
-	}
-	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
-	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
-	return nullptr;
+	return duckdb_vector_safe_assign_string_element_len(vector, index, str, strlen(str));
 }
 
 void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
 	duckdb_vector_assign_string_element_len(vector, index, str, strlen(str));
+}
+
+duckdb_error_data duckdb_vector_safe_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
+                                                               idx_t str_len) {
+	if (!vector) {
+		return nullptr;
+	}
+
+	// UTF-8 analysis for VARCHAR vectors, which expect valid UTF-8.
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	if (v->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
+		auto error_data = duckdb::UTF8Analyze(str, str_len);
+		if (error_data) {
+			return error_data;
+		}
+	}
+
+	// VARCHAR or BLOB assignment.
+	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
+	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
+	return nullptr;
 }
 
 void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {

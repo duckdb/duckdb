@@ -2134,13 +2134,15 @@ DUCKDB_C_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepare
                                                duckdb_interval val);
 
 /*!
-Binds a null-terminated varchar value to the prepared statement at the specified index.
+Binds a null-terminated VARCHAR value to the prepared statement at the specified index. The input must be valid UTF-8.
+Otherwise, undefined behavior is expected at later stages.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                               const char *val);
 
 /*!
-Binds a varchar value to the prepared statement at the specified index.
+Binds a VARCHAR value to the prepared statement at the specified index. The input must be valid UTF-8. Otherwise,
+undefined behavior is expected at later stages.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                                      const char *val, idx_t length);
@@ -2380,19 +2382,44 @@ Destroys the value and de-allocates all memory allocated for that type.
 DUCKDB_C_API void duckdb_destroy_value(duckdb_value *value);
 
 /*!
-Creates a value from a null-terminated string
+Creates a value from a null-terminated string. Supersedes `duckdb_create_varchar`. The input must be valid UTF-8.
+Otherwise, `out_error_data` contains an invalid Unicode error.
+
+* @param text The null-terminated string.
+* @param out_error_data If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the parameter
+must be destroyed with `duckdb_destroy_error_data`.
+* @return The value, which must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_C_API duckdb_value duckdb_safe_create_varchar(const char *text, duckdb_error_data *out_error_data);
+
+/*!
+Creates a value from a null-terminated string. The input must be valid UTF-8. Otherwise, undefined behavior is expected
+at later stages.
 
 * @param text The null-terminated string
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
+* @return The value, which must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_C_API duckdb_value duckdb_create_varchar(const char *text);
 
 /*!
-Creates a value from a string
+Creates a value from a string. Supersedes `duckdb_create_varchar_length`. The input must be valid UTF-8. Otherwise,
+`out_error_data` contains an invalid Unicode error.
 
-* @param text The text
-* @param length The length of the text
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
+* @param text The string.
+* @param length The length of the string.
+* @param out_error_data If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the parameter
+must be destroyed with `duckdb_destroy_error_data`.
+* @return The value, which must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_C_API duckdb_value duckdb_safe_create_varchar_length(const char *text, idx_t length,
+                                                            duckdb_error_data *out_error_data);
+
+/*!
+Creates a value from a string. The input must be valid UTF-8. Otherwise, undefined behavior is expected at later stages.
+
+* @param text The string.
+* @param length The length of the string.
+* @return The value, which must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_C_API duckdb_value duckdb_create_varchar_length(const char *text, idx_t length);
 
@@ -3457,7 +3484,7 @@ This allows NULL values to be written to the vector, regardless of whether a val
 DUCKDB_C_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
 /*!
-Safely assigns a string element in the vector at the specified location. Supersedes
+Safely assigns a null-terminated string element in the vector at the specified location. Supersedes
 `duckdb_vector_assign_string_element`. The vector type must be VARCHAR and the input must be valid UTF-8. Otherwise, it
 returns an invalid Unicode error.
 
@@ -3478,6 +3505,21 @@ Assigns a string element in the vector at the specified location.
 * @param str The null-terminated string
 */
 DUCKDB_C_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
+
+/*!
+Safely assigns a string element in the vector at the specified location. Supersedes
+`duckdb_vector_assign_string_element_len`. The vector type can be VARCHAR or BLOB. In the case of VARCHAR, you must pass
+valid UTF-8. Otherwise, it returns an invalid Unicode error.
+
+* @param vector The vector to alter
+* @param index The row position in the vector to assign the string to
+* @param str The string
+* @param str_len The length of the string (in bytes)
+* @return If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the return value must be
+destroyed with `duckdb_destroy_error_data`.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_vector_safe_assign_string_element_len(duckdb_vector vector, idx_t index,
+                                                                            const char *str, idx_t str_len);
 
 /*!
 Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.

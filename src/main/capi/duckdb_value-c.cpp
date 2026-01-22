@@ -29,8 +29,20 @@ void duckdb_destroy_value(duckdb_value *value) {
 	}
 }
 
+duckdb_value duckdb_safe_create_varchar_length(const char *text, idx_t length, duckdb_error_data *out_error_data) {
+	*out_error_data = duckdb::UTF8Analyze(text, length);
+	if (*out_error_data) {
+		return nullptr;
+	}
+	return WrapValue(new duckdb::Value(std::string(text, length)));
+}
+
 duckdb_value duckdb_create_varchar_length(const char *text, idx_t length) {
 	return WrapValue(new duckdb::Value(std::string(text, length)));
+}
+
+duckdb_value duckdb_safe_create_varchar(const char *text, duckdb_error_data *out_error_data) {
+	return duckdb_safe_create_varchar_length(text, strlen(text), out_error_data);
 }
 
 duckdb_value duckdb_create_varchar(const char *text) {

@@ -553,16 +553,16 @@ TEST_CASE("Test writing invalid UTF-8 to VARCHAR vector in data chunk", "[capi]"
 
 	auto chunk = duckdb_create_data_chunk(types, 1);
 	duckdb_destroy_logical_type(&type);
-	duckdb_data_chunk_set_size(chunk, 1);
+	duckdb_data_chunk_set_size(chunk, 2);
 	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
 
+	// Create a valid and an invalid null-terminated string without non-termination null-bytes.
 	string valid_utf8 = "é";
-	// strlen does not include NULL-termination. Remove the first byte only.
 	idx_t len = strlen(valid_utf8.c_str());
 	auto invalid_utf8 = static_cast<char *>(malloc(len));
 	memcpy(invalid_utf8, valid_utf8.c_str() + 1, len);
 
-	// Write a valid string to initialize the data.
+	// Write a valid string without a null-byte to initialize the first row.
 	auto error_data = duckdb_vector_safe_assign_string_element(vector, 0, valid_utf8.c_str());
 	REQUIRE(!error_data);
 	// Write an invalid string and ensure it does not overwrite.
@@ -576,8 +576,29 @@ TEST_CASE("Test writing invalid UTF-8 to VARCHAR vector in data chunk", "[capi]"
 	REQUIRE(StringUtil::Contains(err_msg, "invalid Unicode detected, str must be valid UTF-8"));
 	duckdb_destroy_error_data(&error_data);
 
+	// Create a valid and an invalid null-terminated string with non-termination null-bytes.
+	constexpr idx_t VALID_NULL_UTF8_LEN = 6;
+	string valid_null_utf8("é\0b\0c\0", VALID_NULL_UTF8_LEN);
+	auto invalid_null_utf8 = static_cast<char *>(malloc(VALID_NULL_UTF8_LEN));
+	memcpy(invalid_null_utf8, valid_null_utf8.c_str() + 1, VALID_NULL_UTF8_LEN);
+
+	// Write a valid string with a null-byte to initialize the second row.
+	error_data = duckdb_vector_safe_assign_string_element_len(vector, 1, valid_null_utf8.c_str(), VALID_NULL_UTF8_LEN);
+	REQUIRE(!error_data);
+	// Write an invalid string and ensure it does not overwrite.
+	error_data = duckdb_vector_safe_assign_string_element_len(vector, 1, invalid_null_utf8, VALID_NULL_UTF8_LEN - 1);
+	free(invalid_null_utf8);
+	REQUIRE(error_data);
+	REQUIRE(duckdb_error_data_has_error(error_data));
+	err_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(err_type == DUCKDB_ERROR_INVALID_INPUT);
+	err_msg = duckdb_error_data_message(error_data);
+	REQUIRE(StringUtil::Contains(err_msg, "invalid Unicode detected, str must be valid UTF-8"));
+	duckdb_destroy_error_data(&error_data);
+
 	// Ensure that nothing was written and the vector still contains the valid data.
 	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
 	REQUIRE((string_data[0].value.inlined.length == valid_utf8.length()));
+	REQUIRE((string_data[1].value.inlined.length == VALID_NULL_UTF8_LEN));
 	duckdb_destroy_data_chunk(&chunk);
 }

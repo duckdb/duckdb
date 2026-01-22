@@ -110,6 +110,7 @@ idx_t GetCTypeSize(const duckdb_type type);
 duckdb_statement_type StatementTypeToC(const StatementType type);
 duckdb_error_type ErrorTypeToC(const ExceptionType type);
 ExceptionType ErrorTypeFromC(const duckdb_error_type type);
+duckdb_error_data UTF8Analyze(const char *str, size_t len);
 
 duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result, duckdb_result *out);
 bool DeprecatedMaterializeResult(duckdb_result *result);
