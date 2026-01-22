@@ -415,7 +415,7 @@ def run_tests_parallel(num_workers, batch_size=1):
 def launch_test_sequential(test, list_of_tests=False):
     """Sequential test execution."""
     global is_active
-
+    # start the background thread
     is_active = True
     background_print_thread = threading.Thread(target=print_interval_background, args=[args.print_interval])
     background_print_thread.start()
@@ -428,7 +428,9 @@ def launch_test_sequential(test, list_of_tests=False):
         test_cmd = [unittest_program] + test
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
+        # should unset SUMMARIZE_FAILURES to avoid producing exceeding failure logs
         env = os.environ.copy()
+        # pass env variables globally
         if list_of_tests or no_exit or tests_per_invocation:
             env['SUMMARIZE_FAILURES'] = '0'
             env['NO_DUPLICATING_HEADERS'] = '1'

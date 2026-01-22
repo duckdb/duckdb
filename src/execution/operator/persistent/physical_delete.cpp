@@ -83,6 +83,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	if (use_input_columns) {
 		// Use columns from the input chunk - they were passed through from the scan
+		// Only physical columns are passed; generated columns are computed in the RETURNING projection
 		for (idx_t i = 0; i < table.ColumnCount(); i++) {
 			D_ASSERT(return_columns[i] != DConstants::INVALID_INDEX);
 			l_state.delete_chunk.data[i].Reference(chunk.data[return_columns[i]]);
@@ -91,7 +92,6 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	} else {
 		// Fall back to fetching columns by row ID
 		// This path is used when:
-		// - Table has generated columns (can't be scanned, must be computed)
 		// - Unique indexes exist but no RETURNING (need indexed columns for delete tracking)
 		// - MERGE INTO operations (optimization not implemented there yet)
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
