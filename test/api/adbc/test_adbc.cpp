@@ -53,12 +53,17 @@ public:
 		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection_ingest, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection_ingest, &adbc_database, &adbc_error)));
 		arrow_stream.release = nullptr;
+		arrow_stream_ingest.release = nullptr;
 	}
 
 	~ADBCTestDatabase() {
 		if (arrow_stream.release) {
 			arrow_stream.release(&arrow_stream);
 			arrow_stream.release = nullptr;
+		}
+		if (arrow_stream_ingest.release) {
+			arrow_stream_ingest.release(&arrow_stream_ingest);
+			arrow_stream_ingest.release = nullptr;
 		}
 		// Release any existing error before calling Release functions
 		InitializeADBCError(&adbc_error);
@@ -103,6 +108,23 @@ public:
 		return arrow_stream;
 	}
 
+	// Query using the ingest connection. Use this when creating data for temporary table ingestion
+	// to avoid conflicts between the streaming result and DDL on the main connection.
+	ArrowArrayStream &QueryArrowForIngest(const string &query) {
+		if (arrow_stream_ingest.release) {
+			arrow_stream_ingest.release(&arrow_stream_ingest);
+			arrow_stream_ingest.release = nullptr;
+		}
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_ingest, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+		int64_t rows_affected;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream_ingest, &rows_affected, &adbc_error)));
+		// Release the statement
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+		return arrow_stream_ingest;
+	}
+
 	void CreateTable(const string &table_name, ArrowArrayStream &input_data, string schema = "", bool temporary = false,
 	                 string catalog = "") {
 		REQUIRE(input_data.release);
@@ -143,6 +165,7 @@ public:
 	AdbcConnection adbc_connection_ingest;
 
 	ArrowArrayStream arrow_stream;
+	ArrowArrayStream arrow_stream_ingest;
 	string path;
 };
 
@@ -439,7 +462,8 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 
 	// Temporary and persistent tables with the same name should be distinct.
 	// The temp table goes to 'temp' catalog, persistent table goes to 'memory' catalog.
-	auto &input_temp = db.QueryArrow("SELECT 42 as value");
+	// Use QueryArrowForIngest to avoid streaming conflicts when creating temp tables.
+	auto &input_temp = db.QueryArrowForIngest("SELECT 42 as value");
 	db.CreateTable("my_table", input_temp, "", true);
 	auto &input_persistent = db.QueryArrow("SELECT 84 as value");
 	// Explicitly specify 'memory' catalog to create persistent table
@@ -463,8 +487,8 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	}
 	ADBCTestDatabase db;
 	db.Query("CREATE SCHEMA my_schema;");
-	// Create Arrow Result
-	auto &input_data = db.QueryArrow("SELECT 42 as value");
+	// Create Arrow Result using ingest connection to avoid streaming conflicts.
+	auto &input_data = db.QueryArrowForIngest("SELECT 42 as value");
 
 	// Temporary ingestion ignores schema.
 	db.CreateTable("my_table", input_data, "my_schema", true);
@@ -527,8 +551,8 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
 	}
 	ADBCTestDatabase db;
 
-	// Create Arrow Result
-	auto &input_data = db.QueryArrow("SELECT 42 as value");
+	// Create Arrow Result using ingest connection to avoid streaming conflicts.
+	auto &input_data = db.QueryArrowForIngest("SELECT 42 as value");
 
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
@@ -560,7 +584,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
 
 	// Case 2: set temporary then catalog
 	{
-		auto &input_data_2 = db.QueryArrow("SELECT 42 as value");
+		auto &input_data_2 = db.QueryArrowForIngest("SELECT 42 as value");
 		AdbcStatement stmt;
 		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &adbc_error)));
 		REQUIRE(SUCCESS(
@@ -593,7 +617,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema After Temporary", "[
 
 	// Case 1: set schema then temporary
 	{
-		auto &input_data = db.QueryArrow("SELECT 42 as value");
+		auto &input_data = db.QueryArrowForIngest("SELECT 42 as value");
 		AdbcStatement stmt;
 		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, "my_schema", &adbc_error)));
@@ -623,7 +647,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema After Temporary", "[
 
 	// Case 2: set temporary then schema
 	{
-		auto &input_data = db.QueryArrow("SELECT 42 as value");
+		auto &input_data = db.QueryArrowForIngest("SELECT 42 as value");
 		AdbcStatement stmt;
 		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &adbc_error)));
 		REQUIRE(SUCCESS(
