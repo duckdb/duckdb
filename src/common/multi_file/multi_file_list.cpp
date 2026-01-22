@@ -161,6 +161,10 @@ vector<OpenFileInfo> MultiFileList::GetDisplayFileList(optional_idx max_files) c
 	return files;
 }
 
+MultiFileCount MultiFileList::GetFileCount(idx_t min_exact_count) const {
+	return MultiFileCount(GetTotalFileCount());
+}
+
 bool MultiFileList::Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file) const {
 	D_ASSERT(iterator.current_file_idx != DConstants::INVALID_INDEX);
 	if (iterator.scan_type == MultiFileListScanType::FETCH_IF_AVAILABLE &&
@@ -274,28 +278,37 @@ LazyMultiFileList::LazyMultiFileList() {
 
 vector<OpenFileInfo> LazyMultiFileList::GetAllFiles() const {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath()) {
+	while (ExpandNextPathInternal()) {
 	}
 	return expanded_files;
 }
 
 idx_t LazyMultiFileList::GetTotalFileCount() const {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath()) {
+	while (ExpandNextPathInternal()) {
 	}
 	return expanded_files.size();
+}
+
+MultiFileCount LazyMultiFileList::GetFileCount(idx_t min_exact_count) const {
+	lock_guard<mutex> lck(lock);
+	// expand files so that we get to min_exact_count
+	while (!all_files_expanded && expanded_files.size() < min_exact_count && ExpandNextPathInternal()) {
+	}
+	auto type = all_files_expanded ? FileExpansionType::ALL_FILES_EXPANDED : FileExpansionType::NOT_ALL_FILES_KNOWN;
+	return MultiFileCount(expanded_files.size(), type);
 }
 
 FileExpandResult LazyMultiFileList::GetExpandResult() const {
 	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
 	(void)GetFile(1);
 
+	lock_guard<mutex> lck(lock);
 	if (expanded_files.size() > 1) {
 		return FileExpandResult::MULTIPLE_FILES;
 	} else if (expanded_files.size() == 1) {
 		return FileExpandResult::SINGLE_FILE;
 	}
-
 	return FileExpandResult::NO_FILES;
 }
 
@@ -307,12 +320,23 @@ bool LazyMultiFileList::FileIsAvailable(idx_t i) const {
 OpenFileInfo LazyMultiFileList::GetFile(idx_t i) const {
 	lock_guard<mutex> lck(lock);
 	while (expanded_files.size() <= i) {
-		if (!ExpandNextPath()) {
+		if (!ExpandNextPathInternal()) {
 			return OpenFileInfo("");
 		}
 	}
 	D_ASSERT(expanded_files.size() > i);
 	return expanded_files[i];
+}
+
+bool LazyMultiFileList::ExpandNextPathInternal() const {
+	if (all_files_expanded) {
+		return false;
+	}
+	if (!ExpandNextPath()) {
+		all_files_expanded = true;
+		return false;
+	}
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

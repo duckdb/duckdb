@@ -19,9 +19,20 @@ class MultiFileList;
 enum class FileExpandResult : uint8_t { NO_FILES, SINGLE_FILE, MULTIPLE_FILES };
 enum class MultiFileListScanType { ALWAYS_FETCH, FETCH_IF_AVAILABLE };
 
+enum class FileExpansionType { ALL_FILES_EXPANDED, NOT_ALL_FILES_KNOWN };
+
 struct MultiFileListScanData {
 	idx_t current_file_idx = DConstants::INVALID_INDEX;
 	MultiFileListScanType scan_type = MultiFileListScanType::ALWAYS_FETCH;
+};
+
+struct MultiFileCount {
+	explicit MultiFileCount(idx_t count, FileExpansionType type = FileExpansionType::ALL_FILES_EXPANDED)
+	    : count(count), type(type) {
+	}
+
+	idx_t count;
+	FileExpansionType type;
 };
 
 class MultiFileListIterationHelper {
@@ -102,6 +113,9 @@ public:
 	virtual FileExpandResult GetExpandResult() const = 0;
 	//! Get the total file count - forces all files to be expanded / known so the exact count can be computed
 	virtual idx_t GetTotalFileCount() const = 0;
+	//! Get the file count - anything under "min_exact_count" is allowed to be incomplete (i.e. `NOT_ALL_FILES_KNOWN`)
+	//! This allows us to get a rough idea of the file count
+	virtual MultiFileCount GetFileCount(idx_t min_exact_count = 0) const;
 	virtual vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files = optional_idx()) const;
 
 	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context) const;
@@ -155,6 +169,7 @@ public:
 	vector<OpenFileInfo> GetAllFiles() const override;
 	FileExpandResult GetExpandResult() const override;
 	idx_t GetTotalFileCount() const override;
+	MultiFileCount GetFileCount(idx_t min_exact_count = 0) const override;
 
 protected:
 	bool FileIsAvailable(idx_t i) const override;
@@ -163,10 +178,15 @@ protected:
 	//! Grabs the next path and expands it into Expanded paths: returns false if no more files to expand
 	virtual bool ExpandNextPath() const = 0;
 
+private:
+	bool ExpandNextPathInternal() const;
+
 protected:
 	mutable mutex lock;
 	//! The expanded files
 	mutable vector<OpenFileInfo> expanded_files;
+	//! Whether or not all files have been expanded
+	mutable bool all_files_expanded = false;
 };
 
 //! MultiFileList that takes a list of globs and resolves all of the globs lazily into files
