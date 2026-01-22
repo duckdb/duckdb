@@ -12,6 +12,8 @@
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/execution/index/art/art_operator.hpp"
 
+#include <duckdb/planner/operator/logical_create_index.hpp>
+
 namespace duckdb {
 namespace {
 
@@ -28,9 +30,9 @@ unique_ptr<IndexBuildBindData> ARTBuildBind(IndexBuildBindInput &input) {
 
 	// TODO: Verify that the the ART is applicable for the given columns and types.
 	bind_data->sorted = true;
-	if (input.expressions.size() > 1) {
+	if (input.op.expressions.size() > 1) {
 		bind_data->sorted = false;
-	} else if (input.expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
+	} else if (input.op.expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
 		bind_data->sorted = false;
 	}
 

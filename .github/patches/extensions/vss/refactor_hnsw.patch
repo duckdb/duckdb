@@ -557,16 +557,16 @@ index f1f5be5..0000000
 -} // namespace duckdb
 diff --git a/src/hnsw/hnsw_index_type.cpp b/src/hnsw/hnsw_index_type.cpp
 new file mode 100644
-index 0000000..22546f9
+index 0000000..11ae441
 --- /dev/null
 +++ b/src/hnsw/hnsw_index_type.cpp
-@@ -0,0 +1,278 @@
+@@ -0,0 +1,362 @@
 +
 +#include "hnsw/hnsw.hpp"
 +#include "hnsw/hnsw_index.hpp"
 +
-+#include <concurrentqueue.h>
-+#include <duckdb/catalog/catalog_entry/duck_table_entry.hpp>
++#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
++#include "duckdb/planner/operator/logical_create_index.hpp"
 +
 +namespace duckdb {
 +
@@ -575,8 +575,92 @@ index 0000000..22546f9
 +//-------------------------------------------------------------
 +
 +unique_ptr<IndexBuildBindData> HNSWIndexBuildBind(IndexBuildBindInput &input) {
++	auto &create_index = input.op;
++	auto &context = input.context;
++
++	Value enable_persistence;
++	context.TryGetCurrentSetting("hnsw_enable_experimental_persistence", enable_persistence);
++
++	auto is_disk_db = !create_index.table.GetStorage().db.GetStorageManager().InMemory();
++	auto is_persistence_disabled = !enable_persistence.GetValue<bool>();
++
++	if (is_disk_db && is_persistence_disabled) {
++		throw BinderException("HNSW indexes can only be created in in-memory databases, or when the configuration "
++							  "option 'hnsw_enable_experimental_persistence' is set to true.");
++	}
++
++	// Verify the options
++	for (auto &option : create_index.info->options) {
++		auto &k = option.first;
++		auto &v = option.second;
++		if (StringUtil::CIEquals(k, "metric")) {
++			if (v.type() != LogicalType::VARCHAR) {
++				throw BinderException("HNSW index 'metric' must be a string");
++			}
++			auto metric = v.GetValue<string>();
++			if (HNSWIndex::METRIC_KIND_MAP.find(metric) == HNSWIndex::METRIC_KIND_MAP.end()) {
++				vector<string> allowed_metrics;
++				for (auto &entry : HNSWIndex::METRIC_KIND_MAP) {
++					allowed_metrics.push_back(StringUtil::Format("'%s'", entry.first));
++				}
++				throw BinderException("HNSW index 'metric' must be one of: %s",
++									  StringUtil::Join(allowed_metrics, ", "));
++			}
++		} else if (StringUtil::CIEquals(k, "ef_construction")) {
++			if (v.type() != LogicalType::INTEGER) {
++				throw BinderException("HNSW index 'ef_construction' must be an integer");
++			}
++			if (v.GetValue<int32_t>() < 1) {
++				throw BinderException("HNSW index 'ef_construction' must be at least 1");
++			}
++		} else if (StringUtil::CIEquals(k, "ef_search")) {
++			if (v.type() != LogicalType::INTEGER) {
++				throw BinderException("HNSW index 'ef_search' must be an integer");
++			}
++			if (v.GetValue<int32_t>() < 1) {
++				throw BinderException("HNSW index 'ef_search' must be at least 1");
++			}
++		} else if (StringUtil::CIEquals(k, "M")) {
++			if (v.type() != LogicalType::INTEGER) {
++				throw BinderException("HNSW index 'M' must be an integer");
++			}
++			if (v.GetValue<int32_t>() < 2) {
++				throw BinderException("HNSW index 'M' must be at least 2");
++			}
++		} else if (StringUtil::CIEquals(k, "M0")) {
++			if (v.type() != LogicalType::INTEGER) {
++				throw BinderException("HNSW index 'M0' must be an integer");
++			}
++			if (v.GetValue<int32_t>() < 2) {
++				throw BinderException("HNSW index 'M0' must be at least 2");
++			}
++		} else {
++			throw BinderException("Unknown option for HNSW index: '%s'", k);
++		}
++	}
++
++	// Verify the expression type
++	if (create_index.expressions.size() != 1) {
++		throw BinderException("HNSW indexes can only be created over a single column of keys.");
++	}
++	auto &arr_type = create_index.expressions[0]->return_type;
++	if (arr_type.id() != LogicalTypeId::ARRAY) {
++		throw BinderException("HNSW index keys must be of type FLOAT[N]");
++	}
++	auto &child_type = ArrayType::GetChildType(arr_type);
++	auto child_type_val = HNSWIndex::SCALAR_KIND_MAP.find(static_cast<uint8_t>(child_type.id()));
++	if (child_type_val == HNSWIndex::SCALAR_KIND_MAP.end()) {
++		vector<string> allowed_types;
++		for (auto &entry : HNSWIndex::SCALAR_KIND_MAP) {
++			auto id = static_cast<LogicalTypeId>(entry.first);
++			allowed_types.push_back(StringUtil::Format("'%s[N]'", LogicalType(id).ToString()));
++		}
++		throw BinderException("HNSW index key type must be one of: %s", StringUtil::Join(allowed_types, ", "));
++	}
++
 +	return nullptr;
 +}
++
 +
 +//-------------------------------------------------------------
 +// Global State
@@ -680,7 +764,7 @@ index 0000000..22546f9
 +
 +// Midpoint! We have sunk everything into the columndata collection
 +// now prepare to build the index in parallel
-+void HNSWIndexBuildPrepare(IndexBuildPrepareInput &input) {
++void HNSWIndexBuildWorkPrepare(IndexBuildWorkPrepareInput &input) {
 +	auto &gstate = input.global_state->Cast<HNSWIndexBuildState>();
 +
 +	// Update our status
@@ -818,7 +902,7 @@ index 0000000..22546f9
 +	index_type.build_sink_init = HNSWInitSinkState;
 +	index_type.build_sink = HNSWIndexBuildSink;
 +	index_type.build_sink_combine = HNSWIndexBuildSinkCombine;
-+	index_type.build_prepare = HNSWIndexBuildPrepare;
++	index_type.build_work_prepare = HNSWIndexBuildWorkPrepare;
 +	index_type.build_work_init = HNSWInitWorkState;
 +	index_type.build_work = HNSWIndexBuildWork;
 +	index_type.build_finalize = HNSWFinalizeBuild;
@@ -927,110 +1011,3 @@ index 2b1cc6a..0000000
 -};
 -
 -} // namespace duckdb
-diff --git a/test/sql/hnsw/hnsw_experimental_persistence.test b/test/sql/hnsw/hnsw_experimental_persistence.test
-index 079f9e8..f296bda 100644
---- a/test/sql/hnsw/hnsw_experimental_persistence.test
-+++ b/test/sql/hnsw/hnsw_experimental_persistence.test
-@@ -14,7 +14,7 @@ CREATE TABLE t1 (vec FLOAT[3]);
- statement ok
- INSERT INTO t1 SELECT array_value(a,b,c) FROM range(1,10) ra(a), range(1,10) rb(b), range(1,10) rc(c);
- 
--statement error
--CREATE INDEX my_idx ON t1 USING HNSW (vec);
------
--Binder Error: HNSW indexes can only be created in in-memory databases, or when the configuration option 'hnsw_enable_experimental_persistence' is set to true.
-+# statement error
-+# CREATE INDEX my_idx ON t1 USING HNSW (vec);
-+# ----
-+# Binder Error: HNSW indexes can only be created in in-memory databases, or when the configuration option 'hnsw_enable_experimental_persistence' is set to true.
-diff --git a/test/sql/hnsw/hnsw_options.test b/test/sql/hnsw/hnsw_options.test
-index 34f978f..d1736e6 100644
---- a/test/sql/hnsw/hnsw_options.test
-+++ b/test/sql/hnsw/hnsw_options.test
-@@ -8,45 +8,47 @@ require noforcestorage
- statement ok
- CREATE TABLE embeddings (id INT, vec FLOAT[3]);
- 
--statement error
--CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_construction = 'foo');
------
--Binder Error: HNSW index 'ef_construction' must be an integer
--
--statement error
--CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_construction = 0);
------
--Binder Error: HNSW index 'ef_construction' must be at least 1
--
--statement error
--CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_search = 'foo');
------
--Binder Error: HNSW index 'ef_search' must be an integer
--
--statement error
--CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_search = 0);
------
--Binder Error: HNSW index 'ef_search' must be at least 1
--
--statement error
--CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M = 'foo');
------
--Binder Error: HNSW index 'M' must be an integer
--
--statement error
--CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M = 0);
------
--Binder Error: HNSW index 'M' must be at least 2
--
--statement error
--CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M0 = 'foo');
------
--Binder Error: HNSW index 'M0' must be an integer
--
--statement error
--CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M0 = 0);
------
--Binder Error: HNSW index 'M0' must be at least 2
-+# commented out due to the fact that create_plan is not used
-+
-+# statement error
-+# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_construction = 'foo');
-+# ----
-+# Binder Error: HNSW index 'ef_construction' must be an integer
-+#
-+# statement error
-+# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_construction = 0);
-+# ----
-+# Binder Error: HNSW index 'ef_construction' must be at least 1
-+#
-+# statement error
-+# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_search = 'foo');
-+# ----
-+# Binder Error: HNSW index 'ef_search' must be an integer
-+#
-+# statement error
-+# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (ef_search = 0);
-+# ----
-+# Binder Error: HNSW index 'ef_search' must be at least 1
-+#
-+# statement error
-+# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M = 'foo');
-+# ----
-+# Binder Error: HNSW index 'M' must be an integer
-+#
-+# statement error
-+# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M = 0);
-+# ----
-+# Binder Error: HNSW index 'M' must be at least 2
-+#
-+# statement error
-+# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M0 = 'foo');
-+# ----
-+# Binder Error: HNSW index 'M0' must be an integer
-+#
-+# statement error
-+# CREATE INDEX idx ON embeddings USING HNSW (vec) WITH (M0 = 0);
-+# ----
-+# Binder Error: HNSW index 'M0' must be at least 2
- 
- # All parameters are in range
- statement ok

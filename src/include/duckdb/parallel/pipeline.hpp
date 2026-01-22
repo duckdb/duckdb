@@ -159,6 +159,7 @@ private:
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 
 	bool ScheduleParallel(shared_ptr<Event> &event);
+	ProgressData GetProgressInternal(ClientContext &context, ProgressData &progress);
 };
 
 } // namespace duckdb

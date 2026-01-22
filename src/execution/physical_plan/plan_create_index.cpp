@@ -144,12 +144,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	// SCAN -> PROJECTION -> [FILTER] -> [SORT] -> CREATE INDEX
 
 	// "Bind" the index and determine if we need a sort.
-	auto &duck_table = op.table.Cast<DuckTableEntry>();
-	IndexBuildBindInput bind_input {context, duck_table, *op.info, op.unbound_expressions};
+	IndexBuildBindInput bind_input {context, op};
 	auto bind_data = index_type->build_bind(bind_input);
 
 	bool need_sort = false;
-
 	// if build_sort contains a callback
 	if (index_type->build_sort) {
 		IndexBuildSortInput sort_input {bind_data.get()};

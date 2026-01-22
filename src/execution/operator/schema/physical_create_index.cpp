@@ -201,11 +201,10 @@ public:
 public:
 	void Schedule() override {
 		//! Midpoint
-		if (op.index_type.build_prepare) {
-			// prepare
+		if (op.index_type.build_work_prepare) {
 			// TODO: Put this in a separate event-chain to not block in Schedule()
-			IndexBuildPrepareInput prepare_input {context, gstate.gstate, op.bind_data};
-			op.index_type.build_prepare(prepare_input);
+			IndexBuildWorkPrepareInput work_prepare_input {context, gstate.gstate, op.bind_data};
+			op.index_type.build_work_prepare(work_prepare_input);
 		}
 
 		vector<shared_ptr<Task>> tasks;

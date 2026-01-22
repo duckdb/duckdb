@@ -128,9 +128,7 @@ class DuckTableEntry;
 
 struct IndexBuildBindInput {
 	ClientContext &context;
-	DuckTableEntry &table;
-	CreateIndexInfo &info;
-	const vector<unique_ptr<Expression>> &expressions;
+	LogicalCreateIndex &op;
 	const vector<column_t> storage_ids;
 };
 
@@ -138,7 +136,7 @@ struct IndexBuildSortInput {
 	optional_ptr<IndexBuildBindData> bind_data;
 };
 
-struct IndexBuildPrepareInput {
+struct IndexBuildWorkPrepareInput {
 	ClientContext &context;
 	optional_ptr<IndexBuildState> global_state;
 	optional_ptr<IndexBuildBindData> bind_data;
@@ -208,7 +206,7 @@ struct IndexBuildWorkCombineInput {
 
 struct IndexBuildFinalizeInput {
 	// Explicit constructor to bind the reference
-	IndexBuildFinalizeInput(IndexBuildState &gstate) : global_state(gstate) {
+	explicit IndexBuildFinalizeInput(IndexBuildState &gstate) : global_state(gstate) {
 	}
 
 	IndexBuildState &global_state;
@@ -233,7 +231,7 @@ typedef unique_ptr<IndexBuildSinkState> (*index_build_sink_init_t)(IndexBuildIni
 typedef void (*index_build_sink_t)(IndexBuildSinkInput &state, DataChunk &key_chunk, DataChunk &row_chunk);
 typedef void (*index_build_sink_combine_t)(IndexBuildSinkCombineInput &input);
 
-typedef void (*index_build_prepare_t)(IndexBuildPrepareInput &input);
+typedef void (*index_build_work_prepare_t)(IndexBuildWorkPrepareInput &input);
 
 typedef unique_ptr<IndexBuildWorkState> (*index_build_work_init_t)(IndexBuildInitWorkInput &input);
 typedef bool (*index_build_work_t)(IndexBuildWorkInput &input); // TODO: Figure out what makes sense to return here
@@ -265,8 +263,9 @@ public:
 	// The name of the index type
 	string name;
 
-	// Callbacks
+	//  ---------- Callbacks ----------
 	index_build_bind_t build_bind = nullptr;
+
 	index_build_sort_t build_sort = nullptr; // optional
 	index_build_init_t build_init = nullptr;
 
@@ -276,7 +275,7 @@ public:
 	index_build_sink_combine_t build_sink_combine = nullptr; // optional
 
 	//! Midpoint
-	index_build_prepare_t build_prepare = nullptr; // optional
+	index_build_work_prepare_t build_work_prepare = nullptr; // optional
 
 	//! Work phase
 	index_build_work_init_t build_work_init = nullptr;       // optional
