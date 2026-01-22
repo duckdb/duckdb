@@ -327,12 +327,12 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
 	auto state_ptrs = FlatVector::GetData<data_ptr_t>(state);
 
-	LogicalType underlying_state_struct = bind_data.aggregate->function.GetStateType();
 	// Note: The underlying state type should always be a struct (we have a D_ASSERT for that in `GetStateType`
 	bool should_result_as_struct = bind_data.aggregate->function.HasGetStateTypeCallback();
 	if (should_result_as_struct) {
 		result.Flatten(count);
 
+		LogicalType underlying_state_struct = bind_data.aggregate->function.GetStateType();
 		auto &children = StructVector::GetEntries(result);
 		auto &struct_fields = StructType::GetChildTypes(underlying_state_struct);
 
