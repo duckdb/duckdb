@@ -47,6 +47,11 @@ public:
 
 		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+		// Create a separate connection for ingest operations to avoid streaming conflicts.
+		// Using the same connection for both streaming query results and ingest would cause issues
+		// because the streaming result holds the ClientContext lock.
+		REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection_ingest, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection_ingest, &adbc_database, &adbc_error)));
 		arrow_stream.release = nullptr;
 	}
 
@@ -57,6 +62,7 @@ public:
 		}
 		// Release any existing error before calling Release functions
 		InitializeADBCError(&adbc_error);
+		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection_ingest, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 		// Ensure error is released at the end
@@ -101,7 +107,11 @@ public:
 	                 string catalog = "") {
 		REQUIRE(input_data.release);
 		AdbcStatement adbc_statement;
-		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		// Use separate connection for ingest to avoid streaming conflicts.
+		// Exception: temporary tables are connection-specific, so we must use the main connection
+		// for them to be visible to Query() calls on the same connection.
+		auto &conn = temporary ? adbc_connection : adbc_connection_ingest;
+		REQUIRE(SUCCESS(AdbcStatementNew(&conn, &adbc_statement, &adbc_error)));
 		if (!catalog.empty()) {
 			REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_CATALOG, catalog.c_str(),
 			                                       &adbc_error)));
@@ -130,6 +140,7 @@ public:
 	AdbcError adbc_error = {};
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
+	AdbcConnection adbc_connection_ingest;
 
 	ArrowArrayStream arrow_stream;
 	string path;
