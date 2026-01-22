@@ -292,8 +292,6 @@ public:
 	index_create_function_t create_instance = nullptr;
 
 	index_build_progress_t build_sink_progress = nullptr; // optional
-
-	// function to create an instance of the index
 };
 
 } // namespace duckdb

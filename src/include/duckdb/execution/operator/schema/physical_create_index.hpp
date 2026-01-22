@@ -91,9 +91,6 @@ public:
 		return true;
 	}
 
-private:
-	unique_ptr<IndexBuildSinkState> GetLocalSinkState(IndexBuildInitSinkInput &input);
-
 public:
 	void FinalizeIndexBuild(ClientContext &context, CreateIndexGlobalSinkState &state) const;
 };

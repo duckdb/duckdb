@@ -31,7 +31,6 @@ struct CreateIndexInfo : public CreateInfo {
 
 	//! The index type (ART, B+-tree, Skip-List, ...)
 	string index_type;
-
 	//! The index constraint type
 	IndexConstraintType constraint_type;
 	//! The column ids of the indexed table
