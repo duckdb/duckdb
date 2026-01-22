@@ -716,12 +716,12 @@ CreateColumnStatistics(const case_insensitive_map_t<case_insensitive_map_t<Value
 	return result;
 }
 
-static ColumnStatsMapData CreateColumnTypes(const case_insensitive_map_t<LogicalType> &column_types) {
+static ColumnStatsMapData CreateVariantLayouts(const child_list_t<LogicalType> &variant_layouts) {
 	ColumnStatsMapData result;
 
 	//! Use a map to make sure the result has a consistent ordering
 	map<string, Value> stats;
-	for (auto &entry : column_types) {
+	for (auto &entry : variant_layouts) {
 		stats.emplace(entry.first, entry.second.ToString());
 	}
 	for (auto &entry : stats) {
@@ -752,10 +752,14 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyT
 	// partition_keys map(varchar, varchar)
 	chunk.SetValue(5, row_idx, info.partition_keys);
 
-	auto column_types = CreateColumnTypes(file_stats.column_types);
-	chunk.SetValue(6, row_idx,
-	               Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(column_types.keys),
-	                          std::move(column_types.values)));
+	auto variant_layouts = CreateVariantLayouts(file_stats.variant_layouts);
+	if (variant_layouts.keys.empty()) {
+		chunk.SetValue(6, row_idx, Value(LogicalType::SQLNULL));
+	} else {
+		chunk.SetValue(6, row_idx,
+		               Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(variant_layouts.keys),
+		                          std::move(variant_layouts.values)));
+	}
 }
 
 SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, DataChunk &chunk,

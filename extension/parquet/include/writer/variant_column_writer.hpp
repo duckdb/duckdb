@@ -84,7 +84,7 @@ public:
 	bool HasTransform() override {
 		return true;
 	}
-	LogicalType TransformedType() override {
+	LogicalType TransformedType() const override {
 		child_list_t<LogicalType> children;
 		for (auto &writer : child_writers) {
 			auto &child_name = writer->Schema().name;

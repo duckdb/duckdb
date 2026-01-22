@@ -22,6 +22,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "writer/variant_column_writer.hpp"
 
 namespace duckdb {
 
@@ -1000,6 +1001,28 @@ static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr
 	}
 }
 
+static void GetVariantLayouts(const ColumnWriter &column_writer, child_list_t<LogicalType> &variant_layouts,
+                              string base_name = string()) {
+	auto &schema = column_writer.Schema();
+	if (schema.repetition_type != duckdb_parquet::FieldRepetitionType::REPEATED) {
+		if (!base_name.empty()) {
+			base_name += ".";
+		}
+		base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
+	}
+
+	auto &type = column_writer.Type();
+	if (type.id() == LogicalTypeId::VARIANT) {
+		auto &variant_column_writer = column_writer.Cast<VariantColumnWriter>();
+		variant_layouts.emplace_back(std::move(base_name), variant_column_writer.TransformedType());
+		return;
+	}
+	auto &children = column_writer.ChildWriters();
+	for (auto &child_writer : children) {
+		GetVariantLayouts(*child_writer, variant_layouts, base_name);
+	}
+}
+
 void ParquetWriter::InitializeSchemaElements() {
 	//! Populate the schema elements of the parquet file we're writing
 	lock_guard<mutex> glock(lock);
@@ -1020,9 +1043,11 @@ void ParquetWriter::InitializeSchemaElements() {
 	if (written_stats) {
 		auto &file_stats = *written_stats;
 		for (auto &column_writer : column_writers) {
-			auto &name = column_writer->Schema().name;
-			file_stats.column_types.emplace(name, column_writer->InternalType());
 			GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
+		}
+
+		for (auto &column_writer : column_writers) {
+			GetVariantLayouts(*column_writer, file_stats.variant_layouts);
 		}
 	}
 }

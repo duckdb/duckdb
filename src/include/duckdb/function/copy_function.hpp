@@ -182,7 +182,7 @@ struct CopyFunctionFileStatistics {
 	// map of column name -> statistics name -> statistics value
 	case_insensitive_map_t<case_insensitive_map_t<Value>> column_statistics;
 	// map of column name -> column type
-	case_insensitive_map_t<LogicalType> column_types;
+	child_list_t<LogicalType> variant_layouts;
 };
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
