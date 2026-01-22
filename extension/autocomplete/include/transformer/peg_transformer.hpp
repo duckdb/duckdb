@@ -183,6 +183,7 @@ public:
 	static void VerifyColumnRefs(const ParsedExpression &expr);
 	static void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr);
 	static void GetValueFromExpression(unique_ptr<ParsedExpression> &expr, vector<Value> &result);
+	static bool TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry);
 
 	// Registration methods
 	void RegisterAlter();

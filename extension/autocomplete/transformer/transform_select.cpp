@@ -595,6 +595,39 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 	}
 }
 
+bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry) {
+	switch (expr->GetExpressionType()) {
+	case ExpressionType::COLUMN_REF: {
+		auto &colref = expr->Cast<ColumnRefExpression>();
+		if (colref.IsQualified()) {
+			throw ParserException(expr->GetQueryLocation(), "PIVOT IN list cannot contain qualified column references");
+		}
+		entry.values.emplace_back(colref.GetColumnName());
+		return true;
+	}
+	case ExpressionType::FUNCTION: {
+		auto &function = expr->Cast<FunctionExpression>();
+		if (function.function_name != "row") {
+			return false;
+		}
+		for (auto &child : function.children) {
+			if (!TransformPivotInList(child, entry)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default: {
+		Value val;
+		if (!ConstructConstantFromExpression(*expr, val)) {
+			return false;
+		}
+		entry.values.push_back(std::move(val));
+		return true;
+	}
+	}
+}
+
 vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -604,7 +637,12 @@ vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTr
 	for (auto &target : target_list) {
 		PivotColumnEntry pivot_entry;
 		pivot_entry.alias = target->alias;
-		GetValueFromExpression(target, pivot_entry.values);
+		bool transformed = TransformPivotInList(target, pivot_entry);
+		if (!transformed) {
+			// for unpivot - we can forward the expression immediately
+			pivot_entry.values.clear();
+			pivot_entry.expr = std::move(target);
+		}
 		result.push_back(std::move(pivot_entry));
 	}
 	return result;
@@ -680,8 +718,12 @@ vector<PivotColumnEntry> PEGTransformerFactory::TransformPivotTargetList(PEGTran
 	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(extract_target_list);
 	for (auto &target : target_list) {
 		PivotColumnEntry pivot_entry;
-		GetValueFromExpression(target, pivot_entry.values);
 		pivot_entry.alias = target->alias;
+		bool transformed = TransformPivotInList(target, pivot_entry);
+		if (!transformed) {
+			// For pivot we throw an exception
+			throw ParserException("PIVOT IN list must contain columns or lists of columns");
+		}
 		result.push_back(std::move(pivot_entry));
 	}
 	return result;
