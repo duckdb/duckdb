@@ -25,7 +25,7 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
 	this->tags = info.tags;
-	this->column_comments = info.column_comments;
+	this->column_comments = info.column_comments_map;
 	if (!types.empty()) {
 		bind_state = ViewBindState::BOUND;
 	}
@@ -49,7 +49,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->dependencies = dependencies;
 	result->comment = comment;
 	result->tags = tags;
-	result->column_comments = column_comments;
+	result->column_comments_map = column_comments;
 	return std::move(result);
 }
 
@@ -61,22 +61,19 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);
 
-		for (idx_t i = 0; i < names.size(); i++) {
-			const auto &col_name = names[i];
-			if (col_name == comment_on_column_info.column_name) {
-				auto &copied_view_entry = copied_view->Cast<ViewCatalogEntry>();
-
-				// If vector is empty, we need to initialize it on setting here
-				if (copied_view_entry.column_comments.empty()) {
-					copied_view_entry.column_comments = vector<Value>(copied_view_entry.types.size());
-				}
-
-				copied_view_entry.column_comments[i] = comment_on_column_info.comment_value;
-				return copied_view;
+		if (HasTypes()) {
+			// view is bound - verify the name we are commenting on exists
+			auto &names = GetNames();
+			auto entry = std::find(names.begin(), names.end(), comment_on_column_info.column_name);
+			if (entry == names.end()) {
+				throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
+				                      comment_on_column_info.column_name);
 			}
 		}
-		throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
-		                      comment_on_column_info.column_name);
+		// apply the comment to the view
+		auto &copied_view_entry = copied_view->Cast<ViewCatalogEntry>();
+		copied_view_entry.column_comments[comment_on_column_info.column_name] = comment_on_column_info.comment_value;
+		return copied_view;
 	}
 
 	if (info.type != AlterType::ALTER_VIEW) {
@@ -111,6 +108,19 @@ const vector<LogicalType> &ViewCatalogEntry::GetTypes() {
 		throw InternalException("ViewCatalogEntry::GetTypes called - but view has not been bound yet");
 	}
 	return types;
+}
+
+Value ViewCatalogEntry::GetColumnComment(idx_t column_index) {
+	if (bind_state != ViewBindState::BOUND) {
+		throw InternalException("ViewCatalogEntry::GetColumnComment called - but view has not been bound yet");
+	}
+	auto &names = GetNames();
+	auto &name = names[column_index];
+	auto entry = column_comments.find(name);
+	if (entry != column_comments.end()) {
+		return entry->second;
+	}
+	return Value();
 }
 
 void ViewCatalogEntry::BindView(ClientContext &context) {

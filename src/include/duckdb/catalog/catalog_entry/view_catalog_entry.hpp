@@ -38,12 +38,11 @@ public:
 	string sql;
 	//! The set of aliases associated with the view
 	vector<string> aliases;
-	//! The comments on the columns of the view: can be empty if there are no comments
-	vector<Value> column_comments;
 
 	virtual const vector<string> &GetNames();
 	virtual const vector<LogicalType> &GetTypes();
 	virtual void BindView(ClientContext &context);
+	Value GetColumnComment(idx_t column_index);
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
@@ -69,6 +68,8 @@ private:
 	atomic<ViewBindState> bind_state;
 	//! Current binding thread
 	atomic<thread_id> bind_thread;
+	//! The comments on the columns of the view: can be empty if there are no comments
+	unordered_map<string, Value> column_comments;
 
 private:
 	void Initialize(CreateViewInfo &info);

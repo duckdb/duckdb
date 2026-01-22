@@ -182,11 +182,7 @@ public:
 		return true;
 	}
 	const Value ColumnComment(idx_t col) override {
-		if (entry.column_comments.empty()) {
-			return Value();
-		}
-		D_ASSERT(entry.column_comments.size() == view_types.size());
-		return entry.column_comments[col];
+		return entry.GetColumnComment(col);
 	}
 
 private:

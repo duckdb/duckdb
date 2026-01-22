@@ -217,16 +217,26 @@
         "id": 204,
         "name": "names",
         "type": "vector<string>",
-        "status": "deleted",
+        "status": "read_only",
         "version": "v1.5.0"
       },
       {
         "id": 205,
         "name": "column_comments",
         "type": "vector<Value>",
-        "default": "vector<Value>()"
+        "status": "read_only",
+        "serialize_property": "GetColumnCommentsList()",
+        "version": "v1.5.0"
+      },
+      {
+        "id": 206,
+        "name": "column_comments_map",
+        "type": "unordered_map<string, Value>",
+        "default": "unordered_map<string, Value>()",
+        "version": "v1.5.0"
       }
-    ]
+    ],
+    "constructor": ["names", "column_comments", "column_comments_map"]
   },
   {
     "class": "CreateTypeInfo",
