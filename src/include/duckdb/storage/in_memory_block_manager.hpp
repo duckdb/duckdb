@@ -69,19 +69,23 @@ public:
 	idx_t GetMetaBlock() override {
 		throw InternalException("Cannot perform IO in in-memory database - GetMetaBlock!");
 	}
-	void CheckChecksum(FileBuffer &block, uint64_t location) const {
+	void CheckChecksum(FileBuffer &block) const {
 		uint64_t stored_checksum = Load<uint64_t>(block.InternalBuffer());
 		uint64_t computed_checksum = Checksum(block.buffer, block.Size());
 
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
-			throw IOException(
-			    "Corrupt in-memory block: computed checksum %llu does not match stored checksum %llu in block "
-			    "at location %llu",
-			    computed_checksum, stored_checksum, location);
+			throw IOException("Corrupt in-memory block: computed checksum %llu does not match stored checksum %llu",
+			                  computed_checksum, stored_checksum);
 		}
 	}
-	void ReadAndChecksum(QueryContext context, Block &block, uint64_t location) const {
+
+	idx_t GetBlockLocation(block_id_t block_id) const {
+		return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
+	}
+
+	void Read(QueryContext context, Block &block) override {
+		D_ASSERT(block.id >= 0);
 		if (context.GetClientContext() != nullptr) {
 			context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ,
 			                                                                block.AllocSize());
@@ -99,17 +103,9 @@ public:
 		// Lock is now released
 		// copy from our stored block to the block provided by the buffer manager
 		memcpy(block.InternalBuffer(), block_handle.get(), GetBlockAllocSize());
-
-		CheckChecksum(block, location);
-	}
-
-	idx_t GetBlockLocation(block_id_t block_id) const {
-		return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
-	}
-
-	void Read(QueryContext context, Block &block) override {
-		D_ASSERT(block.id >= 0);
-		ReadAndChecksum(context, block, GetBlockLocation(block.id));
+#ifdef DEBUG
+		CheckChecksum(block);
+#endif
 	}
 	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override {
 		throw InternalException("Cannot perform IO in in-memory database - ReadBlocks!");
@@ -120,17 +116,16 @@ public:
 	// We currently do not encrypt in-memory storage
 	void Write(QueryContext context, FileBuffer &block, block_id_t block_id) override {
 		D_ASSERT(block_id >= 0);
+#ifdef DEBUG
 		uint64_t checksum = Checksum(block.buffer, block.Size());
 		Store<uint64_t>(checksum, block.InternalBuffer());
+#endif
 
-		// // copy the block to our own storage
-		// auto &allocator = BufferAllocator::Get(buffer_manager.GetDatabase());
-		// auto copy = allocator.Allocate(GetBlockAllocSize());
-		// memcpy(copy.get(), block.InternalBuffer(), GetBlockAllocSize());
+		// copy the block to our own storage
 		auto handle = make_shared_ptr<BlockHandle>(*this, block_id, MemoryTag::IN_MEMORY_TABLE);
 		handle->Load(context, make_uniq<FileBuffer>(block));
-		// lock_guard<mutex> guard(lock);
-		// block_handles[block_id] = std::move(copy);
+		lock_guard<mutex> guard(lock);
+		block_handles[block_id] = std::move(handle);
 	}
 	void WriteHeader(QueryContext context, DatabaseHeader header) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");
