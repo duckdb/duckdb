@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -31,11 +32,12 @@ public:
 
 public:
 	//! Set the remaining size needed for this state (NOTE: does not update the reservation!)
-	void SetRemainingSize(idx_t new_remaining_size);
+	void SetRemainingSize(idx_t new_remaining_size) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	//! Set the remaining size needed for this state and update the reservation
-	void SetRemainingSizeAndUpdateReservation(ClientContext &context, idx_t new_remaining_size);
+	void SetRemainingSizeAndUpdateReservation(ClientContext &context,
+	                                          idx_t new_remaining_size) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	//! Set the remaining size to 0 (NOTE: updates the reservation to 0 as well)
-	void SetZero();
+	void SetZero() DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	//! Get the remaining size that was set for this state
 	idx_t GetRemainingSize() const;
 	//! Set the minimum reservation for this state
@@ -43,11 +45,11 @@ public:
 	//! Get the minimum reservation for this state
 	idx_t GetMinimumReservation() const;
 	//! Updates the reservation based on current remaining size
-	void UpdateReservation(ClientContext &context);
+	void UpdateReservation(ClientContext &context) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	//! Get the reservation of this state
 	idx_t GetReservation() const;
 	//! Set the materialization penalty for this state
-	void SetMaterializationPenalty(idx_t new_materialization_penalty);
+	void SetMaterializationPenalty(idx_t new_materialization_penalty) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	//! Get the materialization penalty for this state
 	idx_t GetMaterializationPenalty() const;
 
@@ -96,7 +98,7 @@ public:
 	//! Get the TemporaryMemoryManager
 	static TemporaryMemoryManager &Get(ClientContext &context);
 	//! Register a TemporaryMemoryState
-	unique_ptr<TemporaryMemoryState> Register(ClientContext &context);
+	unique_ptr<TemporaryMemoryState> Register(ClientContext &context) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 
 private:
 	//! Locks the TemporaryMemoryManager
@@ -104,7 +106,7 @@ private:
 	//! Get the default minimum reservation
 	idx_t DefaultMinimumReservation() const;
 	//! Unregister a TemporaryMemoryState (called by the destructor of TemporaryMemoryState)
-	void Unregister(TemporaryMemoryState &temporary_memory_state);
+	void Unregister(TemporaryMemoryState &temporary_memory_state) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	//! Update memory_limit, has_temporary_directory, and num_threads (must hold the lock)
 	void UpdateConfiguration(ClientContext &context);
 	//! Update the TemporaryMemoryState to the new remaining size, and updates the reservation (must hold the lock)

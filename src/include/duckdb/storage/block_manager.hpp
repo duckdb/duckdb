@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -107,9 +108,11 @@ public:
 	//! If mode is set to destructive (default) - the old_block will be destroyed as part of this method
 	//! This can only be safely used when there is no other (lingering) usage of old_block
 	//! If there is concurrent usage of the block elsewhere - use the THREAD_SAFE mode which creates an extra copy
-	shared_ptr<BlockHandle> ConvertToPersistent(QueryContext context, block_id_t block_id,
-	                                            shared_ptr<BlockHandle> old_block, BufferHandle old_handle,
-	                                            ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE);
+	//! Note: Uses GetLock() which returns unique_lock - analyzer can't track lock ownership across this pattern
+	shared_ptr<BlockHandle>
+	ConvertToPersistent(QueryContext context, block_id_t block_id, shared_ptr<BlockHandle> old_block,
+	                    BufferHandle old_handle,
+	                    ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	shared_ptr<BlockHandle> ConvertToPersistent(QueryContext context, block_id_t block_id,
 	                                            shared_ptr<BlockHandle> old_block,
 	                                            ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE);

@@ -1,6 +1,7 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -396,8 +397,9 @@ idx_t BufferPool::PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age
 	return purged_bytes;
 }
 
+//! Note: Uses GetLock() which returns unique_lock - analyzer can't track lock ownership across this pattern
 template <typename FN>
-void EvictionQueue::IterateUnloadableBlocks(FN fn) {
+void EvictionQueue::IterateUnloadableBlocks(FN fn) DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 	for (;;) {
 		// get a block to unpin from the queue
 		BufferEvictionNode node;

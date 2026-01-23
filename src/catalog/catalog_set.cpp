@@ -585,9 +585,15 @@ optional_ptr<CatalogEntry> CatalogSet::CreateDefaultEntry(CatalogTransaction tra
 	}
 	// we found a default entry, but failed
 	// this means somebody else created the entry first
-	// just retry?
-	read_lock.unlock();
-	return GetEntry(transaction, name);
+	// just return the existing entry (lock is still held)
+	auto existing = map.GetEntry(name);
+	if (existing) {
+		auto &entry_for_tx = GetEntryForTransaction(transaction, *existing);
+		if (!entry_for_tx.deleted) {
+			return &entry_for_tx;
+		}
+	}
+	return nullptr;
 }
 
 CatalogSet::EntryLookup CatalogSet::GetEntryDetailed(CatalogTransaction transaction, const string &name) {

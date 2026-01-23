@@ -100,7 +100,9 @@ public:
 
 private:
 	//! Computes upper partition boundaries using K-way Merge Path
-	void ComputePartitionBoundaries(SortedRunMergerGlobalState &gstate, const optional_idx &p_idx);
+	//! Note: Uses complex lock patterns - Lock() returns unique_lock that analyzer can't track across class boundaries
+	void ComputePartitionBoundaries(SortedRunMergerGlobalState &gstate,
+	                                const optional_idx &p_idx) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	template <class STATE>
 	void ComputePartitionBoundariesSwitch(SortedRunMergerGlobalState &gstate, const optional_idx &p_idx,
 	                                      unsafe_vector<STATE> &states);
@@ -109,7 +111,8 @@ private:
 	                                         unsafe_vector<STATE> &states);
 
 	//! Acquires lower partition boundaries from the global state
-	void AcquirePartitionBoundaries(SortedRunMergerGlobalState &gstate);
+	//! Note: Uses complex lock patterns - Lock() returns unique_lock that analyzer can't track across class boundaries
+	void AcquirePartitionBoundaries(SortedRunMergerGlobalState &gstate) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 
 	//! Merge the partition to obtain the next chunk
 	void MergePartition(SortedRunMergerGlobalState &gstate);
@@ -192,7 +195,8 @@ public:
 		return MaxValue<idx_t>(num_partitions, 1);
 	}
 
-	void DestroyScannedData() {
+	//! Note: Uses complex lock patterns - Lock() returns unique_lock that analyzer can't track across class boundaries
+	void DestroyScannedData() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
 		if (!merger.external) {
 			return; // Only need to destroy when doing an external sort
 		}
