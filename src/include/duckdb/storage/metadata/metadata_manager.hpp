@@ -108,8 +108,8 @@ protected:
 	block_id_t GetNextBlockId() const;
 
 	void AddBlock(MetadataBlock new_block, bool if_exists = false) DUCKDB_REQUIRES(block_mutex);
-	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block) DUCKDB_REQUIRES(block_mutex);
-	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block) DUCKDB_REQUIRES(block_mutex);
+	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block) DUCKDB_REQUIRES(block_lock);
+	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block) DUCKDB_REQUIRES(block_lock);
 	MetadataPointer FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer);
 };
 
