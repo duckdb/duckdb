@@ -78,7 +78,7 @@ public:
 	//! Finishes a checkpoint
 	void WALFinishCheckpoint(lock_guard<mutex> &wal_lock);
 	// Get the WAL lock
-	unique_ptr<lock_guard<mutex>> GetWALLock() DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
+	unique_ptr<lock_guard<mutex>> GetWALLock();
 
 	//! Returns the database file path
 	string GetDBPath() const {

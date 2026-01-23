@@ -65,7 +65,9 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	auto &meta_transaction = MetaTransaction::Get(context);
 	unique_ptr<lock_guard<mutex>> start_lock;
 	if (!meta_transaction.IsReadOnly()) {
-		start_lock = make_uniq<lock_guard<mutex>>(start_transaction_lock);
+		start_lock = [this]() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
+			return make_uniq<lock_guard<mutex>>(start_transaction_lock);
+		}();
 	}
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
