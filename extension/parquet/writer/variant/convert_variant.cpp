@@ -5,6 +5,7 @@
 #include "reader/variant/variant_binary_decoder.hpp"
 #include "parquet_shredding.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -911,7 +912,7 @@ static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunc
 		if (type_str.IsNull()) {
 			throw BinderException("Optional second argument 'shredding' can not be NULL");
 		}
-		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>());
+		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context);
 		bound_function.SetReturnType(GetParquetVariantType(shredded_type));
 	} else {
 		bound_function.SetReturnType(GetParquetVariantType());

@@ -5,6 +5,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
@@ -281,11 +282,11 @@ string StorageManager::GetWALPath(const string &suffix) {
 }
 
 string StorageManager::GetCheckpointWALPath() {
-	return GetWALPath(".checkpoint.wal");
+	return GetWALPath(".wal.checkpoint");
 }
 
 string StorageManager::GetRecoveryWALPath() {
-	return GetWALPath(".recovery.wal");
+	return GetWALPath(".wal.recovery");
 }
 
 bool StorageManager::InMemory() const {
@@ -407,7 +408,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			options.block_alloc_size = storage_options.block_alloc_size;
 		} else {
 			// No explicit option provided: use the default option.
-			options.block_alloc_size = config.options.default_block_alloc_size;
+			options.block_alloc_size = Settings::Get<DefaultBlockSizeSetting>(config);
 		}
 		//! set the block header size for the encrypted database files
 		//! set the database to encrypted

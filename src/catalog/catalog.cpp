@@ -139,6 +139,10 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(ClientContext &context, unique_p
 
 optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                                 BoundCreateTableInfo &info) {
+	auto supports_create_table = SupportsCreateTable(info);
+	if (supports_create_table.HasError()) {
+		supports_create_table.Throw();
+	}
 	return schema.CreateTable(transaction, info);
 }
 
@@ -520,8 +524,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 		return true;
 	}
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
-	if (!dbconfig.options.autoload_known_extensions) {
+	if (!Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 	try {
@@ -537,8 +540,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 
 String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
-	if (dbconfig.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		auto extension_name =
 		    ExtensionHelper::FindExtensionInEntries(configuration_name.ToStdString(), EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
@@ -594,8 +596,7 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(db);
-	if (dbconfig.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 		string extension_name;
 		if (IsAutoloadableFunction(type)) {
 			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
@@ -640,7 +641,7 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	// the setting is not in an extension
 	// get a list of all options
 	vector<string> potential_names = DBConfig::GetOptionNames();
-	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
+	for (auto &entry : DBConfig::GetConfig(context).GetExtensionSettings()) {
 		potential_names.push_back(entry.first);
 	}
 	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);
@@ -651,7 +652,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
                                                       const reference_set_t<SchemaCatalogEntry> &schemas) {
 	auto &context = retriever.GetContext();
 	auto entries = SimilarEntriesInSchemas(context, lookup_info, schemas);
-	auto max_schema_count = DBConfig::GetSetting<CatalogErrorMaxSchemasSetting>(context);
+	auto max_schema_count = Settings::Get<CatalogErrorMaxSchemasSetting>(context);
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
@@ -1209,6 +1210,25 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 
 optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
 	return nullptr;
+}
+
+ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
+	auto &base = info.Base().Cast<CreateTableInfo>();
+	if (!base.partition_keys.empty()) {
+		return ErrorData(
+		    ExceptionType::CATALOG,
+		    StringUtil::Format("PARTITIONED BY is not supported for tables in a %s catalog", GetCatalogType()));
+	}
+	if (!base.sort_keys.empty()) {
+		return ErrorData(ExceptionType::CATALOG,
+		                 StringUtil::Format("SORTED BY is not supported for tables in a %s catalog", GetCatalogType()));
+	}
+	if (!base.options.empty()) {
+		return ErrorData(
+		    ExceptionType::CATALOG,
+		    StringUtil::Format("WITH clause is not supported for tables in a %s catalog", GetCatalogType()));
+	}
+	return ErrorData();
 }
 
 string Catalog::GetDefaultSchema() const {

@@ -429,12 +429,16 @@ unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(const 
 }
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(const RowGroup &row_group,
-                                                               ColumnCheckpointInfo &checkpoint_info) {
+                                                               ColumnCheckpointInfo &checkpoint_info,
+                                                               const BaseStatistics &old_stats) {
 	auto &partial_block_manager = checkpoint_info.GetPartialBlockManager();
 	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
-	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info);
-	for (auto &sub_column : sub_columns) {
-		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, checkpoint_info));
+	checkpoint_state->validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
+
+	for (idx_t col_idx = 0; col_idx < sub_columns.size(); col_idx++) {
+		const auto &sub_column = sub_columns[col_idx];
+		const auto &old_child_stats = StructStats::GetChildStats(old_stats, col_idx);
+		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, checkpoint_info, old_child_stats));
 	}
 	return std::move(checkpoint_state);
 }
