@@ -66,7 +66,7 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	unique_ptr<lock_guard<mutex>> start_lock;
 	if (!meta_transaction.IsReadOnly()) {
 		start_lock = [this]() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-			auto* lock_ptr = new lock_guard<mutex>(start_transaction_lock);
+			auto *lock_ptr = new lock_guard<mutex>(start_transaction_lock);
 			return unique_ptr<lock_guard<mutex>>(lock_ptr);
 		}();
 	}

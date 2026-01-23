@@ -109,10 +109,9 @@ public:
 	//! This can only be safely used when there is no other (lingering) usage of old_block
 	//! If there is concurrent usage of the block elsewhere - use the THREAD_SAFE mode which creates an extra copy
 	//! Note: Uses GetLock() which returns unique_lock - analyzer can't track lock ownership across this pattern
-	shared_ptr<BlockHandle>
-	ConvertToPersistent(QueryContext context, block_id_t block_id, shared_ptr<BlockHandle> old_block,
-	                    BufferHandle old_handle,
-	                    ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
+	shared_ptr<BlockHandle> ConvertToPersistent(
+	    QueryContext context, block_id_t block_id, shared_ptr<BlockHandle> old_block, BufferHandle old_handle,
+	    ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	shared_ptr<BlockHandle> ConvertToPersistent(QueryContext context, block_id_t block_id,
 	                                            shared_ptr<BlockHandle> old_block,
 	                                            ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE);
