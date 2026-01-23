@@ -61,7 +61,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);
 
-		if (HasTypes()) {
+		if (IsBound()) {
 			// view is bound - verify the name we are commenting on exists
 			auto &names = GetNames();
 			auto entry = std::find(names.begin(), names.end(), comment_on_column_info.column_name);
@@ -92,7 +92,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 	}
 }
 
-bool ViewCatalogEntry::HasTypes() const {
+bool ViewCatalogEntry::IsBound() const {
 	return bind_state == ViewBindState::BOUND;
 }
 

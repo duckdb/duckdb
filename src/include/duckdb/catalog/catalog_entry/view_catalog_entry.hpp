@@ -53,8 +53,7 @@ public:
 
 	virtual const SelectStatement &GetQuery();
 
-	// Whether or not the view has types/names defined
-	virtual bool HasTypes() const;
+	virtual bool IsBound() const;
 
 	string ToSQL() const override;
 

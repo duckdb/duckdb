@@ -125,6 +125,29 @@ index c2e2972..4dbb737 100644
  
  	bool IsSource() const override {
  		return true;
+diff --git a/src/include/storage/ducklake_view_entry.hpp b/src/include/storage/ducklake_view_entry.hpp
+index aabb8cf..43675bc 100644
+--- a/src/include/storage/ducklake_view_entry.hpp
++++ b/src/include/storage/ducklake_view_entry.hpp
+@@ -36,18 +36,13 @@ public:
+ 	LocalChange GetLocalChange() const {
+ 		return local_change;
+ 	}
+-	bool IsBound() const;
+ 
+-	void Bind(ClientContext &context);
+ 
+ public:
+ 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
+ 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+ 
+ 	const SelectStatement &GetQuery() override;
+-	bool HasTypes() const override {
+-		return false;
+-	}
+ 	unique_ptr<CreateInfo> GetInfo() const override;
+ 	string ToSQL() const override;
+ 
 diff --git a/src/storage/ducklake_autoload_helper.cpp b/src/storage/ducklake_autoload_helper.cpp
 index 3d8396f..7237e72 100644
 --- a/src/storage/ducklake_autoload_helper.cpp
@@ -251,6 +274,27 @@ index 7ebb3ed..5fe0a8e 100644
  		result.push_back(std::move(info));
  	}
  	return result;
+diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
+index 3fc4162..5614df0 100644
+--- a/src/storage/ducklake_schema_entry.cpp
++++ b/src/storage/ducklake_schema_entry.cpp
+@@ -258,16 +258,6 @@ void DuckLakeSchemaEntry::Scan(ClientContext &context, CatalogType type,
+ 			// this entry exists in both the local and global set - emit only the transaction-local entry
+ 			continue;
+ 		}
+-		if (entry.second->type == CatalogType::VIEW_ENTRY) {
+-			auto &view_entry = entry.second->Cast<DuckLakeViewEntry>();
+-			if (!view_entry.IsBound()) {
+-				try {
+-					view_entry.Bind(context);
+-				} catch (...) {
+-					//
+-				}
+-			}
+-		}
+ 		callback(*entry.second);
+ 	}
+ }
 diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
 index 29634fd..147ba95 100644
 --- a/src/storage/ducklake_transaction.cpp
@@ -297,3 +341,37 @@ index f0bd68e..f2e5cc6 100644
                                           OperatorSourceInput &input) const {
  	auto &global_state = sink_state->Cast<DuckLakeUpdateGlobalState>();
  	auto value = Value::BIGINT(NumericCast<int64_t>(global_state.total_updated_count.load()));
+diff --git a/src/storage/ducklake_view_entry.cpp b/src/storage/ducklake_view_entry.cpp
+index db84135..ed7b54f 100644
+--- a/src/storage/ducklake_view_entry.cpp
++++ b/src/storage/ducklake_view_entry.cpp
+@@ -91,29 +91,4 @@ string DuckLakeViewEntry::GetQuerySQL() {
+ 	return query_sql;
+ }
+ 
+-bool DuckLakeViewEntry::IsBound() const {
+-	return is_bound;
+-}
+-
+-void DuckLakeViewEntry::Bind(ClientContext &context) {
+-	D_ASSERT(!is_bound);
+-	is_bound = true;
+-	std::string create_view_sql = "CREATE VIEW mock_view_name_lake";
+-	if (!aliases.empty()) {
+-		create_view_sql += "(";
+-		for (const auto &alias : aliases) {
+-			create_view_sql += KeywordHelper::WriteOptionallyQuoted(alias);
+-			create_view_sql += ", ";
+-		}
+-		create_view_sql += ")";
+-	}
+-
+-	create_view_sql += " as " + query_sql;
+-	const auto view_info = CreateViewInfo::FromCreateView(context, schema, create_view_sql);
+-	// Fill aliases, types and names
+-	aliases = view_info->aliases;
+-	types = view_info->types;
+-	names = view_info->names;
+-}
+-
+ } // namespace duckdb
