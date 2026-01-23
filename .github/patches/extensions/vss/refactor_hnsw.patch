@@ -15,10 +15,10 @@ index 87c4149..452d02e 100644
      ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_optimize_expr.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/hnsw_optimize_join.cpp
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index ca73a9c..2c2ba52 100644
+index 9d03d2f..ee12c88 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
-@@ -566,12 +566,18 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
+@@ -596,12 +596,18 @@ bool HNSWIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
  void HNSWIndex::Vacuum(IndexLock &state) {
  }
  
@@ -40,7 +40,7 @@ index ca73a9c..2c2ba52 100644
  }
  
  //------------------------------------------------------------------------------
-@@ -664,33 +670,5 @@ void HNSWIndex::VerifyBuffers(IndexLock &lock) {
+@@ -694,33 +700,5 @@ void HNSWIndex::VerifyBuffers(IndexLock &lock) {
  }
  
  
@@ -76,10 +76,10 @@ index ca73a9c..2c2ba52 100644
  } // namespace duckdb
 diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
 deleted file mode 100644
-index 0b31597..0000000
+index 488bde7..0000000
 --- a/src/hnsw/hnsw_index_physical_create.cpp
 +++ /dev/null
-@@ -1,326 +0,0 @@
+@@ -1,329 +0,0 @@
 -#include "hnsw/hnsw_index_physical_create.hpp"
 -
 -#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
@@ -87,7 +87,10 @@ index 0b31597..0000000
 -#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 -#include "duckdb/common/exception/transaction_exception.hpp"
 -#include "duckdb/main/attached_database.hpp"
--#include "duckdb/main/database.hpp"
+-#include "duckdb/storage/buffer_manager.hpp"
+-#include "duckdb/storage/data_table.hpp"
+-#include "duckdb/storage/index.hpp"
+-#include "duckdb/storage/index_storage_info.hpp"
 -#include "duckdb/storage/storage_manager.hpp"
 -#include "duckdb/storage/table_io_manager.hpp"
 -#include "hnsw/hnsw_index.hpp"
@@ -408,21 +411,20 @@ index 0b31597..0000000
 -} // namespace duckdb
 diff --git a/src/hnsw/hnsw_index_plan.cpp b/src/hnsw/hnsw_index_plan.cpp
 deleted file mode 100644
-index f1f5be5..0000000
+index 1ca593a..0000000
 --- a/src/hnsw/hnsw_index_plan.cpp
 +++ /dev/null
-@@ -1,143 +0,0 @@
--#include "duckdb/planner/operator/logical_create_index.hpp"
--#include "duckdb/planner/expression/bound_reference_expression.hpp"
--#include "duckdb/planner/expression/bound_operator_expression.hpp"
--
--#include "duckdb/parser/parsed_data/create_index_info.hpp"
+@@ -1,142 +0,0 @@
 -#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
--
 -#include "duckdb/execution/operator/projection/physical_projection.hpp"
 -#include "duckdb/execution/operator/filter/physical_filter.hpp"
+-#include "duckdb/parser/parsed_data/create_index_info.hpp"
+-#include "duckdb/planner/expression/bound_reference_expression.hpp"
+-#include "duckdb/planner/expression/bound_operator_expression.hpp"
+-#include "duckdb/planner/operator/logical_create_index.hpp"
+-#include "duckdb/storage/data_table.hpp"
+-#include "duckdb/storage/storage_manager.hpp"
 -
--#include "hnsw/hnsw.hpp"
 -#include "hnsw/hnsw_index.hpp"
 -#include "hnsw/hnsw_index_physical_create.hpp"
 -
@@ -925,10 +927,10 @@ index 0000000..11ae441
 +} // namespace duckdb
 \ No newline at end of file
 diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
-index d569292..629e2f3 100644
+index 7fca26a..659ffc6 100644
 --- a/src/include/hnsw/hnsw_index.hpp
 +++ b/src/include/hnsw/hnsw_index.hpp
-@@ -93,8 +93,14 @@ public:
+@@ -99,8 +99,14 @@ public:
  	//! Traverses an HNSWIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
  	void Vacuum(IndexLock &state) override;
  
@@ -947,14 +949,24 @@ index d569292..629e2f3 100644
  
 diff --git a/src/include/hnsw/hnsw_index_physical_create.hpp b/src/include/hnsw/hnsw_index_physical_create.hpp
 deleted file mode 100644
-index 2b1cc6a..0000000
+index 8909d7c..0000000
 --- a/src/include/hnsw/hnsw_index_physical_create.hpp
 +++ /dev/null
-@@ -1,60 +0,0 @@
+@@ -1,70 +0,0 @@
 -#pragma once
+-
+-#include "duckdb/common/enums/operator_result_type.hpp"
+-#include "duckdb/common/enums/physical_operator_type.hpp"
+-#include "duckdb/common/typedefs.hpp"
+-#include "duckdb/common/types.hpp"
+-#include "duckdb/common/unique_ptr.hpp"
+-#include "duckdb/common/vector.hpp"
 -#include "duckdb/execution/physical_operator.hpp"
--#include "duckdb/execution/progress_data.hpp"
--#include "duckdb/storage/data_table.hpp"
+-#include "duckdb/parser/parsed_data/create_index_info.hpp"
+-#include "duckdb/planner/expression.hpp"
+-#include "duckdb/storage/buffer_manager.hpp"
+-#include "duckdb/storage/index.hpp"
+-#include "duckdb/storage/index_storage_info.hpp"
 -
 -namespace duckdb {
 -
