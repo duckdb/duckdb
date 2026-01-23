@@ -50,7 +50,7 @@ public:
 	static DuckTransactionManager &Get(AttachedDatabase &db);
 
 	//! Start a new transaction
-	Transaction &StartTransaction(ClientContext &context) override;
+	Transaction &StartTransaction(ClientContext &context) override DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	//! Commit the given transaction
 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
 	//! Rollback the given transaction
