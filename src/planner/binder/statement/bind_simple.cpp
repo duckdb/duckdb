@@ -76,6 +76,28 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	return std::move(result);
 }
 
+static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
+	if (stmt.info->type == AlterType::ALTER_TABLE) {
+		auto &table_info = stmt.info->Cast<AlterTableInfo>();
+		switch (table_info.alter_table_type) {
+		case AlterTableType::ADD_COLUMN: {
+			auto &add_info = table_info.Cast<AddColumnInfo>();
+			binder.BindLogicalType(add_info.new_column.TypeMutable());
+		} break;
+		case AlterTableType::ADD_FIELD: {
+			auto &add_info = table_info.Cast<AddFieldInfo>();
+			binder.BindLogicalType(add_info.new_field.TypeMutable());
+		} break;
+		case AlterTableType::ALTER_COLUMN_TYPE: {
+			auto &alter_column_info = table_info.Cast<ChangeColumnTypeInfo>();
+			binder.BindLogicalType(alter_column_info.target_type);
+		} break;
+		default:
+			break;
+		}
+	}
+}
+
 BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
@@ -97,7 +119,6 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// Extra step for column comments: They can alter a table or a view, and we resolve that here.
 		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
 		entry = info.TryResolveCatalogEntry(entry_retriever);
-
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
 		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->name);
@@ -107,12 +128,22 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	auto &properties = GetStatementProperties();
 	properties.return_type = StatementReturnType::NOTHING;
 	if (!entry) {
+		// Bind types in this binder
+		BindAlterTypes(*this, stmt);
+
 		result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_ALTER, std::move(stmt.info));
 		return result;
 	}
 
 	D_ASSERT(!entry->deleted);
 	auto &catalog = entry->ParentCatalog();
+
+	// Bind types in the same catalog as the entry
+	auto type_binder = Binder::CreateBinder(context, *this);
+	type_binder->SetSearchPath(catalog, stmt.info->schema);
+
+	BindAlterTypes(*type_binder, stmt);
+
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Can not comment on System Catalog entries");
 	}
