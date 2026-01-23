@@ -120,12 +120,19 @@ public:
 		uint64_t checksum = Checksum(block.buffer, block.Size());
 		Store<uint64_t>(checksum, block.InternalBuffer());
 #endif
+		auto &standard_buffer_manager = dynamic_cast<StandardBufferManager &>(buffer_manager);
+		// standard_buffer_manager.SetTemporaryDirectory("tmp"); //Not sure if needed...
+		standard_buffer_manager.RequireTemporaryDirectory();
+
+		// make a copy of `block`
+		auto new_block = standard_buffer_manager.AllocateMemory(MemoryTag::IN_MEMORY_TABLE, this, true);
+		auto block_lock = new_block.get()->GetLock();
+		memcpy(new_block.get()->GetBuffer(block_lock).get()->InternalBuffer(), block.InternalBuffer(),
+		       block.AllocSize());
 
 		// copy the block to our own storage
-		auto handle = make_shared_ptr<BlockHandle>(*this, block_id, MemoryTag::IN_MEMORY_TABLE);
-		handle->Load(context, make_uniq<FileBuffer>(block));
 		lock_guard<mutex> guard(lock);
-		block_handles[block_id] = std::move(handle);
+		block_handles[block_id] = std::move(new_block);
 	}
 	void WriteHeader(QueryContext context, DatabaseHeader header) override {
 		throw InternalException("Cannot perform IO in in-memory database - WriteHeader!");
@@ -146,8 +153,8 @@ public:
 private:
 	mutable mutex lock;
 	unordered_map<block_id_t, shared_ptr<BlockHandle>> block_handles;
-
-	//! The current maximum block id
-	block_id_t max_block = 0;
+	//! Start our block ID at the first in-memory block (non-disk-backed) id, so it gets offloaded to disk by the buffer
+	//! manager
+	block_id_t max_block = MAXIMUM_BLOCK + 1;
 };
 } // namespace duckdb

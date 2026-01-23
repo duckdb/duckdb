@@ -1,0 +1,43 @@
+# name: test/sql/storage/memory/in_memory_zstd_works_max_memory.test
+# group: [memory]
+
+statement ok
+attach ':memory:' as db2 (compress);
+
+statement ok
+use db2;
+
+statement ok
+pragma force_compression='zstd';
+
+###########################
+# Test CRUD Functionality #
+###########################
+
+# 1. Create
+statement ok
+CREATE TABLE tbl AS (
+  SELECT ('thisisalongstring' || i::VARCHAR) AS string_column
+  FROM range(100000) AS numbers(i)
+);
+
+query I nosort expected_res
+select avg(length(string_column)) from tbl;
+----
+
+statement ok
+force checkpoint;
+
+query I nosort expected_res
+select avg(length(string_column)) from tbl;
+----
+
+statement ok
+SET max_memory = '1000kb';
+
+statement ok
+SET max_memory = '5000kb';
+
+query I nosort expected_res
+select avg(length(string_column)) from tbl;
+----

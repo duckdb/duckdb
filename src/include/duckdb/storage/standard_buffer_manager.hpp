@@ -108,6 +108,7 @@ public:
 	DUCKDB_API void FreeReservedMemory(idx_t size) final;
 	bool HasTemporaryDirectory() const final;
 	bool HasFilesInTemporaryDirectory() const final;
+	void RequireTemporaryDirectory();
 
 protected:
 	//! Helper
@@ -144,8 +145,6 @@ protected:
 	string GetTemporaryPath(block_id_t id);
 
 	void DeleteTemporaryFile(BlockHandle &block) final;
-
-	void RequireTemporaryDirectory();
 
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle) final;
 
