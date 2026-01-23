@@ -12,12 +12,6 @@
       ]
     },
     {
-      "reason": "FIXME: Internal Error",
-      "paths": [
-        "test/parquet/variant/variant_roundtrip.test_slow"
-      ]
-    },
-    {
       "reason": "Loading from disk does not trigger OOM.",
       "paths": [
         "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"

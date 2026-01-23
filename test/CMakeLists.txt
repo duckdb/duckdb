@@ -48,6 +48,10 @@ endif()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
+endif()
+
 target_link_libraries(unittest duckdb_static test_helpers)
 
 link_extension_libraries(unittest "")

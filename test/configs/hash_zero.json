@@ -7,7 +7,7 @@
       "paths": [
         "test/optimizer/pushdown/no_mark_to_semi_if_mark_index_is_projected.test",
         "test/optimizer/joins/tpcds_nofail.test",
-        "test/fuzzer/duckfuzz/bind_limit_num.test",
+        "test/fuzzer/duckfuzz/bind_limit_num.test_slow",
         "test/sql/types/enum/test_5983.test",
         "test/sql/insert/insert_from_many_grouping_sets.test",
         "test/sql/subquery/lateral/pg_lateral.test",

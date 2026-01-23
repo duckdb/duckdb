@@ -62,8 +62,9 @@ jobs:
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
-      CMAKE_CXX_FLAGS: '-DDEBUG'
+      FORCE_DEBUG: 1
       FORCE_ASSERT: 1
+      REDUCE_SYMBOLS: 1
 
     steps:
     - uses: actions/checkout@v4
@@ -83,11 +84,11 @@ jobs:
 
     - name: Build
       shell: bash
-      run:  make release
+      run:  make relassert
 
     - name: Output version info
       shell: bash
-      run: ./build/release/duckdb -c "PRAGMA version;"
+      run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -99,7 +100,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-        python3 scripts/run_tests_one_by_one.py build/release/test/unittest --tests-per-invocation 100
+        python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --tests-per-invocation 100 --timeout 300
 
  linux-release:
     name: Linux Release (full suite)

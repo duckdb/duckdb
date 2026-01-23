@@ -360,7 +360,7 @@ TopNWindowElimination::TryCreateUnnestOperator(unique_ptr<LogicalOperator> op,
 
 	if (params.limit <= 1) {
 		// LIMIT 1 -> we do not need to unnest
-		return std::move(op);
+		return op;
 	}
 
 	// Create unnest expression for aggregate args

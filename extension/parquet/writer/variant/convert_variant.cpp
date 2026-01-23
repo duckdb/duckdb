@@ -876,7 +876,7 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	child_list_t<LogicalType> children;
 	children.emplace_back("metadata", LogicalType::BLOB);
 	children.emplace_back("value", LogicalType::BLOB);
-	if (shredding) {
+	if (shredding && shredding->id() != LogicalTypeId::VARIANT) {
 		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
 	}
 	auto res = LogicalType::STRUCT(std::move(children));
