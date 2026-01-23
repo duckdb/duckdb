@@ -19,6 +19,12 @@
       "paths": [
         "test/sql/storage/external_file_cache/external_file_cache_validate.test"
       ]
+    },
+    {
+      "reason": "Views get rebound on restart",
+      "paths": [
+        "test/sql/table_function/duckdb_columns.test"
+      ]
     }
   ]
 }
