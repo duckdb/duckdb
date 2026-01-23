@@ -591,6 +591,10 @@ string FailureSummary::GetFailureSummary() {
 	if (!test_config.GetSummarizeFailures()) {
 		return string();
 	}
+	return GetFailureSummaryAlways();
+}
+
+string FailureSummary::GetFailureSummaryAlways() {
 	auto &summary = FailureSummary::Instance();
 	lock_guard<mutex> guard(summary.failures_lock);
 	std::ostringstream oss;

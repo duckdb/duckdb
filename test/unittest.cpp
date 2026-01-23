@@ -3,11 +3,14 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "gha_annotation_listener.hpp"
 #include "sqlite/sqllogic_test_logger.hpp"
 #include "test_helpers.hpp"
 #include "test_config.hpp"
 
 using namespace duckdb;
+
+CATCH_REGISTER_LISTENER(GHAAnnotationListener);
 
 int main(int argc_in, char *argv[]) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();

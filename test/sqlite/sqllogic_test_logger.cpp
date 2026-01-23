@@ -4,6 +4,10 @@
 #include "result_helper.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
+#include "gha_annotation.hpp"
+#include "catch.hpp"
+
+#include <sstream>
 
 namespace duckdb {
 
@@ -13,10 +17,13 @@ SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &c
 }
 
 SQLLogicTestLogger::~SQLLogicTestLogger() {
+	gha::EndAnnotation();
 }
 
 void SQLLogicTestLogger::Log(const string &annotation, const string &str) {
-	std::cerr << annotation << str;
+	if (!gha::IsGitHubActions()) {
+		std::cerr << annotation << str;
+	}
 	AppendFailure(str);
 }
 
@@ -26,13 +33,6 @@ void SQLLogicTestLogger::AppendFailure(const string &log_message) {
 
 void SQLLogicTestLogger::LogFailure(const string &log_message) {
 	Log("", log_message);
-}
-
-void SQLLogicTestLogger::LogFailureAnnotation(const string &log_message) {
-	const char *ci = std::getenv("CI");
-	// check the value is "true" otherwise you'll see the prefix in local run outputs
-	auto prefix = (ci && string(ci) == "true") ? "\n::error::" : "";
-	Log(prefix, log_message);
 }
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name, idx_t query_line) {
@@ -131,13 +131,17 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 }
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_line, const string &description) {
+	string title =
+	    description + " (" + Catch::getResultCapture().getCurrentTestName() + ":" + to_string(query_line) + ")";
+	gha::BeginAnnotation(file_name, static_cast<int>(query_line), title);
+
 	std::ostringstream oss;
 	PrintSummaryHeader(file_name, query_line);
 	oss << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
 	if (!file_name.empty()) {
 		oss << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
 	}
-	LogFailureAnnotation(oss.str() + "\n");
+	LogFailure(oss.str() + "\n");
 }
 
 void SQLLogicTestLogger::PrintErrorHeader(const string &description) {

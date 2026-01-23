@@ -120,6 +120,10 @@ public:
 
 	static void Log(string message);
 	static string GetFailureSummary();
+	//! Returns the failure summary content regardless of the summarize_failures setting.
+	//! Used by the annotation system which needs to capture error messages even when
+	//! the summary won't be printed at the end.
+	static string GetFailureSummaryAlways();
 	static idx_t GetSummaryCounter();
 	static bool SkipLoggingSameError(const string &file_name);
 
