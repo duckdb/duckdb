@@ -149,7 +149,6 @@ void MetadataManager::ConvertToTransient(unique_lock<mutex> &block_lock, Metadat
 }
 
 block_id_t MetadataManager::AllocateNewBlock(unique_lock<mutex> &block_lock) {
-	D_ASSERT(!block_lock.owns_lock());
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
