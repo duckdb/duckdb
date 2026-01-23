@@ -87,7 +87,7 @@ namespace {
 
 struct ShredAnalysisState {
 	idx_t highest_count = 0;
-	LogicalTypeId type_id = LogicalTypeId::INVALID;
+	LogicalTypeId type_id = LogicalTypeId::VARIANT;
 	PhysicalType decimal_type = PhysicalType::INVALID;
 };
 
@@ -182,10 +182,13 @@ static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
 void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state_p) {
 	auto &state = state_p.Cast<VariantAnalyzeSchemaState>();
 	auto shredded_type = ConstructShreddedType(state.analyze_data);
-
-	auto typed_value = TransformTypedValueRecursive(shredded_type);
 	is_analyzed = true;
 
+	if (shredded_type.id() == LogicalTypeId::VARIANT) {
+		//! Can't shred, keep the original children
+		return;
+	}
+	auto typed_value = TransformTypedValueRecursive(shredded_type);
 	auto &schema = Schema();
 	auto &context = writer.GetContext();
 	D_ASSERT(child_writers.size() == 2);
