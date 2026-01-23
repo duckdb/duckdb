@@ -128,7 +128,6 @@ MetadataHandle MetadataManager::Pin(const QueryContext &context, const MetadataP
 }
 
 void MetadataManager::ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &metadata_block) {
-	D_ASSERT(block_lock.owns_lock());
 	auto old_block = metadata_block.block;
 	block_lock.unlock();
 	// pin the old block
@@ -165,12 +164,11 @@ block_id_t MetadataManager::AllocateNewBlock(unique_lock<mutex> &block_lock) {
 	memset(handle.Ptr(), 0, block_manager.GetBlockSize());
 
 	block_lock.lock();
-	AddBlock(block_lock, std::move(new_block));
+	AddBlock(std::move(new_block));
 	return new_block_id;
 }
 
-void MetadataManager::AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new_block, bool if_exists) {
-	D_ASSERT(block_lock.owns_lock());
+void MetadataManager::AddBlock(MetadataBlock new_block, bool if_exists) {
 	if (blocks.find(new_block.block_id) != blocks.end()) {
 		if (if_exists) {
 			return;
@@ -190,7 +188,7 @@ void MetadataManager::AddAndRegisterBlock(unique_lock<mutex> &block_lock, Metada
 	block_lock.unlock();
 	block.block = block_manager.RegisterBlock(block.block_id);
 	block_lock.lock();
-	AddBlock(block_lock, std::move(block), true);
+	AddBlock(std::move(block), true);
 }
 
 MetaBlockPointer MetadataManager::GetDiskPointer(const MetadataPointer &pointer, uint32_t offset) {

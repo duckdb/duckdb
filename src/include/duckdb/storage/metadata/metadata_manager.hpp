@@ -102,14 +102,14 @@ protected:
 	unordered_map<block_id_t, idx_t> modified_blocks;
 
 protected:
-	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock);
+	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock) DUCKDB_EXCLUDES(block_lock);
 	block_id_t PeekNextBlockId() const;
 	block_id_t GetNextBlockId() const;
 
-	void AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new_block, bool if_exists = false);
-	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block);
-	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block);
-	MetadataPointer FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer);
+	void AddBlock(MetadataBlock new_block, bool if_exists = false);
+	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block) DUCKDB_REQUIRES(block_lock);
+	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block) DUCKDB_REQUIRES(block_lock);
+	MetadataPointer FromDiskPointerInternal(MetaBlockPointer pointer) DUCKDB_REQUIRES(block_lock);
 };
 
 } // namespace duckdb
