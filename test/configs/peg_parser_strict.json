@@ -246,9 +246,7 @@
       "reason": "Type refactoring",
       "paths": [
         "test/fuzzer/pedro/decimal_with_invalid_scale.test",
-        "test/sql/types/test_user_type_errors_18452.test",
-        "test/sql/types/union/union_ambiguous.test",
-        "test/sql/types/nested/array/array_invalid.test"
+        "test/sql/types/test_user_type_errors_18452.test"
       ]
     }
   ]
