@@ -265,7 +265,7 @@ void MetadataManager::Flush() {
 	// Write the blocks of the metadata manager to disk.
 	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
 
-	unique_lock<mutex> guard(block_lock, std::defer_lock);
+	unique_lock<mutex> guard(block_mutex, std::defer_lock);
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		if (!block.dirty) {
