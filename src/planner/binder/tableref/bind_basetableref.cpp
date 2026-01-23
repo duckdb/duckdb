@@ -284,9 +284,16 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 
 		subquery.alias = ref.alias;
 		// construct view names by taking the view aliases
-		vector<string> view_names = view_catalog_entry.aliases;
+		subquery.column_name_alias = view_catalog_entry.aliases;
 		// now apply the subquery column aliases
-		subquery.column_name_alias = BindContext::AliasColumnNames(ref.table_name, view_names, ref.column_name_alias);
+		for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
+			if (i < subquery.column_name_alias.size()) {
+				// override alias
+				subquery.column_name_alias[i] = ref.column_name_alias[i];
+			} else {
+				subquery.column_name_alias.push_back(ref.column_name_alias[i]);
+			}
+		}
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
 		auto view_search_path =
