@@ -1463,6 +1463,7 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
+	// FIXME: Add hex features here
 	idx_t result_size;
 	if (!Bit::TryGetBitStringSize(input, result_size, parameters.error_message)) {
 		return false;
