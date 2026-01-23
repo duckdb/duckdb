@@ -128,6 +128,7 @@ MetadataHandle MetadataManager::Pin(const QueryContext &context, const MetadataP
 }
 
 void MetadataManager::ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &metadata_block) {
+	D_ASSERT(block_lock.owns_lock());
 	auto old_block = metadata_block.block;
 	block_lock.unlock();
 	// pin the old block
@@ -178,6 +179,7 @@ void MetadataManager::AddBlock(MetadataBlock new_block, bool if_exists) {
 }
 
 void MetadataManager::AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block) {
+	D_ASSERT(block_lock.owns_lock());
 	if (block.block) {
 		throw InternalException("Calling AddAndRegisterBlock on block that already exists");
 	}

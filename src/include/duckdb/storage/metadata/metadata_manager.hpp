@@ -103,13 +103,13 @@ protected:
 	unordered_map<block_id_t, idx_t> modified_blocks;
 
 protected:
-	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock) DUCKDB_ACQUIRE(block_mutex);
+	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	block_id_t PeekNextBlockId() const;
 	block_id_t GetNextBlockId() const;
 
 	void AddBlock(MetadataBlock new_block, bool if_exists = false) DUCKDB_REQUIRES(block_mutex);
-	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block) DUCKDB_REQUIRES(block_lock);
-	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block) DUCKDB_REQUIRES(block_lock);
+	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
+	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	MetadataPointer FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer);
 };
 
