@@ -285,13 +285,6 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		subquery.alias = ref.alias;
 		// construct view names by taking the view aliases
 		vector<string> view_names = view_catalog_entry.aliases;
-		if (view_catalog_entry.IsBound()) {
-			// if the view has stored names - use them as base names
-			auto &stored_names = view_catalog_entry.GetNames();
-			for (idx_t n = view_names.size(); n < stored_names.size(); n++) {
-				view_names.push_back(stored_names[n]);
-			}
-		}
 		// now apply the subquery column aliases
 		subquery.column_name_alias = BindContext::AliasColumnNames(ref.table_name, view_names, ref.column_name_alias);
 
