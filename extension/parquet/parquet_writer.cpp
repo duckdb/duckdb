@@ -315,6 +315,8 @@ struct ColumnStatsUnifier {
 	string column_name;
 	string global_min;
 	string global_max;
+	//! Only set by the 'metadata' of the VARIANT column
+	string variant_type;
 	idx_t null_count = 0;
 	idx_t num_values = 0;
 	bool all_min_max_set = true;
@@ -979,6 +981,20 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	}
 }
 
+static bool IsVariantMetadataField(const ColumnWriter &writer) {
+	if (!writer.parent) {
+		//! Not a nested column
+		return false;
+	}
+	auto &parent = *writer.parent;
+	if (parent.Type().id() != LogicalTypeId::VARIANT) {
+		//! (direct) parent is not a VARIANT
+		return false;
+	}
+	auto &name = writer.Schema().name;
+	return name == "metadata";
+}
+
 static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
                             string base_name = string()) {
 	auto &schema = column_writer.Schema();
@@ -993,33 +1009,17 @@ static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr
 	if (children.empty()) {
 		auto unifier = GetBaseStatsUnifier(schema.type);
 		unifier->column_name = std::move(base_name);
+
+		if (IsVariantMetadataField(column_writer)) {
+			//! Stamp the 'metadata' field of the VARIANT with the internal layout of the VARIANT
+			auto &variant_writer = column_writer.parent->Cast<VariantColumnWriter>();
+			unifier->variant_type = variant_writer.TransformedType().ToString();
+		}
 		unifiers.push_back(std::move(unifier));
 		return;
 	}
 	for (auto &child_writer : children) {
 		GetStatsUnifier(*child_writer, unifiers, base_name);
-	}
-}
-
-static void GetVariantLayouts(const ColumnWriter &column_writer, child_list_t<LogicalType> &variant_layouts,
-                              string base_name = string()) {
-	auto &schema = column_writer.Schema();
-	if (schema.repetition_type != duckdb_parquet::FieldRepetitionType::REPEATED) {
-		if (!base_name.empty()) {
-			base_name += ".";
-		}
-		base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
-	}
-
-	auto &type = column_writer.Type();
-	if (type.id() == LogicalTypeId::VARIANT) {
-		auto &variant_column_writer = column_writer.Cast<VariantColumnWriter>();
-		variant_layouts.emplace_back(std::move(base_name), variant_column_writer.TransformedType());
-		return;
-	}
-	auto &children = column_writer.ChildWriters();
-	for (auto &child_writer : children) {
-		GetVariantLayouts(*child_writer, variant_layouts, base_name);
 	}
 }
 
@@ -1041,13 +1041,8 @@ void ParquetWriter::InitializeSchemaElements() {
 		column_writer->FinalizeSchema(file_meta_data.schema);
 	}
 	if (written_stats) {
-		auto &file_stats = *written_stats;
 		for (auto &column_writer : column_writers) {
 			GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
-		}
-
-		for (auto &column_writer : column_writers) {
-			GetVariantLayouts(*column_writer, file_stats.variant_layouts);
 		}
 	}
 }
@@ -1070,6 +1065,9 @@ void ParquetWriter::GatherWrittenStatistics() {
 			if (stats_unifier->max_is_set) {
 				column_stats["max"] = max_value;
 			}
+		}
+		if (!stats_unifier->variant_type.empty()) {
+			column_stats["variant_type"] = Value(stats_unifier->variant_type);
 		}
 		if (stats_unifier->all_nulls_set) {
 			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
@@ -1106,7 +1104,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 				column_stats["geo_types"] = Value::LIST(type_strings);
 			}
 		}
-		written_stats->column_statistics.insert(make_pair(stats_unifier->column_name, std::move(column_stats)));
+		written_stats->column_statistics.emplace(stats_unifier->column_name, std::move(column_stats));
 	}
 }
 

@@ -201,6 +201,8 @@ protected:
 
 public:
 	ParquetWriter &writer;
+	//! The parent writer (if this is a nested field)
+	optional_ptr<ColumnWriter> parent;
 	ParquetColumnSchema column_schema;
 	vector<string> schema_path;
 	bool can_have_nulls;

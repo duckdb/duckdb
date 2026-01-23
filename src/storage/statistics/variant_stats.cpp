@@ -186,7 +186,7 @@ LogicalType ToStructuredType(const LogicalType &shredding) {
 		std::sort(indices.begin(), indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
 			auto &a = struct_children[lhs].first;
 			auto &b = struct_children[rhs].first;
-			return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+			return a < b;
 		});
 		for (auto &index : indices) {
 			auto &child = struct_children[index];
