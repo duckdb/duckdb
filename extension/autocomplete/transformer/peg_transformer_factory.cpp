@@ -4,9 +4,11 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 
 namespace duckdb {
 
@@ -101,6 +103,12 @@ void PEGTransformerFactory::RegisterAttach() {
 	REGISTER_TRANSFORM(TransformAttachOptions);
 	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
 	REGISTER_TRANSFORM(TransformGenericCopyOption);
+}
+
+void PEGTransformerFactory::RegisterAnalyze() {
+	// analyze.gram
+	REGISTER_TRANSFORM(TransformAnalyzeStatement);
+	REGISTER_TRANSFORM(TransformAnalyzeTarget);
 }
 
 void PEGTransformerFactory::RegisterCall() {
@@ -427,6 +435,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformMapStructExpression);
 	REGISTER_TRANSFORM(TransformMapStructField);
 	REGISTER_TRANSFORM(TransformListComprehensionExpression);
+	REGISTER_TRANSFORM(TransformIsDistinctFromOp);
 }
 
 void PEGTransformerFactory::RegisterImport() {
@@ -458,6 +467,28 @@ void PEGTransformerFactory::RegisterLoad() {
 	REGISTER_TRANSFORM(TransformInstallStatement);
 	REGISTER_TRANSFORM(TransformFromSource);
 	REGISTER_TRANSFORM(TransformVersionNumber);
+}
+
+void PEGTransformerFactory::RegisterMergeInto() {
+	REGISTER_TRANSFORM(TransformMergeIntoStatement);
+	REGISTER_TRANSFORM(TransformMergeIntoUsingClause);
+	REGISTER_TRANSFORM(TransformMergeMatch);
+	REGISTER_TRANSFORM(TransformMatchedClause);
+	REGISTER_TRANSFORM(TransformMatchedClauseAction);
+	REGISTER_TRANSFORM(TransformUpdateMatchClause);
+	REGISTER_TRANSFORM(TransformUpdateMatchInfo);
+	REGISTER_TRANSFORM(TransformDeleteMatchClause);
+	REGISTER_TRANSFORM(TransformInsertMatchClause);
+	REGISTER_TRANSFORM(TransformDoNothingMatchClause);
+	REGISTER_TRANSFORM(TransformErrorMatchClause);
+	REGISTER_TRANSFORM(TransformUpdateMatchSetClause);
+	REGISTER_TRANSFORM(TransformAndExpression);
+	REGISTER_TRANSFORM(TransformNotMatchedClause);
+	REGISTER_TRANSFORM(TransformBySourceOrTarget);
+	REGISTER_TRANSFORM(TransformInsertMatchInfo);
+	REGISTER_TRANSFORM(TransformInsertDefaultValues);
+	REGISTER_TRANSFORM(TransformInsertByNameOrPosition);
+	REGISTER_TRANSFORM(TransformInsertValuesList);
 }
 
 void PEGTransformerFactory::RegisterPragma() {
@@ -598,6 +629,7 @@ void PEGTransformerFactory::RegisterTransaction() {
 	REGISTER_TRANSFORM(TransformTransactionStatement);
 	REGISTER_TRANSFORM(TransformBeginTransaction);
 	REGISTER_TRANSFORM(TransformReadOrWrite);
+	REGISTER_TRANSFORM(TransformReadOnlyOrReadWrite);
 	REGISTER_TRANSFORM(TransformCommitTransaction);
 	REGISTER_TRANSFORM(TransformRollbackTransaction);
 }
@@ -613,6 +645,15 @@ void PEGTransformerFactory::RegisterUpdate() {
 	REGISTER_TRANSFORM(TransformUpdateSetTuple);
 	REGISTER_TRANSFORM(TransformUpdateSetElementList);
 	REGISTER_TRANSFORM(TransformUpdateSetElement);
+}
+
+void PEGTransformerFactory::RegisterVacuum() {
+	REGISTER_TRANSFORM(TransformVacuumStatement);
+	REGISTER_TRANSFORM(TransformVacuumOptions);
+	REGISTER_TRANSFORM(TransformVacuumLegacyOptions);
+	REGISTER_TRANSFORM(TransformVacuumParensOptions);
+	REGISTER_TRANSFORM(TransformVacuumOption);
+	REGISTER_TRANSFORM(TransformNameList);
 }
 
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
@@ -741,12 +782,21 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("NotILikeOp", "!~~*");
 	RegisterEnum<string>("NotLikeOp", "!~~");
 	RegisterEnum<string>("NotSimilarToOp", "!~");
+
+	RegisterEnum<string>("OptAnalyze", "analyze");
+	RegisterEnum<string>("OptFreeze", "freeze");
+	RegisterEnum<string>("OptFull", "full");
+	RegisterEnum<string>("OptVerbose", "verbose");
+
+	RegisterEnum<MergeActionCondition>("BySource", MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE);
+	RegisterEnum<MergeActionCondition>("ByTarget", MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET);
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterAlter();
 	RegisterAttach();
+	RegisterAnalyze();
 	RegisterCall();
 	RegisterCheckpoint();
 	RegisterComment();
@@ -769,12 +819,14 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterImport();
 	RegisterInsert();
 	RegisterLoad();
+	RegisterMergeInto();
 	RegisterPragma();
 	RegisterSelect();
 	RegisterUse();
 	RegisterSet();
 	RegisterTransaction();
 	RegisterUpdate();
+	RegisterVacuum();
 	RegisterKeywordsAndIdentifiers();
 	RegisterEnums();
 }

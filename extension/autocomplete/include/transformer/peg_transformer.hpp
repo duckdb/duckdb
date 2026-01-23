@@ -5,6 +5,7 @@
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
 #include "ast/add_column_entry.hpp"
+#include "ast/analyze_target.hpp"
 #include "ast/column_elements.hpp"
 #include "ast/create_table_as.hpp"
 #include "ast/distinct_clause.hpp"
@@ -26,6 +27,7 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
+#include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -158,6 +160,7 @@ public:
 	// Registration methods
 	void RegisterAlter();
 	void RegisterAttach();
+	void RegisterAnalyze();
 	void RegisterCall();
 	void RegisterCheckpoint();
 	void RegisterComment();
@@ -180,12 +183,14 @@ public:
 	void RegisterImport();
 	void RegisterInsert();
 	void RegisterLoad();
+	void RegisterMergeInto();
 	void RegisterPragma();
 	void RegisterSelect();
 	void RegisterUse();
 	void RegisterSet();
 	void RegisterTransaction();
 	void RegisterUpdate();
+	void RegisterVacuum();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterEnums();
 
@@ -286,6 +291,11 @@ private:
 	                                                                optional_ptr<ParseResult> parse_result);
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
+
+	// analyze.gram
+	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// call.gram
 	static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,
@@ -763,6 +773,8 @@ private:
 	                                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformListComprehensionExpression(PEGTransformer &transformer,
 	                                                                         optional_ptr<ParseResult> parse_result);
+	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer,
+	                                                optional_ptr<ParseResult> parse_result);
 
 	// import.gram
 	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer,
@@ -804,6 +816,46 @@ private:
 	static ExtensionRepositoryInfo TransformFromSource(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
 	static string TransformVersionNumber(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// merge_into.gram
+	static unique_ptr<SQLStatement> TransformMergeIntoStatement(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
+	static unique_ptr<TableRef> TransformMergeIntoUsingClause(PEGTransformer &transformer,
+	                                                          optional_ptr<ParseResult> parse_result);
+	static pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+	TransformMergeMatch(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+	TransformMatchedClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformMatchedClauseAction(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformUpdateMatchClause(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformUpdateMatchInfo(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformDeleteMatchClause(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformInsertMatchClause(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformDoNothingMatchClause(PEGTransformer &transformer,
+	                                                                 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformErrorMatchClause(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
+	static unique_ptr<UpdateSetInfo> TransformUpdateMatchSetClause(PEGTransformer &transformer,
+	                                                               optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformAndExpression(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
+	static pair<MergeActionCondition, unique_ptr<MergeIntoAction>>
+	TransformNotMatchedClause(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static MergeActionCondition TransformBySourceOrTarget(PEGTransformer &transformer,
+	                                                      optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformInsertMatchInfo(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformInsertDefaultValues(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformInsertByNameOrPosition(PEGTransformer &transformer,
+	                                                                   optional_ptr<ParseResult> parse_result);
+	static unique_ptr<MergeIntoAction> TransformInsertValuesList(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
 
 	// pragma.gram
 	static unique_ptr<SQLStatement> TransformPragmaStatement(PEGTransformer &transformer,
@@ -1013,6 +1065,8 @@ private:
 	                                                                  optional_ptr<ParseResult> parse_result);
 	static TransactionModifierType TransformReadOrWrite(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
+	static TransactionModifierType TransformReadOnlyOrReadWrite(PEGTransformer &transformer,
+	                                                            optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TransactionStatement> TransformCommitTransaction(PEGTransformer &, optional_ptr<ParseResult>);
 	static unique_ptr<TransactionStatement> TransformRollbackTransaction(PEGTransformer &, optional_ptr<ParseResult>);
 
@@ -1039,6 +1093,17 @@ private:
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformUseTarget(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+
+	// vacuum.gram
+	static unique_ptr<SQLStatement> TransformVacuumStatement(PEGTransformer &transformer,
+	                                                         optional_ptr<ParseResult> parse_result);
+	static VacuumOptions TransformVacuumOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static VacuumOptions TransformVacuumLegacyOptions(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
+	static VacuumOptions TransformVacuumParensOptions(PEGTransformer &transformer,
+	                                                  optional_ptr<ParseResult> parse_result);
+	static string TransformVacuumOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<string> TransformNameList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 private:
 	PEGParser parser;

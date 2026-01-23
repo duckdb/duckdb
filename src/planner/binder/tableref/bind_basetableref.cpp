@@ -111,6 +111,11 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 	return view_search_path;
 }
 
+void Binder::SetSearchPath(Catalog &catalog, const string &schema) {
+	auto search_path = GetSearchPath(catalog, schema);
+	entry_retriever.SetSearchPath(std::move(search_path));
+}
+
 BoundStatement Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
