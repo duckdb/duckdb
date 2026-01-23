@@ -78,7 +78,6 @@ public:
 	//===--------------------------------------------------------------------===//
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
-	//! Note: Uses complex lock patterns with unique_lock that may be locked/unlocked at different points
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk,
 	                    OperatorSinkInput &input) const DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
