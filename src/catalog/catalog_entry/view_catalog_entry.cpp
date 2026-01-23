@@ -61,15 +61,14 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);
 
-		// bind the view if it is not bound yet
-		BindView(context);
-
-		// verify the name we are commenting on exists
-		auto &names = GetNames();
-		auto entry = std::find(names.begin(), names.end(), comment_on_column_info.column_name);
-		if (entry == names.end()) {
-			throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
-			                      comment_on_column_info.column_name);
+		if (IsBound()) {
+			// if the view is bound - verify the name we are commenting on exists
+			auto &names = GetNames();
+			auto entry = std::find(names.begin(), names.end(), comment_on_column_info.column_name);
+			if (entry == names.end()) {
+				throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
+				                      comment_on_column_info.column_name);
+			}
 		}
 		// apply the comment to the view
 		auto &copied_view_entry = copied_view->Cast<ViewCatalogEntry>();
