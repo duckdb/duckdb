@@ -221,9 +221,9 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 
 static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
                                      idx_t data_size, DBConfig &config) {
-	if (!config.options.allow_unsigned_extensions) {
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(config)) {
 		const bool signature_valid = ExtensionHelper::CheckExtensionBufferSignature(
-		    static_cast<char *>(data), data_size, config.options.allow_community_extensions);
+		    static_cast<char *>(data), data_size, Settings::Get<AllowCommunityExtensionsSetting>(config));
 		if (!signature_valid) {
 			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
 			                  "https://duckdb.org/docs/stable/operations_manual/securing_duckdb/securing_extensions");
