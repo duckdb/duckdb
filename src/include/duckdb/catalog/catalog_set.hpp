@@ -88,13 +88,14 @@ public:
 	void CleanupEntry(CatalogEntry &catalog_entry);
 
 	//! Returns the entry with the specified name
-	DUCKDB_API EntryLookup GetEntryDetailed(CatalogTransaction transaction, const string &name);
+	DUCKDB_API EntryLookup GetEntryDetailed(CatalogTransaction transaction,
+	                                        const string &name) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, const string &name);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
-	SimilarCatalogEntry SimilarEntry(CatalogTransaction transaction, const string &name);
+	SimilarCatalogEntry SimilarEntry(CatalogTransaction transaction, const string &name) DUCKDB_EXCLUDES(catalog_lock);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
@@ -147,10 +148,10 @@ private:
 	optional_ptr<CatalogEntry> CreateCommittedEntry(unique_ptr<CatalogEntry> entry);
 
 	//! Create all default entries
-	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock);
+	void CreateDefaultEntries(CatalogTransaction transaction, unique_lock<mutex> &lock) DUCKDB_REQUIRES(catalog_lock);
 	//! Attempt to create a default entry with the specified name. Returns the entry if successful, nullptr otherwise.
 	optional_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &name,
-	                                              unique_lock<mutex> &lock);
+	                                              unique_lock<mutex> &lock) DUCKDB_ACQUIRE(catalog_lock);
 
 	bool DropEntryInternal(CatalogTransaction transaction, const string &name, bool allow_drop_internal = false);
 
