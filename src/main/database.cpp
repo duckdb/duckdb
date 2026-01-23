@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -48,7 +49,7 @@ DBConfig::DBConfig() {
 	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
-	cast_functions = make_uniq<CastFunctionSet>(*this);
+	type_manager = make_uniq<TypeManager>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();

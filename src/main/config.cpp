@@ -453,8 +453,8 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 		return LogicalType::STRUCT(struct_members);
 	}
 
-	LogicalType type_id = StringUtil::CIEquals(type, "ANY") ? LogicalType::ANY : TransformStringToLogicalTypeId(type);
-	if (type_id == LogicalTypeId::USER) {
+	const auto type_id = StringUtil::CIEquals(type, "ANY") ? LogicalTypeId::ANY : TransformStringToLogicalTypeId(type);
+	if (type_id == LogicalTypeId::UNBOUND) {
 		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
 		                        type);
 	}
@@ -506,7 +506,11 @@ bool DBConfig::IsInMemoryDatabase(const char *database_path) {
 }
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
-	return *cast_functions;
+	return type_manager->GetCastFunctions();
+}
+
+TypeManager &DBConfig::GetTypeManager() {
+	return *type_manager;
 }
 
 CollationBinding &DBConfig::GetCollationBinding() {

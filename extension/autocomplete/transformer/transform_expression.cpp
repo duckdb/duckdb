@@ -431,7 +431,15 @@ PEGTransformerFactory::TransformIsDistinctFromExpression(PEGTransformer &transfo
 	if (!is_test_opt.HasResult()) {
 		return expr;
 	}
-	throw NotImplementedException("IsDistinctFromOp has not yet been implemented");
+	auto is_distinct_repeat = is_test_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &is_distinct : is_distinct_repeat.children) {
+		auto &distinct_list = is_distinct->Cast<ListParseResult>();
+		auto distinct_type = transformer.Transform<ExpressionType>(distinct_list.Child<ListParseResult>(0));
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(distinct_list.Child<ListParseResult>(1));
+		auto distinct_operator = make_uniq<ComparisonExpression>(distinct_type, std::move(expr), std::move(right_expr));
+		expr = std::move(distinct_operator);
+	}
+	return expr;
 }
 
 // ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
@@ -529,7 +537,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 	auto expr_list_pr = ExtractParseResultsFromList(extract_parens);
 	vector<unique_ptr<ParsedExpression>> in_children;
 	for (auto &expr : expr_list_pr) {
-		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(std::move(expr)));
+		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
 	return std::move(result);
@@ -804,7 +812,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 				continue;
 			}
 		}
-
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(expr));
 		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
@@ -1432,8 +1439,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto colid = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto type = LogicalType(TransformStringToLogicalTypeId(colid));
-	if (type == LogicalTypeId::USER) {
-		type = LogicalType::USER(colid);
+	if (type == LogicalTypeId::UNBOUND) {
+		type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
 	}
 	auto string_literal = list_pr.Child<StringLiteralParseResult>(1).result;
 	auto child = make_uniq<ConstantExpression>(Value(string_literal));
@@ -1622,6 +1629,15 @@ PEGTransformerFactory::TransformReplaceEntry(PEGTransformer &transformer, option
 	auto &col_ref = column_reference->Cast<ColumnRefExpression>();
 	auto column_name = col_ref.GetColumnName();
 	return make_pair(column_name, std::move(expr));
+}
+
+ExpressionType PEGTransformerFactory::TransformIsDistinctFromOp(PEGTransformer &transformer,
+                                                                optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	if (list_pr.Child<OptionalParseResult>(1).HasResult()) {
+		return ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	}
+	return ExpressionType::COMPARE_DISTINCT_FROM;
 }
 
 } // namespace duckdb
