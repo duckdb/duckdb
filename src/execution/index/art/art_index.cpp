@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/execution/index/art/art_operator.hpp"
+#include "duckdb/planner/operator/logical_create_index.hpp"
 
 namespace duckdb {
 namespace {
@@ -28,9 +29,9 @@ unique_ptr<IndexBuildBindData> ARTBuildBind(IndexBuildBindInput &input) {
 
 	// TODO: Verify that the the ART is applicable for the given columns and types.
 	bind_data->sorted = true;
-	if (input.expressions.size() > 1) {
+	if (input.op.expressions.size() > 1) {
 		bind_data->sorted = false;
-	} else if (input.expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
+	} else if (input.op.expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
 		bind_data->sorted = false;
 	}
 
@@ -45,14 +46,13 @@ bool ARTBuildSort(IndexBuildSortInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // Global State
 //----------------------------------------------------------------------------------------------------------------------
-class ARTBuildGlobalState : public IndexBuildGlobalState {
+class ARTBuildGlobalState : public IndexBuildState {
 public:
 	unique_ptr<BoundIndex> global_index;
 };
 
-unique_ptr<IndexBuildGlobalState> ARTBuildGlobalInit(IndexBuildInitGlobalStateInput &input) {
+unique_ptr<IndexBuildState> ARTBuildGlobalInit(IndexBuildInitStateInput &input) {
 	auto state = make_uniq<ARTBuildGlobalState>();
-
 	auto &storage = input.table.GetStorage();
 	state->global_index = make_uniq<ART>(input.info.index_name, input.info.constraint_type, input.storage_ids,
 	                                     TableIOManager::Get(storage), input.expressions, storage.db);
@@ -63,7 +63,7 @@ unique_ptr<IndexBuildGlobalState> ARTBuildGlobalInit(IndexBuildInitGlobalStateIn
 //----------------------------------------------------------------------------------------------------------------------
 // Local State
 //----------------------------------------------------------------------------------------------------------------------
-class ARTBuildLocalState : public IndexBuildLocalState {
+class ARTBuildLocalState : public IndexBuildSinkState {
 public:
 	unique_ptr<BoundIndex> local_index;
 	ArenaAllocator arena_allocator;
@@ -74,7 +74,7 @@ public:
 	explicit ARTBuildLocalState(ClientContext &context) : arena_allocator(Allocator::Get(context)) {};
 };
 
-unique_ptr<IndexBuildLocalState> ARTBuildLocalInit(IndexBuildInitLocalStateInput &input) {
+unique_ptr<IndexBuildSinkState> ARTBuildLocalInit(IndexBuildInitSinkInput &input) {
 	// Create the local sink state and add the local index.
 	auto state = make_uniq<ARTBuildLocalState>(input.context);
 
@@ -92,8 +92,9 @@ unique_ptr<IndexBuildLocalState> ARTBuildLocalInit(IndexBuildInitLocalStateInput
 //----------------------------------------------------------------------------------------------------------------------
 // Sink
 //----------------------------------------------------------------------------------------------------------------------
+
 void ARTBuildSinkUnsorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk) {
-	auto &l_state = input.local_state.Cast<ARTBuildLocalState>();
+	auto &l_state = input.local_state->Cast<ARTBuildLocalState>();
 	auto row_count = key_chunk.size();
 	auto &art = l_state.local_index->Cast<ART>();
 
@@ -111,7 +112,7 @@ void ARTBuildSinkUnsorted(IndexBuildSinkInput &input, DataChunk &key_chunk, Data
 }
 
 void ARTBuildSinkSorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk) {
-	auto &l_state = input.local_state.Cast<ARTBuildLocalState>();
+	auto &l_state = input.local_state->Cast<ARTBuildLocalState>();
 	auto &storage = input.table.GetStorage();
 	auto &l_index = l_state.local_index;
 
@@ -131,7 +132,7 @@ void ARTBuildSinkSorted(IndexBuildSinkInput &input, DataChunk &key_chunk, DataCh
 
 void ARTBuildSink(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk) {
 	auto &bind_data = input.bind_data->Cast<ARTBuildBindData>();
-	auto &lstate = input.local_state.Cast<ARTBuildLocalState>();
+	auto &lstate = input.local_state->Cast<ARTBuildLocalState>();
 
 	lstate.arena_allocator.Reset();
 
@@ -147,9 +148,9 @@ void ARTBuildSink(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &r
 //----------------------------------------------------------------------------------------------------------------------
 // Combine
 //----------------------------------------------------------------------------------------------------------------------
-void ARTBuildCombine(IndexBuildCombineInput &input) {
-	auto &gstate = input.global_state.Cast<ARTBuildGlobalState>();
-	auto &lstate = input.local_state.Cast<ARTBuildLocalState>();
+void ARTBuildCombine(IndexBuildSinkCombineInput &input) {
+	auto &gstate = input.global_state->Cast<ARTBuildGlobalState>();
+	auto &lstate = input.local_state->Cast<ARTBuildLocalState>();
 
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
@@ -169,16 +170,16 @@ unique_ptr<BoundIndex> ARTBuildFinalize(IndexBuildFinalizeInput &input) {
 //----------------------------------------------------------------------------------------------------------------------
 // ART::GetIndexType
 //----------------------------------------------------------------------------------------------------------------------
-IndexType ART::GetARTIndexType() {
+IndexType ART::GetIndexTypeInfo() {
 	IndexType art_index_type;
 	art_index_type.name = ART::TYPE_NAME;
 	art_index_type.create_instance = ART::Create;
 	art_index_type.build_bind = ARTBuildBind;
 	art_index_type.build_sort = ARTBuildSort;
-	art_index_type.build_global_init = ARTBuildGlobalInit;
-	art_index_type.build_local_init = ARTBuildLocalInit;
+	art_index_type.build_init = ARTBuildGlobalInit;
+	art_index_type.build_sink_init = ARTBuildLocalInit;
 	art_index_type.build_sink = ARTBuildSink;
-	art_index_type.build_combine = ARTBuildCombine;
+	art_index_type.build_sink_combine = ARTBuildCombine;
 	art_index_type.build_finalize = ARTBuildFinalize;
 	return art_index_type;
 }
