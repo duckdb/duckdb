@@ -479,9 +479,11 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformOverClause);
 	REGISTER_TRANSFORM(TransformWindowFrame);
+	REGISTER_TRANSFORM(TransformParensIdentifier);
 	REGISTER_TRANSFORM(TransformWindowFrameDefinition);
 	REGISTER_TRANSFORM(TransformWindowFrameContentsParens);
 	REGISTER_TRANSFORM(TransformWindowFrameNameContentsParens);
+	REGISTER_TRANSFORM(TransformBaseWindowName);
 	REGISTER_TRANSFORM(TransformWindowFrameContents);
 	REGISTER_TRANSFORM(TransformFraming);
 	REGISTER_TRANSFORM(TransformFrameExtent);

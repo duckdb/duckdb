@@ -138,8 +138,8 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 			if (it != transformer.window_clauses.end()) {
 				throw ParserException("window \"%s\" is already defined", window_name);
 			}
-			transformer.window_clauses[window_name] =
-			    unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
+			auto window_function = unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(window_func));
+			transformer.window_clauses[window_name] = std::move(window_function);
 		}
 	}
 	auto select_node = transformer.Transform<unique_ptr<SelectNode>>(list_pr.Child<ListParseResult>(0));

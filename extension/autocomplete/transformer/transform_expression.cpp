@@ -186,9 +186,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		function_children.clear();
 	}
 	auto lowercase_name = StringUtil::Lower(qualified_function.name);
-	if (lowercase_name == "count" && function_children.empty()) {
-		lowercase_name = "count_star";
-	}
 
 	auto over_opt = list_pr.Child<OptionalParseResult>(5);
 	if (over_opt.HasResult()) {
@@ -277,6 +274,9 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 		}
 		transformer.in_window_definition = false;
 		return std::move(expr);
+	}
+	if (lowercase_name == "count" && function_children.empty()) {
+		lowercase_name = "count_star";
 	}
 
 	if (lowercase_name == "if") {
@@ -1847,10 +1847,24 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTran
 		if (it == transformer.window_clauses.end()) {
 			throw ParserException("window \"%s\" does not exist", window_name);
 		}
-		auto copied_expr = it->second->Copy();
+		auto copied_expr = unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
+
 		return unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(copied_expr));
 	}
 	return transformer.Transform<unique_ptr<WindowExpression>>(choice_pr.result);
+}
+
+unique_ptr<WindowExpression> PEGTransformerFactory::TransformParensIdentifier(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.GetChild(0));
+	auto window_name = extract_parens->Cast<IdentifierParseResult>().identifier;
+	auto it = transformer.window_clauses.find(string(window_name));
+	if (it == transformer.window_clauses.end()) {
+		throw ParserException("window \"%s\" does not exist", window_name);
+	}
+	auto copied_expr = it->second->Copy();
+	return unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(copied_expr));
 }
 
 unique_ptr<WindowExpression>
@@ -1868,19 +1882,58 @@ PEGTransformerFactory::TransformWindowFrameContentsParens(PEGTransformer &transf
 	return transformer.Transform<unique_ptr<WindowExpression>>(extract_parens);
 }
 
+bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end) {
+	bool start_is_default = (start == WindowBoundary::UNBOUNDED_PRECEDING);
+	bool end_is_default = (end == WindowBoundary::CURRENT_ROW_RANGE);
+	return start_is_default && end_is_default;
+}
+
 unique_ptr<WindowExpression>
 PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &transformer,
                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0))->Cast<ListParseResult>();
-	auto window_name_opt = extract_parens.Child<OptionalParseResult>(0);
-	if (window_name_opt.HasResult()) {
-		throw NotImplementedException("Window name has not yet been implemented");
-	}
-	// TODO(Dtenwolde) Use the window name
+	string window_name;
+	transformer.TransformOptional<string>(extract_parens, 0, window_name);
 	auto window_frame_contents =
 	    transformer.Transform<unique_ptr<WindowExpression>>(extract_parens.Child<ListParseResult>(1));
-	return window_frame_contents;
+	if (window_name.empty()) {
+		return window_frame_contents;
+	}
+	auto it = transformer.window_clauses.find(string(window_name));
+	if (it == transformer.window_clauses.end()) {
+		throw ParserException("window \"%s\" does not exist", window_name);
+	}
+	auto copied_window = unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
+	if (copied_window->start_expr || copied_window->end_expr ||
+	    !IsWindowFrameDefault(copied_window->start, copied_window->end)) {
+		throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_name);
+	}
+	copied_window->start = window_frame_contents->start;
+	copied_window->end = window_frame_contents->end;
+	copied_window->exclude_clause = window_frame_contents->exclude_clause;
+	copied_window->start_expr = std::move(window_frame_contents->start_expr);
+	copied_window->end_expr = std::move(window_frame_contents->end_expr);
+
+	copied_window->offset_expr = std::move(window_frame_contents->offset_expr);
+	copied_window->default_expr = std::move(window_frame_contents->default_expr);
+	if (!copied_window->orders.empty() && !window_frame_contents->orders.empty()) {
+		throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
+	}
+	copied_window->orders = std::move(window_frame_contents->orders);
+	if (!copied_window->partitions.empty() && !window_frame_contents->partitions.empty()) {
+		throw ParserException("Cannot override PARTITION BY clause of window \"%s\"", window_name);
+	}
+	if (copied_window->partitions.empty()) {
+		copied_window->partitions = std::move(window_frame_contents->partitions);
+	}
+	return copied_window;
+}
+
+string PEGTransformerFactory::TransformBaseWindowName(PEGTransformer &transformer,
+                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
 unique_ptr<WindowExpression>

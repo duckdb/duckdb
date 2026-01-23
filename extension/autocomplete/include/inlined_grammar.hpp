@@ -739,7 +739,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ExcludeTies <- 'TIES'\n"
 	"ExcludeNoOthers <- 'NO' 'OTHERS'\n"
 	"OverClause <- 'OVER' WindowFrame\n"
-	"WindowFrame <- WindowFrameDefinition / Identifier / ParensIdentifier\n"
+	"WindowFrame <- ParensIdentifier / WindowFrameDefinition / Identifier\n"
 	"ParensIdentifier <- Parens(Identifier)\n"
 	"WindowFrameDefinition <- WindowFrameNameContentsParens / WindowFrameContentsParens\n"
 	"WindowFrameNameContentsParens <- Parens(BaseWindowName? WindowFrameContents)\n"

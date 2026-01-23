@@ -836,12 +836,15 @@ private:
 	                                                        optional_ptr<ParseResult> parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrame(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
+	static unique_ptr<WindowExpression> TransformParensIdentifier(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrameDefinition(PEGTransformer &transformer,
 	                                                                   optional_ptr<ParseResult> parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrameContentsParens(PEGTransformer &transformer,
 	                                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrameNameContentsParens(PEGTransformer &transformer,
 	                                                                           optional_ptr<ParseResult> parse_result);
+	static string TransformBaseWindowName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrameContents(PEGTransformer &transformer,
 	                                                                 optional_ptr<ParseResult> parse_result);
 
