@@ -24,7 +24,11 @@ def valid_timeout(value):
 
 def get_cpu_count() -> int:
     """Get the number of CPU cores available."""
-    return len(os.sched_getaffinity(0))
+    try:
+        return len(os.sched_getaffinity(0))
+    # sched_getaffinity only exists in certain platform, if not exist, fallback
+    except AttributeError:
+        return os.cpu_count() or 1
 
 
 parser = argparse.ArgumentParser(description='Run tests one by one with optional flags.')
