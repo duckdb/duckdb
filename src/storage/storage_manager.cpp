@@ -263,7 +263,8 @@ void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 
 unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {
 	return [this]() DUCKDB_NO_THREAD_SAFETY_ANALYSIS {
-		return make_uniq<lock_guard<mutex>>(wal_lock);
+		auto* lock_ptr = new lock_guard<mutex>(wal_lock);
+		return unique_ptr<lock_guard<mutex>>(lock_ptr);
 	}();
 }
 
