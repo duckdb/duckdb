@@ -3087,7 +3087,8 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 	{
 		auto &input_data = db.QueryArrow("SELECT 43 as value");
 		AdbcStatement adbc_statement;
-		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		// Use ingest connection to avoid streaming conflict with QueryArrow
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(
 		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_CREATE,
@@ -3105,7 +3106,8 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 	{
 		auto &input_data = db.QueryArrow("SELECT 43 as value");
 		AdbcStatement adbc_statement;
-		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		// Use ingest connection to avoid streaming conflict with QueryArrow
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(
 		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
@@ -3126,7 +3128,8 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 	{
 		auto &input_data = db.QueryArrow("SELECT 44 as value");
 		AdbcStatement adbc_statement;
-		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		// Use ingest connection to avoid streaming conflict with QueryArrow
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(
 		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
@@ -3146,7 +3149,8 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 	{
 		auto &input_data = db.QueryArrow("SELECT 45 as value");
 		AdbcStatement adbc_statement;
-		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		// Use ingest connection to avoid streaming conflict with QueryArrow
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(
 		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
@@ -3167,7 +3171,8 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 	{
 		auto &input_data = db.QueryArrow("SELECT 46 as value");
 		AdbcStatement adbc_statement;
-		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		// Use ingest connection to avoid streaming conflict with QueryArrow
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(
 		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table2", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
@@ -3249,7 +3254,8 @@ TEST_CASE("Test ADBC 1.1.0 rows_affected", "[adbc]") {
 	{
 		auto &input_data = db.QueryArrow("SELECT 100 as value UNION ALL SELECT 101 UNION ALL SELECT 102");
 		AdbcStatement adbc_statement;
-		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		// Use ingest connection to avoid streaming conflict with QueryArrow
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(
 		    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_ingest", &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &adbc_error)));
