@@ -119,8 +119,7 @@ endif()
 
 # Enable Clang thread-safety annotations when using Clang compiler
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
-  # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wthread-safety -Werror=thread-safety")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wthread-safety -Wno-error=thread-safety")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wthread-safety -Werror=thread-safety")
 endif()
 
 if (DUCKDB_EXPLICIT_PLATFORM)
