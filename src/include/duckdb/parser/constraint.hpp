@@ -37,6 +37,8 @@ enum class ForeignKeyType : uint8_t {
 struct ForeignKeyInfo {
 	ForeignKeyType type;
 	string schema;
+	bool schema_specified = false;
+	
 	//! if type is FK_TYPE_FOREIGN_KEY_TABLE, means main key table, if type is FK_TYPE_PRIMARY_KEY_TABLE, means foreign
 	//! key table
 	string table;

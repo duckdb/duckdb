@@ -24,7 +24,7 @@ string ForeignKeyConstraint::ToString() const {
 			base += KeywordHelper::WriteOptionallyQuoted(fk_columns[i]);
 		}
 		base += ") REFERENCES ";
-		if (!info.schema.empty()) {
+		if (info.schema_specified) {
 			base += info.schema;
 			base += ".";
 		}
