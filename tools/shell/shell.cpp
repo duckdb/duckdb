@@ -410,7 +410,7 @@ ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
 	strcpy(continuePrompt, "  ");
-	strcpy(continuePromptSelected, "‣ ");
+	strcpy(continuePromptSelected, "  ");
 	strcpy(scrollUpPrompt, "⇡ ");
 	strcpy(scrollDownPrompt, "⇣ ");
 }

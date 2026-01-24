@@ -11,7 +11,7 @@ ConnectionManager::ConnectionManager() : connection_count(0), current_connection
 
 void ConnectionManager::AddConnection(ClientContext &context) {
 	lock_guard<mutex> lock(connections_lock);
-	for (auto &callback : DBConfig::GetConfig(context).extension_callbacks) {
+	for (auto &callback : ExtensionCallback::Iterate(context)) {
 		callback->OnConnectionOpened(context);
 	}
 	connections[context] = weak_ptr<ClientContext>(context.shared_from_this());
@@ -20,7 +20,7 @@ void ConnectionManager::AddConnection(ClientContext &context) {
 
 void ConnectionManager::RemoveConnection(ClientContext &context) {
 	lock_guard<mutex> lock(connections_lock);
-	for (auto &callback : DBConfig::GetConfig(context).extension_callbacks) {
+	for (auto &callback : ExtensionCallback::Iterate(context)) {
 		callback->OnConnectionClosed(context);
 	}
 	connections.erase(context);
