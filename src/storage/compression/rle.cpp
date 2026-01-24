@@ -264,7 +264,7 @@ struct RLEScanState : public SegmentScanState {
 		entry_pos = 0;
 		position_in_entry = 0;
 		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));
-		D_ASSERT(rle_count_offset <= segment.GetBlockManager().GetBlockSize());
+		D_ASSERT(rle_count_offset <= segment.GetBlockSize());
 	}
 
 	inline void SkipInternal(rle_count_t *index_pointer, idx_t skip_count) {

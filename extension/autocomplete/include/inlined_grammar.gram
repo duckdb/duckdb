@@ -932,26 +932,30 @@ ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
 ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'
 ShowOrDescribe <- 'SHOW' / 'DESCRIBE' / 'DESC'
 
-VacuumStatement <- 'VACUUM' (VacuumLegacyOptions AnalyzeStatement / VacuumLegacyOptions QualifiedTarget / VacuumLegacyOptions / VacuumParensOptions QualifiedTarget?)?
+VacuumStatement <- 'VACUUM' VacuumOptions? AnalyzeTarget?
+VacuumOptions <- VacuumParensOptions / VacuumLegacyOptions
 
-VacuumLegacyOptions <- OptFull OptFreeze OptVerbose
 VacuumParensOptions <- Parens(List(VacuumOption))
-VacuumOption <- 'ANALYZE' / 'VERBOSE' / 'FREEZE' / 'FULL' / Identifier
+VacuumLegacyOptions <- OptFull? OptFreeze? OptVerbose? OptAnalyze?
+VacuumOption <- OptAnalyze / OptFreeze / OptFull / OptVerbose / Identifier
 
-OptFull <- 'FULL'?
-OptFreeze <- 'FREEZE'?
-OptVerbose <- 'VERBOSE'?
+OptAnalyze <- 'ANALYZE'
+OptFull <- 'FULL'
+OptFreeze <- 'FREEZE'
+OptVerbose <- 'VERBOSE'
 
-QualifiedTarget <- QualifiedName OptNameList
-OptNameList <- Parens(List(Name))?
-MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause MergeMatch* ReturningClause?
-MergeIntoUsingClause <- 'USING' TableRef JoinQualifier
+NameList <- Parens(List(ColId))
+MergeIntoStatement <- WithClause? 'MERGE' 'INTO' TargetOptAlias MergeIntoUsingClause JoinQualifier MergeMatch+ ReturningClause?
+MergeIntoUsingClause <- 'USING' TableRef
 MergeMatch <- MatchedClause / NotMatchedClause
 MatchedClause <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
 MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
-UpdateMatchClause <- 'UPDATE' (UpdateMatchSetClause / ByNameOrPosition?)
+UpdateMatchClause <- 'UPDATE' UpdateMatchInfo?
+UpdateMatchInfo <- UpdateMatchSetClause / ByNameOrPosition
 DeleteMatchClause <- 'DELETE'
-InsertMatchClause <- 'INSERT' (InsertValuesList / DefaultValues / InsertByNameOrPosition)?
+InsertMatchClause <- 'INSERT' InsertMatchInfo?
+InsertMatchInfo <- InsertValuesList / InsertDefaultValues / InsertByNameOrPosition
+InsertDefaultValues <- 'DEFAULT' 'VALUES'
 InsertByNameOrPosition <- ByNameOrPosition? '*'?
 InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
 DoNothingMatchClause <- 'DO' 'NOTHING'
@@ -959,7 +963,9 @@ ErrorMatchClause <- 'ERROR' Expression?
 UpdateMatchSetClause <- 'SET' (UpdateSetClause / '*')
 AndExpression <- 'AND' Expression
 NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
-BySourceOrTarget <- 'BY' ('SOURCE' / 'TARGET')
+BySourceOrTarget <- BySource / ByTarget
+BySource <- 'BY' 'SOURCE'
+ByTarget <- 'BY' 'TARGET'
 
 
 
@@ -1458,8 +1464,7 @@ ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptions? Statement
 ExplainOptions <- Parens(GenericCopyOptionList)
 
 AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
-AnalyzeTarget <- QualifiedName Parens(List(Name))?
-Name <- ColId ('.' ColLabel)*
+AnalyzeTarget <- BaseTableName NameList?
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
 MacroOrFunction <- 'MACRO' / 'FUNCTION'

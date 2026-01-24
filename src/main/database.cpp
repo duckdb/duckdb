@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -34,6 +35,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/result_set_manager.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -47,13 +49,14 @@ DBConfig::DBConfig() {
 	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
-	cast_functions = make_uniq<CastFunctionSet>(*this);
+	type_manager = make_uniq<TypeManager>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
 	http_util = make_shared_ptr<HTTPUtil>();
-	storage_extensions["__open_file__"] = OpenFileStorageExtension::Create();
+	callback_manager = make_uniq<ExtensionCallbackManager>();
+	callback_manager->Register("__open_file__", OpenFileStorageExtension::Create());
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
@@ -171,15 +174,15 @@ shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 	if (!options.db_type.empty()) {
 		// Find the storage extension for this database file.
 		auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
-		auto entry = config.storage_extensions.find(extension_name);
-		if (entry == config.storage_extensions.end()) {
+		auto storage_extension = StorageExtension::Find(config, extension_name);
+		if (!storage_extension) {
 			throw BinderException("Unrecognized storage type \"%s\"", options.db_type);
 		}
 
-		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
+		if (storage_extension->attach != nullptr && storage_extension->create_transaction_manager != nullptr) {
 			// Use the storage extension to create the initial database.
-			attached_database =
-			    make_shared_ptr<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
+			attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, *storage_extension, context,
+			                                                      info.name, info, options);
 			return attached_database;
 		}
 
@@ -312,8 +315,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
-		auto entry = config.storage_extensions.find(config.options.database_type);
-		if (entry == config.storage_extensions.end()) {
+		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
+		if (!storage_extension) {
 			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 		}
 	}
@@ -450,9 +453,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
 	}
-	if (!new_config.storage_extensions.empty()) {
-		config.storage_extensions = std::move(new_config.storage_extensions);
-	}
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
 	}
@@ -468,7 +468,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	                                                   DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
 	                                                   config.options.block_allocator_size);
 	config.replacement_scans = std::move(new_config.replacement_scans);
-	config.parser_extensions = std::move(new_config.parser_extensions);
+	if (new_config.callback_manager) {
+		config.callback_manager = std::move(new_config.callback_manager);
+		new_config.callback_manager = make_uniq<ExtensionCallbackManager>();
+	}
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_uniq<ErrorManager>();
