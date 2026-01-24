@@ -480,15 +480,12 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 	auto &vfs = opener_filesystem.GetFileSystem();
 	vfs.RegisterSubSystem(make_uniq<TrackingFileSystem>());
 
-	// Shared variable both all caching modes.
-	string buffer(TEST_BUFFER_SIZE, '\0');
-	const auto &external_file_cache = db_instance.GetExternalFileCache();
-
 	FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
 	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
 
 	// Perform read operation and check correctness.
 	auto handle = opener_filesystem.OpenFile(test_file.GetPath(), flags);
+	string buffer(TEST_BUFFER_SIZE, '\0');
 	const idx_t actual_read = handle->Read(QueryContext(), &buffer[0], test_content.length() + 1);
 	REQUIRE(actual_read == test_content.length());
 	REQUIRE(buffer.substr(0, test_content.length()) == test_content);
