@@ -1,0 +1,79 @@
+# name: test/sql/optimizer/plan/plan_arg_max_struct_pruning.test
+# description: Prune unused struct_pack fields for arg_max/arg_min in UNNEST projections
+# group: [plan]
+
+statement ok
+CREATE TABLE argmax_prune(col_1 TEXT, col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 INTEGER);
+
+statement ok
+PRAGMA explain_output = 'PHYSICAL_ONLY';
+
+query II
+EXPLAIN SELECT col_1, col_2, col_3
+FROM (
+  SELECT UNNEST(arg_max(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1, col_2
+);
+----
+physical_plan	<REGEX>:.*struct_pack\(col_1, col_2,.*col_3\).*
+
+query II
+EXPLAIN SELECT col_1, col_2, col_3
+FROM (
+  SELECT UNNEST(arg_max(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1, col_2
+);
+----
+physical_plan	<!REGEX>:.*struct_pack\([^)]*col_4[^)]*\).*
+
+query II
+EXPLAIN SELECT col_2
+FROM (
+  SELECT UNNEST(arg_min(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1
+);
+----
+physical_plan	<REGEX>:.*struct_pack\(col_2\).*
+
+query II
+EXPLAIN SELECT col_2
+FROM (
+  SELECT UNNEST(arg_min(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1
+);
+----
+physical_plan	<!REGEX>:.*struct_pack\([^)]*col_1[^)]*\).*
+
+query II
+EXPLAIN SELECT col_2
+FROM (
+  SELECT UNNEST(arg_min(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1
+);
+----
+physical_plan	<!REGEX>:.*struct_pack\([^)]*col_3[^)]*\).*
+
+query II
+EXPLAIN SELECT col_1, col_3
+FROM (
+  SELECT UNNEST(arg_max_nulls_last(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1, col_2
+);
+----
+physical_plan	<REGEX>:.*struct_pack\(col_1,.*col_3\).*
+
+query II
+EXPLAIN SELECT col_1, col_3
+FROM (
+  SELECT UNNEST(arg_max_nulls_last(argmax_prune, col_5))
+  FROM argmax_prune
+  GROUP BY col_1, col_2
+);
+----
+physical_plan	<!REGEX>:.*struct_pack\([^)]*col_2[^)]*\).*

@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -25,9 +26,95 @@
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include <algorithm>
+#include <unordered_set>
 #include <utility>
 
 namespace duckdb {
+
+bool PruneStructPack(BoundAggregateExpression &aggregate, idx_t argument_index, const vector<idx_t> &required_indexes,
+                     vector<BoundFunctionExpression *> *extracts);
+
+namespace {
+vector<idx_t> GetRequiredStructFields(ReferencedColumn &column) {
+	if (column.child_columns.empty()) {
+		return {};
+	}
+	unordered_set<idx_t> required_indexes;
+	auto add_path = [&](const ColumnIndex &path) {
+		required_indexes.insert(path.GetPrimaryIndex());
+	};
+	if (!column.unique_paths.empty()) {
+		for (auto &path : column.unique_paths) {
+			add_path(path);
+		}
+	} else {
+		for (auto &path : column.child_columns) {
+			add_path(path);
+		}
+	}
+	vector<idx_t> result(required_indexes.begin(), required_indexes.end());
+	std::sort(result.begin(), result.end());
+	return result;
+}
+
+vector<BoundFunctionExpression *> GetStructExtractFunctions(ReferencedColumn &column) {
+	vector<BoundFunctionExpression *> extract_functions;
+	for (auto &extract : column.struct_extracts) {
+		if (extract.expr.empty()) {
+			continue;
+		}
+		auto &leaf_expr = extract.expr.back().get();
+		auto *leaf_ptr = leaf_expr.get();
+		if (!leaf_ptr || leaf_ptr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+			continue;
+		}
+		auto &function = leaf_ptr->Cast<BoundFunctionExpression>();
+		if (function.function.name != "struct_extract" && function.function.name != "struct_extract_at") {
+			continue;
+		}
+		extract_functions.push_back(&function);
+	}
+	return extract_functions;
+}
+
+bool TryPruneStructAggregateArgs(column_binding_map_t<ReferencedColumn> &column_references, LogicalAggregate &op) {
+	bool pruned_structs = false;
+	for (idx_t agg_idx = 0; agg_idx < op.expressions.size(); agg_idx++) {
+		auto &expr = op.expressions[agg_idx];
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+			continue;
+		}
+		auto &aggregate = expr->Cast<BoundAggregateExpression>();
+		if (!aggregate.function.SupportsStructArgumentPruning()) {
+			continue;
+		}
+		// The aggregate declares which argument produces the struct to be pruned.
+		auto argument_index = aggregate.function.GetStructArgumentPruning().GetIndex();
+
+		auto binding = ColumnBinding(op.aggregate_index, agg_idx);
+		auto entry = column_references.find(binding);
+		if (entry == column_references.end()) {
+			continue;
+		}
+		auto required_indexes = GetRequiredStructFields(entry->second);
+		if (required_indexes.empty()) {
+			continue;
+		}
+
+		auto extract_functions = GetStructExtractFunctions(entry->second);
+		auto *extract_ptr = extract_functions.empty() ? nullptr : &extract_functions;
+		if (PruneStructPack(aggregate, argument_index, required_indexes, extract_ptr)) {
+			pruned_structs = true;
+		}
+	}
+	if (pruned_structs) {
+		op.types.clear();
+		op.ResolveOperatorTypes();
+	}
+	return pruned_structs;
+}
+} // namespace
 
 idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
@@ -101,6 +188,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (aggr.grouping_sets.size() > 1) {
 			new_root = true;
 		}
+		TryPruneStructAggregateArgs(column_references, aggr);
 		if (!everything_referenced && !new_root) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
@@ -491,6 +579,78 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 		}
 	}
 	proj.expressions = std::move(expressions);
+}
+
+bool PruneStructPack(BoundAggregateExpression &aggregate, idx_t argument_index, const vector<idx_t> &required_indexes,
+                     vector<BoundFunctionExpression *> *extracts) {
+	if (aggregate.children.size() <= argument_index) {
+		return false;
+	}
+	auto &arg = aggregate.children[argument_index];
+	if (arg->expression_class != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	// Only prune when the aggregate returns the same struct as the target argument.
+	if (aggregate.return_type != arg->return_type || aggregate.function.return_type != arg->return_type) {
+		return false;
+	}
+	auto &struct_pack = arg->Cast<BoundFunctionExpression>();
+	if (struct_pack.function.name != "struct_pack" && struct_pack.function.name != "row") {
+		return false;
+	}
+	auto &bind_data = struct_pack.bind_info->Cast<VariableReturnBindData>();
+	auto &child_types = StructType::GetChildTypes(bind_data.stype);
+	if (required_indexes.empty() || required_indexes.size() >= child_types.size()) {
+		return false;
+	}
+
+	vector<unique_ptr<Expression>> new_children;
+	vector<pair<string, LogicalType>> new_child_types;
+	new_children.reserve(required_indexes.size());
+	new_child_types.reserve(required_indexes.size());
+	D_ASSERT(struct_pack.children.size() == child_types.size());
+	for (auto idx : required_indexes) {
+		D_ASSERT(idx < struct_pack.children.size());
+		new_children.push_back(struct_pack.children[idx]->Copy());
+		new_child_types.push_back(child_types[idx]);
+	}
+	struct_pack.children = std::move(new_children);
+
+	LogicalType new_struct_type = LogicalType::STRUCT(new_child_types);
+	bind_data.stype = new_struct_type;
+	struct_pack.return_type = new_struct_type;
+	struct_pack.function.return_type = new_struct_type;
+	arg->return_type = new_struct_type;
+
+	aggregate.return_type = new_struct_type;
+	aggregate.function.return_type = new_struct_type;
+	if (aggregate.function.arguments.size() > argument_index) {
+		aggregate.function.arguments[argument_index] = new_struct_type;
+	}
+
+	if (extracts) {
+		for (auto *extract_func : *extracts) {
+			auto &extract_bind = extract_func->bind_info->Cast<StructExtractBindData>();
+			auto &child = extract_func->children[0];
+			if (child->type == ExpressionType::BOUND_COLUMN_REF) {
+				child->Cast<BoundColumnRefExpression>().return_type = new_struct_type;
+			} else if (child->type == ExpressionType::BOUND_REF) {
+				child->Cast<BoundReferenceExpression>().return_type = new_struct_type;
+			}
+			bool found = false;
+			for (idx_t new_idx = 0; new_idx < required_indexes.size(); new_idx++) {
+				if (required_indexes[new_idx] == extract_bind.index) {
+					extract_bind.index = new_idx;
+					extract_func->return_type = new_child_types[new_idx].second;
+					extract_func->function.return_type = extract_func->return_type;
+					found = true;
+					break;
+				}
+			}
+			D_ASSERT(found);
+		}
+	}
+	return true;
 }
 
 void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
