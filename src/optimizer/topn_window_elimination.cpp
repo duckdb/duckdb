@@ -420,10 +420,16 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	const auto op_column_bindings = op->GetColumnBindings();
 
 	vector<unique_ptr<Expression>> proj_exprs;
-	// Only project necessary group columns
+	// Only project necessary group columns, but in the same order as they appear in the aggregate operator.
+	// For that, we need the group_idxs ordered by value.
+	std::set<idx_t> ordered_group_projection_idxs;
 	for (const auto &group_idx : group_idxs) {
-		proj_exprs.push_back(
-		    make_uniq<BoundColumnRefExpression>(op->types[group_idx.second], op_column_bindings[group_idx.second]));
+		ordered_group_projection_idxs.insert(group_idx.second);
+	}
+
+	for (const idx_t group_projection_idx : ordered_group_projection_idxs) {
+		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(op->types[group_projection_idx],
+		                                                         op_column_bindings[group_projection_idx]));
 	}
 
 	auto aggregate_column_ref =
