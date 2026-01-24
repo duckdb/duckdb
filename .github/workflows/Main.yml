@@ -40,7 +40,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
 
 jobs:
  check-draft:
@@ -76,11 +75,7 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
@@ -119,11 +114,7 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
@@ -158,11 +149,7 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
@@ -193,11 +180,7 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
@@ -228,11 +211,7 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind clang
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
@@ -268,11 +247,7 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
@@ -340,11 +315,7 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       id: build
