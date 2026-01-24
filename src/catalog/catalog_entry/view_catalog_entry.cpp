@@ -136,7 +136,8 @@ void ViewCatalogEntry::BindView(ClientContext &context) {
 	}
 	bind_state = ViewBindState::BINDING;
 	bind_thread = ThreadUtil::GetThreadId();
-	Binder::BindView(context, *query, ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases, types, names);
+	Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases, types,
+	                 names);
 	bind_state = ViewBindState::BOUND;
 }
 
