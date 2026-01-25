@@ -70,6 +70,9 @@ static void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 	case PhysicalType::INT64:
 		OP::template Operation<int64_t>(std::forward<ARGS>(args)...);
 		break;
+	case PhysicalType::INT128:
+		OP::template Operation<hugeint_t>(std::forward<ARGS>(args)...);
+		break;
 	case PhysicalType::FLOAT:
 		OP::template Operation<float>(std::forward<ARGS>(args)...);
 		break;
@@ -83,7 +86,7 @@ static void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 		OP::template Operation<interval_t>(std::forward<ARGS>(args)...);
 		break;
 	default:
-		throw InternalException("Unsupported physical type for aggregate state export");
+		throw InternalException("Unsupported physical type: %s for aggregate state", TypeIdToString(type));
 	}
 }
 
