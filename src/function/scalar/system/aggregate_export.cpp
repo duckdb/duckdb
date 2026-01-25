@@ -37,11 +37,78 @@ struct ExportAggregateBindData : public FunctionData {
 	}
 };
 
+template <class OP, class... ARGS>
+static void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+	switch (type) {
+	case PhysicalType::BOOL:
+		OP::template Operation<bool>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::UINT8:
+		OP::template Operation<uint8_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::UINT16:
+		OP::template Operation<uint16_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::UINT32:
+		OP::template Operation<uint32_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::UINT64:
+		OP::template Operation<uint64_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::UINT128:
+		OP::template Operation<uhugeint_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::INT8:
+		OP::template Operation<int8_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::INT16:
+		OP::template Operation<int16_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::INT32:
+		OP::template Operation<int32_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::INT64:
+		OP::template Operation<int64_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::FLOAT:
+		OP::template Operation<float>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::DOUBLE:
+		OP::template Operation<double>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::VARCHAR:
+		OP::template Operation<string_t>(std::forward<ARGS>(args)...);
+		break;
+	case PhysicalType::INTERVAL:
+		OP::template Operation<interval_t>(std::forward<ARGS>(args)...);
+		break;
+	default:
+		throw InternalException("Unsupported physical type for aggregate state export");
+	}
+}
+
 struct AggregateStateLayout {
 	AggregateStateLayout(const LogicalType &type, idx_t state_size) : state_size(state_size) {
 		is_struct = type.IsAggregateStateStructType();
 		if (is_struct) {
 			child_types = &AggregateStateType::GetChildTypes(type);
+		}
+	}
+
+	template <class T>
+	void LoadFieldTyped(Vector &struct_vec, idx_t field_idx, const UnifiedVectorFormat &state_data, idx_t count,
+	                    data_ptr_t base_ptr, idx_t aligned_state_size, idx_t field_offset) const {
+		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
+		auto child_data = FlatVector::GetData<T>(child);
+
+		for (idx_t row = 0; row < count; row++) {
+			auto row_idx = state_data.sel->get_index(row);
+			if (!state_data.validity.RowIsValid(row_idx)) {
+				continue;
+			}
+
+			auto dest = base_ptr + row * aligned_state_size + field_offset;
+			*reinterpret_cast<T *>(dest) = child_data[row];
 		}
 	}
 
@@ -102,6 +169,15 @@ struct AggregateStateLayout {
 	const child_list_t<LogicalType> *child_types = nullptr;
 };
 
+struct LoadFieldOp {
+	template <class T>
+	static void Operation(const AggregateStateLayout &layout, Vector &struct_vector, idx_t f,
+	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr,
+	                      idx_t aligned_state_size, idx_t offset) {
+		layout.LoadFieldTyped<T>(struct_vector, f, state_data, count, base_ptr, aligned_state_size, offset);
+	}
+};
+
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
@@ -159,25 +235,45 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	const auto aligned_state_size = AlignValue(bind_data.state_size);
 	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 
-	if (layout.is_struct) {
-		input.data[0].Flatten(input.size());
-	}
-
 	UnifiedVectorFormat state_data;
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
 
-	for (idx_t i = 0; i < input.size(); i++) {
-		auto target_ptr = local_state.state_buffer.get() + aligned_state_size * i;
-		auto state_idx = state_data.sel->get_index(i);
-
-		if (state_data.validity.RowIsValid(state_idx)) {
-			layout.Load(input.data[0], state_data, i, target_ptr);
-		} else {
-			// create a dummy state because finalize does not understand NULLs in its input
-			// we put the NULL back in explicitly below
-			bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
+	if (layout.is_struct) {
+		for (idx_t i = 0; i < input.size(); i++) {
+			state_vec_ptr[i] = local_state.state_buffer.get() + i * aligned_state_size;
 		}
-		state_vec_ptr[i] = data_ptr_cast(target_ptr);
+
+		idx_t offset = 0;
+		for (idx_t f = 0; f < layout.child_types->size(); f++) {
+			auto type = layout.child_types->at(f).second;
+			idx_t field_size = GetTypeIdSize(type.InternalType());
+			idx_t alignment = MinValue<idx_t>(field_size, 8);
+			offset = AlignValue(offset, alignment);
+
+			auto &struct_vector = input.data[0];
+
+			// switch with templating since we want the compiler to optimize this when copying (reinterpret_cast)
+			// will use SIMD internally
+			auto physical = type.InternalType();
+			TemplateDispatch<LoadFieldOp>(physical, layout, struct_vector, f, state_data, input.size(),
+			                              local_state.state_buffer.get(), aligned_state_size, offset);
+
+			offset += field_size;
+		}
+	} else {
+		for (idx_t i = 0; i < input.size(); i++) {
+			auto target_ptr = local_state.state_buffer.get() + aligned_state_size * i;
+			auto state_idx = state_data.sel->get_index(i);
+
+			if (state_data.validity.RowIsValid(state_idx)) {
+				layout.Load(input.data[0], state_data, i, target_ptr);
+			} else {
+				// create a dummy state because finalize does not understand NULLs in its input
+				// we put the NULL back in explicitly below
+				bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
+			}
+			state_vec_ptr[i] = data_ptr_cast(target_ptr);
+		}
 	}
 
 	AggregateInputData aggr_input_data(nullptr, local_state.allocator);
