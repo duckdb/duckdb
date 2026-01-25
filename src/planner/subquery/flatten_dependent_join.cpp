@@ -271,9 +271,20 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 					return true;
 				}
 				// Found a materialized CTE, subtree correlation depends on the CTE node
+				bool handled_by_dependent_join = false;
+				idx_t join_depth = lateral_depth + 1;
+				for (auto &ctx_col : correlated_columns) {
+					if (ctx_col.depth == join_depth) {
+						// Check if the current dependent join will handle the correlation
+						handled_by_dependent_join = true;
+						break;
+					}
+				}
+
 				auto &setop = cte_node->Cast<LogicalCTE>();
 				has_correlated_expressions[op] =
-				    !setop.correlated_columns.empty() || has_correlated_expressions[*cte_node];
+				    (!handled_by_dependent_join && !setop.correlated_columns.empty()) ||
+					has_correlated_expressions[*cte_node];
 				return has_correlated_expressions[op];
 			}
 			// No CTE found: subtree is correlated
