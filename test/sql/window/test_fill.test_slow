@@ -30,6 +30,27 @@ select fill(i) over (order by i::VARCHAR) from range(3) tbl(i);
 ----
 FILL ordering must support subtraction
 
+# No values in partition chunk
+statement ok
+with null_chunk as (
+	select 
+		1 as p, 
+		s,
+		NULL::DOUBLE as v,
+	from range(2050) tbl(s)
+	union all
+	select
+		2 as p, 
+		s,
+		s::DOUBLE as v,
+	from range(16) tbl(s)
+)
+select 
+	p, 
+	s, 
+	fill(v) over(partition by p order by s) as f,
+from null_chunk
+
 #
 # Simple interpolation coverage tests
 #
