@@ -8,11 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/transaction/transaction_data.hpp"

@@ -9,7 +9,7 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/function_binder.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -292,9 +292,9 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 
 	// If there is a non-comparison predicate, we have to use NLJ.
 	const bool has_predicate = op.predicate.get();
-	const bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
+	const bool force_asof_join = Settings::Get<DebugAsofIejoinSetting>(context);
 	if (!force_asof_join || has_predicate) {
-		const idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
+		const idx_t asof_join_threshold = Settings::Get<AsofLoopJoinThresholdSetting>(context);
 		if (has_predicate || (op.children[0]->has_estimated_cardinality && lhs_cardinality < asof_join_threshold)) {
 			auto result = PlanAsOfLoopJoin(op, left, right);
 			if (result) {

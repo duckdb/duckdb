@@ -5,6 +5,7 @@
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -22,10 +23,11 @@ struct LambdaExecuteInfo {
 
 		// get the input types for the input chunk
 		vector<LogicalType> input_types;
+
+		input_types.push_back(child_vector.GetType());
 		if (has_index) {
 			input_types.push_back(LogicalType::BIGINT);
 		}
-		input_types.push_back(child_vector.GetType());
 		for (idx_t i = 1; i < args.ColumnCount(); i++) {
 			input_types.push_back(args.data[i].GetType());
 		}
@@ -152,8 +154,9 @@ struct ListFilterFunctor {
 
 		// slice the input chunk's corresponding vector to get the new lists
 		// and append them to the result
-		idx_t source_list_idx = execute_info.has_index ? 1 : 0;
-		Vector result_lists(execute_info.input_chunk.data[source_list_idx], sel, count);
+
+		// The first vector in the input chunk is always the list vector
+		Vector result_lists(execute_info.input_chunk.data[0], sel, count);
 		ListVector::Append(result, result_lists, count, 0);
 	}
 };
@@ -190,8 +193,8 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 
 	// reference the child vector (and the index vector)
 	if (info.has_index) {
-		info.input_chunk.data[0].Reference(index_vector);
-		info.input_chunk.data[1].Reference(slice);
+		info.input_chunk.data[0].Reference(slice);
+		info.input_chunk.data[1].Reference(index_vector);
 	} else {
 		info.input_chunk.data[0].Reference(slice);
 	}
@@ -247,7 +250,8 @@ LogicalType LambdaFunctions::DetermineListChildType(const LogicalType &child_typ
 		} else if (child_type.id() == LogicalTypeId::LIST) {
 			return ListType::GetChildType(child_type);
 		}
-		throw InternalException("The first argument must be a list or array type");
+
+		throw BinderException("Invalid LIST argument during lambda function binding!");
 	}
 
 	return child_type;

@@ -97,8 +97,7 @@ ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
 		return {projection.table_index, projection.types.size() - 1};
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		const auto &join = op->Cast<LogicalComparisonJoin>();
-		D_ASSERT(!join.right_projection_map.empty());
+		D_ASSERT(!op->Cast<LogicalComparisonJoin>().right_projection_map.empty());
 		const auto child_bindings = op->GetColumnBindings();
 		return child_bindings[child_bindings.size() - 1];
 	}
@@ -482,6 +481,9 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	}
 	auto &filter_value = filter_comparison.right->Cast<BoundConstantExpression>();
 	if (filter_value.value.type() != LogicalType::BIGINT) {
+		return false;
+	}
+	if (filter_value.value.IsNull()) {
 		return false;
 	}
 

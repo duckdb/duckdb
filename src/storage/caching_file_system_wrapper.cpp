@@ -4,17 +4,32 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
+
+namespace {
+// Get database instance from file opener, throw InvalidInput exception.
+DatabaseInstance &GetDatabaseInstance(optional_ptr<FileOpener> file_opener) {
+	if (file_opener == nullptr) {
+		throw InvalidInputException("Cannot get database instance out of file opener, because file opener is nullptr.");
+	}
+	auto database_ptr = file_opener->TryGetDatabase();
+	if (database_ptr == nullptr) {
+		throw InvalidInputException("Cannot extract database instance out of file opener.");
+	}
+	return *database_ptr;
+}
+} // namespace
 
 //===----------------------------------------------------------------------===//
 // CachingFileHandleWrapper implementation
 //===----------------------------------------------------------------------===//
-CachingFileHandleWrapper::CachingFileHandleWrapper(CachingFileSystemWrapper &file_system,
+CachingFileHandleWrapper::CachingFileHandleWrapper(shared_ptr<CachingFileSystemWrapper> file_system,
                                                    unique_ptr<CachingFileHandle> handle, FileOpenFlags flags)
-    : FileHandle(file_system, handle->GetPath(), flags), caching_handle(std::move(handle)) {
-	// Flags should already be validated to be read-only in OpenFileExtended
+    : FileHandle(*file_system, handle->GetPath(), flags), caching_file_system(std::move(file_system)),
+      caching_handle(std::move(handle)) {
+	D_ASSERT(!flags.OpenForWriting());
+	D_ASSERT(!flags.OpenForAppending());
 }
 
 CachingFileHandleWrapper::~CachingFileHandleWrapper() {
@@ -33,14 +48,20 @@ CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, Data
     : caching_file_system(file_system, db), underlying_file_system(file_system), caching_mode(mode) {
 }
 
-CachingFileSystemWrapper CachingFileSystemWrapper::Get(ClientContext &context, CachingMode mode) {
-	return CachingFileSystemWrapper(FileSystem::GetFileSystem(context), *context.db, mode);
+CachingFileSystemWrapper::CachingFileSystemWrapper(FileSystem &file_system, optional_ptr<FileOpener> file_opener,
+                                                   CachingMode mode)
+    : caching_file_system(file_system, GetDatabaseInstance(file_opener)), underlying_file_system(file_system),
+      caching_mode(mode) {
 }
 
 bool CachingFileSystemWrapper::ShouldUseCache(const string &path) const {
 	if (caching_mode == CachingMode::ALWAYS_CACHE) {
 		return true;
 	}
+	if (caching_mode == CachingMode::NO_CACHING) {
+		return false;
+	}
+	D_ASSERT(caching_mode == CachingMode::CACHE_REMOTE_ONLY);
 	return FileSystem::IsRemoteFile(path);
 }
 
@@ -116,8 +137,8 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFile
 	}
 
 	if (ShouldUseCache(path.path)) {
-		auto caching_handle = caching_file_system.OpenFile(path, flags);
-		return make_uniq<CachingFileHandleWrapper>(*this, std::move(caching_handle), flags);
+		auto caching_handle = caching_file_system.OpenFile(path, flags, opener);
+		return make_uniq<CachingFileHandleWrapper>(shared_from_this(), std::move(caching_handle), flags);
 	}
 	// Bypass cache, use underlying file system directly.
 	return underlying_file_system.OpenFile(path, flags, opener);
@@ -289,10 +310,6 @@ void CachingFileSystemWrapper::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) 
 
 void CachingFileSystemWrapper::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) {
 	underlying_file_system.RegisterSubSystem(compression_type, std::move(fs));
-}
-
-void CachingFileSystemWrapper::UnregisterSubSystem(const string &name) {
-	underlying_file_system.UnregisterSubSystem(name);
 }
 
 unique_ptr<FileSystem> CachingFileSystemWrapper::ExtractSubSystem(const string &name) {

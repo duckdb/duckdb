@@ -157,7 +157,7 @@ bool Pipeline::IsOrderDependent() const {
 			return true;
 		}
 	}
-	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(executor.context)) {
+	if (!Settings::Get<PreserveInsertionOrderSetting>(executor.context)) {
 		return false;
 	}
 	if (sink && sink->SinkOrderDependent()) {
