@@ -263,7 +263,7 @@ static void TemplatedSort(ClientContext &context, const TupleDataCollection &key
 	};
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
 
-	context.CheckTimeoutAndInterrupt();
+	context.InterruptCheck();
 }
 
 static void SortSwitch(ClientContext &context, const TupleDataCollection &key_data, bool is_index_sort) {
@@ -367,7 +367,7 @@ static void TemplatedReorder(ClientContext &context, unique_ptr<TupleDataCollect
 
 	idx_t index = 0;
 	while (index < total_count) {
-		context.CheckTimeoutAndInterrupt();
+		context.InterruptCheck();
 
 		const auto next = MinValue<idx_t>(total_count - index, STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < next; i++) {

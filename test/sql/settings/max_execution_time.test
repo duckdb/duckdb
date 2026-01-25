@@ -2,11 +2,11 @@
 # description: Test max_execution_time setting
 # group: [settings]
 
-# verify default is NULL (unset)
+# verify default is 0 (no limit)
 query I
 SELECT current_setting('max_execution_time')
 ----
-NULL
+0
 
 # set and verify
 statement ok
@@ -24,13 +24,13 @@ RESET max_execution_time
 query I
 SELECT current_setting('max_execution_time')
 ----
-NULL
+0
 
 # test that setting appears in duckdb_settings()
 query III
 SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'max_execution_time'
 ----
-max_execution_time	NULL	BIGINT
+max_execution_time	0	BIGINT
 
 # set small value and verify it shows
 statement ok
@@ -68,17 +68,13 @@ RESET max_execution_time
 query I
 SELECT current_setting('max_execution_time')
 ----
-NULL
+0
 
 # simple query succeeds with no timeout
 statement ok
 SELECT 1
 
-#########################################
-# Test edge cases: Operators that might not check timeout
-#########################################
-
-# Test 1: Recursive CTE (tight loop in ExecuteRecursivePipelines)
+# Recursive CTE (tight loop in ExecuteRecursivePipelines)
 statement ok
 SET max_execution_time=100
 
@@ -95,7 +91,7 @@ Interrupt
 statement ok
 SET max_execution_time=5000
 
-# Test 2: Complex aggregation with many groups (hash table operations)
+# Complex aggregation with many groups (hash table operations)
 statement ok
 SET max_execution_time=50
 
@@ -107,7 +103,7 @@ Interrupt
 statement ok
 SET max_execution_time=5000
 
-# Test 3: Large sort operation
+# Large sort operation
 statement ok
 SET max_execution_time=50
 
@@ -119,7 +115,7 @@ Interrupt
 statement ok
 SET max_execution_time=5000
 
-# Test 4: Window functions with partitioning (creates many partitions)
+# Window functions with partitioning (creates many partitions)
 statement ok
 SET max_execution_time=50
 
@@ -131,7 +127,7 @@ Interrupt
 statement ok
 SET max_execution_time=5000
 
-# Test 5: Complex expression evaluation (nested CASE statements)
+# Complex expression evaluation (nested CASE statements)
 statement ok
 SET max_execution_time=50
 
@@ -153,7 +149,7 @@ Interrupt
 statement ok
 SET max_execution_time=5000
 
-# Test 6: DISTINCT with many unique values (hash table)
+# DISTINCT with many unique values (hash table)
 statement ok
 SET max_execution_time=50
 

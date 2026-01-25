@@ -1511,27 +1511,6 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Max Execution Time
-//===----------------------------------------------------------------------===//
-void MaxExecutionTimeSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.max_execution_time = input.IsNull() ? 0 : input.GetValue<int64_t>();
-}
-
-void MaxExecutionTimeSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.max_execution_time = 0;
-}
-
-Value MaxExecutionTimeSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (config.max_execution_time == 0) {
-		return Value();
-	}
-	return Value::BIGINT(config.max_execution_time);
-}
-
-//===----------------------------------------------------------------------===//
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

@@ -81,9 +81,6 @@ struct ClientConfig {
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
 
-	//! The maximum execution time per query in milliseconds (0 = no limit)
-	int64_t max_execution_time = 0;
-
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
 

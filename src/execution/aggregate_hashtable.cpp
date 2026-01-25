@@ -895,7 +895,7 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
 		// Check for interrupts with each chunk
-		context.CheckTimeoutAndInterrupt();
+		context.InterruptCheck();
 		const auto input_chunk_size = fm_state.groups.size();
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,

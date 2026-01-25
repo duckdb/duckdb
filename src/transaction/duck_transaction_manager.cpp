@@ -240,7 +240,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		lock_guard<mutex> start_lock(start_transaction_lock);
 		// wait until any active transactions are finished
 		while (!lock) {
-			context.CheckTimeoutAndInterrupt();
+			context.InterruptCheck();
 			lock = checkpoint_lock.TryGetExclusiveLock();
 		}
 	}

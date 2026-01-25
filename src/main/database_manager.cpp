@@ -117,7 +117,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				// The database ACTUALLY exists, so we return it.
 				return entry->second;
 			}
-			context.CheckTimeoutAndInterrupt();
+			context.InterruptCheck();
 		}
 	}
 	auto &config = DBConfig::GetConfig(context);

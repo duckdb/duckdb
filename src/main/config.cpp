@@ -153,6 +153,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(LoggingLevel),
     DUCKDB_GLOBAL(LoggingMode),
     DUCKDB_GLOBAL(LoggingStorage),
+    DUCKDB_SETTING(MaxExecutionTimeSetting),
     DUCKDB_SETTING(MaxExpressionDepthSetting),
     DUCKDB_GLOBAL(MaxMemorySetting),
     DUCKDB_GLOBAL(MaxTempDirectorySizeSetting),
@@ -177,7 +178,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(ProfilingCoverageSetting),
     DUCKDB_LOCAL(ProfilingModeSetting),
     DUCKDB_LOCAL(ProgressBarTimeSetting),
-    DUCKDB_LOCAL(MaxExecutionTimeSetting),
     DUCKDB_SETTING(ScalarSubqueryErrorOnMultipleRowsSetting),
     DUCKDB_SETTING(SchedulerProcessPartialSetting),
     DUCKDB_LOCAL(SchemaSetting),
@@ -196,12 +196,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 91),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 92),
                                                      DUCKDB_SETTING_ALIAS("null_order", 38),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 110),
-                                                     DUCKDB_SETTING_ALIAS("user", 125),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 111),
+                                                     DUCKDB_SETTING_ALIAS("user", 126),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 124),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 125),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

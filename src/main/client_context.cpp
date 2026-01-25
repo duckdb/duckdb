@@ -215,12 +215,13 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 	query_progress.Initialize();
 	// Set query deadline if max_execution_time is configured
-	if (config.max_execution_time > 0) {
+	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
+	if (max_execution_time > 0) {
 		auto now = steady_clock::now();
-		auto deadline_tp = now + milliseconds(config.max_execution_time);
-		query_deadline = duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count();
+		auto deadline_tp = now + milliseconds(max_execution_time);
+		query_deadline = NumericCast<idx_t>(duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count());
 	} else {
-		query_deadline = 0;
+		query_deadline.SetInvalid();
 	}
 	// Notify any registered state of query begin
 	for (auto &state : registered_state->States()) {
@@ -247,7 +248,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	active_query->progress_bar.reset();
 	D_ASSERT(active_query.get());
 	active_query.reset();
-	query_deadline = 0;
+	query_deadline.SetInvalid();
 	query_progress.Initialize();
 	ErrorData error;
 	try {
@@ -1133,14 +1134,18 @@ void ClientContext::ClearInterrupt() {
 	interrupted = false;
 }
 
-void ClientContext::CheckTimeoutAndInterrupt() const {
-	if (interrupted) {
+void ClientContext::InterruptCheck() const {
+	// Counter for throttling timeout checks - only check every N iterations
+	static constexpr uint32_t TIMEOUT_CHECK_INTERVAL = 256;
+	thread_local uint32_t timeout_check_counter = 0;
+
+	if (interrupted.load(std::memory_order_relaxed)) {
 		throw InterruptException();
 	}
-	auto deadline = query_deadline.load(std::memory_order_relaxed);
-	if (deadline > 0) {
-		auto now = duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
-		if (now >= deadline) {
+	// Only check timeout every N calls to avoid expensive steady_clock::now() syscall
+	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
+		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+		if (now >= query_deadline.GetIndex()) {
 			throw InterruptException();
 		}
 	}

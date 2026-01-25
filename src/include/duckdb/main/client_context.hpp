@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/deque.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -79,8 +80,8 @@ public:
 	shared_ptr<DatabaseInstance> db;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
-	//! The deadline for the current query (milliseconds since epoch, 0 = no deadline)
-	atomic<int64_t> query_deadline{0};
+	//! The deadline for the current query (milliseconds since epoch)
+	optional_idx query_deadline;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
 	//! The logger to be used by this ClientContext
@@ -104,7 +105,7 @@ public:
 	DUCKDB_API void CancelTransaction();
 
 	//! Check for interrupt or timeout, throws InterruptException if triggered
-	DUCKDB_API void CheckTimeoutAndInterrupt() const;
+	DUCKDB_API void InterruptCheck() const;
 
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
