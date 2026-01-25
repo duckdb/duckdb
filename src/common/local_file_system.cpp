@@ -11,6 +11,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -1370,9 +1371,7 @@ static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";
 }
-static bool HasMultipleCrawl(const vector<string> &splits) {
-	return std::count(splits.begin(), splits.end(), "**") > 1;
-}
+
 static bool IsSymbolicLink(const string &path) {
 	auto normalized_path = LocalFileSystem::NormalizeLocalPath(path);
 #ifndef _WIN32
@@ -1386,45 +1385,8 @@ static bool IsSymbolicLink(const string &path) {
 #endif
 }
 
-static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<OpenFileInfo> &result,
-                                     bool match_directory, bool join_path) {
-	fs.ListFiles(path, [&](OpenFileInfo &info) {
-		if (join_path) {
-			info.path = fs.JoinPath(path, info.path);
-		}
-		if (IsSymbolicLink(info.path)) {
-			return;
-		}
-		bool is_directory = FileSystem::IsDirectory(info);
-		bool return_file = is_directory == match_directory;
-		if (is_directory) {
-			if (return_file) {
-				result.push_back(info);
-			}
-			RecursiveGlobDirectories(fs, info.path, result, match_directory, true);
-		} else if (return_file) {
-			result.push_back(std::move(info));
-		}
-	});
-}
-
-static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                              vector<OpenFileInfo> &result, bool join_path) {
-	fs.ListFiles(path, [&](OpenFileInfo &info) {
-		bool is_directory = FileSystem::IsDirectory(info);
-		if (is_directory != match_directory) {
-			return;
-		}
-		if (Glob(info.path.c_str(), info.path.size(), glob.c_str(), glob.size())) {
-			if (join_path) {
-				info.path = fs.JoinPath(path, info.path);
-			}
-			result.push_back(std::move(info));
-		}
-	});
-}
-
-vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
+vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener,
+                                                           bool absolute_path) {
 	vector<OpenFileInfo> result;
 	if (FileExists(path, opener) || IsPipe(path, opener)) {
 		result.emplace_back(path);
@@ -1485,14 +1447,93 @@ const char *LocalFileSystem::NormalizeLocalPath(const string &path) {
 	return path.c_str() + GetFileUrlOffset(path);
 }
 
-vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
+struct PathSplit {
+	PathSplit(LocalFileSystem &fs, string path_p) : path(std::move(path_p)), has_glob(fs.HasGlob(path)) {
+	}
+
+	string path;
+	bool has_glob;
+};
+
+static bool HasMultipleCrawl(const vector<PathSplit> &splits) {
+	idx_t crawl_count = 0;
+	for (auto &split : splits) {
+		if (split.path == "**") {
+			crawl_count++;
+		}
+	}
+	return crawl_count > 1;
+}
+
+struct ExpandDirectory {
+	ExpandDirectory(string path_p, idx_t split_index, bool is_empty = false)
+	    : path(std::move(path_p)), split_index(split_index), is_empty(is_empty) {
+	}
+
+	string path;
+	idx_t split_index;
+	bool is_empty = false;
+
+	bool operator<(const ExpandDirectory &other) const {
+		return path > other.path;
+	}
+};
+
+static void CrawlDirectoryLevel(FileSystem &fs, const string &path, optional_ptr<vector<OpenFileInfo>> files,
+                                std::priority_queue<ExpandDirectory> &directories, idx_t split_index) {
+	fs.ListFiles(path, [&](OpenFileInfo &info) {
+		info.path = fs.JoinPath(path, info.path);
+		if (IsSymbolicLink(info.path)) {
+			return;
+		}
+		bool is_directory = FileSystem::IsDirectory(info);
+		if (is_directory) {
+			directories.emplace(std::move(info.path), split_index);
+		} else if (files) {
+			files->push_back(std::move(info));
+		}
+	});
+}
+
+static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
+                              vector<OpenFileInfo> &result) {
+	fs.ListFiles(path, [&](OpenFileInfo &info) {
+		bool is_directory = FileSystem::IsDirectory(info);
+		if (is_directory != match_directory) {
+			return;
+		}
+		if (Glob(info.path.c_str(), info.path.size(), glob.c_str(), glob.size())) {
+			info.path = fs.JoinPath(path, info.path);
+			result.push_back(std::move(info));
+		}
+	});
+}
+
+struct LocalGlobResult : public LazyMultiFileList {
+public:
+	LocalGlobResult(LocalFileSystem &fs, const string &path, FileGlobOptions options, optional_ptr<FileOpener> opener);
+
+protected:
+	bool ExpandNextPath() const override;
+
+private:
+	LocalFileSystem &fs;
+	string path;
+	optional_ptr<FileOpener> opener;
+	vector<PathSplit> splits;
+	bool absolute_path = false;
+	mutable std::priority_queue<ExpandDirectory> expand_directories;
+	mutable bool finished = false;
+};
+
+LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p,
+                                 optional_ptr<FileOpener> opener)
+    : fs(fs), path(path_p), opener(opener) {
 	if (path.empty()) {
-		return vector<OpenFileInfo>();
+		finished = true;
+		return;
 	}
 	// split up the path into separate chunks
-	vector<string> splits;
-
-	bool is_file_url = StringUtil::StartsWith(path, "file:/");
 	idx_t file_url_path_offset = GetFileUrlOffset(path);
 
 	idx_t last_pos = 0;
@@ -1504,129 +1545,151 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 				continue;
 			}
 			if (splits.empty()) {
-				//				splits.push_back(path.substr(file_url_path_offset, i-file_url_path_offset));
-				splits.push_back(path.substr(0, i));
+				splits.emplace_back(fs, path.substr(0, i));
 			} else {
-				splits.push_back(path.substr(last_pos, i - last_pos));
+				splits.emplace_back(fs, path.substr(last_pos, i - last_pos));
 			}
 			last_pos = i + 1;
 		}
 	}
-	splits.push_back(path.substr(last_pos, path.size() - last_pos));
+	splits.emplace_back(fs, path.substr(last_pos, path.size() - last_pos));
 	// handle absolute paths
-	bool absolute_path = false;
-	if (IsPathAbsolute(path)) {
+	absolute_path = false;
+	if (fs.IsPathAbsolute(path)) {
 		// first character is a slash -  unix absolute path
 		absolute_path = true;
-	} else if (StringUtil::Contains(splits[0], ":")) { // TODO: this is weird? shouldn't IsPathAbsolute handle this?
+	} else if (StringUtil::Contains(splits[0].path,
+	                                ":")) { // TODO: this is weird? shouldn't IsPathAbsolute handle this?
 		// first split has a colon -  windows absolute path
 		absolute_path = true;
-	} else if (splits[0] == "~") {
+	} else if (splits[0].path == "~") {
 		// starts with home directory
-		auto home_directory = GetHomeDirectory(opener);
+		auto home_directory = fs.GetHomeDirectory(opener);
 		if (!home_directory.empty()) {
 			absolute_path = true;
-			splits[0] = home_directory;
+			splits[0].path = home_directory;
 			D_ASSERT(path[0] == '~');
-			if (!HasGlob(path)) {
-				return Glob(home_directory + path.substr(1));
+			if (!fs.HasGlob(path)) {
+				expanded_files = fs.FetchFileWithoutGlob(home_directory + path.substr(1), opener, absolute_path);
+				finished = true;
+				return;
 			}
 		}
 	}
 	// Check if the path has a glob at all
-	if (!HasGlob(path)) {
+	if (!fs.HasGlob(path)) {
 		// no glob: return only the file (if it exists or is a pipe)
-		return FetchFileWithoutGlob(path, opener, absolute_path);
+		expanded_files = fs.FetchFileWithoutGlob(path, opener, absolute_path);
+		finished = true;
+		return;
 	}
-	vector<OpenFileInfo> previous_directories;
 	if (absolute_path) {
 		// for absolute paths, we don't start by scanning the current directory
-		previous_directories.push_back(splits[0]);
+		// FIXME: we don't support /[GLOB]/.. - i.e. globs in the first level of an absolute path
+		if (splits.size() > 1) {
+			expand_directories.emplace(splits[0].path, 1);
+		}
 	} else {
 		// If file_search_path is set, use those paths as the first glob elements
 		Value value;
 		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
-			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
+			auto search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
-				previous_directories.push_back(search_path);
+				expand_directories.emplace(search_path, 0);
 			}
+		}
+		if (expand_directories.empty()) {
+			expand_directories.emplace(".", 0, true);
 		}
 	}
 
 	if (HasMultipleCrawl(splits)) {
 		throw IOException("Cannot use multiple \'**\' in one path");
 	}
+}
 
-	idx_t start_index;
-	if (is_file_url) {
-		start_index = 1;
-	} else if (absolute_path) {
-		start_index = 1;
-	} else {
-		start_index = 0;
+bool LocalGlobResult::ExpandNextPath() const {
+	if (finished) {
+		return false;
 	}
-
-	for (idx_t i = start_index ? 1 : 0; i < splits.size(); i++) {
-		bool is_last_chunk = i + 1 == splits.size();
-		bool has_glob = HasGlob(splits[i]);
-		// if it's the last chunk we need to find files, otherwise we find directories
-		// not the last chunk: gather a list of all directories that match the glob pattern
-		vector<OpenFileInfo> result;
-		if (!has_glob) {
-			// no glob, just append as-is
-			if (previous_directories.empty()) {
-				result.push_back(splits[i]);
-			} else {
-				if (is_last_chunk) {
-					for (auto &prev_directory : previous_directories) {
-						const string filename = JoinPath(prev_directory.path, splits[i]);
-						if (FileExists(filename, opener) || DirectoryExists(filename, opener)) {
-							result.push_back(filename);
-						}
-					}
-				} else {
-					for (auto &prev_directory : previous_directories) {
-						result.push_back(JoinPath(prev_directory.path, splits[i]));
-					}
-				}
-			}
-		} else {
-			if (IsCrawl(splits[i])) {
-				if (!is_last_chunk) {
-					result = previous_directories;
-				}
-				if (previous_directories.empty()) {
-					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
-				} else {
-					for (auto &prev_dir : previous_directories) {
-						RecursiveGlobDirectories(*this, prev_dir.path, result, !is_last_chunk, true);
-					}
-				}
-			} else {
-				if (previous_directories.empty()) {
-					// no previous directories: list in the current path
-					GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false);
-				} else {
-					// previous directories
-					// we iterate over each of the previous directories, and apply the glob of the current directory
-					for (auto &prev_directory : previous_directories) {
-						GlobFilesInternal(*this, prev_directory.path, splits[i], !is_last_chunk, result, true);
-					}
-				}
-			}
-		}
-		if (result.empty()) {
+	if (expand_directories.empty()) {
+		if (expanded_files.empty()) {
 			// no result found that matches the glob
 			// last ditch effort: search the path as a string literal
-			return FetchFileWithoutGlob(path, opener, absolute_path);
+			expanded_files = fs.FetchFileWithoutGlob(path, opener, absolute_path);
 		}
-		if (is_last_chunk) {
-			return result;
-		}
-		previous_directories = std::move(result);
+		finished = true;
+		return false;
 	}
-	return vector<OpenFileInfo>();
+
+	auto next_dir = expand_directories.top();
+	auto is_empty = next_dir.is_empty;
+	auto split_index = next_dir.split_index;
+	auto &current_path = next_dir.path;
+	expand_directories.pop();
+
+	auto &next_split = splits[split_index];
+	bool is_last_component = split_index + 1 == splits.size();
+	auto &next_component = next_split.path;
+	bool has_glob = next_split.has_glob;
+	// if it's the last chunk we need to find files, otherwise we find directories
+	// not the last chunk: gather a list of all directories that match the glob pattern
+	if (!has_glob) {
+		// no glob, just append as-is
+		if (is_empty) {
+			if (is_last_component) {
+				throw InternalException("No glob in only component - but entire split has globs?");
+			}
+			// no path yet - just append
+			expand_directories.emplace(next_component, split_index + 1);
+		} else {
+			if (is_last_component) {
+				// last component - we are emitting a result here
+				auto filename = fs.JoinPath(current_path, next_component);
+				if (fs.FileExists(filename, opener) || fs.DirectoryExists(filename, opener)) {
+					expanded_files.emplace_back(std::move(filename));
+				}
+			} else {
+				// not the last component - add the next directory as "to-be-expanded"
+				expand_directories.emplace(fs.JoinPath(current_path, next_component), split_index + 1);
+			}
+		}
+	} else {
+		// glob - need to resolve the glob
+		if (IsCrawl(next_component)) {
+			if (is_last_component) {
+				// the crawl is the last component - we are looking for files in this directory
+				// any directories we encounter are added to the expand directories
+				CrawlDirectoryLevel(fs, current_path, expanded_files, expand_directories, split_index);
+			} else {
+				// not the last crawl
+				// ** also matches the current directory (i.e. dir/**/file.parquet also matches dir/file.parquet)
+				expand_directories.emplace(current_path, split_index + 1);
+				// now crawl the contents of this directory - but don't add any files we find
+				CrawlDirectoryLevel(fs, current_path, nullptr, expand_directories, split_index);
+			}
+		} else {
+			// glob this directory according to the next component
+			if (is_last_component) {
+				// last component - match files and place them in the result
+				GlobFilesInternal(fs, current_path, next_component, false, expanded_files);
+			} else {
+				// not the last component - match directories and add to expansion list
+				vector<OpenFileInfo> child_directories;
+				GlobFilesInternal(fs, current_path, next_component, true, child_directories);
+				for (auto &file : child_directories) {
+					expand_directories.emplace(std::move(file.path), split_index + 1);
+				}
+			}
+		}
+	}
+	return true;
+}
+
+unique_ptr<MultiFileList> LocalFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
+                                                             optional_ptr<FileOpener> opener) {
+	return make_uniq<LocalGlobResult>(*this, path, FileGlobOptions::ALLOW_EMPTY, opener);
 }
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {

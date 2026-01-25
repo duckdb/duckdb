@@ -138,6 +138,7 @@ enum class ExpressionType : uint8_t {
 	FUNCTION_REF = 204,
 	TABLE_REF = 205,
 	LAMBDA_REF = 206,
+	TYPE = 207,
 
 	// -----------------------------
 	// Miscellaneous
@@ -180,6 +181,7 @@ enum class ExpressionClass : uint8_t {
 	POSITIONAL_REFERENCE = 18,
 	BETWEEN = 19,
 	LAMBDA_REF = 20,
+	TYPE = 21,
 	//===--------------------------------------------------------------------===//
 	// Bound Expressions
 	//===--------------------------------------------------------------------===//
@@ -206,13 +208,6 @@ enum class ExpressionClass : uint8_t {
 	//===--------------------------------------------------------------------===//
 	BOUND_EXPRESSION = 50,
 	BOUND_EXPANDED = 51
-};
-
-// Hash function for expression type.
-struct ExpressionTypeHash {
-	uint32_t operator()(ExpressionType type) const {
-		return static_cast<uint32_t>(type);
-	}
 };
 
 DUCKDB_API string ExpressionTypeToString(ExpressionType type);

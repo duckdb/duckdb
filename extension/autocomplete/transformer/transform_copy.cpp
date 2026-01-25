@@ -123,6 +123,18 @@ string PEGTransformerFactory::TransformCopyFileName(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
 	// TODO(dtenwolde) support stdin and stdout
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->name == "Expression") {
+		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
+		if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+			throw ParserException("Expected a constant expression as file name");
+		}
+		auto &const_expr = expr->Cast<ConstantExpression>();
+		if (const_expr.value.type() != LogicalType::VARCHAR) {
+			throw ParserException("Expected a string as file name");
+		}
+		return const_expr.value.GetValue<string>();
+	}
 	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
@@ -138,7 +150,7 @@ string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transform
 
 case_insensitive_map_t<vector<Value>>
 PEGTransformerFactory::TransformCopyOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-	// CopyOptions <- 'WITH'i? Parens(GenericCopyOptionList) / SpecializedOption+
+	// CopyOptions <- 'WITH'i? (Parens(GenericCopyOptionList) / SpecializedOption+)
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto copy_option_pr = list_pr.Child<ChoiceParseResult>(1).result;
 	return transformer.Transform<case_insensitive_map_t<vector<Value>>>(copy_option_pr);
