@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/interquery/concurrent_append_transactions.test_slow
+# name: test/sql/parallelism/interquery/concurrent_append_transactional.test_slow
 # description: Test concurrent appends and transaction isolation
 # group: [interquery]
 
