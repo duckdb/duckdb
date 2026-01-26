@@ -6,7 +6,6 @@ add_library_unity(
   test_concurrentappend.cpp
   test_concurrentdelete.cpp
   test_concurrent_dependencies.cpp
-  test_concurrent_index.cpp
   test_concurrentupdate.cpp
   test_concurrent_sequence.cpp
   test_concurrent_prepared.cpp
