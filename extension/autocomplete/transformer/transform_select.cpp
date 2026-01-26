@@ -159,6 +159,7 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 6, select_node->sample);
 	auto select_statement = make_uniq<SelectStatement>();
 	select_statement->node = std::move(select_node);
+	transformer.window_clauses.clear();
 	return select_statement;
 }
 

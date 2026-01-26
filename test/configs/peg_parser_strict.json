@@ -178,6 +178,12 @@
       "paths": [
         "test/sql/create/create_table_extra_options.test"
       ]
+    },
+    {
+      "reason": "DESCRIBE with CTE not supported",
+      "paths": [
+        "test/sql/cte/cte_describe.test"
+      ]
     }
   ]
 }
