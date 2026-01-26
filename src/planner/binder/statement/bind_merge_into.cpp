@@ -369,7 +369,8 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	}
 
 	// If RETURNING is present and we have a DELETE action, add all physical columns to the scan
-	// so we can pass them through instead of fetching by row ID in PhysicalDelete
+	// so we can pass them through instead of fetching by row ID in PhysicalDelete.
+	// Generated columns will be computed in the RETURNING projection by the binder.
 	if (!stmt.returning_list.empty()) {
 		bool has_delete_action = false;
 		for (auto &entry : merge_into->actions) {
@@ -385,50 +386,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		}
 
 		if (has_delete_action) {
-			auto &column_ids = get.GetColumnIds();
-			auto &columns = table.GetColumns();
-			auto physical_count = columns.PhysicalColumnCount();
-
-			// Step 1: Add any missing physical columns to the scan
-			for (auto &col : columns.Physical()) {
-				bool found = false;
-				for (auto &col_id : column_ids) {
-					if (!col_id.IsVirtualColumn() && col_id.GetPrimaryIndex() == col.Logical().index) {
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					get.AddColumnId(col.Logical().index);
-				}
-			}
-
-			// Step 2: Resolve types and get bindings once
+			// Use the overloaded helper to add physical columns to the scan and build projection expressions
 			auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
-			target_binding->ResolveOperatorTypes();
-			auto target_bindings = target_binding->GetColumnBindings();
-			auto &target_types = target_binding->types;
-
-			// Step 3: Build the mapping from storage index -> projection expression index
-			merge_into->delete_return_columns.resize(physical_count, DConstants::INVALID_INDEX);
-			auto &updated_column_ids = get.GetColumnIds();
-
-			for (idx_t scan_idx = 0; scan_idx < updated_column_ids.size() && scan_idx < target_bindings.size();
-			     scan_idx++) {
-				auto &col_id = updated_column_ids[scan_idx];
-				if (col_id.IsVirtualColumn()) {
-					continue;
-				}
-				auto logical_idx = col_id.GetPrimaryIndex();
-				auto &col = columns.GetColumn(LogicalIndex(logical_idx));
-				if (!col.Generated()) {
-					auto storage_idx = col.StorageOid();
-					merge_into->delete_return_columns[storage_idx] = projection_expressions.size();
-					auto col_ref =
-					    make_uniq<BoundColumnRefExpression>(target_types[scan_idx], target_bindings[scan_idx]);
-					projection_expressions.push_back(std::move(col_ref));
-				}
-			}
+			BindDeleteReturningColumns(table, get, merge_into->delete_return_columns, projection_expressions,
+			                           *target_binding);
 		}
 	}
 
