@@ -336,6 +336,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGeometryType(PEGTra
 	auto extract_parens = ExtractResultFromParens(crs_opt.optional_result);
 	auto crs = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
 	vector<unique_ptr<ParsedExpression>> geo_children;
+	if (crs->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		throw ParserException("Expected a constant as type modifier");
+	}
 	geo_children.push_back(std::move(crs));
 	return make_uniq<TypeExpression>("GEOMETRY", std::move(geo_children));
 }
