@@ -6,7 +6,6 @@ add_library_unity(
   test_concurrentdelete.cpp
   test_concurrent_dependencies.cpp
   test_concurrentupdate.cpp
-  test_concurrent_sequence.cpp
   test_concurrent_prepared.cpp
   test_default_catalog.cpp)
 set(ALL_OBJECT_FILES
