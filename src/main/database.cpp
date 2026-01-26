@@ -514,16 +514,22 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Va
 	return db_config.TryGetCurrentSetting(key, result);
 }
 
-shared_ptr<EncryptionUtil> DatabaseInstance::GetMbedTLSUtil() {
+shared_ptr<EncryptionUtil> DatabaseInstance::GetMbedTLSUtil(bool force_mbedtls) const {
 	auto encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-	encryption_util->ForceMbedTLSUnsafe();
+
+	if (force_mbedtls) {
+		encryption_util->ForceMbedTLSUnsafe();
+	}
+
 	return encryption_util;
 }
 
 shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
-	if (config.options.force_mbedtls) {
+	auto force_mbedtls = config.options.force_mbedtls;
+
+	if (force_mbedtls) {
 		// return mbedtls if setting is enabled
-		return GetMbedTLSUtil();
+		return GetMbedTLSUtil(force_mbedtls);
 	}
 
 	if (!config.encryption_util) {
@@ -537,7 +543,8 @@ shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
 
 	if (read_only) {
 		// return mbedtls if database is read only
-		return GetMbedTLSUtil();
+		// and OpenSSL not set
+		return GetMbedTLSUtil(force_mbedtls);
 	}
 
 	throw InvalidConfigurationException(

@@ -84,6 +84,15 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API const mbedtls_cipher_info_t *GetCipher(size_t key_len);
 		DUCKDB_API static void SecureClearData(duckdb::data_ptr_t data, duckdb::idx_t len);
 
+	public:
+		void ForceMbedTLSUnsafe() {
+			force_mbedtls = true;
+		}
+
+		void UndoForceMbedTLSUnsafe() {
+			force_mbedtls = false;
+		}
+
 	private:
 		DUCKDB_API void InitializeInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len);
 		DUCKDB_API void GenerateRandomDataInsecure(duckdb::data_ptr_t data, duckdb::idx_t len);
@@ -95,24 +104,31 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 	};
 
 	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
+
 	public:
 		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len = 0) const override {
-			return duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(cipher_p, key_len);
+			auto mbedtls_state = duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(cipher_p, key_len);
+
+			if (force_mbedtls_factory) {
+				mbedtls_state->ForceMbedTLSUnsafe();
+			}
+
+			return mbedtls_state;
 		}
 
 		~AESStateMBEDTLSFactory() override {} //
 
 	public:
 		void ForceMbedTLSUnsafe() {
-			force_mbedlts = true;
+			force_mbedtls_factory = true;
 		}
 
 		void UndoForceMbedTLSUnsafe() {
-			force_mbedlts = false;
+			force_mbedtls_factory = false;
 		}
 
 	private:
-		bool force_mbedlts = false;
+		bool force_mbedtls_factory = false;
 	};
 };
 
