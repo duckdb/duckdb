@@ -675,8 +675,24 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	j += ValidityMask::BITS_PER_VALUE - idx_in_entry;
 
 	// Loop over non-ragged entries
+	const auto entry_count_minus_one = bits.EntryCount(n);
 	const auto entry_idx_before = entry_idx;
-	for (const auto entry_count_minus_one = bits.EntryCount(n); entry_idx < entry_count_minus_one; ++entry_idx) {
+
+	// The compiler has a hard time optimizing this loop for some reason
+	// Creating a static inner loop like this improves performance by almost 2x
+	static constexpr idx_t NEXT_VALID_UNROLL = 8;
+	for (; entry_idx + NEXT_VALID_UNROLL < entry_count_minus_one; entry_idx += NEXT_VALID_UNROLL) {
+		for (idx_t unroll_idx = 0; unroll_idx < NEXT_VALID_UNROLL; unroll_idx++) {
+			const auto unroll_entry_idx = entry_idx + unroll_idx;
+			const auto &entry = bits.GetValidityEntryUnsafe(unroll_entry_idx);
+			if (entry) {
+				return j + (unroll_entry_idx - entry_idx_before) * ValidityMask::BITS_PER_VALUE +
+				       CountZeros<validity_t>::Trailing(entry);
+			}
+		}
+	}
+
+	for (; entry_idx < entry_count_minus_one; ++entry_idx) {
 		const auto &entry = bits.GetValidityEntryUnsafe(entry_idx);
 		if (entry) {
 			return j + (entry_idx - entry_idx_before) * ValidityMask::BITS_PER_VALUE +
