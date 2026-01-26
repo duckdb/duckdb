@@ -232,19 +232,15 @@ unique_ptr<SQLStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterT
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_ResetRelOptions: {
-			case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
+			case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_options_map;
+			case_insensitive_set_t options;
 			if (command->options) {
-				TransformTableOptions(options, command->options);
+				// TransformTableOptions will throw if key values are parsed
+				TransformTableOptions(rel_options_map, command->options, true);
 				// make sure RESET only supports single value options
 				// default of true is allowed
-				for (auto &option : options) {
-					if (option.second->expression_class != ExpressionClass::CONSTANT) {
-						throw InvalidInputException("RESET (options) cannot have value. Use SET to update options");
-					}
-					auto &val = option.second->Cast<ConstantExpression>();
-					if (val.value != Value(true)) {
-						throw InvalidInputException("RESET (options) cannot have value. Use SET to update options");
-					}
+				for (auto &option : rel_options_map) {
+					options.insert(option.first);
 				}
 			}
 			result->info = make_uniq<ResetTableOptionsInfo>(std::move(data), std::move(options));

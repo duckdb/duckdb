@@ -37,12 +37,12 @@ ALTER TABLE tbl1 RESET (foo, buzz);
 statement error
 ALTER TABLE tbl1 RESET ('foo'='baz', 'buzz'='wizz');
 ----
-<REGEX>:.*Invalid Input Error: RESET .*options.* cannot have value. Use SET to update options.*
+<REGEX>:.*Parser Error: "'baz'".*
 
 statement error
 ALTER TABLE tbl1 RESET (foo='baz', buzz='wizz');
 ----
-<REGEX>:.*Invalid Input Error: RESET .*options.* cannot have value. Use SET to update options.*
+<REGEX>:.*Parser Error: "'baz'".*
 
 statement error
 ALTER TABLE tbl1 RESET ();
