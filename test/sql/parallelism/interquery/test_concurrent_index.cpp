@@ -28,14 +28,11 @@ static void CheckConstraintViolation(const string &result_str) {
 	}
 }
 
-static void ReadFromIntegers(DuckDB *db, idx_t thread_idx, atomic<bool> *success) {
+static void AppendToIntegers(DuckDB *db, atomic<bool> *success) {
 	Connection con(*db);
-	while (!concurrent_index_finished) {
-		auto expected_value = to_string(thread_idx * 10000);
-		auto result = con.Query("SELECT i FROM integers WHERE i = " + expected_value);
+	for (idx_t i = 0; i < CONCURRENT_INDEX_INSERT_COUNT; i++) {
+		auto result = con.Query("INSERT INTO integers VALUES (1)");
 		if (result->HasError()) {
-			*success = false;
-		} else if (!CHECK_COLUMN(result, 0, {Value::INTEGER(thread_idx * 10000)})) {
 			*success = false;
 		}
 	}
