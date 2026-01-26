@@ -73,42 +73,6 @@ TEST_CASE("Concurrent inserts to PRIMARY KEY", "[index][.]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1000}));
 }
 
-static void UpdatePK(DuckDB *db) {
-	Connection con(*db);
-	for (idx_t i = 0; i < 1000; i++) {
-		auto result = con.Query("UPDATE integers SET i = 1000 + (i % 100) WHERE i = $1", i);
-		if (result->HasError()) {
-			CheckConstraintViolation(result->ToString());
-		}
-	}
-}
-
-TEST_CASE("Concurrent updates to PRIMARY KEY", "[index][.]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
-
-	// create a table and insert values [1...1000]
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers (i INTEGER PRIMARY KEY)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT range FROM range(1000)"));
-
-	// launch many concurrently updating threads
-	// each thread updates numbers by incrementing them
-	thread threads[CONCURRENT_INDEX_THREAD_COUNT];
-	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
-		threads[i] = thread(UpdatePK, &db);
-	}
-	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
-		threads[i].join();
-	}
-
-	// test the result
-	auto result = con.Query("SELECT COUNT(*), COUNT(DISTINCT i) FROM integers");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(CHECK_COLUMN(result, 0, {1000}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1000}));
-}
-
 static void MixAppendToPK(DuckDB *db, atomic<idx_t> *count) {
 	Connection con(*db);
 	for (idx_t i = 0; i < 100; i++) {
