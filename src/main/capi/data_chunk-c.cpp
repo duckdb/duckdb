@@ -156,10 +156,6 @@ void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, 
 	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
 }
 
-void duckdb_vector_unsafe_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
-	duckdb_vector_unsafe_assign_string_element_len(vector, index, str, strlen(str));
-}
-
 void duckdb_vector_unsafe_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {
 	if (!vector) {
 		return;

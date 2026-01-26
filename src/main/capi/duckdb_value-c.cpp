@@ -7,6 +7,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "utf8proc_wrapper.hpp"
 
 using duckdb::LogicalTypeId;
 
@@ -30,11 +31,18 @@ void duckdb_destroy_value(duckdb_value *value) {
 }
 
 duckdb_value duckdb_create_varchar_length(const char *text, idx_t length) {
+	if (!duckdb_is_valid_utf8(text, length)) {
+		return nullptr;
+	}
 	return WrapValue(new duckdb::Value(std::string(text, length)));
 }
 
 duckdb_value duckdb_create_varchar(const char *text) {
 	return duckdb_create_varchar_length(text, strlen(text));
+}
+
+duckdb_value duckdb_create_unsafe_varchar_length(const char *text, idx_t length) {
+	return WrapValue(new duckdb::Value(std::string(text, length)));
 }
 
 template <class T>

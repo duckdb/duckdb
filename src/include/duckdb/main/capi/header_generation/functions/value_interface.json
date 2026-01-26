@@ -29,7 +29,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a null-terminated string\n\n",
+                "description": "Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8.\n\nSuperseded by `duckdb_create_varchar_length`.\n\n",
                 "param_comments": {
                     "text": "The null-terminated string"
                 },
@@ -50,7 +50,29 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a string\n\n",
+                "description": "Creates a value from a string. Returns nullptr if the string is not valid UTF-8.\n\nSupersedes `duckdb_create_varchar`. Superseded by `duckdb_create_unsafe_varchar_length` combined with `duckdb_is_valid_utf8`. If the input is known to be valid UTF-8, use `duckdb_create_unsafe_varchar_length` directly for better performance. Otherwise, call `duckdb_is_valid_utf8` first to validate.\n\n",
+                "param_comments": {
+                    "text": "The text",
+                    "length": "The length of the text"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_unsafe_varchar_length",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "const char *",
+                    "name": "text"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "length"
+                }
+            ],
+            "comment": {
+                "description": "Creates a value from a string without UTF-8 validation. The caller is responsible for ensuring the input is valid UTF-8. Use `duckdb_is_valid_utf8` to validate strings before calling this function if needed.\n\nSupersedes `duckdb_create_varchar` and `duckdb_create_varchar_length`.\n\n",
                 "param_comments": {
                     "text": "The text",
                     "length": "The length of the text"

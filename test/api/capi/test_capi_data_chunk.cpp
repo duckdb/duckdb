@@ -601,11 +601,11 @@ TEST_CASE("Test unsafe string assignment to VARCHAR vector", "[capi]") {
 
 	// Test unsafe assignment with valid UTF-8.
 	string valid_utf8 = "hello world";
-	duckdb_vector_unsafe_assign_string_element(vector, 0, valid_utf8.c_str());
+	duckdb_vector_unsafe_assign_string_element_len(vector, 0, valid_utf8.c_str(), valid_utf8.length());
 	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
 	REQUIRE((string_data[0].value.inlined.length == valid_utf8.length()));
 
-	// Test unsafe assignment with length.
+	// Test unsafe assignment with another string.
 	string another_valid = "test";
 	duckdb_vector_unsafe_assign_string_element_len(vector, 0, another_valid.c_str(), another_valid.length());
 	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
