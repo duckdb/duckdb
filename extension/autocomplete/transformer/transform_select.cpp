@@ -637,12 +637,7 @@ vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTr
 	for (auto &target : target_list) {
 		PivotColumnEntry pivot_entry;
 		pivot_entry.alias = target->alias;
-		bool transformed = TransformPivotInList(target, pivot_entry);
-		if (!transformed) {
-			// for unpivot - we can forward the expression immediately
-			pivot_entry.values.clear();
-			pivot_entry.expr = std::move(target);
-		}
+		pivot_entry.expr = std::move(target);
 		result.push_back(std::move(pivot_entry));
 	}
 	return result;
@@ -722,7 +717,7 @@ vector<PivotColumnEntry> PEGTransformerFactory::TransformPivotTargetList(PEGTran
 		bool transformed = TransformPivotInList(target, pivot_entry);
 		if (!transformed) {
 			// For pivot we throw an exception
-			throw ParserException("PIVOT IN list must contain columns or lists of columns");
+			pivot_entry.expr = std::move(target);
 		}
 		result.push_back(std::move(pivot_entry));
 	}

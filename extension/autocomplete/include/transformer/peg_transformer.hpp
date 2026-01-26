@@ -24,6 +24,7 @@
 #include "ast/table_alias.hpp"
 #include "ast/window_frame.hpp"
 #include "duckdb/function/macro_function.hpp"
+#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
@@ -184,7 +185,6 @@ public:
 	static void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr);
 	static void GetValueFromExpression(unique_ptr<ParsedExpression> &expr, vector<Value> &result);
 	static bool TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry);
-	static unique_ptr<ParsedExpression> ConvertNumberToValue(string val);
 
 	// Registration methods
 	void RegisterAlter();
