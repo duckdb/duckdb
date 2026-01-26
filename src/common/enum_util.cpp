@@ -1635,19 +1635,20 @@ const StringUtil::EnumStringLiteral *GetExceptionTypeValues() {
 		{ static_cast<uint32_t>(ExceptionType::MISSING_EXTENSION), "MISSING_EXTENSION" },
 		{ static_cast<uint32_t>(ExceptionType::AUTOLOAD), "AUTOLOAD" },
 		{ static_cast<uint32_t>(ExceptionType::SEQUENCE), "SEQUENCE" },
-		{ static_cast<uint32_t>(ExceptionType::INVALID_CONFIGURATION), "INVALID_CONFIGURATION" }
+		{ static_cast<uint32_t>(ExceptionType::INVALID_CONFIGURATION), "INVALID_CONFIGURATION" },
+		{ static_cast<uint32_t>(ExceptionType::WARNING_AS_ERROR), "WARNING_AS_ERROR" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value) {
-	return StringUtil::EnumToString(GetExceptionTypeValues(), 43, "ExceptionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExceptionTypeValues(), 44, "ExceptionType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExceptionType EnumUtil::FromString<ExceptionType>(const char *value) {
-	return static_cast<ExceptionType>(StringUtil::StringToEnum(GetExceptionTypeValues(), 43, "ExceptionType", value));
+	return static_cast<ExceptionType>(StringUtil::StringToEnum(GetExceptionTypeValues(), 44, "ExceptionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExplainFormatValues() {

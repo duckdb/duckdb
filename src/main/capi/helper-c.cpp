@@ -386,6 +386,8 @@ duckdb_error_type ErrorTypeToC(const ExceptionType type) {
 		return DUCKDB_ERROR_SEQUENCE;
 	case ExceptionType::INVALID_CONFIGURATION:
 		return DUCKDB_INVALID_CONFIGURATION;
+	case ExceptionType::WARNING_AS_ERROR:
+		return DUCKDB_WARNING_AS_ERROR;
 	default:
 		return DUCKDB_ERROR_INVALID;
 	}
