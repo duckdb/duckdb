@@ -378,12 +378,13 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHead
 	if (main_header.GetEncryptionVersion() > 0) {
 		// From Encryption Version 1+, always encrypt canary with GCM
 		encryption_state = db.GetDatabase()
-			.GetEncryptionUtil(db.IsReadOnly())
-			->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-		} else {
-		encryption_state = db.GetDatabase()
-			.GetEncryptionUtil(db.IsReadOnly())
-			->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		                       .GetEncryptionUtil(db.IsReadOnly())
+		                       ->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	} else {
+		encryption_state =
+		    db.GetDatabase()
+		        .GetEncryptionUtil(db.IsReadOnly())
+		        ->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
 
 	EncryptCanary(main_header, encryption_state, key);
@@ -429,11 +430,14 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	shared_ptr<EncryptionState> encryption_state;
 	if (main_header.GetEncryptionVersion() > 0) {
 		// From Encryption Version 1+, always encrypt canary with GCM
-		encryption_state = db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(
-		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state = db.GetDatabase()
+		                       .GetEncryptionUtil(db.IsReadOnly())
+		                       ->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	} else {
-		encryption_state = db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(
-		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state =
+		    db.GetDatabase()
+		        .GetEncryptionUtil(db.IsReadOnly())
+		        ->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
 
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {

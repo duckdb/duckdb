@@ -703,16 +703,6 @@ struct EnableMacroDependenciesSetting {
 	static constexpr idx_t SettingIndex = 37;
 };
 
-struct EnableMbedtlsSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "force_mbedtls_unsafe";
-	static constexpr const char *Description = "Enable mbedtls for encryption (WARNING: unsafe to use)";
-	static constexpr const char *InputType = "BOOLEAN";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct EnableObjectCacheSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_object_cache";
@@ -871,6 +861,16 @@ struct ForceCompressionSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = 47;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ForceMbedtlsUnsafeSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "force_mbedtls_unsafe";
+	static constexpr const char *Description = "Enable mbedtls for encryption (WARNING: unsafe to use)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ForceVariantShredding {

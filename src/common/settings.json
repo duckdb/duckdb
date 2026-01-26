@@ -462,13 +462,6 @@
         "default_value": "false"
     },
     {
-        "name": "enable_mbedtls",
-        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
-        "type": "BOOLEAN",
-        "scope": "global",
-        "custom_implementation": true
-    },
-    {
         "name": "enable_object_cache",
         "description": "[PLACEHOLDER] Legacy setting - does nothing",
         "type": "BOOLEAN",
@@ -583,6 +576,13 @@
         "custom_implementation": [
             "set"
         ]
+    },
+    {
+        "name": "force_mbedtls_unsafe",
+        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "force_variant_shredding",

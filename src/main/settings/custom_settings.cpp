@@ -1160,7 +1160,7 @@ Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
 // Enable Mbedtls
 //===----------------------------------------------------------------------===//
 
-void EnableMbedtlsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ForceMbedtlsUnsafeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.force_mbedtls = input.GetValue<bool>();
 
 	if (!config.options.force_mbedtls) {
@@ -1184,12 +1184,12 @@ void EnableMbedtlsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 	}
 }
 
-void EnableMbedtlsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void ForceMbedtlsUnsafeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	// If encryption is initialized, httpfs will be attempted to autoload again
 	SetGlobal(db, config, false);
 }
 
-Value EnableMbedtlsSetting::GetSetting(const ClientContext &context) {
+Value ForceMbedtlsUnsafeSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.force_mbedtls);
 }
