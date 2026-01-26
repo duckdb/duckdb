@@ -1019,6 +1019,13 @@
         "default_value": "30000"
     },
     {
+        "name": "warnings_as_errors",
+        "description": "Escalate all warnings to errors.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "write_buffer_row_group_count",
         "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
         "type": "UBIGINT",
