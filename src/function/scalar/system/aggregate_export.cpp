@@ -424,7 +424,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
                              idx_t offset) {
 	D_ASSERT(offset == 0);
 	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
-	auto state_ptrs = FlatVector::GetData<data_ptr_t>(state);
+	auto addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
 
 	// Note: The underlying state type should always be a struct (we have a D_ASSERT for that in `GetStateType`
 	bool should_result_as_struct = bind_data.aggregate->function.HasGetStateTypeCallback();
@@ -449,7 +449,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 
 			auto data = FlatVector::GetData(child_vector);
 			for (idx_t row = 0; row < count; row++) {
-				auto src = state_ptrs[row] + offset_in_state;
+				auto src = addresses_ptrs[row] + offset_in_state;
 				memcpy(data + row * field_size, src, field_size);
 			}
 
@@ -461,7 +461,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	auto state_size = bind_data.aggregate->function.GetStateSizeCallback()(bind_data.aggregate->function);
 	auto blob_ptr = FlatVector::GetData<string_t>(result);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto data_ptr = state_ptrs[row_idx];
+		auto data_ptr = addresses_ptrs[row_idx];
 		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(data_ptr), state_size);
 	}
 }
