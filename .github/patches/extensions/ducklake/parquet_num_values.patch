@@ -1,5 +1,5 @@
 diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
-index deef757..b40e638 100644
+index deef757..f6b1642 100644
 --- a/src/storage/ducklake_insert.cpp
 +++ b/src/storage/ducklake_insert.cpp
 @@ -81,6 +81,10 @@ DuckLakeColumnStats DuckLakeInsert::ParseColumnStats(const LogicalType &type, co
@@ -13,3 +13,12 @@ index deef757..b40e638 100644
  		} else if (stats_name == "column_size_bytes") {
  			column_stats.column_size_bytes = StringUtil::ToUnsigned(StringValue::Get(stats_children[1]));
  		} else if (stats_name == "has_nan") {
+@@ -116,6 +120,8 @@ DuckLakeColumnStats DuckLakeInsert::ParseColumnStats(const LogicalType &type, co
+ 			for (const auto &child : ListValue::GetChildren(list_value)) {
+ 				geo_stats.geo_types.insert(StringValue::Get(child));
+ 			}
++		} else if (stats_name == "variant_type") {
++			continue;
+ 		} else {
+ 			throw NotImplementedException("Unsupported stats type \"%s\" in DuckLakeInsert::Sink()", stats_name);
+ 		}
