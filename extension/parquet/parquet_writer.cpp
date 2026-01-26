@@ -690,67 +690,6 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteT
 	FlushRowGroup(prepared_row_group);
 }
 
-void ParquetWriter::GatherWrittenStatistics() {
-	written_stats->row_count = file_meta_data.num_rows;
-
-	// finalize the min/max values and write to column stats
-	for (idx_t c = 0; c < stats_accumulator->stats_unifiers.size(); c++) {
-		auto &stats_unifier = stats_accumulator->stats_unifiers[c];
-		case_insensitive_map_t<Value> column_stats;
-		column_stats["column_size_bytes"] = Value::UBIGINT(stats_unifier->column_size_bytes);
-		column_stats["num_values"] = Value::UBIGINT(stats_unifier->num_values);
-		if (stats_unifier->all_min_max_set) {
-			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
-			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
-			if (stats_unifier->min_is_set) {
-				column_stats["min"] = min_value;
-			}
-			if (stats_unifier->max_is_set) {
-				column_stats["max"] = max_value;
-			}
-		}
-		if (!stats_unifier->variant_type.empty()) {
-			column_stats["variant_type"] = Value(stats_unifier->variant_type);
-		}
-		if (stats_unifier->all_nulls_set) {
-			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
-		}
-		if (stats_unifier->can_have_nan) {
-			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
-		}
-		if (stats_unifier->geo_stats) {
-			const auto &bbox = stats_unifier->geo_stats->extent;
-			const auto &types = stats_unifier->geo_stats->types;
-
-			if (bbox.HasXY()) {
-				column_stats["bbox_xmin"] = Value::DOUBLE(bbox.x_min);
-				column_stats["bbox_xmax"] = Value::DOUBLE(bbox.x_max);
-				column_stats["bbox_ymin"] = Value::DOUBLE(bbox.y_min);
-				column_stats["bbox_ymax"] = Value::DOUBLE(bbox.y_max);
-
-				if (bbox.HasZ()) {
-					column_stats["bbox_zmin"] = Value::DOUBLE(bbox.z_min);
-					column_stats["bbox_zmax"] = Value::DOUBLE(bbox.z_max);
-				}
-
-				if (bbox.HasM()) {
-					column_stats["bbox_mmin"] = Value::DOUBLE(bbox.m_min);
-					column_stats["bbox_mmax"] = Value::DOUBLE(bbox.m_max);
-				}
-			}
-
-			if (!types.IsEmpty()) {
-				vector<Value> type_strings;
-				for (const auto &type : types.ToString(true)) {
-					type_strings.push_back(Value(StringUtil::Lower(type)));
-				}
-				column_stats["geo_types"] = Value::LIST(type_strings);
-			}
-		}
-		written_stats->column_statistics.emplace(stats_unifier->column_name, std::move(column_stats));
-	}
-}
-
 template <class T>
 struct BaseNumericStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
@@ -1076,6 +1015,67 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 		}
 		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
 		stats_unifier->num_values += column.meta_data.num_values;
+	}
+}
+
+void ParquetWriter::GatherWrittenStatistics() {
+	written_stats->row_count = file_meta_data.num_rows;
+
+	// finalize the min/max values and write to column stats
+	for (idx_t c = 0; c < stats_accumulator->stats_unifiers.size(); c++) {
+		auto &stats_unifier = stats_accumulator->stats_unifiers[c];
+		case_insensitive_map_t<Value> column_stats;
+		column_stats["column_size_bytes"] = Value::UBIGINT(stats_unifier->column_size_bytes);
+		column_stats["num_values"] = Value::UBIGINT(stats_unifier->num_values);
+		if (stats_unifier->all_min_max_set) {
+			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
+			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
+			if (stats_unifier->min_is_set) {
+				column_stats["min"] = min_value;
+			}
+			if (stats_unifier->max_is_set) {
+				column_stats["max"] = max_value;
+			}
+		}
+		if (!stats_unifier->variant_type.empty()) {
+			column_stats["variant_type"] = Value(stats_unifier->variant_type);
+		}
+		if (stats_unifier->all_nulls_set) {
+			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
+		}
+		if (stats_unifier->can_have_nan) {
+			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
+		}
+		if (stats_unifier->geo_stats) {
+			const auto &bbox = stats_unifier->geo_stats->extent;
+			const auto &types = stats_unifier->geo_stats->types;
+
+			if (bbox.HasXY()) {
+				column_stats["bbox_xmin"] = Value::DOUBLE(bbox.x_min);
+				column_stats["bbox_xmax"] = Value::DOUBLE(bbox.x_max);
+				column_stats["bbox_ymin"] = Value::DOUBLE(bbox.y_min);
+				column_stats["bbox_ymax"] = Value::DOUBLE(bbox.y_max);
+
+				if (bbox.HasZ()) {
+					column_stats["bbox_zmin"] = Value::DOUBLE(bbox.z_min);
+					column_stats["bbox_zmax"] = Value::DOUBLE(bbox.z_max);
+				}
+
+				if (bbox.HasM()) {
+					column_stats["bbox_mmin"] = Value::DOUBLE(bbox.m_min);
+					column_stats["bbox_mmax"] = Value::DOUBLE(bbox.m_max);
+				}
+			}
+
+			if (!types.IsEmpty()) {
+				vector<Value> type_strings;
+				for (const auto &type : types.ToString(true)) {
+					type_strings.push_back(Value(StringUtil::Lower(type)));
+				}
+				column_stats["geo_types"] = Value::LIST(type_strings);
+			}
+		}
+		written_stats->column_statistics.emplace(stats_unifier->column_name, std::move(column_stats));
 	}
 }
 
