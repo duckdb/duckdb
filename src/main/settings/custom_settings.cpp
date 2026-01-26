@@ -1129,7 +1129,7 @@ void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &inp
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_http_logging = input.GetValue<bool>();
 
-	// NOTE: this is a deprecated setting: we mimick the old behaviour by setting the log storage output to STDOUT and
+	// NOTE: this is a deprecated setting: we mimic the old behaviour by setting the log storage output to STDOUT and
 	// enabling logging for http only. Note that this behaviour is slightly wonky in that it sets all sorts of logging
 	// config
 	auto &log_manager = LogManager::Get(context);

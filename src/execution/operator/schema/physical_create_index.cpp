@@ -34,7 +34,7 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 		indexed_columns.push_back(i);
 	}
 
-	// Row id is alway last
+	// Row id is always last
 	rowid_column.push_back(unbound_expressions.size());
 }
 

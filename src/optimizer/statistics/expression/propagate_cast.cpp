@@ -75,7 +75,7 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		const bool to_timestamp = target.id() == LogicalTypeId::TIMESTAMP;
 		const bool to_timestamp_tz = target.id() == LogicalTypeId::TIMESTAMP_TZ;
-		//  Casting to timestamp[_tz] (us) from a different unit can not re-use stats
+		//  Casting to timestamp[_tz] (us) from a different unit can not reuse stats
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_MS:

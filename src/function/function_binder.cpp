@@ -611,7 +611,7 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 		to_substitute.emplace_back(bound_function.varargs);
 	}
 
-	// If the return type is templated, we need to subsitute it as well
+	// If the return type is templated, we need to substitute it as well
 	if (bound_function.GetReturnType().IsTemplated()) {
 		to_substitute.emplace_back(bound_function.GetReturnType());
 	}

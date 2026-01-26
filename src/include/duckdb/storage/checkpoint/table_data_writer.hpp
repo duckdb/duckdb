@@ -76,7 +76,7 @@ private:
 	SingleFileCheckpointWriter &checkpoint_manager;
 	//! Writes the actual table data
 	MetadataWriter &table_data_writer;
-	//! The root pointer, if we are re-using metadata of the table
+	//! The root pointer, if we are reusing metadata of the table
 	MetaBlockPointer existing_pointer;
 	optional_idx existing_rows;
 	vector<MetaBlockPointer> existing_pointers;

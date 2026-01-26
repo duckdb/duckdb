@@ -40,7 +40,7 @@ typedef enum {
 
 /*
  * When allocation_size >= oversize_threshold, use the dedicated huge arena
- * (unless have explicitly spicified arena index).  0 disables the feature.
+ * (unless have explicitly specified arena index).  0 disables the feature.
  */
 #define OVERSIZE_THRESHOLD_DEFAULT (8 << 20)
 

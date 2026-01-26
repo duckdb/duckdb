@@ -389,7 +389,7 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
 		if (chunk.size() <= CachingPhysicalOperator::CACHE_THRESHOLD) {
 			// We can consider appening
 			if (chunk.size() + state.cached_chunk->size() <= STANDARD_VECTOR_SIZE) {
-				// Both fit toghether, append then return
+				// Both fit together, append then return
 				return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK;
 			}
 			if (needs_continuation_chunk) {

@@ -20,7 +20,7 @@ bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> lhs, optional_ptr
 	if (lhs.get() == rhs.get()) {
 		return true;
 	}
-	// If one is null, then we cant compare them
+	// If one is null, then we can't compare them
 	if (lhs == nullptr || rhs == nullptr) {
 		return true;
 	}

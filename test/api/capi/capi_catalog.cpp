@@ -102,7 +102,7 @@ TEST_CASE("Test Catalog Interface in C API", "[capi]") {
 	duckdb_client_context context;
 	duckdb_connection_get_client_context(tester.connection, &context);
 
-	// We cant access the catalog outside of a transaction
+	// We can't access the catalog outside of a transaction
 	auto catalog = duckdb_client_context_get_catalog(context, "duckdb");
 	REQUIRE(catalog == nullptr);
 

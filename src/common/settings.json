@@ -517,7 +517,7 @@
     },
     {
         "name": "experimental_metadata_reuse",
-        "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
+        "description": "EXPERIMENTAL: Reuse row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "true"

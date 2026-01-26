@@ -42,7 +42,7 @@ private:
 		AVAILABLE,
 		//! Introduced later, not available to this version
 		NOT_AVAILABLE_YET,
-		//! Used to be available, but isnt anymore
+		//! Used to be available, but isn't anymore
 		DEPRECATED
 	};
 

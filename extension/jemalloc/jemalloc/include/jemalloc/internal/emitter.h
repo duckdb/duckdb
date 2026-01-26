@@ -132,7 +132,7 @@ emitter_emit_str(emitter_t *emitter, emitter_justify_t justify, int width,
 	/*
 	 * There is no support for long string justification at the moment as
 	 * we output them partially with multiple malloc_snprintf calls and
-	 * justufication will work correctly only withing one call.
+	 * justufication will work correctly only within one call.
 	 * Fortunately this is not a big concern as we don't use justufication
 	 * with long strings right now.
 	 *

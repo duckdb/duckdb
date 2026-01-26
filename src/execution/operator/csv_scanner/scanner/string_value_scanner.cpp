@@ -575,7 +575,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				result.chunk_col_id++;
 			} else {
 				if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
-					// We cant have escapes on non varchar columns
+					// We can't have escapes on non varchar columns
 					result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
 					                             result.last_position);
 					if (!result.state_machine.options.IgnoreErrors()) {
@@ -1471,7 +1471,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
 					if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
-						// We cant have escapes on non varchar columns
+						// We can't have escapes on non varchar columns
 						result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
 						                             result.last_position);
 						if (!result.state_machine.options.IgnoreErrors()) {
@@ -1499,7 +1499,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
 				if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
-					// We cant have escapes on non varchar columns
+					// We can't have escapes on non varchar columns
 					result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
 					                             result.last_position);
 					if (!result.state_machine.options.IgnoreErrors()) {

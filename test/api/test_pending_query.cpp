@@ -108,7 +108,7 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 	}
 	SECTION("Pending results errors as JSON") {
 		con.Query("SET errors_as_json = true;");
-		auto pending_query = con.PendingQuery("SELCT 32;");
+		auto pending_query = con.PendingQuery("SELCT 32;");  // codespell:ignore
 		REQUIRE(pending_query->HasError());
 		REQUIRE(duckdb::StringUtil::Contains(pending_query->GetError(), "SYNTAX_ERROR"));
 	}

@@ -473,7 +473,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &table_chunk, DataT
 	// Append the chunk to the local storage.
 	auto new_row_group = storage->GetCollection().Append(table_chunk, state.append_state);
 
-	// Check if we should pre-emptively flush blocks to disk.
+	// Check if we should preemptively flush blocks to disk.
 	if (new_row_group) {
 		storage->WriteNewRowGroup();
 	}

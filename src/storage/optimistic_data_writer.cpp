@@ -22,7 +22,7 @@ OptimisticDataWriter::~OptimisticDataWriter() {
 }
 
 bool OptimisticDataWriter::PrepareWrite() {
-	// check if we should pre-emptively write the table to disk
+	// check if we should preemptively write the table to disk
 	if (table.IsTemporary() || StorageManager::Get(table.GetAttached()).InMemory()) {
 		return false;
 	}

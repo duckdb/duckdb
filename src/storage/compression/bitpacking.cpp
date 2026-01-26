@@ -125,7 +125,7 @@ public:
 
 	void CalculateDeltaStats() {
 		// TODO: currently we dont support delta compression of values above NumericLimits<T_S>::Maximum(),
-		// 		 we could support this with some clever substract trickery?
+		// 		 we could support this with some clever subtract trickery?
 		if (maximum > static_cast<T>(NumericLimits<T_S>::Maximum())) {
 			return;
 		}
@@ -138,7 +138,7 @@ public:
 		// TODO: handle NULLS here?
 		// Currently we cannot handle nulls because we would need an additional step of patching for this.
 		// we could for example copy the last value on a null insert. This would help a bit, but not be optimal for
-		// large deltas since theres suddenly a zero then. Ideally we would insert a value that leads to a delta within
+		// large deltas since there's suddenly a zero then. Ideally we would insert a value that leads to a delta within
 		// the current domain of deltas however we dont know that domain here yet
 		if (!all_valid) {
 			return;

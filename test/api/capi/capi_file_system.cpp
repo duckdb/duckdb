@@ -182,7 +182,7 @@ TEST_CASE("Test File System in C API", "[capi]") {
 
 	duckdb_destroy_client_context(&context);
 
-	// Try to destory fs again
+	// Try to destroy fs again
 	duckdb_destroy_file_system(&fs);
 	REQUIRE(fs == nullptr);
 }

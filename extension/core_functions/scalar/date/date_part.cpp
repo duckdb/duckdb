@@ -1999,7 +1999,7 @@ struct StructDatePart {
 		auto &child_entries = StructVector::GetEntries(result);
 
 		// The first computer of a part "owns" it
-		// and other requestors just reference the owner
+		// and other requesters just reference the owner
 		vector<size_t> owners(int(DatePartSpecifier::JULIAN_DAY) + 1, child_entries.size());
 		for (size_t col = 0; col < child_entries.size(); ++col) {
 			const auto part_index = size_t(info.part_codes[col]);

@@ -45,7 +45,7 @@ public:
 	};
 };
 
-//! Resevoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
+//! Reservoir sampling is based on the 2005 paper "Weighted Random Sampling" by Efraimidis and Spirakis
 class BaseReservoirSampling {
 public:
 	explicit BaseReservoirSampling(int64_t seed);
@@ -61,7 +61,7 @@ public:
 	void UpdateMinWeightThreshold();
 
 	//! Go from the naive sampling to the reservoir sampling
-	//! Naive samping will not collect weights, but when we serialize
+	//! Naive sampling will not collect weights, but when we serialize
 	//! we need to serialize weights again.
 	void FillWeights(SelectionVector &sel, idx_t &sel_size);
 
@@ -296,7 +296,7 @@ public:
 
 	unique_ptr<BlockingSample> Copy() const override;
 
-	//! Fetches a chunk from the sample. If destory = true this method is descructive
+	//! Fetches a chunk from the sample. If destroy = true this method is descructive
 	unique_ptr<DataChunk> GetChunk() override;
 	void Finalize() override;
 

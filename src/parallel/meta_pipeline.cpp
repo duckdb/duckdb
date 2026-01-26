@@ -115,7 +115,7 @@ Pipeline &MetaPipeline::CreatePipeline() {
 	return *pipelines.back();
 }
 
-vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependant, const Pipeline &start,
+vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependent, const Pipeline &start,
                                                                const bool including) {
 	// find 'start'
 	auto it = pipelines.begin();
@@ -129,7 +129,7 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 	// collect pipelines that were created from then
 	vector<shared_ptr<Pipeline>> created_pipelines;
 	for (; it != pipelines.end(); it++) {
-		if (RefersToSameObject(**it, dependant)) {
+		if (RefersToSameObject(**it, dependent)) {
 			// cannot depend on itself
 			continue;
 		}
@@ -137,7 +137,7 @@ vector<shared_ptr<Pipeline>> MetaPipeline::AddDependenciesFrom(Pipeline &dependa
 	}
 
 	// add them to the dependencies
-	auto &explicit_deps = pipeline_dependencies[dependant];
+	auto &explicit_deps = pipeline_dependencies[dependent];
 	for (auto &created_pipeline : created_pipelines) {
 		explicit_deps.push_back(*created_pipeline);
 	}

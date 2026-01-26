@@ -51,7 +51,7 @@ struct hpa_shard_opts_s {
 	uint64_t min_purge_interval_ms;
 
 	/*
-	 * Strictly respect minimum amout of time between purges.
+	 * Strictly respect minimum amount of time between purges.
 	 *
 	 * This is an option to provide backward compatibility for staged rollout of
 	 * purging logic fix.

@@ -708,7 +708,7 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 		    "JSON auto-detection error in file \"%s\": Expected records, detected non-record JSON instead",
 		    GetFileName());
 	}
-	// store the buffer in the file so it can be re-used by the first reader of the file
+	// store the buffer in the file so it can be reused by the first reader of the file
 	if (!file_handle->IsPipe()) {
 		auto_detect_data = std::move(read_buffer);
 		auto_detect_data_size = read_size;
@@ -986,9 +986,9 @@ void JSONReader::PrepareForReadInternal(JSONReaderScanState &scan_state) {
 }
 bool JSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state) {
 	if (auto_detect_data.IsSet()) {
-		// we have auto-detected data - re-use the buffer
+		// we have auto-detected data - reuse the buffer
 		if (next_buffer_index != 0 || auto_detect_data_size == 0 || scan_state.prev_buffer_remainder != 0) {
-			throw InternalException("Invalid re-use of auto-detect data in JSON");
+			throw InternalException("Invalid reuse of auto-detect data in JSON");
 		}
 		scan_state.buffer_index = GetBufferIndex();
 		scan_state.buffer_size = auto_detect_data_size;

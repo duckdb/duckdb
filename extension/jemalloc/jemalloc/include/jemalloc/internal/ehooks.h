@@ -70,7 +70,7 @@ void ehooks_default_guard_impl(void *guard1, void *guard2);
 void ehooks_default_unguard_impl(void *guard1, void *guard2);
 
 /*
- * We don't officially support reentrancy from wtihin the extent hooks.  But
+ * We don't officially support reentrancy from within the extent hooks.  But
  * various people who sit within throwing distance of the jemalloc team want
  * that functionality in certain limited cases.  The default reentrancy guards
  * assert that we're not reentrant from a0 (since it's the bootstrap arena,

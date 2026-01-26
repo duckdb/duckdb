@@ -807,7 +807,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer,
 	auto &catalog_entry =
 	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
-		throw SerializationException("Cant find table for %s.%s", schema, table);
+		throw SerializationException("Can't find table for %s.%s", schema, table);
 	}
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
 	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);

@@ -87,7 +87,7 @@ struct pac_s {
 	pai_t pai;
 	/*
 	 * Collections of extents that were previously allocated.  These are
-	 * used when allocating extents, in an attempt to re-use address space.
+	 * used when allocating extents, in an attempt to reuse address space.
 	 *
 	 * Synchronization: internal.
 	 */

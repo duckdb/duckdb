@@ -54,8 +54,8 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 
 	for (idx_t i = 0; i < count; i++) {
 		// Loop through all the maps per list
-		// we cant do better because all the entries of the child vector have to be contiguous
-		// so we cant start the next row before we have finished the one before it
+		// we can't do better because all the entries of the child vector have to be contiguous
+		// so we can't start the next row before we have finished the one before it
 		auto &result_entry = result_data[i];
 		vector<MapKeyIndexPair> index_to_map;
 		vector<Value> keys_list;
