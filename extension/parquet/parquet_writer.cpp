@@ -690,43 +690,6 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteT
 	FlushRowGroup(prepared_row_group);
 }
 
-void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &column,
-                                     optional_ptr<ColumnWriterStatistics> writer_stats) {
-	if (!written_stats) {
-		return;
-	}
-
-	// push the stats of this column into the unifier
-	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
-	bool has_nan = false;
-	if (writer_stats) {
-		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
-		has_nan = writer_stats->HasNaN();
-		stats_unifier->has_nan = has_nan;
-	}
-	if (column.meta_data.__isset.statistics) {
-		if (has_nan && writer_stats->HasStats()) {
-			// if we have NaN values we have not written the min/max to the Parquet file
-			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
-			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
-		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
-			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
-		} else {
-			stats_unifier->all_min_max_set = false;
-		}
-		if (column.meta_data.statistics.__isset.null_count) {
-			stats_unifier->null_count += column.meta_data.statistics.null_count;
-		} else {
-			stats_unifier->all_nulls_set = false;
-		}
-		if (writer_stats && writer_stats->HasGeoStats()) {
-			stats_unifier->UnifyGeoStats(*writer_stats->GetGeoStats());
-		}
-		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
-		stats_unifier->num_values += column.meta_data.num_values;
-	}
-}
-
 void ParquetWriter::GatherWrittenStatistics() {
 	written_stats->row_count = file_meta_data.num_rows;
 
@@ -1076,6 +1039,43 @@ static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr
 	}
 	for (auto &child_writer : children) {
 		GetStatsUnifier(*child_writer, unifiers, base_name);
+	}
+}
+
+void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &column,
+                                     optional_ptr<ColumnWriterStatistics> writer_stats) {
+	if (!written_stats) {
+		return;
+	}
+
+	// push the stats of this column into the unifier
+	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
+	bool has_nan = false;
+	if (writer_stats) {
+		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
+		has_nan = writer_stats->HasNaN();
+		stats_unifier->has_nan = has_nan;
+	}
+	if (column.meta_data.__isset.statistics) {
+		if (has_nan && writer_stats->HasStats()) {
+			// if we have NaN values we have not written the min/max to the Parquet file
+			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
+			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
+		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
+			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
+		} else {
+			stats_unifier->all_min_max_set = false;
+		}
+		if (column.meta_data.statistics.__isset.null_count) {
+			stats_unifier->null_count += column.meta_data.statistics.null_count;
+		} else {
+			stats_unifier->all_nulls_set = false;
+		}
+		if (writer_stats && writer_stats->HasGeoStats()) {
+			stats_unifier->UnifyGeoStats(*writer_stats->GetGeoStats());
+		}
+		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
+		stats_unifier->num_values += column.meta_data.num_values;
 	}
 }
 
