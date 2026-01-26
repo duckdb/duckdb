@@ -3,6 +3,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -82,8 +83,10 @@ static LogicalType TransformStringToUnboundType(const string &str) {
 static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContext &context) {
 	auto type = TransformStringToUnboundType(type_str);
 	if (type.IsUnbound()) {
-		auto binder = Binder::CreateBinder(context, nullptr);
-		binder->BindLogicalType(type);
+		context.RunFunctionInTransaction([&] {
+			auto binder = Binder::CreateBinder(context, nullptr);
+			binder->BindLogicalType(type);
+		});
 	}
 	return type;
 }
