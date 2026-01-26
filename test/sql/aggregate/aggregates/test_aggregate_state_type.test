@@ -60,6 +60,10 @@ SELECT typeof(sum(1) EXPORT_STATE);
 ----
 AGGREGATE_STATE<sum(INTEGER)::HUGEINT>
 
+# sum(INT) (as not opted-in) is still serialized correctly in both storage modes (backward & forward compatibiltiy will be run in CI)
+statement ok
+CREATE TABLE t2_sum_int AS SELECT sum(range::INT) EXPORT_STATE as state FROM range(10);
+
 # other aggregate functions (with multiple arguments) that are not opted-in are not broken
 query T
 SELECT typeof(corr(1.0::DOUBLE, 2.0::DOUBLE) EXPORT_STATE);
