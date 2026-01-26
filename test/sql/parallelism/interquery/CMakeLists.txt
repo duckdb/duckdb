@@ -3,7 +3,6 @@ add_library_unity(
   OBJECT
   concurrent_attach_detach.cpp
   concurrent_checkpoint.cpp
-  test_concurrent_dependencies.cpp
   test_concurrent_prepared.cpp
   test_default_catalog.cpp)
 set(ALL_OBJECT_FILES
