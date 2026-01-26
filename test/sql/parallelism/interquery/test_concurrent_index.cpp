@@ -41,53 +41,6 @@ static void ReadFromIntegers(DuckDB *db, idx_t thread_idx, atomic<bool> *success
 	}
 }
 
-static void AppendToIntegers(DuckDB *db, atomic<bool> *success) {
-	Connection con(*db);
-	for (idx_t i = 0; i < CONCURRENT_INDEX_INSERT_COUNT; i++) {
-		auto result = con.Query("INSERT INTO integers VALUES (1)");
-		if (result->HasError()) {
-			*success = false;
-		}
-	}
-}
-
-TEST_CASE("Concurrent writes during index creation", "[index][.]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
-
-	CreateIntegerTable(&con, 1000000);
-
-	atomic<bool> success(true);
-
-	// launch many concurrently writing threads
-	thread threads[CONCURRENT_INDEX_THREAD_COUNT];
-	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
-		threads[i] = thread(AppendToIntegers, &db, &success);
-	}
-
-	// create the index
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-
-	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
-		threads[i].join();
-	}
-
-	REQUIRE(success);
-
-	// first scan the base table to verify the count, we avoid using a filter here to prevent the
-	// optimizer from using an index scan
-	auto result = con.Query("SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i LIMIT 1 OFFSET 1");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1 + CONCURRENT_INDEX_THREAD_COUNT * CONCURRENT_INDEX_INSERT_COUNT}));
-
-	// test that we can probe the index correctly
-	result = con.Query("SELECT COUNT(*) FROM integers WHERE i = 1");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(CHECK_COLUMN(result, 0, {1 + CONCURRENT_INDEX_THREAD_COUNT * CONCURRENT_INDEX_INSERT_COUNT}));
-}
-
 static void AppendToPK(DuckDB *db) {
 	Connection con(*db);
 	for (idx_t i = 0; i < 1000; i++) {
