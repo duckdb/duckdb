@@ -11,8 +11,6 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/planner/expression.hpp"
 
-#include <duckdb/common/extra_type_info.hpp>
-
 namespace duckdb {
 
 BindCastInfo::~BindCastInfo() {
