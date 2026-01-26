@@ -6,6 +6,7 @@
 namespace duckdb {
 
 class ClientContext;
+class DatabaseInstance;
 class CastFunctionSet;
 struct DBConfig;
 
