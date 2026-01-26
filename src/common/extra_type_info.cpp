@@ -292,6 +292,7 @@ void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 
 	// We intentionally don't call `StructTypeInfo::Serialize`, since we have a different ID for child_types, to
 	// maintain backward compatibility (forwards compatibility is not maintained here)
+	// NOLINTNEXTLINE(bugprone-parent-virtual-call) - Intentional for backward compatibility
 	ExtraTypeInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
 	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
