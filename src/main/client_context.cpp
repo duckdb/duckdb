@@ -1492,4 +1492,9 @@ bool ClientContext::ExecutionIsFinished() {
 	return active_query->executor->ExecutionIsFinished();
 }
 
+LogicalType ClientContext::ParseLogicalType(const string &type) {
+	auto lock = LockContext();
+	RunFunctionInTransactionInternal(*lock, [&]() { return TypeManager::Get(*db).ParseLogicalType(type, *this); });
+}
+
 } // namespace duckdb

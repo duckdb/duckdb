@@ -83,10 +83,12 @@ static LogicalType TransformStringToUnboundType(const string &str) {
 static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContext &context) {
 	auto type = TransformStringToUnboundType(type_str);
 	if (type.IsUnbound()) {
-		context.RunFunctionInTransaction([&] {
-			auto binder = Binder::CreateBinder(context, nullptr);
-			binder->BindLogicalType(type);
-		});
+		if (!context.transaction.HasActiveTransaction()) {
+			throw InternalException(
+			    "Context does not have a transaction active, try running ClientContext::BindLogicalType instead");
+		}
+		auto binder = Binder::CreateBinder(context, nullptr);
+		binder->BindLogicalType(type);
 	}
 	return type;
 }
@@ -95,8 +97,8 @@ LogicalType TypeManager::ParseLogicalType(const string &type_str, ClientContext 
 	return parse_function(type_str, context);
 }
 
-TypeManager &TypeManager::Get(ClientContext &context) {
-	return DBConfig::GetConfig(context).GetTypeManager();
+TypeManager &TypeManager::Get(DatabaseInstance &db) {
+	return DBConfig::GetConfig(db).GetTypeManager();
 }
 
 TypeManager::TypeManager(DBConfig &config_p) {
