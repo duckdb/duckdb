@@ -11,6 +11,7 @@
     "duckdb_destroy_selection_vector",
     "duckdb_selection_vector_get_data_ptr",
     "duckdb_vector_copy_sel",
-    "duckdb_vector_safe_assign_string_element"
+    "duckdb_vector_unsafe_assign_string_element",
+    "duckdb_vector_unsafe_assign_string_element_len"
   ]
 }

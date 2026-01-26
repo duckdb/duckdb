@@ -137,34 +137,30 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 	validity.EnsureWritable();
 }
 
-duckdb_error_data duckdb_vector_safe_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
-	if (!vector) {
-		return nullptr;
-	}
-
-	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	idx_t str_len = strlen(str);
-
-	// UTF-8 analysis for VARCHAR vectors, which expect valid UTF-8.
-	if (v->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
-		duckdb::UnicodeInvalidReason reason;
-		size_t pos;
-		auto utf_type = duckdb::Utf8Proc::Analyze(str, str_len, &reason, &pos);
-		if (utf_type == duckdb::UnicodeType::INVALID) {
-			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
-			                                "invalid Unicode detected, str must be valid UTF-8");
-		}
-	}
-	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
-	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
-	return nullptr;
-}
-
 void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
 	duckdb_vector_assign_string_element_len(vector, index, str, strlen(str));
 }
 
 void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {
+	if (!vector) {
+		return;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	// UTF-8 validation for VARCHAR vectors.
+	if (v->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
+		if (!duckdb_is_valid_utf8(str, str_len)) {
+			return;
+		}
+	}
+	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
+	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
+}
+
+void duckdb_vector_unsafe_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
+	duckdb_vector_unsafe_assign_string_element_len(vector, index, str, strlen(str));
+}
+
+void duckdb_vector_unsafe_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {
 	if (!vector) {
 		return;
 	}

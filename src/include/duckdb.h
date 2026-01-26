@@ -1672,6 +1672,15 @@ Get a pointer to the string data of a string_t
 */
 DUCKDB_C_API const char *duckdb_string_t_data(duckdb_string_t *string);
 
+/*!
+Checks if a string is valid UTF-8.
+
+* @param str The string to check
+* @param len The length of the string (in bytes)
+* @return True if valid UTF-8, false otherwise
+*/
+DUCKDB_C_API bool duckdb_is_valid_utf8(const char *str, idx_t len);
+
 //----------------------------------------------------------------------------------------------------------------------
 // Date Time Timestamp Helpers
 //----------------------------------------------------------------------------------------------------------------------
@@ -3457,22 +3466,8 @@ This allows NULL values to be written to the vector, regardless of whether a val
 DUCKDB_C_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
 /*!
-Safely assigns a string element in the vector at the specified location. Supersedes
-`duckdb_vector_assign_string_element`. The vector type must be VARCHAR and the input must be valid UTF-8. Otherwise, it
-returns an invalid Unicode error.
-
-* @param vector The vector to alter
-* @param index The row position in the vector to assign the string to
-* @param str The null-terminated string
-* @return If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the return value must be
-destroyed with `duckdb_destroy_error_data`.
-*/
-DUCKDB_C_API duckdb_error_data duckdb_vector_safe_assign_string_element(duckdb_vector vector, idx_t index,
-                                                                        const char *str);
-
-/*!
-Assigns a string element in the vector at the specified location. The vector type must be VARCHAR and the input must be
-valid UTF-8. Otherwise, undefined behavior is expected at later stages.
+Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8.
+If the input is invalid UTF-8, the assignment is silently skipped (no-op).
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -3481,8 +3476,8 @@ valid UTF-8. Otherwise, undefined behavior is expected at later stages.
 DUCKDB_C_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location. The vector type can be VARCHAR or BLOB. In the case of
-VARCHAR, you must pass valid UTF-8. Otherwise, undefined behavior is expected at later stages.
+Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8.
+If the input is invalid UTF-8, the assignment is silently skipped (no-op). For BLOB vectors, no validation is performed.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -3491,6 +3486,30 @@ VARCHAR, you must pass valid UTF-8. Otherwise, undefined behavior is expected at
 */
 DUCKDB_C_API void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
                                                           idx_t str_len);
+
+/*!
+Assigns a string element in the vector at the specified location without UTF-8 validation. For VARCHAR vectors, the
+caller is responsible for ensuring the input is valid UTF-8. Use `duckdb_is_valid_utf8` to validate strings before
+calling this function if needed.
+
+* @param vector The vector to alter
+* @param index The row position in the vector to assign the string to
+* @param str The null-terminated string
+*/
+DUCKDB_C_API void duckdb_vector_unsafe_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
+
+/*!
+Assigns a string element in the vector at the specified location without UTF-8 validation. For VARCHAR vectors, the
+caller is responsible for ensuring the input is valid UTF-8. Use `duckdb_is_valid_utf8` to validate strings before
+calling this function if needed.
+
+* @param vector The vector to alter
+* @param index The row position in the vector to assign the string to
+* @param str The string
+* @param str_len The length of the string (in bytes)
+*/
+DUCKDB_C_API void duckdb_vector_unsafe_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
+                                                                 idx_t str_len);
 
 /*!
 Retrieves the child vector of a list vector.

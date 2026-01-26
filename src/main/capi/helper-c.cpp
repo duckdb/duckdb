@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -517,4 +518,11 @@ const char *duckdb_string_t_data(duckdb_string_t *string_p) {
 	              "duckdb_string_t should have the same memory layout as duckdb::string_t");
 	auto &string = *reinterpret_cast<duckdb::string_t *>(string_p);
 	return string.GetData();
+}
+
+bool duckdb_is_valid_utf8(const char *str, idx_t len) {
+	duckdb::UnicodeInvalidReason reason;
+	size_t pos;
+	auto utf_type = duckdb::Utf8Proc::Analyze(str, len, &reason, &pos);
+	return utf_type != duckdb::UnicodeType::INVALID;
 }

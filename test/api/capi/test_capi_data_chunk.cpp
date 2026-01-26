@@ -547,6 +547,21 @@ TEST_CASE("Test DataChunk write BIGNUM", "[capi]") {
 	duckdb_destroy_logical_type(&type);
 }
 
+TEST_CASE("Test duckdb_is_valid_utf8", "[capi]") {
+	string valid_utf8 = "hello";
+	REQUIRE(duckdb_is_valid_utf8(valid_utf8.c_str(), valid_utf8.length()));
+
+	string valid_utf8_multibyte = "é";
+	REQUIRE(duckdb_is_valid_utf8(valid_utf8_multibyte.c_str(), valid_utf8_multibyte.length()));
+
+	// Create invalid UTF-8 by removing the first byte of a multi-byte character.
+	idx_t len = strlen(valid_utf8_multibyte.c_str());
+	auto invalid_utf8 = static_cast<char *>(malloc(len));
+	memcpy(invalid_utf8, valid_utf8_multibyte.c_str() + 1, len);
+	REQUIRE(!duckdb_is_valid_utf8(invalid_utf8, len - 1));
+	free(invalid_utf8);
+}
+
 TEST_CASE("Test writing invalid UTF-8 to VARCHAR vector in data chunk", "[capi]") {
 	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
 	duckdb_logical_type types[] = {type};
@@ -563,21 +578,38 @@ TEST_CASE("Test writing invalid UTF-8 to VARCHAR vector in data chunk", "[capi]"
 	memcpy(invalid_utf8, valid_utf8.c_str() + 1, len);
 
 	// Write a valid string to initialize the data.
-	auto error_data = duckdb_vector_safe_assign_string_element(vector, 0, valid_utf8.c_str());
-	REQUIRE(!error_data);
-	// Write an invalid string and ensure it does not overwrite.
-	error_data = duckdb_vector_safe_assign_string_element(vector, 0, invalid_utf8);
+	duckdb_vector_assign_string_element(vector, 0, valid_utf8.c_str());
+
+	// Write an invalid string - should be silently skipped.
+	duckdb_vector_assign_string_element_len(vector, 0, invalid_utf8, len - 1);
 	free(invalid_utf8);
-	REQUIRE(error_data);
-	REQUIRE(duckdb_error_data_has_error(error_data));
-	auto err_type = duckdb_error_data_error_type(error_data);
-	REQUIRE(err_type == DUCKDB_ERROR_INVALID_INPUT);
-	auto err_msg = duckdb_error_data_message(error_data);
-	REQUIRE(StringUtil::Contains(err_msg, "invalid Unicode detected, str must be valid UTF-8"));
-	duckdb_destroy_error_data(&error_data);
 
 	// Ensure that nothing was written and the vector still contains the valid data.
 	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
 	REQUIRE((string_data[0].value.inlined.length == valid_utf8.length()));
+	duckdb_destroy_data_chunk(&chunk);
+}
+
+TEST_CASE("Test unsafe string assignment to VARCHAR vector", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type types[] = {type};
+
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_destroy_logical_type(&type);
+	duckdb_data_chunk_set_size(chunk, 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// Test unsafe assignment with valid UTF-8.
+	string valid_utf8 = "hello world";
+	duckdb_vector_unsafe_assign_string_element(vector, 0, valid_utf8.c_str());
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE((string_data[0].value.inlined.length == valid_utf8.length()));
+
+	// Test unsafe assignment with length.
+	string another_valid = "test";
+	duckdb_vector_unsafe_assign_string_element_len(vector, 0, another_valid.c_str(), another_valid.length());
+	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE((string_data[0].value.inlined.length == another_valid.length()));
+
 	duckdb_destroy_data_chunk(&chunk);
 }
