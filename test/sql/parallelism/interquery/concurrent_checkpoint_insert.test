@@ -7,9 +7,6 @@ statement ok
 ATTACH '__TEST_DIR__/bla_${j}.db' AS db${j};
 
 statement ok
-USE db${j};
-
-statement ok
 CREATE TABLE db${j}.tbl (key INTEGER PRIMARY KEY);
 
 concurrentloop i 0 20
