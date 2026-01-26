@@ -241,13 +241,6 @@
       "paths": [
         "test/sql/create/create_table_extra_options.test"
       ]
-    },
-    {
-      "reason": "Type refactoring",
-      "paths": [
-        "test/fuzzer/pedro/decimal_with_invalid_scale.test",
-        "test/sql/types/test_user_type_errors_18452.test"
-      ]
     }
   ]
 }

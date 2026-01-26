@@ -251,9 +251,6 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				fk_constraint->fk_columns.push_back(qualified_name.name);
 				column_constraint.constraints.push_back(std::move(fk_constraint));
 			} else if (constraint->name == "ColumnCollation") {
-				if (type != LogicalType::VARCHAR) {
-					throw ParserException("Only VARCHAR columns can have collations!");
-				}
 				type = transformer.Transform<LogicalType>(constraint);
 			} else {
 				column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));

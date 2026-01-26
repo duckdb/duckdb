@@ -755,13 +755,13 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<CopyDatabaseType>("CopySchema", CopyDatabaseType::COPY_SCHEMA);
 	RegisterEnum<CopyDatabaseType>("CopyData", CopyDatabaseType::COPY_DATA);
 
-	RegisterEnum<LogicalType>("IntType", LogicalType(LogicalTypeId::INTEGER));
-	RegisterEnum<LogicalType>("IntegerType", LogicalType(LogicalTypeId::INTEGER));
-	RegisterEnum<LogicalType>("SmallintType", LogicalType(LogicalTypeId::SMALLINT));
-	RegisterEnum<LogicalType>("BigintType", LogicalType(LogicalTypeId::BIGINT));
-	RegisterEnum<LogicalType>("RealType", LogicalType(LogicalTypeId::FLOAT));
-	RegisterEnum<LogicalType>("DoubleType", LogicalType(LogicalTypeId::DOUBLE));
-	RegisterEnum<LogicalType>("BooleanType", LogicalType(LogicalTypeId::BOOLEAN));
+	RegisterEnum<string>("IntType", LogicalTypeIdToString(LogicalTypeId::INTEGER));
+	RegisterEnum<string>("IntegerType", LogicalTypeIdToString(LogicalTypeId::INTEGER));
+	RegisterEnum<string>("SmallintType", LogicalTypeIdToString(LogicalTypeId::SMALLINT));
+	RegisterEnum<string>("BigintType", LogicalTypeIdToString(LogicalTypeId::BIGINT));
+	RegisterEnum<string>("RealType", LogicalTypeIdToString(LogicalTypeId::FLOAT));
+	RegisterEnum<string>("DoubleType", LogicalTypeIdToString(LogicalTypeId::DOUBLE));
+	RegisterEnum<string>("BooleanType", LogicalTypeIdToString(LogicalTypeId::BOOLEAN));
 
 	RegisterEnum<DatePartSpecifier>("YearKeyword", DatePartSpecifier::YEAR);
 	RegisterEnum<DatePartSpecifier>("MonthKeyword", DatePartSpecifier::MONTH);
