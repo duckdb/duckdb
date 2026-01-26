@@ -42,7 +42,6 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
-  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
 
 jobs:
   xcode-debug:
@@ -64,15 +63,13 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Install ninja
       shell: bash
       run: brew install ninja
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -125,11 +122,7 @@ jobs:
       - name: Install Ninja
         run: brew install ninja
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Install pytest
         run: |
