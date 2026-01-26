@@ -1,0 +1,19 @@
+# name: test/sql/aggregate/aggregates/test_aggregate_state_bc.test
+# description: Test backward compatibility for avg() EXPORT_STATE from v1.2.0 (opaque BLOB)
+# group: [aggregates]
+
+# Opaque BLOB state for avg() was the standard before v1.5.0
+# We want to ensure that the current version can still read and finalize it correctly.
+
+# Load the frozen database
+unzip data/storage/avg_state_v1_2_0.db.gz __TEST_DIR__/avg_v1_2_0.db
+load __TEST_DIR__/avg_v1_2_0.db readonly
+
+# Verify that the current version can read and finalize the old opaque state
+# The table 'legacy_states' was created with:
+# CREATE TABLE dummy AS SELECT range d FROM range(100);
+# CREATE TABLE legacy_states AS SELECT avg(d) EXPORT_STATE avg_state FROM dummy;
+query I
+SELECT finalize(avg_state) FROM legacy_states;
+----
+49.5
