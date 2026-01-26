@@ -1,4 +1,4 @@
-# name: test/fuzzer/duckfuzz/bind_limit_num.test
+# name: test/fuzzer/duckfuzz/bind_limit_num.test_slow
 # description: Fuzzyduck issue #1581
 # group: [duckfuzz]
 

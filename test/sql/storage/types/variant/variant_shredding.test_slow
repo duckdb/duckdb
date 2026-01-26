@@ -1,4 +1,4 @@
-# name: test/sql/storage/types/variant/variant_shredding.test
+# name: test/sql/storage/types/variant/variant_shredding.test_slow
 # group: [variant]
 
 load __TEST_DIR__/variant_shredding.db

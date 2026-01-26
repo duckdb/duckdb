@@ -1,4 +1,4 @@
-# name: test/sql/storage/types/variant/big_table.test
+# name: test/sql/storage/types/variant/big_table.test_slow
 # group: [variant]
 
 load __TEST_DIR__/variant_big_table.db

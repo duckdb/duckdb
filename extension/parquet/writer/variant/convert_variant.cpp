@@ -810,7 +810,7 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	}
 }
 
-void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = Schema();
@@ -837,9 +837,11 @@ void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &
 	}
 	schemas.push_back(std::move(top_element));
 
+	idx_t unique_columns = 0;
 	for (auto &child_writer : child_writers) {
-		child_writer->FinalizeSchema(schemas);
+		unique_columns += child_writer->FinalizeSchema(schemas);
 	}
+	return unique_columns;
 }
 
 LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType &type) {
@@ -881,7 +883,7 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	child_list_t<LogicalType> children;
 	children.emplace_back("metadata", LogicalType::BLOB);
 	children.emplace_back("value", LogicalType::BLOB);
-	if (shredding) {
+	if (shredding && shredding->id() != LogicalTypeId::VARIANT) {
 		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
 	}
 	auto res = LogicalType::STRUCT(std::move(children));

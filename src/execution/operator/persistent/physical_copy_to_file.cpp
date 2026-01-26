@@ -120,7 +120,11 @@ public:
 				string p_dir;
 				p_dir += HivePartitioning::Escape(partition_col_name);
 				p_dir += "=";
-				p_dir += HivePartitioning::Escape(partition_value.ToString());
+				if (partition_value.IsNull()) {
+					p_dir += "__HIVE_DEFAULT_PARTITION__";
+				} else {
+					p_dir += HivePartitioning::Escape(partition_value.ToString());
+				}
 				path = fs.JoinPath(path, p_dir);
 				CreateDir(path, fs);
 			}

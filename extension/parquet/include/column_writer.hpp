@@ -145,7 +145,7 @@ public:
 		throw NotImplementedException("Writer doesn't require an AnalyzeSchemaFinalize pass");
 	}
 
-	virtual void FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) = 0;
+	virtual idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) = 0;
 
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,

@@ -34,6 +34,7 @@ struct DuckDBExtensionLoadState {
 	//! Create a DuckDBExtensionLoadState reference from a C API opaque pointer
 	static DuckDBExtensionLoadState &Get(duckdb_extension_info info) {
 		D_ASSERT(info);
+
 		return *reinterpret_cast<duckdb::DuckDBExtensionLoadState *>(info);
 	}
 
@@ -164,9 +165,41 @@ static T TryLoadFunctionFromDLL(void *dll, const string &function_name, const st
 	return (T)function;
 }
 
-static void ComputeSHA256String(const string &to_hash, string *res) {
+static void ComputeSHA256Buffer(const char *buffer, const idx_t start, const idx_t end, string *res) {
 	// Invoke MbedTls function to actually compute sha256
-	*res = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(to_hash);
+	char hash[duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES];
+	duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(buffer + start, end - start, hash);
+	*res = std::string(hash, duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
+}
+
+static void ComputeSHA256String(const string &to_hash, string *res) {
+	ComputeSHA256Buffer(to_hash.data(), 0, to_hash.length(), res);
+}
+
+static string ComputeFinalHash(const vector<string> &chunks) {
+	string hash_concatenation;
+	hash_concatenation.reserve(32 * chunks.size()); // 256 bits -> 32 bytes per chunk
+
+	for (auto &chunk : chunks) {
+		hash_concatenation += chunk;
+	}
+
+	string two_level_hash;
+	ComputeSHA256String(hash_concatenation, &two_level_hash);
+
+	return two_level_hash;
+}
+
+static void IntializeAncillaryData(vector<string> &hash_chunks, vector<idx_t> &splits, idx_t length) {
+	const idx_t maxLenChunks = 1024ULL * 1024ULL;
+	const idx_t numChunks = (length + maxLenChunks - 1) / maxLenChunks;
+	hash_chunks.resize(numChunks);
+	splits.resize(numChunks + 1);
+
+	for (idx_t i = 0; i < numChunks; i++) {
+		splits[i] = maxLenChunks * i;
+	}
+	splits.back() = length;
 }
 
 static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, string *res) {
@@ -187,6 +220,26 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 	}
 
 	*res = state.Finalize();
+}
+
+template <typename T, typename F>
+static void ComputeHashesOnSegments(F ComputeHashFun, T handle, const vector<idx_t> &splits,
+                                    vector<string> &hash_chunks) {
+#ifndef DUCKDB_NO_THREADS
+	vector<std::thread> threads;
+	threads.reserve(hash_chunks.size());
+	for (idx_t i = 0; i < hash_chunks.size(); i++) {
+		threads.emplace_back(ComputeHashFun, handle, splits[i], splits[i + 1], &hash_chunks[i]);
+	}
+
+	for (auto &thread : threads) {
+		thread.join();
+	}
+#else
+	for (idx_t i = 0; i < hash_chunks.size(); i++) {
+		ComputeHashFun(handle, splits[i], splits[i + 1], &hash_chunks[i]);
+	}
+#endif // DUCKDB_NO_THREADS
 }
 
 static string FilterZeroAtEnd(string s) {
@@ -257,57 +310,54 @@ ParsedExtensionMetaData ExtensionHelper::ParseExtensionMetaData(FileHandle &hand
 	return ParseExtensionMetaData(metadata_segment.data());
 }
 
-bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
-                                              const bool allow_community_extensions) {
-	auto signature_offset = handle.GetFileSize() - ParsedExtensionMetaData::SIGNATURE_SIZE;
-
-	const idx_t maxLenChunks = 1024ULL * 1024ULL;
-	const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
-	vector<string> hash_chunks(numChunks);
-	vector<idx_t> splits(numChunks + 1);
-
-	for (idx_t i = 0; i < numChunks; i++) {
-		splits[i] = maxLenChunks * i;
-	}
-	splits.back() = signature_offset;
-
-#ifndef DUCKDB_NO_THREADS
-	vector<std::thread> threads;
-	threads.reserve(numChunks);
-	for (idx_t i = 0; i < numChunks; i++) {
-		threads.emplace_back(ComputeSHA256FileSegment, &handle, splits[i], splits[i + 1], &hash_chunks[i]);
-	}
-
-	for (auto &thread : threads) {
-		thread.join();
-	}
-#else
-	for (idx_t i = 0; i < numChunks; i++) {
-		ComputeSHA256FileSegment(&handle, splits[i], splits[i + 1], &hash_chunks[i]);
-	}
-#endif // DUCKDB_NO_THREADS
-
-	string hash_concatenation;
-	hash_concatenation.reserve(32 * numChunks); // 256 bits -> 32 bytes per chunk
-
-	for (auto &hash_chunk : hash_chunks) {
-		hash_concatenation += hash_chunk;
-	}
-
-	string two_level_hash;
-	ComputeSHA256String(hash_concatenation, &two_level_hash);
-
-	// TODO maybe we should do a stream read / hash update here
-	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
-
+static bool CheckKnownSignatures(const string &two_level_hash, const string &signature,
+                                 const bool allow_community_extensions) {
 	for (auto &key : ExtensionHelper::GetPublicKeys(allow_community_extensions)) {
-		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, parsed_metadata.signature, two_level_hash)) {
+		if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, two_level_hash)) {
 			return true;
-			break;
 		}
 	}
 
 	return false;
+}
+
+bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
+                                              const bool allow_community_extensions) {
+	auto signature_offset = handle.GetFileSize() - ParsedExtensionMetaData::SIGNATURE_SIZE;
+
+	vector<string> hash_chunks;
+	vector<idx_t> splits;
+	IntializeAncillaryData(hash_chunks, splits, signature_offset);
+
+	ComputeHashesOnSegments(ComputeSHA256FileSegment, &handle, splits, hash_chunks);
+
+	const string resulting_hash = ComputeFinalHash(hash_chunks);
+
+	// TODO maybe we should do a stream read / hash update here
+	handle.Read((void *)parsed_metadata.signature.data(), parsed_metadata.signature.size(), signature_offset);
+
+	return CheckKnownSignatures(resulting_hash, parsed_metadata.signature, allow_community_extensions);
+}
+
+bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
+                                                    const bool allow_community_extensions) {
+	vector<string> hash_chunks;
+	vector<idx_t> splits;
+	IntializeAncillaryData(hash_chunks, splits, buffer_length);
+
+	ComputeHashesOnSegments(ComputeSHA256Buffer, buffer, splits, hash_chunks);
+
+	const string resulting_hash = ComputeFinalHash(hash_chunks);
+
+	return CheckKnownSignatures(resulting_hash, signature, allow_community_extensions);
+}
+
+bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
+                                                    const bool allow_community_extensions) {
+	auto signature_offset = total_buffer_length - ParsedExtensionMetaData::SIGNATURE_SIZE;
+	string signature = std::string(buffer + signature_offset, ParsedExtensionMetaData::SIGNATURE_SIZE);
+
+	return CheckExtensionBufferSignature(buffer, signature_offset, signature, allow_community_extensions);
 }
 
 bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
@@ -402,6 +452,12 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	} else {
 		direct_load = true;
 		filename = fs.ExpandPath(filename);
+	}
+	if (!StringUtil::EndsWith(filename, ".duckdb_extension")) {
+		throw PermissionException(
+		    "DuckDB extensions are files ending with '.duckdb_extension', loading different "
+		    "files is not possible, error while loading from '%s', consider 'INSTALL <path>; LOAD <name>;'",
+		    filename);
 	}
 	if (!fs.FileExists(filename)) {
 		string message;
