@@ -621,7 +621,7 @@ struct EnableMacroDependenciesSetting {
 
 struct EnableMbedtlsSetting {
 	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "enable_mbedtls";
+	static constexpr const char *Name = "force_mbedtls_unsafe";
 	static constexpr const char *Description = "Enable mbedtls for encryption (WARNING: unsafe to use)";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);

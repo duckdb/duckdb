@@ -40,9 +40,6 @@ public:
 	DUCKDB_API virtual size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
 	DUCKDB_API virtual void GenerateRandomData(data_ptr_t data, idx_t len);
 
-public:
-	DUCKDB_API static void GenerateRandomDataInsecure(data_ptr_t data, idx_t len);
-
 protected:
 	EncryptionTypes::CipherType cipher;
 	idx_t key_len;

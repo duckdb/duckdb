@@ -16,7 +16,7 @@ set autoinstall_known_extensions=false
 statement error
 ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 ----
-Invalid Configuration Error:  DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.  To write an encrypted database that is NOT securely encrypted, one can use SET enable_mbedtls = 'true'.
+Invalid Configuration Error:  DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.  To write an encrypted database that is NOT securely encrypted, one can use SET force_mbedtls_unsafe = 'true'.
 
 # It works again by setting READONLY
 statement ok
@@ -38,17 +38,17 @@ DETACH enc
 statement error
 ATTACH '__TEST_DIR__/test_write_only.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 ----
-Invalid Configuration Error:  DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.  To write an encrypted database that is NOT securely encrypted, one can use SET enable_mbedtls = 'true'.
+Invalid Configuration Error:  DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.  To write an encrypted database that is NOT securely encrypted, one can use SET force_mbedtls_unsafe = 'true'.
 
 statement ok
-SET enable_mbedtls = 'true'
+SET force_mbedtls_unsafe = 'true'
 
 # Creating a new table will now pass, since we explicitly set to use Mbed TLS
 statement ok
 ATTACH '__TEST_DIR__/test_write_only.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 
 statement error
-SET enable_mbedtls = 'false'
+SET force_mbedtls_unsafe = 'false'
 ----
 Failed to autoload HTTPFS. Cannot disable MbedTLS, HTTPFS extension is required to write encrypted databases
 
@@ -56,7 +56,7 @@ statement ok
 DETACH enc
 
 statement ok
-SET enable_mbedtls = 'false'
+SET force_mbedtls_unsafe = 'false'
 
 # Loading httpfs will solve all problems
 

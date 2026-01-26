@@ -7,7 +7,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SET enable_mbedtls = 'true';
+SET force_mbedtls_unsafe = 'true';
 
 statement ok
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
@@ -22,4 +22,4 @@ SELECT SUM(i) FROM encrypted.tbl
 
 #openssl will be used again
 statement ok
-SET enable_mbedtls = 'false';
+SET force_mbedtls_unsafe = 'false';

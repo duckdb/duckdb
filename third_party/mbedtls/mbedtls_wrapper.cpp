@@ -12,6 +12,7 @@
 
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <stdexcept>
 
@@ -300,7 +301,27 @@ MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
 	}
 }
 
+void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataInsecure(duckdb::data_ptr_t data, duckdb::idx_t len) {
+	if (!force_mbedtls) {
+		// To use this insecure MbedTLS random number generator
+		// we double check if force_mbedtls_unsafe is set
+		// such that we do not accidentaly opt-in
+		throw duckdb::InternalException("Insecure random generation called without setting 'force_mbedtls_unsafe' = true");
+	}
+
+	duckdb::RandomEngine random_engine;
+
+	while (len != 0) {
+		const auto random_integer = random_engine.NextRandomInteger();
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
+		memcpy(data, duckdb::const_data_ptr_cast(&random_integer), next);
+		data += next;
+		len -= next;
+	}
+}
+
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+	// generate insecure random data
 	GenerateRandomDataInsecure(data, len);
 }
 

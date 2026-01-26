@@ -514,10 +514,16 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Va
 	return db_config.TryGetCurrentSetting(key, result);
 }
 
+shared_ptr<EncryptionUtil> DatabaseInstance::GetMbedTLSUtil() {
+	auto encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	encryption_util->ForceMbedTLSUnsafe();
+	return encryption_util;
+}
+
 shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
-	if (config.options.enable_mbedtls) {
+	if (config.options.force_mbedtls) {
 		// return mbedtls if setting is enabled
-		return make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+		return GetMbedTLSUtil();
 	}
 
 	if (!config.encryption_util) {
@@ -531,13 +537,13 @@ shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
 
 	if (read_only) {
 		// return mbedtls if database is read only
-		return make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+		return GetMbedTLSUtil();
 	}
 
 	throw InvalidConfigurationException(
 	    " DuckDB currently has a read-only crypto module "
 	    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`. "
-	    " To write an encrypted database that is NOT securely encrypted, one can use SET enable_mbedtls = "
+	    " To write an encrypted database that is NOT securely encrypted, one can use SET force_mbedtls_unsafe = "
 	    "'true'.");
 }
 

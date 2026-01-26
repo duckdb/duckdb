@@ -1325,9 +1325,9 @@ Value EnableHTTPLoggingSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 
 void EnableMbedtlsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.enable_mbedtls = input.GetValue<bool>();
+	config.options.force_mbedtls = input.GetValue<bool>();
 
-	if (!config.options.enable_mbedtls) {
+	if (!config.options.force_mbedtls) {
 		// check if there are attached databases encrypted that are not read only
 		bool encrypted_db_attached = false;
 		for (auto &database : db->GetDatabaseManager().GetDatabases()) {
@@ -1355,7 +1355,7 @@ void EnableMbedtlsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 
 Value EnableMbedtlsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.enable_mbedtls);
+	return Value::BOOLEAN(config.options.force_mbedtls);
 }
 
 //===----------------------------------------------------------------------===//
