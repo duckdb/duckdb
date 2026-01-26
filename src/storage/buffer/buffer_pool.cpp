@@ -1,6 +1,7 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -81,7 +82,7 @@ public:
 	//! Garbage collect dead nodes in the eviction queue.
 	void Purge();
 	template <typename FN>
-	void IterateUnloadableBlocks(FN fn);
+	void IterateUnloadableBlocks(FN fn) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 
 	//! Increment the dead node counter in the purge queue.
 	inline void IncrementDeadNodes() {

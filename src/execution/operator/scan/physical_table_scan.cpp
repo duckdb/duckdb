@@ -186,8 +186,8 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 		switch (output_async_result) {
 		case AsyncResultType::BLOCKED: {
 			D_ASSERT(data.async_result.HasTasks());
-			auto guard = g_state.Lock();
-			if (g_state.CanBlock(guard)) {
+			const lock_guard<mutex> guard {g_state.lock};
+			if (g_state.CanBlock()) {
 				data.async_result.ScheduleTasks(input.interrupt_state, context.pipeline->executor);
 				return SourceResultType::BLOCKED;
 			}
@@ -215,8 +215,8 @@ SourceResultType PhysicalTableScan::GetDataInternal(ExecutionContext &context, D
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
 	case OperatorResultType::BLOCKED: {
-		auto guard = g_state.Lock();
-		return g_state.BlockSource(guard, input.interrupt_state);
+		const lock_guard<mutex> guard {g_state.lock};
+		return g_state.BlockSource(input.interrupt_state);
 	}
 	default:
 		// FIXME: Handling for other cases (such as NEED_MORE_INPUT) breaks current functionality and extensions that
