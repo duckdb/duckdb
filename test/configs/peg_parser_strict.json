@@ -93,6 +93,12 @@
       ]
     },
     {
+      "reason": "Parser exception because of 'autocomplete' caused the CALL command to fail",
+      "paths": [
+        "test/sql/storage/memory/in_memory_compress.test"
+      ]
+    },
+    {
       "reason": "Quotations",
       "paths": [
         "test/sql/table_function/sqlite_master_quotes.test",
@@ -165,6 +171,12 @@
         "test/sql/function/string/test_subscript.test",
         "test/sql/binder/test_string_alias.test",
         "test/sql/function/string/test_string_slice.test"
+      ]
+    },
+    {
+      "reason": "New CREATE TABLE option syntax",
+      "paths": [
+        "test/sql/create/create_table_extra_options.test"
       ]
     }
   ]

@@ -75,16 +75,21 @@ NULL
 # test 'string' concat
 
 query I
-SELECT concat(NULL)
+SELECT concat(NULL) is NULL
 ----
-NULL
+false
 
 query I
-SELECT concat(NULL, NULL)
+SELECT '' = concat(NULL)
 ----
-NULL
+true
+
+query I
+SELECT '' = concat(NULL, NULL)
+----
+true
 
 query I
 SELECT ''~concat(NULL)
 ----
-NULL
+true

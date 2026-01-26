@@ -5,8 +5,6 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -220,6 +218,8 @@ void ColumnIndex::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", child_indexes);
 	serializer.WritePropertyWithDefault<ColumnIndexType>(3, "index_type", index_type, ColumnIndexType::FULL_READ);
 	serializer.WritePropertyWithDefault<LogicalType>(4, "type", type, LogicalType::INVALID);
+	serializer.WritePropertyWithDefault<string>(5, "field", field, "");
+	serializer.WritePropertyWithDefault<bool>(6, "has_index", has_index, true);
 }
 
 ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
@@ -228,6 +228,8 @@ ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<ColumnIndex>>(2, "child_indexes", result.child_indexes);
 	deserializer.ReadPropertyWithExplicitDefault<ColumnIndexType>(3, "index_type", result.index_type, ColumnIndexType::FULL_READ);
 	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(4, "type", result.type, LogicalType::INVALID);
+	deserializer.ReadPropertyWithExplicitDefault<string>(5, "field", result.field, "");
+	deserializer.ReadPropertyWithExplicitDefault<bool>(6, "has_index", result.has_index, true);
 	return result;
 }
 
@@ -349,18 +351,6 @@ JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-void LogicalType::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
-	serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
-}
-
-LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
-	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
-	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
-	LogicalType result(id, std::move(type_info));
-	return result;
-}
-
 void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "filename", filename);
 	serializer.WritePropertyWithDefault<bool>(101, "hive_partitioning", hive_partitioning);
@@ -422,20 +412,6 @@ PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(101, "unpivot_names", result.unpivot_names);
 	deserializer.ReadPropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", result.entries);
 	deserializer.ReadPropertyWithDefault<string>(103, "pivot_enum", result.pivot_enum);
-	return result;
-}
-
-void PivotColumnEntry::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
-	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
-}
-
-PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
-	PivotColumnEntry result;
-	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
-	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
 	return result;
 }
 

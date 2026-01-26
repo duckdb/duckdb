@@ -11,11 +11,13 @@
 #include <functional>
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/list.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 
 namespace duckdb {
 
@@ -40,8 +42,13 @@ public:
 	~SharedLruCache() = default;
 
 	// Insert `value` with key `key` and explicit memory size. This will replace any previous entry with the same key.
-	void Put(Key key, shared_ptr<Val> value, idx_t memory_size) {
+	void Put(Key key, shared_ptr<Val> value, unique_ptr<BufferPoolReservation> reservation) {
+		if (reservation == nullptr) {
+			throw InvalidInputException("Reservation cannot be null when emplace into LRU!");
+		}
+
 		// Remove existing entry if present
+		const idx_t memory_size = reservation->size;
 		auto existing_it = entry_map.find(key);
 		if (existing_it != entry_map.end()) {
 			DeleteImpl(existing_it);
@@ -56,8 +63,8 @@ public:
 		lru_list.emplace_front(key);
 		Entry new_entry;
 		new_entry.value = std::move(value);
-		new_entry.memory = memory_size;
 		new_entry.lru_iterator = lru_list.begin();
+		new_entry.reservation = std::move(reservation);
 
 		entry_map[std::move(key)] = std::move(new_entry);
 		current_memory += memory_size;
@@ -88,9 +95,27 @@ public:
 
 	// Clear the whole cache.
 	void Clear() {
+		for (auto &entry : entry_map) {
+			D_ASSERT(entry.second.reservation != nullptr);
+			entry.second.reservation->Resize(0);
+		}
 		entry_map.clear();
 		lru_list.clear();
 		current_memory = 0;
+	}
+
+	// Evict entries based on their access, until we've freed at least the target number of bytes or there's no entries
+	// in the cache. Return number of bytes freed.
+	idx_t EvictToReduceMemory(idx_t target_bytes) {
+		idx_t freed = 0;
+		while (!lru_list.empty() && freed < target_bytes) {
+			const auto &stale_key = lru_list.back();
+			auto stale_it = entry_map.find(stale_key);
+			D_ASSERT(stale_it != entry_map.end());
+			freed += stale_it->second.reservation->size;
+			DeleteImpl(stale_it);
+		}
+		return freed;
 	}
 
 	idx_t MaxMemory() const {
@@ -102,19 +127,25 @@ public:
 	size_t Size() const {
 		return entry_map.size();
 	}
+	bool IsEmpty() const {
+		return entry_map.empty();
+	}
 
 private:
 	struct Entry {
 		shared_ptr<Val> value;
 		idx_t memory;
 		typename list<Key>::iterator lru_iterator;
+		// Record memory reservation in the buffer pool, which is used for global memory control.
+		unique_ptr<BufferPoolReservation> reservation;
 	};
 
 	using EntryMap = unordered_map<Key, Entry, KeyHash, KeyEqual>;
 
 	void DeleteImpl(typename EntryMap::iterator iter) {
-		current_memory -= iter->second.memory;
+		current_memory -= iter->second.reservation->size;
 		D_ASSERT(current_memory >= 0);
+		iter->second.reservation->Resize(0);
 		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
 	}

@@ -15,6 +15,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
+struct DBConfig;
 
 //! The ParserExtensionInfo holds static information relevant to the parser extension
 //! It is made available in the parse_function, and will be kept alive as long as the database system is kept alive
@@ -116,6 +117,8 @@ public:
 
 	//! Additional parser info passed to the parse function
 	shared_ptr<ParserExtensionInfo> parser_info;
+
+	static void Register(DBConfig &config, ParserExtension extension);
 };
 
 } // namespace duckdb

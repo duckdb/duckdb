@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/storage/storage_index.hpp"
-#include "duckdb/common/types/value.hpp"
+
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
@@ -90,7 +89,7 @@ public:
 
 	void Set(StatsInfo info);
 	void CombineValidity(const BaseStatistics &left, const BaseStatistics &right);
-	void CopyValidity(BaseStatistics &stats);
+	void CopyValidity(const BaseStatistics &stats);
 	//! Set that the CURRENT level can have null values
 	//! Note that this is not correct for nested types unless this information is propagated in a different manner
 	//! Use Set(StatsInfo::CAN_HAVE_NULL_VALUES) in the general case

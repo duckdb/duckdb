@@ -252,9 +252,6 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				fk_constraint->fk_columns.push_back(qualified_name.name);
 				column_constraint.constraints.push_back(std::move(fk_constraint));
 			} else if (constraint->name == "ColumnCollation") {
-				if (type != LogicalType::VARCHAR) {
-					throw ParserException("Only VARCHAR columns can have collations!");
-				}
 				type = transformer.Transform<LogicalType>(constraint);
 			} else {
 				column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));
@@ -389,7 +386,7 @@ CompressionType PEGTransformerFactory::TransformColumnCompression(PEGTransformer
                                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto compression_string = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
-	return CompressionTypeFromString(StringUtil::Lower(compression_string));
+	return EnumUtil::FromString<CompressionType>(StringUtil::Lower(compression_string));
 }
 
 unique_ptr<ForeignKeyConstraint>
