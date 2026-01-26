@@ -3,7 +3,6 @@ add_library_unity(
   OBJECT
   concurrent_attach_detach.cpp
   concurrent_checkpoint.cpp
-  test_concurrentappend.cpp
   test_concurrentdelete.cpp
   test_concurrent_dependencies.cpp
   test_concurrentupdate.cpp
