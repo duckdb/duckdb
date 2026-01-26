@@ -72,7 +72,7 @@ public:
 	~VariantColumnWriter() override = default;
 
 public:
-	void FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
+	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
 	unique_ptr<ParquetAnalyzeSchemaState> AnalyzeSchemaInit() override;
 	void AnalyzeSchema(ParquetAnalyzeSchemaState &state, Vector &input, idx_t count) override;
 	void AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state) override;

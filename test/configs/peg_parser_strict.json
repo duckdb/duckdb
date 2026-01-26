@@ -13,7 +13,8 @@
         "test/sql/delete/test_segment_deletes.test",
         "test/sql/types/union/union_join.test",
         "test/sql/catalog/did_you_mean.test",
-        "test/sql/storage/wal/wal_view_storage.test"
+        "test/sql/storage/wal/wal_view_storage.test",
+        "test/sql/upsert/postgres/planner_preprocessing.test"
       ]
     },
     {
@@ -65,14 +66,30 @@
         "test/sql/attach/reattach_schema.test",
         "test/sql/pivot/pivot_enum.test",
         "test/sql/types/enum/test_5983.test",
-        "test/sql/binder/test_alias_map_in_subquery.test"
+        "test/sql/binder/test_alias_map_in_subquery.test",
+        "test/sql/catalog/function/test_macro_default_arg.test"
       ]
     },
     {
-      "reason": "Conversion Error",
+      "reason": "Implement transform sample",
       "paths": [
-        "test/sql/storage/types/struct/wal_struct_storage.test",
-        "test/sql/storage/types/struct/struct_storage.test"
+        "test/sql/index/art/scan/test_random_uuid.test"
+      ]
+    },
+    {
+      "reason": "Error handling",
+      "paths": [
+        "test/sql/error/error_position.test",
+        "test/sql/catalog/table/test_default_values.test",
+        "test/sql/cast/cast_error_location.test"
+      ]
+    },
+    {
+      "reason": "Special strings",
+      "paths": [
+        "test/sql/copy/csv/unquoted_escape/basic.test",
+        "test/sqlserver/sqlserver_cte.test",
+        "test/optimizer/compare_blob.test"
       ]
     },
     {
@@ -92,6 +109,7 @@
     {
       "reason": "Parser exception because of dollar-quoted strings",
       "paths": [
+        "test/sql/peg_parser/parser/insert_statement.test",
         "test/sql/peg_parser/parser/create_macro.test",
         "test/sql/peg_parser/parser/show_table.test",
         "test/sql/peg_parser/parser/prepare_statement.test",
@@ -137,17 +155,22 @@
       ]
     },
     {
+      "reason": "Parser exception because of 'autocomplete' caused the CALL command to fail",
+      "paths": [
+        "test/sql/storage/memory/in_memory_compress.test"
+      ]
+    },
+    {
       "reason": "Quotations",
       "paths": [
-        "test/sql/pragma/test_show_tables_from.test",
-        "test/sql/attach/attach_dbname_quotes.test",
         "test/sql/table_function/sqlite_master_quotes.test",
         "test/sql/keywords/escaped_quotes_expressions.test",
-        "test/sql/keywords/keywords_in_expressions.test",
-        "test/sql/show_select/test_describe_quoted.test",
-        "test/sql/show_select/test_summarize_quoted.test",
-        "test/sql/pragma/test_show_tables.test",
-        "test/sql/export/export_quoted_enum.test"
+        "test/sql/export/export_quoted_enum.test",
+        "test/sql/json/issues/large_quoted_string_constant.test",
+        "test/sql/attach/attach_dbname_quotes.test",
+        "test/sql/pragma/test_show_tables_from.test",
+        "test/sql/catalog/test_quoted_column_name.test",
+        "test/sql/cast/string_to_struct_cast.test"
       ]
     },
     {
@@ -183,6 +206,7 @@
         "test/sql/settings/allowed_directories.test",
         "test/sql/types/enum/test_enum.test",
         "test/sql/types/struct/nested_struct_projection_pushdown.test",
+        "test/sql/types/struct/struct_projection_pushdown.test",
         "test/sql/types/struct/struct_cast_superset.test",
         "test/sql/attach/attach_new_compression.test",
         "test/sql/attach/attach_wal_alter.test",
@@ -196,7 +220,8 @@
         "test/sql/pragma/profiling/call_enable_profiling_function.test",
         "test/sql/secrets/create_secret_persistence_no_client_context.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
+        "test/sql/pragma/test_pragma_sanitized_inputs.test"
       ]
     }
   ]

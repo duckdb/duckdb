@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "iostream"

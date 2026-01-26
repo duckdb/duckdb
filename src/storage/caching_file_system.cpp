@@ -1,15 +1,13 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
-#include "duckdb/common/chrono.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/external_file_cache_util.hpp"
 
@@ -51,7 +49,7 @@ bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length)
 } // namespace
 
 CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
-    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db_p)), db(db_p) {
+    : file_system(file_system_p), db(db_p), external_file_cache(ExternalFileCache::Get(db)) {
 }
 
 CachingFileSystem::~CachingFileSystem() {
@@ -61,21 +59,23 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
 }
 
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags) {
-	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags,
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+                                                          optional_ptr<FileOpener> opener) {
+	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener,
 	                                    external_file_cache.GetOrCreateCachedFile(path.path));
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
-                                                          FileOpenFlags flags) {
-	return make_uniq<CachingFileHandle>(context, *this, path, flags,
+                                                          FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+	return make_uniq<CachingFileHandle>(context, *this, path, flags, opener,
 	                                    external_file_cache.GetOrCreateCachedFile(path.path));
 }
 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
-                                     const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
+                                     const OpenFileInfo &path_p, FileOpenFlags flags_p,
+                                     optional_ptr<FileOpener> opener_p, CachedFile &cached_file_p)
     : context(context), caching_file_system(caching_file_system_p),
-      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p),
+      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), opener(opener_p),
       validate(
           ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
       cached_file(cached_file_p), position(0) {
@@ -97,7 +97,7 @@ CachingFileHandle::~CachingFileHandle() {
 
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
-		file_handle = caching_file_system.file_system.OpenFile(path, flags);
+		file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
 		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 

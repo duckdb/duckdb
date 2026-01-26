@@ -1,8 +1,8 @@
 #pragma once
 
 #include "duckdb/common/types/variant.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -26,6 +26,8 @@ struct VariantStatsData {
 struct VariantShreddedStats {
 public:
 	DUCKDB_API static bool IsFullyShredded(const BaseStatistics &stats);
+	DUCKDB_API static optional_ptr<const BaseStatistics> FindChildStats(const BaseStatistics &stats,
+	                                                                    const VariantPathComponent &component);
 };
 
 //! VARIANT as a type can hold arbitrarily typed values within the same column.
@@ -66,6 +68,8 @@ public:
 
 	DUCKDB_API static bool MergeShredding(BaseStatistics &stats, const BaseStatistics &other,
 	                                      BaseStatistics &new_stats);
+	DUCKDB_API static unique_ptr<BaseStatistics> WrapExtractedFieldAsVariant(const BaseStatistics &base_variant,
+	                                                                         const BaseStatistics &extracted_field);
 
 public:
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
@@ -76,6 +80,8 @@ public:
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);
+	DUCKDB_API static unique_ptr<BaseStatistics> PushdownExtract(const BaseStatistics &stats,
+	                                                             const StorageIndex &index);
 
 private:
 	static VariantStatsData &GetDataUnsafe(BaseStatistics &stats);

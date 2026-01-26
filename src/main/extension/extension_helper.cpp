@@ -181,18 +181,16 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
                                                           const string &extension_name) {
 	string install_hint;
 
-	auto &config = db.config;
-
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
 		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
-	} else if (!config.options.autoload_known_extensions) {
+	} else if (!Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 		install_hint =
 		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
 		    extension_name + ";\nLOAD " + extension_name +
 		    ";\n\nAlternatively, consider enabling auto-install "
 		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
-	} else if (!config.options.autoinstall_known_extensions) {
+	} else if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db)) {
 		install_hint =
 		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
 		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
@@ -209,11 +207,10 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
-	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
-		if (dbconfig.options.autoinstall_known_extensions) {
-			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(
-			    StringValue::Get(DBConfig::GetConfig(context).options.autoinstall_extension_repo));
+		if (Settings::Get<AutoinstallKnownExtensionsSetting>(context)) {
+			auto autoinstall_repo_setting = Settings::Get<AutoinstallExtensionRepositorySetting>(context);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(autoinstall_repo_setting);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
@@ -225,10 +222,10 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
-static string GetAutoInstallExtensionsRepository(const DBConfigOptions &options) {
-	string repository_url = options.autoinstall_extension_repo;
+static string GetAutoInstallExtensionsRepository(const DBConfig &config) {
+	string repository_url = Settings::Get<AutoinstallExtensionRepositorySetting>(config);
 	if (repository_url.empty()) {
-		repository_url = options.custom_extension_repo;
+		repository_url = Settings::Get<CustomExtensionRepositorySetting>(config);
 	}
 	return repository_url;
 }
@@ -240,8 +237,8 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 	auto &dbconfig = DBConfig::GetConfig(instance);
 	try {
 		auto &fs = FileSystem::GetFileSystem(instance);
-		if (dbconfig.options.autoinstall_known_extensions) {
-			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig.options);
+		if (Settings::Get<AutoinstallKnownExtensionsSetting>(instance)) {
+			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
@@ -274,7 +271,7 @@ static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, Dat
 	// Parse the version of the extension before updating
 	auto ext_binary_handle = fs.OpenFile(full_extension_path, FileOpenFlags::FILE_FLAGS_READ);
 	auto parsed_metadata = ExtensionHelper::ParseExtensionMetaData(*ext_binary_handle);
-	if (!parsed_metadata.AppearsValid() && !DBConfig::GetSetting<AllowExtensionsMetadataMismatchSetting>(context)) {
+	if (!parsed_metadata.AppearsValid() && !Settings::Get<AllowExtensionsMetadataMismatchSetting>(context)) {
 		throw IOException(
 		    "Failed to update extension: '%s', the metadata of the extension appears invalid! To resolve this, either "
 		    "reinstall the extension using 'FORCE INSTALL %s', manually remove the file '%s', or enable '"
@@ -388,8 +385,8 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	try {
 		auto fs = FileSystem::CreateLocal();
 #ifndef DUCKDB_WASM
-		if (dbconfig.options.autoinstall_known_extensions) {
-			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig.options);
+		if (Settings::Get<AutoinstallKnownExtensionsSetting>(db)) {
+			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig);
 			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;

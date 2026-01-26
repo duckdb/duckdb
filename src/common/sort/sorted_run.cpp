@@ -47,6 +47,11 @@ void SortedRunScanState::Scan(const SortedRun &sorted_run, const Vector &sort_ke
 	}
 }
 
+void SortedRunScanState::Clear() {
+	payload_state.pin_state.row_handles.clear();
+	payload_state.pin_state.heap_handles.clear();
+}
+
 template <class SORT_KEY, class PHYSICAL_TYPE>
 void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count,
                                DataChunk &key, data_ptr_t *const payload_ptrs) {

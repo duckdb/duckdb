@@ -248,6 +248,20 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(time_val.micros == 123400);
 	REQUIRE(result->Fetch<string>(0, 2) == Value::TIME(12, 0, 30, 123400).ToString());
 
+	// time_ns columns
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE time_ns_values(d TIME_NS)"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO time_ns_values VALUES ('12:34:56.789123456'), (NULL), ('12:34:56')"));
+
+	result = tester.Query("SELECT * FROM time_ns_values ORDER BY d");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->IsNull(0, 0));
+	duckdb_time_ns time_ns_val = result->Fetch<duckdb_time_ns>(0, 1);
+	REQUIRE(time_ns_val.nanos == 45296000000000);
+	REQUIRE(result->Fetch<string>(0, 1) == Value::TIME_NS(dtime_ns_t(45296000000000)).ToString());
+	time_ns_val = result->Fetch<duckdb_time_ns>(0, 2);
+	REQUIRE(time_ns_val.nanos == 45296789123456);
+	REQUIRE(result->Fetch<string>(0, 2) == Value::TIME_NS(dtime_ns_t(45296789123456)).ToString());
+
 	// blob columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE blobs(b BLOB)"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO blobs VALUES ('hello\\x12world'), ('\\x00'), (NULL)"));
@@ -732,4 +746,10 @@ TEST_CASE("Test unsupported types in the deprecated C API", "[capi]") {
 	REQUIRE(!string(second_bigint_row).compare("412"));
 	duckdb_free(second_bigint_row);
 	REQUIRE(duckdb_value_string(&result_c, 1, 1).data == nullptr);
+}
+
+TEST_CASE("Test creating DUCKDB_ERROR_INTERNAL error data", "[capi]") {
+	auto error_data = duckdb_create_error_data(DUCKDB_ERROR_INTERNAL, "foo");
+	REQUIRE(error_data);
+	duckdb_destroy_error_data(&error_data);
 }

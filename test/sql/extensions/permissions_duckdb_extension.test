@@ -1,0 +1,30 @@
+# name: test/sql/extensions/permissions_duckdb_extension.test
+# description: Test that writing (but not reading) into file ending with '.duckdb_extension' is forbidden
+# group: [extensions]
+
+statement error
+COPY (SELECT 42) TO 'name.duckdb_extension';
+----
+Permission Error: File 'name.duckdb_extension' cannot be opened for writing since files ending with '.duckdb_extension' are reserved for DuckDB extensions, and these can only be installed through the INSTALL command
+
+statement ok
+COPY (SELECT 42) TO 'name_duckdb_extension';
+
+statement error
+COPY (SELECT NULL::BLOB) TO 'name.duckdb_extension' (FORMAT BLOB);
+----
+Permission Error: File 'name.duckdb_extension' cannot be opened for writing since files ending with '.duckdb_extension' are reserved for DuckDB extensions, and these can only be installed through the INSTALL command
+
+statement ok
+COPY (SELECT NULL::BLOB) TO 'name.duckdb_extensionz' (FORMAT BLOB);
+
+statement error
+ATTACH 'my_name.duckdb_extension'
+----
+Permission Error: File 'my_name.duckdb_extension' cannot be opened for writing since files ending with '.duckdb_extension' are reserved for DuckDB extensions, and these can only be installed through the INSTALL command
+
+statement ok
+ATTACH 'my_name_duckdb_extension'
+
+statement ok
+FROM read_blob('build/*/repository/*/*/parquet.duckdb_extension');

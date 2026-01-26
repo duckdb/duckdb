@@ -16,8 +16,10 @@
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 
 namespace duckdb {
-class SecretManager;
+
+struct BoundStatement;
 struct DBConfig;
+class SecretManager;
 class SchemaCatalogEntry;
 
 //! A Secret Entry in the secret manager

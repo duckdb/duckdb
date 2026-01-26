@@ -6,7 +6,6 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
-#include "duckdb/common/column_index.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -270,6 +269,8 @@ unique_ptr<BaseStatistics> BaseStatistics::PushdownExtract(const StorageIndex &i
 	switch (stats_type) {
 	case StatisticsType::STRUCT_STATS:
 		return StructStats::PushdownExtract(*this, index);
+	case StatisticsType::VARIANT_STATS:
+		return VariantStats::PushdownExtract(*this, index);
 	default:
 		throw InternalException("PushdownExtract not supported for StatisticsType::%s", EnumUtil::ToString(stats_type));
 	}
@@ -347,7 +348,7 @@ void BaseStatistics::CombineValidity(const BaseStatistics &left, const BaseStati
 	has_no_null = left.has_no_null || right.has_no_null;
 }
 
-void BaseStatistics::CopyValidity(BaseStatistics &stats) {
+void BaseStatistics::CopyValidity(const BaseStatistics &stats) {
 	has_null = stats.has_null;
 	has_no_null = stats.has_no_null;
 }

@@ -109,6 +109,33 @@
             }
         },
         {
+            "name": "duckdb_vector_safe_assign_string_element",
+            "return_type": "duckdb_error_data",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "index"
+                },
+                {
+                    "type": "const char *",
+                    "name": "str"
+                }
+            ],
+            "comment": {
+                "description": "Safely assigns a string element in the vector at the specified location. Supersedes `duckdb_vector_assign_string_element`. The vector type must be VARCHAR and the input must be\nvalid UTF-8. Otherwise, it returns an invalid Unicode error.\n\n",
+                "param_comments": {
+                    "vector": "The vector to alter",
+                    "index": "The row position in the vector to assign the string to",
+                    "str": "The null-terminated string"
+                },
+                "return_value": "If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the return value must be destroyed with `duckdb_destroy_error_data`."
+            }
+        },
+        {
             "name": "duckdb_vector_assign_string_element",
             "return_type": "void",
             "params": [
@@ -126,7 +153,7 @@
                 }
             ],
             "comment": {
-                "description": "Assigns a string element in the vector at the specified location.\n\n",
+                "description": "Assigns a string element in the vector at the specified location. The vector type must be VARCHAR and the input must be valid UTF-8. Otherwise, undefined behavior is expected at later stages.\n\n",
                 "param_comments": {
                     "vector": "The vector to alter",
                     "index": "The row position in the vector to assign the string to",
@@ -156,7 +183,7 @@
                 }
             ],
             "comment": {
-                "description": "Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.\n\n",
+                "description": "Assigns a string element in the vector at the specified location. The vector type can be VARCHAR or BLOB. In the case of VARCHAR, you must pass valid UTF-8. Otherwise, undefined behavior is expected at later stages.\n\n",
                 "param_comments": {
                     "vector": "The vector to alter",
                     "index": "The row position in the vector to assign the string to",

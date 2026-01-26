@@ -50,6 +50,8 @@ enum class AggregateOrderDependent : uint8_t;
 
 enum class AggregateType : uint8_t;
 
+enum class AllowParserOverride : uint8_t;
+
 enum class AlterDatabaseType : uint8_t;
 
 enum class AlterForeignKeyType : uint8_t;
@@ -190,6 +192,8 @@ enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
+enum class ExtraPersistentColumnDataType : uint8_t;
+
 enum class ExtraTypeInfoType : uint8_t;
 
 enum class FileBufferType : uint8_t;
@@ -291,6 +295,8 @@ enum class OnConflictAction : uint8_t;
 enum class OnCreateConflict : uint8_t;
 
 enum class OnEntryNotFound : uint8_t;
+
+enum class OperatorCachingMode : uint8_t;
 
 enum class OperatorFinalResultType : uint8_t;
 
@@ -430,8 +436,6 @@ enum class TablePartitionInfo : uint8_t;
 
 enum class TableReferenceType : uint8_t;
 
-enum class TableScanType : uint8_t;
-
 enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
@@ -515,6 +519,9 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 
 template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
+
+template<>
+const char* EnumUtil::ToChars<AllowParserOverride>(AllowParserOverride value);
 
 template<>
 const char* EnumUtil::ToChars<AlterDatabaseType>(AlterDatabaseType value);
@@ -727,6 +734,9 @@ template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
 
 template<>
+const char* EnumUtil::ToChars<ExtraPersistentColumnDataType>(ExtraPersistentColumnDataType value);
+
+template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
 
 template<>
@@ -878,6 +888,9 @@ const char* EnumUtil::ToChars<OnCreateConflict>(OnCreateConflict value);
 
 template<>
 const char* EnumUtil::ToChars<OnEntryNotFound>(OnEntryNotFound value);
+
+template<>
+const char* EnumUtil::ToChars<OperatorCachingMode>(OperatorCachingMode value);
 
 template<>
 const char* EnumUtil::ToChars<OperatorFinalResultType>(OperatorFinalResultType value);
@@ -1087,9 +1100,6 @@ template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value);
 
 template<>
-const char* EnumUtil::ToChars<TableScanType>(TableScanType value);
-
-template<>
 const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value);
 
 template<>
@@ -1200,6 +1210,9 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
+
+template<>
+AllowParserOverride EnumUtil::FromString<AllowParserOverride>(const char *value);
 
 template<>
 AlterDatabaseType EnumUtil::FromString<AlterDatabaseType>(const char *value);
@@ -1412,6 +1425,9 @@ template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
 
 template<>
+ExtraPersistentColumnDataType EnumUtil::FromString<ExtraPersistentColumnDataType>(const char *value);
+
+template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
 
 template<>
@@ -1563,6 +1579,9 @@ OnCreateConflict EnumUtil::FromString<OnCreateConflict>(const char *value);
 
 template<>
 OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value);
+
+template<>
+OperatorCachingMode EnumUtil::FromString<OperatorCachingMode>(const char *value);
 
 template<>
 OperatorFinalResultType EnumUtil::FromString<OperatorFinalResultType>(const char *value);
@@ -1770,9 +1789,6 @@ TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);
 
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value);
-
-template<>
-TableScanType EnumUtil::FromString<TableScanType>(const char *value);
 
 template<>
 TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);

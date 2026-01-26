@@ -2,12 +2,9 @@
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/transaction/undo_buffer.hpp"
-#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 

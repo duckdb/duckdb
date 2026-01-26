@@ -164,7 +164,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMP to TIMESTAMPTZ cast.");
 		}
-		if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
+		if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
 			throw BinderException("Casting from TIMESTAMP to TIMESTAMP WITH TIME ZONE without an explicit time zone "
 			                      "has been disabled  - use \"AT TIME ZONE ...\"");
 		}
@@ -251,7 +251,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMPTZ to TIMESTAMP cast.");
 		}
-		if (DBConfig::GetSetting<DisableTimestamptzCastsSetting>(*input.context)) {
+		if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
 			throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to TIMESTAMP without an explicit time zone "
 			                      "has been disabled  - use \"AT TIME ZONE ...\"");
 		}

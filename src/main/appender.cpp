@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -172,6 +173,9 @@ void BaseAppender::AppendValueInternal(T input) {
 		break;
 	case LogicalTypeId::TIME:
 		AppendValueInternal<T, dtime_t>(col, input);
+		break;
+	case LogicalTypeId::TIME_NS:
+		AppendValueInternal<T, dtime_ns_t>(col, input);
 		break;
 	case LogicalTypeId::TIME_TZ:
 		AppendValueInternal<T, dtime_tz_t>(col, input);

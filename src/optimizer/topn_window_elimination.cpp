@@ -97,8 +97,7 @@ ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
 		return {projection.table_index, projection.types.size() - 1};
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		const auto &join = op->Cast<LogicalComparisonJoin>();
-		D_ASSERT(!join.right_projection_map.empty());
+		D_ASSERT(!op->Cast<LogicalComparisonJoin>().right_projection_map.empty());
 		const auto child_bindings = op->GetColumnBindings();
 		return child_bindings[child_bindings.size() - 1];
 	}
@@ -361,7 +360,7 @@ TopNWindowElimination::TryCreateUnnestOperator(unique_ptr<LogicalOperator> op,
 
 	if (params.limit <= 1) {
 		// LIMIT 1 -> we do not need to unnest
-		return std::move(op);
+		return op;
 	}
 
 	// Create unnest expression for aggregate args
@@ -421,10 +420,16 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	const auto op_column_bindings = op->GetColumnBindings();
 
 	vector<unique_ptr<Expression>> proj_exprs;
-	// Only project necessary group columns
+	// Only project necessary group columns, but in the same order as they appear in the aggregate operator.
+	// For that, we need the group_idxs ordered by value.
+	std::set<idx_t> ordered_group_projection_idxs;
 	for (const auto &group_idx : group_idxs) {
-		proj_exprs.push_back(
-		    make_uniq<BoundColumnRefExpression>(op->types[group_idx.second], op_column_bindings[group_idx.second]));
+		ordered_group_projection_idxs.insert(group_idx.second);
+	}
+
+	for (const idx_t group_projection_idx : ordered_group_projection_idxs) {
+		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(op->types[group_projection_idx],
+		                                                         op_column_bindings[group_projection_idx]));
 	}
 
 	auto aggregate_column_ref =
@@ -482,6 +487,9 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	}
 	auto &filter_value = filter_comparison.right->Cast<BoundConstantExpression>();
 	if (filter_value.value.type() != LogicalType::BIGINT) {
+		return false;
+	}
+	if (filter_value.value.IsNull()) {
 		return false;
 	}
 
