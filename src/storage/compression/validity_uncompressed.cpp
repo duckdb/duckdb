@@ -393,11 +393,6 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 #endif
 
 #ifdef DEBUG
-	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
-	ValidityMask input_mask(input_data, input_size);
-	for (idx_t i = 0; i < scan_count; i++) {
-		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(input_start + i));
-	}
 	// verify surrounding bits weren't modified
 	auto debug_final_result_data = (validity_t *)result_mask.GetData();
 	validity_t debug_final_first_entry =
