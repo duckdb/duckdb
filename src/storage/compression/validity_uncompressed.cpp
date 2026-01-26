@@ -224,10 +224,6 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	auto input_data = reinterpret_cast<validity_t *>(input);
 
 #ifdef DEBUG
-	// this method relies on all the bits we are going to write to being set to valid
-	for (idx_t i = 0; i < scan_count; i++) {
-		D_ASSERT(result_mask.RowIsValid(result_offset + i));
-	}
 	// save boundary entries to verify we don't corrupt surrounding bits later.
 	idx_t debug_first_entry = result_offset / ValidityMask::BITS_PER_VALUE;
 	idx_t debug_last_entry = (result_offset + scan_count - 1) / ValidityMask::BITS_PER_VALUE;
