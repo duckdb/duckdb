@@ -344,7 +344,7 @@ ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, vec
 	chunk.Initialize(buffer.GetAllocator(), types);
 }
 
-//! TODO: this doesnt work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
+//! TODO: this doesn't work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
 //! no locks Either every local state needs its own copy of this or we need a lock so its used by one thread at a time..
 //! The former has my preference
 ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollection &input) {

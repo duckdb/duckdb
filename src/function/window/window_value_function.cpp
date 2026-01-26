@@ -988,7 +988,7 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 				}
 			}
 
-			//	If there is nothing beind us (missing early value) then scan forward
+			//	If there is nothing behind us (missing early value) then scan forward
 			if (prev_valid == DConstants::INVALID_INDEX) {
 				for (idx_t n = own_row + 1; n < frame_width; ++n) {
 					auto j = gfstate.value_tree->SelectNth(frames, n).first;
@@ -1099,7 +1099,7 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 			}
 		}
 
-		//	If there is nothing beind us (missing early value) then scan forward
+		//	If there is nothing behind us (missing early value) then scan forward
 		if (prev_valid == DConstants::INVALID_INDEX) {
 			for (idx_t j = row_idx + 1; j < valid_end[i]; ++j) {
 				if (!order_value_func(j, order_cursor)) {

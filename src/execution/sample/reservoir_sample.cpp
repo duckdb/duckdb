@@ -326,7 +326,7 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 	UpdateSampleAppend(reservoir_chunk->chunk, other.reservoir_chunk->chunk, chunk_sel, keep_from_other);
 	base_reservoir_sample->num_entries_seen_total += other.GetTuplesSeen();
 
-	// if THIS has too many samples now, we conver it to a slower sample.
+	// if THIS has too many samples now, we convert it to a slower sample.
 	if (GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
 		ConvertToReservoirSample();
 	}
@@ -771,7 +771,7 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 
 	Verify();
 
-	// if we are over the threshold, we ned to switch to slow sampling.
+	// if we are over the threshold, we need to switch to slow sampling.
 	if (GetSamplingState() == SamplingState::RANDOM && GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
 		ConvertToReservoirSample();
 	}

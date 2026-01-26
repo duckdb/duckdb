@@ -136,7 +136,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		// note that it is fine to do this now, even if the same column is used again later
 		// e.g. if we have i=j AND i=k, and the stats for j and k are disjoint, we know there are no results
 		// so if we have e.g. i: [0, 100], j: [0, 25], k: [75, 100]
-		// we can set i: [0, 25] after the first comparison, and statically determine that the second comparison is fals
+		// we can set i: [0, 25] after the first comparison, and statically determine that the second comparison is false
 
 		// note that we can't update statistics the same for all join types
 		// mark and single joins don't filter any tuples -> so there is no propagation possible

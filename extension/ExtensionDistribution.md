@@ -41,7 +41,7 @@ name                                        The default name of a given extensio
 .duckdb_extension                           Fixed file identifier
 ```
 
-DuckDB-Wasm extensions are are downloaded by the browsers WITHOUT appening .gz, since decompression status is agreed using headers such as `Accept-Encoding: *` and `Content-Encoding: br`.
+DuckDB-Wasm extensions are are downloaded by the browsers WITHOUT appending .gz, since decompression status is agreed using headers such as `Accept-Encoding: *` and `Content-Encoding: br`.
 
 ### Version identifier
 

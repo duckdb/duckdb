@@ -32,7 +32,7 @@ WITH RECURSIVE friends(startPerson, hopCount, friend) AS (
    , friend_list AS (
     SELECT DISTINCT f.friend AS friendid
       FROM friends_shortest f
-         , person tf -- the friend's preson record
+         , person tf -- the friend's person record
          , place ci -- city
          , place co -- country
      WHERE 1=1

@@ -481,7 +481,7 @@ void DependencyManager::VerifyCommitDrop(CatalogTransaction transaction, transac
 			// timestamp
 			//
 			// Which differentiates between objects that we were already aware of (and will subsequently be dropped) and
-			// objects that were introduced inbetween, which should cause this error:
+			// objects that were introduced in between, which should cause this error:
 			throw DependencyException(
 			    "Could not commit DROP of \"%s\" because a dependency was created after the transaction started",
 			    object.name);
