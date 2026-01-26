@@ -1645,7 +1645,7 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
 	       ")" + "::" +
 	       (is_struct ? aggr_state.return_type.ToString() + ", " + struct_type.ToString()
-	                       : aggr_state.return_type.ToString()) +
+	                  : aggr_state.return_type.ToString()) +
 	       ">";
 }
 

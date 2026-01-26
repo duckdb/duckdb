@@ -301,7 +301,7 @@ void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	// This way we can still preserve forward compatibility for the legacy opaque aggregate state
 	if (serializer.ShouldSerialize(7)) {
 		serializer.WritePropertyWithDefault<child_list_t<LogicalType>>(203, "child_types", child_types,
-																	   child_list_t<LogicalType> {});
+		                                                               child_list_t<LogicalType> {});
 	}
 }
 
