@@ -873,6 +873,11 @@
         "id": 206,
         "name": "return_chunk",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "delete_return_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": ["$ClientContext", "table_info&"]
