@@ -17,15 +17,16 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/function/cast_rules.hpp"
-#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/database_manager.hpp"
+#include "duckdb/common/types/type_manager.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <cmath>
 
@@ -119,6 +120,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
+	case LogicalTypeId::TYPE:
 		return PhysicalType::VARCHAR;
 	case LogicalTypeId::INTERVAL:
 		return PhysicalType::INTERVAL;
@@ -158,7 +160,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INTEGER_LITERAL:
 	case LogicalTypeId::TEMPLATE:
 		return PhysicalType::INVALID;
-	case LogicalTypeId::USER:
+	case LogicalTypeId::UNBOUND:
 		return PhysicalType::UNKNOWN;
 	case LogicalTypeId::AGGREGATE_STATE:
 		return PhysicalType::VARCHAR;
@@ -387,7 +389,7 @@ static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_li
 }
 
 string LogicalType::ToString() const {
-	if (id_ != LogicalTypeId::USER) {
+	if (id_ != LogicalTypeId::UNBOUND) {
 		auto alias = GetAlias();
 		if (!alias.empty()) {
 			if (HasExtensionInfo()) {
@@ -482,39 +484,17 @@ string LogicalType::ToString() const {
 		ret += ")";
 		return ret;
 	}
-	case LogicalTypeId::USER: {
-		string result;
-		auto &catalog = UserType::GetCatalog(*this);
-		auto &schema = UserType::GetSchema(*this);
-		auto &type = UserType::GetTypeName(*this);
-		auto &mods = UserType::GetTypeModifiers(*this);
-
-		if (!catalog.empty()) {
-			result = KeywordHelper::WriteOptionallyQuoted(catalog);
-		}
-		if (!schema.empty()) {
-			if (!result.empty()) {
-				result += ".";
-			}
-			result += KeywordHelper::WriteOptionallyQuoted(schema);
-		}
-		if (!result.empty()) {
-			result += ".";
-		}
-		result += KeywordHelper::WriteOptionallyQuoted(type);
-
-		if (!mods.empty()) {
-			result += "(";
-			for (idx_t i = 0; i < mods.size(); i++) {
-				result += mods[i].ToString();
-				if (i < mods.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += ")";
+	case LogicalTypeId::UNBOUND: {
+		if (!type_info_) {
+			return "UNBOUND";
 		}
 
-		return result;
+		auto &expr = UnboundType::GetTypeExpression(*this);
+		if (expr->type != ExpressionType::TYPE) {
+			return "(" + expr->ToString() + ")";
+		} else {
+			return expr->ToString();
+		}
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
@@ -547,110 +527,13 @@ LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 	if (type == LogicalTypeId::INVALID) {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
-		type = LogicalTypeId::USER;
+		type = LogicalTypeId::UNBOUND;
 	}
-	return type;
-}
-
-LogicalType TransformStringToLogicalType(const string &str) {
-	if (StringUtil::Lower(str) == "null") {
-		return LogicalType::SQLNULL;
-	}
-	ColumnList column_list;
-	try {
-		column_list = Parser::ParseColumnList("dummy " + str);
-	} catch (const std::runtime_error &e) {
-		const vector<string> suggested_types {"BIGINT",
-		                                      "INT8",
-		                                      "LONG",
-		                                      "BIT",
-		                                      "BITSTRING",
-		                                      "BLOB",
-		                                      "BYTEA",
-		                                      "BINARY,",
-		                                      "VARBINARY",
-		                                      "BOOLEAN",
-		                                      "BOOL",
-		                                      "LOGICAL",
-		                                      "DATE",
-		                                      "DECIMAL(prec, scale)",
-		                                      "DOUBLE",
-		                                      "FLOAT8",
-		                                      "FLOAT",
-		                                      "FLOAT4",
-		                                      "REAL",
-		                                      "HUGEINT",
-		                                      "INTEGER",
-		                                      "INT4",
-		                                      "INT",
-		                                      "SIGNED",
-		                                      "INTERVAL",
-		                                      "SMALLINT",
-		                                      "INT2",
-		                                      "SHORT",
-		                                      "TIME",
-		                                      "TIMESTAMPTZ",
-		                                      "TIMESTAMP",
-		                                      "DATETIME",
-		                                      "TINYINT",
-		                                      "INT1",
-		                                      "UBIGINT",
-		                                      "UHUGEINT",
-		                                      "UINTEGER",
-		                                      "USMALLINT",
-		                                      "UTINYINT",
-		                                      "UUID",
-		                                      "VARCHAR",
-		                                      "CHAR",
-		                                      "BPCHAR",
-		                                      "TEXT",
-		                                      "STRING",
-		                                      "MAP(INTEGER, VARCHAR)",
-		                                      "UNION(num INTEGER, text VARCHAR)"};
-		std::ostringstream error;
-		error << "Value \"" << str << "\" can not be converted to a DuckDB Type." << '\n';
-		error << "Possible examples as suggestions: " << '\n';
-		auto suggestions = StringUtil::TopNJaroWinkler(suggested_types, str);
-		for (auto &suggestion : suggestions) {
-			error << "* " << suggestion << '\n';
-		}
-		throw InvalidInputException(error.str());
-	}
-	return column_list.GetColumn(LogicalIndex(0)).Type();
-}
-
-LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {
-	if (type.id() == LogicalTypeId::USER && type.HasAlias()) {
-		auto &type_entry =
-		    Catalog::GetEntry<TypeCatalogEntry>(context, INVALID_CATALOG, INVALID_SCHEMA, type.GetAlias());
-		return type_entry.user_type;
-	}
-	// Look for LogicalTypeId::USER in nested types
-	if (type.id() == LogicalTypeId::STRUCT) {
-		child_list_t<LogicalType> children;
-		children.reserve(StructType::GetChildCount(type));
-		for (auto &child : StructType::GetChildTypes(type)) {
-			children.emplace_back(child.first, GetUserTypeRecursive(child.second, context));
-		}
-		return LogicalType::STRUCT(children);
-	}
-	if (type.id() == LogicalTypeId::LIST) {
-		return LogicalType::LIST(GetUserTypeRecursive(ListType::GetChildType(type), context));
-	}
-	if (type.id() == LogicalTypeId::ARRAY) {
-		return LogicalType::ARRAY(GetUserTypeRecursive(ArrayType::GetChildType(type), context),
-		                          ArrayType::GetSize(type));
-	}
-	if (type.id() == LogicalTypeId::MAP) {
-		return LogicalType::MAP(GetUserTypeRecursive(MapType::KeyType(type), context),
-		                        GetUserTypeRecursive(MapType::ValueType(type), context));
-	}
-	// Not LogicalTypeId::USER or a nested type
 	return type;
 }
 
 LogicalType TransformStringToLogicalType(const string &str, ClientContext &context) {
-	return GetUserTypeRecursive(TransformStringToLogicalType(str), context);
+	return TypeManager::Get(context).ParseLogicalType(str, context);
 }
 
 bool LogicalType::IsIntegral() const {
@@ -1282,6 +1165,11 @@ bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
+	return TryGetMaxLogicalTypeUnchecked(left, right, result);
+}
+
+bool LogicalType::TryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right,
+                                                LogicalType &result) {
 	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(left, right, result);
 }
 
@@ -1378,7 +1266,8 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
-	case LogicalTypeId::USER:
+	case LogicalTypeId::UNBOUND:
+	case LogicalTypeId::TYPE:
 		break;
 	}
 	return 1000;
@@ -1469,6 +1358,33 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
+void LogicalType::Serialize(Serializer &serializer) const {
+	// This is a UNBOUND type and we are writing to older storage.
+	// 1. try to default-bind into a concrete logical type, and serialize that
+	// 2. if that fails, serialize normally, in which case the UNBOUND_TYPE_INFO will try to
+	//    write itself as an old-style USER type.
+	if (id_ == LogicalTypeId::UNBOUND && !serializer.ShouldSerialize(7)) {
+		try {
+			auto bound_type = UnboundType::TryDefaultBind(*this);
+			if (bound_type.id() != LogicalTypeId::INVALID && bound_type.id() != LogicalTypeId::UNBOUND) {
+				bound_type.Serialize(serializer);
+				return;
+			}
+		} catch (...) {
+			// Ignore errors, just try to write as a USER type instead
+		}
+	}
+	serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
+	serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
+}
+
+LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
+	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
+	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
+	LogicalType result(id, std::move(type_info));
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
@@ -1499,9 +1415,6 @@ void LogicalType::SetAlias(string alias) {
 }
 
 string LogicalType::GetAlias() const {
-	if (id() == LogicalTypeId::USER) {
-		return UserType::GetTypeName(*this);
-	}
 	if (type_info_) {
 		return type_info_->alias;
 	}
@@ -1509,9 +1422,6 @@ string LogicalType::GetAlias() const {
 }
 
 bool LogicalType::HasAlias() const {
-	if (id() == LogicalTypeId::USER) {
-		return !UserType::GetTypeName(*this).empty();
-	}
 	if (type_info_ && !type_info_->alias.empty()) {
 		return true;
 	}
@@ -1767,52 +1677,18 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 }
 
 //===--------------------------------------------------------------------===//
-// User Type
+// Unbound Type
 //===--------------------------------------------------------------------===//
-const string &UserType::GetCatalog(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.AuxInfo();
-	return info->Cast<UserTypeInfo>().catalog;
+LogicalType LogicalType::UNBOUND(unique_ptr<ParsedExpression> expr) {
+	auto info = make_shared_ptr<UnboundTypeInfo>(std::move(expr));
+	return LogicalType(LogicalTypeId::UNBOUND, std::move(info));
 }
 
-const string &UserType::GetSchema(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.AuxInfo();
-	return info->Cast<UserTypeInfo>().schema;
-}
-
-const string &UserType::GetTypeName(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.AuxInfo();
-	return info->Cast<UserTypeInfo>().user_type_name;
-}
-
-const vector<Value> &UserType::GetTypeModifiers(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.AuxInfo();
-	return info->Cast<UserTypeInfo>().user_type_modifiers;
-}
-
-vector<Value> &UserType::GetTypeModifiers(LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::USER);
-	auto info = type.GetAuxInfoShrPtr();
-	return info->Cast<UserTypeInfo>().user_type_modifiers;
-}
-
-LogicalType LogicalType::USER(const string &user_type_name) {
-	auto info = make_shared_ptr<UserTypeInfo>(user_type_name);
-	return LogicalType(LogicalTypeId::USER, std::move(info));
-}
-
-LogicalType LogicalType::USER(const string &user_type_name, const vector<Value> &user_type_mods) {
-	auto info = make_shared_ptr<UserTypeInfo>(user_type_name, user_type_mods);
-	return LogicalType(LogicalTypeId::USER, std::move(info));
-}
-
-LogicalType LogicalType::USER(string catalog, string schema, string name, vector<Value> user_type_mods) {
-	auto info = make_shared_ptr<UserTypeInfo>(std::move(catalog), std::move(schema), std::move(name),
-	                                          std::move(user_type_mods));
-	return LogicalType(LogicalTypeId::USER, std::move(info));
+//===--------------------------------------------------------------------===//
+// Type Type
+//===--------------------------------------------------------------------===//
+LogicalType LogicalType::TYPE() {
+	return LogicalType(LogicalTypeId::TYPE);
 }
 
 //===--------------------------------------------------------------------===//
@@ -2077,6 +1953,77 @@ const CoordinateReferenceSystem &GeoType::GetCRS(const LogicalType &type) {
 	auto &geo_info = info->Cast<GeoTypeInfo>();
 
 	return geo_info.crs;
+}
+
+//===--------------------------------------------------------------------===//
+// Unbound Types
+//===--------------------------------------------------------------------===//
+
+const unique_ptr<ParsedExpression> &UnboundType::GetTypeExpression(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::UNBOUND);
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO);
+	return info->Cast<UnboundTypeInfo>().expr;
+}
+
+LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
+	if (type_str.empty()) {
+		return LogicalType::INVALID;
+	}
+	try {
+		ColumnList list = Parser::ParseColumnList("dummy " + type_str);
+		auto unbound = list.GetColumn(LogicalIndex(0)).Type();
+		return TryDefaultBind(unbound);
+	} catch (const std::runtime_error &e) {
+		throw InvalidInputException("Could not parse type string '%s'", type_str);
+	}
+}
+
+static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
+	if (expr.type != ExpressionType::TYPE) {
+		throw InvalidInputException("Cannot default bind unbound type with non-type expression");
+	}
+	const auto &type_expr = expr.Cast<TypeExpression>();
+
+	// Now we try to bind the unbound type to a default type
+	auto &name = type_expr.GetTypeName();
+	auto &args = type_expr.GetChildren();
+
+	vector<pair<string, Value>> bound_args;
+	for (auto &arg : args) {
+		switch (arg->GetExpressionType()) {
+		case ExpressionType::TYPE: {
+			auto type = TryDefaultBindTypeExpression(*arg);
+			bound_args.emplace_back(arg->GetName(), Value::TYPE(type));
+		} break;
+		case ExpressionType::VALUE_CONSTANT: {
+			auto &const_expr = arg->Cast<ConstantExpression>();
+			bound_args.emplace_back(arg->GetName(), const_expr.value);
+		} break;
+		default:
+			throw InvalidInputException("Cannot default bind unbound type with non-type, non-expression parameter");
+			break;
+		}
+	}
+
+	// Try to bind as far as we can
+	auto result = DefaultTypeGenerator::TryDefaultBind(name, bound_args);
+	if (result.id() != LogicalTypeId::INVALID) {
+		return result;
+	}
+
+	// Otherwise, wrap this as an unbound type
+	auto copy = expr.Copy();
+	return LogicalType::UNBOUND(std::move(copy));
+	// return LogicalType::INVALID;
+}
+
+LogicalType UnboundType::TryDefaultBind(const LogicalType &unbound_type) {
+	if (!unbound_type.IsUnbound()) {
+		return unbound_type;
+	}
+	auto &expr = UnboundType::GetTypeExpression(unbound_type);
+	return TryDefaultBindTypeExpression(*expr);
 }
 
 //===--------------------------------------------------------------------===//

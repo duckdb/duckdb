@@ -30,15 +30,13 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/optimizer/optimizer_extension.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/user_settings.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/common/types/type_manager.hpp"
 
 namespace duckdb {
 
@@ -59,6 +57,8 @@ class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
 class DatabaseFilePathManager;
+class ExtensionCallbackManager;
+class TypeManager;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -190,24 +190,14 @@ public:
 	unique_ptr<BlockAllocator> block_allocator;
 	//! Database configuration options
 	DBConfigOptions options;
-	//! Extensions made to the parser
-	vector<ParserExtension> parser_extensions;
-	//! Extensions made to the optimizer
-	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager
 	unique_ptr<ErrorManager> error_manager;
 	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
 	shared_ptr<Allocator> default_allocator;
-	//! Extensions made to binder
-	vector<unique_ptr<OperatorExtension>> operator_extensions;
-	//! Extensions made to storage
-	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
 	//! Provide a custom buffer manager implementation (if desired).
 	shared_ptr<BufferManager> buffer_manager;
-	//! Set of callbacks that can be installed by extensions
-	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! HTTP Request utility functions
@@ -287,6 +277,7 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
@@ -310,15 +301,18 @@ public:
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;
+	ExtensionCallbackManager &GetCallbackManager();
+	const ExtensionCallbackManager &GetCallbackManager() const;
 
 private:
 	mutable mutex config_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
-	unique_ptr<CastFunctionSet> cast_functions;
+	unique_ptr<TypeManager> type_manager;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
+	unique_ptr<ExtensionCallbackManager> callback_manager;
 	bool is_user_config = true;
 };
 

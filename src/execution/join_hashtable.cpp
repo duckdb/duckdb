@@ -1,13 +1,14 @@
 #include "duckdb/execution/join_hashtable.hpp"
 
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/ht_entry.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -1136,25 +1137,35 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys) {
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, chain_match_sel_vector, nullptr);
 
-		// for each match, fully follow the chain
-		for (idx_t i = 0; i < result_count; i++) {
-			const auto idx = chain_match_sel_vector.get_index(i);
-			auto &ptr = ptrs[idx];
-			if (Load<bool>(ptr + ht.tuple_size)) { // Early out: chain has been fully marked as found before
-				ptr = ht.dead_end.get();
-				continue;
-			}
-
-			// Fully mark chain as found
-			while (true) {
-				// NOTE: threadsan reports this as a data race because this can be set concurrently by separate threads
-				// Technically it is, but it does not matter, since the only value that can be written is "true"
-				Store<bool>(true, ptr + ht.tuple_size);
-				auto next_ptr = LoadPointer(ptr + ht.pointer_offset);
-				if (!next_ptr) {
-					break;
+		if (ht.non_equality_predicates.empty()) {
+			// we only have equality predicates - the match is found for the entire chain
+			for (idx_t i = 0; i < result_count; i++) {
+				const auto idx = chain_match_sel_vector.get_index(i);
+				auto &ptr = ptrs[idx];
+				if (Load<bool>(ptr + ht.tuple_size)) { // Early out: chain has been fully marked as found before
+					ptr = ht.dead_end.get();
+					continue;
 				}
-				ptr = next_ptr;
+
+				// Fully mark chain as found
+				while (true) {
+					// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
+					// threads Technically it is, but it does not matter, since the only value that can be written is
+					// "true"
+					Store<bool>(true, ptr + ht.tuple_size);
+					auto next_ptr = LoadPointer(ptr + ht.pointer_offset);
+					if (!next_ptr) {
+						break;
+					}
+					ptr = next_ptr;
+				}
+			}
+		} else {
+			// we have non-equality predicates - we need to evaluate the join condition for every row
+			// for each match found in the current pass - mark the match as found
+			for (idx_t i = 0; i < result_count; i++) {
+				auto idx = chain_match_sel_vector.get_index(i);
+				Store<bool>(true, ptrs[idx] + ht.tuple_size);
 			}
 		}
 

@@ -50,6 +50,9 @@ void AdditionalAuthenticatedData::WriteStringData(const std::string &val) const 
 EncryptionEngine::EncryptionEngine() {
 }
 
+EncryptionEngine::~EncryptionEngine() {
+}
+
 const_data_ptr_t EncryptionEngine::GetKeyFromCache(DatabaseInstance &db, const string &key_name) {
 	auto &keys = EncryptionKeyManager::Get(db);
 	return keys.GetKey(key_name);
@@ -65,8 +68,8 @@ void EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const
 	if (!keys.HasKey(key_name)) {
 		keys.AddKey(key_name, key);
 	} else {
-		// wipe out the key
-		std::memset(key, 0, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key,
+		                                                                 MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
 }
 
@@ -77,8 +80,8 @@ string EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key) {
 	if (!keys.HasKey(key_id)) {
 		keys.AddKey(key_id, key);
 	} else {
-		// wipe out the original key
-		std::memset(key, 0, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(key,
+		                                                                 MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
 
 	return key_id;

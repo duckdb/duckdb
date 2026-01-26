@@ -473,7 +473,7 @@ void AttachWorker::Work() {
 
 			// NOTE: Magic threshold used for debugging slowness in this test.
 			// NOTE Set to a fairly high value for CI purposes.
-			if (elapsed >= 0.5) {
+			if (elapsed >= 1) {
 				Printer::PrintF("Slow task %s - took %lf seconds\n", AttachTaskTypeToString(task.type), elapsed);
 			}
 

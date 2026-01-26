@@ -1060,9 +1060,8 @@ def test_empty_result(shell):
     result.check_stdout('''┌──────────────┐
 │ empty_result │
 │    int32     │
-├──────────────┤
-│    0 rows    │
-└──────────────┘''')
+└──────────────┘
+     0 rows''')
 
 def test_columnar_mode_constant(shell):
     columns = ','.join(["'MyValue" + str(x) + "'" for x in range(100)])
