@@ -1494,7 +1494,10 @@ bool ClientContext::ExecutionIsFinished() {
 
 LogicalType ClientContext::ParseLogicalType(const string &type) {
 	auto lock = LockContext();
-	RunFunctionInTransactionInternal(*lock, [&]() { return TypeManager::Get(*db).ParseLogicalType(type, *this); });
+	LogicalType logical_type;
+	RunFunctionInTransactionInternal(*lock,
+	                                 [&]() { logical_type = TypeManager::Get(*db).ParseLogicalType(type, *this); });
+	return logical_type;
 }
 
 } // namespace duckdb
