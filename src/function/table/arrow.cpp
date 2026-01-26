@@ -234,6 +234,7 @@ static bool CanPushdown(const ArrowType &type) {
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:

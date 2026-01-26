@@ -1,0 +1,28 @@
+# name: benchmark/micro/delete_returning/delete_returning_10col.benchmark
+# description: DELETE RETURNING with 10 columns (optimized scan pass-through path)
+# group: [delete_returning]
+
+load
+CREATE TABLE t10 (
+    c1 INT, c2 VARCHAR, c3 DOUBLE, c4 INT, c5 VARCHAR,
+    c6 DOUBLE, c7 INT, c8 VARCHAR, c9 DOUBLE, c10 INT
+);
+INSERT INTO t10 SELECT
+    i, 'val_' || i::VARCHAR, i * 1.5, i + 1, 'str_' || (i+1)::VARCHAR,
+    i * 2.5, i + 2, 'txt_' || (i+2)::VARCHAR, i * 3.5, i + 3
+FROM range(1000000) t(i);
+
+run
+DELETE FROM t10 WHERE c1 % 2 = 0 RETURNING *;
+
+cleanup
+DROP TABLE IF EXISTS t10;
+CREATE TABLE t10 (
+    c1 INT, c2 VARCHAR, c3 DOUBLE, c4 INT, c5 VARCHAR,
+    c6 DOUBLE, c7 INT, c8 VARCHAR, c9 DOUBLE, c10 INT
+);
+INSERT INTO t10 SELECT
+    i, 'val_' || i::VARCHAR, i * 1.5, i + 1, 'str_' || (i+1)::VARCHAR,
+    i * 2.5, i + 2, 'txt_' || (i+2)::VARCHAR, i * 3.5, i + 3
+FROM range(1000000) t(i);
+

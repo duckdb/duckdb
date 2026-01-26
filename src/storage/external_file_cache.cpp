@@ -39,7 +39,7 @@ ExternalFileCache::CachedFileRange::GetOverlap(const CachedFileRange &other) con
 void ExternalFileCache::CachedFileRange::AddCheckSum() {
 #ifdef DEBUG
 	D_ASSERT(checksum == 0);
-	auto buffer_handle = block_handle->block_manager.buffer_manager.Pin(block_handle);
+	auto buffer_handle = block_handle->GetBufferManager().Pin(block_handle);
 	checksum = Checksum(buffer_handle.Ptr(), nr_bytes);
 #endif
 }
@@ -49,7 +49,7 @@ void ExternalFileCache::CachedFileRange::VerifyCheckSum() {
 	if (checksum == 0) {
 		return;
 	}
-	auto buffer_handle = block_handle->block_manager.buffer_manager.Pin(block_handle);
+	auto buffer_handle = block_handle->GetBufferManager().Pin(block_handle);
 	if (!buffer_handle.IsValid()) {
 		return;
 	}

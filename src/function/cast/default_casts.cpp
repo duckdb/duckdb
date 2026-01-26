@@ -174,6 +174,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return ArrayCastSwitch(input, source, target);
 	case LogicalTypeId::GEOMETRY:
 		return GeoCastSwitch(input, source, target);
+	case LogicalTypeId::TYPE:
+		return TypeCastSwitch(input, source, target);
 	case LogicalTypeId::BIGNUM:
 		return BignumCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
 
@@ -146,10 +147,6 @@ public:
 		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
 	}
 
-	void UnregisterSubSystem(const string &name) override {
-		GetFileSystem().UnregisterSubSystem(name);
-	}
-
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
 	}
@@ -186,6 +183,17 @@ protected:
 	}
 
 	bool SupportsListFilesExtended() const override {
+		return true;
+	}
+
+	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                            optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(path);
+		return GetFileSystem().Glob(path, input, GetOpener());
+	}
+
+	bool SupportsGlobExtended() const override {
 		return true;
 	}
 
