@@ -24,6 +24,7 @@ public:
 
 	//! Get the TypeManager from the DatabaseInstance
 	static TypeManager &Get(DatabaseInstance &db);
+	static TypeManager &Get(ClientContext &context);
 
 private:
 	//! This has to be a function pointer to avoid the compiler inlining the implementation and

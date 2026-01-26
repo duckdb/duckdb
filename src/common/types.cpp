@@ -533,7 +533,7 @@ LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
 }
 
 LogicalType TransformStringToLogicalType(const string &str, ClientContext &context) {
-	return context.ParseLogicalType(str);
+	return TypeManager::Get(context).ParseLogicalType(str, context);
 }
 
 bool LogicalType::IsIntegral() const {

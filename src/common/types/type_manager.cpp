@@ -102,6 +102,10 @@ TypeManager &TypeManager::Get(DatabaseInstance &db) {
 	return DBConfig::GetConfig(db).GetTypeManager();
 }
 
+TypeManager &TypeManager::Get(ClientContext &context) {
+	return DBConfig::GetConfig(context).GetTypeManager();
+}
+
 TypeManager::TypeManager(DBConfig &config_p) {
 	cast_functions = make_uniq<CastFunctionSet>(config_p);
 	parse_function = ParseLogicalTypeInternal;
