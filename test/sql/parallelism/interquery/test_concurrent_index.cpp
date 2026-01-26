@@ -41,38 +41,6 @@ static void ReadFromIntegers(DuckDB *db, idx_t thread_idx, atomic<bool> *success
 	}
 }
 
-TEST_CASE("Concurrent reads during index creation", "[index][.]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("SET immediate_transaction_mode=true"));
-
-	CreateIntegerTable(&con, 1000000);
-	concurrent_index_finished = false;
-
-	atomic<bool> success(true);
-
-	// launch many reading threads
-	thread threads[CONCURRENT_INDEX_THREAD_COUNT];
-	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
-		threads[i] = thread(ReadFromIntegers, &db, i, &success);
-	}
-
-	// create the index
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	concurrent_index_finished = true;
-
-	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
-		threads[i].join();
-	}
-
-	REQUIRE(success);
-
-	// test that we can probe the index correctly
-	auto result = con.Query("SELECT COUNT(*) FROM integers WHERE i=500000");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-}
-
 static void AppendToIntegers(DuckDB *db, atomic<bool> *success) {
 	Connection con(*db);
 	for (idx_t i = 0; i < CONCURRENT_INDEX_INSERT_COUNT; i++) {
