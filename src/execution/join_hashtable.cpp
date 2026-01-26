@@ -1,15 +1,16 @@
 #include "duckdb/execution/join_hashtable.hpp"
 
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/ht_entry.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/main/settings.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

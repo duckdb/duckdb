@@ -26,6 +26,7 @@ public:
 		case LogicalOperatorType::LOGICAL_PROJECTION:
 		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		case LogicalOperatorType::LOGICAL_FILTER:
 			if (!op.children.empty()) {
 				return CanRebind(*op.children[0]);
 			}

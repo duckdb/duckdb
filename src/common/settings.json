@@ -729,6 +729,13 @@
         "custom_implementation": true
     },
     {
+        "name": "max_execution_time",
+        "description": "The maximum execution time per query in milliseconds (0 = no limit)",
+        "type": "BIGINT",
+        "scope": "local",
+        "default_value": "0"
+    },
+    {
         "name": "max_expression_depth",
         "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
         "type": "UBIGINT",

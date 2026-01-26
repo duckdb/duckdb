@@ -1,4 +1,5 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
+
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
@@ -6,6 +7,7 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
 namespace duckdb {
