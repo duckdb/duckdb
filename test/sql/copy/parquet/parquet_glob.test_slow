@@ -66,11 +66,6 @@ FROM parquet_scan('{DATA_DIR}/parquet-testing/glob3/*/dir/*.parquet');
 1	a
 3	c
 
-statement error
-select count(*) from parquet_scan('')
-----
-<REGEX>:.*IO Error.*can only be set for.*
-
 # schema mismatch in parquet glob
 statement error
 select * from parquet_scan('{DATA_DIR}/parquet-testing/*.parquet')

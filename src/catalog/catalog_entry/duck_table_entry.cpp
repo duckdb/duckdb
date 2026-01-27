@@ -53,6 +53,10 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	// create the physical storage
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
+		if (TypeVisitor::Contains(col_def.Type(), LogicalTypeId::TYPE)) {
+			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
+		}
+
 		column_defs.push_back(col_def.Copy());
 	}
 	storage = make_shared_ptr<DataTable>(catalog.GetAttached(), StorageManager::Get(catalog).GetTableIOManager(&info),
@@ -364,8 +368,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	for (auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
+
 	auto binder = Binder::CreateBinder(context);
-	binder->BindLogicalType(info.new_column.TypeMutable(), &catalog, schema.name);
+	binder->SetSearchPath(catalog, schema.name);
+	binder->BindLogicalType(info.new_column.TypeMutable());
+
 	info.new_column.SetOid(columns.LogicalColumnCount());
 	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
 	auto col = info.new_column.Copy();
@@ -978,8 +985,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
-	auto binder = Binder::CreateBinder(context);
-	binder->BindLogicalType(info.target_type, &catalog, schema.name);
+	// Bind type
+	auto type_binder = Binder::CreateBinder(context);
+	type_binder->SetSearchPath(catalog, schema.name);
+	type_binder->BindLogicalType(info.target_type);
 
 	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
@@ -988,6 +997,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	create_info->tags = tags;
 
 	// Bind the USING expression.
+	auto binder = Binder::CreateBinder(context);
 	vector<LogicalIndex> bound_columns;
 	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
