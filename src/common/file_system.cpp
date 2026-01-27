@@ -906,7 +906,7 @@ string FileSystem::CanonicalizePath(const string &path_p) {
 		}
 	}
 	// we lost the leading / in the split/loop so lets put it back
-	if (result[0] == '/') {
+	if (path_p[0] == '/') {
 		result = "/";
 	}
 	while (!path_stack.empty()) {
