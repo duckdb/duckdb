@@ -632,7 +632,7 @@ TEST_CASE("Test writing invalid UTF-8 to VARCHAR vector in data chunk", "[capi]"
 	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
 
 	string valid_utf8 = "é";
-	// strlen does not include NULL-termination. Remove the first byte only.
+	// Create invalid UTF-8 by stripping the lead byte of 'é' (0xC3 0xA9), leaving a lone continuation byte.
 	idx_t len = strlen(valid_utf8.c_str());
 	auto invalid_utf8 = static_cast<char *>(malloc(len));
 	memcpy(invalid_utf8, valid_utf8.c_str() + 1, len);
