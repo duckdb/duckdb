@@ -9,12 +9,11 @@ namespace duckdb {
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op,
                                                PhysicalOperator &left, PhysicalOperator &right,
-                                               vector<JoinCondition> cond, JoinType join_type,
+                                               vector<JoinCondition> conds, JoinType join_type,
                                                idx_t estimated_cardinality,
                                                unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
-                             estimated_cardinality),
-      predicate(std::move(op.predicate)) {
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(conds), join_type,
+                             estimated_cardinality) {
 	filter_pushdown = std::move(pushdown_info_p);
 	children.push_back(left);
 	children.push_back(right);
@@ -122,17 +121,27 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 		return true;
 	}
 	for (auto &cond : conditions) {
-		if (cond.left->return_type.InternalType() == PhysicalType::STRUCT ||
-		    cond.left->return_type.InternalType() == PhysicalType::LIST ||
-		    cond.left->return_type.InternalType() == PhysicalType::ARRAY) {
+		if (!cond.IsComparison()) {
+			continue;
+		}
+		if (cond.GetLHS().return_type.InternalType() == PhysicalType::STRUCT ||
+		    cond.GetLHS().return_type.InternalType() == PhysicalType::LIST ||
+		    cond.GetLHS().return_type.InternalType() == PhysicalType::ARRAY) {
 			return false;
 		}
 	}
+
 	// To avoid situations like https://github.com/duckdb/duckdb/issues/10046
 	// If there is an equality in the conditions, a hash join is planned
 	// with one condition, we can use mark join logic, otherwise we should use physical blockwise nl join
 	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
-		return conditions.size() == 1;
+		idx_t comparison_count = 0;
+		for (auto &cond : conditions) {
+			if (cond.IsComparison()) {
+				comparison_count++;
+			}
+		}
+		return comparison_count == 1;
 	}
 	return true;
 }
@@ -174,8 +183,8 @@ public:
 	    : rhs_executor(context) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : op.conditions) {
-			rhs_executor.AddExpression(*cond.right);
-			condition_types.push_back(cond.right->return_type);
+			rhs_executor.AddExpression(cond.GetRHS());
+			condition_types.push_back(cond.GetRHS().return_type);
 		}
 		right_condition.Initialize(Allocator::Get(context), condition_types);
 
@@ -194,8 +203,8 @@ public:
 
 vector<LogicalType> PhysicalNestedLoopJoin::GetJoinTypes() const {
 	vector<LogicalType> result;
-	for (auto &op : conditions) {
-		result.push_back(op.right->return_type);
+	for (auto &cond : conditions) {
+		result.push_back(cond.GetRHS().return_type);
 	}
 	return result;
 }
@@ -276,8 +285,8 @@ public:
 	      left_outer(IsLeftOuterJoin(op.join_type)), pred_executor(context) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
-			lhs_executor.AddExpression(*cond.left);
-			condition_types.push_back(cond.left->return_type);
+			lhs_executor.AddExpression(cond.GetLHS());
+			condition_types.push_back(cond.GetLHS().return_type);
 		}
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);

@@ -318,10 +318,10 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 
 	for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
 		auto &row_id_col = row_id_columns[r_idx];
-		JoinCondition condition;
-		condition.comparison = ExpressionType::COMPARE_EQUAL;
-		condition.left = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]);
-		condition.right = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, rhs_bindings[r_idx]);
+		JoinCondition condition(
+		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]),
+		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, rhs_bindings[r_idx]),
+		    ExpressionType::COMPARE_EQUAL);
 		join->conditions.push_back(std::move(condition));
 	}
 

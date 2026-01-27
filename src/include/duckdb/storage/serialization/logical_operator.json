@@ -463,7 +463,8 @@
       {
         "id": 208,
         "name": "predicate",
-        "type": "Expression*"
+        "type": "Expression*",
+        "status": "deleted"
       }
     ],
     "constructor": [
