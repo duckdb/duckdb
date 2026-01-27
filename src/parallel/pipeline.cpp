@@ -255,6 +255,10 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
 }
 
+vector<weak_ptr<Pipeline>> Pipeline::GetDependencies() const {
+	return dependencies;
+}
+
 string Pipeline::ToString() const {
 	TextTreeRenderer renderer;
 	return renderer.ToString(*this);
