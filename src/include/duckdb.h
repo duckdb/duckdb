@@ -2149,7 +2149,7 @@ DUCKDB_C_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepare
 /*!
 Binds a null-terminated varchar value to the prepared statement at the specified index.
 
-Superseded by `duckdb_bind_varchar_length`.
+Superseded by `duckdb_bind_varchar_length`, which is superseded by `duckdb_bind_value`.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                               const char *val);
@@ -2399,7 +2399,8 @@ DUCKDB_C_API void duckdb_destroy_value(duckdb_value *value);
 /*!
 Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8.
 
-Superseded by `duckdb_create_varchar_length`.
+Superseded by `duckdb_create_varchar_length`, which is superseded by `duckdb_unsafe_create_varchar_length` combined with
+`duckdb_is_valid_utf8`.
 
 * @param text The null-terminated string
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -3495,7 +3496,8 @@ DUCKDB_C_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8.
 If the input is invalid UTF-8, the assignment is silently skipped (no-op).
 
-Superseded by `duckdb_vector_assign_string_element_len`.
+Superseded by `duckdb_vector_assign_string_element_len`, which is superseded by
+`duckdb_unsafe_vector_assign_string_element_len` combined with `duckdb_is_valid_utf8`.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to

@@ -462,7 +462,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds a null-terminated varchar value to the prepared statement at the specified index.\n\nSuperseded by `duckdb_bind_varchar_length`.\n"
+                "description": "Binds a null-terminated varchar value to the prepared statement at the specified index.\n\nSuperseded by `duckdb_bind_varchar_length`, which is superseded by `duckdb_bind_value`.\n"
             }
         },
         {
