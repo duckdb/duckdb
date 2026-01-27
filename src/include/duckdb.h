@@ -2411,8 +2411,7 @@ DUCKDB_C_API duckdb_value duckdb_create_varchar(const char *text);
 Creates a value from a string. Returns nullptr if the string is not valid UTF-8.
 
 Supersedes `duckdb_create_varchar`. Superseded by `duckdb_unsafe_create_varchar_length` combined with
-`duckdb_is_valid_utf8`. If the input is known to be valid UTF-8, use `duckdb_unsafe_create_varchar_length` directly for
-better performance. Otherwise, call `duckdb_is_valid_utf8` first to validate.
+`duckdb_is_valid_utf8`.
 
 * @param text The text
 * @param length The length of the text
@@ -2422,7 +2421,8 @@ DUCKDB_C_API duckdb_value duckdb_create_varchar_length(const char *text, idx_t l
 
 /*!
 Creates a value from a string without UTF-8 validation. The caller is responsible for ensuring the input is valid UTF-8.
-Use `duckdb_is_valid_utf8` to validate strings before calling this function if needed.
+Use `duckdb_is_valid_utf8` to validate strings before calling this function if needed. If the input is known to be valid
+UTF-8, this function can be called directly for better performance, avoiding the overhead of redundant validation.
 
 Supersedes `duckdb_create_varchar` and `duckdb_create_varchar_length`.
 
@@ -3510,9 +3510,7 @@ Assigns a string element in the vector at the specified location. For VARCHAR ve
 If the input is invalid UTF-8, the assignment is silently skipped (no-op). For BLOB vectors, no validation is performed.
 
 Supersedes `duckdb_vector_assign_string_element`. Superseded by `duckdb_unsafe_vector_assign_string_element_len`
-combined with `duckdb_is_valid_utf8`. If the input is known to be valid UTF-8, use
-`duckdb_unsafe_vector_assign_string_element_len` directly for better performance. Otherwise, call `duckdb_is_valid_utf8`
-first to validate.
+combined with `duckdb_is_valid_utf8`.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -3523,9 +3521,10 @@ DUCKDB_C_API void duckdb_vector_assign_string_element_len(duckdb_vector vector, 
                                                           idx_t str_len);
 
 /*!
-Assigns a string element in the vector at the specified location without UTF-8 validation. For VARCHAR vectors, the
-caller is responsible for ensuring the input is valid UTF-8. Use `duckdb_is_valid_utf8` to validate strings before
-calling this function if needed.
+Assigns a string element in the vector at the specified location without UTF-8 validation. The caller is responsible for
+ensuring the input is valid UTF-8. Use `duckdb_is_valid_utf8` to validate strings before calling this function if
+needed. If the input is known to be valid UTF-8, this function can be called directly for better performance, avoiding
+the overhead of redundant validation.
 
 Supersedes `duckdb_vector_assign_string_element` and `duckdb_vector_assign_string_element_len`.
 
