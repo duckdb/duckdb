@@ -31,17 +31,21 @@ void duckdb_destroy_value(duckdb_value *value) {
 }
 
 duckdb_value duckdb_create_varchar_length(const char *text, idx_t length) {
-	if (!duckdb_is_valid_utf8(text, length)) {
+	if (!duckdb_is_valid_utf8(text, length, nullptr)) {
 		return nullptr;
 	}
-	return WrapValue(new duckdb::Value(std::string(text, length)));
+	return duckdb_unsafe_create_varchar_length(text, length);
 }
 
 duckdb_value duckdb_create_varchar(const char *text) {
-	return duckdb_create_varchar_length(text, strlen(text));
+	auto length = strlen(text);
+	if (!duckdb_is_valid_utf8(text, length, nullptr)) {
+		return nullptr;
+	}
+	return duckdb_unsafe_create_varchar_length(text, length);
 }
 
-duckdb_value duckdb_create_unsafe_varchar_length(const char *text, idx_t length) {
+duckdb_value duckdb_unsafe_create_varchar_length(const char *text, idx_t length) {
 	return WrapValue(new duckdb::Value(std::string(text, length)));
 }
 

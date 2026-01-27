@@ -549,16 +549,27 @@ TEST_CASE("Test DataChunk write BIGNUM", "[capi]") {
 
 TEST_CASE("Test duckdb_is_valid_utf8", "[capi]") {
 	string valid_utf8 = "hello";
-	REQUIRE(duckdb_is_valid_utf8(valid_utf8.c_str(), valid_utf8.length()));
+	REQUIRE(duckdb_is_valid_utf8(valid_utf8.c_str(), valid_utf8.length(), nullptr));
 
 	string valid_utf8_multibyte = "é";
-	REQUIRE(duckdb_is_valid_utf8(valid_utf8_multibyte.c_str(), valid_utf8_multibyte.length()));
+	REQUIRE(duckdb_is_valid_utf8(valid_utf8_multibyte.c_str(), valid_utf8_multibyte.length(), nullptr));
 
 	// Create invalid UTF-8 by removing the first byte of a multi-byte character.
 	idx_t len = strlen(valid_utf8_multibyte.c_str());
 	auto invalid_utf8 = static_cast<char *>(malloc(len));
 	memcpy(invalid_utf8, valid_utf8_multibyte.c_str() + 1, len);
-	REQUIRE(!duckdb_is_valid_utf8(invalid_utf8, len - 1));
+
+	// Test without error output.
+	REQUIRE(!duckdb_is_valid_utf8(invalid_utf8, len - 1, nullptr));
+
+	// Test with error output.
+	duckdb_error_data error = nullptr;
+	REQUIRE(!duckdb_is_valid_utf8(invalid_utf8, len - 1, &error));
+	REQUIRE(error != nullptr);
+	REQUIRE(duckdb_error_data_error_type(error) == DUCKDB_ERROR_INVALID_INPUT);
+	REQUIRE(duckdb::StringUtil::Contains(duckdb_error_data_message(error), "invalid Unicode"));
+	duckdb_destroy_error_data(&error);
+
 	free(invalid_utf8);
 }
 
@@ -601,13 +612,13 @@ TEST_CASE("Test unsafe string assignment to VARCHAR vector", "[capi]") {
 
 	// Test unsafe assignment with valid UTF-8.
 	string valid_utf8 = "hello world";
-	duckdb_vector_unsafe_assign_string_element_len(vector, 0, valid_utf8.c_str(), valid_utf8.length());
+	duckdb_unsafe_vector_assign_string_element_len(vector, 0, valid_utf8.c_str(), valid_utf8.length());
 	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
 	REQUIRE((string_data[0].value.inlined.length == valid_utf8.length()));
 
 	// Test unsafe assignment with another string.
 	string another_valid = "test";
-	duckdb_vector_unsafe_assign_string_element_len(vector, 0, another_valid.c_str(), another_valid.length());
+	duckdb_unsafe_vector_assign_string_element_len(vector, 0, another_valid.c_str(), another_valid.length());
 	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
 	REQUIRE((string_data[0].value.inlined.length == another_valid.length()));
 

@@ -644,7 +644,7 @@ typedef struct {
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
-	bool (*duckdb_is_valid_utf8)(const char *str, idx_t len);
+	bool (*duckdb_is_valid_utf8)(const char *str, idx_t len, duckdb_error_data *out_error);
 	// New functions around the table description
 
 	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
@@ -660,7 +660,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
-	duckdb_value (*duckdb_create_unsafe_varchar_length)(const char *text, idx_t length);
+	duckdb_value (*duckdb_unsafe_create_varchar_length)(const char *text, idx_t length);
 	// API to create and manipulate vector types
 
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
@@ -673,7 +673,7 @@ typedef struct {
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
 	                               idx_t src_offset, idx_t dst_offset);
-	void (*duckdb_vector_unsafe_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
+	void (*duckdb_unsafe_vector_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
 	                                                       idx_t str_len);
 } duckdb_ext_api_v1;
 
@@ -1217,7 +1217,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_create_union_value = duckdb_create_union_value;
 	result.duckdb_create_time_ns = duckdb_create_time_ns;
 	result.duckdb_get_time_ns = duckdb_get_time_ns;
-	result.duckdb_create_unsafe_varchar_length = duckdb_create_unsafe_varchar_length;
+	result.duckdb_unsafe_create_varchar_length = duckdb_unsafe_create_varchar_length;
 	result.duckdb_create_vector = duckdb_create_vector;
 	result.duckdb_destroy_vector = duckdb_destroy_vector;
 	result.duckdb_slice_vector = duckdb_slice_vector;
@@ -1227,7 +1227,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
 	result.duckdb_vector_copy_sel = duckdb_vector_copy_sel;
-	result.duckdb_vector_unsafe_assign_string_element_len = duckdb_vector_unsafe_assign_string_element_len;
+	result.duckdb_unsafe_vector_assign_string_element_len = duckdb_unsafe_vector_assign_string_element_len;
 	return result;
 }
 

@@ -6,6 +6,6 @@
       "duckdb_create_union_value",
       "duckdb_create_time_ns",
       "duckdb_get_time_ns",
-      "duckdb_create_unsafe_varchar_length"
+      "duckdb_unsafe_create_varchar_length"
   ]
 }

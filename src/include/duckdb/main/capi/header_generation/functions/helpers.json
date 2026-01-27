@@ -103,13 +103,18 @@
                 {
                     "type": "idx_t",
                     "name": "len"
+                },
+                {
+                    "type": "duckdb_error_data *",
+                    "name": "out_error"
                 }
             ],
             "comment": {
                 "description": "Checks if a string is valid UTF-8.\n\n",
                 "param_comments": {
                     "str": "The string to check",
-                    "len": "The length of the string (in bytes)"
+                    "len": "The length of the string (in bytes)",
+                    "out_error": "Optional output parameter for error details. If non-NULL and the string is invalid, receives a duckdb_error_data with error information. Must be destroyed with `duckdb_destroy_error_data` if set."
                 },
                 "return_value": "True if valid UTF-8, false otherwise"
             }

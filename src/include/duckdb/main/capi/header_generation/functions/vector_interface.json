@@ -156,7 +156,7 @@
                 }
             ],
             "comment": {
-                "description": "Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8. If the input is invalid UTF-8, the assignment is silently skipped (no-op). For BLOB vectors, no validation is performed.\n\nSupersedes `duckdb_vector_assign_string_element`. Superseded by `duckdb_vector_unsafe_assign_string_element_len` combined with `duckdb_is_valid_utf8`. If the input is known to be valid UTF-8, use `duckdb_vector_unsafe_assign_string_element_len` directly for better performance. Otherwise, call `duckdb_is_valid_utf8` first to validate.\n\n",
+                "description": "Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8. If the input is invalid UTF-8, the assignment is silently skipped (no-op). For BLOB vectors, no validation is performed.\n\nSupersedes `duckdb_vector_assign_string_element`. Superseded by `duckdb_unsafe_vector_assign_string_element_len` combined with `duckdb_is_valid_utf8`. If the input is known to be valid UTF-8, use `duckdb_unsafe_vector_assign_string_element_len` directly for better performance. Otherwise, call `duckdb_is_valid_utf8` first to validate.\n\n",
                 "param_comments": {
                     "vector": "The vector to alter",
                     "index": "The row position in the vector to assign the string to",
@@ -166,7 +166,7 @@
             }
         },
         {
-            "name": "duckdb_vector_unsafe_assign_string_element_len",
+            "name": "duckdb_unsafe_vector_assign_string_element_len",
             "return_type": "void",
             "params": [
                 {

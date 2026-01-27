@@ -1677,9 +1677,11 @@ Checks if a string is valid UTF-8.
 
 * @param str The string to check
 * @param len The length of the string (in bytes)
+* @param out_error Optional output parameter for error details. If non-NULL and the string is invalid, receives a
+duckdb_error_data with error information. Must be destroyed with `duckdb_destroy_error_data` if set.
 * @return True if valid UTF-8, false otherwise
 */
-DUCKDB_C_API bool duckdb_is_valid_utf8(const char *str, idx_t len);
+DUCKDB_C_API bool duckdb_is_valid_utf8(const char *str, idx_t len, duckdb_error_data *out_error);
 
 //----------------------------------------------------------------------------------------------------------------------
 // Date Time Timestamp Helpers
@@ -2144,12 +2146,16 @@ DUCKDB_C_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepare
 
 /*!
 Binds a null-terminated varchar value to the prepared statement at the specified index.
+
+Superseded by `duckdb_bind_varchar_length`.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                               const char *val);
 
 /*!
 Binds a varchar value to the prepared statement at the specified index.
+
+Supersedes `duckdb_bind_varchar`. Superseded by `duckdb_bind_value`.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                                      const char *val, idx_t length);
@@ -2401,8 +2407,8 @@ DUCKDB_C_API duckdb_value duckdb_create_varchar(const char *text);
 /*!
 Creates a value from a string. Returns nullptr if the string is not valid UTF-8.
 
-Supersedes `duckdb_create_varchar`. Superseded by `duckdb_create_unsafe_varchar_length` combined with
-`duckdb_is_valid_utf8`. If the input is known to be valid UTF-8, use `duckdb_create_unsafe_varchar_length` directly for
+Supersedes `duckdb_create_varchar`. Superseded by `duckdb_unsafe_create_varchar_length` combined with
+`duckdb_is_valid_utf8`. If the input is known to be valid UTF-8, use `duckdb_unsafe_create_varchar_length` directly for
 better performance. Otherwise, call `duckdb_is_valid_utf8` first to validate.
 
 * @param text The text
@@ -2421,7 +2427,7 @@ Supersedes `duckdb_create_varchar` and `duckdb_create_varchar_length`.
 * @param length The length of the text
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
 */
-DUCKDB_C_API duckdb_value duckdb_create_unsafe_varchar_length(const char *text, idx_t length);
+DUCKDB_C_API duckdb_value duckdb_unsafe_create_varchar_length(const char *text, idx_t length);
 
 /*!
 Creates a value from a boolean
@@ -3499,9 +3505,9 @@ DUCKDB_C_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_
 Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8.
 If the input is invalid UTF-8, the assignment is silently skipped (no-op). For BLOB vectors, no validation is performed.
 
-Supersedes `duckdb_vector_assign_string_element`. Superseded by `duckdb_vector_unsafe_assign_string_element_len`
+Supersedes `duckdb_vector_assign_string_element`. Superseded by `duckdb_unsafe_vector_assign_string_element_len`
 combined with `duckdb_is_valid_utf8`. If the input is known to be valid UTF-8, use
-`duckdb_vector_unsafe_assign_string_element_len` directly for better performance. Otherwise, call `duckdb_is_valid_utf8`
+`duckdb_unsafe_vector_assign_string_element_len` directly for better performance. Otherwise, call `duckdb_is_valid_utf8`
 first to validate.
 
 * @param vector The vector to alter
@@ -3524,7 +3530,7 @@ Supersedes `duckdb_vector_assign_string_element` and `duckdb_vector_assign_strin
 * @param str The string
 * @param str_len The length of the string (in bytes)
 */
-DUCKDB_C_API void duckdb_vector_unsafe_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
+DUCKDB_C_API void duckdb_unsafe_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
                                                                  idx_t str_len);
 
 /*!

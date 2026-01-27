@@ -741,7 +741,7 @@ typedef struct {
 // New string functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	char *(*duckdb_value_to_string)(duckdb_value value);
-	bool (*duckdb_is_valid_utf8)(const char *str, idx_t len);
+	bool (*duckdb_is_valid_utf8)(const char *str, idx_t len, duckdb_error_data *out_error);
 #endif
 
 // New functions around the table description
@@ -763,7 +763,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
-	duckdb_value (*duckdb_create_unsafe_varchar_length)(const char *text, idx_t length);
+	duckdb_value (*duckdb_unsafe_create_varchar_length)(const char *text, idx_t length);
 #endif
 
 // API to create and manipulate vector types
@@ -778,7 +778,7 @@ typedef struct {
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
 	                               idx_t src_offset, idx_t dst_offset);
-	void (*duckdb_vector_unsafe_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
+	void (*duckdb_unsafe_vector_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
 	                                                       idx_t str_len);
 #endif
 
@@ -1365,7 +1365,7 @@ typedef struct {
 #define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context
 
 // Version unstable_new_value_functions
-#define duckdb_create_unsafe_varchar_length duckdb_ext_api.duckdb_create_unsafe_varchar_length
+#define duckdb_unsafe_create_varchar_length duckdb_ext_api.duckdb_unsafe_create_varchar_length
 #define duckdb_create_time_ns               duckdb_ext_api.duckdb_create_time_ns
 #define duckdb_get_time_ns                  duckdb_ext_api.duckdb_get_time_ns
 #define duckdb_create_map_value             duckdb_ext_api.duckdb_create_map_value
@@ -1374,7 +1374,7 @@ typedef struct {
 // Version unstable_new_vector_functions
 #define duckdb_create_vector                           duckdb_ext_api.duckdb_create_vector
 #define duckdb_destroy_vector                          duckdb_ext_api.duckdb_destroy_vector
-#define duckdb_vector_unsafe_assign_string_element_len duckdb_ext_api.duckdb_vector_unsafe_assign_string_element_len
+#define duckdb_unsafe_vector_assign_string_element_len duckdb_ext_api.duckdb_unsafe_vector_assign_string_element_len
 #define duckdb_slice_vector                            duckdb_ext_api.duckdb_slice_vector
 #define duckdb_vector_copy_sel                         duckdb_ext_api.duckdb_vector_copy_sel
 #define duckdb_vector_reference_value                  duckdb_ext_api.duckdb_vector_reference_value
