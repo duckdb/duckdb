@@ -1499,7 +1499,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParensExpression(PE
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformConstantLiteral(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return make_uniq<ConstantExpression>(transformer.TransformEnum<Value>(list_pr.Child<ChoiceParseResult>(0).result));
+	auto val = transformer.TransformEnum<Value>(list_pr.Child<ChoiceParseResult>(0).result);
+	if (val.IsNull()) {
+		return make_uniq<ConstantExpression>(val);
+	} else {
+		auto varchar_val = make_uniq<ConstantExpression>(val.GetValue<string>().substr(0, 1));
+		auto bool_type =
+		    LogicalType::UNBOUND(make_uniq<TypeExpression>("BOOLEAN", vector<unique_ptr<ParsedExpression>> {}));
+		return make_uniq<CastExpression>(bool_type, std::move(varchar_val));
+	}
 }
 
 // SingleExpression <- LiteralExpression /
