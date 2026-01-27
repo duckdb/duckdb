@@ -29,7 +29,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8.\n\nSuperseded by `duckdb_create_varchar_length`, which is superseded by `duckdb_unsafe_create_varchar_length` combined with `duckdb_valid_utf8_check`.\n\n",
+                "description": "Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8.\n\nSuperseded by `duckdb_unsafe_create_varchar_length`, optionally combined with `duckdb_valid_utf8_check`.\n\n",
                 "param_comments": {
                     "text": "The null-terminated string"
                 },
@@ -50,7 +50,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a string. Returns nullptr if the string is not valid UTF-8.\n\nSupersedes `duckdb_create_varchar`. Superseded by `duckdb_unsafe_create_varchar_length` combined with `duckdb_valid_utf8_check`.\n\n",
+                "description": "Creates a value from a string. Returns nullptr if the string is not valid UTF-8.\n\nSuperseded by `duckdb_unsafe_create_varchar_length`, optionally combined with `duckdb_valid_utf8_check`.\n\n",
                 "param_comments": {
                     "text": "The text",
                     "length": "The length of the text"
@@ -72,7 +72,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a string without UTF-8 validation. The caller is responsible for ensuring the input is valid UTF-8. Use `duckdb_valid_utf8_check` to validate strings before calling this function if needed. If the input is known to be valid UTF-8, this function can be called directly for better performance, avoiding the overhead of redundant validation.\n\nSupersedes `duckdb_create_varchar` and `duckdb_create_varchar_length`.\n\n",
+                "description": "Creates a value from a string without UTF-8 validation. The caller is responsible for ensuring the input is valid UTF-8. Use `duckdb_valid_utf8_check` to validate strings before calling this function if needed. If the input is known to be valid UTF-8, this function can be called directly for better performance, avoiding the overhead of redundant validation.\n\n",
                 "param_comments": {
                     "text": "The text",
                     "length": "The length of the text"
