@@ -675,7 +675,7 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	j += ValidityMask::BITS_PER_VALUE - idx_in_entry;
 
 	// Loop over non-ragged entries
-	const auto entry_count_minus_one = bits.EntryCount(n);
+	const auto entry_count_minus_one = bits.EntryCount(n) - 1;
 	const auto entry_idx_before = entry_idx;
 
 	// The compiler has a hard time optimizing this loop for some reason
@@ -704,8 +704,7 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	j += (entry_idx - entry_idx_before) * ValidityMask::BITS_PER_VALUE;
 
 	// Check the final entry
-	const auto &entry = bits.GetValidityEntryUnsafe(entry_idx);
-	return MinValue(j + CountZeros<validity_t>::Trailing(entry), n);
+	return j > n ? n : j + CountZeros<validity_t>::Trailing(bits.GetValidityEntryUnsafe(entry_idx));
 }
 
 idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
