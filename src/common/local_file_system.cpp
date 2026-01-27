@@ -1351,7 +1351,7 @@ bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 		return false;
 	}
 	input = WindowsUtil::UnicodeToUTF8(resolved);
-	return result;
+	return true;
 }
 #endif
 
