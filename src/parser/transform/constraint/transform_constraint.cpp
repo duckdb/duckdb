@@ -10,7 +10,13 @@ static void ParseSchemaTableNameFK(duckdb_libpgquery::PGRangeVar &input, Foreign
 	if (input.catalogname) {
 		throw ParserException("FOREIGN KEY constraints cannot be defined cross-database");
 	}
-	fk_info.schema = input.schemaname ? input.schemaname : "";
+	if (input.schemaname) {
+		fk_info.schema = input.schemaname;
+		fk_info.schema_specified = true;
+	} else {
+		fk_info.schema_specified = false;
+	}
+
 	fk_info.table = input.relname;
 }
 

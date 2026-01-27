@@ -563,12 +563,18 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 
 		// Resolve the table reference.
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
-		auto table_entry = entry_retriever.GetEntry(INVALID_CATALOG, fk.info.schema, table_lookup);
+		D_ASSERT(!fk.info.schema_specified || !fk.info.schema.empty());
+
+		auto schema_name = fk.info.schema_specified ? fk.info.schema : INVALID_SCHEMA;
+		auto table_entry = entry_retriever.GetEntry(INVALID_CATALOG, schema_name, table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}
 
 		auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
+		
+		fk.info.schema = pk_table_entry_ptr.schema.name;
+		fk.info.table = pk_table_entry_ptr.name;
 		if (&pk_table_entry_ptr.schema != &schema) {
 			throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
 		}
