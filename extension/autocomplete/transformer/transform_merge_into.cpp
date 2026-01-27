@@ -42,7 +42,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGT
 		result->actions[entry.first].push_back(std::move(entry.second));
 	}
 	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 7, result->returning_list);
-	return result;
+	return unique_ptr_cast<MergeIntoStatement, SQLStatement>(std::move(result));
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformMergeIntoUsingClause(PEGTransformer &transformer,
