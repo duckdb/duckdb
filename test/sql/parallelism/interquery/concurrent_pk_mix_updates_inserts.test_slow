@@ -14,7 +14,7 @@ INSERT INTO integers FROM range(100);
 # this can randomly leave some batches
 concurrentloop threadid 0 10
 
-loop x 0 100 shuffle
+loop x 0 100
 
 onlyif threadid<5
 statement maybe
