@@ -2396,9 +2396,9 @@ Destroys the value and de-allocates all memory allocated for that type.
 DUCKDB_C_API void duckdb_destroy_value(duckdb_value *value);
 
 /*!
-Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8.
+Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
 
-Superseded by `duckdb_unsafe_create_varchar_length`, optionally combined with `duckdb_valid_utf8_check`.
+Superseded by `duckdb_create_varchar_length`.
 
 * @param text The null-terminated string
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2406,26 +2406,13 @@ Superseded by `duckdb_unsafe_create_varchar_length`, optionally combined with `d
 DUCKDB_C_API duckdb_value duckdb_create_varchar(const char *text);
 
 /*!
-Creates a value from a string. Returns nullptr if the string is not valid UTF-8.
-
-Superseded by `duckdb_unsafe_create_varchar_length`, optionally combined with `duckdb_valid_utf8_check`.
+Creates a value from a string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
 
 * @param text The text
 * @param length The length of the text
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_C_API duckdb_value duckdb_create_varchar_length(const char *text, idx_t length);
-
-/*!
-Creates a value from a string without UTF-8 validation. The caller is responsible for ensuring the input is valid UTF-8.
-Use `duckdb_valid_utf8_check` to validate strings before calling this function if needed. If the input is known to be
-valid UTF-8, this function can be called directly for better performance, avoiding the overhead of redundant validation.
-
-* @param text The text
-* @param length The length of the text
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
-*/
-DUCKDB_C_API duckdb_value duckdb_unsafe_create_varchar_length(const char *text, idx_t length);
 
 /*!
 Creates a value from a boolean
