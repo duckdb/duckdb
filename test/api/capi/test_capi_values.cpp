@@ -428,6 +428,65 @@ TEST_CASE("Test UUID value", "[capi]") {
 	}
 }
 
+TEST_CASE("Test UTF-8 string creation with and without embedded nulls", "[capi]") {
+	// Create a valid and an invalid null-terminated string without embedded null-bytes.
+	string valid_utf8 = "é";
+	idx_t len = strlen(valid_utf8.c_str());
+	auto invalid_utf8 = static_cast<char *>(malloc(len));
+	memcpy(invalid_utf8, valid_utf8.c_str() + 1, len);
+
+	duckdb_error_data error_data = nullptr;
+	duckdb_value value = nullptr;
+
+	// Valid null-terminated string.
+	REQUIRE(duckdb_is_valid_utf8(valid_utf8.c_str(), len, &error_data));
+	REQUIRE(!error_data);
+	value = duckdb_unsafe_create_varchar_length(valid_utf8.c_str(), len);
+	REQUIRE(value);
+	auto res = duckdb_get_varchar(value);
+	REQUIRE(StringUtil::Equals(res, valid_utf8));
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Invalid null-terminated string.
+	REQUIRE(!duckdb_is_valid_utf8(invalid_utf8, len - 1, &error_data));
+	free(invalid_utf8);
+	REQUIRE(error_data);
+	REQUIRE(duckdb_error_data_has_error(error_data));
+	auto err_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(err_type == DUCKDB_ERROR_INVALID_INPUT);
+	auto err_msg = duckdb_error_data_message(error_data);
+	REQUIRE(StringUtil::Contains(err_msg, "invalid Unicode detected, str must be valid UTF-8"));
+	duckdb_destroy_error_data(&error_data);
+
+	// Create a valid and an invalid string with embedded null-bytes.
+	constexpr idx_t VALID_NULL_UTF8_LEN = 6;
+	string valid_null_utf8("é\0b\0c\0", VALID_NULL_UTF8_LEN);
+	auto invalid_null_utf8 = static_cast<char *>(malloc(VALID_NULL_UTF8_LEN));
+	memcpy(invalid_null_utf8, valid_null_utf8.c_str() + 1, VALID_NULL_UTF8_LEN);
+
+	// Valid string with embedded nulls.
+	REQUIRE(duckdb_is_valid_utf8(valid_null_utf8.c_str(), VALID_NULL_UTF8_LEN, &error_data));
+	REQUIRE(!error_data);
+	value = duckdb_unsafe_create_varchar_length(valid_null_utf8.c_str(), VALID_NULL_UTF8_LEN);
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(StringUtil::Equals(res, valid_null_utf8));
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Invalid string with embedded nulls.
+	REQUIRE(!duckdb_is_valid_utf8(invalid_null_utf8, VALID_NULL_UTF8_LEN - 1, &error_data));
+	free(invalid_null_utf8);
+	REQUIRE(error_data);
+	REQUIRE(duckdb_error_data_has_error(error_data));
+	err_type = duckdb_error_data_error_type(error_data);
+	REQUIRE(err_type == DUCKDB_ERROR_INVALID_INPUT);
+	err_msg = duckdb_error_data_message(error_data);
+	REQUIRE(StringUtil::Contains(err_msg, "invalid Unicode detected, str must be valid UTF-8"));
+	duckdb_destroy_error_data(&error_data);
+}
+
 TEST_CASE("Test SQL string conversion", "[capi]") {
 	auto uint_val = duckdb_create_uint64(42);
 	auto uint_val_str = duckdb_value_to_string(uint_val);
