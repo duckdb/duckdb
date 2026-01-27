@@ -171,7 +171,7 @@ public:
 	}
 
 	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override {
-		GetFileSystem().ExtractSubSystem(name);
+		return GetFileSystem().ExtractSubSystem(name);
 	}
 
 	void SetDisabledFileSystems(const vector<string> &names) override {
