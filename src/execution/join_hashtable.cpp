@@ -6,6 +6,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -35,32 +37,38 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 
 JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &op_p,
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
-                             const vector<idx_t> &output_columns_p)
+                             const vector<idx_t> &output_columns_p, unique_ptr<ResidualPredicateInfo> residual_p,
+                             Expression *predicate_ptr, const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      radix_bits(INITIAL_RADIX_BITS) {
+      radix_bits(INITIAL_RADIX_BITS), residual_predicate(predicate_ptr) {
+	// store residual predicate information
+	residual_info = std::move(residual_p);
+	lhs_output_in_probe = output_in_probe;
+
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
-		D_ASSERT(condition.left->return_type == condition.right->return_type);
-		auto type = condition.left->return_type;
-		if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
-		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		D_ASSERT(condition.IsComparison());
+		D_ASSERT(condition.GetLHS().return_type == condition.GetRHS().return_type);
+		auto type = condition.GetLHS().return_type;
+		if (condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
+		    condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// ensure that all equality conditions are at the front,
 			// and that all other conditions are at the back
 			D_ASSERT(equality_types.size() == condition_types.size());
 			equality_types.push_back(type);
-			equality_predicates.push_back(condition.comparison);
+			equality_predicates.push_back(condition.GetComparisonType());
 			equality_predicate_columns.push_back(i);
 
 		} else {
 			// all non-equality conditions are at the back
-			non_equality_predicates.push_back(condition.comparison);
+			non_equality_predicates.push_back(condition.GetComparisonType());
 			non_equality_predicate_columns.push_back(i);
 		}
 
-		null_values_are_equal.push_back(condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
-		                                condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+		null_values_are_equal.push_back(condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+		                                condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 
 		condition_types.push_back(type);
 	}
@@ -845,37 +853,77 @@ ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state
       found_match(make_unsafe_uniq_array_uninitialized<bool>(STANDARD_VECTOR_SIZE)), ht(ht_p), finished(false),
       is_null(true), rhs_pointers(LogicalType::POINTER), lhs_sel_vector(STANDARD_VECTOR_SIZE), last_match_count(0),
       last_sel_vector(STANDARD_VECTOR_SIZE) {
+	if (ht.residual_predicate) {
+		residual_executor = make_uniq<ExpressionExecutor>(ht.context);
+		residual_executor->AddExpression(*ht.residual_predicate);
+
+		// initialize residual state
+		residual_state = make_uniq<ResidualPredicateProbeState>();
+
+		// determine column types needed
+		idx_t total_columns = 0;
+		for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
+			total_columns = MaxValue(total_columns, entry.first + 1);
+		}
+		for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
+			total_columns = MaxValue(total_columns, entry.first + 1);
+		}
+
+		vector<LogicalType> eval_types(total_columns, LogicalType::INVALID);
+		vector<bool> initialize_columns(total_columns, false);
+
+		// fill in probe types
+		for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
+			idx_t orig_idx = entry.first;
+			idx_t probe_data_col = entry.second;
+			eval_types[orig_idx] = ht.residual_info->probe_types[probe_data_col];
+			initialize_columns[orig_idx] = true;
+		}
+
+		// fill in build types
+		for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
+			idx_t col_with_offset = entry.first;
+			idx_t layout_col = entry.second;
+			eval_types[col_with_offset] = ht.layout_ptr->GetTypes()[layout_col];
+			initialize_columns[col_with_offset] = true;
+		}
+
+		// initialize chunks ONCE
+		residual_state->Initialize(Allocator::Get(ht.context), eval_types, initialize_columns);
+	}
 }
 
-void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(keys.size() == left.size());
+void ScanStructure::Next(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
+	D_ASSERT(keys.size() == probe_data.size());
+
 	if (finished) {
 		return;
 	}
+
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
-		NextInnerJoin(keys, left, result);
+		NextInnerJoin(keys, probe_data, result);
 		break;
 	case JoinType::SEMI:
-		NextSemiJoin(keys, left, result);
+		NextSemiJoin(keys, probe_data, result);
 		break;
 	case JoinType::MARK:
-		NextMarkJoin(keys, left, result);
+		NextMarkJoin(keys, probe_data, result);
 		break;
 	case JoinType::ANTI:
-		NextAntiJoin(keys, left, result);
+		NextAntiJoin(keys, probe_data, result);
 		break;
 	case JoinType::RIGHT_ANTI:
 	case JoinType::RIGHT_SEMI:
-		NextRightSemiOrAntiJoin(keys);
+		NextRightSemiOrAntiJoin(keys, probe_data);
 		break;
 	case JoinType::OUTER:
 	case JoinType::LEFT:
-		NextLeftJoin(keys, left, result);
+		NextLeftJoin(keys, probe_data, result);
 		break;
 	case JoinType::SINGLE:
-		NextSingleJoin(keys, left, result);
+		NextSingleJoin(keys, probe_data, result);
 		break;
 	default:
 		throw InternalException("Unhandled join type in JoinHashTable");
@@ -885,11 +933,12 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 bool ScanStructure::PointersExhausted() const {
 	// AdvancePointers creates a "new_count" for every pointer advanced during the
 	// previous advance pointers call. If no pointers are advanced, new_count = 0.
-	// count is then set ot new_count.
+	// count is then set to new_count.
 	return count == 0;
 }
 
-idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {
+idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
+                                       SelectionVector *no_match_sel) {
 	// Initialize the found_match array to the current sel_vector
 	for (idx_t i = 0; i < this->count; ++i) {
 		match_sel.set_index(i, this->sel_vector.get_index(i));
@@ -911,16 +960,67 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 		result_count = this->count;
 	}
 
+	if (ht.residual_predicate && ht.residual_info && result_count > 0) {
+		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel);
+	}
+
 	// Update total probe match count
 	ht.total_probe_matches.fetch_add(result_count, std::memory_order_relaxed);
 
 	return result_count;
 }
 
-idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
+idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
+                                            SelectionVector *no_match_sel) {
+	D_ASSERT(residual_state);
+	D_ASSERT(residual_executor);
+
+	// reset chunks for reuse (no reallocation!)
+	residual_state->eval_chunk.Reset();
+	residual_state->eval_chunk.SetCardinality(match_count);
+
+	// copy probe columns at their ORIGINAL positions
+	for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
+		idx_t orig_idx = entry.first;
+		idx_t probe_data_col = entry.second;
+		residual_state->eval_chunk.data[orig_idx].Slice(probe_data.data[probe_data_col], match_sel, match_count);
+	}
+
+	// gather RHS columns from hash table
+	// TODO: these columns are gathered again when building the final result
+	for (const auto &entry : ht.residual_info->build_input_to_layout_map) {
+		idx_t col_with_offset = entry.first;
+		idx_t layout_col = entry.second;
+		auto &target_vector = residual_state->eval_chunk.data[col_with_offset];
+		GatherResult(target_vector, match_sel, match_count, layout_col);
+	}
+
+	SelectionVector &selected_sel = residual_state->selected_sel;
+	SelectionVector &remaining_sel = residual_state->remaining_sel;
+
+	idx_t new_match_count = residual_executor->SelectExpression(residual_state->eval_chunk, selected_sel, remaining_sel,
+	                                                            nullptr, match_count);
+
+	for (idx_t i = 0; i < new_match_count; i++) {
+		idx_t dense_idx = selected_sel.get_index(i);
+		match_sel.set_index(i, match_sel.get_index(dense_idx));
+	}
+
+	if (no_match_sel) {
+		idx_t no_match_count = match_count - new_match_count;
+		for (idx_t i = 0; i < no_match_count; i++) {
+			idx_t dense_idx = remaining_sel.get_index(i);
+			no_match_sel->set_index(i, match_sel.get_index(dense_idx));
+		}
+	}
+
+	return new_match_count;
+}
+
+idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &probe_data, SelectionVector &result_vector) {
 	while (true) {
 		// resolve the equality_predicates for this set of keys
-		idx_t result_count = ResolvePredicates(keys, result_vector, nullptr);
+		idx_t result_count = ResolvePredicates(keys, probe_data, result_vector, nullptr);
 
 		// after doing all the comparisons set the found_match vector
 		if (found_match) {
@@ -990,9 +1090,9 @@ void ScanStructure::UpdateCompactionBuffer(idx_t base_count, SelectionVector &re
 	VectorOperations::Copy(pointers, rhs_pointers, result_vector, result_count, 0, base_count);
 }
 
-void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
 	if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
-		D_ASSERT(result.ColumnCount() == left.ColumnCount() + ht.output_columns.size());
+		D_ASSERT(result.ColumnCount() == ht.lhs_output_in_probe.size() + ht.output_columns.size());
 	}
 
 	idx_t base_count = 0;
@@ -1000,7 +1100,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	while (this->count > 0) {
 		// if we have saved the match result, we need not call ScanInnerJoin again
 		if (last_match_count == 0) {
-			result_count = ScanInnerJoin(keys, chain_match_sel_vector);
+			result_count = ScanInnerJoin(keys, probe_data, chain_match_sel_vector);
 		} else {
 			chain_match_sel_vector.Initialize(last_sel_vector);
 			result_count = last_match_count;
@@ -1028,15 +1128,18 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			}
 
 			if (ht.join_type != JoinType::RIGHT_SEMI && ht.join_type != JoinType::RIGHT_ANTI) {
-				// Fast Path: if there is NO more than one element in the chain, we construct the result chunk directly
+				// fast path: no chains longer than one
 				if (!ht.chains_longer_than_one) {
-					// matches were found
-					// on the LHS, we create a slice using the result vector
-					result.Slice(left, chain_match_sel_vector, result_count);
+					// extract only OUTPUT columns from probe_data
+					for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
+						idx_t probe_col_idx = ht.lhs_output_in_probe[i];
+						result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
+					}
+					result.SetCardinality(result_count);
 
 					// on the RHS, we need to fetch the data from the hash table
 					for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-						auto &vector = result.data[left.ColumnCount() + i];
+						auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
 						const auto output_col_idx = ht.output_columns[i];
 						D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 						GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
@@ -1055,13 +1158,16 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	}
 
 	if (base_count > 0) {
-		// create result chunk, we have two steps:
-		// 1) slice LHS vectors
-		result.Slice(left, lhs_sel_vector, base_count);
+		// extract only OUTPUT columns from probe_data using compaction buffer
+		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
+			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
+			result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
+		}
+		result.SetCardinality(base_count);
 
 		// 2) gather RHS vectors
 		for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-			auto &vector = result.data[left.ColumnCount() + i];
+			auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
 			const auto output_col_idx = ht.output_columns[i];
 			D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 			GatherResult(vector, base_count, output_col_idx);
@@ -1069,7 +1175,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	}
 }
 
-void ScanStructure::ScanKeyMatches(DataChunk &keys) {
+void ScanStructure::ScanKeyMatches(DataChunk &keys, DataChunk &probe_data) {
 	// the semi-join, anti-join and mark-join we handle a differently from the inner join
 	// since there can be at most STANDARD_VECTOR_SIZE results
 	// we handle the entire chunk in one call to Next().
@@ -1079,7 +1185,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 
 	while (this->count > 0) {
 		// resolve the equality_predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
+		idx_t match_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
@@ -1092,8 +1198,9 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 }
 
 template <bool MATCH>
-void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(left.ColumnCount() == result.ColumnCount());
+void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
+	D_ASSERT(ht.lhs_output_in_probe.size() == result.ColumnCount());
+
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t result_count = 0;
@@ -1105,37 +1212,46 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChu
 	}
 	// construct the final result
 	if (result_count > 0) {
-		// we only return the columns on the left side
-		// reference the columns of the left side from the result
-		result.Slice(left, sel, result_count);
+		// extract only OUTPUT columns from probe_data
+		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
+			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
+			result.data[i].Slice(probe_data.data[probe_col_idx], sel, result_count);
+		}
+		result.SetCardinality(result_count);
 	} else {
 		D_ASSERT(result.size() == 0);
 	}
 }
 
-void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
+	D_ASSERT(probe_data.ColumnCount() == result.ColumnCount());
+
 	// first scan for key matches
-	ScanKeyMatches(keys);
+	ScanKeyMatches(keys, probe_data);
+
 	// then construct the result from all tuples with a match
-	NextSemiOrAntiJoin<true>(keys, left, result);
+	NextSemiOrAntiJoin<true>(keys, probe_data, result);
 
 	finished = true;
 }
 
-void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
+	D_ASSERT(probe_data.ColumnCount() == result.ColumnCount());
+
 	// first scan for key matches
-	ScanKeyMatches(keys);
+	ScanKeyMatches(keys, probe_data);
+
 	// then construct the result from all tuples that did not find a match
-	NextSemiOrAntiJoin<false>(keys, left, result);
+	NextSemiOrAntiJoin<false>(keys, probe_data, result);
 
 	finished = true;
 }
 
-void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys) {
+void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data) {
 	const auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 	while (!PointersExhausted()) {
 		// resolve the equality_predicates for this set of keys
-		idx_t result_count = ResolvePredicates(keys, chain_match_sel_vector, nullptr);
+		idx_t result_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, nullptr);
 
 		if (ht.non_equality_predicates.empty()) {
 			// we only have equality predicates - the match is found for the entire chain
@@ -1176,14 +1292,17 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys) {
 	finished = true;
 }
 
-void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result) {
-	// for the initial set of columns we just reference the left side
-	result.SetCardinality(child);
-	for (idx_t i = 0; i < child.ColumnCount(); i++) {
-		result.data[i].Reference(child.data[i]);
+void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
+	// extract OUTPUT columns from probe_data
+	result.SetCardinality(probe_data.size());
+	for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
+		idx_t probe_col_idx = ht.lhs_output_in_probe[i];
+		result.data[i].Reference(probe_data.data[probe_col_idx]);
 	}
+
 	auto &mark_vector = result.data.back();
 	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
+
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
@@ -1203,14 +1322,16 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 			}
 		}
 	}
+
 	// now set the remaining entries to either true or false based on whether a match was found
 	D_ASSERT(found_match);
-	for (idx_t i = 0; i < child.size(); i++) {
+	for (idx_t i = 0; i < probe_data.size(); i++) {
 		bool_result[i] = found_match[i];
 	}
+
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
 	if (ht.has_null) {
-		for (idx_t i = 0; i < child.size(); i++) {
+		for (idx_t i = 0; i < probe_data.size(); i++) {
 			if (!bool_result[i]) {
 				mask.SetInvalid(i);
 			}
@@ -1218,15 +1339,16 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 	}
 }
 
-void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(result.ColumnCount() == left.ColumnCount() + 1);
+void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
+	D_ASSERT(result.ColumnCount() == ht.lhs_output_in_probe.size() + 1);
 	D_ASSERT(result.data.back().GetType() == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
 	D_ASSERT(ht.Count() > 0);
 
-	ScanKeyMatches(keys);
+	ScanKeyMatches(keys, probe_data);
+
 	if (ht.correlated_mark_join_info.correlated_types.empty()) {
-		ConstructMarkJoinResult(keys, left, result);
+		ConstructMarkJoinResult(keys, probe_data, result);
 	} else {
 		auto &info = ht.correlated_mark_join_info;
 		lock_guard<mutex> mj_lock(info.mj_lock);
@@ -1240,31 +1362,35 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 		}
 		info.correlated_counts->FetchAggregates(info.group_chunk, info.result_chunk);
 
-		// for the initial set of columns we just reference the left side
-		result.SetCardinality(left);
-		for (idx_t i = 0; i < left.ColumnCount(); i++) {
-			result.data[i].Reference(left.data[i]);
+		// extract OUTPUT columns from probe_data
+		result.SetCardinality(probe_data.size());
+		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
+			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
+			result.data[i].Reference(probe_data.data[probe_col_idx]);
 		}
+
 		// create the result matching vector
 		auto &last_key = keys.data.back();
 		auto &result_vector = result.data.back();
-		// first set the nullmask based on whether or not there were NULL values in the join key
+		// first set the null mask based on whether there were NULL values in the join key
 		result_vector.SetVectorType(VectorType::FLAT_VECTOR);
 		auto bool_result = FlatVector::GetData<bool>(result_vector);
 		auto &mask = FlatVector::Validity(result_vector);
+
+		// Set null mask based on NULL values in join key
 		switch (last_key.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(last_key)) {
-				mask.SetAllInvalid(left.size());
+				mask.SetAllInvalid(probe_data.size());
 			}
 			break;
 		case VectorType::FLAT_VECTOR:
-			mask.Copy(FlatVector::Validity(last_key), left.size());
+			mask.Copy(FlatVector::Validity(last_key), probe_data.size());
 			break;
 		default: {
 			UnifiedVectorFormat kdata;
 			last_key.ToUnifiedFormat(keys.size(), kdata);
-			for (idx_t i = 0; i < left.size(); i++) {
+			for (idx_t i = 0; i < probe_data.size(); i++) {
 				auto kidx = kdata.sel->get_index(i);
 				mask.Set(i, kdata.validity.RowIsValid(kidx));
 			}
@@ -1274,8 +1400,9 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 
 		auto count_star = FlatVector::GetData<int64_t>(info.result_chunk.data[0]);
 		auto count = FlatVector::GetData<int64_t>(info.result_chunk.data[1]);
+
 		// set the entries to either true or false based on whether a match was found
-		for (idx_t i = 0; i < left.size(); i++) {
+		for (idx_t i = 0; i < probe_data.size(); i++) {
 			D_ASSERT(count_star[i] >= count[i]);
 			bool_result[i] = found_match ? found_match[i] : false;
 			if (!bool_result[i] && count_star[i] > count[i]) {
@@ -1283,7 +1410,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 				mask.SetInvalid(i);
 			}
 			if (count_star[i] == 0) {
-				// count == 0, set nullmask to false (we know the result is false now)
+				// count == 0, set null mask to false (we know the result is false now)
 				mask.SetValid(i);
 			}
 		}
@@ -1291,29 +1418,34 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 	finished = true;
 }
 
-void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
 	// a LEFT OUTER JOIN is identical to an INNER JOIN except all tuples that do
 	// not have a match must return at least one tuple (with the right side set
 	// to NULL in every column)
-	NextInnerJoin(keys, left, result);
+	NextInnerJoin(keys, probe_data, result);
+
 	if (result.size() == 0) {
 		// no entries left from the normal join
 		// fill in the result of the remaining left tuples
 		// together with NULL values on the right-hand side
 		idx_t remaining_count = 0;
 		SelectionVector sel(STANDARD_VECTOR_SIZE);
-		for (idx_t i = 0; i < left.size(); i++) {
+		for (idx_t i = 0; i < probe_data.size(); i++) {
 			if (!found_match[i]) {
 				sel.set_index(remaining_count++, i);
 			}
 		}
+
 		if (remaining_count > 0) {
-			// have remaining tuples
-			// slice the left side with tuples that did not find a match
-			result.Slice(left, sel, remaining_count);
+			// extract only OUTPUT columns from probe_data
+			for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
+				idx_t probe_col_idx = ht.lhs_output_in_probe[i];
+				result.data[i].Slice(probe_data.data[probe_col_idx], sel, remaining_count);
+			}
+			result.SetCardinality(remaining_count);
 
 			// now set the right side to NULL
-			for (idx_t i = left.ColumnCount(); i < result.ColumnCount(); i++) {
+			for (idx_t i = ht.lhs_output_in_probe.size(); i < result.ColumnCount(); i++) {
 				Vector &vec = result.data[i];
 				vec.SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(vec, true);
@@ -1323,40 +1455,38 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 	}
 }
 
-void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	// single join
-	// this join is similar to the semi join except that
-	// (1) we actually return data from the RHS and
-	// (2) we return NULL for that data if there is no match
-	// (3) if single_join_error_on_multiple_rows is set, we need to keep looking for duplicates after fetching
+void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
 	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 
 	while (this->count > 0) {
-		// resolve the equality_predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, &chain_no_match_sel_vector);
+		idx_t match_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, &chain_no_match_sel_vector);
 		idx_t no_match_count = this->count - match_count;
 
-		// mark each of the matches as found
+		// Mark each of the matches as found
 		for (idx_t i = 0; i < match_count; i++) {
 			// found a match for this index
 			auto index = chain_match_sel_vector.get_index(i);
 			found_match[index] = true;
 			result_sel.set_index(result_count++, index);
 		}
+
 		// continue searching for the ones where we did not find a match yet
 		AdvancePointers(chain_no_match_sel_vector, no_match_count);
 	}
-	// reference the columns of the left side from the result
-	D_ASSERT(left.ColumnCount() > 0);
-	for (idx_t i = 0; i < left.ColumnCount(); i++) {
-		result.data[i].Reference(left.data[i]);
+
+	// extract OUTPUT columns from probe_data
+	D_ASSERT(ht.lhs_output_in_probe.size() > 0);
+	for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
+		idx_t probe_col_idx = ht.lhs_output_in_probe[i];
+		result.data[i].Reference(probe_data.data[probe_col_idx]);
 	}
+
 	// now fetch the data from the RHS
 	for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-		auto &vector = result.data[left.ColumnCount() + i];
+		auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
 		// set NULL entries for every entry that was not found
-		for (idx_t j = 0; j < left.size(); j++) {
+		for (idx_t j = 0; j < probe_data.size(); j++) {
 			if (!found_match[j]) {
 				FlatVector::SetNull(vector, j, true);
 			}
@@ -1365,7 +1495,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
 	}
-	result.SetCardinality(left.size());
+	result.SetCardinality(probe_data.size());
 
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
@@ -1376,7 +1506,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &
 		AdvancePointers(result_sel, result_count);
 
 		// now resolve the predicates
-		idx_t match_count = ResolvePredicates(keys, chain_match_sel_vector, nullptr);
+		idx_t match_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, nullptr);
 		if (match_count > 0) {
 			// we found at least one duplicate row - throw
 			throw InvalidInputException(

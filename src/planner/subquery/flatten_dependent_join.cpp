@@ -39,10 +39,9 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 		if (binding_idx >= bindings.size()) {
 			throw InternalException("Delim join - binding index out of range");
 		}
-		JoinCondition cond;
-		cond.left = make_uniq<BoundColumnRefExpression>(col.name, col.type, col.binding);
-		cond.right = make_uniq<BoundColumnRefExpression>(col.name, col.type, bindings[binding_idx]);
-		cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+		JoinCondition cond(make_uniq<BoundColumnRefExpression>(col.name, col.type, col.binding),
+		                   make_uniq<BoundColumnRefExpression>(col.name, col.type, bindings[binding_idx]),
+		                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		delim_join.conditions.push_back(std::move(cond));
 	}
 }
@@ -183,18 +182,17 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 		if (op.subquery_type == SubqueryType::ANY) {
 			// add the actual condition based on the ANY/ALL predicate
 			for (idx_t child_idx = 0; child_idx < op.expression_children.size(); child_idx++) {
-				JoinCondition compare_cond;
-				compare_cond.left = std::move(op.expression_children[child_idx]);
+				auto left_expr = std::move(op.expression_children[child_idx]);
 				auto &child_type = op.child_types[child_idx];
 				auto &compare_type = op.child_targets[child_idx];
-				compare_cond.right = BoundCastExpression::AddDefaultCastToType(
+				auto right_expr = BoundCastExpression::AddDefaultCastToType(
 				    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
 				    op.child_targets[child_idx]);
-				compare_cond.comparison = op.comparison_type;
+				JoinCondition compare_cond(std::move(left_expr), std::move(right_expr), op.comparison_type);
 
 				// push collations
-				ExpressionBinder::PushCollation(binder.context, compare_cond.left, compare_type);
-				ExpressionBinder::PushCollation(binder.context, compare_cond.right, compare_type);
+				ExpressionBinder::PushCollation(binder.context, compare_cond.LeftReference(), compare_type);
+				ExpressionBinder::PushCollation(binder.context, compare_cond.RightReference(), compare_type);
 				op.conditions.push_back(std::move(compare_cond));
 			}
 		}
@@ -401,12 +399,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			    ColumnBinding(cteref.table_index, cteref.chunk_types.size() - cteref.correlated_columns);
 			// add the correlated columns to the join conditions
 			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
-				JoinCondition cond;
-				cond.left = make_uniq<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-				cond.right = make_uniq<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
-				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+				JoinCondition cond(make_uniq<BoundColumnRefExpression>(
+				                       correlated_columns[i].type,
+				                       ColumnBinding(left_binding.table_index, left_binding.column_index + i)),
+				                   make_uniq<BoundColumnRefExpression>(
+				                       correlated_columns[i].type,
+				                       ColumnBinding(base_binding.table_index, base_binding.column_index + i)),
+				                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 				join->conditions.push_back(std::move(cond));
 			}
 			join->children.push_back(std::move(plan));
@@ -559,11 +558,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			join->children.push_back(std::move(plan));
 			for (idx_t i = 0; i < new_group_count; i++) {
 				auto &col = correlated_columns[i];
-				JoinCondition cond;
-				cond.left = make_uniq<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(left_index, i));
-				cond.right = make_uniq<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(delim_table_index, delim_column_offset + i));
-				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+				JoinCondition cond(
+				    make_uniq<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(left_index, i)),
+				    make_uniq<BoundColumnRefExpression>(correlated_columns[i].type,
+				                                        ColumnBinding(delim_table_index, delim_column_offset + i)),
+				    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 				join->conditions.push_back(std::move(cond));
 			}
 			// for any COUNT aggregate we replace references to the column with: CASE WHEN COUNT(*) IS NULL THEN 0
@@ -626,12 +625,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			JoinCondition cond;
-			cond.left = make_uniq<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-			cond.right = make_uniq<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
-			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+			JoinCondition cond(
+			    make_uniq<BoundColumnRefExpression>(
+			        correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i)),
+			    make_uniq<BoundColumnRefExpression>(
+			        correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i)),
+			    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 			join->conditions.push_back(std::move(cond));
 		}
 		join->children.push_back(std::move(plan->children[0]));
@@ -712,14 +711,13 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 				// add the correlated columns to the join conditions
 				for (idx_t i = 0; i < correlated_columns.size(); i++) {
-					JoinCondition cond;
-					cond.left = make_uniq<BoundColumnRefExpression>(
-					    correlated_columns[i].type,
-					    ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-					cond.right = make_uniq<BoundColumnRefExpression>(
-					    correlated_columns[i].type,
-					    ColumnBinding(right_binding.table_index, right_binding.column_index + i));
-					cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+					JoinCondition cond(make_uniq<BoundColumnRefExpression>(
+					                       correlated_columns[i].type,
+					                       ColumnBinding(left_binding.table_index, left_binding.column_index + i)),
+					                   make_uniq<BoundColumnRefExpression>(
+					                       correlated_columns[i].type,
+					                       ColumnBinding(right_binding.table_index, right_binding.column_index + i)),
+					                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 
 					auto &comparison_join = join.Cast<LogicalComparisonJoin>();
 					comparison_join.conditions.push_back(std::move(cond));
@@ -766,10 +764,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 			if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 			    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-				JoinCondition cond;
-				cond.left = std::move(left);
-				cond.right = std::move(right);
-				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+				JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 
 				auto &comparison_join = join.Cast<LogicalComparisonJoin>();
 				comparison_join.conditions.push_back(std::move(cond));
