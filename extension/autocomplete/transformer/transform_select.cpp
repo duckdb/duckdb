@@ -1337,7 +1337,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 		for (auto &child_wrapper : group_by_list) {
 			auto child_list_pr = child_wrapper->Cast<ListParseResult>();
 			auto child_expr = child_list_pr.Child<ChoiceParseResult>(0).result;
-			auto child_sets = GroupByExpressionUnfolding(transformer, std::move(child_expr), map, result);
+			auto child_sets = GroupByExpressionUnfolding(transformer, child_expr, map, result);
 			result_sets.insert(result_sets.end(), child_sets.begin(), child_sets.end());
 		}
 	} else if (StringUtil::CIEquals(group_by_expr->name, "CubeOrRollupClause")) {
