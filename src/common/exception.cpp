@@ -153,8 +153,7 @@ static constexpr ExceptionEntry EXCEPTION_MAP[] = {{ExceptionType::INVALID, "Inv
                                                    {ExceptionType::HTTP, "HTTP"},
                                                    {ExceptionType::AUTOLOAD, "Extension Autoloading"},
                                                    {ExceptionType::SEQUENCE, "Sequence"},
-                                                   {ExceptionType::INVALID_CONFIGURATION, "Invalid Configuration"},
-                                                   {ExceptionType::WARNING_AS_ERROR, "Escalated Warning"}};
+                                                   {ExceptionType::INVALID_CONFIGURATION, "Invalid Configuration"}};
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	for (auto &e : EXCEPTION_MAP) {
@@ -391,9 +390,6 @@ ParameterNotAllowedException::ParameterNotAllowedException(const string &msg)
 
 ParameterNotResolvedException::ParameterNotResolvedException()
     : Exception(ExceptionType::PARAMETER_NOT_RESOLVED, "Parameter types could not be resolved") {
-}
-
-WarningAsErrorException::WarningAsErrorException(const string &msg) : Exception(ExceptionType::WARNING_AS_ERROR, msg) {
 }
 
 } // namespace duckdb

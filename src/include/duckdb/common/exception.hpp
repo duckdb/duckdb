@@ -88,8 +88,7 @@ enum class ExceptionType : uint8_t {
 	AUTOLOAD = 40,          // Thrown when an extension is used but not loaded
 	SEQUENCE = 41,
 	INVALID_CONFIGURATION =
-	    42, // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
-	WARNING_AS_ERROR = 43 // Throw when warning needs to be treated as Error
+	    42 // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
 };
 
 class Exception : public std::runtime_error {
@@ -397,11 +396,6 @@ public:
 	DUCKDB_API TypeMismatchException(optional_idx error_location, const LogicalType &type_1, const LogicalType &type_2,
 	                                 const string &msg);
 	DUCKDB_API explicit TypeMismatchException(const string &msg);
-};
-
-class WarningAsErrorException : public Exception {
-public:
-	DUCKDB_API explicit WarningAsErrorException(const string &msg);
 };
 
 class ParameterNotAllowedException : public Exception {
