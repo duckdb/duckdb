@@ -64,11 +64,18 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->bound_constraints = BindConstraints(table);
 
-	// If RETURNING is present, add all physical table columns to the scan so we can pass them through
-	// instead of having to fetch them by row ID in PhysicalDelete.
-	// Generated columns will be computed in the RETURNING projection by the binder.
+	// Add columns to the scan to avoid fetching by row ID in PhysicalDelete:
+	// - If RETURNING: add all physical columns (for RETURNING projection)
+	// - Else if unique indexes exist: add only indexed columns (for delete index tracking)
 	if (!stmt.returning_list.empty()) {
+		// Add all physical columns for RETURNING
 		BindDeleteReturningColumns(table, get, del->return_columns);
+	} else {
+		// Check if table has unique indexes - if so, add indexed columns to scan
+		auto &storage = table.GetStorage();
+		if (storage.HasUniqueIndexes()) {
+			BindDeleteIndexColumns(table, get, del->return_columns);
+		}
 	}
 
 	del->AddChild(std::move(root));
