@@ -202,13 +202,9 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "view_name", view_name);
 	serializer.WritePropertyWithDefault<vector<string>>(201, "aliases", aliases);
-	if (!serializer.ShouldSerialize(7)) {
-		serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
-	}
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
-	if (!serializer.ShouldSerialize(7)) {
-		serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
-	}
+	serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
 	if (!serializer.ShouldSerialize(7)) {
 		serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", GetColumnCommentsList());
 	}
@@ -220,7 +216,7 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	auto view_name = deserializer.ReadPropertyWithDefault<string>(200, "view_name");
 	auto aliases = deserializer.ReadPropertyWithDefault<vector<string>>(201, "aliases");
-	deserializer.ReadDeletedProperty<vector<LogicalType>>(202, "types");
+	auto types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types");
 	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query");
 	auto names = deserializer.ReadPropertyWithDefault<vector<string>>(204, "names");
 	auto column_comments = deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments");
@@ -228,6 +224,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateViewInfo>(new CreateViewInfo(std::move(names), std::move(column_comments), std::move(column_comments_map)));
 	result->view_name = std::move(view_name);
 	result->aliases = std::move(aliases);
+	result->types = std::move(types);
 	result->query = std::move(query);
 	return std::move(result);
 }

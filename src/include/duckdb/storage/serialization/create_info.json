@@ -204,9 +204,7 @@
       {
         "id": 202,
         "name": "types",
-        "type": "vector<LogicalType>",
-        "status": "deleted",
-        "version": "v1.5.0"
+        "type": "vector<LogicalType>"
       },
       {
         "id": 203,
@@ -216,9 +214,7 @@
       {
         "id": 204,
         "name": "names",
-        "type": "vector<string>",
-        "status": "read_only",
-        "version": "v1.5.0"
+        "type": "vector<string>"
       },
       {
         "id": 205,
