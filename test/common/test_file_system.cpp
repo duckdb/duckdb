@@ -274,6 +274,74 @@ TEST_CASE("re-register subsystem", "[file_system]") {
 	REQUIRE_THROWS(vfs.RegisterSubSystem(std::move(second_local_filesystem)));
 }
 
+struct CanonicalizationTest {
+	CanonicalizationTest(string a_p, string b_p, string description_p)
+	    : a(std::move(a_p)), b(std::move(b_p)), description(std::move(description_p)) {
+	}
+
+	string a;
+	string b;
+	string description;
+};
+
+TEST_CASE("Test path canonicalization", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+
+	std::vector<CanonicalizationTest> test_cases;
+	test_cases.emplace_back("foo/./bar", "foo/bar", "single dot removal");
+	test_cases.emplace_back("foo/../bar", "bar", "parent directory removal");
+	test_cases.emplace_back("foo/bar/..", "foo", "trailing parent removal");
+	test_cases.emplace_back("./foo", "foo", "leading dot removal");
+	test_cases.emplace_back("foo/.", "foo", "trailing dot removal");
+	test_cases.emplace_back("foo/bar/../../baz", "baz", "multiple parent traversal");
+	test_cases.emplace_back("foo/./bar/./baz", "foo/bar/baz", "multiple dot removal");
+	test_cases.emplace_back("./././foo", "foo", "repeated leading dots");
+	test_cases.emplace_back("foo/bar/../../../baz", "../baz", "parent beyond root (relative)");
+	test_cases.emplace_back("foo//bar", "foo/bar", "double slash");
+	test_cases.emplace_back("foo///bar", "foo/bar", "triple slash");
+	test_cases.emplace_back("//foo/bar", "/foo/bar", "leading double slash");
+	test_cases.emplace_back("foo/bar/", "foo/bar", "trailing slash");
+	test_cases.emplace_back("foo/bar//", "foo/bar", "multiple trailing slashes");
+	test_cases.emplace_back(".", ".", "single dot");
+	test_cases.emplace_back("..", "..", "single parent");
+	test_cases.emplace_back("", "", "empty path");
+	test_cases.emplace_back("/", "/", "root only");
+	test_cases.emplace_back("foo", "foo", "simple filename");
+	test_cases.emplace_back("foo/./bar/../baz/./qux/..", "foo/baz", "mixed operations");
+	test_cases.emplace_back("./foo/../bar/./baz", "bar/baz", "leading dot with parent");
+	test_cases.emplace_back("a/b/c/../../d/e/../f", "a/d/f", "interleaved parents");
+
+#ifdef _WIN32
+	// Backslash handling
+	test_cases.emplace_back("foo\\bar", "foo\\bar", "backslash separator");
+	test_cases.emplace_back("foo\\..\\bar", "bar", "parent with backslash");
+	test_cases.emplace_back("foo/bar\\baz", "foo\\bar\\baz", "mixed separators");
+
+	// Drive letters
+	test_cases.emplace_back("C:\\foo\\bar", "C:\\foo\\bar", "absolute with drive");
+	test_cases.emplace_back("C:\\foo\\..\\bar", "C:\\bar", "parent with drive");
+	test_cases.emplace_back("C:", "C:\\", "drive only");
+	test_cases.emplace_back("C:foo", "C:foo", "drive-relative path");
+	test_cases.emplace_back("C:\\", "C:\\", "drive root");
+
+	// UNC paths
+	test_cases.emplace_back("\\\\server\\share", "\\\\server\\share", "UNC path");
+	test_cases.emplace_back("\\\\server\\share\\foo\\..\\bar", "\\\\server\\share\\bar", "UNC with parent");
+
+	// FIXME: should we do case insensitivity?
+	// // Case insensitivity (for equivalence, not normalization)
+	// test_cases.emplace_back("C:\\Foo\\Bar", "C:\\foo\\bar", "case normalization");
+	// test_cases.emplace_back("C:\\foo\\bar", "C:\\foo\\.\\bar", "windows absolute equivalents");
+	// test_cases.emplace_back("C:\\foo\\bar", "C:\\foo\\baz\\..\\bar", "windows absolute equivalents");
+	//
+	// test_cases.emplace_back("C:\\Foo\\Bar", "c:\\foo\\bar", "C:\\FOO\\BAR", "windows case insensitive");
+#endif
+
+	for (auto &test : test_cases) {
+		REQUIRE(fs->CanonicalizePath(test.a) == fs->CanonicalizePath(test.b));
+	}
+}
+
 TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 	auto fs = FileSystem::CreateLocal();
 

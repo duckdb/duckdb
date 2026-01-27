@@ -1384,6 +1384,9 @@ string LocalFileSystem::CanonicalizePath(const string &input) {
 			if (remainder.empty()) {
 				return current;
 			}
+			if (StringUtil::EndsWith(current, path_sep)) {
+				return current + remainder;
+			}
 			return current + path_sep + remainder;
 		}
 		// move up one directory
@@ -1414,7 +1417,8 @@ string LocalFileSystem::CanonicalizePath(const string &input) {
 		// continue with remainder
 		current = current.substr(0, sep);
 	}
-	return path;
+	// failed to canonicalize path - fallback to generic canonicalization
+	return FileSystem::CanonicalizePath(path);
 }
 
 string LocalFileSystem::GetVersionTag(FileHandle &handle) {

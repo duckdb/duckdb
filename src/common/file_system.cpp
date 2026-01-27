@@ -910,8 +910,11 @@ string FileSystem::CanonicalizePath(const string &path_p) {
 		result = "/";
 	}
 	while (!path_stack.empty()) {
-		result += path_stack.front() + path_sep;
+		result += path_stack.front();
 		path_stack.pop_front();
+		if (!path_stack.empty()) {
+			result += path_sep;
+		}
 	}
 
 	return result;

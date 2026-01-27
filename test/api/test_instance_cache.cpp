@@ -224,13 +224,11 @@ TEST_CASE("Test instance cache canonicalization", "[api][.]") {
 	// abs path
 	equivalent_paths.push_back(fs.JoinPath(fs.GetWorkingDirectory(), test_path));
 	// dot dot
-	auto dot_dot = TestCreatePath(fs.JoinPath(fs.JoinPath("subdir", ".."), "instance_cache_canonicalization.db"));
+	auto dot_dot = TestCreatePath(fs.JoinPath("subdir", "..", "instance_cache_canonicalization.db"));
 	equivalent_paths.push_back(dot_dot);
 	// dot dot dot
-	auto subdirs = fs.JoinPath(fs.JoinPath("subdir", "subdir2"), "subdir3");
-	auto many_dots = fs.JoinPath(fs.JoinPath("..", ".."), "..");
-	auto dot_dot_dot =
-	    TestCreatePath(fs.JoinPath(fs.JoinPath(subdirs, many_dots), "instance_cache_canonicalization.db"));
+	auto subdirs = fs.JoinPath("subdir", "subdir2", "subdir3", "..", "..", "..", "instance_cache_canonicalization.db");
+	auto dot_dot_dot = TestCreatePath(subdirs);
 	equivalent_paths.push_back(dot_dot_dot);
 	// dots
 	auto dots = TestCreatePath(fs.JoinPath(fs.JoinPath(".", "."), "instance_cache_canonicalization.db"));
@@ -243,8 +241,7 @@ TEST_CASE("Test instance cache canonicalization", "[api][.]") {
 	for (idx_t i = 0; i < dir_count + 1; i++) {
 		many_dots_test_path = fs.JoinPath(many_dots_test_path, "..");
 	}
-	equivalent_paths.push_back(
-	    fs.JoinPath(fs.JoinPath(many_dots_test_path, test_dir_path), "instance_cache_canonicalization.db"));
+	equivalent_paths.push_back(fs.JoinPath(many_dots_test_path, test_dir_path, "instance_cache_canonicalization.db"));
 
 	vector<shared_ptr<DuckDB>> databases;
 	for (auto &path : equivalent_paths) {
