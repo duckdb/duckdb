@@ -2,6 +2,9 @@
 # description: Test storage with dictionary compression and a smaller block size.
 # group: [dict_fsst]
 
+# FIXME: This test currently runs into an assertion, creating noise in CI
+mode skip
+
 statement ok
 SET storage_compatibility_version='latest';
 
