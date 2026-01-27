@@ -777,40 +777,13 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 }
 
 string DBConfig::SanitizeAllowedPath(const string &path_p) const {
+	auto result = file_system->CanonicalizePath(path_p);
+	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
 	auto path_sep = file_system->PathSeparator(path_p);
-	auto path = path_p;
 	if (path_sep != "/") {
-		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
-		path = StringUtil::Replace(path_p, path_sep, "/");
+		result = StringUtil::Replace(result, path_sep, "/");
 	}
-
-	auto elements = StringUtil::Split(path, "/");
-	path.clear(); // later reconstructed
-	deque<string> path_stack;
-	for (idx_t i = 0; i < elements.size(); i++) {
-		if (elements[i].empty() || elements[i] == ".") {
-			// we ignore empty and `.`
-			continue;
-		}
-		if (elements[i] == "..") {
-			// .. pops from stack if possible, if already at root its ignored
-			if (!path_stack.empty()) {
-				path_stack.pop_back();
-			}
-		} else {
-			path_stack.push_back(elements[i]);
-		}
-	}
-	// we lost the leading / in the split/loop so leats put it back
-	if (path_p[0] == '/') {
-		path = "/";
-	}
-	while (!path_stack.empty()) {
-		path += path_stack.front() + '/';
-		path_stack.pop_front();
-	}
-
-	return path;
+	return result;
 }
 
 void DBConfig::AddAllowedDirectory(const string &path) {

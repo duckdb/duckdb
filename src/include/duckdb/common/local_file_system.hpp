@@ -99,6 +99,8 @@ public:
 
 	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener, bool absolute_path);
 
+	string CanonicalizePath(const string &path_p) override;
+
 protected:
 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,
 	                       optional_ptr<FileOpener> opener) override;

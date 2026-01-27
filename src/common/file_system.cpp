@@ -885,4 +885,36 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 	return false;
 }
 
+string FileSystem::CanonicalizePath(const string &path_p) {
+	auto path_sep = PathSeparator(path_p);
+	auto elements = StringUtil::Split(path_p, path_sep);
+
+	deque<string> path_stack;
+	string result;
+	for (idx_t i = 0; i < elements.size(); i++) {
+		if (elements[i].empty() || elements[i] == ".") {
+			// we ignore empty and `.`
+			continue;
+		}
+		if (elements[i] == "..") {
+			// .. pops from stack if possible, if already at root its ignored
+			if (!path_stack.empty()) {
+				path_stack.pop_back();
+			}
+		} else {
+			path_stack.push_back(elements[i]);
+		}
+	}
+	// we lost the leading / in the split/loop so lets put it back
+	if (result[0] == '/') {
+		result = "/";
+	}
+	while (!path_stack.empty()) {
+		result += path_stack.front() + path_sep;
+		path_stack.pop_front();
+	}
+
+	return result;
+}
+
 } // namespace duckdb

@@ -789,12 +789,20 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	auto normalized_target = NormalizeLocalPath(target);
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(normalized_source, normalized_target) != 0) {
-		throw IOException({{"errno", std::to_string(errno)}}, "Could not rename file!");
+		throw IOException({{"errno", to_string(errno)}}, "Could not rename file \"%s\" to \"%s\": %s", source, target, strerror(errno));
 	}
 }
 
 std::string LocalFileSystem::GetLastErrorAsString() {
 	return string();
+}
+
+string LocalFileSystem::CanonicalizePath(const string &path_p) {
+	char resolved[PATH_MAX];
+	if (!realpath(path_p.c_str(), resolved)) {
+		throw IOException({{"errno", to_string(errno)}}, "Could not canonicalize path \"%s\" using realpath: %s", path_p, strerror(errno));
+	}
+	return resolved;
 }
 
 #else
@@ -1320,6 +1328,32 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto file_metadata = StatsInternal(hFile, handle.GetPath());
 	return file_metadata;
+}
+
+string LocalFileSystem::CanonicalizePath(const string &path_p) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(path_p);
+	HANDLE handle = CreateFileW(
+	    unicode_path.c_str(),
+	    0,  // No access needed, just query
+	    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	    NULL,
+	    OPEN_EXISTING,
+	    FILE_FLAG_BACKUP_SEMANTICS,  // Required for directories
+	    NULL
+	);
+
+	if (handle == INVALID_HANDLE_VALUE) {
+		throw IOException("Failed to canonicalize path \"%s\" - CreateFileW failure: %s", path_p.c_str(), GetLastErrorAsString());
+	}
+    wchar_t resolved[MAX_PATH];
+    DWORD len = GetFinalPathNameByHandleW(handle, resolved, MAX_PATH, FILE_NAME_NORMALIZED);
+    CloseHandle(handle);
+
+	auto result = WindowsUtil::UnicodeToUTF8(wideMessage.c_str());
+    if (len < 0 && len >= MAX_PATH) {
+	    throw IOException("Failed to canonicalize path \"%s\" - GetFinalPathNameByHandleW failure: %s", path_p.c_str(), GetLastErrorAsString());
+    }
+	return result;
 }
 #endif
 

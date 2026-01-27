@@ -219,6 +219,10 @@ protected:
 		return true;
 	}
 
+	string CanonicalizePath(const string &path_p) override {
+		return GetFileSystem().CanonicalizePath(path_p);
+	}
+
 private:
 	void VerifyCanAccessFileInternal(const string &path, FileType type);
 };
