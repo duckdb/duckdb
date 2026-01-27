@@ -789,7 +789,8 @@ void LocalFileSystem::MoveFile(const string &source, const string &target, optio
 	auto normalized_target = NormalizeLocalPath(target);
 	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
 	if (rename(normalized_source, normalized_target) != 0) {
-		throw IOException({{"errno", to_string(errno)}}, "Could not rename file \"%s\" to \"%s\": %s", source, target, strerror(errno));
+		throw IOException({{"errno", to_string(errno)}}, "Could not rename file \"%s\" to \"%s\": %s", source, target,
+		                  strerror(errno));
 	}
 }
 
@@ -797,12 +798,13 @@ std::string LocalFileSystem::GetLastErrorAsString() {
 	return string();
 }
 
-string LocalFileSystem::CanonicalizePath(const string &path_p) {
+bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 	char resolved[PATH_MAX];
-	if (!realpath(path_p.c_str(), resolved)) {
-		throw IOException({{"errno", to_string(errno)}}, "Could not canonicalize path \"%s\" using realpath: %s", path_p, strerror(errno));
+	if (!realpath(input.c_str(), resolved)) {
+		return false;
 	}
-	return resolved;
+	input = resolved;
+	return true;
 }
 
 #else
@@ -1330,29 +1332,25 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	return file_metadata;
 }
 
-string LocalFileSystem::CanonicalizePath(const string &path_p) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(path_p);
-	HANDLE handle = CreateFileW(
-	    unicode_path.c_str(),
-	    0,  // No access needed, just query
-	    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-	    NULL,
-	    OPEN_EXISTING,
-	    FILE_FLAG_BACKUP_SEMANTICS,  // Required for directories
-	    NULL
-	);
+bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
+	auto unicode_path = NormalizePathAndConvertToUnicode(input);
+	HANDLE handle = CreateFileW(unicode_path.c_str(),
+	                            0, // No access needed, just query
+	                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
+	                            FILE_FLAG_BACKUP_SEMANTICS, // Required for directories
+	                            NULL);
 
 	if (handle == INVALID_HANDLE_VALUE) {
-		throw IOException("Failed to canonicalize path \"%s\" - CreateFileW failure: %s", path_p.c_str(), GetLastErrorAsString());
+		return false;
 	}
-    wchar_t resolved[MAX_PATH];
-    DWORD len = GetFinalPathNameByHandleW(handle, resolved, MAX_PATH, FILE_NAME_NORMALIZED);
-    CloseHandle(handle);
+	wchar_t resolved[MAX_PATH];
+	DWORD len = GetFinalPathNameByHandleW(handle, resolved, MAX_PATH, FILE_NAME_NORMALIZED);
+	CloseHandle(handle);
 
-	auto result = WindowsUtil::UnicodeToUTF8(wideMessage.c_str());
-    if (len < 0 && len >= MAX_PATH) {
-	    throw IOException("Failed to canonicalize path \"%s\" - GetFinalPathNameByHandleW failure: %s", path_p.c_str(), GetLastErrorAsString());
-    }
+	if (len < 0 && len >= MAX_PATH) {
+		return false;
+	}
+	input = WindowsUtil::UnicodeToUTF8(resolved);
 	return result;
 }
 #endif
@@ -1363,6 +1361,57 @@ bool LocalFileSystem::CanSeek() {
 
 bool LocalFileSystem::OnDiskFile(FileHandle &handle) {
 	return true;
+}
+
+string LocalFileSystem::CanonicalizePath(const string &input) {
+	auto path_sep = PathSeparator(input);
+	if (path_sep.size() != 1) {
+		throw InternalException("path separator can only be a single byte for local file systems");
+	}
+	string path;
+	if (!IsPathAbsolute(input)) {
+		path = GetWorkingDirectory() + path_sep + input;
+	} else {
+		path = input;
+	}
+
+	string current = path;
+	string remainder;
+	while (!current.empty()) {
+		if (TryCanonicalizeExistingPath(current)) {
+			// successfully canonicalized "current" - add remainder if we have any
+			if (remainder.empty()) {
+				return current;
+			}
+			return current + path_sep + remainder;
+		}
+		// move up one directory
+		bool move_up_directory;
+		do {
+			move_up_directory = false;
+			size_t sep = current.find_last_of(path_sep[0]);
+			if (sep == std::string::npos) {
+				// exhausted the full path and nothing exists - break out
+				current = string();
+				break;
+			}
+			auto component = current.substr(sep + 1);
+			if (component == "." || component == ".." || component.empty()) {
+				// for ".", ".." or empty component we move up another layer instead of adding to the remainder
+				move_up_directory = true;
+			} else {
+				// add component to remainder
+				if (remainder.empty()) {
+					remainder = component;
+				} else {
+					remainder = component + path_sep + remainder;
+				}
+			}
+			// continue with remainder
+			current = current.substr(0, sep);
+		} while (move_up_directory && !current.empty());
+	}
+	return path;
 }
 
 string LocalFileSystem::GetVersionTag(FileHandle &handle) {
