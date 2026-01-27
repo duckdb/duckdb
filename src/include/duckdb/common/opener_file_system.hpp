@@ -170,7 +170,7 @@ public:
 		GetFileSystem().UnregisterSubSystem(name);
 	}
 
-	unique_ptr<FileSystem> ExtractSubSystem(const string &name) {
+	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override {
 		GetFileSystem().ExtractSubSystem(name);
 	}
 
