@@ -43,7 +43,7 @@ BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t evi
 }
 
 bool BufferEvictionNode::CanUnload(BlockHandle &handle_p) {
-	if (handle_sequence_number != handle_p.EvictionSequenceNumber()) {
+	if (handle_sequence_number != handle_p.GetMemory().EvictionSequenceNumber()) {
 		// handle was used in between
 		return false;
 	}
@@ -252,10 +252,10 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 
 	// The block handle is locked during this operation (Unpin),
 	// or the block handle is still a local variable (ConvertToPersistent)
-	D_ASSERT(handle->Readers() == 0);
-	auto ts = handle->NextEvictionSequenceNumber();
+	D_ASSERT(handle->GetMemory().Readers() == 0);
+	auto ts = handle->GetMemory().NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
-		handle->SetLRUTimestamp(
+		handle->GetMemory().SetLRUTimestamp(
 		    std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 		        .time_since_epoch()
 		        .count());
@@ -271,7 +271,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 }
 
 EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &handle) {
-	const auto &handle_buffer_type = handle.GetBufferType();
+	const auto &handle_buffer_type = handle.GetMemory().GetBufferType();
 
 	// Get offset into eviction queues for this FileBufferType
 	idx_t queue_index = 0;
@@ -282,7 +282,7 @@ EvictionQueue &BufferPool::GetEvictionQueueForBlockHandle(const BlockHandle &han
 
 	const auto &queue_size = eviction_queue_sizes[handle_queue_type_idx];
 	// Adjust if eviction_queue_idx is set (idx == 0 -> add at back, idx >= queue_size -> add at front)
-	auto eviction_queue_idx = handle.GetEvictionQueueIndex();
+	auto eviction_queue_idx = handle.GetMemory().GetEvictionQueueIndex();
 	if (eviction_queue_idx < queue_size) {
 		queue_index += queue_size - eviction_queue_idx - 1;
 	}
@@ -375,7 +375,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 	queue.IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockHandle> &handle, BlockLock &lock) {
 		// hooray, we can unload the block
-		if (buffer && handle->GetBuffer(lock)->AllocSize() == extra_memory) {
+		if (buffer && handle->GetMemory().GetBuffer(lock)->AllocSize() == extra_memory) {
 			// we can re-use the memory directly
 			*buffer = handle->UnloadAndTakeBlock(lock);
 			found = true;
@@ -421,9 +421,9 @@ idx_t BufferPool::PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age
 	    [&](BufferEvictionNode &node, const shared_ptr<BlockHandle> &handle, BlockLock &lock) {
 		    // We will unload this block regardless. But stop the iteration immediately afterward if this
 		    // block is younger than the age threshold.
-		    auto lru_timestamp_msec = handle->GetLRUTimestamp();
+		    auto lru_timestamp_msec = handle->GetMemory().GetLRUTimestamp();
 		    bool is_fresh = lru_timestamp_msec >= limit && lru_timestamp_msec <= now;
-		    purged_bytes += handle->GetMemoryUsage();
+		    purged_bytes += handle->GetMemory().GetMemoryUsage();
 		    handle->Unload(lock);
 		    // Return false to stop iterating if the current block is_fresh
 		    return !is_fresh;
@@ -452,7 +452,7 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		}
 
 		// we might be able to free this block: grab the mutex and check if we can free it
-		auto lock = handle->GetLock();
+		auto lock = handle->GetMemory().GetLock();
 		if (!node.CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
 			DecrementDeadNodes();

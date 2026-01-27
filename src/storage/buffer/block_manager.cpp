@@ -54,24 +54,24 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
                                                           ConvertToPersistentMode mode) {
 	// register a block with the new block id
 	auto new_block = RegisterBlock(block_id);
-	D_ASSERT(new_block->GetState() == BlockState::BLOCK_UNLOADED);
-	D_ASSERT(new_block->Readers() == 0);
+	D_ASSERT(new_block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
+	D_ASSERT(new_block->GetMemory().Readers() == 0);
 
 	if (mode == ConvertToPersistentMode::THREAD_SAFE) {
 		// safe mode - create a copy of the old block and operate on that
 		// this ensures we don't modify the old block - which allows other concurrent operations on the old block to
 		// continue
-		auto old_block_copy = buffer_manager.AllocateMemory(old_block->GetMemoryTag(), this, false);
+		auto old_block_copy = buffer_manager.AllocateMemory(old_block->GetMemory().GetMemoryTag(), this, false);
 		auto copy_pin = buffer_manager.Pin(old_block_copy);
 		memcpy(copy_pin.Ptr(), old_handle.Ptr(), GetBlockSize());
 		old_block = std::move(old_block_copy);
 		old_handle = std::move(copy_pin);
 	}
 
-	auto lock = old_block->GetLock();
-	D_ASSERT(old_block->GetState() == BlockState::BLOCK_LOADED);
-	D_ASSERT(old_block->GetBuffer(lock));
-	if (old_block->Readers() > 1) {
+	auto lock = old_block->GetMemory().GetLock();
+	D_ASSERT(old_block->GetMemory().GetState() == BlockState::BLOCK_LOADED);
+	D_ASSERT(old_block->GetMemory().GetBuffer(lock));
+	if (old_block->GetMemory().Readers() > 1) {
 		throw InternalException(
 		    "BlockManager::ConvertToPersistent in destructive mode - cannot be called for block %d as old_block has "
 		    "multiple readers active",
@@ -80,16 +80,16 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 
 	// Temp buffers can be larger than the storage block size.
 	// But persistent buffers cannot.
-	D_ASSERT(old_block->GetBuffer(lock)->AllocSize() <= GetBlockAllocSize());
+	D_ASSERT(old_block->GetMemory().GetBuffer(lock)->AllocSize() <= GetBlockAllocSize());
 
 	// convert the buffer to a block
-	auto converted_buffer = ConvertBlock(block_id, *old_block->GetBuffer(lock));
+	auto converted_buffer = ConvertBlock(block_id, *old_block->GetMemory().GetBuffer(lock));
 
 	// persist the new block to disk
 	Write(context, *converted_buffer, block_id);
 
 	// now convert the actual block
-	old_block->ConvertToPersistent(lock, *new_block, std::move(converted_buffer));
+	old_block->GetMemory().ConvertToPersistent(lock, *new_block, std::move(converted_buffer));
 
 	// destroy the old buffer
 	lock.unlock();

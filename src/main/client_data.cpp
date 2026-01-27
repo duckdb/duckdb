@@ -44,7 +44,7 @@ public:
 		auto result = buffer_manager.AllocateTemporaryMemory(tag, block_size, can_destroy);
 		// Track allocation based on actual allocated size from the handle
 		if (result) {
-			TrackMemoryAllocation(result->GetMemoryUsage());
+			TrackMemoryAllocation(result->GetMemory().GetMemoryUsage());
 		}
 		return result;
 	}
@@ -53,7 +53,7 @@ public:
 		auto result = buffer_manager.AllocateMemory(tag, block_manager, can_destroy);
 		// Track allocation based on actual allocated size from the handle
 		if (result) {
-			TrackMemoryAllocation(result->GetMemoryUsage());
+			TrackMemoryAllocation(result->GetMemory().GetMemoryUsage());
 		}
 		return result;
 	}
@@ -61,7 +61,7 @@ public:
 		auto result = buffer_manager.Allocate(tag, block_size, can_destroy);
 		// Track allocation based on actual allocated size from the handle
 		if (result.GetBlockHandle()) {
-			TrackMemoryAllocation(result.GetBlockHandle()->GetMemoryUsage());
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
 		}
 		return result;
 	}
@@ -69,15 +69,15 @@ public:
 		auto result = buffer_manager.Allocate(tag, block_manager, can_destroy);
 		// Track allocation based on actual allocated size from the handle
 		if (result.GetBlockHandle()) {
-			TrackMemoryAllocation(result.GetBlockHandle()->GetMemoryUsage());
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
 		}
 		return result;
 	}
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) override {
 		// Track the difference in size (new size - old size)
-		idx_t old_size = handle->GetMemoryUsage();
+		idx_t old_size = handle->GetMemory().GetMemoryUsage();
 		buffer_manager.ReAllocate(handle, block_size);
-		idx_t new_size = handle->GetMemoryUsage();
+		idx_t new_size = handle->GetMemory().GetMemoryUsage();
 		if (new_size > old_size) {
 			TrackMemoryAllocation(new_size - old_size);
 		}
