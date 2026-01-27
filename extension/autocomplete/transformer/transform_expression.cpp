@@ -826,12 +826,9 @@ bool TryNegateLikeFunction(string &function_name) {
 		function_name = "!~~*";
 		return true;
 	} else if (function_name == "~~~") {
-		// Assuming '~~~' (GLOB) negates to something specific
-		// in your system, otherwise wrap in NOT
 		return false;
 	} else if (function_name == "regexp_full_match") {
-		function_name = "!~";
-		return true;
+		return false;
 	}
 	return false;
 }
@@ -872,6 +869,10 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 			} else {
 				expr = std::move(func_expr);
 			}
+		} else if (func_expr->function_name == "!~") {
+			func_expr->function_name = "regexp_full_match";
+			func_expr->is_operator = false;
+			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 		} else {
 			expr = std::move(func_expr);
 		}
