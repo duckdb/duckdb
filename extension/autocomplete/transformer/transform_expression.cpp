@@ -2267,7 +2267,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformRowExpression(PEGTr
                                                                            optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
-	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	auto expr_list_opt = extract_parens->Cast<OptionalParseResult>();
+	if (!expr_list_opt.HasResult()) {
+		throw InvalidInputException("Can't pack nothing into a struct");
+	}
+	auto expr_list = ExtractParseResultsFromList(expr_list_opt.optional_result);
 	vector<unique_ptr<ParsedExpression>> results;
 	for (auto expr : expr_list) {
 		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));

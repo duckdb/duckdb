@@ -66,8 +66,10 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 			} else if (IsInvalidSchema(base_table->schema_name)) {
 				// Logic for unqualified relations (databases, tables, variables)
 				auto table_name = StringUtil::Lower(base_table->table_name);
-				if (table_name == "databases" || table_name == "tables" || table_name == "variables") {
+				if (table_name == "databases" || table_name == "tables" || table_name == "schemas" ||
+				    table_name == "variables") {
 					showref->table_name = "\"" + table_name + "\"";
+					showref->show_type = ShowType::SHOW_UNQUALIFIED;
 				}
 			}
 		}

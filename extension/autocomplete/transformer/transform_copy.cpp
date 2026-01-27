@@ -31,7 +31,7 @@ void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &optio
 					throw BinderException("\"%s\" expects a column list or * as parameter", option.name);
 				}
 				vector<unique_ptr<ParsedExpression>> func_children;
-				for (auto partition : option.children) {
+				for (const auto &partition : option.children) {
 					func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<string>()));
 				}
 				auto row_func =

@@ -897,7 +897,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression\n"
 	"NullIfExpression <- 'NULLIF' Parens(Expression ',' Expression)\n"
 	"PositionExpression <- 'POSITION' Parens(SingleExpression 'IN' SingleExpression)\n"
-	"RowExpression <- 'ROW' Parens(List(Expression))\n"
+	"RowExpression <- 'ROW' Parens(List(Expression)?)\n"
 	"SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)\n"
 	"SubstringArguments <- SubstringParameters / SubstringExpressionList\n"
 	"SubstringExpressionList <- List(Expression)\n"
