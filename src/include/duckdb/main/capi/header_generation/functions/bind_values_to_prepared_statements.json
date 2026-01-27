@@ -21,7 +21,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds a value to the prepared statement at the specified index.\n"
+                "description": "Binds a value to the prepared statement at the specified index.\n\nSupersedes all type-specific bind functions (e.g., `duckdb_bind_varchar`, `duckdb_bind_int64`, etc.).\n"
             }
         },
         {
