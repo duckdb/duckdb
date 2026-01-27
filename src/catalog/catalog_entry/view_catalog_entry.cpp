@@ -138,7 +138,7 @@ void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 	auto columns = make_shared_ptr<ViewColumnInfo>();
 	Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases,
 	                 columns->types, columns->names);
-	view_columns.atomic_store(std::move(columns));
+	view_columns.atomic_store(columns);
 	bind_state = ViewBindState::BOUND;
 }
 
@@ -152,7 +152,7 @@ void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const v
 	auto new_columns = make_shared_ptr<ViewColumnInfo>();
 	new_columns->types = types_p;
 	new_columns->names = names_p;
-	view_columns.atomic_store(std::move(new_columns));
+	view_columns.atomic_store(new_columns);
 	bind_state = ViewBindState::BOUND;
 }
 
