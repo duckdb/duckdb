@@ -594,44 +594,47 @@ endif()
 
 
 if(NOT MSVC)
+  set(CXX_EXTRA_DEBUG
+          "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic"
+  )
+
   if(${FORCE_WARN_UNUSED})
     set(CXX_EXTRA "${CXX_EXTRA} -Wunused")
   endif()
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CXX_EXTRA "${CXX_EXTRA} -Werror")
   endif()
+  if (FORCE_DEBUG)
+    set(CXX_EXTRA "${CXX_EXTRA} -Wall ${CXX_EXTRA_DEBUG}")
+  endif()
+
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
+          VERSION_GREATER 8.0)
+    if(REDUCE_SYMBOLS)
+      set(CXX_EXTRA "${CXX_EXTRA} -g1 -gsplit-dwarf")
+    endif()
+  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
+          AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
+    if(REDUCE_SYMBOLS)
+      set(CXX_EXTRA "${CXX_EXTRA} -gline-tables-only")
+    endif()
+  else()
+    message(WARNING "Please use a recent compiler for debug builds")
+  endif()
+
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=${CMAKE_LTO}")
   elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
   endif()
+
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
-
-  set(CXX_EXTRA_DEBUG
-      "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic"
-  )
-
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
-                                                   VERSION_GREATER 8.0)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
-    if(REDUCE_SYMBOLS)
-      set(CMAKE_CXX_FLAGS_DEBUG "-g1 -gsplit-dwarf")
-      set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g1 -gsplit-dwarf")
-    endif()
-  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
-         AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
-    if(REDUCE_SYMBOLS)
-      set(CMAKE_CXX_FLAGS_DEBUG "-gline-tables-only")
-      set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-gline-tables-only")
-    endif()
-  else()
-    message(WARNING "Please use a recent compiler for debug builds")
-  endif()
 else()
   set(CMAKE_CXX_WINDOWS_FLAGS
       "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")

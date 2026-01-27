@@ -193,7 +193,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	vector<string> return_names;
 	auto constexpr ordinality_name = "ordinality";
 	string ordinality_column_name = ordinality_name;
-	idx_t ordinality_column_id;
+	optional_idx ordinality_column_id;
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref);

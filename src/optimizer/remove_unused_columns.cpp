@@ -135,25 +135,25 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// this reduces the amount of columns we need to extract from the join hash table
 		// (except in the case of floating point numbers which have +0 and -0, equal but different).
 		for (auto &cond : comp_join.conditions) {
-			if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+			if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
 				continue;
 			}
-			if (cond.left->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			if (cond.GetLHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
-			if (cond.right->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			if (cond.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
-			if (cond.left->Cast<BoundColumnRefExpression>().return_type.IsFloating()) {
+			if (cond.GetLHS().Cast<BoundColumnRefExpression>().return_type.IsFloating()) {
 				continue;
 			}
-			if (cond.right->Cast<BoundColumnRefExpression>().return_type.IsFloating()) {
+			if (cond.GetRHS().Cast<BoundColumnRefExpression>().return_type.IsFloating()) {
 				continue;
 			}
 			// comparison join between two bound column refs
 			// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
-			auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
-			auto &rhs_col = cond.right->Cast<BoundColumnRefExpression>();
+			auto &lhs_col = cond.GetLHS().Cast<BoundColumnRefExpression>();
+			auto &rhs_col = cond.GetRHS().Cast<BoundColumnRefExpression>();
 			// if there are any columns that refer to the RHS,
 			auto colrefs = column_references.find(rhs_col.binding);
 			if (colrefs == column_references.end()) {
@@ -313,10 +313,17 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			bool found = false;
 			for (auto &unique_cond : unique_conditions) {
-				if (cond.comparison == unique_cond.comparison && cond.left->Equals(*unique_cond.left) &&
-				    cond.right->Equals(*unique_cond.right)) {
-					found = true;
-					break;
+				if (cond.IsComparison() && unique_cond.IsComparison()) {
+					if (cond.GetComparisonType() == unique_cond.GetComparisonType() &&
+					    cond.GetLHS().Equals(unique_cond.GetLHS()) && cond.GetRHS().Equals(unique_cond.GetRHS())) {
+						found = true;
+						break;
+					}
+				} else if (!cond.IsComparison() && !unique_cond.IsComparison()) {
+					if (cond.GetJoinExpression().Equals(unique_cond.GetJoinExpression())) {
+						found = true;
+						break;
+					}
 				}
 			}
 			if (!found) {
@@ -443,7 +450,7 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		}
 		path_iter = path_iter.get().GetChildIndex(0);
 	}
-	return std::move(target);
+	return target;
 }
 
 void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expression_count) {

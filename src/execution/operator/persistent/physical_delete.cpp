@@ -91,42 +91,35 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		l_state.delete_chunk.SetCardinality(chunk.size());
 	} else {
 		// Fall back to fetching columns by row ID
-		// This path is used when:
-		// - Unique indexes exist but no RETURNING (need indexed columns for delete tracking)
-		// - MERGE INTO operations (optimization not implemented there yet)
+		// This path is only used when unique indexes exist but no RETURNING
+		// (need indexed columns for delete tracking)
+		D_ASSERT(!return_chunk && "RETURNING should always use the optimized path with return_columns");
+
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
-		auto to_be_fetched = vector<bool>(types.size(), return_chunk);
+		auto to_be_fetched = vector<bool>(types.size(), false);
 		vector<StorageIndex> column_ids;
 		vector<LogicalType> column_types;
 
-		if (return_chunk) {
-			// Fetch all columns.
-			column_types = types;
-			for (idx_t i = 0; i < table.ColumnCount(); i++) {
-				column_ids.emplace_back(i);
-			}
-		} else {
-			// Fetch only the required columns for updating the delete indexes.
-			auto &local_storage = LocalStorage::Get(context.client, table.db);
-			auto storage = local_storage.GetStorage(table);
-			unordered_set<column_t> indexed_column_id_set;
-			storage->delete_indexes.Scan([&](Index &index) {
-				if (!index.IsBound() || !index.IsUnique()) {
-					return false;
-				}
-				auto &set = index.GetColumnIdSet();
-				indexed_column_id_set.insert(set.begin(), set.end());
+		// Fetch only the required columns for updating the delete indexes
+		auto &local_storage = LocalStorage::Get(context.client, table.db);
+		auto storage = local_storage.GetStorage(table);
+		unordered_set<column_t> indexed_column_id_set;
+		storage->delete_indexes.Scan([&](Index &index) {
+			if (!index.IsBound() || !index.IsUnique()) {
 				return false;
-			});
-			for (auto &col : indexed_column_id_set) {
-				column_ids.emplace_back(col);
 			}
-			sort(column_ids.begin(), column_ids.end());
-			for (auto &col : column_ids) {
-				auto i = col.GetPrimaryIndex();
-				to_be_fetched[i] = true;
-				column_types.push_back(types[i]);
-			}
+			auto &set = index.GetColumnIdSet();
+			indexed_column_id_set.insert(set.begin(), set.end());
+			return false;
+		});
+		for (auto &col : indexed_column_id_set) {
+			column_ids.emplace_back(col);
+		}
+		sort(column_ids.begin(), column_ids.end());
+		for (auto &col : column_ids) {
+			auto i = col.GetPrimaryIndex();
+			to_be_fetched[i] = true;
+			column_types.push_back(types[i]);
 		}
 
 		// Fetch the to-be-deleted chunk.

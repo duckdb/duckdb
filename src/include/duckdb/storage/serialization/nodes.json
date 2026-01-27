@@ -466,6 +466,7 @@
         "type": "ExpressionType"
       }
     ],
+    "constructor": ["left", "right", "comparison"],
     "pointer_type": "none"
   },
   {
