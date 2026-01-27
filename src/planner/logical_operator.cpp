@@ -180,7 +180,6 @@ void LogicalOperator::Verify(ClientContext &context) {
 		try {
 			// It is valid to set the compatibility as "latest"
 			// for more information look at `DataChunk::Verify`
-			auto &config = DBConfig::GetConfig(context);
 			SerializationOptions options;
 			options.serialization_compatibility = SerializationCompatibility::Latest();
 
