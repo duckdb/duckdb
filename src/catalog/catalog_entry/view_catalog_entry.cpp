@@ -17,11 +17,15 @@ namespace duckdb {
 void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
-	if (!info.types.empty()) {
+	if (!info.types.empty() && !info.names.empty()) {
 		bind_state = ViewBindState::BOUND;
 		view_columns = make_shared_ptr<ViewColumnInfo>();
 		view_columns->types = info.types;
 		view_columns->names = info.names;
+		if (info.types.size() != info.names.size()) {
+			throw InternalException("Error creating view %s - view types / names size mismatch (%d types, %d names)",
+			                        name, info.types.size(), info.names.size());
+		}
 	}
 	this->temporary = info.temporary;
 	this->sql = info.sql;
@@ -107,6 +111,9 @@ Value ViewCatalogEntry::GetColumnComment(idx_t column_index) {
 		throw InternalException("ViewCatalogEntry::GetColumnComment called - but view has not been bound yet");
 	}
 	auto &names = view_columns->names;
+	if (column_index >= names.size()) {
+		return Value();
+	}
 	auto &name = names[column_index];
 	auto entry = column_comments.find(name);
 	if (entry != column_comments.end()) {
