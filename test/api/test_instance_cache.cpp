@@ -4,6 +4,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -209,6 +210,57 @@ TEST_CASE("Test attaching the same database path from different databases in rea
 
 		// and now we can no longer attach in read-only mode
 		REQUIRE_FAIL(con1.Query(read_only_attach));
+	}
+}
+
+TEST_CASE("Test instance cache canonicalization", "[api][.]") {
+	LocalFileSystem fs;
+
+	DBInstanceCache instance_cache;
+	vector<string> equivalent_paths;
+	auto test_path = TestCreatePath("instance_cache_canonicalization.db");
+	// base path
+	equivalent_paths.push_back(test_path);
+	// abs path
+	equivalent_paths.push_back(fs.JoinPath(fs.GetWorkingDirectory(), test_path));
+	// dot dot
+	auto dot_dot = TestCreatePath(fs.JoinPath(fs.JoinPath("subdir", ".."), "instance_cache_canonicalization.db"));
+	equivalent_paths.push_back(dot_dot);
+	// dot dot dot
+	auto subdirs = fs.JoinPath(fs.JoinPath("subdir", "subdir2"), "subdir3");
+	auto many_dots = fs.JoinPath(fs.JoinPath("..", ".."), "..");
+	auto dot_dot_dot =
+	    TestCreatePath(fs.JoinPath(fs.JoinPath(subdirs, many_dots), "instance_cache_canonicalization.db"));
+	equivalent_paths.push_back(dot_dot_dot);
+	// dots
+	auto dots = TestCreatePath(fs.JoinPath(fs.JoinPath(".", "."), "instance_cache_canonicalization.db"));
+	equivalent_paths.push_back(dots);
+	// dots that point to a real directory
+	auto test_dir_path = TestDirectoryPath();
+	auto sep = fs.PathSeparator(test_dir_path);
+	auto dir_count = std::count(test_dir_path.begin(), test_dir_path.end(), sep[0]);
+	string many_dots_test_path = test_dir_path;
+	for (idx_t i = 0; i < dir_count + 1; i++) {
+		many_dots_test_path = fs.JoinPath(many_dots_test_path, "..");
+	}
+	equivalent_paths.push_back(
+	    fs.JoinPath(fs.JoinPath(many_dots_test_path, test_dir_path), "instance_cache_canonicalization.db"));
+
+	vector<shared_ptr<DuckDB>> databases;
+	for (auto &path : equivalent_paths) {
+		DBConfig config;
+		auto db = instance_cache.GetOrCreateInstance(path, config, true);
+		databases.push_back(std::move(db));
+	}
+	{
+		Connection con(*databases[0]);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT 42 i"));
+	}
+	// verify that all these databases point to the same path
+	for (auto &db : databases) {
+		Connection con(*db);
+		auto result = con.Query("SELECT * FROM tbl");
+		REQUIRE(CHECK_COLUMN(*result, 0, {42}));
 	}
 }
 

@@ -1377,8 +1377,9 @@ string LocalFileSystem::CanonicalizePath(const string &input) {
 
 	string current = path;
 	string remainder;
+	idx_t dot_dot_count = 0;
 	while (!current.empty()) {
-		if (TryCanonicalizeExistingPath(current)) {
+		if (dot_dot_count == 0 && TryCanonicalizeExistingPath(current)) {
 			// successfully canonicalized "current" - add remainder if we have any
 			if (remainder.empty()) {
 				return current;
@@ -1386,30 +1387,32 @@ string LocalFileSystem::CanonicalizePath(const string &input) {
 			return current + path_sep + remainder;
 		}
 		// move up one directory
-		bool move_up_directory;
-		do {
-			move_up_directory = false;
-			size_t sep = current.find_last_of(path_sep[0]);
-			if (sep == std::string::npos) {
-				// exhausted the full path and nothing exists - break out
-				current = string();
-				break;
-			}
-			auto component = current.substr(sep + 1);
-			if (component == "." || component == ".." || component.empty()) {
-				// for ".", ".." or empty component we move up another layer instead of adding to the remainder
-				move_up_directory = true;
+		size_t sep = current.find_last_of(path_sep[0]);
+		if (sep == std::string::npos) {
+			// exhausted the full path and nothing exists - break out
+			current = string();
+			break;
+		}
+		auto component = current.substr(sep + 1);
+		if (component == "..") {
+			// dot dot - we need to move up a level
+			// increment the count
+			dot_dot_count++;
+		} else if (!component.empty() && component != ".") {
+			if (dot_dot_count > 0) {
+				// just clear this directory
+				dot_dot_count--;
 			} else {
-				// add component to remainder
+				// add component to remainder - unless it's dot or empty
 				if (remainder.empty()) {
 					remainder = component;
 				} else {
 					remainder = component + path_sep + remainder;
 				}
 			}
-			// continue with remainder
-			current = current.substr(0, sep);
-		} while (move_up_directory && !current.empty());
+		}
+		// continue with remainder
+		current = current.substr(0, sep);
 	}
 	return path;
 }
