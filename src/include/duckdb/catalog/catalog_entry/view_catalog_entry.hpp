@@ -21,6 +21,12 @@ class DataTable;
 struct CreateViewInfo;
 
 enum class ViewBindState { BOUND, BINDING, UNBOUND };
+enum class BindViewAction { BIND_IF_UNBOUND, FORCE_REBIND };
+
+struct ViewColumnInfo {
+	vector<LogicalType> types;
+	vector<string> names;
+};
 
 //! A view catalog entry
 class ViewCatalogEntry : public StandardEntry {
@@ -39,9 +45,12 @@ public:
 	//! The set of aliases associated with the view
 	vector<string> aliases;
 
-	virtual const vector<string> &GetNames();
-	virtual const vector<LogicalType> &GetTypes();
-	virtual void BindView(ClientContext &context);
+	//! Returns the view column info, if the view is bound. Otherwise returns `nullptr`
+	virtual shared_ptr<ViewColumnInfo> GetColumnInfo() const;
+	//! Bind a view so we know the types / names returned by it
+	virtual void BindView(ClientContext &context, BindViewAction action = BindViewAction::BIND_IF_UNBOUND);
+	//! Update the view with a new set of types / names
+	virtual void UpdateBinding(const vector<LogicalType> &types, const vector<string> &names);
 	Value GetColumnComment(idx_t column_index);
 
 public:
@@ -53,16 +62,12 @@ public:
 
 	virtual const SelectStatement &GetQuery();
 
-	virtual bool IsBound() const;
-
 	string ToSQL() const override;
 
 private:
 	mutable mutex bind_lock;
-	//! The returned types of the view
-	vector<LogicalType> types;
-	//! The returned names of the view
-	vector<string> names;
+	//! Columns returned by the view, if bound
+	shared_ptr<ViewColumnInfo> view_columns;
 	//! The current bind state of the view
 	atomic<ViewBindState> bind_state;
 	//! Current binding thread

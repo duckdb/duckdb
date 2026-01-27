@@ -249,9 +249,11 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 
 static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData &data, ViewCatalogEntry &view,
                                 DataChunk &output, bool is_table_info) {
-	view.BindView(context);
-	auto &view_names = view.GetNames();
-	auto &view_types = view.GetTypes();
+	// force rebind the view to ensure the names / types are up to date
+	view.BindView(context, BindViewAction::FORCE_REBIND);
+	auto columns = view.GetColumnInfo();
+	auto &view_names = columns->names;
+	auto &view_types = columns->types;
 	if (data.offset >= view_types.size()) {
 		// finished returning values
 		return;

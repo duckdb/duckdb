@@ -101,7 +101,6 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(view.catalog.GetOid())));
 				break;
 			case 2:
-
 				// schema_name, LogicalType::VARCHAR
 				output.SetValue(c, count, Value(view.schema.name));
 				break;
@@ -133,12 +132,14 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 				// temporary, LogicalType::BOOLEAN
 				output.SetValue(c, count, Value::BOOLEAN(view.temporary));
 				break;
-			case 10:
+			case 10: {
 				// column_count, LogicalType::BIGINT
 				// make sure the view is bound so we know the columns it emits
 				view.BindView(context);
-				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(view.GetTypes().size())));
+				auto columns = view.GetColumnInfo();
+				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(columns->types.size())));
 				break;
+			}
 			case 11:
 				// sql, LogicalType::VARCHAR
 				output.SetValue(c, count, Value(view.ToSQL()));

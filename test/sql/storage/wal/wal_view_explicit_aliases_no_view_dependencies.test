@@ -36,11 +36,6 @@ SELECT * FROM test.v
 statement ok
 DROP TABLE test.t
 
-# we can still query this after the table is gone
-query II nosort view_info
-PRAGMA table_info('test.v')
-----
-
 loop i 0 2
 
 # now reload

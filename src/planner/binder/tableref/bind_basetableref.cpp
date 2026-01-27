@@ -313,6 +313,8 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		if (!view_binder->correlated_columns.empty()) {
 			throw BinderException("Contents of view were altered - view bound correlated columns");
 		}
+		// update the view binding with the bound view information
+		view_catalog_entry.UpdateBinding(bound_child.types, bound_child.names);
 		bind_context.AddView(bound_child.plan->GetRootIndex(), subquery.alias, subquery, bound_child,
 		                     view_catalog_entry);
 		return bound_child;

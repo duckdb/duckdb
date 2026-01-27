@@ -159,21 +159,20 @@ class ViewColumnHelper : public ColumnHelper {
 public:
 	explicit ViewColumnHelper(ClientContext &context, ViewCatalogEntry &entry) : entry(entry) {
 		entry.BindView(context);
-		view_types = entry.GetTypes();
-		view_names = entry.GetNames();
+		view_columns = entry.GetColumnInfo();
 	}
 
 	StandardEntry &Entry() override {
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return view_types.size();
+		return view_columns->types.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return col < entry.aliases.size() ? entry.aliases[col] : view_names[col];
+		return col < entry.aliases.size() ? entry.aliases[col] : view_columns->names[col];
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return view_types[col];
+		return view_columns->types[col];
 	}
 	const Value ColumnDefault(idx_t col) override {
 		return Value();
@@ -187,8 +186,7 @@ public:
 
 private:
 	ViewCatalogEntry &entry;
-	vector<LogicalType> view_types;
-	vector<string> view_names;
+	shared_ptr<ViewColumnInfo> view_columns;
 };
 
 unique_ptr<ColumnHelper> ColumnHelper::Create(ClientContext &context, CatalogEntry &entry) {

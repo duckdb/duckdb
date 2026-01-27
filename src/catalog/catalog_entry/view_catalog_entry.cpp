@@ -17,8 +17,12 @@ namespace duckdb {
 void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
-	this->types = info.types;
-	this->names = info.names;
+	if (!info.types.empty()) {
+		bind_state = ViewBindState::BOUND;
+		view_columns = make_shared_ptr<ViewColumnInfo>();
+		view_columns->types = info.types;
+		view_columns->names = info.names;
+	}
 	this->temporary = info.temporary;
 	this->sql = info.sql;
 	this->internal = info.internal;
@@ -26,9 +30,6 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->comment = info.comment;
 	this->tags = info.tags;
 	this->column_comments = info.column_comments_map;
-	if (!types.empty()) {
-		bind_state = ViewBindState::BOUND;
-	}
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
@@ -43,8 +44,11 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->sql = sql;
 	result->query = query ? unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy()) : nullptr;
 	result->aliases = aliases;
-	result->names = names;
-	result->types = types;
+	auto view_columns = GetColumnInfo();
+	if (view_columns) {
+		result->names = view_columns->names;
+		result->types = view_columns->types;
+	}
 	result->temporary = temporary;
 	result->dependencies = dependencies;
 	result->comment = comment;
@@ -61,9 +65,10 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);
 
-		if (IsBound()) {
+		auto view_columns = GetColumnInfo();
+		if (view_columns) {
 			// if the view is bound - verify the name we are commenting on exists
-			auto &names = GetNames();
+			auto &names = view_columns->names;
 			auto entry = std::find(names.begin(), names.end(), comment_on_column_info.column_name);
 			if (entry == names.end()) {
 				throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
@@ -92,29 +97,16 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 	}
 }
 
-bool ViewCatalogEntry::IsBound() const {
-	return bind_state == ViewBindState::BOUND;
-}
-
-const vector<string> &ViewCatalogEntry::GetNames() {
-	if (bind_state != ViewBindState::BOUND) {
-		throw InternalException("ViewCatalogEntry::GetNames called - but view has not been bound yet");
-	}
-	return names;
-}
-
-const vector<LogicalType> &ViewCatalogEntry::GetTypes() {
-	if (bind_state != ViewBindState::BOUND) {
-		throw InternalException("ViewCatalogEntry::GetTypes called - but view has not been bound yet");
-	}
-	return types;
+shared_ptr<ViewColumnInfo> ViewCatalogEntry::GetColumnInfo() const {
+	return view_columns.atomic_load();
 }
 
 Value ViewCatalogEntry::GetColumnComment(idx_t column_index) {
-	if (bind_state != ViewBindState::BOUND) {
+	auto view_columns = GetColumnInfo();
+	if (!view_columns) {
 		throw InternalException("ViewCatalogEntry::GetColumnComment called - but view has not been bound yet");
 	}
-	auto &names = GetNames();
+	auto &names = view_columns->names;
 	auto &name = names[column_index];
 	auto entry = column_comments.find(name);
 	if (entry != column_comments.end()) {
@@ -123,21 +115,37 @@ Value ViewCatalogEntry::GetColumnComment(idx_t column_index) {
 	return Value();
 }
 
-void ViewCatalogEntry::BindView(ClientContext &context) {
+void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 	if (bind_state == ViewBindState::BINDING && bind_thread == ThreadUtil::GetThreadId()) {
 		throw InvalidInputException("View \"%s\" was requested to be bound but this thread is already binding that "
 		                            "view - this likely means the view was attempted to be bound recursively",
 		                            name);
 	}
 	lock_guard<mutex> guard(bind_lock);
-	if (bind_state == ViewBindState::BOUND) {
+	if (action == BindViewAction::BIND_IF_UNBOUND && view_columns) {
 		// already bound
 		return;
 	}
 	bind_state = ViewBindState::BINDING;
 	bind_thread = ThreadUtil::GetThreadId();
-	Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases, types,
-	                 names);
+	auto columns = make_shared_ptr<ViewColumnInfo>();
+	Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases,
+	                 columns->types, columns->names);
+	view_columns.atomic_store(std::move(columns));
+	bind_state = ViewBindState::BOUND;
+}
+
+void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const vector<string> &names_p) {
+	auto columns = view_columns.atomic_load();
+	if (columns && columns->types == types_p && columns->names == names_p) {
+		// already bound with the current info
+		return;
+	}
+	lock_guard<mutex> guard(bind_lock);
+	auto new_columns = make_shared_ptr<ViewColumnInfo>();
+	new_columns->types = types_p;
+	new_columns->names = names_p;
+	view_columns.atomic_store(std::move(new_columns));
 	bind_state = ViewBindState::BOUND;
 }
 
