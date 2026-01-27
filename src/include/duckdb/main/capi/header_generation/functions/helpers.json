@@ -93,8 +93,8 @@
             }
         },
         {
-            "name": "duckdb_is_valid_utf8",
-            "return_type": "bool",
+            "name": "duckdb_valid_utf8_check",
+            "return_type": "duckdb_error_data",
             "params": [
                 {
                     "type": "const char *",
@@ -103,20 +103,15 @@
                 {
                     "type": "idx_t",
                     "name": "len"
-                },
-                {
-                    "type": "duckdb_error_data *",
-                    "name": "out_error"
                 }
             ],
             "comment": {
                 "description": "Checks if a string is valid UTF-8.\n\n",
                 "param_comments": {
                     "str": "The string to check",
-                    "len": "The length of the string (in bytes)",
-                    "out_error": "Optional output parameter for error details. If non-NULL and the string is invalid, receives a duckdb_error_data with error information. Must be destroyed with `duckdb_destroy_error_data` if set."
+                    "len": "The length of the string (in bytes)"
                 },
-                "return_value": "True if valid UTF-8, false otherwise"
+                "return_value": "nullptr if the string is valid UTF-8. Otherwise, a duckdb_error_data containing error information. Must be destroyed with `duckdb_destroy_error_data`."
             }
         }
     ]

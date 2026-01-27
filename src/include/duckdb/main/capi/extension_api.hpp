@@ -644,7 +644,7 @@ typedef struct {
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
-	bool (*duckdb_is_valid_utf8)(const char *str, idx_t len, duckdb_error_data *out_error);
+	duckdb_error_data (*duckdb_valid_utf8_check)(const char *str, idx_t len);
 	// New functions around the table description
 
 	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
@@ -1209,7 +1209,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_scalar_function_init_get_bind_data = duckdb_scalar_function_init_get_bind_data;
 	result.duckdb_scalar_function_init_get_extra_info = duckdb_scalar_function_init_get_extra_info;
 	result.duckdb_value_to_string = duckdb_value_to_string;
-	result.duckdb_is_valid_utf8 = duckdb_is_valid_utf8;
+	result.duckdb_valid_utf8_check = duckdb_valid_utf8_check;
 	result.duckdb_table_description_get_column_count = duckdb_table_description_get_column_count;
 	result.duckdb_table_description_get_column_type = duckdb_table_description_get_column_type;
 	result.duckdb_table_function_get_client_context = duckdb_table_function_get_client_context;

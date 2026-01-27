@@ -439,8 +439,8 @@ TEST_CASE("Test UTF-8 string creation with and without embedded nulls", "[capi]"
 	duckdb_value value = nullptr;
 
 	// Valid null-terminated string.
-	REQUIRE(duckdb_is_valid_utf8(valid_utf8.c_str(), len, &error_data));
-	REQUIRE(!error_data);
+	error_data = duckdb_valid_utf8_check(valid_utf8.c_str(), len);
+	REQUIRE(error_data == nullptr);
 	value = duckdb_unsafe_create_varchar_length(valid_utf8.c_str(), len);
 	REQUIRE(value);
 	auto res = duckdb_get_varchar(value);
@@ -449,9 +449,9 @@ TEST_CASE("Test UTF-8 string creation with and without embedded nulls", "[capi]"
 	duckdb_destroy_value(&value);
 
 	// Invalid null-terminated string.
-	REQUIRE(!duckdb_is_valid_utf8(invalid_utf8, len - 1, &error_data));
+	error_data = duckdb_valid_utf8_check(invalid_utf8, len - 1);
 	free(invalid_utf8);
-	REQUIRE(error_data);
+	REQUIRE(error_data != nullptr);
 	REQUIRE(duckdb_error_data_has_error(error_data));
 	auto err_type = duckdb_error_data_error_type(error_data);
 	REQUIRE(err_type == DUCKDB_ERROR_INVALID_INPUT);
@@ -466,8 +466,8 @@ TEST_CASE("Test UTF-8 string creation with and without embedded nulls", "[capi]"
 	memcpy(invalid_null_utf8, valid_null_utf8.c_str() + 1, VALID_NULL_UTF8_LEN);
 
 	// Valid string with embedded nulls.
-	REQUIRE(duckdb_is_valid_utf8(valid_null_utf8.c_str(), VALID_NULL_UTF8_LEN, &error_data));
-	REQUIRE(!error_data);
+	error_data = duckdb_valid_utf8_check(valid_null_utf8.c_str(), VALID_NULL_UTF8_LEN);
+	REQUIRE(error_data == nullptr);
 	value = duckdb_unsafe_create_varchar_length(valid_null_utf8.c_str(), VALID_NULL_UTF8_LEN);
 	REQUIRE(value);
 	res = duckdb_get_varchar(value);
@@ -476,9 +476,9 @@ TEST_CASE("Test UTF-8 string creation with and without embedded nulls", "[capi]"
 	duckdb_destroy_value(&value);
 
 	// Invalid string with embedded nulls.
-	REQUIRE(!duckdb_is_valid_utf8(invalid_null_utf8, VALID_NULL_UTF8_LEN - 1, &error_data));
+	error_data = duckdb_valid_utf8_check(invalid_null_utf8, VALID_NULL_UTF8_LEN - 1);
 	free(invalid_null_utf8);
-	REQUIRE(error_data);
+	REQUIRE(error_data != nullptr);
 	REQUIRE(duckdb_error_data_has_error(error_data));
 	err_type = duckdb_error_data_error_type(error_data);
 	REQUIRE(err_type == DUCKDB_ERROR_INVALID_INPUT);

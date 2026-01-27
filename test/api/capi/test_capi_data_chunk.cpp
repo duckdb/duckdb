@@ -547,24 +547,20 @@ TEST_CASE("Test DataChunk write BIGNUM", "[capi]") {
 	duckdb_destroy_logical_type(&type);
 }
 
-TEST_CASE("Test duckdb_is_valid_utf8", "[capi]") {
+TEST_CASE("Test duckdb_valid_utf8_check", "[capi]") {
 	string valid_utf8 = "hello";
-	REQUIRE(duckdb_is_valid_utf8(valid_utf8.c_str(), valid_utf8.length(), nullptr));
+	REQUIRE(duckdb_valid_utf8_check(valid_utf8.c_str(), valid_utf8.length()) == nullptr);
 
 	string valid_utf8_multibyte = "é";
-	REQUIRE(duckdb_is_valid_utf8(valid_utf8_multibyte.c_str(), valid_utf8_multibyte.length(), nullptr));
+	REQUIRE(duckdb_valid_utf8_check(valid_utf8_multibyte.c_str(), valid_utf8_multibyte.length()) == nullptr);
 
 	// Create invalid UTF-8 by removing the first byte of a multi-byte character.
 	idx_t len = strlen(valid_utf8_multibyte.c_str());
 	auto invalid_utf8 = static_cast<char *>(malloc(len));
 	memcpy(invalid_utf8, valid_utf8_multibyte.c_str() + 1, len);
 
-	// Test without error output.
-	REQUIRE(!duckdb_is_valid_utf8(invalid_utf8, len - 1, nullptr));
-
-	// Test with error output.
-	duckdb_error_data error = nullptr;
-	REQUIRE(!duckdb_is_valid_utf8(invalid_utf8, len - 1, &error));
+	// Invalid UTF-8 returns error data.
+	auto error = duckdb_valid_utf8_check(invalid_utf8, len - 1);
 	REQUIRE(error != nullptr);
 	REQUIRE(duckdb_error_data_error_type(error) == DUCKDB_ERROR_INVALID_INPUT);
 	REQUIRE(duckdb::StringUtil::Contains(duckdb_error_data_message(error), "invalid Unicode"));

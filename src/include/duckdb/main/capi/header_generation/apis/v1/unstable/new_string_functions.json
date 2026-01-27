@@ -3,6 +3,6 @@
     "description": "New string functions that are added",
     "entries": [
         "duckdb_value_to_string",
-        "duckdb_is_valid_utf8"
+        "duckdb_valid_utf8_check"
     ]
 }

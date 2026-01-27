@@ -741,7 +741,7 @@ typedef struct {
 // New string functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	char *(*duckdb_value_to_string)(duckdb_value value);
-	bool (*duckdb_is_valid_utf8)(const char *str, idx_t len, duckdb_error_data *out_error);
+	duckdb_error_data (*duckdb_valid_utf8_check)(const char *str, idx_t len);
 #endif
 
 // New functions around the table description
@@ -1354,8 +1354,8 @@ typedef struct {
 #define duckdb_scalar_function_init_get_extra_info     duckdb_ext_api.duckdb_scalar_function_init_get_extra_info
 
 // Version unstable_new_string_functions
-#define duckdb_is_valid_utf8   duckdb_ext_api.duckdb_is_valid_utf8
-#define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+#define duckdb_valid_utf8_check duckdb_ext_api.duckdb_valid_utf8_check
+#define duckdb_value_to_string  duckdb_ext_api.duckdb_value_to_string
 
 // Version unstable_new_table_description_functions
 #define duckdb_table_description_get_column_count duckdb_ext_api.duckdb_table_description_get_column_count
