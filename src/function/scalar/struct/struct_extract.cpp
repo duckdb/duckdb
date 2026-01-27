@@ -152,11 +152,6 @@ ScalarFunction GetKeyExtractFunction() {
 	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
 }
 
-ScalarFunction GetKeyExtractAggregateStateFunction() {
-	return ScalarFunction("struct_extract", {LogicalTypeId::AGGREGATE_STATE, LogicalType::VARCHAR}, LogicalType::ANY,
-	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
-}
-
 ScalarFunction GetIndexExtractFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::BIGINT}, LogicalType::ANY,
 	                      StructExtractFunction, StructExtractBindIndex);
@@ -172,7 +167,6 @@ ScalarFunctionSet StructExtractFun::GetFunctions() {
 	ScalarFunctionSet struct_extract_set("struct_extract");
 	struct_extract_set.AddFunction(GetKeyExtractFunction());
 	struct_extract_set.AddFunction(GetIndexExtractFunction());
-	struct_extract_set.AddFunction(GetKeyExtractAggregateStateFunction());
 	return struct_extract_set;
 }
 
