@@ -54,7 +54,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 			if (warn_deprecated_syntax) {
 				DUCKDB_LOG_WARNING(context, msg);
 				if (warnings_as_errors) {
-					throw WarningAsErrorException(msg);
+					throw InvalidInputException(msg);
 				}
 			}
 			return lambda_bind_result;
@@ -65,7 +65,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 		if (warn_deprecated_syntax) {
 			DUCKDB_LOG_WARNING(context, msg);
 			if (warnings_as_errors) {
-				throw WarningAsErrorException(msg);
+				throw InvalidInputException(msg);
 			}
 		}
 		return lambda_bind_result;
