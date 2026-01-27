@@ -170,6 +170,10 @@ public:
 		GetFileSystem().UnregisterSubSystem(name);
 	}
 
+	unique_ptr<FileSystem> ExtractSubSystem(const string &name) {
+		GetFileSystem().ExtractSubSystem(name);
+	}
+
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
 	}
