@@ -285,7 +285,8 @@ void AggregateStateTypeInfo::VerifyStateAsStructSerialization(Serializer &serial
 	// we will not be able to restore the DataChunk correctly unless we retrigger the whole EXPORT_STATE.
 	// However, we do preserve forward compatibility for Opaque AggregateStates
 	if (!serializer.ShouldSerialize(7) && !child_types.empty()) {
-		throw InternalException("AggregateState as a Struct can only be serialized to storage versions >= 7");
+		throw SerializationException("Cannot serialize aggregate state as a struct under your storage version '%s'",
+		                             serializer.GetOptions().serialization_compatibility.duckdb_version);
 	}
 }
 

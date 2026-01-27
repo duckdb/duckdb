@@ -106,3 +106,10 @@ query T
 SELECT typeof(avg(1.2) EXPORT_STATE) = 'AGGREGATE_STATE<avg(DECIMAL(2,1))::DOUBLE, STRUCT(count UBIGINT, "value" DECIMAL(2,1))>';
 ----
 true
+
+# Test that we block serialization of struct based aggregate states to older storage compatibility versions
+load __TEST_DIR__/test_state_export.db readwrite v1.4.4
+
+statement error
+CREATE TABLE my_table AS SELECT avg(5) EXPORT_STATE;
+----
