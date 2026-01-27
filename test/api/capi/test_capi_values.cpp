@@ -446,7 +446,12 @@ TEST_CASE("Test UTF-8 string creation with and without embedded nulls", "[capi]"
 	duckdb_free(res);
 	duckdb_destroy_value(&value);
 
-	// Invalid null-terminated string returns nullptr.
+	// Invalid null-terminated string via duckdb_create_varchar returns nullptr.
+	invalid_utf8[len - 1] = '\0';
+	value = duckdb_create_varchar(invalid_utf8);
+	REQUIRE(!value);
+
+	// Invalid string via duckdb_create_varchar_length also returns nullptr.
 	value = duckdb_create_varchar_length(invalid_utf8, len - 1);
 	free(invalid_utf8);
 	REQUIRE(!value);
@@ -480,6 +485,133 @@ TEST_CASE("Test UTF-8 string creation with and without embedded nulls", "[capi]"
 	value = duckdb_create_varchar_length(invalid_null_utf8, VALID_NULL_UTF8_LEN - 1);
 	free(invalid_null_utf8);
 	REQUIRE(!value);
+}
+
+TEST_CASE("Test duckdb_create_varchar edge cases", "[capi]") {
+	duckdb_value value = nullptr;
+
+	// Empty string is valid.
+	value = duckdb_create_varchar("");
+	REQUIRE(value);
+	auto res = duckdb_get_varchar(value);
+	REQUIRE(strlen(res) == 0);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Empty string via _length is valid.
+	value = duckdb_create_varchar_length("", 0);
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(strlen(res) == 0);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Valid ASCII.
+	value = duckdb_create_varchar("hello");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "hello");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Valid multibyte (3-byte: Euro sign).
+	value = duckdb_create_varchar("\xe2\x82\xac");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "\xe2\x82\xac");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Valid 4-byte (emoji).
+	value = duckdb_create_varchar("\xf0\x9f\x98\x80");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "\xf0\x9f\x98\x80");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Valid 2-byte 'é' (0xC3 0xA9), then lone continuation byte (0xA9 without lead byte) is invalid.
+	value = duckdb_create_varchar("\xc3\xa9");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "\xc3\xa9");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	char lone_cont[] = {(char)0xA9, '\0'};
+	value = duckdb_create_varchar(lone_cont);
+	REQUIRE(!value);
+
+	// Valid '/' (0x2F), then overlong encoding of '/' (0xC0 0xAF) is invalid.
+	value = duckdb_create_varchar("/");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "/");
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	char overlong[] = {(char)0xC0, (char)0xAF, '\0'};
+	value = duckdb_create_varchar(overlong);
+	REQUIRE(!value);
+
+	// Valid U+D7FF (0xED 0x9F 0xBF, last before surrogates), then surrogate half U+D800 is invalid.
+	value = duckdb_create_varchar("\xed\x9f\xbf");
+	REQUIRE(value);
+	duckdb_destroy_value(&value);
+
+	char surrogate[] = {(char)0xED, (char)0xA0, (char)0x80, '\0'};
+	value = duckdb_create_varchar(surrogate);
+	REQUIRE(!value);
+
+	// Valid 'A' (0x41), then 0xFF byte is invalid (never valid in UTF-8).
+	value = duckdb_create_varchar("A");
+	REQUIRE(value);
+	duckdb_destroy_value(&value);
+
+	char ff_byte[] = {(char)0xFF, '\0'};
+	value = duckdb_create_varchar(ff_byte);
+	REQUIRE(!value);
+}
+
+TEST_CASE("Test duckdb_create_varchar null truncation vs length version", "[capi]") {
+	// duckdb_create_varchar uses strlen, so it truncates at the first embedded null byte.
+	// duckdb_create_varchar_length preserves the full content including embedded nulls.
+	duckdb_value value = nullptr;
+
+	// "hello\0world" — non-len version sees only "hello".
+	value = duckdb_create_varchar("hello\0world");
+	REQUIRE(value);
+	auto res = duckdb_get_varchar(value);
+	REQUIRE(string(res) == "hello");
+	REQUIRE(strlen(res) == 5);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Same bytes via _length version preserves the full 11 bytes.
+	string full("hello\0world", 11);
+	value = duckdb_create_varchar_length(full.c_str(), full.length());
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res, 11) == full);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Leading null byte — non-len version sees empty string.
+	value = duckdb_create_varchar("\0trailing");
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(strlen(res) == 0);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
+
+	// Same bytes via _length version preserves all 9 bytes.
+	string leading_null("\0trailing", 9);
+	value = duckdb_create_varchar_length(leading_null.c_str(), leading_null.length());
+	REQUIRE(value);
+	res = duckdb_get_varchar(value);
+	REQUIRE(string(res, 9) == leading_null);
+	duckdb_free(res);
+	duckdb_destroy_value(&value);
 }
 
 TEST_CASE("Test SQL string conversion", "[capi]") {
