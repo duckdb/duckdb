@@ -167,6 +167,13 @@ void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
+// Using Key Syntax
+//===----------------------------------------------------------------------===//
+void UsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<UsingKeySyntax>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Validate External File Cache
 //===----------------------------------------------------------------------===//
 void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
