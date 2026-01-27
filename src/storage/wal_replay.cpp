@@ -147,7 +147,7 @@ public:
 			                                                   state_p.db.GetStorageManager().GetEncryptionVersion());
 			//! initialize the decryption
 			auto encryption_state =
-			    database.GetEncryptionUtil(state_p.db.IsReadOnly())->CreateEncryptionState(metadata);
+			    database.GetEncryptionUtil(state_p.db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key);
 
 			//! Allocate a decryption buffer

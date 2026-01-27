@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/encryption_functions.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/helper.hpp"
@@ -19,11 +27,13 @@ private:
 };
 
 struct EncryptionNonce {
-	EncryptionNonce(const idx_t nonce_len = MainHeader::AES_NONCE_LEN);
-	EncryptionNonce(EncryptionTypes::EncryptionVersion version = EncryptionTypes::EncryptionVersion::V0_1);
+	EncryptionNonce(EncryptionTypes::CipherType cipher = EncryptionTypes::GCM,
+	                EncryptionTypes::EncryptionVersion version = EncryptionTypes::EncryptionVersion::V0_1);
 	data_ptr_t data();
 	idx_t size() const;
 	idx_t size_deprecated() const;
+
+	void SetSize(idx_t length);
 
 private:
 	unique_ptr<data_t[]> nonce;

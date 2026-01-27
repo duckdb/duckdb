@@ -141,7 +141,8 @@ public:
 		auto metadata = make_uniq<EncryptionStateMetadata>(db.GetStorageManager().GetCipher(),
 		                                                   MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH,
 		                                                   EncryptionTypes::EncryptionVersion::V0_1);
-		auto encryption_state = db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(metadata);
+		auto encryption_state =
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);

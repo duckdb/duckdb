@@ -166,7 +166,7 @@ public:
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 		auto metadata = make_uniq<EncryptionStateMetadata>(EncryptionTypes::GCM, key.size(),
 		                                                   EncryptionTypes::EncryptionVersion::NONE);
-		aes = encryption_util_p.CreateEncryptionState(metadata);
+		aes = encryption_util_p.CreateEncryptionState(std::move(metadata));
 
 		Initialize(key);
 	}
@@ -251,7 +251,7 @@ public:
 	    : prot(prot_p), trans(*prot.getTransport()), read_buffer_size(0), read_buffer_offset(0) {
 		auto metadata = make_uniq<EncryptionStateMetadata>(EncryptionTypes::GCM, key.size(),
 		                                                   EncryptionTypes::EncryptionVersion::NONE);
-		aes = encryption_util_p.CreateEncryptionState(metadata);
+		aes = encryption_util_p.CreateEncryptionState(std::move(metadata));
 		Initialize(key, crypto_meta_data);
 	}
 

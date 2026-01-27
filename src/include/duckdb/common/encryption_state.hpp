@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+struct EncryptionNonce;
+
 class EncryptionTypes {
 public:
 	enum CipherType : uint8_t { INVALID = 0, GCM = 1, CTR = 2, CBC = 3 };
@@ -65,20 +67,20 @@ public:
 
 class EncryptionState {
 public:
-	DUCKDB_API explicit EncryptionState(unique_ptr<EncryptionStateMetadata> &metadata);
+	DUCKDB_API explicit EncryptionState(unique_ptr<EncryptionStateMetadata> metadata);
 	DUCKDB_API virtual ~EncryptionState();
 
 public:
-	DUCKDB_API virtual void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key,
+	DUCKDB_API virtual void InitializeEncryption(EncryptionNonce nonce, const_data_ptr_t key,
 	                                             const_data_ptr_t aad = nullptr, idx_t aad_len = 0);
-	DUCKDB_API virtual void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key,
+	DUCKDB_API virtual void InitializeDecryption(EncryptionNonce nonce, const_data_ptr_t key,
 	                                             const_data_ptr_t aad = nullptr, idx_t aad_len = 0);
 	DUCKDB_API virtual size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len);
 	DUCKDB_API virtual size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
 	DUCKDB_API virtual void GenerateRandomData(data_ptr_t data, idx_t len);
 
 public:
-	unique_ptr<EncryptionStateMetadata> &metadata;
+	unique_ptr<EncryptionStateMetadata> metadata;
 };
 
 class EncryptionUtil {
@@ -86,8 +88,8 @@ public:
 	DUCKDB_API explicit EncryptionUtil() {};
 
 public:
-	virtual shared_ptr<EncryptionState> CreateEncryptionState(unique_ptr<EncryptionStateMetadata> &metadata) const {
-		return make_shared_ptr<EncryptionState>(metadata);
+	virtual shared_ptr<EncryptionState> CreateEncryptionState(unique_ptr<EncryptionStateMetadata> metadata) const {
+		return make_shared_ptr<EncryptionState>(std::move(metadata));
 	}
 
 	virtual ~EncryptionUtil() {

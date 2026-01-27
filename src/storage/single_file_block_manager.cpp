@@ -102,18 +102,18 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
                    const_data_ptr_t derived_key) {
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
-	uint8_t iv[MainHeader::AES_NONCE_LEN];
 
 	switch (encryption_state->metadata->GetVersion()) {
 	case EncryptionTypes::V0_0:
 		// generate a new, larger IV
-		uint8_t new_iv[MainHeader::MainHeader::AES_NONCE_LEN_DEPRECATED];
-		memset(new_iv, 0, MainHeader::AES_NONCE_LEN_DEPRECATED);
-		encryption_state->InitializeEncryption(new_iv, MainHeader::AES_NONCE_LEN_DEPRECATED, derived_key);
+		uint8_t iv_old[MainHeader::MainHeader::AES_NONCE_LEN_DEPRECATED];
+		memset(iv_old, 0, MainHeader::AES_NONCE_LEN_DEPRECATED);
+		encryption_state->InitializeEncryption(iv_old, MainHeader::AES_NONCE_LEN_DEPRECATED, derived_key);
 		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
 		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
 		break;
 	case EncryptionTypes::V0_1:
+		uint8_t iv[MainHeader::AES_NONCE_LEN];
 		uint8_t tag[MainHeader::AES_TAG_LEN];
 		encryption_state->GenerateRandomData(iv, MainHeader::AES_NONCE_LEN);
 		main_header.SetCanaryIV(iv);
@@ -378,11 +378,13 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHead
 		// From Encryption Version 1+, always encrypt canary with GCM
 		auto metadata = make_uniq<EncryptionStateMetadata>(
 		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
-		encryption_state = db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(metadata);
+		encryption_state =
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	} else {
 		auto metadata = make_uniq<EncryptionStateMetadata>(
 		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
-		encryption_state = db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(metadata);
+		encryption_state =
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	}
 
 	EncryptCanary(main_header, encryption_state, key);
@@ -431,11 +433,13 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 		// From Encryption Version 1+, always encrypt canary with GCM
 		auto metadata = make_uniq<EncryptionStateMetadata>(
 		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
-		encryption_state = db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(metadata);
+		encryption_state =
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	} else {
 		auto metadata = make_uniq<EncryptionStateMetadata>(
 		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
-		encryption_state = db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(metadata);
+		encryption_state =
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	}
 
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {

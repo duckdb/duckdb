@@ -279,7 +279,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(duckdb::data_ptr_t data, d
 	mbedtls_platform_zeroize(data, len);
 }
 
-MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> &metadata) : EncryptionState(metadata), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
+MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata) : EncryptionState(std::move(metadata)), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
 	mbedtls_cipher_init(context.get());
 
 	auto cipher_info = GetCipher();
@@ -328,28 +328,8 @@ void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data
 	GenerateRandomDataInsecure(data, len);
 }
 
-void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len){
-	duckdb::const_data_ptr_t final_iv = iv;
-	duckdb::idx_t final_iv_len = iv_len;
-	duckdb::unique_ptr<duckdb::EncryptionNonce> extended_iv;
-
-	if (metadata->GetVersion() == EncryptionVersion::V0_1) {
-		if (iv_len == MainHeader::AES_NONCE_LEN_DEPRECATED) {
-			throw duckdb::InternalException("IV/nonce of deprecated length is detected for encryption version 0.1. The length should be 12.");
-		}
-
-		if (metadata->GetCipher() == CipherType::CTR) {
-			// we need to initialize the 4 byte counter ourselves for CTR
-			// the zero-ing out is done in the constructor of the nonce
-			extended_iv = duckdb::make_uniq<duckdb::EncryptionNonce>(iv_len + MainHeader::AES_COUNTER_BYTES);
-			memcpy(extended_iv->data(), iv, iv_len);
-			final_iv = extended_iv->data();
-			final_iv_len = iv_len + MainHeader::AES_COUNTER_BYTES;
-
-		}
-	}
-
-	if (mbedtls_cipher_set_iv(context.get(), final_iv, final_iv_len)) {
+void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::EncryptionNonce nonce, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len){
+	if (mbedtls_cipher_set_iv(context.get(), nonce.data(), nonce.size())) {
 		throw runtime_error("Failed to set IV for encryption");
 	}
 
@@ -360,24 +340,24 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::const_data_ptr_
 	}
 }
 
-void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
+void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::EncryptionNonce nonce, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
 	mode = duckdb::EncryptionTypes::ENCRYPT;
 
 	if (mbedtls_cipher_setkey(context.get(), key, metadata->GetKeyLen() * 8, MBEDTLS_ENCRYPT) != 0) {
 		runtime_error("Failed to set AES key for encryption");
 	}
 
-	InitializeInternal(iv, iv_len, aad, aad_len);
+	InitializeInternal(std::move(nonce), aad, aad_len);
 }
 
-void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
+void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::EncryptionNonce nonce, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
 	mode = duckdb::EncryptionTypes::DECRYPT;
 
 	if (mbedtls_cipher_setkey(context.get(), key, metadata->GetKeyLen() * 8, MBEDTLS_DECRYPT)) {
 		throw runtime_error("Failed to set AES key for encryption");
 	}
 
-	InitializeInternal(iv, iv_len, aad, aad_len);
+	InitializeInternal(std::move(nonce), aad, aad_len);
 }
 
 size_t MbedTlsWrapper::AESStateMBEDTLS::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
