@@ -233,6 +233,8 @@ public:
 	//! Process an error for display to the user
 	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
 
+	DUCKDB_API LogicalType ParseLogicalType(const string &type);
+
 private:
 	//! Parse statements and resolve pragmas from a query
 	vector<unique_ptr<SQLStatement>> ParseStatements(ClientContextLock &lock, const string &query);
