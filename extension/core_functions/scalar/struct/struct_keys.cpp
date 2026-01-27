@@ -74,6 +74,11 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
+	auto return_type = arguments[0]->return_type;
+	if (return_type.id() != LogicalTypeId::STRUCT && !return_type.IsAggregateStateStructType()) {
+		throw InvalidInputException("struct_keys() expects a STRUCT argument");
+	}
+
 	const bool is_unnamed = StructType::IsUnnamed(arguments[0]->return_type);
 	if (is_unnamed) {
 		throw InvalidInputException("struct_keys() cannot be applied to an unnamed STRUCT");
@@ -82,7 +87,7 @@ static unique_ptr<FunctionData> StructKeysBind(ClientContext &context, ScalarFun
 }
 
 ScalarFunction StructKeysFun::GetFunction() {
-	ScalarFunction func({LogicalTypeId::STRUCT}, LogicalType::LIST(LogicalType::VARCHAR), StructKeysFunction,
+	ScalarFunction func({LogicalTypeId::ANY}, LogicalType::LIST(LogicalType::VARCHAR), StructKeysFunction,
 	                    StructKeysBind);
 	return func;
 }
