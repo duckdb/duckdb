@@ -1459,6 +1459,17 @@ struct UsernameSetting {
 	static constexpr idx_t SettingIndex = 84;
 };
 
+struct UsingKeySyntaxSetting {
+	using RETURN_TYPE = UsingKeySyntax;
+	static constexpr const char *Name = "using_key_syntax";
+	static constexpr const char *Description = "Configures the use of the deprecated union syntax for USING KEY CTEs.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = 85;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ValidateExternalFileCacheSetting {
 	using RETURN_TYPE = CacheValidationMode;
 	static constexpr const char *Name = "validate_external_file_cache";
@@ -1468,7 +1479,7 @@ struct ValidateExternalFileCacheSetting {
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr const char *DefaultValue = "VALIDATE_ALL";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = 85;
+	static constexpr idx_t SettingIndex = 86;
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
@@ -1480,7 +1491,7 @@ struct VariantMinimumShreddingSizeSetting {
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "30000";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 86;
+	static constexpr idx_t SettingIndex = 87;
 };
 
 struct WriteBufferRowGroupCountSetting {
@@ -1491,7 +1502,7 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = 87;
+	static constexpr idx_t SettingIndex = 88;
 };
 
 struct ZstdMinStringLengthSetting {
@@ -1502,11 +1513,11 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "4096";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 88;
+	static constexpr idx_t SettingIndex = 89;
 };
 
 struct GeneratedSettingInfo {
-	static constexpr idx_t MaxSettingIndex = 89;
+	static constexpr idx_t MaxSettingIndex = 90;
 };
 
 //===----------------------------------------------------------------------===//
