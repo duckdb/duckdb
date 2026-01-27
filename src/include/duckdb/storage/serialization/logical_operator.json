@@ -392,6 +392,12 @@
         "type": "vector<string>"
       },
       {
+        "id": 204,
+        "name": "materialized_cte",
+        "type": "CTEMaterialize",
+        "status": "deleted"
+      },
+      {
         "id": 205,
         "name": "is_recurring",
         "type": "bool"
@@ -867,6 +873,11 @@
         "id": 206,
         "name": "return_chunk",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "delete_return_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": ["$ClientContext", "table_info&"]

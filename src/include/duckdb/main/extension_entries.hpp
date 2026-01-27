@@ -630,6 +630,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_hasm", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_hasz", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_hilbert", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_interiorringn", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_interpolatepoint", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_intersection", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_intersection_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},

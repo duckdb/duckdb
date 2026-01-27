@@ -50,7 +50,6 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
   BASE_HASH: ${{ inputs.base_hash }}
-  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
 
 jobs:
   check-draft:
@@ -86,11 +85,7 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
@@ -222,11 +217,7 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
@@ -303,11 +294,7 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
@@ -346,11 +333,7 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install tqdm
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash

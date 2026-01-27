@@ -323,6 +323,25 @@ statement ok
 DROP TABLE test_where_returning;
 
 # ============================================================
+# Virtual columns like rowid are not supported in RETURNING
+# ============================================================
+
+statement ok
+CREATE TABLE test_rowid_not_supported (id INTEGER, name VARCHAR);
+
+statement ok
+INSERT INTO test_rowid_not_supported VALUES (1, 'one');
+
+# rowid is not supported in DELETE RETURNING
+statement error
+DELETE FROM test_rowid_not_supported WHERE id = 1 RETURNING rowid;
+----
+<REGEX>:Binder Error.*Referenced column "rowid" not found.*
+
+statement ok
+DROP TABLE test_rowid_not_supported;
+
+# ============================================================
 # Tests for DELETE RETURNING with generated columns
 # Generated columns are computed at execution time from physical columns
 # ============================================================
@@ -432,3 +451,103 @@ Hello, Bob!
 
 statement ok
 DROP TABLE test_generated_varchar;
+
+# ============================================================
+# Tests for MERGE INTO DELETE RETURNING with generated columns
+# ============================================================
+
+statement ok
+CREATE TABLE merge_gen_target(id INT, x INT, gen AS (x * 2));
+
+statement ok
+INSERT INTO merge_gen_target(id, x) VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE merge_source(id INT);
+
+statement ok
+INSERT INTO merge_source VALUES (1), (2);
+
+# MERGE INTO DELETE RETURNING with generated column
+query IIII
+MERGE INTO merge_gen_target USING merge_source ON merge_gen_target.id = merge_source.id
+WHEN MATCHED THEN DELETE
+RETURNING *, merge_action;
+----
+1	10	20	DELETE
+2	20	40	DELETE
+
+# Verify remaining row
+query III
+SELECT * FROM merge_gen_target;
+----
+3	30	60
+
+statement ok
+DROP TABLE merge_gen_target;
+
+statement ok
+DROP TABLE merge_source;
+
+# MERGE INTO DELETE RETURNING with multiple generated columns
+statement ok
+CREATE TABLE merge_multi_gen(
+    id INT,
+    a INT,
+    b INT,
+    sum_ab INT GENERATED ALWAYS AS (a + b) VIRTUAL,
+    prod_ab INT GENERATED ALWAYS AS (a * b) VIRTUAL
+);
+
+statement ok
+INSERT INTO merge_multi_gen(id, a, b) VALUES (1, 2, 3), (2, 4, 5), (3, 6, 7);
+
+statement ok
+CREATE TABLE merge_delete_source(id INT);
+
+statement ok
+INSERT INTO merge_delete_source VALUES (1), (3);
+
+query IIIIII
+MERGE INTO merge_multi_gen t USING merge_delete_source s ON t.id = s.id
+WHEN MATCHED THEN DELETE
+RETURNING t.id, t.a, t.b, t.sum_ab, t.prod_ab, merge_action;
+----
+1	2	3	5	6	DELETE
+3	6	7	13	42	DELETE
+
+statement ok
+DROP TABLE merge_multi_gen;
+
+statement ok
+DROP TABLE merge_delete_source;
+
+# ============================================================
+# Virtual columns like rowid are not supported in MERGE INTO RETURNING
+# ============================================================
+
+statement ok
+CREATE TABLE merge_rowid_target (id INT, val INT);
+
+statement ok
+INSERT INTO merge_rowid_target VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE merge_rowid_source (id INT);
+
+statement ok
+INSERT INTO merge_rowid_source VALUES (1);
+
+# rowid is not supported in MERGE INTO DELETE RETURNING
+statement error
+MERGE INTO merge_rowid_target t USING merge_rowid_source s ON t.id = s.id
+WHEN MATCHED THEN DELETE
+RETURNING t.rowid, t.id, t.val;
+----
+<REGEX>:Binder Error.*does not have a column named "rowid".*
+
+statement ok
+DROP TABLE merge_rowid_target;
+
+statement ok
+DROP TABLE merge_rowid_source;
