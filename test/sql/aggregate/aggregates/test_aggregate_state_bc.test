@@ -7,6 +7,7 @@
 
 # Load the frozen database
 unzip data/storage/avg_state_v1_2_0.db.gz __TEST_DIR__/avg_v1_2_0.db
+
 load __TEST_DIR__/avg_v1_2_0.db readonly
 
 # Verify that the current version can read and finalize the old opaque state
