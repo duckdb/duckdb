@@ -127,7 +127,7 @@ public:
 			auto offset = stream.CurrentOffset();
 			auto file_size = stream.FileSize();
 
-			EncryptionNonce nonce;
+			EncryptionNonce nonce(state_p.db.GetStorageManager().GetEncryptionVersion());
 			EncryptionTag tag;
 
 			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
@@ -142,13 +142,13 @@ public:
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
 			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
 			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
-
+			auto metadata = make_uniq<EncryptionStateMetadata>(state_p.db.GetStorageManager().GetCipher(),
+			                                                   MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH,
+			                                                   state_p.db.GetStorageManager().GetEncryptionVersion());
 			//! initialize the decryption
-			auto encryption_state = database.GetEncryptionUtil(state_p.db.IsReadOnly())
-			                            ->CreateEncryptionState(state_p.db.GetStorageManager().GetCipher(),
-			                                                    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
-			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+			auto encryption_state =
+			    database.GetEncryptionUtil(state_p.db.IsReadOnly())->CreateEncryptionState(metadata);
+			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key);
 
 			//! Allocate a decryption buffer
 			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);

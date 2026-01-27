@@ -19,12 +19,15 @@ private:
 };
 
 struct EncryptionNonce {
-	EncryptionNonce();
+	EncryptionNonce(const idx_t nonce_len = MainHeader::AES_NONCE_LEN);
+	EncryptionNonce(EncryptionTypes::EncryptionVersion version = EncryptionTypes::EncryptionVersion::V0_1);
 	data_ptr_t data();
 	idx_t size() const;
+	idx_t size_deprecated() const;
 
 private:
 	unique_ptr<data_t[]> nonce;
+	idx_t nonce_len;
 };
 
 class AdditionalAuthenticatedData {

@@ -106,7 +106,9 @@ public:
 	//! The canary is a known plaintext for detecting wrong keys early.
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
 	//! Nonce, IV (nonce + counter) and tag length
-	static constexpr uint64_t AES_NONCE_LEN = 16;
+	static constexpr uint64_t AES_NONCE_LEN = 12;
+	static constexpr uint64_t AES_COUNTER_BYTES = 4;
+	static constexpr uint64_t AES_NONCE_LEN_DEPRECATED = 16;
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
 
@@ -153,8 +155,8 @@ public:
 	}
 
 	void SetCanaryIV(data_ptr_t source) {
-		memset(canary_iv, 0, AES_IV_LEN);
-		memcpy(canary_iv, source, AES_IV_LEN);
+		memset(canary_iv, 0, AES_NONCE_LEN);
+		memcpy(canary_iv, source, AES_NONCE_LEN);
 	}
 
 	void SetCanaryTag(data_ptr_t source) {
@@ -197,8 +199,8 @@ private:
 	//! The unique database identifier and optional encryption salt.
 	data_t db_identifier[DB_IDENTIFIER_LEN];
 	data_t encrypted_canary[CANARY_BYTE_SIZE];
-	data_t canary_iv[AES_IV_LEN];
-	data_t canary_tag[AES_IV_LEN];
+	data_t canary_iv[AES_NONCE_LEN];
+	data_t canary_tag[AES_TAG_LEN];
 };
 
 //! The DatabaseHeader contains information about the current state of the database. Every storage file has two

@@ -67,12 +67,12 @@ public:
 
 class AESStateMBEDTLS : public duckdb::EncryptionState {
 	public:
-		DUCKDB_API explicit AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len);
+		DUCKDB_API explicit AESStateMBEDTLS(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> &metadata);
 		DUCKDB_API ~AESStateMBEDTLS() override;
 
 	public:
-		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
-		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
+		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
+		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
 
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		                          duckdb::idx_t out_len) override;
@@ -81,7 +81,7 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API static void GenerateRandomDataStatic(duckdb::data_ptr_t data, duckdb::idx_t len);
 		DUCKDB_API void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) override;
 		DUCKDB_API void FinalizeGCM(duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
-		DUCKDB_API const mbedtls_cipher_info_t *GetCipher(size_t key_len);
+		DUCKDB_API const mbedtls_cipher_info_t *GetCipher();
 		DUCKDB_API static void SecureClearData(duckdb::data_ptr_t data, duckdb::idx_t len);
 
 	public:
@@ -92,6 +92,7 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		void UndoForceMbedTLSUnsafe() {
 			force_mbedtls = false;
 		}
+
 
 	private:
 		DUCKDB_API void InitializeInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len);
@@ -106,8 +107,8 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
 
 	public:
-		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len = 0) const override {
-			auto mbedtls_state = duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(cipher_p, key_len);
+		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> &metadata) const override {
+			auto mbedtls_state = duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(metadata);
 
 			if (force_mbedtls_factory) {
 				mbedtls_state->ForceMbedTLSUnsafe();

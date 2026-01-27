@@ -163,8 +163,11 @@ class EncryptionTransport : public TTransport {
 public:
 	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
 	    : prot(prot_p), trans(*prot.getTransport()),
-	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
+		auto metadata = make_uniq<EncryptionStateMetadata>(EncryptionTypes::GCM, key.size(),
+		                                                   EncryptionTypes::EncryptionVersion::NONE);
+		aes = encryption_util_p.CreateEncryptionState(metadata);
+
 		Initialize(key);
 	}
 
@@ -222,8 +225,7 @@ private:
 		// Generate Nonce
 		aes->GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 		// Initialize Encryption
-		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-		                          key.size());
+		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()));
 	}
 
 private:
@@ -246,9 +248,10 @@ class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p,
 	                    const CryptoMetaData &crypto_meta_data)
-	    : prot(prot_p), trans(*prot.getTransport()),
-	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
-	      read_buffer_offset(0) {
+	    : prot(prot_p), trans(*prot.getTransport()), read_buffer_size(0), read_buffer_offset(0) {
+		auto metadata = make_uniq<EncryptionStateMetadata>(EncryptionTypes::GCM, key.size(),
+		                                                   EncryptionTypes::EncryptionVersion::NONE);
+		aes = encryption_util_p.CreateEncryptionState(metadata);
 		Initialize(key, crypto_meta_data);
 	}
 
@@ -310,12 +313,12 @@ private:
 		// check whether context is initialized
 		if (!crypto_meta_data.IsEmpty()) {
 			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-			                          key.size(), crypto_meta_data.additional_authenticated_data->data(),
+			                          crypto_meta_data.additional_authenticated_data->data(),
 			                          crypto_meta_data.additional_authenticated_data->size());
 			crypto_meta_data.additional_authenticated_data->Rewind();
 		} else {
-			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-			                          key.size());
+			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES,
+			                          reinterpret_cast<const_data_ptr_t>(key.data()));
 		}
 	}
 

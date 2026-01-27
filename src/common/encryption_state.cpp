@@ -2,18 +2,17 @@
 
 namespace duckdb {
 
-EncryptionState::EncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len_p)
-    : cipher(cipher_p), key_len(key_len_p) {
+EncryptionState::EncryptionState(unique_ptr<EncryptionStateMetadata> &metadata_p) : metadata(metadata_p) {
 }
 
 EncryptionState::~EncryptionState() {
 }
 
-void EncryptionState::InitializeEncryption(const_data_ptr_t, idx_t, const_data_ptr_t, idx_t, const_data_ptr_t, idx_t) {
+void EncryptionState::InitializeEncryption(const_data_ptr_t, idx_t, const_data_ptr_t, const_data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-void EncryptionState::InitializeDecryption(const_data_ptr_t, idx_t, const_data_ptr_t, idx_t, const_data_ptr_t, idx_t) {
+void EncryptionState::InitializeDecryption(const_data_ptr_t, idx_t, const_data_ptr_t, const_data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
