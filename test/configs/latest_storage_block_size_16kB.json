@@ -20,6 +20,7 @@
         "test/sql/attach/attach_views.test",
         "test/sql/catalog/function/attached_macro.test",
         "test/sql/catalog/test_set_search_path.test",
+        "test/sql/catalog/test_temp_schema_medallion.test",
         "test/sql/catalog/test_temporary.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/json/test_json_serialize_sql.test",
