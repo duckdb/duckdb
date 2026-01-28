@@ -14,14 +14,14 @@
 #include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
-struct UncompressedStringSegmentState;
+struct OverflowStringSegmentState;
 
 class OverflowStringWriter {
 public:
 	virtual ~OverflowStringWriter() {
 	}
 
-	virtual void WriteString(UncompressedStringSegmentState &state, string_t string, block_id_t &result_block,
+	virtual void WriteString(OverflowStringSegmentState &state, string_t string, block_id_t &result_block,
 	                         int32_t &result_offset) = 0;
 	virtual void Flush() = 0;
 };
@@ -33,8 +33,9 @@ struct StringBlock {
 	unique_ptr<StringBlock> next;
 };
 
-struct UncompressedStringSegmentState : public CompressedSegmentState {
-	~UncompressedStringSegmentState() override;
+// Stores the overflowed "tail end" of german strings
+struct OverflowStringSegmentState : public CompressedSegmentState {
+	~OverflowStringSegmentState() override;
 
 	//! The string block holding strings that do not fit in the main block
 	//! FIXME: this should be replaced by a heap that also allows freeing of unused strings

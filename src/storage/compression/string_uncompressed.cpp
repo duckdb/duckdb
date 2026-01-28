@@ -10,7 +10,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Storage Class
 //===--------------------------------------------------------------------===//
-UncompressedStringSegmentState::~UncompressedStringSegmentState() {
+OverflowStringSegmentState::~OverflowStringSegmentState() {
 	while (head) {
 		// prevent deep recursion here
 		head = std::move(head->next);
@@ -67,7 +67,7 @@ void UncompressedStringInitPrefetch(ColumnSegment &segment, PrefetchState &prefe
 	prefetch_state.AddBlock(segment.block);
 	auto segment_state = segment.GetSegmentState();
 	if (segment_state) {
-		auto &state = segment_state->Cast<UncompressedStringSegmentState>();
+		auto &state = segment_state->Cast<OverflowStringSegmentState>();
 		auto &block_manager = segment.GetBlockManager();
 		for (auto &block_id : state.on_disk_blocks) {
 			auto block_handle = state.GetHandle(block_manager, block_id);
@@ -204,7 +204,7 @@ UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t 
 		dictionary.end = UnsafeNumericCast<uint32_t>(segment.SegmentSize());
 		SetDictionary(segment, handle, dictionary);
 	}
-	auto result = make_uniq<UncompressedStringSegmentState>();
+	auto result = make_uniq<OverflowStringSegmentState>();
 	if (segment_state) {
 		auto &serialized_state = segment_state->Cast<SerializedStringSegmentState>();
 		result->on_disk_blocks = std::move(serialized_state.blocks);
@@ -243,7 +243,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 // Serialization & Cleanup
 //===--------------------------------------------------------------------===//
 unique_ptr<ColumnSegmentState> UncompressedStringStorage::SerializeState(ColumnSegment &segment) {
-	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	auto &state = segment.GetSegmentState()->Cast<OverflowStringSegmentState>();
 	if (state.on_disk_blocks.empty()) {
 		// no on-disk blocks - nothing to write
 		return nullptr;
@@ -258,7 +258,7 @@ unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deser
 }
 
 void UncompressedStringStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
-	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	auto &state = segment.GetSegmentState()->Cast<OverflowStringSegmentState>();
 	for (auto &block_id : state.on_disk_blocks) {
 		visitor.Visit(block_id);
 	}
@@ -315,7 +315,7 @@ idx_t UncompressedStringStorage::RemainingSpace(ColumnSegment &segment, BufferHa
 
 void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block,
                                             int32_t &result_offset) {
-	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	auto &state = segment.GetSegmentState()->Cast<OverflowStringSegmentState>();
 	if (state.overflow_writer) {
 		// overflow writer is set: write string there
 		state.overflow_writer->WriteString(state, string, result_block, result_offset);
@@ -332,7 +332,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	BufferHandle handle;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	auto &state = segment.GetSegmentState()->Cast<OverflowStringSegmentState>();
 	// check if the string fits in the current block
 	if (!state.head || state.head->offset + total_length >= state.head->size) {
 		// string does not fit, allocate space for it
@@ -368,7 +368,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
                                                        int32_t offset) {
 	auto &block_manager = segment.GetBlockManager();
 	auto &buffer_manager = block_manager.buffer_manager;
-	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	auto &state = segment.GetSegmentState()->Cast<OverflowStringSegmentState>();
 
 	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < NumericCast<int32_t>(block_manager.GetBlockSize()));

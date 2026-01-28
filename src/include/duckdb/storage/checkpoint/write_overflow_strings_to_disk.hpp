@@ -28,12 +28,12 @@ public:
 	idx_t offset;
 
 public:
-	void WriteString(UncompressedStringSegmentState &state, string_t string, block_id_t &result_block,
+	void WriteString(OverflowStringSegmentState &state, string_t string, block_id_t &result_block,
 	                 int32_t &result_offset) override;
 	void Flush() override;
 
 private:
-	void AllocateNewBlock(UncompressedStringSegmentState &state, block_id_t new_block_id);
+	void AllocateNewBlock(OverflowStringSegmentState &state, block_id_t new_block_id);
 	idx_t GetStringSpace() const;
 };
 
