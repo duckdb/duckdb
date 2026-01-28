@@ -180,10 +180,6 @@ void StorageManager::IncrementWALTransactionsCount() {
 	wal_transactions_count++;
 }
 
-void StorageManager::ResetWALTransactionsCount() {
-	wal_transactions_count = 0;
-}
-
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	if (InMemory() || read_only || !load_complete) {
 		return nullptr;
@@ -245,8 +241,6 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 	D_ASSERT(wal.get());
 
-	ResetWALTransactionsCount();
-
 	// "wal" points to the checkpoint WAL
 	// first check if the checkpoint WAL has been written to
 	auto &fs = FileSystem::Get(db);
@@ -255,6 +249,7 @@ void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 		// this is the common scenario if there are no concurrent writes happening while checkpointing
 		// in this case we can just remove the main WAL and re-instantiate it to empty
 		fs.TryRemoveFile(wal_path);
+		wal_transactions_count = 0;
 
 		wal = make_uniq<WriteAheadLog>(*this, wal_path);
 		return;

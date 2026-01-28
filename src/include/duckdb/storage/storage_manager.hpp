@@ -74,7 +74,6 @@ public:
 	//! Gets the number of committed transactions since last checkpoint
 	idx_t GetWALTransactionsCount();
 	void IncrementWALTransactionsCount();
-	void ResetWALTransactionsCount();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
