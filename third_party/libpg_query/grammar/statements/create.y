@@ -604,8 +604,12 @@ reloption_elem:
 				}
 			| Sconst '=' a_expr /* for table options with quoted key CREATE .. WITH ('filesize.bytes'= 2048)*/
 				{
-					$$ = makeDefElem($1, $3, @1);
+					$$ = makeDefElem($1, (PGNode *) $3, @1);
 				}
+            | Sconst
+            	{
+            		$$ = makeDefElem($1, NULL, @1);
+            	}
 		;
 
 columnList:
