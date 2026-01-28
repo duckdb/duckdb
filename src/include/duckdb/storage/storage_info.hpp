@@ -33,8 +33,13 @@ class QueryContext;
 //! The default block header size for encrypted blocks.
 #define DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE 40ULL
 //! The configurable block allocation size.
+
+// Configurable block allocation size
 #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
-#define DUCKDB_BLOCK_HEADER_STORAGE_SIZE     DEFAULT_BLOCK_HEADER_STORAGE_SIZE
+#define DUCKDB_BLOCK_HEADER_STORAGE_SIZE DEFAULT_BLOCK_HEADER_STORAGE_SIZE
+#endif
+
+#ifndef DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE
 #define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 32ULL
 #endif
 

@@ -10,12 +10,16 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/encryption_types.hpp"
 
 namespace duckdb {
 
 class DatabaseInstance;
 class AttachedDatabase;
 class FileBuffer;
+
+using CipherType = EncryptionTypes::CipherType;
+using Version = EncryptionTypes::EncryptionVersion;
 
 struct EncryptionTag {
 	EncryptionTag();
@@ -36,9 +40,10 @@ private:
 };
 
 struct EncryptionNonce {
-	EncryptionNonce(EncryptionTypes::CipherType cipher = EncryptionTypes::GCM,
-	                EncryptionTypes::EncryptionVersion version = EncryptionTypes::EncryptionVersion::V0_1);
+	explicit EncryptionNonce(CipherType cipher = EncryptionTypes::GCM,
+	                         Version version = EncryptionTypes::EncryptionVersion::V0_1);
 	data_ptr_t data();
+	const_data_ptr_t data_const() const;
 	idx_t size() const;
 	idx_t total_size() const;
 	idx_t size_deprecated() const;

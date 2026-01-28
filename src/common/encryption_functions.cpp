@@ -82,6 +82,10 @@ data_ptr_t EncryptionNonce::data() {
 	return nonce.get();
 }
 
+const_data_ptr_t EncryptionNonce::data_const() const {
+	return nonce.get();
+}
+
 idx_t EncryptionNonce::size() const {
 	// always return 12 bytes
 	return MainHeader::AES_NONCE_LEN;
