@@ -467,7 +467,7 @@ public:
 			new_id = partial_block_manager.GetFreeBlockId();
 		}
 
-		auto &state = segment->GetSegmentState()->Cast<OverflowStringSegmentState>();
+		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
 
 		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
@@ -485,7 +485,7 @@ public:
 
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		if (block_manager.InMemory()) {
-			auto &state = segment->GetSegmentState()->Cast<OverflowStringSegmentState>();
+			auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 			state.handles[block_id] = buffer.GetBlockHandle();
 		} else {
 			block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
@@ -709,7 +709,7 @@ public:
 struct ZSTDScanState : public SegmentScanState {
 public:
 	explicit ZSTDScanState(ColumnSegment &segment)
-	    : state(segment.GetSegmentState()->Cast<OverflowStringSegmentState>()),
+	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
 	      block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
 	      segment_block_offset(segment.GetBlockOffset()), segment(segment) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
@@ -969,7 +969,7 @@ public:
 	}
 
 public:
-	OverflowStringSegmentState &state;
+	UncompressedStringSegmentState &state;
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
 
@@ -1034,7 +1034,7 @@ void ZSTDStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 
 unique_ptr<CompressedSegmentState> ZSTDStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id,
                                                                   optional_ptr<ColumnSegmentState> segment_state) {
-	auto result = make_uniq<OverflowStringSegmentState>();
+	auto result = make_uniq<UncompressedStringSegmentState>();
 	if (segment_state) {
 		auto &serialized_state = segment_state->Cast<SerializedStringSegmentState>();
 		result->on_disk_blocks = std::move(serialized_state.blocks);
@@ -1043,7 +1043,7 @@ unique_ptr<CompressedSegmentState> ZSTDStorage::StringInitSegment(ColumnSegment 
 }
 
 unique_ptr<ColumnSegmentState> ZSTDStorage::SerializeState(ColumnSegment &segment) {
-	auto &state = segment.GetSegmentState()->Cast<OverflowStringSegmentState>();
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	if (state.on_disk_blocks.empty()) {
 		// no on-disk blocks - nothing to write
 		return nullptr;
@@ -1062,7 +1062,7 @@ void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &vi
 		// This code would result in MarkBlockAsModified() getting called, no need to do this for in-memory blocks.
 		return;
 	}
-	auto &state = segment.GetSegmentState()->Cast<OverflowStringSegmentState>();
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	for (auto &block_id : state.on_disk_blocks) {
 		visitor.Visit(block_id);
 	}

@@ -71,7 +71,7 @@ void UncompressedCompressState::CreateEmptySegment() {
 	auto compressed_segment =
 	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		auto &state = compressed_segment->GetSegmentState()->Cast<OverflowStringSegmentState>();
+		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		auto &storage_manager = checkpoint_data.GetStorageManager();
 		if (!storage_manager.InMemory()) {
 			auto &partial_block_manager = checkpoint_data.GetCheckpointState().GetPartialBlockManager();
@@ -86,7 +86,7 @@ void UncompressedCompressState::CreateEmptySegment() {
 void UncompressedCompressState::FlushSegment(idx_t segment_size) {
 	auto &state = checkpoint_data.GetCheckpointState();
 	if (current_segment->type.InternalType() == PhysicalType::VARCHAR) {
-		auto &segment_state = current_segment->GetSegmentState()->Cast<OverflowStringSegmentState>();
+		auto &segment_state = current_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		if (segment_state.overflow_writer) {
 			segment_state.overflow_writer->Flush();
 			segment_state.overflow_writer.reset();
