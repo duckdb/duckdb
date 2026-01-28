@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 
