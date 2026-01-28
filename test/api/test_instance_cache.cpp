@@ -236,9 +236,9 @@ TEST_CASE("Test instance cache canonicalization", "[api][.]") {
 	// dots that point to a real directory
 	auto test_dir_path = TestDirectoryPath();
 	auto sep = fs.PathSeparator(test_dir_path);
-	auto dir_count = std::count(test_dir_path.begin(), test_dir_path.end(), sep[0]);
+	idx_t dir_count = StringUtil::Split(test_dir_path, sep).size();
 	string many_dots_test_path = test_dir_path;
-	for (idx_t i = 0; i < dir_count + 1; i++) {
+	for (idx_t i = 0; i < dir_count; i++) {
 		many_dots_test_path = fs.JoinPath(many_dots_test_path, "..");
 	}
 	equivalent_paths.push_back(fs.JoinPath(many_dots_test_path, test_dir_path, "instance_cache_canonicalization.db"));

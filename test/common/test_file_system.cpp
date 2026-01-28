@@ -329,22 +329,42 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 	test_cases.emplace_back("\\\\server\\share\\src\\..\\common", "\\\\server\\share\\common", "UNC with parent");
 #endif
 
+	std::vector<string> failures;
 	for (auto &test : test_cases) {
 		// test canonicalization
 		auto canonical_a = fs->CanonicalizePath(test.a);
 		auto canonical_b = fs->CanonicalizePath(test.b);
 
-		REQUIRE(canonical_a == canonical_b);
+		if (canonical_a != canonical_b) {
+			failures.emplace_back(StringUtil::Format("Canonical path mismatch %s <> %s (original: %s - %s)",
+			                                         canonical_a, canonical_b, test.a, test.b));
+		}
 		if (!fs->IsPathAbsolute(test.a)) {
 			// verify absolute and relative paths resolve to the same path
 			auto abs_a = fs->JoinPath(fs->GetWorkingDirectory(), test.a);
 			auto abs_b = fs->JoinPath(fs->GetWorkingDirectory(), test.b);
 			auto canonical_abs_a = fs->CanonicalizePath(abs_a);
 			auto canonical_abs_b = fs->CanonicalizePath(abs_b);
-			REQUIRE(canonical_abs_a == canonical_abs_b);
+			if (canonical_abs_a != canonical_abs_b) {
+				failures.emplace_back(StringUtil::Format("Canonical abs path mismatch %s <> %s (original: %s - %s)",
+				                                         canonical_abs_a, canonical_abs_b, test.a, test.b));
+			}
 			// absolute path matches relative path
-			REQUIRE(canonical_abs_a == canonical_a);
+			if (canonical_abs_a != canonical_a) {
+				failures.emplace_back(
+				    StringUtil::Format("Canonical abs - relative path mismatch %s <> %s (original: %s)",
+				                       canonical_abs_a, canonical_a, test.a));
+			}
+			REQUIRE(1 == 1);
 		}
+		REQUIRE(1 == 1);
+	}
+	if (!failures.empty()) {
+		Printer::PrintF("------------- FAILURE -------------");
+		for (auto &failure : failures) {
+			Printer::PrintF("%s", failure);
+		}
+		FAIL();
 	}
 }
 
