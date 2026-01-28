@@ -1,0 +1,11 @@
+# name: test/sql/storage/alter/use_debug.test
+# group: [alter]
+
+# statement ok
+# attach ':memory:' as db1;
+#
+# statement ok
+# CREATE TABLE db1.tbl (id INTEGER DEFAULT nextval('seq'), s VARCHAR);
+
+statement ok
+USE db1.tbl;

@@ -9,6 +9,7 @@
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -31,12 +32,14 @@ void AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, uniq
 }
 
 void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, const string &column_name,
-                               const string &table_name, const unique_ptr<ParsedExpression> &original_expression) {
+                               const AlterEntryData &table_data,
+                               const unique_ptr<ParsedExpression> &original_expression) {
 	auto update_statement = make_uniq<UpdateStatement>();
 
 	auto table_ref = make_uniq<BaseTableRef>();
-
-	table_ref->table_name = table_name;
+	table_ref->catalog_name = table_data.catalog;
+	table_ref->schema_name = table_data.schema;
+	table_ref->table_name = table_data.name;
 	update_statement->table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();
@@ -65,11 +68,32 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
 	 * values, which makes WAL replays consistent.
 	 */
 
+	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &fun = expression->Cast<FunctionExpression>();
+		if (fun.function_name == "nextval" || fun.function_name == "currval" && !fun.children.empty() &&
+		                                          fun.children[0]->GetExpressionClass() == ExpressionClass::CONSTANT) {
+			for (size_t i = 0; i < fun.children.size(); i++) {
+				auto &constant_expr = fun.children[i]->Cast<ConstantExpression>();
+				if (constant_expr.value.type().id() == LogicalTypeId::VARCHAR) {
+					auto seq_name = constant_expr.value.GetValue<string>();
+					if (seq_name.find('.') == string::npos && !data.schema.empty()) {
+						auto qualified_seq_name = data.schema + "." + seq_name;
+						if (!data.catalog.empty()) {
+							qualified_seq_name = data.catalog + "." + qualified_seq_name;
+						}
+						fun.children[i] = make_uniq<ConstantExpression>(Value(qualified_seq_name));
+					}
+				}
+			}
+		}
+		expression = make_uniq<FunctionExpression>(std::move(fun));
+	}
+
 	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
 	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
 
 	// 2. `UPDATE t SET u = <expression>;`
-	AddUpdateToMultiStatement(multi_statement, column_name, stmt.relation->relname, expression);
+	AddUpdateToMultiStatement(multi_statement, column_name, data, expression);
 
 	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
