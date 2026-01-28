@@ -6,6 +6,12 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "test_helpers.hpp"
+#if (!defined(_WIN32) && !defined(WIN32)) || defined(__MINGW32__)
+#define TEST_HAVE_SYMLINK
+#include <unistd.h>
+#else
+#include "duckdb/common/windows.hpp"
+#endif
 
 using namespace duckdb;
 using namespace std;
@@ -282,11 +288,52 @@ struct CanonicalizationTest {
 	string a;
 	string b;
 	string description;
+
+	static void Test(const std::vector<CanonicalizationTest> &test_cases);
 };
 
-TEST_CASE("Test path canonicalization", "[file_system]") {
+void CanonicalizationTest::Test(const std::vector<CanonicalizationTest> &test_cases) {
 	auto fs = FileSystem::CreateLocal();
+	std::vector<string> failures;
+	for (auto &test : test_cases) {
+		// test canonicalization
+		auto canonical_a = fs->CanonicalizePath(test.a);
+		auto canonical_b = fs->CanonicalizePath(test.b);
 
+		if (canonical_a != canonical_b) {
+			failures.emplace_back(StringUtil::Format("Canonical path mismatch %s <> %s (original: %s - %s)",
+			                                         canonical_a, canonical_b, test.a, test.b));
+		}
+		if (!fs->IsPathAbsolute(test.a)) {
+			// verify absolute and relative paths resolve to the same path
+			auto abs_a = fs->JoinPath(fs->GetWorkingDirectory(), test.a);
+			auto abs_b = fs->JoinPath(fs->GetWorkingDirectory(), test.b);
+			auto canonical_abs_a = fs->CanonicalizePath(abs_a);
+			auto canonical_abs_b = fs->CanonicalizePath(abs_b);
+			if (canonical_abs_a != canonical_abs_b) {
+				failures.emplace_back(StringUtil::Format("Canonical abs path mismatch %s <> %s (original: %s - %s)",
+				                                         canonical_abs_a, canonical_abs_b, test.a, test.b));
+			}
+			// absolute path matches relative path
+			if (canonical_abs_a != canonical_a) {
+				failures.emplace_back(
+				    StringUtil::Format("Canonical abs - relative path mismatch %s <> %s (original: %s)",
+				                       canonical_abs_a, canonical_a, test.a));
+			}
+			REQUIRE(1 == 1);
+		}
+		REQUIRE(1 == 1);
+	}
+	if (!failures.empty()) {
+		Printer::PrintF("------------- FAILURE -------------");
+		for (auto &failure : failures) {
+			Printer::PrintF("%s", failure);
+		}
+		FAIL();
+	}
+}
+
+TEST_CASE("Test path canonicalization", "[file_system]") {
 	std::vector<CanonicalizationTest> test_cases;
 	test_cases.emplace_back("src/./common", "src/common", "single dot removal");
 	test_cases.emplace_back("src/../common", "common", "parent directory removal");
@@ -328,44 +375,62 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 	test_cases.emplace_back("\\\\server\\share", "\\\\server\\share", "UNC path");
 	test_cases.emplace_back("\\\\server\\share\\src\\..\\common", "\\\\server\\share\\common", "UNC with parent");
 #endif
+	CanonicalizationTest::Test(test_cases);
+}
 
-	std::vector<string> failures;
-	for (auto &test : test_cases) {
-		// test canonicalization
-		auto canonical_a = fs->CanonicalizePath(test.a);
-		auto canonical_b = fs->CanonicalizePath(test.b);
-
-		if (canonical_a != canonical_b) {
-			failures.emplace_back(StringUtil::Format("Canonical path mismatch %s <> %s (original: %s - %s)",
-			                                         canonical_a, canonical_b, test.a, test.b));
-		}
-		if (!fs->IsPathAbsolute(test.a)) {
-			// verify absolute and relative paths resolve to the same path
-			auto abs_a = fs->JoinPath(fs->GetWorkingDirectory(), test.a);
-			auto abs_b = fs->JoinPath(fs->GetWorkingDirectory(), test.b);
-			auto canonical_abs_a = fs->CanonicalizePath(abs_a);
-			auto canonical_abs_b = fs->CanonicalizePath(abs_b);
-			if (canonical_abs_a != canonical_abs_b) {
-				failures.emplace_back(StringUtil::Format("Canonical abs path mismatch %s <> %s (original: %s - %s)",
-				                                         canonical_abs_a, canonical_abs_b, test.a, test.b));
-			}
-			// absolute path matches relative path
-			if (canonical_abs_a != canonical_a) {
-				failures.emplace_back(
-				    StringUtil::Format("Canonical abs - relative path mismatch %s <> %s (original: %s)",
-				                       canonical_abs_a, canonical_a, test.a));
-			}
-			REQUIRE(1 == 1);
-		}
-		REQUIRE(1 == 1);
-	}
-	if (!failures.empty()) {
-		Printer::PrintF("------------- FAILURE -------------");
-		for (auto &failure : failures) {
-			Printer::PrintF("%s", failure);
-		}
+void TestCreateSymlink(const string &source, const string &target, bool directory_link) {
+#ifdef TEST_HAVE_SYMLINK
+	if (symlink(target.c_str(), source.c_str()) != 0) {
+		perror("symlink");
 		FAIL();
 	}
+#else
+	// windows - use native APIs
+	if (!CreateSymbolicLinkA(source.c_str(), target.c_str(), directory_link ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0)) {
+		std::cerr << "Error: " << GetLastError() << std::endl;
+		FAIL();
+	}
+#endif
+}
+
+TEST_CASE("Test path canonicalization with symlinks", "[file_system]") {
+	auto fs = FileSystem::CreateLocal();
+
+	TestCreateDirectory("real_dir");
+	auto real_dir = TestCreatePath("real_dir");
+	auto test_dir = TestDirectoryPath();
+	auto fake_dir = TestCreatePath("fake_dir");
+	auto real_file = fs->JoinPath(real_dir, "real_file");
+
+	TestCreateDirectory(real_dir);
+	// create a real file
+	{
+		DuckDB db(real_file);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT 42 i"));
+	}
+	// create symlink from fake_dir -> real_dir
+	TestCreateSymlink(fake_dir, fs->JoinPath(fs->GetWorkingDirectory(), real_dir), true);
+	// create symlink from fake_file -> real_file
+	TestCreateSymlink(fs->JoinPath(fake_dir, "fake_file"), fs->JoinPath(fs->GetWorkingDirectory(), real_file), false);
+
+	// all of these tests are in the test dir
+	std::vector<CanonicalizationTest> test_cases;
+	test_cases.emplace_back("fake_dir", "real_dir", "base directory");
+	test_cases.emplace_back("fake_dir/file", "real_dir/file", "follow directory symlink");
+	test_cases.emplace_back("fake_dir/real_file", "real_dir/real_file", "follow directory symlink for real file");
+	test_cases.emplace_back("./real_dir/.././fake_dir/.//file", "real_dir/file", "follow directory symlink with dots");
+	test_cases.emplace_back("fake_dir/fake_file", "real_dir/real_file", "follow file symlink");
+	test_cases.emplace_back("real_dir/.././fake_dir/././fake_file", "././real_dir/././real_file",
+	                        "follow file symlink with dots");
+
+	// prepend everything with the test dir
+	for (auto &test_case : test_cases) {
+		test_case.a = fs->JoinPath(test_dir, test_case.a);
+		test_case.b = fs->JoinPath(test_dir, test_case.b);
+	}
+
+	CanonicalizationTest::Test(test_cases);
 }
 
 TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
