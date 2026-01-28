@@ -368,28 +368,37 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		projection_expressions.push_back(std::move(marker_ref));
 	}
 
-	// If RETURNING is present and we have a DELETE action, add all physical columns to the scan
-	// so we can pass them through instead of fetching by row ID in PhysicalDelete.
-	// Generated columns will be computed in the RETURNING projection by the binder.
-	if (!stmt.returning_list.empty()) {
-		bool has_delete_action = false;
-		for (auto &entry : merge_into->actions) {
-			for (auto &action : entry.second) {
-				if (action->action_type == MergeActionType::MERGE_DELETE) {
-					has_delete_action = true;
-					break;
-				}
-			}
-			if (has_delete_action) {
+	// Check if we have a DELETE action
+	bool has_delete_action = false;
+	for (auto &entry : merge_into->actions) {
+		for (auto &action : entry.second) {
+			if (action->action_type == MergeActionType::MERGE_DELETE) {
+				has_delete_action = true;
 				break;
 			}
 		}
-
 		if (has_delete_action) {
+			break;
+		}
+	}
+
+	// If RETURNING is present and we have a DELETE action, add all physical columns to the scan
+	// so we can pass them through instead of fetching by row ID in PhysicalDelete.
+	// Generated columns will be computed in the RETURNING projection by the binder.
+	if (has_delete_action) {
+		if (!stmt.returning_list.empty()) {
 			// Use the overloaded helper to add physical columns to the scan and build projection expressions
 			auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
 			BindDeleteReturningColumns(table, get, merge_into->delete_return_columns, projection_expressions,
 			                           *target_binding);
+		} else {
+			// If no RETURNING, but unique indexes exist, add indexed columns to the scan
+			auto &storage = table.GetStorage();
+			if (storage.HasUniqueIndexes()) {
+				auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
+				BindDeleteIndexColumns(table, get, merge_into->delete_return_columns, projection_expressions,
+				                       *target_binding);
+			}
 		}
 	}
 
