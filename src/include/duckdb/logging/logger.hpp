@@ -10,6 +10,7 @@
 
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/logging/log_type.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -30,7 +31,11 @@ struct FileHandle;
 	{                                                                                                                  \
 		auto &logger_ref_ = Logger::Get(SOURCE);                                                                       \
 		if (logger_ref_.ShouldLog(TYPE, LEVEL)) {                                                                      \
-			logger_ref_.WriteLog(TYPE, LEVEL, __VA_ARGS__);                                                            \
+			if (LEVEL == LogLevel::LOG_WARNING && Logger::WarningsAsError(SOURCE)) {                                   \
+				throw InvalidInputException(logger_ref_.GetLogText(__VA_ARGS__));                                      \
+			} else {                                                                                                   \
+				logger_ref_.WriteLog(TYPE, LEVEL, __VA_ARGS__);                                                        \
+			}                                                                                                          \
 		}                                                                                                              \
 	}
 
@@ -86,6 +91,29 @@ public:
 	DUCKDB_API static Logger &Get(const FileOpener &opener);
 	DUCKDB_API static Logger &Get(const DatabaseInstance &db);
 	DUCKDB_API static Logger &Get(const shared_ptr<Logger> &logger);
+
+	// Get 'WarningsAsErrors' from Settings. This can only be done if client context or database instance is available.
+	DUCKDB_API static bool WarningsAsError(const ClientContext &client_context) {
+		return Settings::Get<WarningsAsErrorsSetting>(client_context);
+	};
+	DUCKDB_API static bool WarningsAsError(const DatabaseInstance &db) {
+		return Settings::Get<WarningsAsErrorsSetting>(db);
+	};
+	template <class T>
+	DUCKDB_API static bool WarningsAsError(const T &logger) {
+		return false;
+	};
+
+	template <typename... ARGS>
+	DUCKDB_API static const string GetLogText(const char *format_string, ARGS... params) {
+		return StringUtil::Format(format_string, params...);
+	}
+	DUCKDB_API static const string GetLogText(const string_t &logtext) {
+		return logtext.GetString();
+	}
+	DUCKDB_API static const string GetLogText(const string &logtext) {
+		return logtext;
+	}
 
 	template <class T>
 	static void Flush(T &log_context_source) {

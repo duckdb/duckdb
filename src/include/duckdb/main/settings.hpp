@@ -1483,6 +1483,16 @@ struct VariantMinimumShreddingSizeSetting {
 	static constexpr idx_t SettingIndex = 86;
 };
 
+struct WarningsAsErrorsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "warnings_as_errors";
+	static constexpr const char *Description = "Escalate all warnings to errors.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = 87;
+};
+
 struct WriteBufferRowGroupCountSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "write_buffer_row_group_count";
@@ -1491,7 +1501,7 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = 87;
+	static constexpr idx_t SettingIndex = 88;
 };
 
 struct ZstdMinStringLengthSetting {
@@ -1502,11 +1512,11 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "4096";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 88;
+	static constexpr idx_t SettingIndex = 89;
 };
 
 struct GeneratedSettingInfo {
-	static constexpr idx_t MaxSettingIndex = 89;
+	static constexpr idx_t MaxSettingIndex = 90;
 };
 
 //===----------------------------------------------------------------------===//
