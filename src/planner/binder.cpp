@@ -7,6 +7,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -18,7 +19,9 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
@@ -34,10 +37,11 @@ idx_t Binder::GetBinderDepth() const {
 
 void Binder::IncreaseDepth() {
 	depth++;
-	if (depth > context.config.max_expression_depth) {
+	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(context);
+	if (depth > max_expression_depth) {
 		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
-		                      context.config.max_expression_depth);
+		                      max_expression_depth);
 	}
 }
 
@@ -361,6 +365,69 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 			        "'excluded' qualified columns are not supported in the RETURNING clause yet");
 		    }
 	    });
+}
+
+void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns) {
+	// Build a mapping from storage column index to scan chunk index for RETURNING.
+	// This allows PhysicalDelete to pass columns through from the scan instead of
+	// fetching them by row ID. Generated columns will be computed by the RETURNING projection.
+	auto &column_ids = get.GetColumnIds();
+	auto &columns = table.GetColumns();
+	auto physical_count = columns.PhysicalColumnCount();
+
+	// Initialize the mapping with INVALID_INDEX
+	return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+	// First, map columns already in the scan to their storage indices
+	for (idx_t chunk_idx = 0; chunk_idx < column_ids.size(); chunk_idx++) {
+		auto &col_id = column_ids[chunk_idx];
+		if (col_id.IsVirtualColumn()) {
+			continue;
+		}
+		// Get the column by logical index, then get its storage index
+		auto logical_idx = col_id.GetPrimaryIndex();
+		auto &col = columns.GetColumn(LogicalIndex(logical_idx));
+		if (!col.Generated()) {
+			auto storage_idx = col.StorageOid();
+			return_columns[storage_idx] = chunk_idx;
+		}
+	}
+
+	// Add any missing physical columns to the scan
+	for (auto &col : columns.Physical()) {
+		auto storage_idx = col.StorageOid();
+		if (return_columns[storage_idx] == DConstants::INVALID_INDEX) {
+			return_columns[storage_idx] = column_ids.size();
+			get.AddColumnId(col.Logical().index);
+		}
+	}
+}
+
+void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+                                        vector<unique_ptr<Expression>> &projection_expressions,
+                                        LogicalOperator &target_binding) {
+	// First, use the base helper to ensure all physical columns are in the scan
+	vector<idx_t> scan_return_columns;
+	BindDeleteReturningColumns(table, get, scan_return_columns);
+
+	// Resolve types after adding columns to the scan
+	target_binding.ResolveOperatorTypes();
+	auto target_bindings = target_binding.GetColumnBindings();
+	auto &target_types = target_binding.types;
+
+	// Convert scan mapping to projection expression mapping
+	// return_columns[storage_idx] = projection_expr_idx
+	auto physical_count = table.GetColumns().PhysicalColumnCount();
+	return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+	for (idx_t storage_idx = 0; storage_idx < scan_return_columns.size(); storage_idx++) {
+		auto scan_idx = scan_return_columns[storage_idx];
+		if (scan_idx != DConstants::INVALID_INDEX && scan_idx < target_bindings.size()) {
+			return_columns[storage_idx] = projection_expressions.size();
+			auto col_ref = make_uniq<BoundColumnRefExpression>(target_types[scan_idx], target_bindings[scan_idx]);
+			projection_expressions.push_back(std::move(col_ref));
+		}
+	}
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,

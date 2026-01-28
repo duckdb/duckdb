@@ -12,7 +12,6 @@
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/enums/access_mode.hpp"
-#include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -48,10 +47,6 @@ constexpr const char *EnabledLogTypes::Name;
 constexpr const char *DisabledLogTypes::Name;
 constexpr const char *DisabledFilesystemsSetting::Name;
 
-const string GetDefaultUserAgent() {
-	return StringUtil::Format("duckdb/%s(%s)", DuckDB::LibraryVersion(), DuckDB::Platform());
-}
-
 namespace {
 
 template <class T>
@@ -78,18 +73,10 @@ bool AccessModeSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, cons
 //===----------------------------------------------------------------------===//
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
-bool AllocatorBackgroundThreadsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(input.GetValue<bool>());
+void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db) {
+		TaskScheduler::GetScheduler(*info.db).SetAllocatorBackgroundThreads(input.GetValue<bool>());
 	}
-	return true;
-}
-
-bool AllocatorBackgroundThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorBackgroundThreads(DBConfigOptions().allocator_background_threads);
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
@@ -143,46 +130,10 @@ Value AllocatorFlushThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allow Community Extensions
 //===----------------------------------------------------------------------===//
-bool AllowCommunityExtensionsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && !config.options.allow_community_extensions) {
-		auto new_value = input.GetValue<bool>();
-		if (new_value) {
-			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
-		}
-		return false;
+void AllowCommunityExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db && input.GetValue<bool>()) {
+		throw InvalidInputException("Cannot change allow_community_extensions setting while database is running");
 	}
-	return true;
-}
-
-bool AllowCommunityExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db && !config.options.allow_community_extensions) {
-		if (DBConfigOptions().allow_community_extensions) {
-			throw InvalidInputException("Cannot upgrade allow_community_extensions setting while database is running");
-		}
-		return false;
-	}
-	return true;
-}
-
-//===----------------------------------------------------------------------===//
-// Allow Parser Override
-//===----------------------------------------------------------------------===//
-bool AllowParserOverrideExtensionSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto new_value = input.GetValue<string>();
-	vector<string> supported_options = {"default", "fallback", "strict", "strict_when_supported"};
-	string supported_option_string;
-	for (const auto &option : supported_options) {
-		if (StringUtil::CIEquals(new_value, option)) {
-			return true;
-		}
-	}
-	throw InvalidInputException("Unrecognized value for parser override setting. Valid options are: %s",
-	                            StringUtil::Join(supported_options, ", "));
-}
-
-bool AllowParserOverrideExtensionSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	config.options.allow_parser_override_extension = "default";
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
@@ -205,59 +156,35 @@ Value AllowPersistentSecretsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Allow Unredacted Secrets
 //===----------------------------------------------------------------------===//
-bool AllowUnredactedSecretsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && input.GetValue<bool>()) {
+void AllowUnredactedSecretsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if ((info.db || info.context) && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
 	}
-	return true;
-}
-
-bool AllowUnredactedSecretsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change allow_unredacted_secrets setting while database is running");
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
 // Disable Database Invalidation
 //===----------------------------------------------------------------------===//
-bool DisableDatabaseInvalidationSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && input.GetValue<bool>()) {
+void DisableDatabaseInvalidationSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db || info.context) {
 		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
 	}
-	return true;
-}
-
-bool DisableDatabaseInvalidationSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change disable_database_invalidation setting while database is running");
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
 // Allow Unsigned Extensions
 //===----------------------------------------------------------------------===//
-bool AllowUnsignedExtensionsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db && input.GetValue<bool>()) {
+void AllowUnsignedExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
-	return true;
-}
-
-bool AllowUnsignedExtensionsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
 // Allowed Directories
 //===----------------------------------------------------------------------===//
 void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
 	if (!config.file_system) {
@@ -271,7 +198,7 @@ void AllowedDirectoriesSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 }
 
 void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_directories when enable_external_access is disabled");
 	}
 	config.options.allowed_directories = DBConfigOptions().allowed_directories;
@@ -290,7 +217,7 @@ Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
 // Allowed Paths
 //===----------------------------------------------------------------------===//void
 void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
 	if (!config.file_system) {
@@ -305,7 +232,7 @@ void AllowedPathsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 }
 
 void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw InvalidInputException("Cannot change allowed_paths when enable_external_access is disabled");
 	}
 	config.options.allowed_paths = DBConfigOptions().allowed_paths;
@@ -581,19 +508,9 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 //===----------------------------------------------------------------------===//
 // Default Block Size
 //===----------------------------------------------------------------------===//
-void DefaultBlockSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DefaultBlockSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {
 	auto block_alloc_size = input.GetValue<uint64_t>();
 	Storage::VerifyBlockAllocSize(block_alloc_size);
-	config.options.default_block_alloc_size = block_alloc_size;
-}
-
-void DefaultBlockSizeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.default_block_alloc_size = DBConfigOptions().default_block_alloc_size;
-}
-
-Value DefaultBlockSizeSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.default_block_alloc_size);
 }
 
 //===----------------------------------------------------------------------===//
@@ -674,12 +591,15 @@ void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig
 			disabled_compression_methods.clear();
 			break;
 		}
-		auto compression_type = CompressionTypeFromString(param);
-		if (compression_type == CompressionType::COMPRESSION_UNCOMPRESSED) {
-			throw InvalidInputException("Uncompressed compression cannot be disabled");
-		}
-		if (compression_type == CompressionType::COMPRESSION_AUTO) {
-			throw InvalidInputException("Unrecognized compression method \"%s\"", entry);
+		auto compression_type = EnumUtil::FromString<CompressionType>(param);
+		switch (compression_type) {
+		case CompressionType::COMPRESSION_AUTO:
+		case CompressionType::COMPRESSION_CONSTANT:
+		case CompressionType::COMPRESSION_EMPTY:
+		case CompressionType::COMPRESSION_UNCOMPRESSED:
+			throw InvalidInputException("Compression method %s cannot be disabled", param);
+		default:
+			break;
 		}
 		disabled_compression_methods.push_back(compression_type);
 	}
@@ -759,81 +679,47 @@ Value DisabledOptimizersSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Duckdb Api
 //===----------------------------------------------------------------------===//
-void DuckDBAPISetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto new_value = input.GetValue<string>();
-	if (db) {
+void DuckDBAPISetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db) {
 		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
 	}
-	config.options.duckdb_api = new_value;
-}
-
-void DuckDBAPISetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change duckdb_api setting while database is running");
-	}
-	config.options.duckdb_api = GetDefaultUserAgent();
-}
-
-Value DuckDBAPISetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.duckdb_api);
 }
 
 //===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
-bool EnableExternalAccessSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!db) {
-		return true;
+void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
+		return;
 	}
 	if (input.GetValue<bool>()) {
-		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
+		throw InvalidInputException("Cannot enable external access while database is running");
 	}
-	if (db && config.options.enable_external_access) {
+	auto &config = info.config;
+	if (info.db && Settings::Get<EnableExternalAccessSetting>(*info.db)) {
 		// we are turning off external access - add any already attached databases to the list of accepted paths
-		auto &db_manager = DatabaseManager::Get(*db);
+		auto &db_manager = DatabaseManager::Get(*info.db);
 		auto attached_paths = db_manager.GetAttachedDatabasePaths();
 		for (auto &path : attached_paths) {
 			config.AddAllowedPath(path);
 			config.AddAllowedPath(path + ".wal");
-			config.AddAllowedPath(path + ".checkpoint.wal");
-			config.AddAllowedPath(path + ".recovery.wal");
+			config.AddAllowedPath(path + ".wal.checkpoint");
+			config.AddAllowedPath(path + ".wal.recovery");
 		}
 	}
 	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
 		// if temp directory is enabled we can also write there
 		config.AddAllowedDirectory(config.options.temporary_directory);
 	}
-	return true;
-}
-
-bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	if (db) {
-		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
-	}
-	return true;
 }
 
 //===----------------------------------------------------------------------===//
 // Enable External File Cache
 //===----------------------------------------------------------------------===//
-void EnableExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.enable_external_file_cache = input.GetValue<bool>();
-	if (db) {
-		ExternalFileCache::Get(*db).SetEnabled(config.options.enable_external_file_cache);
+void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db) {
+		ExternalFileCache::Get(*info.db).SetEnabled(input.GetValue<bool>());
 	}
-}
-
-void EnableExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.enable_external_file_cache = DBConfigOptions().enable_external_file_cache;
-	if (db) {
-		ExternalFileCache::Get(*db).SetEnabled(config.options.enable_external_file_cache);
-	}
-}
-
-Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value(config.options.enable_external_file_cache);
 }
 
 //===----------------------------------------------------------------------===//
@@ -864,7 +750,12 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 		                            value.type().ToString());
 	}
 
-	auto logical_type = TransformStringToLogicalType(value.GetValue<string>());
+	auto logical_type = UnboundType::TryParseAndDefaultBind(value.GetValue<string>());
+	if (logical_type.id() == LogicalTypeId::INVALID) {
+		throw InvalidInputException("Could not parse the argument '%s' to 'force_variant_shredding' as a built in type",
+		                            value.GetValue<string>());
+	}
+
 	TypeVisitor::Contains(logical_type, [](const LogicalType &type) {
 		if (type.IsNested()) {
 			if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::LIST) {
@@ -1178,76 +1069,26 @@ bool EnableProgressBarSetting::OnLocalReset(ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // External Threads
 //===----------------------------------------------------------------------===//
-bool ExternalThreadsSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto new_val = input.GetValue<int64_t>();
-	if (new_val < 0) {
-		throw SyntaxException("Must have a non-negative number of external threads!");
+void ExternalThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	auto new_external_threads = input.GetValue<uint64_t>();
+	if (info.db) {
+		TaskScheduler::GetScheduler(*info.db).SetThreads(info.config.options.maximum_threads, new_external_threads);
 	}
-	auto new_external_threads = NumericCast<idx_t>(new_val);
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
-	}
-	return true;
-}
-
-bool ExternalThreadsSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_external_threads = DBConfigOptions().external_threads;
-	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads, new_external_threads);
-	}
-	return true;
-}
-
-//===----------------------------------------------------------------------===//
-// File Search Path
-//===----------------------------------------------------------------------===//
-void FileSearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = input.ToString();
-	auto &client_data = ClientData::Get(context);
-	client_data.file_search_path = parameter;
-}
-
-void FileSearchPathSetting::ResetLocal(ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	client_data.file_search_path.clear();
-}
-
-Value FileSearchPathSetting::GetSetting(const ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	return Value(client_data.file_search_path);
-}
-
-//===----------------------------------------------------------------------===//
-// Force Bitpacking Mode
-//===----------------------------------------------------------------------===//
-void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto mode_str = StringUtil::Lower(input.ToString());
-	auto mode = BitpackingModeFromString(mode_str);
-	if (mode == BitpackingMode::INVALID) {
-		throw ParserException("Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
-		                      "delta_for, or for");
-	}
-	config.options.force_bitpacking_mode = mode;
-}
-
-void ForceBitpackingModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.force_bitpacking_mode = DBConfigOptions().force_bitpacking_mode;
-}
-
-Value ForceBitpackingModeSetting::GetSetting(const ClientContext &context) {
-	return Value(BitpackingModeToString(context.db->config.options.force_bitpacking_mode));
 }
 
 //===----------------------------------------------------------------------===//
 // Force Compression
 //===----------------------------------------------------------------------===//
-void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void ForceCompressionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	auto compression = StringUtil::Lower(input.ToString());
 	if (compression == "none" || compression == "auto") {
-		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
+		input = "auto";
 	} else {
-		auto compression_type = CompressionTypeFromString(compression);
-		//! FIXME: do we want to try to retrieve the AttachedDatabase here to get the StorageManager ??
+		auto compression_type = EnumUtil::FromString<CompressionType>(compression);
+		if (compression_type == CompressionType::COMPRESSION_CONSTANT ||
+		    compression_type == CompressionType::COMPRESSION_EMPTY) {
+			throw ParserException("auto / constant cannot be used for force_compression");
+		}
 		auto compression_availability_result = CompressionTypeIsAvailable(compression_type);
 		if (!compression_availability_result.IsAvailable()) {
 			if (compression_availability_result.IsDeprecated()) {
@@ -1258,32 +1099,27 @@ void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 				                      CompressionTypeToString(compression_type));
 			}
 		}
-		if (compression_type == CompressionType::COMPRESSION_AUTO) {
-			auto compression_types = StringUtil::Join(ListCompressionTypes(), ", ");
-			throw ParserException("Unrecognized option for PRAGMA force_compression, expected %s", compression_types);
-		}
-		config.options.force_compression = compression_type;
 	}
-}
-
-void ForceCompressionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.force_compression = DBConfigOptions().force_compression;
-}
-
-Value ForceCompressionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(*context.db);
-	return CompressionTypeToString(config.options.force_compression);
 }
 
 //===----------------------------------------------------------------------===//
 // Home Directory
 //===----------------------------------------------------------------------===//
-void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (!input.IsNull() && FileSystem::GetFileSystem(context).IsRemoteFile(input.ToString())) {
-		throw InvalidInputException("Cannot set the home directory to a remote path");
+void HomeDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	optional_ptr<FileSystem> fs;
+	if (info.context) {
+		fs = FileSystem::GetFileSystem(*info.context);
+	} else if (info.db) {
+		fs = FileSystem::GetFileSystem(*info.db);
+	} else {
+		fs = info.config.file_system.get();
 	}
-	config.home_directory = input.IsNull() ? string() : input.ToString();
+	if (fs && !input.IsNull()) {
+		auto new_home_directory = input.ToString();
+		if (fs->IsRemoteFile(new_home_directory)) {
+			throw InvalidInputException("Cannot set the home directory to a remote path");
+		}
+	}
 }
 
 //===----------------------------------------------------------------------===//
@@ -1346,47 +1182,21 @@ void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
-// Lambda Syntax Setting
-//===----------------------------------------------------------------------===//
-void LambdaSyntaxSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto setting_type = EnumUtil::FromString<LambdaSyntax>(input.ToString());
-	auto &config = ClientConfig::GetConfig(context);
-	config.lambda_syntax = setting_type;
-}
-
-void LambdaSyntaxSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.lambda_syntax = LambdaSyntax::DEFAULT;
-}
-
-Value LambdaSyntaxSetting::GetSetting(const ClientContext &context) {
-	const auto &config = ClientConfig::GetConfig(context);
-	return Value(EnumUtil::ToString(config.lambda_syntax));
-}
-
-//===----------------------------------------------------------------------===//
 // Log Query Path
 //===----------------------------------------------------------------------===//
-void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &client_data = ClientData::Get(context);
+void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.context) {
+		throw InvalidInputException("log_query_path can only be set when a context is present");
+	}
+	auto &client_data = ClientData::Get(*info.context);
 	auto path = input.ToString();
 	if (path.empty()) {
 		// empty path: clean up query writer
 		client_data.log_query_writer = nullptr;
 	} else {
-		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*info.context), path,
 		                                                             BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 	}
-}
-
-void LogQueryPathSetting::ResetLocal(ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	client_data.log_query_writer = nullptr;
-}
-
-Value LogQueryPathSetting::GetSetting(const ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	return client_data.log_query_writer ? Value(client_data.log_query_writer->path) : Value();
 }
 
 //===----------------------------------------------------------------------===//
@@ -1465,21 +1275,6 @@ void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &i
 	if (param <= 0) {
 		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
 	}
-}
-
-//===----------------------------------------------------------------------===//
-// Password
-//===----------------------------------------------------------------------===//
-void PasswordSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// nop
-}
-
-void PasswordSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// nop
-}
-
-Value PasswordSetting::GetSetting(const ClientContext &context) {
-	return Value();
 }
 
 //===----------------------------------------------------------------------===//
@@ -1719,7 +1514,7 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
 	config.options.temporary_directory = input.IsNull() ? "" : input.ToString();
@@ -1731,7 +1526,7 @@ void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 }
 
 void TempDirectorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		throw PermissionException("Modifying the temp_directory has been disabled by configuration");
 	}
 	config.SetDefaultTempDirectory();
@@ -1750,44 +1545,15 @@ Value TempDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Temporary File Encryption
 //===----------------------------------------------------------------------===//
-void TempFileEncryptionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto setting = input.GetValue<bool>();
-	if (config.options.temp_file_encryption == setting) {
-		// setting is the current setting
+void TempFileEncryptionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.db) {
 		return;
 	}
-
-	if (db) {
-		auto &buffer_manager = BufferManager::GetBufferManager(*db);
-		if (buffer_manager.HasFilesInTemporaryDirectory()) {
-			throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
-			                          "while there are existing temporary files is disabled.");
-		}
+	auto &buffer_manager = BufferManager::GetBufferManager(*info.db);
+	if (buffer_manager.HasFilesInTemporaryDirectory()) {
+		throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
+		                          "while there are existing temporary files is disabled.");
 	}
-
-	config.options.temp_file_encryption = setting;
-}
-
-void TempFileEncryptionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	if (config.options.temp_file_encryption == true) {
-		// setting is the current setting
-		return;
-	}
-
-	if (db) {
-		auto &buffer_manager = BufferManager::GetBufferManager(*db);
-		if (buffer_manager.HasFilesInTemporaryDirectory()) {
-			throw PermissionException("Existing temporary files found: Modifying the temp_file_encryption setting "
-			                          "while there are existing temporary files is disabled.");
-		}
-	}
-
-	config.options.temp_file_encryption = true;
-}
-
-Value TempFileEncryptionSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.options.temp_file_encryption);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1800,7 +1566,7 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 	}
 	auto new_maximum_threads = NumericCast<idx_t>(new_val);
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	}
 	config.options.maximum_threads = new_maximum_threads;
 }
@@ -1808,7 +1574,7 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, config.options.external_threads);
+		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	}
 	config.options.maximum_threads = new_maximum_threads;
 }
@@ -1816,21 +1582,6 @@ void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
-}
-
-//===----------------------------------------------------------------------===//
-// Username
-//===----------------------------------------------------------------------===//
-void UsernameSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	// nop
-}
-
-void UsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	// nop
-}
-
-Value UsernameSetting::GetSetting(const ClientContext &context) {
-	return Value();
 }
 
 } // namespace duckdb

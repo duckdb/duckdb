@@ -5,6 +5,7 @@
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
@@ -314,16 +315,50 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 	return *temporary_memory_manager;
 }
 
+BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit) {
+	TempBufferPoolReservation r(tag, *this, extra_memory);
+
+	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
+		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+			block_allocator.FlushAll(extra_memory);
+		}
+		return {true, std::move(r)};
+	}
+
+	bool success = false;
+	while (!object_cache->IsEmpty()) {
+		const idx_t freed_mem = object_cache->EvictToReduceMemory(extra_memory);
+		// Break if all entries cannot be evicted.
+		if (freed_mem == 0) {
+			break;
+		}
+
+		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
+			success = true;
+			break;
+		}
+	}
+	if (!success) {
+		r.Resize(0);
+	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+		block_allocator.FlushAll(extra_memory);
+	}
+
+	return {success, std::move(r)};
+}
+
 BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
                                                    unique_ptr<FileBuffer> *buffer) {
 	for (auto &queue : queues) {
 		auto block_result = EvictBlocksInternal(*queue, tag, extra_memory, memory_limit, buffer);
-		if (block_result.success || RefersToSameObject(*queue, *queues.back())) {
-			return block_result; // Return upon success or upon last queue
+		if (block_result.success) {
+			return block_result;
 		}
 	}
-	// This can never happen since we always return when i == 1. Exception to silence compiler warning
-	throw InternalException("Exited BufferPool::EvictBlocksInternal without obtaining BufferPool::EvictionResult");
+
+	// Evict object cache, which is usually used to cache metadata and configs, when flushing buffer blocks alone is not
+	// enough to limit overall memory consumption.
+	return EvictObjectCacheEntries(tag, extra_memory, memory_limit);
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,

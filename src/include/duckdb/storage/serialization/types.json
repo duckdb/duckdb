@@ -1,7 +1,9 @@
 [
   {
     "class": "LogicalTypeModifier",
-    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "includes": [
+      "duckdb/common/extension_type_info.hpp"
+    ],
     "members": [
       {
         "id": 100,
@@ -15,11 +17,15 @@
       }
     ],
     "pointer_type": "none",
-    "constructor": ["value"]
+    "constructor": [
+      "value"
+    ]
   },
   {
     "class": "ExtensionTypeInfo",
-    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "includes": [
+      "duckdb/common/extension_type_info.hpp"
+    ],
     "members": [
       {
         "id": 100,
@@ -140,6 +146,14 @@
         "name": "bound_argument_types",
         "type": "vector<LogicalType>",
         "property": "state_type.bound_argument_types"
+      },
+      {
+        "id": 203,
+        "name": "state_type",
+        "type": "LogicalType",
+        "property": "state_type.state_type",
+        "default": "LogicalTypeId::INVALID",
+        "version": "v1.5.0"
       }
     ]
   },
@@ -159,35 +173,9 @@
         "type": "uint32_t"
       }
     ],
-    "constructor": ["child_type", "size"]
-  },
-  {
-    "class": "UserTypeInfo",
-    "base": "ExtraTypeInfo",
-    "enum": "USER_TYPE_INFO",
-    "members": [
-      {
-        "id": 200,
-        "name": "user_type_name",
-        "type": "string"
-      },
-      {
-        "id": 201,
-        "name": "catalog",
-        "type": "string",
-        "default": "string()"
-      },
-      {
-        "id": 202,
-        "name": "schema",
-        "type": "string",
-        "default": "string()"
-      },
-      {
-        "id": 203,
-        "name": "user_type_modifiers",
-        "type": "vector<Value>"
-      }
+    "constructor": [
+      "child_type",
+      "size"
     ]
   },
   {
@@ -260,5 +248,11 @@
         "type": "CoordinateReferenceSystem"
       }
     ]
+  },
+  {
+    "class": "UnboundTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "UNBOUND_TYPE_INFO",
+    "custom_implementation": true
   }
 ]

@@ -23,9 +23,7 @@ namespace duckdb {
 
 static bool TryLoadExtensionForReplacementScan(ClientContext &context, const string &table_name) {
 	auto lower_name = StringUtil::Lower(table_name);
-	auto &dbconfig = DBConfig::GetConfig(context);
-
-	if (!dbconfig.options.autoload_known_extensions) {
+	if (!Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 
@@ -111,6 +109,11 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 	//! Signal that this catalog should be checked, regardless of the schema in the reference
 	view_search_path.emplace_back(catalog_name, INVALID_SCHEMA);
 	return view_search_path;
+}
+
+void Binder::SetSearchPath(Catalog &catalog, const string &schema) {
+	auto search_path = GetSearchPath(catalog, schema);
+	entry_retriever.SetSearchPath(std::move(search_path));
 }
 
 static vector<LogicalType> ExchangeAllNullTypes(const vector<LogicalType> &types) {
@@ -205,7 +208,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			}
 		}
 		auto &config = DBConfig::GetConfig(context);
-		if (context.config.use_replacement_scans && config.options.enable_external_access &&
+		if (context.config.use_replacement_scans && Settings::Get<EnableExternalAccessSetting>(config) &&
 		    ExtensionHelper::IsFullPath(full_path)) {
 			auto &fs = FileSystem::GetFileSystem(context);
 			if (!fs.IsDisabledForPath(full_path) && fs.FileExists(full_path)) {

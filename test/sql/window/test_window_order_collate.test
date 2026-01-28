@@ -31,7 +31,7 @@ INSERT INTO db_city VALUES
 	
 
 query III rowsort
-SELECT name, city, row_number() OVER (PARTITION BY city) AS row_id 
+SELECT name, city, row_number() OVER (PARTITION BY city) AS row_id
 FROM db_city;
 ----
 DuckDB	Amsterdam	1
@@ -39,9 +39,38 @@ MonetDB	amsterdam	2
 VectorWise	Amstërdam	1
 
 query III rowsort
-SELECT name, city, row_number() OVER (PARTITION BY city COLLATE NOCASE) AS row_id 
+SELECT name, city, row_number() OVER (PARTITION BY city COLLATE NOCASE) AS row_id
 FROM db_city;
 ----
 DuckDB	Amsterdam	1
 MonetDB	amsterdam	2
 VectorWise	Amstërdam	1
+
+# Window operators are also created by EXCEPT set operations 
+# and need to honour collation correctly
+statement ok
+CREATE TABLE t86
+(
+    c0 VARCHAR COLLATE NOCASE NOT NULL
+);
+
+statement ok
+CREATE TABLE t0
+(
+    c0 BOOLEAN UNIQUE NOT NULL,
+    PRIMARY KEY (c0)
+);
+
+statement ok
+INSERT INTO t0(c0) VALUES (true);
+
+statement ok
+INSERT INTO t86(c0) VALUES (''), ('cOB4');
+
+query II
+(SELECT t86.c0, t0.c0 FROM t0, t86) EXCEPT ALL (
+	SELECT i,i FROM range(0, 4) r(i)
+);
+----
+(empty)	1
+cOB4	1

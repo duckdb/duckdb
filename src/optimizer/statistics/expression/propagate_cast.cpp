@@ -5,6 +5,10 @@ namespace duckdb {
 
 static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics &input,
                                                                          const LogicalType &target) {
+	// Bail out if the stats are not numeric
+	if (input.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+		return nullptr;
+	}
 	if (!NumericStats::HasMinMax(input)) {
 		return nullptr;
 	}

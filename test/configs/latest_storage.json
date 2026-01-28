@@ -28,7 +28,6 @@
         "test/sql/pg_catalog/system_functions.test",
         "test/sql/attach/attach_table_info.test",
         "test/sql/attach/attach_did_you_mean.test",
-        "test/sql/attach/show_databases.test",
         "test/sql/attach/attach_show_all_tables.test",
         "test/sql/attach/attach_default_table.test",
         "test/sql/attach/attach_icu_collation.test",
@@ -46,6 +45,13 @@
       "reason": "Attached databases have a main schema, which is not implicit.",
       "paths": [
         "test/fuzzer/sqlsmith/current_schemas_null.test"
+      ]
+    },
+    {
+      "reason": "Requires a specific set of databases and schemas",
+      "paths": [
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/show_schemas.test"
       ]
     }
   ]

@@ -903,7 +903,7 @@ struct duckdb_extension_access {
 	//! Indicate that an error has occurred.
 	void (*set_error)(duckdb_extension_info info, const char *error);
 	//! Fetch the database on which to register the extension.
-	duckdb_database (*get_database)(duckdb_extension_info info);
+	duckdb_database *(*get_database)(duckdb_extension_info info);
 	//! Fetch the API struct pointer.
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
@@ -3471,7 +3471,8 @@ DUCKDB_C_API duckdb_error_data duckdb_vector_safe_assign_string_element(duckdb_v
                                                                         const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location.
+Assigns a string element in the vector at the specified location. The vector type must be VARCHAR and the input must be
+valid UTF-8. Otherwise, undefined behavior is expected at later stages.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -3480,7 +3481,8 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_C_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
+Assigns a string element in the vector at the specified location. The vector type can be VARCHAR or BLOB. In the case of
+VARCHAR, you must pass valid UTF-8. Otherwise, undefined behavior is expected at later stages.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to

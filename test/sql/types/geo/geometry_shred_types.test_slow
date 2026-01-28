@@ -1,0 +1,125 @@
+# name: test/sql/types/geo/geometry_shred_types.test_slow
+# group: [geo]
+
+load __TEST_DIR__/test_shred_types.db
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+SET geometry_minimum_shredding_size = 0;
+
+
+# Setup test table
+statement ok
+CREATE TABLE t1(type VARCHAR, has_z BOOLEAN, has_m BOOLEAN, g GEOMETRY);
+
+# Insert, for each geometry type, a geometry with and without Z/M,
+# Empty geometries are intentionally left out here as they can't be shredded. We have a separate test for them.
+
+statement ok
+INSERT INTO t1 VALUES
+	('POINT', 	FALSE, 	FALSE,	'POINT(0 0)'::GEOMETRY),
+	('POINT', 	TRUE, 	FALSE,	'POINT Z (0 0 0)'::GEOMETRY),
+	('POINT', 	FALSE, 	TRUE,	'POINT M (0 0 0)'::GEOMETRY),
+	('POINT', 	TRUE, 	TRUE,	'POINT ZM (0 0 0 0)'::GEOMETRY),
+	('LINESTRING', 	FALSE, 	FALSE,	'LINESTRING(0 0, 1 1)'::GEOMETRY),
+	('LINESTRING', 	TRUE, 	FALSE,	'LINESTRING Z (0 0 0, 1 1 1)'::GEOMETRY),
+	('LINESTRING', 	FALSE, 	TRUE,	'LINESTRING M (0 0 0, 1 1 0)'::GEOMETRY),
+	('LINESTRING', 	TRUE, 	TRUE,	'LINESTRING ZM (0 0 0 0, 1 1 1 1)'::GEOMETRY),
+	('POLYGON', 	FALSE, 	FALSE,	'POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))'::GEOMETRY),
+	('POLYGON', 	TRUE, 	FALSE,	'POLYGON Z ((0 0 0, 4 0 0, 4 4 0, 0 4 0, 0 0 0))'::GEOMETRY),
+	('POLYGON', 	FALSE, 	TRUE,	'POLYGON M ((0 0 0, 4 0 0, 4 4 0, 0 4 0, 0 0 0))'::GEOMETRY),
+	('POLYGON', 	TRUE,	TRUE,	'POLYGON ZM ((0 0 0 0, 4 0 0 0, 4 4 0 0, 0 4 0 0, 0 0 0 0))'::GEOMETRY),
+	('MULTIPOINT', 	FALSE, 	FALSE,	'MULTIPOINT((0 0), (1 1))'::GEOMETRY),
+	('MULTIPOINT', 	TRUE, 	FALSE,	'MULTIPOINT Z ((0 0 0), (1 1 1))'::GEOMETRY),
+	('MULTIPOINT', 	FALSE, 	TRUE,	'MULTIPOINT M ((0 0 0), (1 1 0))'::GEOMETRY),
+	('MULTIPOINT', 	TRUE,	TRUE,	'MULTIPOINT ZM ((0 0 0 0), (1 1 1 1))'::GEOMETRY),
+	('MULTILINESTRING', 	FALSE, 	FALSE,	'MULTILINESTRING((0 0, 1 1), (2 2, 3 3))'::GEOMETRY),
+	('MULTILINESTRING', 	TRUE, 	FALSE,	'MULTILINESTRING Z ((0 0 0, 1 1 1), (2 2 2, 3 3 3))'::GEOMETRY),
+	('MULTILINESTRING', 	FALSE, 	TRUE,	'MULTILINESTRING M ((0 0 0, 1 1 0), (2 2 0, 3 3 0))'::GEOMETRY),
+	('MULTILINESTRING', 	TRUE,	TRUE,	'MULTILINESTRING ZM ((0 0 0 0, 1 1 1 1), (2 2 2 2, 3 3 3 3))'::GEOMETRY),
+	('MULTIPOLYGON', 	FALSE, 	FALSE,	'MULTIPOLYGON(((0 0,4 0,4 4,0 4,0 0)),((5 5,6 5,6 6,5 6,5 5)))'::GEOMETRY),
+	('MULTIPOLYGON', 	TRUE, 	FALSE,	'MULTIPOLYGON Z (((0 0 0,4 0 0,4 4 0,0 4 0,0 0 0)),((5 5 0,6 5 0,6 6 0,5 6 0,5 5 0)))'::GEOMETRY),
+	('MULTIPOLYGON', 	FALSE, 	TRUE,	'MULTIPOLYGON M (((0 0 0,4 0 0,4 4 0,0 4 0,0 0 0)),((5 5 0,6 5 0,6 6 0,5 6 0,5 5 0)))'::GEOMETRY),
+	('MULTIPOLYGON', 	TRUE,	TRUE,	'MULTIPOLYGON ZM (((0 0 0 0,4 0 0 0,4 4 0 0,0 4 0 0,0 0 0 0)),((5 5 0 0,6 5 0 0,6 6 0 0,5 6 0 0,5 5 0 0)))'::GEOMETRY),
+
+# Now test to shread each type individually
+
+foreach type POINT LINESTRING POLYGON MULTIPOINT MULTILINESTRING MULTIPOLYGON
+
+foreach has_z FALSE TRUE
+
+foreach has_m FALSE TRUE
+
+statement ok
+create table t2 as select g from t1 where type='${type}' and has_z=${has_z} and has_m=${has_m};
+
+query I rowsort
+select distinct segment_type from pragma_storage_info('t2') order by all;
+----
+GEOMETRY
+VALIDITY
+
+# Check stats
+query I rowsort stats_result
+select stats(g) from t2;
+----
+
+# Checkpoint to force shredding
+statement ok
+CHECKPOINT
+
+# Should NOT contain GEOMETRY segment now
+query I
+select segment_type from pragma_storage_info('t2') where segment_type = 'GEOMETRY';
+----
+
+# Should have as many double segments as the number of dimensions (X,Y + Z + M)
+query I rowsort
+select count(*) = (2 + ${has_z}::INT + ${has_m}::INT)
+from pragma_storage_info('t2')
+where segment_type = 'DOUBLE' group by segment_type;
+----
+true
+
+# Check stats again
+query I rowsort stats_result
+select stats(g) from t2;
+----
+
+# Restart to ensure persistence
+restart
+
+# Should NOT contain GEOMETRY segment now
+query I
+select segment_type from pragma_storage_info('t2') where segment_type = 'GEOMETRY';
+----
+
+# Should have as many double segments as the number of dimensions (X,Y + Z + M)
+query I rowsort
+select count(*) = (2 + ${has_z}::INT + ${has_m}::INT)
+from pragma_storage_info('t2')
+where segment_type = 'DOUBLE' group by segment_type;
+----
+true
+
+# Check stats again
+query I rowsort stats_result
+select stats(g) from t2;
+----
+
+# Clean up for next iteration
+statement ok
+drop table t2;
+
+reset label stats_result
+
+endloop
+
+endloop
+
+endloop

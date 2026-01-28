@@ -26,9 +26,13 @@ PEGTransformerFactory::TransformBeginTransaction(PEGTransformer &transformer, op
 TransactionModifierType PEGTransformerFactory::TransformReadOrWrite(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto &only_or_write = list_pr.Child<ListParseResult>(1);
-	auto &only_or_write_choice = only_or_write.Child<ChoiceParseResult>(0);
-	return transformer.TransformEnum<TransactionModifierType>(only_or_write_choice.result);
+	return transformer.Transform<TransactionModifierType>(list_pr.Child<ListParseResult>(1));
+}
+
+TransactionModifierType PEGTransformerFactory::TransformReadOnlyOrReadWrite(PEGTransformer &transformer,
+                                                                            optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<TransactionModifierType>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 unique_ptr<TransactionStatement> PEGTransformerFactory::TransformCommitTransaction(PEGTransformer &,

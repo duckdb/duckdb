@@ -4,16 +4,18 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/planner/operator/logical_update.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/constraints/bound_check_constraint.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 #include <sstream>
 
@@ -157,10 +159,19 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			ss << column.Type().ToString();
 		}
 		auto extra_type_info = column_type.AuxInfo();
-		if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
-			auto &string_info = extra_type_info->Cast<StringTypeInfo>();
-			if (!string_info.collation.empty()) {
-				ss << " COLLATE " + string_info.collation;
+		if (extra_type_info) {
+			if (extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+				auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+				if (!string_info.collation.empty()) {
+					ss << " COLLATE " + string_info.collation;
+				}
+			}
+			if (extra_type_info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
+				// TODO
+				// auto &colllation = UnboundType::GetCollation(column_type);
+				// if (!colllation.empty()) {
+				//	ss << " COLLATE " + colllation;
+				//}
 			}
 		}
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
@@ -174,7 +185,6 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				auto &expr = generated_expression.get();
 				D_ASSERT(expr.GetExpressionType() == ExpressionType::OPERATOR_CAST);
 				auto &cast_expr = expr.Cast<CastExpression>();
-				D_ASSERT(cast_expr.cast_type.id() == column_type.id());
 				generated_expression = *cast_expr.child;
 			}
 			ss << " GENERATED ALWAYS AS(" << generated_expression.get().ToString() << ")";

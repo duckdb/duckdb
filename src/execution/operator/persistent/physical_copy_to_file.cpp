@@ -51,7 +51,7 @@ public:
 	explicit CopyToFunctionGlobalState(ClientContext &context_p)
 	    : context(context_p), finalized(false), initialized(false), rows_copied(0), last_file_offset(0),
 	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
-		max_open_files = DBConfig::GetSetting<PartitionedWriteMaxOpenFilesSetting>(context);
+		max_open_files = Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context);
 	}
 	~CopyToFunctionGlobalState() override;
 
@@ -120,7 +120,11 @@ public:
 				string p_dir;
 				p_dir += HivePartitioning::Escape(partition_col_name);
 				p_dir += "=";
-				p_dir += HivePartitioning::Escape(partition_value.ToString());
+				if (partition_value.IsNull()) {
+					p_dir += "__HIVE_DEFAULT_PARTITION__";
+				} else {
+					p_dir += HivePartitioning::Escape(partition_value.ToString());
+				}
 				path = fs.JoinPath(path, p_dir);
 				CreateDir(path, fs);
 			}
@@ -275,7 +279,7 @@ class CopyToFunctionLocalState : public LocalSinkState {
 public:
 	explicit CopyToFunctionLocalState(ClientContext &context, unique_ptr<LocalFunctionData> local_state)
 	    : local_state(std::move(local_state)) {
-		partitioned_write_flush_threshold = DBConfig::GetSetting<PartitionedWriteFlushThresholdSetting>(context);
+		partitioned_write_flush_threshold = Settings::Get<PartitionedWriteFlushThresholdSetting>(context);
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
@@ -409,11 +413,6 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 	    overwrite_mode == CopyOverwriteMode::COPY_APPEND) {
 		// with overwrite or ignore we fully ignore the presence of any files instead of erasing them
 		return;
-	}
-	if (fs.IsRemoteFile(file_path) && overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE) {
-		// we can only remove files for local file systems currently
-		// as remote file systems (e.g. S3) do not support RemoveFile
-		throw NotImplementedException("OVERWRITE is not supported for remote file systems");
 	}
 	vector<string> file_list;
 	vector<string> directory_list;
