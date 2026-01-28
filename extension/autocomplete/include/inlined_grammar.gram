@@ -670,12 +670,11 @@ TypeNameKeyword <- 'ASOF' /
 'VERBOSE' /
 'SEMI' /
 'ANTI'
-PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? GroupByClause?
+PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? PivotGroupByList?
 
-PivotOn <- 'ON' PivotColumnList
+PivotOn <- 'ON' List(Expression)
 PivotUsing <- 'USING' TargetList
 
-PivotColumnList <- List(Expression)
 
 PivotKeyword <- 'PIVOT' / 'PIVOT_WIDER'
 UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'

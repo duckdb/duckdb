@@ -13,6 +13,7 @@
 #include "ast/generated_column_definition.hpp"
 #include "ast/generic_copy_option.hpp"
 #include "ast/insert_values.hpp"
+#include "ast/create_pivot_entry.hpp"
 #include "ast/join_prefix.hpp"
 #include "ast/join_qualifier.hpp"
 #include "ast/key_actions.hpp"
@@ -138,6 +139,8 @@ public:
 	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
 	void SetParamCount(idx_t new_count);
 	idx_t ParamCount() const;
+	unique_ptr<SQLStatement> CreatePivotStatement(unique_ptr<SQLStatement> statement);
+	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 
 public:
 	ArenaAllocator &allocator;
@@ -150,6 +153,8 @@ public:
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 
 	case_insensitive_map_t<unique_ptr<WindowExpression>> window_clauses;
+
+	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 
 	bool in_window_definition = false;
 
@@ -185,6 +190,8 @@ public:
 	static void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr);
 	static void GetValueFromExpression(unique_ptr<ParsedExpression> &expr, vector<Value> &result);
 	static bool TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry);
+	static void AddPivotEntry(PEGTransformer &transformer, string enum_name, unique_ptr<SelectNode> base,
+	                          unique_ptr<ParsedExpression> column, unique_ptr<QueryNode> subquery, bool has_parameters);
 
 	// Registration methods
 	void RegisterAlter();
@@ -1058,6 +1065,7 @@ private:
 	                                                           optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformPivotUsing(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
+	static vector<PivotColumn> TransformPivotOn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformUnpivotHeader(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformUnpivotHeaderSingle(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);

@@ -59,6 +59,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings, options);
 	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
+	if (!transformer.pivot_entries.empty()) {
+		result = transformer.CreatePivotStatement(std::move(result));
+	}
 	return result;
 }
 
@@ -603,6 +606,7 @@ void PEGTransformerFactory::RegisterPivot() {
 	// pivot.gram
 	REGISTER_TRANSFORM(TransformPivotStatement);
 	REGISTER_TRANSFORM(TransformPivotUsing);
+	REGISTER_TRANSFORM(TransformPivotOn);
 	REGISTER_TRANSFORM(TransformUnpivotHeader);
 	REGISTER_TRANSFORM(TransformUnpivotHeaderSingle);
 	REGISTER_TRANSFORM(TransformUnpivotHeaderList);
