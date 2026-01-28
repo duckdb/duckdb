@@ -403,11 +403,9 @@ struct ArrowGeometry {
 			duckdb_yyjson::yyjson_val *crs = yyjson_obj_get(val, "crs");
 
 			if (crs) {
-				auto &crs_manager = CoordinateReferenceSystemManager::Get(context);
-
 				if (duckdb_yyjson::yyjson_is_str(crs)) {
 					const char *crs_str = duckdb_yyjson::yyjson_get_str(crs);
-					duckdb_crs = crs_manager.TryIdentify(crs_str);
+					duckdb_crs = CoordinateReferenceSystem::TryIdentify(context, crs_str);
 				} else if (duckdb_yyjson::yyjson_is_obj(crs)) {
 					// Stringify the object
 					duckdb_yyjson::yyjson_write_flag write_flags = duckdb_yyjson::YYJSON_WRITE_NOFLAG;
@@ -416,7 +414,7 @@ struct ArrowGeometry {
 					if (crs_str) {
 						const auto str = string(crs_str, len);
 						free(crs_str);
-						duckdb_crs = crs_manager.TryIdentify(str);
+						duckdb_crs = CoordinateReferenceSystem::TryIdentify(context, str);
 					} else {
 						throw SerializationException("Could not serialize CRS object from GeoArrow metadata");
 					}
@@ -443,20 +441,25 @@ struct ArrowGeometry {
 
 	static void WriteCRS(duckdb_yyjson::yyjson_mut_doc *doc, const CoordinateReferenceSystem &crs,
 	                     ClientContext &context) {
-		const auto &manager = CoordinateReferenceSystemManager::Get(context);
-
 		// Try to convert to preferred formats, in order
-		auto converted = manager.TryConvertInOrder(crs, {
-		                                                    CoordinateReferenceSystemType::PROJJSON,
-		                                                    CoordinateReferenceSystemType::WKT2_2019,
-		                                                    CoordinateReferenceSystemType::AUTH_CODE,
-		                                                    CoordinateReferenceSystemType::SRID,
-		                                                });
+		auto converted = CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::PROJJSON);
+		if (!converted) {
+			converted = CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::WKT2_2019);
+		}
+		if (!converted) {
+			converted = CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::AUTH_CODE);
+		}
+		if (!converted) {
+			converted = CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::SRID);
+		}
+		if (!converted) {
+			converted = nullptr;
+		}
+
+		const auto &crs_def = converted ? converted->GetDefinition() : crs.GetDefinition();
+		const auto &crs_type = converted ? converted->GetType() : crs.GetType();
 
 		const auto root = duckdb_yyjson::yyjson_mut_doc_get_root(doc);
-
-		const auto &crs_def = converted.GetDefinition();
-		const auto &crs_type = converted.GetType();
 
 		switch (crs_type) {
 		case CoordinateReferenceSystemType::PROJJSON: {

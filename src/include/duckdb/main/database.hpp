@@ -74,8 +74,6 @@ public:
 
 	DUCKDB_API shared_ptr<EncryptionUtil> GetEncryptionUtil();
 
-	DUCKDB_API shared_ptr<CoordinateReferenceSystemManager> GetCoordinateReferenceSystemManager();
-
 	shared_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
 	                                                    AttachOptions &options);
 

@@ -429,8 +429,7 @@ LogicalType BindGeometryType(BindLogicalTypeInput &input) {
 		throw BinderException("Cannot create GEOMETRY type with coordinate system without a connection");
 	}
 
-	auto &crs_manager = CoordinateReferenceSystemManager::Get(*input.context);
-	const auto crs_result = crs_manager.TryIdentify(crs);
+	const auto crs_result = CoordinateReferenceSystem::TryIdentify(*input.context, crs);
 	if (!crs_result) {
 		if (Settings::Get<IgnoreUnknownCrsSetting>(*input.context)) {
 			// Ignored by user configuration - return generic GEOMETRY type

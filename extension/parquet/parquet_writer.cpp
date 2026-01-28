@@ -272,9 +272,8 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 
 				if (crs.GetType() != CoordinateReferenceSystemType::PROJJSON) {
 					// Try to convert to GeoJSON
-					const auto &crs_manager = CoordinateReferenceSystemManager::Get(context);
-					const auto lookup = crs_manager.TryConvert(crs, CoordinateReferenceSystemType::PROJJSON);
-
+					const auto lookup =
+					    CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::PROJJSON);
 					if (lookup) {
 						schema_ele.logicalType.GEOMETRY.__isset.crs = true;
 						schema_ele.logicalType.GEOMETRY.crs = lookup->GetDefinition();

@@ -128,8 +128,8 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 						free(crs_json);
 					} else {
 						// Otherwise, default to OGC:CRS84
-						auto &crs_util = CoordinateReferenceSystemManager::Get(context);
-						auto crs = crs_util.TryConvert("OGC:CRS84", CoordinateReferenceSystemType::PROJJSON);
+						auto crs = CoordinateReferenceSystem::TryConvert(context, "OGC:CRS84",
+						                                                 CoordinateReferenceSystemType::PROJJSON);
 						if (crs) {
 							column.projjson = crs->GetDefinition();
 						}
@@ -168,8 +168,7 @@ static void ConvertCRS(ClientContext &context, GeoParquetColumnMetadata &column,
 		return;
 	}
 
-	const auto &manager = CoordinateReferenceSystemManager::Get(context);
-	const auto lookup = manager.TryConvert(crs, CoordinateReferenceSystemType::PROJJSON);
+	const auto lookup = CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::PROJJSON);
 
 	if (lookup) {
 		// Successfully converted to PROJJSON

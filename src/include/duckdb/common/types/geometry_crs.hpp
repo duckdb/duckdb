@@ -90,8 +90,28 @@ public:
 		return type == other.type && definition == other.definition;
 	}
 
+	//! Try to identify a CRS from a string
+	//! If the string is unable to be identified as one of the registered coordinates systems, and
+	//! - IS NOT a complete CRS definition, returns nullptr
+	//! - IS a complete CRS definition (e.g. PROJJSON or WKT2), returns the CRS as is.
+	//! Otherwise, returns the identified CRS in the most compact form possible (AUTH:CODE > SRID > PROJJSON > WKT2)
+	static unique_ptr<CoordinateReferenceSystem> TryIdentify(ClientContext &context, const string &source_crs);
+
+	//! Try to convert the CRS to another format
+	//! Returns nullptr if no conversion could be performed
+	static unique_ptr<CoordinateReferenceSystem> TryConvert(ClientContext &context,
+	                                                        const CoordinateReferenceSystem &source_crs,
+	                                                        CoordinateReferenceSystemType target_type);
+
+	//! Try to convert the CRS to another format
+	//! Returns nullptr if no conversion could be performed
+	static unique_ptr<CoordinateReferenceSystem> TryConvert(ClientContext &context, const string &source_crs,
+	                                                        CoordinateReferenceSystemType target_type);
+
+	//! Serialize this CRS to a binary format
 	void Serialize(Serializer &serializer) const;
 
+	//! Deserialize a CRS from a binary format
 	static CoordinateReferenceSystem Deserialize(Deserializer &deserializer);
 
 private:
@@ -123,48 +143,8 @@ public:
 	                                                         CoordinateReferenceSystemType target_type) = 0;
 
 	virtual ~CoordinateReferenceSystemProvider() = default;
-};
 
-class CoordinateReferenceSystemManager {
-public:
-	CoordinateReferenceSystemManager();
-
-	void AddProvider(shared_ptr<CoordinateReferenceSystemProvider> provider);
-
-	static CoordinateReferenceSystemManager &Get(ClientContext &context);
-
-	//! Try to identify a CRS from a string
-	//! If the string is unable to be identified as one of the registered coordinates systems, and
-	//! - IS NOT a complete CRS definition, returns nullptr
-	//! - IS a complete CRS definition (e.g. PROJJSON or WKT2), returns the CRS as is.
-	//! Otherwise, returns the identified CRS in the most compact form possible (AUTH:CODE > SRID > PROJJSON > WKT2)
-	unique_ptr<CoordinateReferenceSystem> TryIdentify(const string &source_crs);
-
-	//! Try to convert the CRS to another format
-	//! Returns nullptr if no conversion could be performed
-	unique_ptr<CoordinateReferenceSystem> TryConvert(const CoordinateReferenceSystem &source_crs,
-	                                                 CoordinateReferenceSystemType target_type) const;
-
-	//! Try to convert the CRS to another format
-	//! Returns nullptr if no conversion could be performed
-	unique_ptr<CoordinateReferenceSystem> TryConvert(const string &source_crs,
-	                                                 CoordinateReferenceSystemType target_type) const;
-
-	//! Try to convert the CRS to a sequence of target types
-	//! Returns the first successful conversion, or the original CRS if no conversion could be performed
-	CoordinateReferenceSystem TryConvertInOrder(CoordinateReferenceSystem source_crs,
-	                                            const vector<CoordinateReferenceSystemType> &target_types) const {
-		for (const auto target_type : target_types) {
-			auto converted = TryConvert(source_crs, target_type);
-			if (converted) {
-				return *converted;
-			}
-		}
-		return source_crs;
-	}
-
-private:
-	vector<shared_ptr<CoordinateReferenceSystemProvider>> providers;
+	static shared_ptr<CoordinateReferenceSystemProvider> CreateDefault();
 };
 
 } // namespace duckdb
