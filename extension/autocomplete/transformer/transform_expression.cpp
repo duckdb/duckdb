@@ -726,7 +726,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsExpression(PEGTra
 		auto is_expr = transformer.Transform<unique_ptr<ParsedExpression>>(is_test_expr);
 		if (is_expr->GetExpressionClass() == ExpressionClass::COMPARISON) {
 			auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(is_expr));
-			compare_expr->left = std::move(expr);
+			compare_expr->left = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(expr));
 			expr = std::move(compare_expr);
 		} else if (is_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
 			auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(is_expr));
@@ -933,6 +933,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 	vector<unique_ptr<ParsedExpression>> in_children;
 	for (auto &expr : expr_list_pr) {
 		in_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	}
+	if (in_children.size() == 1 && in_children[0]->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subquery_expr = in_children[0]->Cast<SubqueryExpression>();
+		auto result = make_uniq<SubqueryExpression>();
+		result->subquery_type = SubqueryType::ANY;
+		result->comparison_type = ExpressionType::COMPARE_EQUAL;
+		result->subquery = std::move(subquery_expr.subquery);
+		return result;
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
 	return std::move(result);
