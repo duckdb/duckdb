@@ -43,7 +43,7 @@ idx_t EncryptionCanary::size() const {
 	return MainHeader::CANARY_BYTE_SIZE;
 }
 
-EncryptionNonce::EncryptionNonce(CipherType cipher, Version version) {
+EncryptionNonce::EncryptionNonce(CipherType cipher_p, Version version_p) : version(version_p), cipher(cipher_p) {
 	switch (version) {
 	case Version::V0_0:
 		// for prior versions
@@ -82,12 +82,13 @@ data_ptr_t EncryptionNonce::data() {
 	return nonce.get();
 }
 
-const_data_ptr_t EncryptionNonce::data_const() const {
-	return nonce.get();
-}
-
 idx_t EncryptionNonce::size() const {
 	// always return 12 bytes
+	if (version == Version::V0_0) {
+		// in the first version, nonce was always 16
+		return MainHeader::AES_NONCE_LEN_DEPRECATED;
+	}
+	// in v1, nonce is always 12
 	return MainHeader::AES_NONCE_LEN;
 }
 
@@ -189,7 +190,7 @@ void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string 
 
 	//! store the nonce at the start of the block
 	memcpy(block_offset_internal, nonce.data(), nonce.size());
-	encryption_state->InitializeEncryption(std::move(nonce), encrypt_key);
+	encryption_state->InitializeEncryption(nonce, encrypt_key);
 
 	auto checksum_offset = block.InternalBuffer() + delta;
 	auto encryption_checksum_offset = block_offset_internal + delta;
@@ -226,7 +227,7 @@ void EncryptionEngine::DecryptBlock(AttachedDatabase &attached_db, const string 
 	memcpy(tag.data(), internal_buffer + nonce.size(), tag.size());
 
 	//! Initialize the decryption
-	encryption_state->InitializeDecryption(std::move(nonce), decrypt_key);
+	encryption_state->InitializeDecryption(nonce, decrypt_key);
 
 	auto checksum_offset = internal_buffer + delta;
 	auto size = block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -266,7 +267,7 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 
 	//! store the nonce at the start of metadata buffer
 	memcpy(metadata, nonce.data(), nonce.size());
-	encryption_state->InitializeEncryption(std::move(nonce), temp_key);
+	encryption_state->InitializeEncryption(nonce, temp_key);
 
 	auto aes_res = encryption_state->Process(buffer, buffer_size, buffer, buffer_size);
 
@@ -294,7 +295,7 @@ static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t te
 	memcpy(tag.data(), metadata + nonce.size(), tag.size());
 
 	//! Initialize the decryption
-	encryption_state.InitializeDecryption(std::move(nonce), temp_key);
+	encryption_state.InitializeDecryption(nonce, temp_key);
 
 	auto aes_res = encryption_state.Process(buffer, buffer_size, buffer, buffer_size);
 

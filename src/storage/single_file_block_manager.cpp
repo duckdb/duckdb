@@ -108,7 +108,7 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	switch (encryption_state->metadata->GetVersion()) {
 	case EncryptionTypes::V0_0:
 		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
-		encryption_state->InitializeEncryption(std::move(nonce), derived_key);
+		encryption_state->InitializeEncryption(nonce, derived_key);
 		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), canary.size(), canary.data(),
 		                          canary.size());
 		break;
@@ -117,7 +117,7 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN);
 		encryption_state->GenerateRandomData(nonce.data(), nonce.size());
 		main_header.SetCanaryIV(nonce.data());
-		encryption_state->InitializeEncryption(std::move(nonce), derived_key);
+		encryption_state->InitializeEncryption(nonce, derived_key);
 		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), canary.size(), canary.data(),
 		                          canary.size());
 		encryption_state->Finalize(canary.data(), canary.size(), tag.data(), MainHeader::AES_TAG_LEN);
@@ -141,7 +141,7 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	case EncryptionTypes::V0_0:
 		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
 		//! Decrypt the canary, Nonce is zeroed out
-		encryption_state->InitializeDecryption(std::move(nonce), derived_key);
+		encryption_state->InitializeDecryption(nonce, derived_key);
 		encryption_state->Process(main_header.GetEncryptedCanary(), decrypted_canary.size(), decrypted_canary.data(),
 		                          decrypted_canary.size());
 		break;
@@ -152,7 +152,7 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 		memcpy(tag.data(), main_header.GetTag(), tag.size());
 
 		//! Decrypt the canary
-		encryption_state->InitializeDecryption(std::move(nonce), derived_key);
+		encryption_state->InitializeDecryption(nonce, derived_key);
 		encryption_state->Process(main_header.GetEncryptedCanary(), decrypted_canary.size(), decrypted_canary.data(),
 		                          decrypted_canary.size());
 		try {

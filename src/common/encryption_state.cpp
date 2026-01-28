@@ -8,11 +8,11 @@ EncryptionState::EncryptionState(unique_ptr<EncryptionStateMetadata> metadata_p)
 EncryptionState::~EncryptionState() {
 }
 
-void EncryptionState::InitializeEncryption(const EncryptionNonce &nonce, const_data_ptr_t, const_data_ptr_t, idx_t) {
+void EncryptionState::InitializeEncryption(EncryptionNonce &nonce, const_data_ptr_t, const_data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-void EncryptionState::InitializeDecryption(const EncryptionNonce &nonce, const_data_ptr_t, const_data_ptr_t, idx_t) {
+void EncryptionState::InitializeDecryption(EncryptionNonce &nonce, const_data_ptr_t, const_data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 

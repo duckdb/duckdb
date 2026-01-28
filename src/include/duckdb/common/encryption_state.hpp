@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "encryption_functions.hpp"
+#include "duckdb/common/encryption_types.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/random_engine.hpp"
@@ -58,9 +58,9 @@ public:
 	DUCKDB_API virtual ~EncryptionState();
 
 public:
-	DUCKDB_API virtual void InitializeEncryption(const EncryptionNonce &nonce, const_data_ptr_t key,
+	DUCKDB_API virtual void InitializeEncryption(EncryptionNonce &nonce, const_data_ptr_t key,
 	                                             const_data_ptr_t aad = nullptr, idx_t aad_len = 0);
-	DUCKDB_API virtual void InitializeDecryption(const EncryptionNonce &nonce, const_data_ptr_t key,
+	DUCKDB_API virtual void InitializeDecryption(EncryptionNonce &nonce, const_data_ptr_t key,
 	                                             const_data_ptr_t aad = nullptr, idx_t aad_len = 0);
 	DUCKDB_API virtual size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len);
 	DUCKDB_API virtual size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);

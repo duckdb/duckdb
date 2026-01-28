@@ -224,9 +224,9 @@ private:
 	void Initialize(const string &key) {
 		EncryptionNonce nonce;
 		// Generate Nonce
-		aes->GenerateRandomData(nonce.data(), nonce.total_size());
+		aes->GenerateRandomData(nonce.data(), nonce.size());
 		// Initialize Encryption
-		aes->InitializeEncryption(std::move(nonce), reinterpret_cast<const_data_ptr_t>(key.data()));
+		aes->InitializeEncryption(nonce, reinterpret_cast<const_data_ptr_t>(key.data()));
 	}
 
 private:
@@ -313,12 +313,12 @@ private:
 		transport_remaining -= trans.read(nonce.data(), nonce.total_size());
 		// check whether context is initialized
 		if (!crypto_meta_data.IsEmpty()) {
-			aes->InitializeDecryption(std::move(nonce), reinterpret_cast<const_data_ptr_t>(key.data()),
+			aes->InitializeDecryption(nonce, reinterpret_cast<const_data_ptr_t>(key.data()),
 			                          crypto_meta_data.additional_authenticated_data->data(),
 			                          crypto_meta_data.additional_authenticated_data->size());
 			crypto_meta_data.additional_authenticated_data->Rewind();
 		} else {
-			aes->InitializeDecryption(std::move(nonce), reinterpret_cast<const_data_ptr_t>(key.data()));
+			aes->InitializeDecryption(nonce, reinterpret_cast<const_data_ptr_t>(key.data()));
 		}
 	}
 

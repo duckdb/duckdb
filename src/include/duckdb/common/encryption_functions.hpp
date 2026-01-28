@@ -43,7 +43,6 @@ struct EncryptionNonce {
 	explicit EncryptionNonce(CipherType cipher = EncryptionTypes::GCM,
 	                         Version version = EncryptionTypes::EncryptionVersion::V0_1);
 	data_ptr_t data();
-	const_data_ptr_t data_const() const;
 	idx_t size() const;
 	idx_t total_size() const;
 	idx_t size_deprecated() const;
@@ -53,6 +52,10 @@ struct EncryptionNonce {
 private:
 	unique_ptr<data_t[]> nonce;
 	idx_t nonce_len;
+
+private:
+	Version version;
+	CipherType cipher;
 };
 
 class AdditionalAuthenticatedData {

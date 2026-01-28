@@ -149,7 +149,7 @@ public:
 			//! initialize the decryption
 			auto encryption_state =
 			    database.GetEncryptionUtil(state_p.db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
-			encryption_state->InitializeDecryption(std::move(nonce), derived_key);
+			encryption_state->InitializeDecryption(nonce, derived_key);
 
 			//! Allocate a decryption buffer
 			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);

@@ -71,8 +71,8 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API ~AESStateMBEDTLS() override;
 
 	public:
-		DUCKDB_API void InitializeEncryption(const duckdb::EncryptionNonce &nonce, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
-		DUCKDB_API void InitializeDecryption(const duckdb::EncryptionNonce &nonce, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
+		DUCKDB_API void InitializeEncryption(duckdb::EncryptionNonce &nonce, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
+		DUCKDB_API void InitializeDecryption(duckdb::EncryptionNonce &nonce, duckdb::const_data_ptr_t key, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) override;
 
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		                          duckdb::idx_t out_len) override;
@@ -95,7 +95,7 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 
 
 	private:
-		DUCKDB_API void InitializeInternal(const duckdb::EncryptionNonce &nonce, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len);
+		DUCKDB_API void InitializeInternal(duckdb::EncryptionNonce &nonce, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len);
 		DUCKDB_API void GenerateRandomDataInsecure(duckdb::data_ptr_t data, duckdb::idx_t len);
 
 	private:

@@ -163,7 +163,7 @@ public:
 		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
 
 		//! encrypt the temp buf
-		encryption_state->InitializeEncryption(std::move(nonce), keys.GetKey(encryption_key_id));
+		encryption_state->InitializeEncryption(nonce, keys.GetKey(encryption_key_id));
 		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
 
 		//! calculate the tag (for GCM)
