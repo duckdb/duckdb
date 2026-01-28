@@ -19,32 +19,52 @@ void PEGTransformerFactory::AddPivotEntry(PEGTransformer &transformer, string en
 vector<PivotColumn> PEGTransformerFactory::TransformPivotOn(PEGTransformer &transformer,
                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto expr_list = ExtractParseResultsFromList(list_pr.GetChild(1));
+	return transformer.Transform<vector<PivotColumn>>(list_pr.GetChild(1));
+}
+
+vector<PivotColumn> PEGTransformerFactory::TransformPivotColumnList(PEGTransformer &transformer,
+                                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto pivot_column_list = ExtractParseResultsFromList(list_pr.GetChild(0));
 	vector<PivotColumn> result;
-	for (auto &expr_pr : expr_list) {
-		PivotColumn col;
-		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(expr_pr);
-		if (expr->IsScalar()) {
-			throw ParserException(expr->GetQueryLocation(), "Cannot pivot on constant value \"%s\"", expr->ToString());
-		}
-		if (expr->GetExpressionClass() != ExpressionClass::OPERATOR) {
-			col.pivot_expressions.push_back(std::move(expr));
-		} else {
-			auto &operator_expr = expr->Cast<OperatorExpression>();
-			if (operator_expr.type == ExpressionType::COMPARE_IN) {
-				col.pivot_expressions.push_back(std::move(operator_expr.children[0]));
-				for (idx_t i = 1; i < operator_expr.children.size(); i++) {
-					PivotColumnEntry entry;
-					entry.expr = std::move(operator_expr.children[i]);
-					col.entries.push_back(std::move(entry));
-				}
-			} else {
-				throw ParserException("Expected a COMPARE_IN expression, got %s instead.",
-				                      EnumUtil::ToString(operator_expr.type));
+	for (auto pivot_column : pivot_column_list) {
+		auto col = transformer.Transform<PivotColumn>(pivot_column);
+		for (auto &expr : col.pivot_expressions) {
+			if (expr->IsScalar()) {
+				throw ParserException(expr->GetQueryLocation(), "Cannot pivot on constant value \"%s\"",
+				                      expr->ToString());
+			}
+			if (expr->HasSubquery()) {
+				throw ParserException(expr->GetQueryLocation(), "Cannot pivot on subquery \"%s\"", expr->ToString());
 			}
 		}
-		result.push_back(std::move(col));
+		result.push_back(transformer.Transform<PivotColumn>(pivot_column));
 	}
+	return result;
+}
+
+PivotColumn PEGTransformerFactory::TransformPivotColumnEntry(PEGTransformer &transformer,
+                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<PivotColumn>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+PivotColumn PEGTransformerFactory::TransformPivotColumnSubquery(PEGTransformer &transformer,
+                                                                optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	PivotColumn result;
+	result.pivot_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
+	auto select_subquery = ExtractResultFromParens(list_pr.GetChild(2));
+	auto select = transformer.Transform<unique_ptr<SelectStatement>>(select_subquery);
+	result.subquery = std::move(select->node);
+	return result;
+}
+
+PivotColumn PEGTransformerFactory::TransformPivotColumnEntryInternal(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	PivotColumn result;
+	result.pivot_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
 	return result;
 }
 

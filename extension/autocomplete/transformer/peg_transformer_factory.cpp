@@ -608,6 +608,11 @@ void PEGTransformerFactory::RegisterPivot() {
 	REGISTER_TRANSFORM(TransformPivotStatement);
 	REGISTER_TRANSFORM(TransformPivotUsing);
 	REGISTER_TRANSFORM(TransformPivotOn);
+	REGISTER_TRANSFORM(TransformPivotColumnList);
+	REGISTER_TRANSFORM(TransformPivotColumnEntry);
+	REGISTER_TRANSFORM(TransformPivotColumnSubquery);
+	REGISTER_TRANSFORM(TransformPivotColumnEntryInternal);
+
 	REGISTER_TRANSFORM(TransformUnpivotHeader);
 	REGISTER_TRANSFORM(TransformUnpivotHeaderSingle);
 	REGISTER_TRANSFORM(TransformUnpivotHeaderList);

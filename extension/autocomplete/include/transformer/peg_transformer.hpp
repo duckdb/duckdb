@@ -1067,6 +1067,14 @@ private:
 	static vector<unique_ptr<ParsedExpression>> TransformPivotUsing(PEGTransformer &transformer,
 	                                                                optional_ptr<ParseResult> parse_result);
 	static vector<PivotColumn> TransformPivotOn(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static vector<PivotColumn> TransformPivotColumnList(PEGTransformer &transformer,
+	                                                    optional_ptr<ParseResult> parse_result);
+	static PivotColumn TransformPivotColumnEntry(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static PivotColumn TransformPivotColumnSubquery(PEGTransformer &transformer,
+	                                                optional_ptr<ParseResult> parse_result);
+	static PivotColumn TransformPivotColumnEntryInternal(PEGTransformer &transformer,
+	                                                     optional_ptr<ParseResult> parse_result);
+
 	static vector<string> TransformUnpivotHeader(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformUnpivotHeaderSingle(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
