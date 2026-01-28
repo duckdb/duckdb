@@ -1,0 +1,14 @@
+# name: benchmark/micro/list/list_comprehension_if.benchmark
+# description: List comprehension without tuple indices
+# group: [list]
+
+name List Comprehension with If
+group micro
+subgroup list
+
+load
+CREATE TABLE t AS SELECT range(1, 100) AS values FROM range(1, 10001) t(i);
+
+run
+SELECT [ v * 2 FOR v IN values IF v % 7 = 0 ] FROM t;
+
