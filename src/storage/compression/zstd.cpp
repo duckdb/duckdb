@@ -11,6 +11,8 @@
 
 #include "zstd.h"
 
+#include "zstd/common/zstd_internal.h"
+
 /*
 Data layout per segment:
 +--------------------------------------------+
@@ -450,7 +452,22 @@ public:
 
 	block_id_t FinalizePage() {
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		auto new_id = partial_block_manager.GetFreeBlockId();
+		block_id_t new_id;
+		if (block_manager.InMemory()) {
+			/*TODO: ✅ Register block, then use AllocateData to get a BufferHandle which contains a BlockHandle which
+			 *		contains a block_id. That way ill have my block_id here without having to manage it
+			 *		ERRATA: Actually I believe its not AllocateData but StandardBufferManager::Allocate
+			 */
+
+			// auto &buffer_allocator = BufferAllocator::Get(block_manager.buffer_manager.GetDatabase());
+			auto &buffer_manager = block_manager.buffer_manager;
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, info.GetBlockSize(), false);
+			auto block_handle = buffer_handle.GetBlockHandle();
+			new_id = block_handle.get()->BlockId();
+		} else {
+			// TODO: ✅ This was the first failure point Cannot perform IO in in-memory database - GetFreeBlockId!
+			new_id = partial_block_manager.GetFreeBlockId();
+		}
 
 		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
@@ -470,7 +487,14 @@ public:
 
 		// Write the current page to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
+		if (block_manager.InMemory()) {
+			auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
+			// state.RegisterBlock(block_manager, block_id);
+			state.handles[block_id] = buffer.GetBlockHandle();
+		} else {
+			// TODO: Second point of failure
+			block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
+		}
 	}
 
 	void FlushVector() {

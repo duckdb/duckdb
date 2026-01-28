@@ -54,10 +54,10 @@ public:
 	void RegisterBlock(BlockManager &manager, block_id_t block_id);
 
 	string GetSegmentInfo() const override;
+	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
 
 private:
 	mutex block_lock;
-	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
 };
 
 } // namespace duckdb
