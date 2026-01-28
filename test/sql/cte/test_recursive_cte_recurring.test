@@ -101,3 +101,34 @@ c2
 c3
 c4
 c5
+
+query II
+WITH RECURSIVE
+parent(p,c) AS (
+  VALUES ('c1','c2'),
+         ('c1','c3'),
+         ('c3','c4'),
+         ('c3','c5'),
+         ('c4','c6'),
+         ('c4','c7')
+),
+ancestor(a,c) AS (
+  FROM parent
+    UNION
+  SELECT a1.x, a2.y
+  FROM   recurring.ancestor AS a1(x,z) NATURAL JOIN recurring.ancestor AS a2(z,y)
+)
+FROM ancestor ORDER BY ALL;
+----
+c1	c2
+c1	c3
+c1	c4
+c1	c5
+c1	c6
+c1	c7
+c3	c4
+c3	c5
+c3	c6
+c3	c7
+c4	c6
+c4	c7
