@@ -194,7 +194,7 @@ public:
 
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns,
-	              unique_ptr<ResidualPredicateInfo> residual_p, Expression *predicate_ptr = nullptr,
+	              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr = nullptr,
 	              const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
@@ -307,7 +307,7 @@ public:
 	//! Number of probe matches
 	atomic<idx_t> total_probe_matches {0};
 	//! Residual predicate to evaluate during probing
-	Expression *residual_predicate;
+	optional_ptr<Expression> residual_predicate;
 	//! Residual predicate mapping info
 	unique_ptr<ResidualPredicateInfo> residual_info;
 	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
