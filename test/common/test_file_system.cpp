@@ -7,7 +7,7 @@
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "test_helpers.hpp"
-#if (!defined(_WIN32) && !defined(WIN32)) || defined(__MINGW32__)
+#if (!defined(_WIN32) && !defined(WIN32))
 #define TEST_HAVE_SYMLINK
 #include <unistd.h>
 #else
