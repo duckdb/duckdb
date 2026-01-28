@@ -153,8 +153,8 @@ for hpp_file in hpp_files:
                         strings = [override]
 
                 if member.group(2):
-                    # If the member has a value, make sure it isnt already covered by another member
-                    # If it is, we cant do anything else than ignore it
+                    # If the member has a value, make sure it isn't already covered by another member
+                    # If it is, we can't do anything else than ignore it
                     value = remove_prefix(member.group(2).strip(), "=").strip()
                     if value not in enum_values and value not in dict(enum_members):
                         enum_members.append((key, strings))

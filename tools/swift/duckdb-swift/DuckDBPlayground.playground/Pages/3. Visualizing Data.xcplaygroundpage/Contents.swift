@@ -174,7 +174,7 @@ struct PopularCountriesView: View {
  
  In just a few lines of code DuckDB has enabled you to:
  
- - Open a CSV file withing DuckDB
+ - Open a CSV file within DuckDB
  - Analyze it using SQL
  - Prepare it for display using Swift Charts.
  

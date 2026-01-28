@@ -174,7 +174,7 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "abc"));
 	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "babababa"));
 	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "hello"));
-	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "hellow"));
+	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "hellow"));  // codespell:ignore
 	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "torororororo"));
 	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "torororororp"));
 	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "z"));
@@ -191,7 +191,7 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	keys.push_back(CreateCompoundKey(arena_allocator, "hello", -1));
 	keys.push_back(CreateCompoundKey(arena_allocator, "hello", 0));
 	keys.push_back(CreateCompoundKey(arena_allocator, "hello", 1));
-	keys.push_back(CreateCompoundKey(arena_allocator, "hellow", -10000));
+	keys.push_back(CreateCompoundKey(arena_allocator, "hellow", -10000));  // codespell:ignore
 	keys.push_back(CreateCompoundKey(arena_allocator, "z", 30));
 
 	TestKeys(keys);

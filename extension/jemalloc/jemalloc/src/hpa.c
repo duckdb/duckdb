@@ -229,7 +229,7 @@ hpa_shard_init(hpa_shard_t *shard, hpa_central_t *central, emap_t *emap,
 /*
  * Note that the stats functions here follow the usual stats naming conventions;
  * "merge" obtains the stats from some live object of instance, while "accum"
- * only combines the stats from one stats objet to another.  Hence the lack of
+ * only combines the stats from one stats object to another.  Hence the lack of
  * locking here.
  */
 static void
@@ -355,7 +355,7 @@ hpa_update_purge_hugify_eligibility(tsdn_t *tsdn, hpa_shard_t *shard,
 	 * could lead to situations where a hugepage that spends most of its
 	 * time meeting the criteria never quite getting hugified if there are
 	 * intervening deallocations).  The idea is that the hugification delay
-	 * will allow them to get purged, reseting their "hugify-allowed" bit.
+	 * will allow them to get purged, resetting their "hugify-allowed" bit.
 	 * If they don't get purged, then the hugification isn't hurting and
 	 * might help.  As an exception, we don't hugify hugepages that are now
 	 * empty; it definitely doesn't help there until the hugepage gets

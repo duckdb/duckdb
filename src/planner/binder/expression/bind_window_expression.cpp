@@ -322,7 +322,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->distinct = window.distinct;
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
-	// Note that PRECEEDING and FOLLOWING refer to the sequential order in the frame,
+	// Note that PRECEDING and FOLLOWING refer to the sequential order in the frame,
 	// not the natural ordering of the type. This means that the offset arithmetic must be reversed
 	// for ORDER BY DESC.
 	auto &config = DBConfig::GetConfig(context);

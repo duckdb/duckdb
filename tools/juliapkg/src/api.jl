@@ -3806,7 +3806,7 @@ Must be destroyed with `duckdb_destroy_value`.
 - `map_type`: `duckdb_logical_type` The map type
 - `keys`: `Ref{duckdb_value}` The keys of the map
 - `values`: `Ref{duckdb_value}` The values of the map
-- `entry_count`: `idx_t` The number of entrys (key-value pairs) in the map
+- `entry_count`: `idx_t` The number of entries (key-value pairs) in the map
 
 Returns: `duckdb_value` The map value, or nullptr, if the parameters are invalid.
 """

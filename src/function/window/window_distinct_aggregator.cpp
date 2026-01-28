@@ -125,7 +125,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	sort_types = aggregator.arg_types;
 	sort_types.emplace_back(LogicalType::UBIGINT);
 
-	//	All expressions will be precomputed for sharing, so we jsut need to reference the arguments
+	//	All expressions will be precomputed for sharing, so we just need to reference the arguments
 	vector<BoundOrderByNode> orders;
 	for (const auto &type : sort_types) {
 		auto expr = make_uniq<BoundReferenceExpression>(type, orders.size());

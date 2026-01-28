@@ -1,4 +1,4 @@
-# dsdgen extension global statics
+# dsdgen extension global statistics
 leak:load_dist
 leak:find_dist
 leak:read_dist

@@ -78,8 +78,8 @@ public:
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
-	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
-	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
+	//! If the "buffer" argument is specified AND the system can find a buffer to reuse for the given allocation size
+	//! "buffer" will be made to point to the reusable memory. Note that this is not guaranteed.
 	//! Returns a pair. result.first indicates if eviction was successful. result.second contains the
 	//! reservation handle, which can be moved to the BlockHandle that will own the reservation.
 	struct EvictionResult {

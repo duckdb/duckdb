@@ -1311,7 +1311,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
-	// Auto-Commit is on, so this should just be commited
+	// Auto-Commit is on, so this should just be committed
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));

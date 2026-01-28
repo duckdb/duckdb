@@ -63,7 +63,7 @@ bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
 	string error_message;
 	if (!ColumnDataCollection::ResultEquals(*ground_truth, *result, error_message, false)) {
 		std::cout << "truth: " << ground_truth->Count() << std::endl;
-		std::cout << "resul: " << result->Count() << std::endl;
+		std::cout << "result: " << result->Count() << std::endl;
 
 		std::cout << path << " Buffer Size: " << to_string(buffer_size) << '\n';
 		std::cout << error_message << '\n';

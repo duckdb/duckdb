@@ -47,7 +47,7 @@ enum class GeoParquetVersion : uint8_t {
 	// of spatial columns is Parquet native geometry, where the Parquet writer will include
 	// native statistics according to the underlying Parquet options. Compared to 'BOTH', this will
 	// actually write the metadata as containing GeoParquet version 2.0.0
-	// However, V2 isnt standardized yet, so this option is still a bit experimental
+	// However, V2 isn't standardized yet, so this option is still a bit experimental
 	V2,
 
 	// Write GeoParquet 1.0 metadata, with native Parquet geometry types

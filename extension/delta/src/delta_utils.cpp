@@ -194,7 +194,7 @@ ffi::EngineIterator EngineIteratorFromCallable(Callable &callable) {
 	return {.data = &callable, .get_next = (const void *(*)(void *))get_next};
 };
 
-// Helper function to prevent pushing down filters kernel cant handle
+// Helper function to prevent pushing down filters kernel can't handle
 // TODO: remove once kernel handles this properly?
 static bool CanHandleFilter(TableFilter *filter) {
 	switch (filter->filter_type) {

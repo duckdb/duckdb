@@ -44,7 +44,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 		size = fs->GetFileSize(*handle);
 		REQUIRE(size >= 0);
 	}
-	// now reload the database a bunch of times, and everytime we reload update all the values
+	// now reload the database a bunch of times, and every time we reload update all the values
 	for (idx_t i = 0; i < 20; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);

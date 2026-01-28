@@ -17,7 +17,7 @@ class Allocator;
 class Vector;
 
 //! The VectorCache holds cached vector data.
-//! It enables re-using the same memory for different vectors.
+//! It enables reusing the same memory for different vectors.
 class VectorCache {
 public:
 	//! Instantiate an empty vector cache.

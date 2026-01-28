@@ -115,7 +115,7 @@ struct pa_shard_s {
 	/* The emap this shard is tied to. */
 	emap_t *emap;
 
-	/* The base from which we get the ehooks and allocate metadat. */
+	/* The base from which we get the ehooks and allocate metadata. */
 	base_t *base;
 };
 

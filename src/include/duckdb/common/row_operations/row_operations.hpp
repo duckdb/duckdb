@@ -28,7 +28,7 @@ struct RowOperationsState {
 	}
 
 	ArenaAllocator &allocator;
-	unique_ptr<Vector> addresses; // Re-usable vector for row_aggregate.cpp
+	unique_ptr<Vector> addresses; // Reusable vector for row_aggregate.cpp
 };
 
 // RowOperations contains a set of operations that operate on data using a TupleDataLayout

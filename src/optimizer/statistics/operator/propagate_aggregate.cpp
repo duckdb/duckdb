@@ -85,7 +85,7 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 	} else {
 		D_ASSERT(column_stats->GetStatsType() == StatisticsType::STRING_STATS);
 		if (StringStats::Min(*column_stats) > StringStats::Max(*column_stats)) {
-			// No min/max statistics availabe
+			// No min/max statistics available
 			return false;
 		}
 	}

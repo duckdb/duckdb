@@ -216,7 +216,7 @@ TEST_CASE("Test Custom Type Function", "[capi]") {
 	REQUIRE(data[4] == 10.0f);
 	REQUIRE(data[5] == 12.0f);
 
-	// But we cant execute the function with a non-VEC3D type
+	// But we can't execute the function with a non-VEC3D type
 	result = tester.Query("SELECT vec3d_add([0,0,0]::FLOAT[3], [1,1,1]::FLOAT[3])");
 	REQUIRE_FAIL(result);
 	REQUIRE(result->ErrorType() == DUCKDB_ERROR_BINDER);

@@ -508,7 +508,7 @@ static uint64_t ValueXH64FixedWidth(const Value &constant) {
 
 // TODO we can only this if the parquet representation of the type exactly matches the duckdb rep!
 // TODO TEST THIS!
-// TODO perhaps we can re-use some writer infra here
+// TODO perhaps we can reuse some writer infra here
 static uint64_t ValueXXH64(const Value &constant) {
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:

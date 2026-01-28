@@ -310,7 +310,7 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			filter_chunk.data[filter_bound_ref.index].Reference(chunk.data[it->second]);
 			filter_chunk.SetCardinality(chunk.size());
 
-			// We cant use the AggregateFilterData::ApplyFilter method, because the chunk we need to
+			// We can't use the AggregateFilterData::ApplyFilter method, because the chunk we need to
 			// apply the filter to also has the groups, and the filtered_data.filtered_payload does not have those.
 			SelectionVector sel_vec(STANDARD_VECTOR_SIZE);
 			idx_t count = filtered_data.filter_executor.SelectExpression(filter_chunk, sel_vec);
@@ -319,7 +319,7 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 				continue;
 			}
 
-			// Because the 'input' chunk needs to be re-used after this, we need to create
+			// Because the 'input' chunk needs to be reused after this, we need to create
 			// a duplicate of it, that we can apply the filter to
 			DataChunk filtered_input;
 			filtered_input.InitializeEmpty(chunk.GetTypes());
@@ -711,7 +711,7 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 		OperatorSourceInput source_input {*finalize_event.global_source_states[grouping_idx][agg_idx], local_source,
 		                                  interrupt_state};
 
-		// Create a duplicate of the output_chunk, because of multi-threading we cant alter the original
+		// Create a duplicate of the output_chunk, because of multi-threading we can't alter the original
 		DataChunk output_chunk;
 		output_chunk.Initialize(executor.context, distinct_state.distinct_output_chunks[table_idx]->GetTypes());
 

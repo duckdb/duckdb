@@ -74,7 +74,7 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 	auto incomming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(arguments.size(), true);
 
-	// Validate incomming arguments and record names
+	// Validate incoming arguments and record names
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		auto &child = arguments[arg_idx];
 		if (child->alias.empty()) {

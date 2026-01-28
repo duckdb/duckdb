@@ -77,7 +77,7 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 protected:
-	//! Add a reference to the column in its entirey
+	//! Add a reference to the column in its entirely
 	void AddBinding(BoundColumnRefExpression &col);
 	//! Add a reference to a sub-section of the column
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);

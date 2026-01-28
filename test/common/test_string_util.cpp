@@ -249,7 +249,7 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 		REQUIRE(StringUtil::SplitWithQuote("\"\"") == duckdb::vector<string> {""});
 	}
 
-	SECTION("One empty item, followed by non-empty one - Or vise versa") {
+	SECTION("One empty item, followed by non-empty one - Or vice versa") {
 		REQUIRE(StringUtil::SplitWithQuote("\"\",hello") == duckdb::vector<string> {"", "hello"});
 		REQUIRE(StringUtil::SplitWithQuote(",\"hello\"") == duckdb::vector<string> {"", "hello"});
 		REQUIRE(StringUtil::SplitWithQuote(",hello") == duckdb::vector<string> {"", "hello"});

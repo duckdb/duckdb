@@ -125,7 +125,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 		if (bound_expression) {
 			return bound_expression;
 		}
-		// Otherwise, fall thorugh and continue on normally
+		// Otherwise, fall through and continue on normally
 	}
 	auto result = make_uniq<BoundFunctionExpression>(std::move(function_return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));

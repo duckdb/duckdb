@@ -413,7 +413,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 			target_column = "\"" + bind_data.table_columns[expr_idx] + "\" ";
 		}
 		extended_error = StringUtil::Format(
-		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column %swith type "
+		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column %switch type "
 		    "%s.\nThis means the %s schema does not match the schema of the table.\nPossible solutions:\n* Insert by "
 		    "name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM %s(...)\"\n* Manually specify "
 		    "which columns to insert using \"INSERT INTO tbl SELECT ... FROM %s(...)\"",

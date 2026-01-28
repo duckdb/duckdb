@@ -320,7 +320,7 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	for (idx_t i = 0; i < count; i++) {
 		vals[i] = yyjson_mut_obj(doc);
 	}
-	// Initialize re-usable array for the nested values
+	// Initialize reusable array for the nested values
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 
 	// Add the key/value pairs to the values
@@ -398,7 +398,7 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 		}
 	}
 
-	// Initialize re-usable array for the nested values
+	// Initialize reusable array for the nested values
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 
 	auto &tag_v = UnionVector::GetTags(value_v);
@@ -634,7 +634,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < count; i++) {
 		objs[i] = yyjson_mut_obj(doc);
 	}
-	// Initialize a re-usable value array
+	// Initialize a reusable value array
 	auto vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 	// Loop through key/value pairs
 	for (idx_t pair_idx = 0; pair_idx < args.data.size() / 2; pair_idx++) {
@@ -667,7 +667,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	for (idx_t i = 0; i < count; i++) {
 		arrs[i] = yyjson_mut_arr(doc);
 	}
-	// Initialize a re-usable value array
+	// Initialize a reusable value array
 	auto vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, count);
 	// Loop through args
 	for (auto &v : args.data) {

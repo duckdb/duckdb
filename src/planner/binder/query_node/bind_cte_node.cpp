@@ -118,7 +118,7 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 	result.child_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
-	// as we are binding a CTE currently, we take precendence over the existing binding.
+	// as we are binding a CTE currently, we take precedence over the existing binding.
 	// This implements the CTE shadowing behavior.
 	auto cte_binding = make_uniq<CTEBinding>(BindingAlias(ctename), result.cte_bind_state, result.setop_index);
 	result.child_binder->bind_context.AddCTEBinding(std::move(cte_binding));

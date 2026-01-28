@@ -385,7 +385,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			size_t smallest_index[2];
 			D_ASSERT(join_relations.size() >= 2);
 
-			// first just add the first two join relations. It doesn't matter the cost as the JOO
+			// first just add the first two join relations. It doesn't matter the cost as the YOU
 			// will swap them on estimated cardinality anyway.
 			for (idx_t i = 0; i < 2; i++) {
 				optional_ptr<DPJoinNode> current_plan = plans[join_relations[i]];

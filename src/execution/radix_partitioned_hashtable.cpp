@@ -368,7 +368,7 @@ public:
 	RadixHTLocalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht);
 
 public:
-	//! Thread-local HT that is re-used after abandoning
+	//! Thread-local HT that is reused after abandoning
 	unique_ptr<GroupedAggregateHashTable> ht;
 	//! Chunk with group columns
 	DataChunk group_chunk;
@@ -684,7 +684,7 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 	// This many partitions will fit given our reservation (at least 1))
 	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);
 
-	// Mininum of the two
+	// Minimum of the two
 	return MinValue<idx_t>(partitions_fit, max_threads);
 }
 
@@ -741,7 +741,7 @@ public:
 	RadixHTSourceTaskType task;
 	idx_t task_idx;
 
-	//! Thread-local HT that is re-used to Finalize
+	//! Thread-local HT that is reused to Finalize
 	unique_ptr<GroupedAggregateHashTable> ht;
 	//! Current status of a Scan
 	RadixHTScanStatus scan_status;

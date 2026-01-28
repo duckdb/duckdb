@@ -144,7 +144,7 @@ TEST_CASE("Test secret_directory configuration", "[api]") {
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
-	// Ensure that the extension directory is set correctly (according to the inital config)
+	// Ensure that the extension directory is set correctly (according to the initial config)
 	auto select_extension_dir = con.Query("SELECT current_setting('extension_directory') AS extdir;");
 	REQUIRE(select_extension_dir->GetValue(0, 0).ToString() == "my_extension_dir");
 
@@ -168,7 +168,7 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration", "
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
-	// Ensure that the extension directory is set correctly (according to the inital config)
+	// Ensure that the extension directory is set correctly (according to the initial config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
 	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
 
@@ -195,7 +195,7 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration upd
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
-	// Ensure that the extension directory is set correctly (according to the inital config)
+	// Ensure that the extension directory is set correctly (according to the initial config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
 	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
 
@@ -228,7 +228,7 @@ TEST_CASE("Test secret_directory configuration update after secret creation", "[
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
-	// Ensure that the extension directory is set correctly (according to the inital config)
+	// Ensure that the extension directory is set correctly (according to the initial config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
 	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
 

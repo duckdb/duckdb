@@ -1152,7 +1152,7 @@
                     "map_type": "The map type",
                     "keys": "The keys of the map",
                     "values": "The values of the map",
-                    "entry_count": "The number of entrys (key-value pairs) in the map"
+                    "entry_count": "The number of entries (key-value pairs) in the map"
                 },
                 "return_value": "The map value, or nullptr, if the parameters are invalid."
             }

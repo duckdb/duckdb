@@ -37,7 +37,7 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
-			// We didnt find the key in the map, so return NULL
+			// We didn't find the key in the map, so return NULL
 			FlatVector::SetNull(result, row_idx, true);
 			continue;
 		}
@@ -92,7 +92,7 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
-			// We didnt find the key in the map, so return empty list
+			// We didn't find the key in the map, so return empty list
 			out_list.offset = offset;
 			out_list.length = 0;
 			continue;

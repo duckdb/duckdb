@@ -73,7 +73,7 @@ protected:
 	Vector statep;
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
-	//! The rows beging updated.
+	//! The rows being updated.
 	SelectionVector update_sel;
 	//! Count of buffered values
 	idx_t flush_count;

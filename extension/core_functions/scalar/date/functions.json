@@ -373,7 +373,7 @@
     {
         "name": "to_millennia",
         "parameters": "integer",
-        "description": "Construct a millenium interval",
+        "description": "Construct a millennium interval",
         "example": "to_millennia(1)",
         "type": "scalar_function_set"
     },

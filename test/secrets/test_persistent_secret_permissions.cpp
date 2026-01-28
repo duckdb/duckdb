@@ -95,7 +95,7 @@ TEST_CASE("Test that DuckDB rejects secrets with incorrect permissions on linux/
 	// Setting back to correct permission should allow us to read it again
 	chmod(secret_path.c_str(), S_IRUSR | S_IWUSR);
 
-	// Should be gud now
+	// Should be good now
 	DuckDB db2(nullptr);
 	Connection con2(db2);
 	REQUIRE_NO_FAIL(con2.Query("set allow_persistent_secrets=true;"));

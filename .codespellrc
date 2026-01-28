@@ -1,0 +1,16 @@
+[codespell]
+# Ref: https://github.com/codespell-project/codespell#using-a-config-file
+skip = .git*,*.svg,i18n,.codespellrc,*.benchmark,*.csv,*.tsv,third_party,*.test*,cases,*.parquet,*.sha256,*.signature,*.jsonl,./data/json/*,./extension/tpcds/*,./extension/tpch/*
+check-hidden = true
+ignore-regex = \bNome\b|^// Available.*|\bMone\b
+# Some variable choices etc
+# ModeRm: function name (Mode Remove)
+# TE: template parameter name (common in templates)
+# ist,sie,te,fo,ot: vendored code abbreviations
+# Mone: proper name (Mone Kamishiraishi - Japanese actress in test data)
+# allocatedp,deallocatedp: jemalloc API naming pattern (allocated + p for pointer variant)
+# larg: libpgquery struct field convention (paired with rarg for left/right argument)
+# acount: intentional paired variable pattern (paired with bcount in merge functions)
+# HasTable: method name (valid C++ Has* predicate pattern)
+# pres: variable name abbreviation (parsed result)
+ignore-words-list = ans,inout,ser,clen,nd,ModeRm,TE,ist,sie,te,fo,ot,Mone,allocatedp,deallocatedp,larg,acount,HasTable,pres

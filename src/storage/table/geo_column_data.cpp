@@ -298,11 +298,11 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	auto has_only_geometry_collection = new_geom_type == GeometryType::GEOMETRYCOLLECTION;
 	auto has_only_invalid = new_geom_type == GeometryType::INVALID;
 
-	// We cant specialize empty geometries, because we cant represent zero-vertex geometries in those layouts
+	// We can't specialize empty geometries, because we can't represent zero-vertex geometries in those layouts
 	const auto has_empty = flags.HasEmptyGeometry() || flags.HasEmptyPart();
 
 	if (has_mixed_type || has_only_geometry_collection || has_only_invalid || has_empty) {
-		// Cant specialize, keep column
+		// Can't specialize, keep column
 		checkpoint_state->inner_column = base_column;
 		checkpoint_state->inner_column_state =
 		    checkpoint_state->inner_column->Checkpoint(row_group, info, old_column_stats);

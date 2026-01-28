@@ -1447,7 +1447,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 		if (!table_has_changes) {
 			// table is unmodified and already exists on disk
-			// we can directly re-use the metadata pointer
+			// we can directly reuse the metadata pointer
 			// mark all blocks associated with row groups as still being in-use
 			auto &metadata_manager = writer.GetMetadataManager();
 			for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
@@ -1541,7 +1541,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException("Checkpointing should always remember metadata blocks");
 			}
 			if (metadata_reuse && pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
-				throw InternalException("Colum start pointers changed during metadata reuse");
+				throw InternalException("Column start pointers changed during metadata reuse");
 			}
 
 			// Capture blocks that have been written

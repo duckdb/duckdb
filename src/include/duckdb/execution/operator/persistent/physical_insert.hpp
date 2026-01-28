@@ -58,7 +58,7 @@ public:
 	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
 	//! The delete state for ON CONFLICT handling that is rewritten into DELETE + INSERT.
 	unique_ptr<TableDeleteState> delete_state;
-	//! The append chunk for ON CONFLICT handling that is rewritting into DELETE + INSERT.
+	//! The append chunk for ON CONFLICT handling that is rewriting into DELETE + INSERT.
 	DataChunk append_chunk;
 };
 

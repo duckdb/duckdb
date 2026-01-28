@@ -26,7 +26,7 @@ static const TestConfigOption test_config_options[] = {
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
     {"base_config", "Config file to load and base initial settings on", LogicalType::VARCHAR,
      TestConfiguration::LoadBaseConfig},
-    {"block_size", "Block Alloction Size; must be a power of 2", LogicalType::BIGINT, nullptr},
+    {"block_size", "Block Allocation Size; must be a power of 2", LogicalType::BIGINT, nullptr},
     {"checkpoint_wal_size", "Size in bytes after which to trigger automatic checkpointing", LogicalType::BIGINT,
      nullptr},
     {"checkpoint_on_shutdown", "Whether or not to checkpoint on database shutdown", LogicalType::BOOLEAN, nullptr},

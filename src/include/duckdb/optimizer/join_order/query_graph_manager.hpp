@@ -63,7 +63,7 @@ public:
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
 //! from the logical plan and creating the intermediate structures needed by the plan enumerator.
-//! When the plan enumerator finishes, the Query Graph Manger can then recreate the logical plan.
+//! When the plan enumerator finishes, the Query Graph Manager can then recreate the logical plan.
 class QueryGraphManager {
 public:
 	explicit QueryGraphManager(ClientContext &context) : relation_manager(context), context(context) {

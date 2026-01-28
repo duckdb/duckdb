@@ -422,7 +422,7 @@ extent_recycle_extract(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks,
 		 * some small size to satisfy a small request.  When that small
 		 * request is freed, though, it won't merge back with the larger
 		 * extent if delayed coalescing is on.  The large extent can
-		 * then no longer satify a request for its original size.  To
+		 * then no longer satisfy a request for its original size.  To
 		 * limit this effect, when delayed coalescing is enabled, we
 		 * put a cap on how big an extent we can split for a request.
 		 */

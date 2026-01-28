@@ -395,7 +395,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	return DenomInfo(*subgraphs.at(0).numerator_relations, 1, subgraphs.at(0).denom * denom_multiplier);
 }
 
-// Cardinality is calculatd using logic found in
+// Cardinality is calculated using logic found in
 // https://blobs.duckdb.org/papers/tom-ebergen-msc-thesis-join-order-optimization-with-almost-no-statistics.pdf TL;DR
 // Cardinality is estimated based on cardinality of base tables and the distinct counts of joined columns. If you have
 // two tables A and B joined using A.x = B.y we assume that each tuple in A will match ~ B/(distinct(y)) tuples in B.

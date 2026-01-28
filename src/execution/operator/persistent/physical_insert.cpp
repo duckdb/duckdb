@@ -504,7 +504,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	auto affected_tuples = PerformOnConflictAction<GLOBAL>(lstate, gstate, context, combined_chunk, table, row_ids, op);
 
 	// Remove the conflicting tuples from the insert chunk
-	// We can use only the primay data because the secondary data has the same indexes in the chunk.
+	// We can use only the primary data because the secondary data has the same indexes in the chunk.
 	SelectionVector sel_vec(tuples.size());
 	auto &inverted_sel = conflict_manager.GetInvertedSel();
 	auto new_size = SelectionVector::Inverted(inverted_sel, sel_vec, conflict_count, tuples.size());

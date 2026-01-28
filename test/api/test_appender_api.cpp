@@ -272,7 +272,7 @@ TEST_CASE("Test appender during stack unwinding", "[api]") {
 		Appender appender(con, "integers");
 		appender.AppendRow(1);
 
-		// closing the apender throws an exception, because we changed the table's columns
+		// closing the appender throws an exception, because we changed the table's columns
 		REQUIRE_NO_FAIL(con.Query("ALTER TABLE integers ADD COLUMN j VARCHAR"));
 		REQUIRE_THROWS(appender.Close());
 	}

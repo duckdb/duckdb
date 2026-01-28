@@ -32,7 +32,7 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 	auto entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name,
 	                                                           OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
-		// try to find whether a table extry might exist
+		// try to find whether a table entry might exist
 		auto table_entry = Catalog::GetEntry<TableFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA,
 		                                                                info.name, OnEntryNotFound::RETURN_NULL);
 		if (table_entry) {

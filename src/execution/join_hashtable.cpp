@@ -217,7 +217,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 				const hash_t row_salt = ht_entry_t::ExtractSalt(row_hash);
 				const bool salt_match = entry.GetSalt() == row_salt;
 				if (salt_match) {
-					// we know that the enty is occupied and the salt matches -> compare the keys
+					// we know that the entry is occupied and the salt matches -> compare the keys
 					auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
 					AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count,
 					                    row_index);
@@ -322,7 +322,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 			hashes_dense[i] = ht_offset_and_salt; // populate dense again
 		}
 
-		// in the next interation, we have a selection vector with the keys that do not match
+		// in the next iteration, we have a selection vector with the keys that do not match
 		row_sel = &state.keys_no_match_sel;
 		has_row_sel = true;
 
@@ -492,7 +492,7 @@ static data_ptr_t LoadPointer(const const_data_ptr_t &source) {
 	return cast_uint64_to_pointer(Load<uint64_t>(source));
 }
 
-//! If we consider to insert into an entry we expct to be empty, if it was filled in the meantime the insert will not
+//! If we consider to insert into an entry we expect to be empty, if it was filled in the meantime the insert will not
 //! happen and we need to return the pointer to the to row with which the new entry would have collided. In any other
 //! case we return a nullptr
 template <bool PARALLEL, bool EXPECT_EMPTY>
@@ -1778,7 +1778,7 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 	std::stable_sort(partition_indices.begin(), partition_indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
 		const auto lhs_size = partitions[lhs]->SizeInBytes() + PointerTableSize(partitions[lhs]->Count());
 		const auto rhs_size = partitions[rhs]->SizeInBytes() + PointerTableSize(partitions[rhs]->Count());
-		// We divide by min_partition_size, effectively rouding everything down to a multiple of min_partition_size
+		// We divide by min_partition_size, effectively rounding everything down to a multiple of min_partition_size
 		// Makes it so minor differences in partition sizes don't mess up the original order
 		// Retaining as much of the original order as possible reduces I/O (partition idx determines eviction queue idx)
 		return lhs_size / min_partition_size < rhs_size / min_partition_size;

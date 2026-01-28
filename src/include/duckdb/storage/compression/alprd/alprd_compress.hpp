@@ -71,7 +71,7 @@ public:
 	}
 
 	bool HasEnoughSpace(idx_t vector_size) {
-		//! If [start of block + used space + required space] is more than whats left (current position
+		//! If [start of block + used space + required space] is more than what's left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
 		if ((handle.Ptr() + AlignValue(UsedSpace() + vector_size)) >=
 		    (metadata_ptr - AlpRDConstants::METADATA_POINTER_SIZE)) {

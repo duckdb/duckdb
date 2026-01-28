@@ -1085,7 +1085,7 @@ void IEJoinLocalSourceState::ExecuteSinkL1Task(ExecutionContext &context, Interr
 		// RHS has negative rids
 		ExpressionExecutor r_executor(context.client);
 		r_executor.AddExpression(*op.rhs_orders[0].expression);
-		// add const column flase
+		// add const column false
 		auto right_const = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 		r_executor.AddExpression(*right_const);
 		r_executor.AddExpression(*op.rhs_orders[1].expression);
