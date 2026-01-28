@@ -556,9 +556,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		// Try to parse the CRS
 		LogicalType target_type;
 
-		auto lookup = CoordinateReferenceSystemUtil::Get(context).TryIdentify(crs);
-		if (lookup.Success()) {
-			target_type = LogicalType::GEOMETRY(lookup.GetResult());
+		auto lookup = CoordinateReferenceSystemManager::Get(context).TryIdentify(crs);
+		if (lookup) {
+			target_type = LogicalType::GEOMETRY(lookup->GetDefinition());
 		} else {
 			target_type = LogicalType::GEOMETRY(crs);
 		}

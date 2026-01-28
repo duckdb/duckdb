@@ -55,7 +55,7 @@ class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
-class CoordinateReferenceSystemUtil;
+class CoordinateReferenceSystemManager;
 class HTTPUtil;
 class DatabaseFilePathManager;
 class ExtensionCallbackManager;
@@ -204,7 +204,7 @@ public:
 	//! HTTP Request utility functions
 	shared_ptr<HTTPUtil> http_util;
 	//! Coordinate Reference System Utility
-	shared_ptr<CoordinateReferenceSystemUtil> crs_util;
+	shared_ptr<CoordinateReferenceSystemManager> crs_manager;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 	//! Reference to the database file path manager

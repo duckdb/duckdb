@@ -142,6 +142,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
     DUCKDB_SETTING(HTTPProxyUsernameSetting),
     DUCKDB_SETTING(IeeeFloatingPointOpsSetting),
+    DUCKDB_SETTING(IgnoreUnknownCrsSetting),
     DUCKDB_SETTING(ImmediateTransactionModeSetting),
     DUCKDB_SETTING(IndexScanMaxCountSetting),
     DUCKDB_SETTING_CALLBACK(IndexScanPercentageSetting),
@@ -196,12 +197,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 91),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 92),
                                                      DUCKDB_SETTING_ALIAS("null_order", 38),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 110),
-                                                     DUCKDB_SETTING_ALIAS("user", 125),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 111),
+                                                     DUCKDB_SETTING_ALIAS("user", 126),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 124),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 125),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
