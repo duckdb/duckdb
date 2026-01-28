@@ -128,10 +128,10 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 						free(crs_json);
 					} else {
 						// Otherwise, default to OGC:CRS84
-						auto &crs_util = CoordinateReferenceSystemUtil::Get(context);
+						auto &crs_util = CoordinateReferenceSystemManager::Get(context);
 						auto crs = crs_util.TryConvert("OGC:CRS84", CoordinateReferenceSystemType::PROJJSON);
-						if (crs.Success()) {
-							column.projjson = crs.GetResult().GetDefinition();
+						if (crs) {
+							column.projjson = crs->GetDefinition();
 						}
 					}
 
@@ -154,8 +154,41 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 	return nullptr;
 }
 
-void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const string &column_name, const LogicalType &type,
-                                                const GeometryStatsData &stats, GeoParquetVersion version) {
+static void ConvertCRS(ClientContext &context, GeoParquetColumnMetadata &column, const string &column_name,
+                       const CoordinateReferenceSystem &crs, GeoParquetVersion version) {
+	// This is the default in GeoParquet
+	if (StringUtil::CIEquals("OGC:CRS84", crs.GetIdentifier())) {
+		// Dont write the default
+		return;
+	}
+
+	if (crs.GetType() == CoordinateReferenceSystemType::PROJJSON) {
+		// If already PROJJSON, just write it directly
+		column.projjson = crs.GetDefinition();
+		return;
+	}
+
+	const auto &manager = CoordinateReferenceSystemManager::Get(context);
+	const auto lookup = manager.TryConvert(crs, CoordinateReferenceSystemType::PROJJSON);
+
+	if (lookup) {
+		// Successfully converted to PROJJSON
+		column.projjson = lookup->GetDefinition();
+	}
+
+	if (version != GeoParquetVersion::V2) {
+		throw InvalidInputException("Cannot write GeoParquet V1 metadata for column '%s': GeoParquet V1 only "
+		                            "supports PROJJSON CRS definitions",
+		                            column_name);
+	}
+
+	// Fall back to writing the original CRS definition
+	column.projjson = crs.GetDefinition();
+}
+
+void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const string &column_name,
+                                                const LogicalType &type, const GeometryStatsData &stats,
+                                                GeoParquetVersion version) {
 	// Lock the metadata
 	lock_guard<mutex> glock(write_lock);
 
@@ -166,29 +199,7 @@ void GeoParquetFileMetadata::AddGeoParquetStats(ClientContext &context, const st
 
 		// Attempt to convert the CRS to PROJJSON
 		if (GeoType::HasCRS(type)) {
-			const auto &crs = GeoType::GetCRS(type);
-
-			if (crs.GetType() != CoordinateReferenceSystemType::PROJJSON) {
-
-				const auto &crs_util = CoordinateReferenceSystemUtil::Get(context);
-				auto lookup = crs_util.TryConvert(crs, CoordinateReferenceSystemType::PROJJSON);
-
-				if (!lookup.Success()) {
-					if (version != GeoParquetVersion::V2) {
-						throw InvalidInputException("Cannot write GeoParquet V1 metadata for column '%s': GeoParquet only "
-							"supports PROJJSON CRS definitions",
-							column_name);
-					}
-
-					// Dont write anything for V2 if not PROJJSON
-
-				} else {
-					column.projjson = lookup.GetResult().GetDefinition();
-				}
-			} else if (!StringUtil::CIEquals(crs.GetCode(), "OGC:CRS84")) {
-				// Don't write if this is the default (ogc:crs84)
-				column.projjson = crs.GetDefinition();
-			}
+			ConvertCRS(context, column, column_name, GeoType::GetCRS(type), version);
 		}
 
 		// Merge the stats

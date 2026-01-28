@@ -117,9 +117,9 @@ static unique_ptr<FunctionData> SetCRSBind(ClientContext &context, ScalarFunctio
 		const auto &crs_str = StringValue::Get(crs_val);
 
 		// Try to convert to identify
-		auto lookup = CoordinateReferenceSystemUtil::Get(context).TryIdentify(crs_str);
-		if (lookup.Success()) {
-			bound_function.return_type = LogicalType::GEOMETRY(lookup.GetResult());
+		const auto lookup = CoordinateReferenceSystemManager::Get(context).TryIdentify(crs_str);
+		if (lookup) {
+			bound_function.return_type = LogicalType::GEOMETRY(lookup->GetDefinition());
 		} else {
 			// Pass on the raw string (better than nothing)
 			bound_function.return_type = LogicalType::GEOMETRY(crs_str);

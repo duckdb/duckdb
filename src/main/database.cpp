@@ -56,7 +56,7 @@ DBConfig::DBConfig() {
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
 	http_util = make_shared_ptr<HTTPUtil>();
-	crs_util = make_shared_ptr<CoordinateReferenceSystemUtil>();
+	crs_manager = make_shared_ptr<CoordinateReferenceSystemManager>();
 	callback_manager = make_uniq<ExtensionCallbackManager>();
 	callback_manager->Register("__open_file__", OpenFileStorageExtension::Create());
 }
@@ -536,8 +536,8 @@ shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() {
 	return std::move(result);
 }
 
-shared_ptr<CoordinateReferenceSystemUtil> DatabaseInstance::GetCoordinateReferenceSystemUtil() {
-	return config.crs_util;
+shared_ptr<CoordinateReferenceSystemManager> DatabaseInstance::GetCoordinateReferenceSystemManager() {
+	return config.crs_manager;
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

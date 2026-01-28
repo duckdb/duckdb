@@ -14,74 +14,6 @@
 
 namespace duckdb {
 
-void CoordinateReferenceSystem::Parse(const string &text, CoordinateReferenceSystem &result) {
-	if (text.empty()) {
-		result.type = CoordinateReferenceSystemType::INVALID;
-		return;
-	}
-
-	// Check if the text is all whitespace
-	auto all_space = true;
-	for (const auto c : text) {
-		if (!StringUtil::CharacterIsSpace(c)) {
-			all_space = false;
-			break;
-		}
-	}
-
-	if (all_space) {
-		result.type = CoordinateReferenceSystemType::INVALID;
-		return;
-	}
-
-	if (TryParsePROJJSON(text, result)) {
-		return;
-	}
-
-	if (TryParseAuthCode(text, result)) {
-		return;
-	}
-
-	// TODO: Also strip formatting
-	if (TryParseWKT2(text, result)) {
-		return;
-	}
-
-	// Otherwise, treat this as an opaque SRID identifier, and don't set an explicit name or id
-	result.type = CoordinateReferenceSystemType::SRID;
-	result.text = text;
-}
-
-bool CoordinateReferenceSystem::TryParse(const string &text, CoordinateReferenceSystem &result) {
-	try {
-		Parse(text, result);
-	} catch (const InvalidInputException &ex) {
-		return false;
-	}
-	return true;
-}
-
-CoordinateReferenceSystem::CoordinateReferenceSystem(const string &crs) {
-	Parse(crs, *this);
-}
-
-void CoordinateReferenceSystem::Serialize(Serializer &serializer) const {
-	// Only serialize the text definition
-	serializer.WritePropertyWithDefault<string>(100, "text", text);
-}
-
-CoordinateReferenceSystem CoordinateReferenceSystem::Deserialize(Deserializer &deserializer) {
-	string text;
-	deserializer.ReadPropertyWithDefault<string>(100, "text", text);
-	CoordinateReferenceSystem result;
-	// If this fails for whatever reason, just return an invalid CRS
-	if (!TryParse(text, result)) {
-		result.text = "";
-		result.type = CoordinateReferenceSystemType::INVALID;
-	}
-	return result;
-}
-
 //----------------------------------------------------------------------------------------------------------------------
 // WKT2:2019 Parsing
 //----------------------------------------------------------------------------------------------------------------------
@@ -98,13 +30,13 @@ public:
 	template <class T>
 	T &As() {
 		D_ASSERT(T::TYPE == type);
-		return reinterpret_cast<T &>(*this);
+		return static_cast<T &>(*this);
 	}
 
 	template <class T>
-	T &As() const {
+	const T &As() const {
 		D_ASSERT(T::TYPE == type);
-		return reinterpret_cast<T &>(*this);
+		return static_cast<const T &>(*this);
 	}
 
 	bool IsKeyword() const {
@@ -182,25 +114,32 @@ public:
 	static unique_ptr<WKTValue> Parse(const string &wkt) {
 		WKTParser parser(wkt.c_str(), wkt.size());
 
-		// Skip leading whitespace
+		// Skip initial whitespace
 		parser.SkipWhitespace();
 
 		// Parse the root node
-		return parser.ParseNode();
+		auto node = parser.ParseNode();
+
+		// Ensure we reached the end of the input
+		if (parser.pos != parser.end) {
+			throw InvalidInputException("Unexpected input at position %zu", parser.pos - parser.beg);
+		}
+
+		return node;
 	}
 
 private:
 	const char *beg;
 	const char *end;
 	const char *pos;
+	uint32_t depth;
 
 private:
-	WKTParser(const char *text, size_t size) : beg(text), end(text + size), pos(text) {
-		SkipWhitespace();
+	WKTParser(const char *text, size_t size) : beg(text), end(text + size), pos(text), depth(0) {
 	}
 
 	bool TryMatch(char c) {
-		if (pos < end && tolower(*pos) == tolower(c)) {
+		if (pos < end && *pos == c) {
 			pos++;
 			SkipWhitespace(); // remove trailing whitespace
 			return true;
@@ -219,8 +158,13 @@ private:
 
 	bool TryMatchText(string &result) {
 		const auto start = pos;
-		while (pos < end && (isalpha(*pos) || *pos == '_')) {
+		// First character must be alphabetic or underscore
+		if (pos < end && (isalpha(*pos) || *pos == '_')) {
 			pos++;
+			// Subsequent characters can also include digits
+			while (pos < end && (isalnum(*pos) || *pos == '_')) {
+				pos++;
+			}
 		}
 		if (pos == start) {
 			// Didnt match any text
@@ -237,13 +181,28 @@ private:
 			return nullptr;
 		}
 		const char *start = pos;
-		while (pos < end && *pos != '"') {
-			pos++;
+		string result;
+		while (pos < end) {
+			if (*pos == '"') {
+				// Check for escaped quote (doubled quote)
+				if (pos + 1 < end && *(pos + 1) == '"') {
+					// Append everything up to and including one quote
+					result.append(start, UnsafeNumericCast<size_t>(pos - start + 1));
+					pos += 2; // Skip both quotes
+					start = pos;
+				} else {
+					// End of string
+					break;
+				}
+			} else {
+				pos++;
+			}
 		}
 		if (pos == end) {
 			throw InvalidInputException("Unterminated string starting at position %zu", start - beg);
 		}
-		auto result = string(start, UnsafeNumericCast<size_t>(pos - start));
+		// Append any remaining content before the closing quote
+		result.append(start, UnsafeNumericCast<size_t>(pos - start));
 
 		Match('"');
 		SkipWhitespace();
@@ -304,6 +263,11 @@ private:
 	}
 
 	unique_ptr<WKTValue> ParseNode() {
+		// Increment depth to avoid stack overflow on malicious input
+		if (depth++ > 1000) {
+			throw InvalidInputException("WKT input is too deeply nested to parse");
+		}
+
 		unique_ptr<WKTValue> node = nullptr;
 
 		node = ParseStringNode();
@@ -459,12 +423,12 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 		}
 
 		result.type = CoordinateReferenceSystemType::WKT2_2019;
-		result.name = name;
-		result.text = text;
+		result.identifier = name;
+		result.definition = text;
 
 		// Also trim text
 		// TODO: Normalize WKT Input
-		StringUtil::Trim(result.text);
+		StringUtil::Trim(result.definition);
 
 		return true;
 	}
@@ -481,13 +445,14 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 		// Pick name as fallback
 		name = first->As<WKTString>().GetValue();
 	}
-	result.name = name;
+
 	result.type = CoordinateReferenceSystemType::WKT2_2019;
-	result.text = text;
+	result.identifier = name;
+	result.definition = text;
 
 	// Also trim text
 	// TODO: Normalize WKT Input
-	StringUtil::Trim(result.text);
+	StringUtil::Trim(result.definition);
 
 	return true;
 }
@@ -555,7 +520,7 @@ bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateR
 	if (name_val && yyjson_is_str(name_val)) {
 		const char *name_str = yyjson_get_str(name_val);
 		if (name_str) {
-			result.name = string(name_str);
+			result.identifier = string(name_str);
 		}
 	}
 
@@ -567,17 +532,17 @@ bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateR
 			const auto auth_str = yyjson_get_str(auth_val);
 
 			if (auth_str) {
-				result.code = string(auth_str);
+				result.identifier = string(auth_str);
 
 				const auto code_val = yyjson_obj_get(id_val, "code");
 				if (code_val && yyjson_is_int(code_val)) {
 					const auto code_int = yyjson_get_int(code_val);
-					result.code += ":" + StringUtil::Format("%d", code_int);
+					result.identifier += ":" + StringUtil::Format("%d", code_int);
 				}
 				if (code_val && yyjson_is_str(code_val)) {
 					const auto code_str = yyjson_get_str(code_val);
 					if (code_str) {
-						result.code += ":" + string(code_str);
+						result.identifier += ":" + string(code_str);
 					}
 				}
 			}
@@ -594,7 +559,7 @@ bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateR
 		return false;
 	}
 
-	result.text = string(json_text, json_size);
+	result.definition = string(json_text, json_size);
 	free(json_text);
 
 	return true;
@@ -642,15 +607,73 @@ bool CoordinateReferenceSystem::TryParseAuthCode(const string &text, CoordinateR
 			if (auth_valid && code_valid) {
 				// Valid AUTH:CODE
 				result.type = CoordinateReferenceSystemType::AUTH_CODE;
-				result.text = string(beg, UnsafeNumericCast<size_t>(end - beg));
-				result.code = result.text;
+				result.definition = string(beg, UnsafeNumericCast<size_t>(end - beg));
 				return true;
 			}
 			break;
 		}
 	}
-
 	return false;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Coordinate Reference System Parsing
+//----------------------------------------------------------------------------------------------------------------------
+void CoordinateReferenceSystem::ParseDefinition(const string &definition, CoordinateReferenceSystem &result) {
+	if (definition.empty()) {
+		result.type = CoordinateReferenceSystemType::INVALID;
+		return;
+	}
+
+	// Check if the text is all whitespace
+	auto all_space = true;
+	for (const auto c : definition) {
+		if (!StringUtil::CharacterIsSpace(c)) {
+			all_space = false;
+			break;
+		}
+	}
+
+	if (all_space) {
+		result.type = CoordinateReferenceSystemType::INVALID;
+		return;
+	}
+
+	if (TryParsePROJJSON(definition, result)) {
+		return;
+	}
+
+	if (TryParseAuthCode(definition, result)) {
+		return;
+	}
+
+	// TODO: Also strip formatting
+	if (TryParseWKT2(definition, result)) {
+		return;
+	}
+
+	// Otherwise, treat this as an opaque identifier, and don't set an explicit id
+	result.type = CoordinateReferenceSystemType::SRID;
+	result.definition = definition;
+}
+
+void CoordinateReferenceSystem::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "definition", definition, string());
+}
+
+CoordinateReferenceSystem CoordinateReferenceSystem::Deserialize(Deserializer &deserializer) {
+	string definition;
+	deserializer.ReadPropertyWithExplicitDefault<string>(100, "definition", definition, string());
+
+	// If this fails for whatever reason, just return an invalid CRS
+	CoordinateReferenceSystem result;
+	try {
+		ParseDefinition(definition, result);
+	} catch (...) {
+		result.definition = "";
+		result.type = CoordinateReferenceSystemType::INVALID;
+	}
+	return result;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -658,122 +681,88 @@ bool CoordinateReferenceSystem::TryParseAuthCode(const string &text, CoordinateR
 //----------------------------------------------------------------------------------------------------------------------
 namespace {
 
-class DefaultCoordinateReferenceSystemProvider final : public CoordinateReferencesSystemProvider {
+class DefaultCoordinateReferenceSystemProvider final : public CoordinateReferenceSystemProvider {
 public:
-	static CoordinateReferenceSystemLookupResult DefaultTryConvert(const CoordinateReferenceSystem &source_crs,
-	                                                               CoordinateReferenceSystemType target_type);
-
-	CoordinateReferenceSystemLookupResult TryConvert(const CoordinateReferenceSystem &source_crs,
-	                                                 CoordinateReferenceSystemType target_type) override {
-		return DefaultTryConvert(source_crs, target_type);
+	unique_ptr<CoordinateReferenceSystem> TryConvert(const CoordinateReferenceSystem &source_crs,
+	                                                 CoordinateReferenceSystemType target_type) override;
+	string GetName() const override {
+		return "default";
 	}
 };
 
 } // namespace
 
 //----------------------------------------------------------------------------------------------------------------------
-// Coordinate Reference System Utility
+// Coordinate Reference System Manager
 //----------------------------------------------------------------------------------------------------------------------
 
-CoordinateReferenceSystemUtil::CoordinateReferenceSystemUtil() {
+CoordinateReferenceSystemManager::CoordinateReferenceSystemManager() {
 	// Always add the default provider
 	providers.push_back(make_uniq<DefaultCoordinateReferenceSystemProvider>());
 }
 
-void CoordinateReferenceSystemUtil::AddProvider(shared_ptr<CoordinateReferencesSystemProvider> provider) {
+void CoordinateReferenceSystemManager::AddProvider(shared_ptr<CoordinateReferenceSystemProvider> provider) {
 	// Insert at the front
 	providers.insert(providers.begin(), provider);
 }
 
-CoordinateReferenceSystemLookupResult
-CoordinateReferenceSystemUtil::TryConvert(const CoordinateReferenceSystem &source_crs,
-                                          CoordinateReferenceSystemType target_type) const {
-	std::priority_queue<CoordinateReferenceSystemLookupResult> candidates;
-
+unique_ptr<CoordinateReferenceSystem>
+CoordinateReferenceSystemManager::TryConvert(const CoordinateReferenceSystem &source_crs,
+                                             CoordinateReferenceSystemType target_type) const {
 	// Ask each provider, front to back
 	for (auto &provider : providers) {
 		auto result = provider->TryConvert(source_crs, target_type);
-		if (result.Success()) {
-			if (result.GetConfidenceScore() == 100) {
-				// Exact match!
-				return result;
-			}
-			candidates.emplace(std::move(result));
+		if (result) {
+			return result;
 		}
 	}
 
-	if (candidates.empty()) {
-		return CoordinateReferenceSystemLookupResult::NotFound();
-	}
-
-	return candidates.top();
+	return nullptr;
 }
 
-CoordinateReferenceSystemUtil &CoordinateReferenceSystemUtil::Get(ClientContext &context) {
-	return *DBConfig::GetConfig(context).crs_util;
+CoordinateReferenceSystemManager &CoordinateReferenceSystemManager::Get(ClientContext &context) {
+	return *DBConfig::GetConfig(context).crs_manager;
 }
 
-CoordinateReferenceSystemLookupResult
-CoordinateReferenceSystemUtil::DefaultTryConvert(const CoordinateReferenceSystem &source_crs,
-                                                 CoordinateReferenceSystemType target_type) {
-	return DefaultCoordinateReferenceSystemProvider::DefaultTryConvert(source_crs, target_type);
-}
-
-CoordinateReferenceSystemLookupResult
-CoordinateReferenceSystemUtil::TryConvert(const string &source_crs, CoordinateReferenceSystemType target_type) const {
+unique_ptr<CoordinateReferenceSystem>
+CoordinateReferenceSystemManager::TryConvert(const string &source_crs,
+                                             CoordinateReferenceSystemType target_type) const {
 	const CoordinateReferenceSystem source(source_crs);
 	return TryConvert(source, target_type);
 }
 
-CoordinateReferenceSystemLookupResult
-CoordinateReferenceSystemUtil::DefaultTryConvert(const string &source_crs, CoordinateReferenceSystemType target_type) {
-	const CoordinateReferenceSystem source(source_crs);
-	return DefaultCoordinateReferenceSystemProvider::DefaultTryConvert(source, target_type);
-}
+unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystemManager::TryIdentify(const string &source_crs) {
+	CoordinateReferenceSystem source(source_crs);
 
-CoordinateReferenceSystemLookupResult CoordinateReferenceSystemUtil::TryIdentify(const string &source_crs) {
-	CoordinateReferenceSystem crs(source_crs);
-
-	// If the CRS is fully defined, then return it immediately
-	if (crs.IsComplete()) {
-		return CoordinateReferenceSystemLookupResult(100, std::move(crs));
+	// We always want to identify the CRS as short as possible, so first check for AUTH:CODE
+	auto auth_crs = TryConvert(source, CoordinateReferenceSystemType::AUTH_CODE);
+	if (auth_crs) {
+		return auth_crs;
 	}
 
-	// Otherwise, try to see if any of the providers can convert it into either PROJJSON or WKT2:2019
-	// We prefer PROJJSON as it is generally easier to deal with
-	auto result = TryConvert(source_crs, CoordinateReferenceSystemType::PROJJSON);
-	if (result.Success()) {
-		return result;
+	// Next, check for SRID
+	auto srid_crs = TryConvert(source, CoordinateReferenceSystemType::SRID);
+	if (srid_crs) {
+		return srid_crs;
 	}
 
-	result = TryConvert(source_crs, CoordinateReferenceSystemType::WKT2_2019);
-	if (result.Success()) {
-		return result;
+	// Otherwise, PROJJSON
+	auto projjson_crs = TryConvert(source, CoordinateReferenceSystemType::PROJJSON);
+	if (projjson_crs) {
+		return projjson_crs;
 	}
 
-	return result;
-}
-
-CoordinateReferenceSystemLookupResult CoordinateReferenceSystemUtil::DefaultTryIdentify(const string &source_crs) {
-	CoordinateReferenceSystem crs(source_crs);
-
-	if (crs.IsComplete()) {
-		return CoordinateReferenceSystemLookupResult(100, std::move(crs));
+	// Finally, WKT2:2019
+	auto wkt2_crs = TryConvert(source, CoordinateReferenceSystemType::WKT2_2019);
+	if (wkt2_crs) {
+		return wkt2_crs;
 	}
 
-	// Otherwise, try to see if we can convert it into either PROJJSON or WKT2:2019
-	// We prefer PROJJSON as it is generally easier to deal with
-	auto result = DefaultTryConvert(source_crs, CoordinateReferenceSystemType::PROJJSON);
-	if (result.Success()) {
-		return result;
+	if (!source.IsComplete()) {
+		return nullptr;
 	}
 
-	result = DefaultTryConvert(source_crs, CoordinateReferenceSystemType::WKT2_2019);
-	if (result.Success()) {
-		return result;
-	}
-
-	return result;
+	return make_uniq<CoordinateReferenceSystem>(std::move(source));
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -888,19 +877,56 @@ constexpr auto OGC_CRS84_PROJJSON = R"JSON_LITERAL({
   }
 })JSON_LITERAL";
 
-CoordinateReferenceSystemLookupResult
-DefaultCoordinateReferenceSystemProvider::DefaultTryConvert(const CoordinateReferenceSystem &source_crs,
-                                                            CoordinateReferenceSystemType target_type) {
+constexpr auto OGC_CRS84_WKT2_2019 = R"WKT_LITERAL(GEOGCRS["WGS 84 (CRS84)",
+    ENSEMBLE["World Geodetic System 1984 ensemble",
+        MEMBER["World Geodetic System 1984 (Transit)"],
+        MEMBER["World Geodetic System 1984 (G730)"],
+        MEMBER["World Geodetic System 1984 (G873)"],
+        MEMBER["World Geodetic System 1984 (G1150)"],
+        MEMBER["World Geodetic System 1984 (G1674)"],
+        MEMBER["World Geodetic System 1984 (G1762)"],
+        MEMBER["World Geodetic System 1984 (G2139)"],
+        MEMBER["World Geodetic System 1984 (G2296)"],
+        ELLIPSOID["WGS 84",6378137,298.257223563,
+            LENGTHUNIT["metre",1]],
+        ENSEMBLEACCURACY[2.0]],
+    PRIMEM["Greenwich",0,
+        ANGLEUNIT["degree",0.0174532925199433]],
+    CS[ellipsoidal,2],
+        AXIS["geodetic longitude (Lon)",east,
+            ORDER[1],
+            ANGLEUNIT["degree",0.0174532925199433]],
+        AXIS["geodetic latitude (Lat)",north,
+            ORDER[2],
+            ANGLEUNIT["degree",0.0174532925199433]],
+    USAGE[
+        SCOPE["Not known."],
+        AREA["World."],
+        BBOX[-90,-180,90,180]],
+    ID["OGC","CRS84"]]
+)WKT_LITERAL";
+
+unique_ptr<CoordinateReferenceSystem>
+DefaultCoordinateReferenceSystemProvider::TryConvert(const CoordinateReferenceSystem &source_crs,
+                                                     CoordinateReferenceSystemType target_type) {
 	// TODO: Add more built-in CRS definitions
-	if (target_type == CoordinateReferenceSystemType::PROJJSON) {
-		if (source_crs.GetType() == CoordinateReferenceSystemType::AUTH_CODE) {
-			if (StringUtil::CIEquals(source_crs.GetDefinition(), "OGC:CRS84")) {
-				return CoordinateReferenceSystemLookupResult::FromString(OGC_CRS84_PROJJSON);
-			}
+	if (StringUtil::CIEquals(source_crs.GetIdentifier(), "OGC:CRS84") ||
+	    StringUtil::CIEquals(source_crs.GetIdentifier(), "CRS84")) {
+		switch (target_type) {
+		case CoordinateReferenceSystemType::AUTH_CODE:
+			return make_uniq<CoordinateReferenceSystem>("OGC:CRS84");
+		case CoordinateReferenceSystemType::PROJJSON:
+			return make_uniq<CoordinateReferenceSystem>(OGC_CRS84_PROJJSON);
+		case CoordinateReferenceSystemType::WKT2_2019:
+			return make_uniq<CoordinateReferenceSystem>(OGC_CRS84_WKT2_2019);
+		case CoordinateReferenceSystemType::SRID:
+			return make_uniq<CoordinateReferenceSystem>("CRS84");
+		case CoordinateReferenceSystemType::INVALID:
+			return nullptr;
 		}
 	}
 
-	return CoordinateReferenceSystemLookupResult::NotFound();
+	return nullptr;
 }
 
 } // namespace
