@@ -62,6 +62,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	if (!transformer.pivot_entries.empty()) {
 		result = transformer.CreatePivotStatement(std::move(result));
 	}
+	transformer.Clear();
 	return result;
 }
 

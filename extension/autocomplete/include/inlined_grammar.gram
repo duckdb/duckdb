@@ -672,9 +672,12 @@ TypeNameKeyword <- 'ASOF' /
 'ANTI'
 PivotStatement <- PivotKeyword TableRef PivotOn? PivotUsing? PivotGroupByList?
 
-PivotOn <- 'ON' List(Expression)
+PivotOn <- 'ON' PivotColumnList
 PivotUsing <- 'USING' TargetList
-
+PivotColumnList <- List(PivotColumnEntry)
+PivotColumnEntry <- PivotColumnSubquery / PivotValueList / PivotColumnEntryInternal
+PivotColumnEntryInternal <- Expression
+PivotColumnSubquery <- BaseExpression 'IN' Parens(SelectStatementInternal)
 
 PivotKeyword <- 'PIVOT' / 'PIVOT_WIDER'
 UnpivotKeyword <- 'UNPIVOT' / 'PIVOT_LONGER'

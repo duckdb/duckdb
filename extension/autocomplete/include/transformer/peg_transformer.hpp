@@ -133,6 +133,7 @@ public:
 		return allocator.Make<T>(std::forward<Args>(args)...);
 	}
 
+	void Clear();
 	void ClearParameters();
 	static void ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type);
 	void SetParam(const string &name, idx_t index, PreparedParamType type);

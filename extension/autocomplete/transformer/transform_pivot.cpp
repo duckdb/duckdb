@@ -1,6 +1,7 @@
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
 void PEGTransformerFactory::AddPivotEntry(PEGTransformer &transformer, string enum_name, unique_ptr<SelectNode> base,
@@ -26,10 +27,22 @@ vector<PivotColumn> PEGTransformerFactory::TransformPivotOn(PEGTransformer &tran
 		if (expr->IsScalar()) {
 			throw ParserException(expr->GetQueryLocation(), "Cannot pivot on constant value \"%s\"", expr->ToString());
 		}
-		if (expr->HasSubquery()) {
-			throw ParserException(expr->GetQueryLocation(), "Cannot pivot on subquery \"%s\"", expr->ToString());
+		if (expr->GetExpressionClass() != ExpressionClass::OPERATOR) {
+			col.pivot_expressions.push_back(std::move(expr));
+		} else {
+			auto &operator_expr = expr->Cast<OperatorExpression>();
+			if (operator_expr.type == ExpressionType::COMPARE_IN) {
+				col.pivot_expressions.push_back(std::move(operator_expr.children[0]));
+				for (idx_t i = 1; i < operator_expr.children.size(); i++) {
+					PivotColumnEntry entry;
+					entry.expr = std::move(operator_expr.children[i]);
+					col.entries.push_back(std::move(entry));
+				}
+			} else {
+				throw ParserException("Expected a COMPARE_IN expression, got %s instead.",
+				                      EnumUtil::ToString(operator_expr.type));
+			}
 		}
-		col.pivot_expressions.push_back(std::move(expr));
 		result.push_back(std::move(col));
 	}
 	return result;

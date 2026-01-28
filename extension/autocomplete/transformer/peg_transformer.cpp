@@ -46,6 +46,11 @@ void PEGTransformer::ClearParameters() {
 	named_parameter_map.clear();
 }
 
+void PEGTransformer::Clear() {
+	ClearParameters();
+	pivot_entries.clear();
+}
+
 idx_t PEGTransformer::ParamCount() const {
 	return prepared_statement_parameter_index;
 }
