@@ -532,6 +532,7 @@ void WriteAheadLog::Flush() {
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
 	storage_manager.SetWALSize(writer->GetFileSize());
+	storage_manager.IncrementWALTransactionsCount();
 }
 
 } // namespace duckdb
