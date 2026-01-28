@@ -98,6 +98,13 @@
         "custom_implementation": true
     },
     {
+        "name": "arrow_filter_pushdown_with_view_types",
+        "description": "Whether to allow filter pushdown into Arrow scans on tables containing string_view or binary_view columns. Some Arrow libraries (e.g. pyarrow) do not support filtering on view types. Set to true if the Arrow library in use supports it (e.g. Vortex).",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "arrow_large_buffer_size",
         "description": "Whether Arrow buffers for strings, blobs, uuids and bits should be exported using large buffers",
         "type": "BOOLEAN",
