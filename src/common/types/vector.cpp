@@ -730,6 +730,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	}
 	case LogicalTypeId::GEOMETRY: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
+		if (GeoType::HasCRS(type)) {
+			return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize(), GeoType::GetCRS(type));
+		}
 		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::AGGREGATE_STATE: {
@@ -800,6 +803,10 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			children.push_back(child_vec.GetValue(i));
 		}
 		return Value::ARRAY(ArrayType::GetChildType(type), std::move(children));
+	}
+	case LogicalTypeId::TYPE: {
+		auto blob = reinterpret_cast<string_t *>(data)[index];
+		return Value::TYPE(blob);
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");

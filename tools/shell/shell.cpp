@@ -410,7 +410,7 @@ ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
 	    "(e.g. duckdb -unsigned).");
 	nullValue = "NULL";
 	strcpy(continuePrompt, "  ");
-	strcpy(continuePromptSelected, "‣ ");
+	strcpy(continuePromptSelected, "  ");
 	strcpy(scrollUpPrompt, "⇡ ");
 	strcpy(scrollDownPrompt, "⇣ ");
 }
@@ -1180,6 +1180,7 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::ShellExtension>();
 		if (safe_mode) {
 			ExecuteQuery("SET enable_external_access=false");
+			ExecuteQuery("SET lock_configuration=true");
 		}
 		if (stdout_is_console) {
 			ExecuteQuery("PRAGMA enable_progress_bar");
@@ -1564,6 +1565,7 @@ MetadataResult ShellState::EnableSafeMode(ShellState &state, const vector<string
 	if (state.db) {
 		// db has been opened - disable external access
 		state.ExecuteQuery("SET enable_external_access=false");
+		state.ExecuteQuery("SET lock_configuration=true");
 	}
 	return MetadataResult::SUCCESS;
 }

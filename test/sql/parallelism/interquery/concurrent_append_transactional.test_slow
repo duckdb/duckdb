@@ -1,0 +1,50 @@
+# name: test/sql/parallelism/interquery/concurrent_append_transactional.test_slow
+# description: Test concurrent appends and transaction isolation
+# group: [interquery]
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+concurrentloop threadid 0 10
+
+# threads 0-1
+onlyif threadid>1
+statement ok
+SELECT sleep_ms((random() * 100)::BIGINT);
+
+onlyif threadid>1
+statement ok
+BEGIN TRANSACTION
+
+onlyif threadid>1
+statement ok
+SET VARIABLE initial_count=(SELECT COUNT(*) FROM strings);
+
+loop i 0 1000
+
+statement ok
+INSERT INTO strings VALUES ('my favorite string value')
+
+onlyif threadid>1
+query I
+SELECT CASE
+	WHEN COUNT(*)=(getvariable('initial_count') + ${i} + 1)
+	THEN NULL
+	ELSE {'count': COUNT(*), 'initial_count': getvariable('initial_count')}
+	END
+FROM strings
+----
+NULL
+
+endloop
+
+onlyif threadid>1
+statement ok
+COMMIT
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(strlen(s)) FROM strings
+----
+10000	240000

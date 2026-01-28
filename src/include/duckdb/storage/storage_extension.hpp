@@ -8,9 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/access_mode.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
@@ -47,10 +44,13 @@ public:
 
 	virtual void OnCheckpointEnd(AttachedDatabase &db, CheckpointOptions checkpoint_options) {
 	}
+
+	static optional_ptr<StorageExtension> Find(const DBConfig &config, const string &extension_name);
+	static void Register(DBConfig &config, const string &extension_name, shared_ptr<StorageExtension> extension);
 };
 
 struct OpenFileStorageExtension {
-	static unique_ptr<StorageExtension> Create();
+	static shared_ptr<StorageExtension> Create();
 };
 
 } // namespace duckdb

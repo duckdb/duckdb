@@ -50,6 +50,19 @@ index 8d40413..7c20e70 100644
  
  	bool IsSource() const override {
  		return true;
+diff --git a/src/sqlite_extension.cpp b/src/sqlite_extension.cpp
+index 5161298..0fac9c1 100644
+--- a/src/sqlite_extension.cpp
++++ b/src/sqlite_extension.cpp
+@@ -37,7 +37,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	config.AddExtensionOption("sqlite_debug_show_queries", "DEBUG SETTING: print all queries sent to SQLite to stdout",
+ 	                          LogicalType::BOOLEAN, Value::BOOLEAN(false), SetSqliteDebugQueryPrint);
+ 
+-	config.storage_extensions["sqlite_scanner"] = make_uniq<SQLiteStorageExtension>();
++	StorageExtension::Register(config, "sqlite_scanner", make_shared_ptr<SQLiteStorageExtension>());
+ }
+ 
+ void SqliteScannerExtension::Load(ExtensionLoader &loader) {
 diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
 index e8d55d1..8b28385 100644
 --- a/src/storage/sqlite_delete.cpp
@@ -89,6 +102,18 @@ index 926e037..95c4e39 100644
  	auto &insert_gstate = sink_state->Cast<SQLiteInsertGlobalState>();
  	chunk.SetCardinality(1);
  	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
+diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
+index 9657797..d0b7fa3 100644
+--- a/src/storage/sqlite_schema_entry.cpp
++++ b/src/storage/sqlite_schema_entry.cpp
+@@ -12,6 +12,7 @@
+ #include "duckdb/parser/parsed_data/alter_info.hpp"
+ #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+ #include "duckdb/parser/parsed_expression_iterator.hpp"
++#include "duckdb/parser/expression/columnref_expression.hpp"
+ 
+ namespace duckdb {
+ 
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
 index cfead5b..f49b4ea 100644
 --- a/src/storage/sqlite_update.cpp

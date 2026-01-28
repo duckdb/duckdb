@@ -136,12 +136,10 @@ public:
 	                                                  const string &table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
-	//! Execute a query with the given collection "attached" to the query using a CTE
-	DUCKDB_API void Append(ColumnDataCollection &collection, const string &query, const vector<string> &column_names,
-	                       const string &collection_name);
-	//! Appends a DataChunk and its default columns to the specified table.
-	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection,
-	                       optional_ptr<const vector<LogicalIndex>> column_ids = nullptr);
+	//! Executes a query with the given collection "attached" to the query using a CTE.
+	DUCKDB_API void Append(unique_ptr<SQLStatement> stmt);
+	//! Appends a ColumnDataCollection to the described table.
+	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
 
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
@@ -200,6 +198,8 @@ public:
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
+	//! Returns the value of the current setting set by the user - if the user has set it.
+	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -230,6 +230,8 @@ public:
 
 	//! Process an error for display to the user
 	DUCKDB_API void ProcessError(ErrorData &error, const string &query) const;
+
+	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
 	//! Parse statements and resolve pragmas from a query
@@ -308,8 +310,6 @@ private:
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
 	                                                                  unique_ptr<SQLStatement> statement,
 	                                                                  PendingQueryParameters parameters);
-
-	SettingLookupResult TryGetCurrentSettingInternal(const string &key, Value &result) const;
 
 private:
 	//! Lock on using the ClientContext in parallel

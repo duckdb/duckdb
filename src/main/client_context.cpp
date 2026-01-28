@@ -183,7 +183,7 @@ void ClientContext::Destroy() {
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	error.FinalizeError();
-	if (config.errors_as_json) {
+	if (Settings::Get<ErrorsAsJSONSetting>(*this)) {
 		error.ConvertErrorToJSON();
 	} else {
 		error.AddErrorLocation(query);
@@ -720,8 +720,10 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 
 unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> statement) {
 	auto lock = LockContext();
-	// prepare the query
+	// Store the query in case of an error.
 	auto query = statement->query;
+
+	// Try to prepare.
 	try {
 		InitialCleanup(*lock);
 		return PrepareInternal(*lock, std::move(statement));
@@ -942,9 +944,8 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
 		try {
 			string log_path(DUCKDB_FORCE_QUERY_LOG);
-			client_data->log_query_writer =
-			    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
-			                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data->file_opener.get());
+			client_data->log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
+			                                                              BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 		} catch (...) {
 			return;
 		}
@@ -1171,6 +1172,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	if (require_new_transaction) {
 		D_ASSERT(!active_query);
 		transaction.BeginTransaction();
+		interrupted = false;
 	}
 	try {
 		fun();
@@ -1226,86 +1228,20 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	return TableInfo(INVALID_CATALOG, schema_name, table_name);
 }
 
-CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
-	switch (statement.type) {
-	case StatementType::INSERT_STATEMENT:
-		return statement.Cast<InsertStatement>().cte_map;
-	case StatementType::DELETE_STATEMENT:
-		return statement.Cast<DeleteStatement>().cte_map;
-	case StatementType::UPDATE_STATEMENT:
-		return statement.Cast<UpdateStatement>().cte_map;
-	case StatementType::MERGE_INTO_STATEMENT:
-		return statement.Cast<MergeIntoStatement>().cte_map;
-	default:
-		throw InvalidInputException(
-		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
-	}
-}
-
-void ClientContext::Append(ColumnDataCollection &collection, const string &query, const vector<string> &column_names,
-                           const string &collection_name) {
-	// create the CTE for the appender
-	string alias = collection_name.empty() ? "appended_data" : collection_name;
-	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
-	column_data_ref->alias = alias;
-	column_data_ref->expected_names = column_names;
-	auto cte = make_uniq<SelectNode>();
-	cte->select_list.push_back(make_uniq<StarExpression>());
-	cte->from_table = std::move(column_data_ref);
-	auto cte_select = make_uniq<SelectStatement>();
-	cte_select->node = std::move(cte);
-
-	// parse the query
-	Parser parser;
-	parser.ParseQuery(query);
-
-	// must be a single statement with CTEs
-	if (parser.statements.size() != 1) {
-		throw InvalidInputException("Expected exactly 1 query for appending data");
-	}
-
-	// add the appender data as a CTE to the cte map
-	auto &cte_map = GetCTEMap(*parser.statements[0]);
-	auto cte_info = make_uniq<CommonTableExpressionInfo>();
-	cte_info->query = std::move(cte_select);
-	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
-
-	cte_map.map.insert(alias, std::move(cte_info));
-
-	// now we have the query - run it in a transaction
-	auto result = Query(std::move(parser.statements[0]), false);
+void ClientContext::Append(unique_ptr<SQLStatement> stmt) {
+	auto result = Query(std::move(stmt), false);
 	if (result->HasError()) {
 		result->GetErrorObject().Throw("Failed to append: ");
 	}
 }
 
-void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection,
-                           optional_ptr<const vector<LogicalIndex>> column_ids) {
+void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
 	string table_name = "__duckdb_internal_appended_data";
-	string query = "INSERT INTO ";
-	if (!description.database.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description.database));
-	}
-	if (!description.schema.empty()) {
-		query += StringUtil::Format("%s.", SQLIdentifier(description.schema));
-	}
-	query += StringUtil::Format("%s", SQLIdentifier(description.table));
-	if (column_ids && !column_ids->empty()) {
-		query += "(";
-		auto &ids = *column_ids;
-		for (idx_t i = 0; i < ids.size(); i++) {
-			if (i > 0) {
-				query += ", ";
-			}
-			auto &col_name = description.columns[ids[i].index].Name();
-			query += StringUtil::Format("%s", SQLIdentifier(col_name));
-		}
-		query += ")";
-	}
-	query += " FROM ";
-	query += table_name;
-	vector<string> column_names;
-	Append(collection, query, column_names, table_name);
+	vector<string> expected_names;
+	auto query = Appender::ConstructQuery(description, table_name, expected_names);
+	auto table_ref = BaseAppender::GetColumnDataTableRef(collection, table_name, expected_names);
+	auto stmt = BaseAppender::ParseStatement(std::move(table_ref), query, table_name);
+	Append(std::move(stmt));
 }
 
 void ClientContext::InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
@@ -1425,43 +1361,40 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return ErrorResult<MaterializedQueryResult>(ErrorData(err_str));
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSettingInternal(const string &key, Value &result) const {
-	// check the client session values
-	const auto &session_config_map = config.set_variables;
-
-	auto session_value = session_config_map.find(key);
-	bool found_session_value = session_value != session_config_map.end();
-	if (found_session_value) {
-		result = session_value->second;
+SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
+	optional_ptr<const ConfigurationOption> option;
+	// try to get the setting index
+	auto &db_config = DBConfig::GetConfig(*this);
+	auto setting_index = db_config.TryGetSettingIndex(key, option);
+	if (setting_index.IsValid()) {
+		// generic setting - try to fetch it
+		auto lookup_result =
+		    config.user_settings.TryGetSetting(db_config.user_settings, setting_index.GetIndex(), result);
+		if (lookup_result) {
+			return lookup_result;
+		}
+	}
+	if (option && option->get_setting) {
+		// legacy callback
+		result = option->get_setting(*this);
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
-	// finally check the global session values
-	return db->TryGetCurrentSetting(key, result);
+	// setting is not set - get the default value
+	return DBConfig::TryGetDefaultValue(option, result);
 }
 
-SettingLookupResult ClientContext::TryGetCurrentSetting(const string &key, Value &result) const {
-	// first check the built-in settings
+SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index, Value &result) const {
 	auto &db_config = DBConfig::GetConfig(*this);
-	auto option = db_config.GetOptionByName(key);
-	if (option) {
-		if (option->get_setting) {
-			result = option->get_setting(*this);
-			return SettingLookupResult(SettingScope::LOCAL);
-		}
-		// alias - search for the default key
-		return TryGetCurrentSettingInternal(option->name, result);
-	}
-	return TryGetCurrentSettingInternal(key, result);
+	return config.user_settings.TryGetSetting(db_config.user_settings, setting_index, result);
 }
 
 ParserOptions ClientContext::GetParserOptions() const {
-	auto &client_config = ClientConfig::GetConfig(*this);
 	ParserOptions options;
-	options.preserve_identifier_case = DBConfig::GetSetting<PreserveIdentifierCaseSetting>(*this);
-	options.integer_division = DBConfig::GetSetting<IntegerDivisionSetting>(*this);
-	options.max_expression_depth = client_config.max_expression_depth;
-	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
-	options.parser_override_setting = DBConfig::GetConfig(*this).options.allow_parser_override_extension;
+	options.preserve_identifier_case = Settings::Get<PreserveIdentifierCaseSetting>(*this);
+	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
+	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
+	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
+	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
 	return options;
 }
 
@@ -1473,13 +1406,13 @@ ClientProperties ClientContext::GetClientProperties() {
 		timezone = result.ToString();
 	}
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
-	if (DBConfig::GetSetting<ArrowLargeBufferSizeSetting>(*this)) {
+	if (Settings::Get<ArrowLargeBufferSizeSetting>(*this)) {
 		arrow_offset_size = ArrowOffsetSize::LARGE;
 	}
-	bool arrow_use_list_view = DBConfig::GetSetting<ArrowOutputListViewSetting>(*this);
-	bool arrow_lossless_conversion = DBConfig::GetSetting<ArrowLosslessConversionSetting>(*this);
-	bool arrow_use_string_view = DBConfig::GetSetting<ProduceArrowStringViewSetting>(*this);
-	auto arrow_format_version = DBConfig::GetSetting<ArrowOutputVersionSetting>(*this);
+	bool arrow_use_list_view = Settings::Get<ArrowOutputListViewSetting>(*this);
+	bool arrow_lossless_conversion = Settings::Get<ArrowLosslessConversionSetting>(*this);
+	bool arrow_use_string_view = Settings::Get<ProduceArrowStringViewSetting>(*this);
+	auto arrow_format_version = Settings::Get<ArrowOutputVersionSetting>(*this);
 	return {timezone,
 	        arrow_offset_size,
 	        arrow_use_list_view,
@@ -1494,6 +1427,14 @@ bool ClientContext::ExecutionIsFinished() {
 		return false;
 	}
 	return active_query->executor->ExecutionIsFinished();
+}
+
+LogicalType ClientContext::ParseLogicalType(const string &type) {
+	auto lock = LockContext();
+	LogicalType logical_type;
+	RunFunctionInTransactionInternal(*lock,
+	                                 [&]() { logical_type = TypeManager::Get(*db).ParseLogicalType(type, *this); });
+	return logical_type;
 }
 
 } // namespace duckdb

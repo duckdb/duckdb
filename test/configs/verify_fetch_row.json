@@ -18,7 +18,6 @@
         "test/sql/attach/attach_show_all_tables.test",
         "test/sql/attach/attach_issue7711.test",
         "test/sql/attach/attach_issue_7660.test",
-        "test/sql/attach/show_databases.test",
         "test/sql/attach/attach_views.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/pg_catalog/sqlalchemy.test",
@@ -40,6 +39,19 @@
         "test/sql/storage/compression/roaring/roaring_bool_fetch_row.test",
         "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test"
+      ]
+    },
+    {
+      "reason": "Geometry with CRS is not always string round-trippable",
+        "paths": [
+          "test/geoparquet/with_crs.test"
+        ]
+    },
+    {
+      "reason": "Expects db with name 'memory'",
+      "paths": [
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/show_schemas.test"
       ]
     }
   ]

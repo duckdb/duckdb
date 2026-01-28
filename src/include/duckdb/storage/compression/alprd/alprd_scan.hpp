@@ -11,16 +11,10 @@
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -149,7 +143,7 @@ public:
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < segment.GetBlockManager().GetBlockSize());
+		D_ASSERT(data_byte_offset < segment.GetBlockSize());
 
 		idx_t vector_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 

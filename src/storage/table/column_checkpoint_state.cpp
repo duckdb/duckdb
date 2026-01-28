@@ -5,8 +5,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
-#include "duckdb/main/config.hpp"
-
 namespace duckdb {
 
 ColumnCheckpointState::ColumnCheckpointState(const RowGroup &row_group, ColumnData &original_column,

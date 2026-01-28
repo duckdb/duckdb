@@ -105,7 +105,7 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	}
 }
 
-void StructColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t StructColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;
@@ -129,9 +129,11 @@ void StructColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &s
 	}
 	schemas.push_back(std::move(schema_element));
 
+	idx_t unique_columns = 0;
 	for (auto &child_writer : child_writers) {
-		child_writer->FinalizeSchema(schemas);
+		unique_columns += child_writer->FinalizeSchema(schemas);
 	}
+	return unique_columns;
 }
 
 } // namespace duckdb

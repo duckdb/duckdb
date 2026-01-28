@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "parquet_crypto.hpp"
+#include "parquet_decimal_utils.hpp"
 #include "parquet_shredding.hpp"
 #include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
@@ -20,6 +21,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 
 namespace duckdb {
 
@@ -264,8 +266,11 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		if (allow_geometry) { // Don't set this if we write GeoParquet V1
 			schema_ele.__isset.logicalType = true;
 			schema_ele.logicalType.__isset.GEOMETRY = true;
-			// TODO: Set CRS in the future
-			schema_ele.logicalType.GEOMETRY.__isset.crs = false;
+			if (GeoType::HasCRS(duckdb_type)) {
+				const auto &crs = GeoType::GetCRS(duckdb_type);
+				schema_ele.logicalType.GEOMETRY.__isset.crs = true;
+				schema_ele.logicalType.GEOMETRY.crs = crs.GetDefinition();
+			}
 		}
 	default:
 		break;
@@ -514,9 +519,15 @@ void ParquetWriter::InitializeSchemaElements() {
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
 
+	idx_t unique_columns = 0;
 	for (auto &column_writer : column_writers) {
-		column_writer->FinalizeSchema(file_meta_data.schema);
+		unique_columns += column_writer->FinalizeSchema(file_meta_data.schema);
 	}
+
+	duckdb_parquet::ColumnOrder column_order;
+	column_order.__set_TYPE_ORDER(duckdb_parquet::TypeDefinedOrder());
+	file_meta_data.column_orders.resize(unique_columns, column_order);
+	file_meta_data.__isset.column_orders = true;
 }
 
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRowGroup &result,
@@ -751,8 +762,17 @@ struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 		if (stats.empty()) {
 			return string();
 		}
-		auto numeric_val = Load<T>(const_data_ptr_cast(stats.data()));
-		return Value::DECIMAL(numeric_val, width, scale).ToString();
+
+		auto stats_data = const_data_ptr_cast(stats.data());
+
+		if (sizeof(T) == sizeof(hugeint_t)) {
+			auto _schema = ParquetColumnSchema();
+			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), _schema);
+			return Value::DECIMAL(numeric_val, width, scale).ToString();
+		} else {
+			auto numeric_val = Load<T>(stats_data);
+			return Value::DECIMAL(numeric_val, width, scale).ToString();
+		}
 	}
 };
 
@@ -874,7 +894,7 @@ struct NullStatsUnifier : public ColumnStatsUnifier {
 static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_uniq<NullStatsUnifier>();
+		return make_uniq<NumericStatsUnifier<int8_t>>();
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -919,6 +939,8 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 			return make_uniq<DecimalStatsUnifier<int32_t>>(width, scale);
 		case PhysicalType::INT64:
 			return make_uniq<DecimalStatsUnifier<int64_t>>(width, scale);
+		case PhysicalType::INT128:
+			return make_uniq<DecimalStatsUnifier<hugeint_t>>(width, scale);
 		default:
 			return make_uniq<NullStatsUnifier>();
 		}

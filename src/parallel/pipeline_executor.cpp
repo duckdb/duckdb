@@ -262,8 +262,8 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 
 		if (result == OperatorResultType::FINISHED) {
+			D_ASSERT(in_process_operators.empty());
 			exhausted_pipeline = true;
-			break;
 		}
 	} while (chunk_budget.Next());
 

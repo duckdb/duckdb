@@ -1,78 +1,46 @@
-diff --git a/src/include/storage/mysql_execute_query.hpp b/src/include/storage/mysql_execute_query.hpp
-index 412f813..a59b7b9 100644
---- a/src/include/storage/mysql_execute_query.hpp
-+++ b/src/include/storage/mysql_execute_query.hpp
-@@ -25,7 +25,7 @@ public:
+diff --git a/src/include/storage/mysql_optimizer.hpp b/src/include/storage/mysql_optimizer.hpp
+index 7a44c5b..2b27c72 100644
+--- a/src/include/storage/mysql_optimizer.hpp
++++ b/src/include/storage/mysql_optimizer.hpp
+@@ -9,6 +9,7 @@
+ #pragma once
+
+ #include "duckdb/main/config.hpp"
++#include "duckdb/optimizer/optimizer_extension.hpp"
+
+ namespace duckdb {
+ class MySQLOptimizer {
+diff --git a/src/mysql_extension.cpp b/src/mysql_extension.cpp
+index ec3c7e3..3e69d23 100644
+--- a/src/mysql_extension.cpp
++++ b/src/mysql_extension.cpp
+@@ -108,7 +108,7 @@ static void LoadInternal(ExtensionLoader &loader) {
+ 	auto &db = loader.GetDatabaseInstance();
  
- public:
- 	// Source interface
--	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 	auto &config = DBConfig::GetConfig(db);
+-	config.storage_extensions["mysql_scanner"] = make_uniq<MySQLStorageExtension>();
++	StorageExtension::Register(config, "mysql_scanner", make_shared_ptr<MySQLStorageExtension>());
  
- 	bool IsSource() const override {
- 		return true;
-diff --git a/src/include/storage/mysql_index.hpp b/src/include/storage/mysql_index.hpp
-index a674069..56ea40e 100644
---- a/src/include/storage/mysql_index.hpp
-+++ b/src/include/storage/mysql_index.hpp
-@@ -23,7 +23,7 @@ public:
+ 	config.AddExtensionOption("mysql_experimental_filter_pushdown",
+ 	                          "Whether or not to use filter pushdown (currently experimental)", LogicalType::BOOLEAN,
+@@ -129,7 +129,7 @@ static void LoadInternal(ExtensionLoader &loader) {
  
- public:
- 	// Source interface
--	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ 	OptimizerExtension mysql_optimizer;
+ 	mysql_optimizer.optimize_function = MySQLOptimizer::Optimize;
+-	config.optimizer_extensions.push_back(std::move(mysql_optimizer));
++	OptimizerExtension::Register(config, std::move(mysql_optimizer));
+ }
  
- 	bool IsSource() const override {
- 		return true;
-diff --git a/src/include/storage/mysql_insert.hpp b/src/include/storage/mysql_insert.hpp
-index 98ecde3..a0c9a56 100644
---- a/src/include/storage/mysql_insert.hpp
-+++ b/src/include/storage/mysql_insert.hpp
-@@ -33,7 +33,7 @@ public:
+ void MysqlScannerExtension::Load(ExtensionLoader &loader) {
+diff --git a/src/storage/mysql_schema_entry.cpp b/src/storage/mysql_schema_entry.cpp
+index 889ff75..d82c444 100644
+--- a/src/storage/mysql_schema_entry.cpp
++++ b/src/storage/mysql_schema_entry.cpp
+@@ -10,6 +10,7 @@
+ #include "duckdb/parser/parsed_data/alter_info.hpp"
+ #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+ #include "duckdb/parser/parsed_expression_iterator.hpp"
++#include "duckdb/parser/expression/columnref_expression.hpp"
  
- public:
- 	// Source interface
--	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-+	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+ namespace duckdb {
  
- 	bool IsSource() const override {
- 		return true;
-diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
-index 3bae886..2c89cb3 100644
---- a/src/storage/mysql_execute_query.cpp
-+++ b/src/storage/mysql_execute_query.cpp
-@@ -57,7 +57,7 @@ SinkFinalizeType MySQLExecuteQuery::Finalize(Pipeline &pipeline, Event &event, C
- //===--------------------------------------------------------------------===//
- // GetData
- //===--------------------------------------------------------------------===//
--SourceResultType MySQLExecuteQuery::GetData(ExecutionContext &context, DataChunk &chunk,
-+SourceResultType MySQLExecuteQuery::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
-                                             OperatorSourceInput &input) const {
- 	auto &insert_gstate = sink_state->Cast<MySQLExecuteQueryGlobalState>();
- 	chunk.SetCardinality(1);
-diff --git a/src/storage/mysql_index.cpp b/src/storage/mysql_index.cpp
-index 2a9be12..445c715 100644
---- a/src/storage/mysql_index.cpp
-+++ b/src/storage/mysql_index.cpp
-@@ -15,7 +15,7 @@ MySQLCreateIndex::MySQLCreateIndex(PhysicalPlan &physical_plan, unique_ptr<Creat
- //===--------------------------------------------------------------------===//
- // Source
- //===--------------------------------------------------------------------===//
--SourceResultType MySQLCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
-+SourceResultType MySQLCreateIndex::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
-                                            OperatorSourceInput &input) const {
- 	auto &catalog = table.catalog;
- 	if (info->catalog == INVALID_CATALOG && info->schema == catalog.GetName()) {
-diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
-index 9633e19..5356b69 100644
---- a/src/storage/mysql_insert.cpp
-+++ b/src/storage/mysql_insert.cpp
-@@ -246,7 +246,7 @@ SinkFinalizeType MySQLInsert::Finalize(Pipeline &pipeline, Event &event, ClientC
- //===--------------------------------------------------------------------===//
- // GetData
- //===--------------------------------------------------------------------===//
--SourceResultType MySQLInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-+SourceResultType MySQLInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
- 	auto &insert_gstate = sink_state->Cast<MySQLInsertGlobalState>();
- 	chunk.SetCardinality(1);
- 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));

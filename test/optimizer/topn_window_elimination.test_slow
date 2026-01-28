@@ -228,3 +228,93 @@ ORDER BY a.id, list_distance(a.vec, neighbor.vec);
 query IIII
 SELECT * FROM (FROM with_optimizer) EXCEPT (FROM without_optimizer);
 ---
+
+#
+# Test non strict less than conditions
+#
+statement ok
+set disabled_optimizers = ''
+
+statement ok
+SELECT SETSEED(0.8675309);
+
+statement ok
+CREATE TABLE ints AS 
+	SELECT CAST(FLOOR(RANDOM() * 100) AS INT) as rand 
+	FROM range(10_000_000);
+
+# = 1 conditions should be optimized
+query I
+SELECT rand
+FROM ints
+QUALIFY 1 = row_number() OVER(ORDER BY rand);
+----
+0
+
+query II
+EXPLAIN
+SELECT rand
+FROM ints
+QUALIFY 1 = row_number() OVER(ORDER BY rand);
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# Less than conditions should be optimized
+query I
+SELECT rand
+FROM ints
+QUALIFY 2 > row_number() OVER(ORDER BY rand);
+----
+0
+
+query II
+EXPLAIN
+SELECT rand
+FROM ints
+QUALIFY 2 > row_number() OVER(ORDER BY rand);
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# NOP comparisons should not be optimised
+query II
+EXPLAIN
+SELECT rand
+FROM ints
+QUALIFY 0 = row_number() OVER(ORDER BY rand);
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*
+
+query II
+EXPLAIN
+SELECT rand
+FROM ints
+QUALIFY 1 > row_number() OVER(ORDER BY rand);
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*
+
+# taken from slt_good_12.test (this was previously causing issues in NightlyTests CI)
+statement ok
+CREATE TABLE tab2(col0 INTEGER, col1 INTEGER, col2 INTEGER)
+
+statement ok
+SELECT ALL 37 + 24 * - 44 FROM tab2 GROUP BY col1, col0, col0 HAVING col1 * col1 + - COALESCE ( - 56, COUNT ( * ) * + col1 ) IN ( CAST ( NULL AS INTEGER ) + + 78 )
+
+# Test array function with multiple groups
+statement ok
+CREATE TABLE a (a_vec FLOAT[3], a_id INT)
+
+statement ok
+CREATE TABLE b (b_vec FLOAT[3], b_str VARCHAR)
+
+statement ok
+INSERT INTO a VALUES (ARRAY[1.0, 2.0, 3.0], 1), (ARRAY[4.0, 5.0, 6.0], 2)
+
+statement ok
+INSERT INTO b VALUES (ARRAY[4.0, 5.0, 6.0], 'b'), (ARRAY[1.0, 2.0, 3.0], 'a')
+
+query IIIII
+SELECT * FROM a, LATERAL (SELECT *, a_id AS id_dup FROM b ORDER BY array_distance(a.a_vec, b.b_vec) LIMIT 1) ORDER BY ALL
+----
+[1.0, 2.0, 3.0]	1	[1.0, 2.0, 3.0]	a	1
+[4.0, 5.0, 6.0]	2	[4.0, 5.0, 6.0]	b	2
+

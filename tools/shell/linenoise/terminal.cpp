@@ -1,7 +1,6 @@
 #include "terminal.hpp"
 #include "history.hpp"
 #include "linenoise.hpp"
-#include "duckdb/common/operator/numeric_cast.hpp"
 #if defined(_WIN32) || defined(WIN32)
 #include <io.h>
 #define STDIN_FILENO  0
@@ -240,7 +239,7 @@ int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
 	// no timeout: return immediately
 	struct timeval tv;
 	tv.tv_sec = 0;
-	tv.tv_usec = NumericCast<int>(timeout_micros);
+	tv.tv_usec = static_cast<int>(timeout_micros);
 	return select(1, &rfds, NULL, NULL, &tv);
 #endif
 }
@@ -428,6 +427,13 @@ void Terminal::BufferAvailableInput() {
 }
 
 bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
+#if defined(_WIN32) || defined(WIN32)
+	// FIXME: always emit black background on Windows
+	color.r = 0;
+	color.g = 0;
+	color.b = 0;
+	return true;
+#else
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;
 
@@ -442,8 +448,8 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 		idx_t i = 0;
 		while (i < sizeof(buf) - 1) {
 			// check if we have data to read
-			// wait up till 1ms
-			if (!HasMoreData(ifd, 10000)) {
+			// wait up till 1s
+			if (!HasMoreData(ifd, 1000000)) {
 				// no more data available - done
 				break;
 			}
@@ -465,6 +471,7 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	}
 	Terminal::DisableRawMode();
 	return success;
+#endif
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80

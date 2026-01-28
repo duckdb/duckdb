@@ -322,7 +322,7 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		if (has_json_stats) {
 			// Add the geospatial statistics to the extra GeoParquet metadata
 			writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
-			                                              *state.stats_state->GetGeoStats());
+			                                              *state.stats_state->GetGeoStats(), gpq_version);
 		}
 	}
 
@@ -431,7 +431,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }
 
-void PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;
@@ -458,6 +458,7 @@ void PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement>
 	schemas.push_back(std::move(schema_element));
 
 	D_ASSERT(child_writers.empty());
+	return 1;
 }
 
 } // namespace duckdb

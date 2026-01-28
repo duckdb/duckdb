@@ -12,7 +12,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 

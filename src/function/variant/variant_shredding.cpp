@@ -198,8 +198,9 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 		path_component.key = key;
 
 		ValidityMask lookup_validity(count);
+		ValidityMask all_valid_validity(count);
 		VariantUtils::FindChildValues(variant, path_component, sel, child_values_indexes, lookup_validity,
-		                              nested_data.get(), count);
+		                              nested_data.get(), all_valid_validity, count);
 
 		if (!lookup_validity.AllValid()) {
 			auto &child_variant_vectors = StructVector::GetEntries(child_vec);

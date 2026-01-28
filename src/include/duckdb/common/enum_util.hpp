@@ -50,6 +50,8 @@ enum class AggregateOrderDependent : uint8_t;
 
 enum class AggregateType : uint8_t;
 
+enum class AllowParserOverride : uint8_t;
+
 enum class AlterDatabaseType : uint8_t;
 
 enum class AlterForeignKeyType : uint8_t;
@@ -132,6 +134,8 @@ enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
+enum class CoordinateReferenceSystemType : uint8_t;
+
 enum class CopyFunctionReturnType : uint8_t;
 
 enum class CopyOverwriteMode : uint8_t;
@@ -187,6 +191,8 @@ enum class ExtensionLoadResult : uint8_t;
 enum class ExtensionUpdateResultTag : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
+
+enum class ExtraPersistentColumnDataType : uint8_t;
 
 enum class ExtraTypeInfoType : uint8_t;
 
@@ -290,6 +296,8 @@ enum class OnCreateConflict : uint8_t;
 
 enum class OnEntryNotFound : uint8_t;
 
+enum class OperatorCachingMode : uint8_t;
+
 enum class OperatorFinalResultType : uint8_t;
 
 enum class OperatorFinalizeResultType : uint8_t;
@@ -335,6 +343,8 @@ enum class PreserveOrderType : uint8_t;
 enum class ProfilerPrintFormat : uint8_t;
 
 enum class ProfilingCoverage : uint8_t;
+
+enum class ProfilingParameterNames : uint8_t;
 
 enum class PushdownExtractSupport : uint8_t;
 
@@ -426,8 +436,6 @@ enum class TablePartitionInfo : uint8_t;
 
 enum class TableReferenceType : uint8_t;
 
-enum class TableScanType : uint8_t;
-
 enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
@@ -511,6 +519,9 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 
 template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
+
+template<>
+const char* EnumUtil::ToChars<AllowParserOverride>(AllowParserOverride value);
 
 template<>
 const char* EnumUtil::ToChars<AlterDatabaseType>(AlterDatabaseType value);
@@ -636,6 +647,9 @@ template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
+const char* EnumUtil::ToChars<CoordinateReferenceSystemType>(CoordinateReferenceSystemType value);
+
+template<>
 const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value);
 
 template<>
@@ -718,6 +732,9 @@ const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ExtraPersistentColumnDataType>(ExtraPersistentColumnDataType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
@@ -873,6 +890,9 @@ template<>
 const char* EnumUtil::ToChars<OnEntryNotFound>(OnEntryNotFound value);
 
 template<>
+const char* EnumUtil::ToChars<OperatorCachingMode>(OperatorCachingMode value);
+
+template<>
 const char* EnumUtil::ToChars<OperatorFinalResultType>(OperatorFinalResultType value);
 
 template<>
@@ -940,6 +960,9 @@ const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilingCoverage>(ProfilingCoverage value);
+
+template<>
+const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value);
 
 template<>
 const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
@@ -1077,9 +1100,6 @@ template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value);
 
 template<>
-const char* EnumUtil::ToChars<TableScanType>(TableScanType value);
-
-template<>
 const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value);
 
 template<>
@@ -1190,6 +1210,9 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
+
+template<>
+AllowParserOverride EnumUtil::FromString<AllowParserOverride>(const char *value);
 
 template<>
 AlterDatabaseType EnumUtil::FromString<AlterDatabaseType>(const char *value);
@@ -1315,6 +1338,9 @@ template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
+CoordinateReferenceSystemType EnumUtil::FromString<CoordinateReferenceSystemType>(const char *value);
+
+template<>
 CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value);
 
 template<>
@@ -1397,6 +1423,9 @@ ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const ch
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
+
+template<>
+ExtraPersistentColumnDataType EnumUtil::FromString<ExtraPersistentColumnDataType>(const char *value);
 
 template<>
 ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
@@ -1552,6 +1581,9 @@ template<>
 OnEntryNotFound EnumUtil::FromString<OnEntryNotFound>(const char *value);
 
 template<>
+OperatorCachingMode EnumUtil::FromString<OperatorCachingMode>(const char *value);
+
+template<>
 OperatorFinalResultType EnumUtil::FromString<OperatorFinalResultType>(const char *value);
 
 template<>
@@ -1619,6 +1651,9 @@ ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value)
 
 template<>
 ProfilingCoverage EnumUtil::FromString<ProfilingCoverage>(const char *value);
+
+template<>
+ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value);
 
 template<>
 PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);
@@ -1754,9 +1789,6 @@ TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);
 
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value);
-
-template<>
-TableScanType EnumUtil::FromString<TableScanType>(const char *value);
 
 template<>
 TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);

@@ -9,11 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/map.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
-#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -131,6 +129,11 @@ struct ColumnScanState {
 	optional_ptr<TableScanOptions> scan_options;
 	//! (optionally) the expression state for any pushed down expression(s)
 	unique_ptr<PushedDownExpressionState> expression_state;
+	//! Whether or not updates should be allowed
+	UpdateScanType update_scan_type = UpdateScanType::STANDARD;
+
+public:
+	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);
 
 public:
 	void Initialize(const QueryContext &context_p, const LogicalType &type, const StorageIndex &column_id,
@@ -256,8 +259,7 @@ public:
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentLock &l, SegmentNode<RowGroup> &row_group) const;
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment() const;
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
-	bool ScanCommitted(DataChunk &result, TableScanType type);
-	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
+	bool Scan(DataChunk &result, TableScanType type, optional_ptr<SegmentLock> l = nullptr);
 
 private:
 	TableScanState &parent;
