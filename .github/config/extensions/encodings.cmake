@@ -5,5 +5,6 @@ duckdb_extension_load(encodings
         GIT_URL https://github.com/duckdb/duckdb-encodings
         GIT_TAG b5a547ec74fad87698ed3142033d7b9cf86e0b2f
         TEST_DIR test/sql
+        APPLY_PATCHES
 )
 endif()
