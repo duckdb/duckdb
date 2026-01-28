@@ -22,6 +22,7 @@ class OperatorExtension;
 class OptimizerExtension;
 class ParserExtension;
 class StorageExtension;
+class CoordinateReferenceSystemProvider;
 struct ExtensionCallbackRegistry;
 
 template <class T>
@@ -41,11 +42,14 @@ public:
 	void Register(shared_ptr<OperatorExtension> extension);
 	void Register(const string &name, shared_ptr<StorageExtension> extension);
 	void Register(shared_ptr<ExtensionCallback> extension);
+	void Register(shared_ptr<CoordinateReferenceSystemProvider> crs_provider);
 
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
+	ExtensionCallbackIteratorHelper<shared_ptr<CoordinateReferenceSystemProvider>>
+	CoordinateReferenceSystemProviders() const;
 	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
 	bool HasParserExtensions() const;
 

@@ -1,91 +1,23 @@
 #include "duckdb/common/types/geometry_crs.hpp"
-
 #include "duckdb/common/common.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/array.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include "yyjson.hpp"
 #include "fast_float/fast_float.h"
 
 #include <limits>
-#include <cmath>
-#include <sys/stat.h>
 
 namespace duckdb {
-
-void CoordinateReferenceSystem::Parse(const string &text, CoordinateReferenceSystem &result) {
-	if (text.empty()) {
-		result.type = CoordinateReferenceSystemType::INVALID;
-		return;
-	}
-
-	// Check if the text is all whitespace
-	auto all_space = true;
-	for (const auto c : text) {
-		if (!StringUtil::CharacterIsSpace(c)) {
-			all_space = false;
-			break;
-		}
-	}
-
-	if (all_space) {
-		result.type = CoordinateReferenceSystemType::INVALID;
-		return;
-	}
-
-	if (TryParsePROJJSON(text, result)) {
-		return;
-	}
-
-	if (TryParseAuthCode(text, result)) {
-		return;
-	}
-
-	// TODO: Also strip formatting
-	if (TryParseWKT2(text, result)) {
-		return;
-	}
-
-	// Otherwise, treat this as an opaque SRID identifier, and don't set an explicit name or id
-	result.type = CoordinateReferenceSystemType::SRID;
-	result.text = text;
-}
-
-bool CoordinateReferenceSystem::TryParse(const string &text, CoordinateReferenceSystem &result) {
-	try {
-		Parse(text, result);
-	} catch (const InvalidInputException &ex) {
-		return false;
-	}
-	return true;
-}
-
-CoordinateReferenceSystem::CoordinateReferenceSystem(const string &crs) {
-	Parse(crs, *this);
-}
-
-void CoordinateReferenceSystem::Serialize(Serializer &serializer) const {
-	// Only serialize the text definition
-	serializer.WritePropertyWithDefault<string>(100, "text", text);
-}
-
-CoordinateReferenceSystem CoordinateReferenceSystem::Deserialize(Deserializer &deserializer) {
-	string text;
-	deserializer.ReadPropertyWithDefault<string>(100, "text", text);
-	CoordinateReferenceSystem result;
-	// If this fails for whatever reason, just return an invalid CRS
-	if (!TryParse(text, result)) {
-		result.text = "";
-		result.type = CoordinateReferenceSystemType::INVALID;
-	}
-	return result;
-}
 
 //----------------------------------------------------------------------------------------------------------------------
 // WKT2:2019 Parsing
 //----------------------------------------------------------------------------------------------------------------------
-
+namespace {
 class WKTKeyword;
 class WKTNumber;
 class WKTString;
@@ -98,13 +30,13 @@ public:
 	template <class T>
 	T &As() {
 		D_ASSERT(T::TYPE == type);
-		return reinterpret_cast<T &>(*this);
+		return static_cast<T &>(*this);
 	}
 
 	template <class T>
-	T &As() const {
+	const T &As() const {
 		D_ASSERT(T::TYPE == type);
-		return reinterpret_cast<T &>(*this);
+		return static_cast<const T &>(*this);
 	}
 
 	bool IsKeyword() const {
@@ -182,25 +114,32 @@ public:
 	static unique_ptr<WKTValue> Parse(const string &wkt) {
 		WKTParser parser(wkt.c_str(), wkt.size());
 
-		// Skip leading whitespace
+		// Skip initial whitespace
 		parser.SkipWhitespace();
 
 		// Parse the root node
-		return parser.ParseNode();
+		auto node = parser.ParseNode();
+
+		// Ensure we reached the end of the input
+		if (parser.pos != parser.end) {
+			throw InvalidInputException("Unexpected input at position %zu", parser.pos - parser.beg);
+		}
+
+		return node;
 	}
 
 private:
 	const char *beg;
 	const char *end;
 	const char *pos;
+	uint32_t depth;
 
 private:
-	WKTParser(const char *text, size_t size) : beg(text), end(text + size), pos(text) {
-		SkipWhitespace();
+	WKTParser(const char *text, size_t size) : beg(text), end(text + size), pos(text), depth(0) {
 	}
 
 	bool TryMatch(char c) {
-		if (pos < end && tolower(*pos) == tolower(c)) {
+		if (pos < end && *pos == c) {
 			pos++;
 			SkipWhitespace(); // remove trailing whitespace
 			return true;
@@ -219,8 +158,13 @@ private:
 
 	bool TryMatchText(string &result) {
 		const auto start = pos;
-		while (pos < end && (isalpha(*pos) || *pos == '_')) {
+		// First character must be alphabetic or underscore
+		if (pos < end && (isalpha(*pos) || *pos == '_')) {
 			pos++;
+			// Subsequent characters can also include digits
+			while (pos < end && (isalnum(*pos) || *pos == '_')) {
+				pos++;
+			}
 		}
 		if (pos == start) {
 			// Didnt match any text
@@ -237,13 +181,28 @@ private:
 			return nullptr;
 		}
 		const char *start = pos;
-		while (pos < end && *pos != '"') {
-			pos++;
+		string result;
+		while (pos < end) {
+			if (*pos == '"') {
+				// Check for escaped quote (doubled quote)
+				if (pos + 1 < end && *(pos + 1) == '"') {
+					// Append everything up to and including one quote
+					result.append(start, UnsafeNumericCast<size_t>(pos - start + 1));
+					pos += 2; // Skip both quotes
+					start = pos;
+				} else {
+					// End of string
+					break;
+				}
+			} else {
+				pos++;
+			}
 		}
 		if (pos == end) {
 			throw InvalidInputException("Unterminated string starting at position %zu", start - beg);
 		}
-		auto result = string(start, UnsafeNumericCast<size_t>(pos - start));
+		// Append any remaining content before the closing quote
+		result.append(start, UnsafeNumericCast<size_t>(pos - start));
 
 		Match('"');
 		SkipWhitespace();
@@ -304,6 +263,11 @@ private:
 	}
 
 	unique_ptr<WKTValue> ParseNode() {
+		// Increment depth to avoid stack overflow on malicious input
+		if (depth++ > 1000) {
+			throw InvalidInputException("WKT input is too deeply nested to parse");
+		}
+
 		unique_ptr<WKTValue> node = nullptr;
 
 		node = ParseStringNode();
@@ -371,6 +335,9 @@ static string TryExtractIDFromWKTNode(const WKTKeyword &keyword) {
 
 	return string();
 }
+
+} // namespace
+
 bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateReferenceSystem &result) {
 	const auto node = WKTParser::Parse(text);
 
@@ -456,12 +423,12 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 		}
 
 		result.type = CoordinateReferenceSystemType::WKT2_2019;
-		result.name = name;
-		result.text = text;
+		result.identifier = name;
+		result.definition = text;
 
 		// Also trim text
 		// TODO: Normalize WKT Input
-		StringUtil::Trim(result.text);
+		StringUtil::Trim(result.definition);
 
 		return true;
 	}
@@ -478,13 +445,14 @@ bool CoordinateReferenceSystem::TryParseWKT2(const string &text, CoordinateRefer
 		// Pick name as fallback
 		name = first->As<WKTString>().GetValue();
 	}
-	result.name = name;
+
 	result.type = CoordinateReferenceSystemType::WKT2_2019;
-	result.text = text;
+	result.identifier = name;
+	result.definition = text;
 
 	// Also trim text
 	// TODO: Normalize WKT Input
-	StringUtil::Trim(result.text);
+	StringUtil::Trim(result.definition);
 
 	return true;
 }
@@ -552,7 +520,7 @@ bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateR
 	if (name_val && yyjson_is_str(name_val)) {
 		const char *name_str = yyjson_get_str(name_val);
 		if (name_str) {
-			result.name = string(name_str);
+			result.identifier = string(name_str);
 		}
 	}
 
@@ -564,17 +532,17 @@ bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateR
 			const auto auth_str = yyjson_get_str(auth_val);
 
 			if (auth_str) {
-				result.code = string(auth_str);
+				result.identifier = string(auth_str);
 
 				const auto code_val = yyjson_obj_get(id_val, "code");
 				if (code_val && yyjson_is_int(code_val)) {
 					const auto code_int = yyjson_get_int(code_val);
-					result.code += ":" + StringUtil::Format("%d", code_int);
+					result.identifier += ":" + StringUtil::Format("%d", code_int);
 				}
 				if (code_val && yyjson_is_str(code_val)) {
 					const auto code_str = yyjson_get_str(code_val);
 					if (code_str) {
-						result.code += ":" + string(code_str);
+						result.identifier += ":" + string(code_str);
 					}
 				}
 			}
@@ -591,7 +559,7 @@ bool CoordinateReferenceSystem::TryParsePROJJSON(const string &text, CoordinateR
 		return false;
 	}
 
-	result.text = string(json_text, json_size);
+	result.definition = string(json_text, json_size);
 	free(json_text);
 
 	return true;
@@ -639,15 +607,217 @@ bool CoordinateReferenceSystem::TryParseAuthCode(const string &text, CoordinateR
 			if (auth_valid && code_valid) {
 				// Valid AUTH:CODE
 				result.type = CoordinateReferenceSystemType::AUTH_CODE;
-				result.text = string(beg, UnsafeNumericCast<size_t>(end - beg));
-				result.code = result.text;
+				result.definition = string(beg, UnsafeNumericCast<size_t>(end - beg));
 				return true;
 			}
 			break;
 		}
 	}
-
 	return false;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Coordinate Reference System Parsing
+//----------------------------------------------------------------------------------------------------------------------
+void CoordinateReferenceSystem::ParseDefinition(const string &definition, CoordinateReferenceSystem &result) {
+	if (definition.empty()) {
+		result.type = CoordinateReferenceSystemType::INVALID;
+		return;
+	}
+
+	// Check if the text is all whitespace
+	auto all_space = true;
+	for (const auto c : definition) {
+		if (!StringUtil::CharacterIsSpace(c)) {
+			all_space = false;
+			break;
+		}
+	}
+
+	if (all_space) {
+		result.type = CoordinateReferenceSystemType::INVALID;
+		return;
+	}
+
+	if (TryParsePROJJSON(definition, result)) {
+		return;
+	}
+
+	if (TryParseAuthCode(definition, result)) {
+		return;
+	}
+
+	// TODO: Also strip formatting
+	if (TryParseWKT2(definition, result)) {
+		return;
+	}
+
+	// Otherwise, treat this as an opaque identifier, and don't set an explicit id
+	result.type = CoordinateReferenceSystemType::SRID;
+	result.definition = definition;
+}
+
+void CoordinateReferenceSystem::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "definition", definition, string());
+}
+
+CoordinateReferenceSystem CoordinateReferenceSystem::Deserialize(Deserializer &deserializer) {
+	string definition;
+	deserializer.ReadPropertyWithExplicitDefault<string>(100, "definition", definition, string());
+
+	// If this fails for whatever reason, just return an invalid CRS
+	CoordinateReferenceSystem result;
+	try {
+		ParseDefinition(definition, result);
+	} catch (...) {
+		result.definition = "";
+		result.type = CoordinateReferenceSystemType::INVALID;
+	}
+	return result;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Coordinate Reference System Manager
+//----------------------------------------------------------------------------------------------------------------------
+
+unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryConvert(ClientContext &context,
+                                                                            const CoordinateReferenceSystem &source_crs,
+                                                                            CoordinateReferenceSystemType target_type) {
+	if (source_crs.type == target_type) {
+		// No conversion needed
+		return make_uniq<CoordinateReferenceSystem>(source_crs);
+	}
+
+	// Ask each provider, front to back
+	auto providers = ExtensionCallbackManager::Get(context).CoordinateReferenceSystemProviders();
+	for (auto &provider : providers) {
+		auto result = provider->TryConvert(source_crs, target_type);
+		if (result) {
+			return result;
+		}
+	}
+
+	return nullptr;
+}
+
+unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryConvert(ClientContext &context,
+                                                                            const string &source_crs,
+                                                                            CoordinateReferenceSystemType target_type) {
+	const CoordinateReferenceSystem source(source_crs);
+	return TryConvert(context, source, target_type);
+}
+
+unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryIdentify(ClientContext &context,
+                                                                             const string &source_crs) {
+	CoordinateReferenceSystem source(source_crs);
+
+	// We always want to identify the CRS as short as possible, so first check for AUTH:CODE
+	auto auth_crs = TryConvert(context, source, CoordinateReferenceSystemType::AUTH_CODE);
+	if (auth_crs) {
+		return auth_crs;
+	}
+
+	// Next, check for SRID
+	auto srid_crs = TryConvert(context, source, CoordinateReferenceSystemType::SRID);
+	if (srid_crs) {
+		return srid_crs;
+	}
+
+	// Otherwise, PROJJSON
+	auto projjson_crs = TryConvert(context, source, CoordinateReferenceSystemType::PROJJSON);
+	if (projjson_crs) {
+		return projjson_crs;
+	}
+
+	// Finally, WKT2:2019
+	auto wkt2_crs = TryConvert(context, source, CoordinateReferenceSystemType::WKT2_2019);
+	if (wkt2_crs) {
+		return wkt2_crs;
+	}
+
+	if (!source.IsComplete()) {
+		return nullptr;
+	}
+
+	return make_uniq<CoordinateReferenceSystem>(std::move(source));
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Default Coordinate Systems
+//----------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+const auto OGC_CRS84_WKT2_2019 =
+    R"WKT_LITERAL(GEOGCRS["WGS 84 (CRS84)",ENSEMBLE["World Geodetic System 1984 ensemble",MEMBER["World Geodetic System 1984 (Transit)"],MEMBER["World Geodetic System 1984 (G730)"],MEMBER["World Geodetic System 1984 (G873)"],MEMBER["World Geodetic System 1984 (G1150)"],MEMBER["World Geodetic System 1984 (G1674)"],MEMBER["World Geodetic System 1984 (G1762)"],MEMBER["World Geodetic System 1984 (G2139)"],MEMBER["World Geodetic System 1984 (G2296)"],ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]],ENSEMBLEACCURACY[2.0]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic longitude (Lon)",east,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic latitude (Lat)",north,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],USAGE[SCOPE["Not known."],AREA["World."],BBOX[-90,-180,90,180]],ID["OGC","CRS84"]])WKT_LITERAL";
+const auto OGC_CRS84_PROJJSON =
+    R"JSON_LITERAL({"$schema":"https://proj.org/schemas/v0.7/projjson.schema.json","type":"GeographicCRS","name":"WGS 84 (CRS84)","datum_ensemble":{"name":"World Geodetic System 1984 ensemble","members":[{"name":"World Geodetic System 1984 (Transit)","id":{"authority":"EPSG","code":1166}},{"name":"World Geodetic System 1984 (G730)","id":{"authority":"EPSG","code":1152}},{"name":"World Geodetic System 1984 (G873)","id":{"authority":"EPSG","code":1153}},{"name":"World Geodetic System 1984 (G1150)","id":{"authority":"EPSG","code":1154}},{"name":"World Geodetic System 1984 (G1674)","id":{"authority":"EPSG","code":1155}},{"name":"World Geodetic System 1984 (G1762)","id":{"authority":"EPSG","code":1156}},{"name":"World Geodetic System 1984 (G2139)","id":{"authority":"EPSG","code":1309}},{"name":"World Geodetic System 1984 (G2296)","id":{"authority":"EPSG","code":1383}}],"ellipsoid":{"name":"WGS 84","semi_major_axis":6378137,"inverse_flattening":298.257223563},"accuracy":"2.0","id":{"authority":"EPSG","code":6326}},"coordinate_system":{"subtype":"ellipsoidal","axis":[{"name":"Geodetic longitude","abbreviation":"Lon","direction":"east","unit":"degree"},{"name":"Geodetic latitude","abbreviation":"Lat","direction":"north","unit":"degree"}]},"scope":"Not known.","area":"World.","bbox":{"south_latitude":-90,"west_longitude":-180,"north_latitude":90,"east_longitude":180},"id":{"authority":"OGC","code":"CRS84"}})JSON_LITERAL";
+
+const auto EPSG_4326_WKT2_2019 =
+    R"WKT_LITERAL(GEOGCRS["WGS 84",ENSEMBLE["World Geodetic System 1984 ensemble",MEMBER["World Geodetic System 1984 (Transit)"],MEMBER["World Geodetic System 1984 (G730)"],MEMBER["World Geodetic System 1984 (G873)"],MEMBER["World Geodetic System 1984 (G1150)"],MEMBER["World Geodetic System 1984 (G1674)"],MEMBER["World Geodetic System 1984 (G1762)"],MEMBER["World Geodetic System 1984 (G2139)"],MEMBER["World Geodetic System 1984 (G2296)"],ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]],ENSEMBLEACCURACY[2.0]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic longitude (Lon)",east,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],USAGE[SCOPE["Horizontal component of 3D system."],AREA["World."],BBOX[-90,-180,90,180]],ID["EPSG",4326]])WKT_LITERAL";
+const auto EPSG_4326_PROJJSON =
+    R"JSON_LITERAL({"$schema":"https://proj.org/schemas/v0.7/projjson.schema.json","type":"GeographicCRS","name":"WGS 84","datum_ensemble":{"name":"World Geodetic System 1984 ensemble","members":[{"name":"World Geodetic System 1984 (Transit)","id":{"authority":"EPSG","code":1166}},{"name":"World Geodetic System 1984 (G730)","id":{"authority":"EPSG","code":1152}},{"name":"World Geodetic System 1984 (G873)","id":{"authority":"EPSG","code":1153}},{"name":"World Geodetic System 1984 (G1150)","id":{"authority":"EPSG","code":1154}},{"name":"World Geodetic System 1984 (G1674)","id":{"authority":"EPSG","code":1155}},{"name":"World Geodetic System 1984 (G1762)","id":{"authority":"EPSG","code":1156}},{"name":"World Geodetic System 1984 (G2139)","id":{"authority":"EPSG","code":1309}},{"name":"World Geodetic System 1984 (G2296)","id":{"authority":"EPSG","code":1383}}],"ellipsoid":{"name":"WGS 84","semi_major_axis":6378137,"inverse_flattening":298.257223563},"accuracy":"2.0","id":{"authority":"EPSG","code":6326}},"coordinate_system":{"subtype":"ellipsoidal","axis":[{"name":"Geodetic latitude","abbreviation":"Lat","direction":"north","unit":"degree"},{"name":"Geodetic longitude","abbreviation":"Lon","direction":"east","unit":"degree"}]},"scope":"Horizontal component of 3D system.","area":"World.","bbox":{"south_latitude":-90,"west_longitude":-180,"north_latitude":90,"east_longitude":180},"id":{"authority":"EPSG","code":4326}})JSON_LITERAL";
+
+const auto EPSG_3857_WKT2_2019 =
+    R"WKT_LITERAL(PROJCRS["WGS 84 / Pseudo-Mercator",BASEGEOGCRS["WGS 84",ENSEMBLE["World Geodetic System 1984 ensemble",MEMBER["World Geodetic System 1984 (Transit)"],MEMBER["World Geodetic System 1984 (G730)"],MEMBER["World Geodetic System 1984 (G873)"],MEMBER["World Geodetic System 1984 (G1150)"],MEMBER["World Geodetic System 1984 (G1674)"],MEMBER["World Geodetic System 1984 (G1762)"],MEMBER["World Geodetic System 1984 (G2139)"],MEMBER["World Geodetic System 1984 (G2296)"],ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]],ENSEMBLEACCURACY[2.0]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4326]],CONVERSION["Popular Visualisation Pseudo-Mercator",METHOD["Popular Visualisation Pseudo Mercator",ID["EPSG",1024]],PARAMETER["Latitude of natural origin",0,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8801]],PARAMETER["Longitude of natural origin",0,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8802]],PARAMETER["False easting",0,LENGTHUNIT["metre",1],ID["EPSG",8806]],PARAMETER["False northing",0,LENGTHUNIT["metre",1],ID["EPSG",8807]]],CS[Cartesian,2],AXIS["easting (X)",east,ORDER[1],LENGTHUNIT["metre",1]],AXIS["northing (Y)",north,ORDER[2],LENGTHUNIT["metre",1]],USAGE[SCOPE["Web mapping and visualisation."],AREA["World between 85.06°S and 85.06°N."],BBOX[-85.06,-180,85.06,180]],ID["EPSG",3857]])WKT_LITERAL";
+const auto EPSG_3857_PROJJSON =
+    R"WKT_LITERAL({"$schema":"https://proj.org/schemas/v0.7/projjson.schema.json","type":"ProjectedCRS","name":"WGS 84 / Pseudo-Mercator","base_crs":{"type":"GeographicCRS","name":"WGS 84","datum_ensemble":{"name":"World Geodetic System 1984 ensemble","members":[{"name":"World Geodetic System 1984 (Transit)","id":{"authority":"EPSG","code":1166}},{"name":"World Geodetic System 1984 (G730)","id":{"authority":"EPSG","code":1152}},{"name":"World Geodetic System 1984 (G873)","id":{"authority":"EPSG","code":1153}},{"name":"World Geodetic System 1984 (G1150)","id":{"authority":"EPSG","code":1154}},{"name":"World Geodetic System 1984 (G1674)","id":{"authority":"EPSG","code":1155}},{"name":"World Geodetic System 1984 (G1762)","id":{"authority":"EPSG","code":1156}},{"name":"World Geodetic System 1984 (G2139)","id":{"authority":"EPSG","code":1309}},{"name":"World Geodetic System 1984 (G2296)","id":{"authority":"EPSG","code":1383}}],"ellipsoid":{"name":"WGS 84","semi_major_axis":6378137,"inverse_flattening":298.257223563},"accuracy":"2.0","id":{"authority":"EPSG","code":6326}},"coordinate_system":{"subtype":"ellipsoidal","axis":[{"name":"Geodetic latitude","abbreviation":"Lat","direction":"north","unit":"degree"},{"name":"Geodetic longitude","abbreviation":"Lon","direction":"east","unit":"degree"}]},"id":{"authority":"EPSG","code":4326}},"conversion":{"name":"Popular Visualisation Pseudo-Mercator","method":{"name":"Popular Visualisation Pseudo Mercator","id":{"authority":"EPSG","code":1024}},"parameters":[{"name":"Latitude of natural origin","value":0,"unit":"degree","id":{"authority":"EPSG","code":8801}},{"name":"Longitude of natural origin","value":0,"unit":"degree","id":{"authority":"EPSG","code":8802}},{"name":"False easting","value":0,"unit":"metre","id":{"authority":"EPSG","code":8806}},{"name":"False northing","value":0,"unit":"metre","id":{"authority":"EPSG","code":8807}}]},"coordinate_system":{"subtype":"Cartesian","axis":[{"name":"Easting","abbreviation":"X","direction":"east","unit":"metre"},{"name":"Northing","abbreviation":"Y","direction":"north","unit":"metre"}]},"scope":"Web mapping and visualisation.","area":"World between 85.06°S and 85.06°N.","bbox":{"south_latitude":-85.06,"west_longitude":-180,"north_latitude":85.06,"east_longitude":180},"id":{"authority":"EPSG","code":3857}})WKT_LITERAL";
+
+struct DefaultCoordinateReferenceSystem {
+	const char *key;
+
+	const char *auth_code;
+	const char *srid;
+	const char *wkt2_2019;
+	const char *projjson;
+};
+
+using builtin_crs_array = std::array<DefaultCoordinateReferenceSystem, 3>;
+
+const builtin_crs_array DEFAULT_CRS_DEFINITIONS = {
+    {DefaultCoordinateReferenceSystem {"OGC:CRS84", "OGC:CRS84", "CRS84", OGC_CRS84_WKT2_2019, OGC_CRS84_PROJJSON},
+     DefaultCoordinateReferenceSystem {"EPSG:4326", "EPSG:4326", "4326", EPSG_4326_WKT2_2019, EPSG_4326_PROJJSON},
+     DefaultCoordinateReferenceSystem {"EPSG:3857", "EPSG:3857", "3857", EPSG_3857_WKT2_2019, EPSG_3857_PROJJSON}}};
+
+class DefaultCoordinateReferenceSystemProvider final : public CoordinateReferenceSystemProvider {
+public:
+	unique_ptr<CoordinateReferenceSystem> TryConvert(const CoordinateReferenceSystem &source_crs,
+	                                                 CoordinateReferenceSystemType target_type) override;
+	string GetName() const override {
+		return "default";
+	}
+};
+
+unique_ptr<CoordinateReferenceSystem>
+DefaultCoordinateReferenceSystemProvider::TryConvert(const CoordinateReferenceSystem &source_crs,
+                                                     CoordinateReferenceSystemType target_type) {
+	const auto &key = source_crs.GetIdentifier();
+
+	for (const auto &def : DEFAULT_CRS_DEFINITIONS) {
+		if (StringUtil::CIEquals(key, def.key)) {
+			switch (target_type) {
+			case CoordinateReferenceSystemType::AUTH_CODE:
+				return make_uniq<CoordinateReferenceSystem>(def.auth_code);
+			case CoordinateReferenceSystemType::PROJJSON:
+				return make_uniq<CoordinateReferenceSystem>(def.projjson);
+			case CoordinateReferenceSystemType::WKT2_2019:
+				return make_uniq<CoordinateReferenceSystem>(def.wkt2_2019);
+			case CoordinateReferenceSystemType::SRID:
+				return make_uniq<CoordinateReferenceSystem>(def.srid);
+			case CoordinateReferenceSystemType::INVALID:
+				return nullptr;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+} // namespace
+
+shared_ptr<CoordinateReferenceSystemProvider> CoordinateReferenceSystemProvider::CreateDefault() {
+	auto result = make_shared_ptr<DefaultCoordinateReferenceSystemProvider>();
+	return std::move(result);
 }
 
 } // namespace duckdb

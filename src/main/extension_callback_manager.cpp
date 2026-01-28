@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/planner/extension_callback.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,8 @@ struct ExtensionCallbackRegistry {
 	case_insensitive_map_t<shared_ptr<StorageExtension>> storage_extensions;
 	//! Set of callbacks that can be installed by extensions
 	vector<shared_ptr<ExtensionCallback>> extension_callbacks;
+	//! Coordinate System Handler
+	vector<shared_ptr<CoordinateReferenceSystemProvider>> crs_providers;
 };
 
 ExtensionCallbackManager &ExtensionCallbackManager::Get(ClientContext &context) {
@@ -72,6 +75,13 @@ void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension)
 	callback_registry.atomic_store(new_registry);
 }
 
+void ExtensionCallbackManager::Register(shared_ptr<CoordinateReferenceSystemProvider> crs_provider) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->crs_providers.push_back(std::move(crs_provider));
+	callback_registry.atomic_store(new_registry);
+}
+
 template <class T>
 ExtensionCallbackIteratorHelper<T>::ExtensionCallbackIteratorHelper(
     const vector<T> &vec, shared_ptr<ExtensionCallbackRegistry> callback_registry)
@@ -104,6 +114,14 @@ ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallback
 	auto registry = callback_registry.atomic_load();
 	auto &extension_callbacks = registry->extension_callbacks;
 	return ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>(extension_callbacks, std::move(registry));
+}
+
+ExtensionCallbackIteratorHelper<shared_ptr<CoordinateReferenceSystemProvider>>
+ExtensionCallbackManager::CoordinateReferenceSystemProviders() const {
+	auto registry = callback_registry.atomic_load();
+	auto &crs_providers = registry->crs_providers;
+	return ExtensionCallbackIteratorHelper<shared_ptr<CoordinateReferenceSystemProvider>>(crs_providers,
+	                                                                                      std::move(registry));
 }
 
 optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {
@@ -149,5 +167,6 @@ template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
 template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
 template class ExtensionCallbackIteratorHelper<ParserExtension>;
+template class ExtensionCallbackIteratorHelper<shared_ptr<CoordinateReferenceSystemProvider>>;
 
 } // namespace duckdb
