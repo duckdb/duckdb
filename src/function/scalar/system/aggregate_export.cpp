@@ -38,7 +38,7 @@ struct ExportAggregateBindData : public FunctionData {
 };
 
 template <class OP, class... ARGS>
-static void TemplateDispatch(PhysicalType type, ARGS &&...args) {
+static void TemplateDispatch(PhysicalType type, ARGS &&... args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
