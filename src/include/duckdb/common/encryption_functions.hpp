@@ -26,11 +26,21 @@ private:
 	unique_ptr<data_t[]> tag;
 };
 
+struct EncryptionCanary {
+	EncryptionCanary();
+	data_ptr_t data();
+	idx_t size() const;
+
+private:
+	unique_ptr<data_t[]> canary;
+};
+
 struct EncryptionNonce {
 	EncryptionNonce(EncryptionTypes::CipherType cipher = EncryptionTypes::GCM,
 	                EncryptionTypes::EncryptionVersion version = EncryptionTypes::EncryptionVersion::V0_1);
 	data_ptr_t data();
 	idx_t size() const;
+	idx_t total_size() const;
 	idx_t size_deprecated() const;
 
 	void SetSize(idx_t length);

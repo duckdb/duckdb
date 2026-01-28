@@ -127,7 +127,7 @@ public:
 			auto offset = stream.CurrentOffset();
 			auto file_size = stream.FileSize();
 
-			EncryptionNonce nonce(state_p.db.GetStorageManager().GetEncryptionVersion());
+			EncryptionNonce nonce(state_p.db.GetStorageManager().GetCipher(), state_p.db.GetStorageManager().GetEncryptionVersion());
 			EncryptionTag tag;
 
 			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
@@ -148,7 +148,7 @@ public:
 			//! initialize the decryption
 			auto encryption_state =
 			    database.GetEncryptionUtil(state_p.db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
-			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key);
+			encryption_state->InitializeDecryption(std::move(nonce), derived_key);
 
 			//! Allocate a decryption buffer
 			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);

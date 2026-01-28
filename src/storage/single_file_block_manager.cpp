@@ -100,28 +100,30 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
+
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
+	EncryptionCanary encryption_canary;
+
+	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, encryption_state->metadata->GetVersion());
+	memset(nonce.data(), 0, nonce.size());
 
 	switch (encryption_state->metadata->GetVersion()) {
 	case EncryptionTypes::V0_0:
-		// generate a new, larger IV
-		uint8_t iv_old[MainHeader::MainHeader::AES_NONCE_LEN_DEPRECATED];
-		memset(iv_old, 0, MainHeader::AES_NONCE_LEN_DEPRECATED);
-		encryption_state->InitializeEncryption(iv_old, MainHeader::AES_NONCE_LEN_DEPRECATED, derived_key);
+		D_ASSERT(nonce.size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
+		encryption_state->InitializeEncryption(std::move(nonce), derived_key);
 		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
 		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
 		break;
 	case EncryptionTypes::V0_1:
-		uint8_t iv[MainHeader::AES_NONCE_LEN];
-		uint8_t tag[MainHeader::AES_TAG_LEN];
-		encryption_state->GenerateRandomData(iv, MainHeader::AES_NONCE_LEN);
-		main_header.SetCanaryIV(iv);
-		encryption_state->InitializeEncryption(iv, MainHeader::AES_NONCE_LEN, derived_key);
+		EncryptionTag tag;
+		encryption_state->GenerateRandomData(nonce.data(), nonce.size());
+		main_header.SetCanaryIV(nonce.data());
+		encryption_state->InitializeEncryption(std::move(nonce), derived_key);
 		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
 		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
-		encryption_state->Finalize(canary_buffer, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
-		main_header.SetCanaryTag(tag);
+		encryption_state->Finalize(canary_buffer, MainHeader::CANARY_BYTE_SIZE, tag.data(), MainHeader::AES_TAG_LEN);
+		main_header.SetCanaryTag(tag.data());
 		break;
 	default:
 		throw InvalidInputException("No valid encryption version found!");

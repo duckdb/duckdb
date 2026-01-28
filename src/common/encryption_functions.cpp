@@ -13,7 +13,7 @@ namespace duckdb {
 using CipherType = EncryptionTypes::CipherType;
 using Version = EncryptionTypes::EncryptionVersion;
 
-EncryptionTag::EncryptionTag() : tag(new data_t[MainHeader::AES_TAG_LEN]) {
+EncryptionTag::EncryptionTag() : tag(new data_t[MainHeader::AES_TAG_LEN]()) {
 }
 
 data_ptr_t EncryptionTag::data() {
@@ -22,6 +22,17 @@ data_ptr_t EncryptionTag::data() {
 
 idx_t EncryptionTag::size() const {
 	return MainHeader::AES_TAG_LEN;
+}
+
+EncryptionCanary::EncryptionCanary() : canary(new data_t[MainHeader::CANARY_BYTE_SIZE]()) {
+}
+
+data_ptr_t EncryptionCanary::data() {
+	return canary.get();
+}
+
+idx_t EncryptionCanary::size() const {
+	return MainHeader::CANARY_BYTE_SIZE;
 }
 
 EncryptionNonce::EncryptionNonce(CipherType cipher, Version version) {
@@ -48,6 +59,9 @@ EncryptionNonce::EncryptionNonce(CipherType cipher, Version version) {
 	default:
 		throw InvalidConfigurationException("Encryption version not recognized!");
 	}
+
+	// Check if the nonce is zero-initialized
+	D_ASSERT(tag != nullptr);
 }
 
 data_ptr_t EncryptionNonce::data() {
@@ -55,8 +69,14 @@ data_ptr_t EncryptionNonce::data() {
 }
 
 idx_t EncryptionNonce::size() const {
+	// always return 12 bytes
+	return MainHeader::AES_NONCE_LEN;
+}
+
+idx_t EncryptionNonce::total_size() const {
 	return nonce_len;
 }
+
 
 idx_t EncryptionNonce::size_deprecated() const {
 	return MainHeader::AES_NONCE_LEN_DEPRECATED;
