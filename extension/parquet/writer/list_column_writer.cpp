@@ -146,6 +146,11 @@ ColumnWriter &ListColumnWriter::GetChildWriter() {
 	return *child_writers[0];
 }
 
+const ColumnWriter &ListColumnWriter::GetChildWriter() const {
+	D_ASSERT(child_writers.size() == 1);
+	return *child_writers[0];
+}
+
 idx_t ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 

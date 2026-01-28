@@ -122,7 +122,7 @@ public:
 		}
 		return false;
 	}
-	virtual LogicalType TransformedType() {
+	virtual LogicalType TransformedType() const {
 		throw NotImplementedException("Writer does not have a transformed type");
 	}
 	virtual unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) {
@@ -179,6 +179,18 @@ public:
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;
 	virtual void FinalizeWrite(ColumnWriterState &state) = 0;
 
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;
@@ -189,6 +201,8 @@ protected:
 
 public:
 	ParquetWriter &writer;
+	//! The parent writer (if this is a nested field)
+	optional_ptr<ColumnWriter> parent;
 	ParquetColumnSchema column_schema;
 	vector<string> schema_path;
 	bool can_have_nulls;

@@ -150,7 +150,10 @@ bool VariantShreddedStats::IsFullyShredded(const BaseStatistics &stats) {
 	}
 	if (!untyped_value_index_stats.CanHaveNoNull()) {
 		//! In the event that this field is entirely missing from the parent OBJECT, both are NULL
-		return false;
+		//! But that doesn't mean we can't do pushdown into this field, so it is shredded (only when the extract path
+		//! ends at the parent we can't do pushdown)
+		D_ASSERT(untyped_value_index_stats.CanHaveNull());
+		return true;
 	}
 	if (!NumericStats::HasMin(untyped_value_index_stats) || !NumericStats::HasMax(untyped_value_index_stats)) {
 		//! Has no min/max values, essentially double-checking the CanHaveNoNull from above
@@ -176,7 +179,17 @@ LogicalType ToStructuredType(const LogicalType &shredding) {
 	if (typed_value.id() == LogicalTypeId::STRUCT) {
 		auto &struct_children = StructType::GetChildTypes(typed_value);
 		child_list_t<LogicalType> structured_children;
-		for (auto &child : struct_children) {
+		vector<idx_t> indices(struct_children.size());
+		for (idx_t i = 0; i < indices.size(); i++) {
+			indices[i] = i;
+		}
+		std::sort(indices.begin(), indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
+			auto &a = struct_children[lhs].first;
+			auto &b = struct_children[rhs].first;
+			return a < b;
+		});
+		for (auto &index : indices) {
+			auto &child = struct_children[index];
 			structured_children.emplace_back(child.first, ToStructuredType(child.second));
 		}
 		return LogicalType::STRUCT(structured_children);
@@ -307,12 +320,22 @@ static string ToStringInternal(const BaseStatistics &stats) {
 	} else if (type_id == LogicalTypeId::STRUCT) {
 		result += ", children: {";
 		auto &fields = StructType::GetChildTypes(typed_value.GetType());
-		for (idx_t i = 0; i < fields.size(); i++) {
+		vector<idx_t> indices(fields.size());
+		for (idx_t i = 0; i < indices.size(); i++) {
+			indices[i] = i;
+		}
+		std::sort(indices.begin(), indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
+			auto &a = fields[lhs].first;
+			auto &b = fields[rhs].first;
+			return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+		});
+		for (idx_t i = 0; i < indices.size(); i++) {
 			if (i) {
 				result += ", ";
 			}
-			auto &child_stats = StructStats::GetChildStats(typed_value, i);
-			result += StringUtil::Format("%s: %s", fields[i].first, ToStringInternal(child_stats));
+			auto &child_stats = StructStats::GetChildStats(typed_value, indices[i]);
+			auto &field = fields[indices[i]];
+			result += StringUtil::Format("%s: %s", field.first, ToStringInternal(child_stats));
 		}
 		result += "}";
 	}

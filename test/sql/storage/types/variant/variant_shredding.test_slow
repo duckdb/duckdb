@@ -132,8 +132,26 @@ insert into partially_shredded_object select {
 statement ok
 checkpoint
 
-# The added difference is that 'untyped_value_index' is now: "Has Null: false"
-# Because we have an OBJECT(d 42) in the 'unshredded' column for every row now
+restart
+
+# This makes the 'a' field "missing" for the newly added row, which doesn't affect shredding ('a' is still fully shredded)
+query I
+select stats(col) from partially_shredded_object limit 1;
+----
+<REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: true, children: {a: fully_shredded: true, b: fully_shredded: true}}.*
+
+statement ok
+insert into partially_shredded_object select {
+	'a': 'not a shredded value',
+	'b': true
+} from range(1) t(i)
+
+statement ok
+checkpoint
+
+restart
+
+# 'a' is not fully shredded anymore, because we've added a value of type VARCHAR, instead of INTEGER
 query I
 select stats(col) from partially_shredded_object limit 1;
 ----
