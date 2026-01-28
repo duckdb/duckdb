@@ -6,6 +6,7 @@
 namespace duckdb {
 
 class ClientContext;
+class DatabaseInstance;
 class CastFunctionSet;
 struct DBConfig;
 
@@ -21,7 +22,8 @@ public:
 	//! Try to parse and bind a logical type from a string. Throws an exception if the type could not be parsed.
 	LogicalType ParseLogicalType(const string &type_str, ClientContext &context) const;
 
-	//! Get the TypeManager from the ClientContext
+	//! Get the TypeManager from the DatabaseInstance
+	static TypeManager &Get(DatabaseInstance &db);
 	static TypeManager &Get(ClientContext &context);
 
 private:
