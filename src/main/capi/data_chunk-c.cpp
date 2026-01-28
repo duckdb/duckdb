@@ -138,6 +138,9 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 }
 
 void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
+	if (!vector) {
+		return;
+	}
 	auto str_len = strlen(str);
 	auto error = duckdb_valid_utf8_check(str, str_len);
 	if (error != nullptr) {
