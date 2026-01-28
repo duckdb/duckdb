@@ -354,6 +354,26 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 	}
 }
 
+int64_t ImplicitCastToUnionMember(const LogicalType &from, const LogicalType &to) {
+	// check that the union type is fully resolved.
+	if (to.AuxInfo() == nullptr) {
+		return -1;
+	}
+	// check if the union contains something castable from the source type
+	// in which case the least expensive (most specific) cast should be used
+	bool found = false;
+	auto cost = NumericLimits<int64_t>::Maximum();
+	for (idx_t i = 0; i < UnionType::GetMemberCount(to); i++) {
+		auto target_member = UnionType::GetMemberType(to, i);
+		auto target_cost = CastRules::ImplicitCast(from, target_member);
+		if (target_cost != -1) {
+			found = true;
+			cost = MinValue(cost, target_cost);
+		}
+	}
+	return found ? cost : -1;
+}
+
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
 	if (from.id() == LogicalTypeId::SQLNULL && to.id() == LogicalTypeId::TEMPLATE) {
 		// Prefer the TEMPLATE type for NULL casts, as it is the most generic
@@ -400,8 +420,15 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// in any other case we use the casting rules of the preferred type of the literal
 		return CastRules::ImplicitCast(IntegerLiteral::GetType(from), to);
 	}
+
 	if (from.GetAlias() != to.GetAlias()) {
 		// if aliases are different, an implicit cast is not possible
+
+		// Special case: Anything can be cast to a union if the source type is a member of the union
+		if (to.id() == LogicalTypeId::UNION) {
+			return ImplicitCastToUnionMember(from, to);
+		}
+
 		return -1;
 	}
 	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
@@ -476,7 +503,10 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 				return -1;
 			}
 		}
-		return cost;
+		// If not found, try casting source to member of target (below)
+		if (cost != -1) {
+			return cost;
+		}
 	}
 	if (from.id() == LogicalTypeId::STRUCT && to.id() == LogicalTypeId::STRUCT) {
 		if (to.AuxInfo() == nullptr) {
@@ -543,26 +573,9 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// arguments match: do nothing
 		return 0;
 	}
-
 	// Special case: Anything can be cast to a union if the source type is a member of the union
 	if (to.id() == LogicalTypeId::UNION) {
-		// check that the union type is fully resolved.
-		if (to.AuxInfo() == nullptr) {
-			return -1;
-		}
-		// check if the union contains something castable from the source type
-		// in which case the least expensive (most specific) cast should be used
-		bool found = false;
-		auto cost = NumericLimits<int64_t>::Maximum();
-		for (idx_t i = 0; i < UnionType::GetMemberCount(to); i++) {
-			auto target_member = UnionType::GetMemberType(to, i);
-			auto target_cost = ImplicitCast(from, target_member);
-			if (target_cost != -1) {
-				found = true;
-				cost = MinValue(cost, target_cost);
-			}
-		}
-		return found ? cost : -1;
+		return ImplicitCastToUnionMember(from, to);
 	}
 
 	switch (from.id()) {

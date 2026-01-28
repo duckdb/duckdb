@@ -193,3 +193,10 @@ query I
 SELECT parameter_types from duckdb_functions() where function_name = 'bounded_add';
 ----
 [BOUNDED, BOUNDED]
+
+query I
+SELECT can_cast_implicitly(i, i::UNION(a BOUNDED(200))) FROM t1;
+----
+true
+true
+true
