@@ -27,7 +27,6 @@ shared_ptr<BlockHandle> UncompressedStringSegmentState::GetHandle(BlockManager &
 }
 
 void UncompressedStringSegmentState::RegisterBlock(BlockManager &manager_p, block_id_t block_id) {
-	printf("RegisterBlock %lld\n", block_id);
 	lock_guard<mutex> lock(block_lock);
 	auto entry = handles.find(block_id);
 	if (entry != handles.end()) {

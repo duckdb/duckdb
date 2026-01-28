@@ -269,6 +269,12 @@ public:
 
 		optional_ptr<BufferHandle> to_use;
 
+		if (block_manager.InMemory() && next_page_buffer.IsValid()) {
+			D_ASSERT(to_use.get() != &next_page_buffer);
+			*to_use = std::move(next_page_buffer);
+			return *to_use;
+		}
+
 		if (in_vector) {
 			// Currently in a Vector, we have to be mindful of the buffer that the string_lengths lives on
 			// as that will have to stay writable until the Vector is finished
@@ -454,18 +460,10 @@ public:
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		block_id_t new_id;
 		if (block_manager.InMemory()) {
-			/*TODO: ✅ Register block, then use AllocateData to get a BufferHandle which contains a BlockHandle which
-			 *		contains a block_id. That way ill have my block_id here without having to manage it
-			 *		ERRATA: Actually I believe its not AllocateData but StandardBufferManager::Allocate
-			 */
-
-			// auto &buffer_allocator = BufferAllocator::Get(block_manager.buffer_manager.GetDatabase());
 			auto &buffer_manager = block_manager.buffer_manager;
-			auto buffer_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, info.GetBlockSize(), false);
-			auto block_handle = buffer_handle.GetBlockHandle();
-			new_id = block_handle.get()->BlockId();
+			next_page_buffer = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, info.GetBlockSize(), false);
+			new_id = next_page_buffer.GetBlockHandle()->BlockId();
 		} else {
-			// TODO: ✅ This was the first failure point Cannot perform IO in in-memory database - GetFreeBlockId!
 			new_id = partial_block_manager.GetFreeBlockId();
 		}
 
@@ -485,14 +483,11 @@ public:
 			return;
 		}
 
-		// Write the current page to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		if (block_manager.InMemory()) {
 			auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
-			// state.RegisterBlock(block_manager, block_id);
 			state.handles[block_id] = buffer.GetBlockHandle();
 		} else {
-			// TODO: Second point of failure
 			block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
 		}
 	}
@@ -599,6 +594,7 @@ public:
 	idx_t vectors_per_segment = 0;
 	unique_ptr<ColumnSegment> segment;
 	BufferHandle segment_handle;
+	BufferHandle next_page_buffer; // Only relevant for in-memory storage
 
 	// Non-segment buffers
 	BufferHandle extra_pages[2];
@@ -1062,6 +1058,10 @@ unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deser
 }
 
 void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
+	if (segment.GetBlockManager().InMemory()) {
+		// This code would result in MarkBlockAsModified() getting called, no need to do this for in-memory blocks.
+		return;
+	}
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	for (auto &block_id : state.on_disk_blocks) {
 		visitor.Visit(block_id);
