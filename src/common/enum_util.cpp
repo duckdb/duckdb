@@ -1260,9 +1260,9 @@ const StringUtil::EnumStringLiteral *GetCoordinateReferenceSystemTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::SRID), "SRID" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::AUTH_CODE), "AUTH_CODE" },
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::PROJJSON), "PROJJSON" },
-		{ static_cast<uint32_t>(CoordinateReferenceSystemType::WKT2_2019), "WKT2_2019" },
-		{ static_cast<uint32_t>(CoordinateReferenceSystemType::AUTH_CODE), "AUTH_CODE" }
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::WKT2_2019), "WKT2_2019" }
 	};
 	return values;
 }
