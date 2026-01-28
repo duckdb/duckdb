@@ -194,12 +194,6 @@
       ]
     },
     {
-      "reason": "PEG Transformer does not support EXPORT_STATE yet",
-      "paths": [
-        "test/sql/aggregate/aggregates/test_aggregate_state_type.test"
-      ]
-    },
-    {
       "reason": "Unclassified failures",
       "paths": [
         "test/extension/install_extension.test",
