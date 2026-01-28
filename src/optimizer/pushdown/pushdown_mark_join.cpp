@@ -57,8 +57,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;
 					for (auto &cond : comp_join.conditions) {
-						if (cond.comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
-						    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						if (!cond.IsComparison()) {
+							continue;
+						}
+						if (cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM &&
+						    cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 							all_null_values_are_equal = false;
 							break;
 						}

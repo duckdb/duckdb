@@ -1537,10 +1537,14 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 		return "AGGREGATE_STATE<?>";
 	}
 	auto aggr_state = info->Cast<AggregateStateTypeInfo>().state_type;
+	bool is_nested_type = aggr_state.state_type.IsValid();
 	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
 	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
 	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
-	       ")" + "::" + aggr_state.return_type.ToString() + ">";
+	       ")" + "::" +
+	       (is_nested_type ? aggr_state.return_type.ToString() + ", " + aggr_state.state_type.ToString()
+	                       : aggr_state.return_type.ToString()) +
+	       ">";
 }
 
 //===--------------------------------------------------------------------===//

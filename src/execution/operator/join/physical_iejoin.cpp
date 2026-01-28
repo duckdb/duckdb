@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -23,19 +24,19 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 	D_ASSERT(conditions.size() >= 2);
 	for (idx_t i = 0; i < 2; ++i) {
 		auto &cond = conditions[i];
-		D_ASSERT(cond.left->return_type == cond.right->return_type);
-		join_key_types.push_back(cond.left->return_type);
+		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
+		join_key_types.push_back(cond.GetLHS().return_type);
 
 		// Convert the conditions to sort orders
-		auto left = cond.left->Copy();
-		auto right = cond.right->Copy();
+		auto left = cond.GetLHS().Copy();
+		auto right = cond.GetRHS().Copy();
 		auto sense = OrderType::INVALID;
 
 		// 2. if (op1 ∈ {>, ≥}) sort L1 in descending order
 		// 3. else if (op1 ∈ {<, ≤}) sort L1 in ascending order
 		// 4. if (op2 ∈ {>, ≥}) sort L2 in ascending order
 		// 5. else if (op2 ∈ {<, ≤}) sort L2 in descending order
-		switch (cond.comparison) {
+		switch (cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_GREATERTHAN:
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			sense = i ? OrderType::ASCENDING : OrderType::DESCENDING;
@@ -53,8 +54,8 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 
 	for (idx_t i = 2; i < conditions.size(); ++i) {
 		auto &cond = conditions[i];
-		D_ASSERT(cond.left->return_type == cond.right->return_type);
-		join_key_types.push_back(cond.left->return_type);
+		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
+		join_key_types.push_back(cond.GetLHS().return_type);
 	}
 }
 
@@ -446,7 +447,7 @@ struct IEJoinUnion {
 	IEJoinGlobalSourceState &gsource;
 
 	//! Inverted loop
-	idx_t JoinComplexBlocks(vector<idx_t> &lsel, vector<idx_t> &rsel);
+	idx_t JoinComplexBlocks(idx_t *lsel, idx_t *rsel);
 
 	//! B
 	vector<validity_t> bit_array;
@@ -549,7 +550,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 IEJoinUnion::IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chunks) : gsource(gsource), n(0), i(0) {
 	auto &op = gsource.op;
 	auto &l1 = *gsource.l1;
-	const auto strict1 = IsStrictComparison(op.conditions[0].comparison);
+	const auto strict1 = IsStrictComparison(op.conditions[0].GetComparisonType());
 	op1 = make_uniq<UnionIterator>(l1, strict1);
 	off1 = make_uniq<UnionIterator>(l1, strict1);
 
@@ -565,7 +566,7 @@ IEJoinUnion::IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chu
 	bloom_filter.Initialize(bloom_array.data(), bloom_count);
 
 	// 11. for(i←1 to n) do
-	const auto strict2 = IsStrictComparison(op.conditions[1].comparison);
+	const auto strict2 = IsStrictComparison(op.conditions[1].GetComparisonType());
 	op2 = make_uniq<UnionIterator>(l2, strict2);
 	off2 = make_uniq<UnionIterator>(l2, strict2);
 	n = l2.BlockStart(chunks.second);
@@ -672,11 +673,7 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	// Check the non-ragged entries
 	for (const auto entry_count = bits.EntryCount(n); entry_idx < entry_count; ++entry_idx) {
 		if (entry) {
-			for (; idx_in_entry < bits.BITS_PER_VALUE; ++idx_in_entry, ++j) {
-				if (bits.RowIsValid(entry, idx_in_entry)) {
-					return j;
-				}
-			}
+			return j + CountZeros<validity_t>::Trailing(entry) - idx_in_entry;
 		} else {
 			j += bits.BITS_PER_VALUE - idx_in_entry;
 		}
@@ -686,22 +683,14 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	}
 
 	// Check the final entry
-	for (; j < n; ++idx_in_entry, ++j) {
-		if (bits.RowIsValid(entry, idx_in_entry)) {
-			return j;
-		}
-	}
-
-	return j;
+	return MinValue(j + CountZeros<validity_t>::Trailing(entry) - idx_in_entry, n);
 }
 
-idx_t IEJoinUnion::JoinComplexBlocks(vector<idx_t> &lsel, vector<idx_t> &rsel) {
-	auto &li = gsource.li;
+idx_t IEJoinUnion::JoinComplexBlocks(idx_t *lsel, idx_t *rsel) {
+	auto li = gsource.li.data();
 
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
-	lsel.resize(0);
-	rsel.resize(0);
 
 	// 11. for(i←1 to n) do
 	while (i < n) {
@@ -731,8 +720,8 @@ idx_t IEJoinUnion::JoinComplexBlocks(vector<idx_t> &lsel, vector<idx_t> &rsel) {
 
 			D_ASSERT(lrid > 0 && rrid < 0);
 			// 15. add tuples w.r.t. (L1[j], L1[i]) to join result
-			lsel.emplace_back(idx_t(+lrid - 1));
-			rsel.emplace_back(idx_t(-rrid - 1));
+			lsel[result_count] = idx_t(+lrid - 1);
+			rsel[result_count] = idx_t(-rrid - 1);
 			++result_count;
 			if (result_count == STANDARD_VECTOR_SIZE) {
 				// out of space!
@@ -804,7 +793,7 @@ IEJoinGlobalSourceState::IEJoinGlobalSourceState(const PhysicalIEJoin &op, Clien
 	// Using this OrderType, if i < j then value[i] (from left table) and value[j] (from right table) match
 	// the condition (t1.time <= t2.time or t1.time < t2.time), then from_left will force them into the correct order.
 	auto from_left = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-	const auto strict1 = IEJoinUnion::IsStrictComparison(op.conditions[0].comparison);
+	const auto strict1 = IEJoinUnion::IsStrictComparison(op.conditions[0].GetComparisonType());
 	orders.emplace_back(!strict1 ? OrderType::DESCENDING : OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT,
 	                    std::move(from_left));
 
@@ -859,7 +848,8 @@ public:
 
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
 	    : gsource(gsource), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
-	      left_executor(client), right_executor(client), left_matches(nullptr), right_matches(nullptr)
+	      left_executor(client), right_executor(client), pred_executor(client), left_matches(nullptr),
+	      right_matches(nullptr)
 
 	{
 		auto &op = gsource.op;
@@ -881,6 +871,11 @@ public:
 		left_scan_state = left_table.CreateScanState(client);
 		right_scan_state = right_table.CreateScanState(client);
 
+		if (op.predicate) {
+			pred_executor.AddExpression(*op.predicate);
+			pred_matches.Initialize();
+		}
+
 		if (op.conditions.size() < 3) {
 			return;
 		}
@@ -890,11 +885,11 @@ public:
 		for (idx_t i = 2; i < op.conditions.size(); ++i) {
 			const auto &cond = op.conditions[i];
 
-			left_types.push_back(cond.left->return_type);
-			left_executor.AddExpression(*cond.left);
+			left_types.push_back(cond.GetLHS().return_type);
+			left_executor.AddExpression(cond.GetLHS());
 
-			right_types.push_back(cond.left->return_type);
-			right_executor.AddExpression(*cond.right);
+			right_types.push_back(cond.GetLHS().return_type);
+			right_executor.AddExpression(cond.GetRHS());
 		}
 
 		left_keys.Initialize(allocator, left_types);
@@ -979,6 +974,10 @@ public:
 	DataChunk right_keys;
 
 	DataChunk unprojected;
+
+	//! Arbitrary expressions
+	ExpressionExecutor pred_executor;
+	SelectionVector pred_matches;
 
 	// Outer joins
 	vector<idx_t> outer_sel;
@@ -1181,7 +1180,7 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 	auto &right_table = *ie_sink.tables[1];
 
 	do {
-		auto result_count = joiner->JoinComplexBlocks(lsel, rsel);
+		auto result_count = joiner->JoinComplexBlocks(lsel.data(), rsel.data());
 		if (result_count == 0) {
 			// exhausted this pair
 			joiner.reset();
@@ -1221,8 +1220,8 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 					left.Slice(*sel, tail_count);
 					right.Slice(*sel, tail_count);
 				}
-				tail_count =
-				    op.SelectJoinTail(conditions[cmp_idx + 2].comparison, left, right, sel, tail_count, match_sel);
+				tail_count = op.SelectJoinTail(conditions[cmp_idx + 2].GetComparisonType(), left, right, sel,
+				                               tail_count, match_sel);
 				sel = match_sel;
 			}
 
@@ -1243,6 +1242,13 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 			}
 		}
 		chunk.SetCardinality(result_count);
+
+		//	Apply any arbitrary predicate
+		if (op.predicate) {
+			result_count = pred_executor.SelectExpression(chunk, pred_matches);
+			chunk.Slice(pred_matches, result_count);
+			sel = &pred_matches;
+		}
 
 		//	We need all of the data to compute other predicates,
 		//	but we only return what is in the projection map
