@@ -1,0 +1,145 @@
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index 213c13d..5762359 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -27,6 +27,7 @@
+ #include "cpl_vsi.h"
+ #include "cpl_vsi_error.h"
+ #include "cpl_vsi_virtual.h"
++#include "duckdb/common/types/geometry_crs.hpp"
+ #include "duckdb/main/settings.hpp"
+ 
+ namespace duckdb {
+@@ -611,7 +612,7 @@ auto Bind(ClientContext &ctx, TableFunctionBindInput &input, vector<LogicalType>
+ 		// Convert Arrow schema to DuckDB types
+ 		for (int64_t i = 0; i < schema.n_children; i++) {
+ 			auto &child_schema = *schema.children[i];
+-			const auto gdal_type = ArrowType::GetTypeFromSchema(ctx.db->config, child_schema);
++			const auto gdal_type = ArrowType::GetTypeFromSchema(ctx, child_schema);
+ 			auto duck_type = gdal_type->GetDuckType();
+ 
+ 			// Track geometry columns to compute stats later
+@@ -849,7 +850,7 @@ auto InitGlobal(ClientContext &context, TableFunctionInitInput &input) -> unique
+ 	// Store the column types
+ 	for (int64_t i = 0; i < schema.n_children; i++) {
+ 		auto &child_schema = *schema.children[i];
+-		result->col_types.push_back(ArrowType::GetTypeFromSchema(context.db->config, child_schema));
++		result->col_types.push_back(ArrowType::GetTypeFromSchema(context, child_schema));
+ 	}
+ 
+ 	return std::move(result);
+@@ -1199,6 +1200,16 @@ auto Bind(ClientContext &context, CopyFunctionBindInput &input, const vector<str
+ 		throw BinderException("Unknown GDAL COPY option: '%s'", option.first);
+ 	}
+ 
++	// If no override SRS is set, we will use the SRS of the first geometry column
++	if (result->target_srs.empty()) {
++		for (auto &col : sql_types) {
++			if (col.id() == LogicalTypeId::GEOMETRY && GeoType::HasCRS(col)) {
++				result->target_srs = GeoType::GetCRS(col).GetDefinition();
++				break;
++			}
++		}
++	}
++
+ 	// Check that options are valid
+ 	if (result->driver_name.empty()) {
+ 		throw BinderException("GDAL COPY option 'DRIVER' is required");
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index 616a9d0..76e9757 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -8,10 +8,12 @@
+ #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+ #include "duckdb/execution/expression_executor.hpp"
+ #include "duckdb/planner/expression/bound_function_expression.hpp"
++#include "duckdb/common/types/geometry_crs.hpp"
+ 
+ #include "proj.h"
+ #include "geodesic.h"
+ #include "sqlite3.h"
++#include "duckdb/main/extension_callback_manager.hpp"
+ 
+ // We embed the whole proj.db in the proj_db.c file, which we then link into the extension binary
+ // We can then use the sqlite3 "memvfs" (which we also statically link to) to point to the proj.db database in memory
+@@ -1208,6 +1210,70 @@ struct DuckDB_Proj_Compiled_Version {
+ 
+ } // namespace
+ 
++//======================================================================================================================
++// CRS Provider
++//======================================================================================================================
++namespace {
++
++class SpatialCoordinateReferenceSystemProvider final : public CoordinateReferenceSystemProvider {
++public:
++	string GetName() const override {
++		return "spatial";
++	}
++
++	unique_ptr<CoordinateReferenceSystem> TryConvert(const CoordinateReferenceSystem &source_crs,
++	                                                 CoordinateReferenceSystemType target_type) override {
++
++		const auto ctx = ProjModule::GetThreadProjContext();
++		const auto pj = proj_create(ctx, source_crs.GetDefinition().c_str());
++
++		unique_ptr<CoordinateReferenceSystem> result = nullptr;
++
++		if (pj) {
++			switch (target_type) {
++			case CoordinateReferenceSystemType::AUTH_CODE: {
++				const auto auth_name = proj_get_id_auth_name(pj, 0);
++				const auto auth_code = proj_get_id_code(pj, 0);
++				if (auth_name != nullptr && auth_code != nullptr) {
++					result = make_uniq<CoordinateReferenceSystem>(string(auth_name) + ":" + string(auth_code));
++				}
++			} break;
++			case CoordinateReferenceSystemType::SRID: {
++				const auto name = proj_get_name(pj);
++				if (name != nullptr) {
++					result = make_uniq<CoordinateReferenceSystem>(name);
++				}
++			} break;
++			case CoordinateReferenceSystemType::PROJJSON: {
++				const auto pj_json = proj_as_projjson(ctx, pj, nullptr);
++				if (pj_json != nullptr) {
++					result = make_uniq<CoordinateReferenceSystem>(pj_json);
++				}
++			} break;
++			case CoordinateReferenceSystemType::WKT2_2019: {
++				const auto wkt = proj_as_wkt(ctx, pj, PJ_WKT2_2019, nullptr);
++				if (wkt != nullptr) {
++					result = make_uniq<CoordinateReferenceSystem>(wkt);
++				}
++			} break;
++			default:
++				break;
++			}
++		}
++
++		proj_destroy(pj);
++		proj_context_destroy(ctx);
++
++		return result;
++	}
++
++	static void Register(ExtensionLoader &loader) {
++		ExtensionCallbackManager::Get(loader.GetDatabaseInstance())
++			.Register(make_shared_ptr<SpatialCoordinateReferenceSystemProvider>());
++	}
++};
++
++} // namespace
+ //######################################################################################################################
+ // Module Registration
+ //######################################################################################################################
+@@ -1229,6 +1295,9 @@ void RegisterProjModule(ExtensionLoader &loader) {
+ 	// Meta functions for proj lib
+ 	DuckDB_Proj_Version::Register(loader);
+ 	DuckDB_Proj_Compiled_Version::Register(loader);
++
++	// CRS Provider
++	SpatialCoordinateReferenceSystemProvider::Register(loader);
+ }
+ 
+ } // namespace duckdb
