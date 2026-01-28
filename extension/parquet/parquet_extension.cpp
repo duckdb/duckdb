@@ -644,8 +644,9 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->string_dictionary_page_size_limit = deserializer.ReadPropertyWithExplicitDefault(
 	    114, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
 	data->geoparquet_version =
-	    deserializer.ReadPropertyWithExplicitDefault(115, "geoparquet_version", default_value.geoparquet_version);
-	data->shredding_types = deserializer.ReadProperty<ShreddingType>(116, "shredding_types");
+	    deserializer.ReadPropertyWithExplicitDefault(116, "geoparquet_version", default_value.geoparquet_version);
+	data->shredding_types =
+	    deserializer.ReadPropertyWithExplicitDefault<ShreddingType>(117, "shredding_types", ShreddingType());
 
 	return std::move(data);
 }
