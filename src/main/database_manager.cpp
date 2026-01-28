@@ -16,7 +16,7 @@
 namespace duckdb {
 
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
-    : next_oid(0), current_query_number(1), current_transaction_id(0) {
+    : db(db), next_oid(0), current_query_number(1), current_transaction_id(0) {
 	system = make_shared_ptr<AttachedDatabase>(db);
 	auto &config = DBConfig::GetConfig(db);
 	path_manager = config.path_manager;

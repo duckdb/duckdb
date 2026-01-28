@@ -261,6 +261,23 @@ TEST_CASE("Test instance cache canonicalization", "[api][.]") {
 	}
 }
 
+TEST_CASE("Test database file path manager absolute path", "[api][.]") {
+	LocalFileSystem fs;
+	DuckDB db;
+	Connection con(db);
+
+	auto test_db = TestCreatePath("test_same_db_attach.db");
+	auto test_db_abs = fs.JoinPath(fs.GetWorkingDirectory(), test_db);
+
+	// we can attach this once
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_db + "' AS db1"));
+	// we cannot attach with absolute path, even though our original attach was with relative path
+	REQUIRE_FAIL(con.Query("ATTACH '" + test_db_abs + "' AS db2"));
+	// after detaching we can attach with absolute path
+	REQUIRE_NO_FAIL(con.Query("DETACH db1"));
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_db_abs + "' AS db2"));
+}
+
 TEST_CASE("Test automatic DB instance caching", "[api][.]") {
 	DBInstanceCache instance_cache;
 	DBConfig config;
