@@ -38,11 +38,11 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &op_p,
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
                              const vector<idx_t> &output_columns_p, unique_ptr<ResidualPredicateInfo> residual_p,
-                             Expression *predicate_ptr, const vector<idx_t> &output_in_probe)
+                             optional_ptr<Expression> predicate_ptr, const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      radix_bits(INITIAL_RADIX_BITS), residual_predicate(predicate_ptr) {
+      residual_predicate(predicate_ptr), radix_bits(INITIAL_RADIX_BITS) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;

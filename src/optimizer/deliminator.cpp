@@ -383,8 +383,8 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 						final_comparison = ExpressionType::COMPARE_EQUAL;
 					}
 					delim_conditions[cond_idx] =
-					    JoinCondition(std::move(delim_conditions[cond_idx].LeftReference()->Copy()),
-					                  std::move(delim_conditions[cond_idx].RightReference()->Copy()), final_comparison);
+					    JoinCondition(delim_conditions[cond_idx].LeftReference()->Copy(),
+					                  delim_conditions[cond_idx].RightReference()->Copy(), final_comparison);
 				}
 				found = true;
 				break;
