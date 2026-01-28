@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 
 #include "yyjson.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "fast_float/fast_float.h"
 
 #include <limits>
@@ -677,39 +678,19 @@ CoordinateReferenceSystem CoordinateReferenceSystem::Deserialize(Deserializer &d
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-// Default CRS Provider
-//----------------------------------------------------------------------------------------------------------------------
-namespace {
-
-class DefaultCoordinateReferenceSystemProvider final : public CoordinateReferenceSystemProvider {
-public:
-	unique_ptr<CoordinateReferenceSystem> TryConvert(const CoordinateReferenceSystem &source_crs,
-	                                                 CoordinateReferenceSystemType target_type) override;
-	string GetName() const override {
-		return "default";
-	}
-};
-
-} // namespace
-
-//----------------------------------------------------------------------------------------------------------------------
 // Coordinate Reference System Manager
 //----------------------------------------------------------------------------------------------------------------------
 
-CoordinateReferenceSystemManager::CoordinateReferenceSystemManager() {
-	// Always add the default provider
-	providers.push_back(make_uniq<DefaultCoordinateReferenceSystemProvider>());
-}
+unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryConvert(ClientContext &context,
+                                                                            const CoordinateReferenceSystem &source_crs,
+                                                                            CoordinateReferenceSystemType target_type) {
+	if (source_crs.type == target_type) {
+		// No conversion needed
+		return make_uniq<CoordinateReferenceSystem>(source_crs);
+	}
 
-void CoordinateReferenceSystemManager::AddProvider(shared_ptr<CoordinateReferenceSystemProvider> provider) {
-	// Insert at the front
-	providers.insert(providers.begin(), provider);
-}
-
-unique_ptr<CoordinateReferenceSystem>
-CoordinateReferenceSystemManager::TryConvert(const CoordinateReferenceSystem &source_crs,
-                                             CoordinateReferenceSystemType target_type) const {
 	// Ask each provider, front to back
+	auto providers = ExtensionCallbackManager::Get(context).CoordinateReferenceSystemProviders();
 	for (auto &provider : providers) {
 		auto result = provider->TryConvert(source_crs, target_type);
 		if (result) {
@@ -720,40 +701,37 @@ CoordinateReferenceSystemManager::TryConvert(const CoordinateReferenceSystem &so
 	return nullptr;
 }
 
-CoordinateReferenceSystemManager &CoordinateReferenceSystemManager::Get(ClientContext &context) {
-	return *DBConfig::GetConfig(context).crs_manager;
-}
-
-unique_ptr<CoordinateReferenceSystem>
-CoordinateReferenceSystemManager::TryConvert(const string &source_crs,
-                                             CoordinateReferenceSystemType target_type) const {
+unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryConvert(ClientContext &context,
+                                                                            const string &source_crs,
+                                                                            CoordinateReferenceSystemType target_type) {
 	const CoordinateReferenceSystem source(source_crs);
-	return TryConvert(source, target_type);
+	return TryConvert(context, source, target_type);
 }
 
-unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystemManager::TryIdentify(const string &source_crs) {
+unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystem::TryIdentify(ClientContext &context,
+                                                                             const string &source_crs) {
 	CoordinateReferenceSystem source(source_crs);
 
 	// We always want to identify the CRS as short as possible, so first check for AUTH:CODE
-	auto auth_crs = TryConvert(source, CoordinateReferenceSystemType::AUTH_CODE);
+	auto auth_crs = TryConvert(context, source, CoordinateReferenceSystemType::AUTH_CODE);
 	if (auth_crs) {
 		return auth_crs;
 	}
 
 	// Next, check for SRID
-	auto srid_crs = TryConvert(source, CoordinateReferenceSystemType::SRID);
+	auto srid_crs = TryConvert(context, source, CoordinateReferenceSystemType::SRID);
 	if (srid_crs) {
 		return srid_crs;
 	}
 
 	// Otherwise, PROJJSON
-	auto projjson_crs = TryConvert(source, CoordinateReferenceSystemType::PROJJSON);
+	auto projjson_crs = TryConvert(context, source, CoordinateReferenceSystemType::PROJJSON);
 	if (projjson_crs) {
 		return projjson_crs;
 	}
 
 	// Finally, WKT2:2019
-	auto wkt2_crs = TryConvert(source, CoordinateReferenceSystemType::WKT2_2019);
+	auto wkt2_crs = TryConvert(context, source, CoordinateReferenceSystemType::WKT2_2019);
 	if (wkt2_crs) {
 		return wkt2_crs;
 	}
@@ -771,158 +749,63 @@ unique_ptr<CoordinateReferenceSystem> CoordinateReferenceSystemManager::TryIdent
 
 namespace {
 
-constexpr auto OGC_CRS84_PROJJSON = R"JSON_LITERAL({
-  "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
-  "type": "GeographicCRS",
-  "name": "WGS 84 (CRS84)",
-  "datum_ensemble": {
-    "name": "World Geodetic System 1984 ensemble",
-    "members": [
-      {
-        "name": "World Geodetic System 1984 (Transit)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1166
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G730)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1152
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G873)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1153
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G1150)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1154
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G1674)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1155
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G1762)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1156
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G2139)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1309
-        }
-      },
-      {
-        "name": "World Geodetic System 1984 (G2296)",
-        "id": {
-          "authority": "EPSG",
-          "code": 1383
-        }
-      }
-    ],
-    "ellipsoid": {
-      "name": "WGS 84",
-      "semi_major_axis": 6378137,
-      "inverse_flattening": 298.257223563
-    },
-    "accuracy": "2.0",
-    "id": {
-      "authority": "EPSG",
-      "code": 6326
-    }
-  },
-  "coordinate_system": {
-    "subtype": "ellipsoidal",
-    "axis": [
-      {
-        "name": "Geodetic longitude",
-        "abbreviation": "Lon",
-        "direction": "east",
-        "unit": "degree"
-      },
-      {
-        "name": "Geodetic latitude",
-        "abbreviation": "Lat",
-        "direction": "north",
-        "unit": "degree"
-      }
-    ]
-  },
-  "scope": "Not known.",
-  "area": "World.",
-  "bbox": {
-    "south_latitude": -90,
-    "west_longitude": -180,
-    "north_latitude": 90,
-    "east_longitude": 180
-  },
-  "id": {
-    "authority": "OGC",
-    "code": "CRS84"
-  }
-})JSON_LITERAL";
+const auto OGC_CRS84_WKT2_2019 =
+    R"WKT_LITERAL(GEOGCRS["WGS 84 (CRS84)",ENSEMBLE["World Geodetic System 1984 ensemble",MEMBER["World Geodetic System 1984 (Transit)"],MEMBER["World Geodetic System 1984 (G730)"],MEMBER["World Geodetic System 1984 (G873)"],MEMBER["World Geodetic System 1984 (G1150)"],MEMBER["World Geodetic System 1984 (G1674)"],MEMBER["World Geodetic System 1984 (G1762)"],MEMBER["World Geodetic System 1984 (G2139)"],MEMBER["World Geodetic System 1984 (G2296)"],ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]],ENSEMBLEACCURACY[2.0]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic longitude (Lon)",east,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic latitude (Lat)",north,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],USAGE[SCOPE["Not known."],AREA["World."],BBOX[-90,-180,90,180]],ID["OGC","CRS84"]])WKT_LITERAL";
+const auto OGC_CRS84_PROJJSON =
+    R"JSON_LITERAL({"$schema":"https://proj.org/schemas/v0.7/projjson.schema.json","type":"GeographicCRS","name":"WGS 84 (CRS84)","datum_ensemble":{"name":"World Geodetic System 1984 ensemble","members":[{"name":"World Geodetic System 1984 (Transit)","id":{"authority":"EPSG","code":1166}},{"name":"World Geodetic System 1984 (G730)","id":{"authority":"EPSG","code":1152}},{"name":"World Geodetic System 1984 (G873)","id":{"authority":"EPSG","code":1153}},{"name":"World Geodetic System 1984 (G1150)","id":{"authority":"EPSG","code":1154}},{"name":"World Geodetic System 1984 (G1674)","id":{"authority":"EPSG","code":1155}},{"name":"World Geodetic System 1984 (G1762)","id":{"authority":"EPSG","code":1156}},{"name":"World Geodetic System 1984 (G2139)","id":{"authority":"EPSG","code":1309}},{"name":"World Geodetic System 1984 (G2296)","id":{"authority":"EPSG","code":1383}}],"ellipsoid":{"name":"WGS 84","semi_major_axis":6378137,"inverse_flattening":298.257223563},"accuracy":"2.0","id":{"authority":"EPSG","code":6326}},"coordinate_system":{"subtype":"ellipsoidal","axis":[{"name":"Geodetic longitude","abbreviation":"Lon","direction":"east","unit":"degree"},{"name":"Geodetic latitude","abbreviation":"Lat","direction":"north","unit":"degree"}]},"scope":"Not known.","area":"World.","bbox":{"south_latitude":-90,"west_longitude":-180,"north_latitude":90,"east_longitude":180},"id":{"authority":"OGC","code":"CRS84"}})JSON_LITERAL";
 
-constexpr auto OGC_CRS84_WKT2_2019 = R"WKT_LITERAL(GEOGCRS["WGS 84 (CRS84)",
-    ENSEMBLE["World Geodetic System 1984 ensemble",
-        MEMBER["World Geodetic System 1984 (Transit)"],
-        MEMBER["World Geodetic System 1984 (G730)"],
-        MEMBER["World Geodetic System 1984 (G873)"],
-        MEMBER["World Geodetic System 1984 (G1150)"],
-        MEMBER["World Geodetic System 1984 (G1674)"],
-        MEMBER["World Geodetic System 1984 (G1762)"],
-        MEMBER["World Geodetic System 1984 (G2139)"],
-        MEMBER["World Geodetic System 1984 (G2296)"],
-        ELLIPSOID["WGS 84",6378137,298.257223563,
-            LENGTHUNIT["metre",1]],
-        ENSEMBLEACCURACY[2.0]],
-    PRIMEM["Greenwich",0,
-        ANGLEUNIT["degree",0.0174532925199433]],
-    CS[ellipsoidal,2],
-        AXIS["geodetic longitude (Lon)",east,
-            ORDER[1],
-            ANGLEUNIT["degree",0.0174532925199433]],
-        AXIS["geodetic latitude (Lat)",north,
-            ORDER[2],
-            ANGLEUNIT["degree",0.0174532925199433]],
-    USAGE[
-        SCOPE["Not known."],
-        AREA["World."],
-        BBOX[-90,-180,90,180]],
-    ID["OGC","CRS84"]]
-)WKT_LITERAL";
+const auto EPSG_4326_WKT2_2019 =
+    R"WKT_LITERAL(GEOGCRS["WGS 84",ENSEMBLE["World Geodetic System 1984 ensemble",MEMBER["World Geodetic System 1984 (Transit)"],MEMBER["World Geodetic System 1984 (G730)"],MEMBER["World Geodetic System 1984 (G873)"],MEMBER["World Geodetic System 1984 (G1150)"],MEMBER["World Geodetic System 1984 (G1674)"],MEMBER["World Geodetic System 1984 (G1762)"],MEMBER["World Geodetic System 1984 (G2139)"],MEMBER["World Geodetic System 1984 (G2296)"],ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]],ENSEMBLEACCURACY[2.0]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],CS[ellipsoidal,2],AXIS["geodetic latitude (Lat)",north,ORDER[1],ANGLEUNIT["degree",0.0174532925199433]],AXIS["geodetic longitude (Lon)",east,ORDER[2],ANGLEUNIT["degree",0.0174532925199433]],USAGE[SCOPE["Horizontal component of 3D system."],AREA["World."],BBOX[-90,-180,90,180]],ID["EPSG",4326]])WKT_LITERAL";
+const auto EPSG_4326_PROJJSON =
+    R"JSON_LITERAL({"$schema":"https://proj.org/schemas/v0.7/projjson.schema.json","type":"GeographicCRS","name":"WGS 84","datum_ensemble":{"name":"World Geodetic System 1984 ensemble","members":[{"name":"World Geodetic System 1984 (Transit)","id":{"authority":"EPSG","code":1166}},{"name":"World Geodetic System 1984 (G730)","id":{"authority":"EPSG","code":1152}},{"name":"World Geodetic System 1984 (G873)","id":{"authority":"EPSG","code":1153}},{"name":"World Geodetic System 1984 (G1150)","id":{"authority":"EPSG","code":1154}},{"name":"World Geodetic System 1984 (G1674)","id":{"authority":"EPSG","code":1155}},{"name":"World Geodetic System 1984 (G1762)","id":{"authority":"EPSG","code":1156}},{"name":"World Geodetic System 1984 (G2139)","id":{"authority":"EPSG","code":1309}},{"name":"World Geodetic System 1984 (G2296)","id":{"authority":"EPSG","code":1383}}],"ellipsoid":{"name":"WGS 84","semi_major_axis":6378137,"inverse_flattening":298.257223563},"accuracy":"2.0","id":{"authority":"EPSG","code":6326}},"coordinate_system":{"subtype":"ellipsoidal","axis":[{"name":"Geodetic latitude","abbreviation":"Lat","direction":"north","unit":"degree"},{"name":"Geodetic longitude","abbreviation":"Lon","direction":"east","unit":"degree"}]},"scope":"Horizontal component of 3D system.","area":"World.","bbox":{"south_latitude":-90,"west_longitude":-180,"north_latitude":90,"east_longitude":180},"id":{"authority":"EPSG","code":4326}})JSON_LITERAL";
+
+const auto EPSG_3857_WKT2_2019 =
+    R"WKT_LITERAL(PROJCRS["WGS 84 / Pseudo-Mercator",BASEGEOGCRS["WGS 84",ENSEMBLE["World Geodetic System 1984 ensemble",MEMBER["World Geodetic System 1984 (Transit)"],MEMBER["World Geodetic System 1984 (G730)"],MEMBER["World Geodetic System 1984 (G873)"],MEMBER["World Geodetic System 1984 (G1150)"],MEMBER["World Geodetic System 1984 (G1674)"],MEMBER["World Geodetic System 1984 (G1762)"],MEMBER["World Geodetic System 1984 (G2139)"],MEMBER["World Geodetic System 1984 (G2296)"],ELLIPSOID["WGS 84",6378137,298.257223563,LENGTHUNIT["metre",1]],ENSEMBLEACCURACY[2.0]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4326]],CONVERSION["Popular Visualisation Pseudo-Mercator",METHOD["Popular Visualisation Pseudo Mercator",ID["EPSG",1024]],PARAMETER["Latitude of natural origin",0,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8801]],PARAMETER["Longitude of natural origin",0,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8802]],PARAMETER["False easting",0,LENGTHUNIT["metre",1],ID["EPSG",8806]],PARAMETER["False northing",0,LENGTHUNIT["metre",1],ID["EPSG",8807]]],CS[Cartesian,2],AXIS["easting (X)",east,ORDER[1],LENGTHUNIT["metre",1]],AXIS["northing (Y)",north,ORDER[2],LENGTHUNIT["metre",1]],USAGE[SCOPE["Web mapping and visualisation."],AREA["World between 85.06°S and 85.06°N."],BBOX[-85.06,-180,85.06,180]],ID["EPSG",3857]])WKT_LITERAL";
+const auto EPSG_3857_PROJJSON =
+    R"WKT_LITERAL({"$schema":"https://proj.org/schemas/v0.7/projjson.schema.json","type":"ProjectedCRS","name":"WGS 84 / Pseudo-Mercator","base_crs":{"type":"GeographicCRS","name":"WGS 84","datum_ensemble":{"name":"World Geodetic System 1984 ensemble","members":[{"name":"World Geodetic System 1984 (Transit)","id":{"authority":"EPSG","code":1166}},{"name":"World Geodetic System 1984 (G730)","id":{"authority":"EPSG","code":1152}},{"name":"World Geodetic System 1984 (G873)","id":{"authority":"EPSG","code":1153}},{"name":"World Geodetic System 1984 (G1150)","id":{"authority":"EPSG","code":1154}},{"name":"World Geodetic System 1984 (G1674)","id":{"authority":"EPSG","code":1155}},{"name":"World Geodetic System 1984 (G1762)","id":{"authority":"EPSG","code":1156}},{"name":"World Geodetic System 1984 (G2139)","id":{"authority":"EPSG","code":1309}},{"name":"World Geodetic System 1984 (G2296)","id":{"authority":"EPSG","code":1383}}],"ellipsoid":{"name":"WGS 84","semi_major_axis":6378137,"inverse_flattening":298.257223563},"accuracy":"2.0","id":{"authority":"EPSG","code":6326}},"coordinate_system":{"subtype":"ellipsoidal","axis":[{"name":"Geodetic latitude","abbreviation":"Lat","direction":"north","unit":"degree"},{"name":"Geodetic longitude","abbreviation":"Lon","direction":"east","unit":"degree"}]},"id":{"authority":"EPSG","code":4326}},"conversion":{"name":"Popular Visualisation Pseudo-Mercator","method":{"name":"Popular Visualisation Pseudo Mercator","id":{"authority":"EPSG","code":1024}},"parameters":[{"name":"Latitude of natural origin","value":0,"unit":"degree","id":{"authority":"EPSG","code":8801}},{"name":"Longitude of natural origin","value":0,"unit":"degree","id":{"authority":"EPSG","code":8802}},{"name":"False easting","value":0,"unit":"metre","id":{"authority":"EPSG","code":8806}},{"name":"False northing","value":0,"unit":"metre","id":{"authority":"EPSG","code":8807}}]},"coordinate_system":{"subtype":"Cartesian","axis":[{"name":"Easting","abbreviation":"X","direction":"east","unit":"metre"},{"name":"Northing","abbreviation":"Y","direction":"north","unit":"metre"}]},"scope":"Web mapping and visualisation.","area":"World between 85.06°S and 85.06°N.","bbox":{"south_latitude":-85.06,"west_longitude":-180,"north_latitude":85.06,"east_longitude":180},"id":{"authority":"EPSG","code":3857}})WKT_LITERAL";
+
+struct DefaultCoordinateReferenceSystem {
+	const char *key;
+
+	const char *auth_code;
+	const char *srid;
+	const char *wkt2_2019;
+	const char *projjson;
+};
+
+const auto DEFAULT_CRS_DEFINITIONS = array<DefaultCoordinateReferenceSystem, 3> {
+    DefaultCoordinateReferenceSystem {"OGC:CRS84", "OGC:CRS84", "CRS84", OGC_CRS84_WKT2_2019, OGC_CRS84_PROJJSON},
+    DefaultCoordinateReferenceSystem {"EPSG:4326", "EPSG:4326", "4326", EPSG_4326_WKT2_2019, EPSG_4326_PROJJSON},
+    DefaultCoordinateReferenceSystem {"EPSG:3857", "EPSG:3857", "3857", EPSG_3857_WKT2_2019, EPSG_3857_PROJJSON}};
+
+class DefaultCoordinateReferenceSystemProvider final : public CoordinateReferenceSystemProvider {
+public:
+	unique_ptr<CoordinateReferenceSystem> TryConvert(const CoordinateReferenceSystem &source_crs,
+	                                                 CoordinateReferenceSystemType target_type) override;
+	string GetName() const override {
+		return "default";
+	}
+};
 
 unique_ptr<CoordinateReferenceSystem>
 DefaultCoordinateReferenceSystemProvider::TryConvert(const CoordinateReferenceSystem &source_crs,
                                                      CoordinateReferenceSystemType target_type) {
-	// TODO: Add more built-in CRS definitions
-	if (StringUtil::CIEquals(source_crs.GetIdentifier(), "OGC:CRS84") ||
-	    StringUtil::CIEquals(source_crs.GetIdentifier(), "CRS84")) {
-		switch (target_type) {
-		case CoordinateReferenceSystemType::AUTH_CODE:
-			return make_uniq<CoordinateReferenceSystem>("OGC:CRS84");
-		case CoordinateReferenceSystemType::PROJJSON:
-			return make_uniq<CoordinateReferenceSystem>(OGC_CRS84_PROJJSON);
-		case CoordinateReferenceSystemType::WKT2_2019:
-			return make_uniq<CoordinateReferenceSystem>(OGC_CRS84_WKT2_2019);
-		case CoordinateReferenceSystemType::SRID:
-			return make_uniq<CoordinateReferenceSystem>("CRS84");
-		case CoordinateReferenceSystemType::INVALID:
-			return nullptr;
+	const auto &key = source_crs.GetIdentifier();
+
+	for (const auto &def : DEFAULT_CRS_DEFINITIONS) {
+		if (StringUtil::CIEquals(key, def.key)) {
+			switch (target_type) {
+			case CoordinateReferenceSystemType::AUTH_CODE:
+				return make_uniq<CoordinateReferenceSystem>(def.auth_code);
+			case CoordinateReferenceSystemType::PROJJSON:
+				return make_uniq<CoordinateReferenceSystem>(def.projjson);
+			case CoordinateReferenceSystemType::WKT2_2019:
+				return make_uniq<CoordinateReferenceSystem>(def.wkt2_2019);
+			case CoordinateReferenceSystemType::SRID:
+				return make_uniq<CoordinateReferenceSystem>(def.srid);
+			case CoordinateReferenceSystemType::INVALID:
+				return nullptr;
+			}
 		}
 	}
 
@@ -930,5 +813,10 @@ DefaultCoordinateReferenceSystemProvider::TryConvert(const CoordinateReferenceSy
 }
 
 } // namespace
+
+shared_ptr<CoordinateReferenceSystemProvider> CoordinateReferenceSystemProvider::CreateDefault() {
+	auto result = make_shared_ptr<DefaultCoordinateReferenceSystemProvider>();
+	return std::move(result);
+}
 
 } // namespace duckdb
