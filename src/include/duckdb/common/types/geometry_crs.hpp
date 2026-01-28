@@ -150,6 +150,19 @@ public:
 	unique_ptr<CoordinateReferenceSystem> TryConvert(const string &source_crs,
 	                                                 CoordinateReferenceSystemType target_type) const;
 
+	//! Try to convert the CRS to a sequence of target types
+	//! Returns the first successful conversion, or the original CRS if no conversion could be performed
+	CoordinateReferenceSystem TryConvertInOrder(CoordinateReferenceSystem source_crs,
+	                                            const vector<CoordinateReferenceSystemType> &target_types) const {
+		for (const auto target_type : target_types) {
+			auto converted = TryConvert(source_crs, target_type);
+			if (converted) {
+				return *converted;
+			}
+		}
+		return source_crs;
+	}
+
 private:
 	vector<shared_ptr<CoordinateReferenceSystemProvider>> providers;
 };

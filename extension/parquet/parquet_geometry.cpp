@@ -174,6 +174,7 @@ static void ConvertCRS(ClientContext &context, GeoParquetColumnMetadata &column,
 	if (lookup) {
 		// Successfully converted to PROJJSON
 		column.projjson = lookup->GetDefinition();
+		return;
 	}
 
 	if (version != GeoParquetVersion::V2) {
