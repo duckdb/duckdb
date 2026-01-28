@@ -288,57 +288,63 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 	auto fs = FileSystem::CreateLocal();
 
 	std::vector<CanonicalizationTest> test_cases;
-	test_cases.emplace_back("foo/./bar", "foo/bar", "single dot removal");
-	test_cases.emplace_back("foo/../bar", "bar", "parent directory removal");
-	test_cases.emplace_back("foo/bar/..", "foo", "trailing parent removal");
-	test_cases.emplace_back("./foo", "foo", "leading dot removal");
-	test_cases.emplace_back("foo/.", "foo", "trailing dot removal");
-	test_cases.emplace_back("foo/bar/../../baz", "baz", "multiple parent traversal");
-	test_cases.emplace_back("foo/./bar/./baz", "foo/bar/baz", "multiple dot removal");
-	test_cases.emplace_back("./././foo", "foo", "repeated leading dots");
-	test_cases.emplace_back("foo/bar/../../../baz", "../baz", "parent beyond root (relative)");
-	test_cases.emplace_back("foo//bar", "foo/bar", "double slash");
-	test_cases.emplace_back("foo///bar", "foo/bar", "triple slash");
-	test_cases.emplace_back("//foo/bar", "/foo/bar", "leading double slash");
-	test_cases.emplace_back("foo/bar/", "foo/bar", "trailing slash");
-	test_cases.emplace_back("foo/bar//", "foo/bar", "multiple trailing slashes");
+	test_cases.emplace_back("src/./common", "src/common", "single dot removal");
+	test_cases.emplace_back("src/../common", "common", "parent directory removal");
+	test_cases.emplace_back("src/common/..", "src", "trailing parent removal");
+	test_cases.emplace_back("./src", "src", "leading dot removal");
+	test_cases.emplace_back("src/.", "src", "trailing dot removal");
+	test_cases.emplace_back("src/common/../../CMakeLists.txt", "CMakeLists.txt", "multiple parent traversal");
+	test_cases.emplace_back("src/./common/./CMakeLists.txt", "src/common/CMakeLists.txt", "multiple dot removal");
+	test_cases.emplace_back("./././src", "src", "repeated leading dots");
+	test_cases.emplace_back("src/common/../../../CMakeLists.txt", "../CMakeLists.txt", "parent beyond root (relative)");
+	test_cases.emplace_back("src//common", "src/common", "double slash");
+	test_cases.emplace_back("src///common", "src/common", "triple slash");
+	test_cases.emplace_back("//src/common", "/src/common", "leading double slash");
+	test_cases.emplace_back("src/common/", "src/common", "trailing slash");
+	test_cases.emplace_back("src/common//", "src/common", "multiple trailing slashes");
 	test_cases.emplace_back(".", ".", "single dot");
 	test_cases.emplace_back("..", "..", "single parent");
 	test_cases.emplace_back("", "", "empty path");
 	test_cases.emplace_back("/", "/", "root only");
-	test_cases.emplace_back("foo", "foo", "simple filename");
-	test_cases.emplace_back("foo/./bar/../baz/./qux/..", "foo/baz", "mixed operations");
-	test_cases.emplace_back("./foo/../bar/./baz", "bar/baz", "leading dot with parent");
+	test_cases.emplace_back("src", "src", "simple filename");
+	test_cases.emplace_back("src/./common/../CMakeLists.txt/./qux/..", "src/CMakeLists.txt", "mixed operations");
+	test_cases.emplace_back("./src/../common/./CMakeLists.txt", "common/CMakeLists.txt", "leading dot with parent");
 	test_cases.emplace_back("a/b/c/../../d/e/../f", "a/d/f", "interleaved parents");
 
 #ifdef _WIN32
 	// Backslash handling
-	test_cases.emplace_back("foo\\bar", "foo\\bar", "backslash separator");
-	test_cases.emplace_back("foo\\..\\bar", "bar", "parent with backslash");
-	test_cases.emplace_back("foo/bar\\baz", "foo\\bar\\baz", "mixed separators");
+	test_cases.emplace_back("src\\common", "src\\common", "backslash separator");
+	test_cases.emplace_back("src\\..\\common", "common", "parent with backslash");
+	test_cases.emplace_back("src/common\\CMakeLists.txt", "src\\common\\CMakeLists.txt", "mixed separators");
 
 	// Drive letters
-	test_cases.emplace_back("C:\\foo\\bar", "C:\\foo\\bar", "absolute with drive");
-	test_cases.emplace_back("C:\\foo\\..\\bar", "C:\\bar", "parent with drive");
+	test_cases.emplace_back("C:\\src\\common", "C:\\src\\common", "absolute with drive");
+	test_cases.emplace_back("C:\\src\\..\\common", "C:\\common", "parent with drive");
 	test_cases.emplace_back("C:", "C:\\", "drive only");
-	test_cases.emplace_back("C:foo", "C:foo", "drive-relative path");
+	test_cases.emplace_back("C:src", "C:src", "drive-relative path");
 	test_cases.emplace_back("C:\\", "C:\\", "drive root");
 
 	// UNC paths
 	test_cases.emplace_back("\\\\server\\share", "\\\\server\\share", "UNC path");
-	test_cases.emplace_back("\\\\server\\share\\foo\\..\\bar", "\\\\server\\share\\bar", "UNC with parent");
-
-	// FIXME: should we do case insensitivity?
-	// // Case insensitivity (for equivalence, not normalization)
-	// test_cases.emplace_back("C:\\Foo\\Bar", "C:\\foo\\bar", "case normalization");
-	// test_cases.emplace_back("C:\\foo\\bar", "C:\\foo\\.\\bar", "windows absolute equivalents");
-	// test_cases.emplace_back("C:\\foo\\bar", "C:\\foo\\baz\\..\\bar", "windows absolute equivalents");
-	//
-	// test_cases.emplace_back("C:\\Foo\\Bar", "c:\\foo\\bar", "C:\\FOO\\BAR", "windows case insensitive");
+	test_cases.emplace_back("\\\\server\\share\\src\\..\\common", "\\\\server\\share\\common", "UNC with parent");
 #endif
 
 	for (auto &test : test_cases) {
-		REQUIRE(fs->CanonicalizePath(test.a) == fs->CanonicalizePath(test.b));
+		// test canonicalization
+		auto canonical_a = fs->CanonicalizePath(test.a);
+		auto canonical_b = fs->CanonicalizePath(test.b);
+
+		REQUIRE(canonical_a == canonical_b);
+		if (!fs->IsPathAbsolute(test.a)) {
+			// verify absolute and relative paths resolve to the same path
+			auto abs_a = fs->JoinPath(fs->GetWorkingDirectory(), test.a);
+			auto abs_b = fs->JoinPath(fs->GetWorkingDirectory(), test.b);
+			auto canonical_abs_a = fs->CanonicalizePath(abs_a);
+			auto canonical_abs_b = fs->CanonicalizePath(abs_b);
+			REQUIRE(canonical_abs_a == canonical_abs_b);
+			// absolute path matches relative path
+			REQUIRE(canonical_abs_a == canonical_a);
+		}
 	}
 }
 
