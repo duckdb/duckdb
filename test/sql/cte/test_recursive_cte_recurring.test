@@ -41,6 +41,6 @@ SELECT CASE WHEN EXISTS (SELECT 1 FROM deduction WHERE len(clause) = 0)
             THEN 'CONTRADICTION FOUND'
             ELSE 'LOGICALLY CONSISTENT'
        END AS result,
-       (SELECT list(clause) FROM deduction) AS all_deduced_clauses;
+       (SELECT list(clause ORDER BY clause) FROM deduction) AS all_deduced_clauses;
 ----
-CONTRADICTION FOUND	[[1], [-1, 2], [-2], [2], [-1], []]
+CONTRADICTION FOUND	[[], [-2], [-1], [-1, 2], [1], [2]]
