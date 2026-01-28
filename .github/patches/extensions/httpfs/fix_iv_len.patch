@@ -1,226 +1,85 @@
 diff --git a/src/crypto.cpp b/src/crypto.cpp
-index 69fb347..034638e 100644
+index 034638e..8a0504a 100644
 --- a/src/crypto.cpp
 +++ b/src/crypto.cpp
-@@ -21,10 +21,15 @@
- #include <openssl/applink.c>
- #endif
- 
-+using CipherType = duckdb::EncryptionTypes::CipherType;
-+using EncryptionVersion = duckdb::EncryptionTypes::EncryptionVersion;
-+using MainHeader = duckdb::MainHeader;
-+using Mode = duckdb::EncryptionTypes::Mode;
-+
- namespace duckdb {
- 
--AESStateSSL::AESStateSSL(EncryptionTypes::CipherType cipher_p, idx_t key_len)
--    : EncryptionState(cipher_p, key_len), context(EVP_CIPHER_CTX_new()) {
-+AESStateSSL::AESStateSSL(unique_ptr<EncryptionStateMetadata> metadata)
-+    : EncryptionState(std::move(metadata)), context(EVP_CIPHER_CTX_new()) {
- 	if (!(context)) {
- 		throw InternalException("OpenSSL AES failed with initializing context");
- 	}
-@@ -35,11 +40,10 @@ AESStateSSL::~AESStateSSL() {
- 	EVP_CIPHER_CTX_free(context);
- }
- 
--const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
--
--	switch (cipher) {
-+const EVP_CIPHER *AESStateSSL::GetCipher() {
-+	switch (metadata->GetCipher()) {
- 	case EncryptionTypes::GCM: {
--		switch (key_len) {
-+		switch (metadata->GetKeyLen()) {
- 		case 16:
- 			return EVP_aes_128_gcm();
- 		case 24:
-@@ -51,7 +55,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
- 		}
- 	}
- 	case EncryptionTypes::CTR: {
--		switch (key_len) {
-+		switch (metadata->GetKeyLen()) {
- 		case 16:
- 			return EVP_aes_128_ctr();
- 		case 24:
-@@ -63,7 +67,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
- 		}
- 	}
- 	case EncryptionTypes::CBC: {
--		switch (key_len) {
-+		switch (metadata->GetKeyLen()) {
- 		case 16:
- 			return EVP_aes_128_cbc();
- 		case 24:
-@@ -75,7 +79,7 @@ const EVP_CIPHER *AESStateSSL::GetCipher(idx_t key_len) {
- 		}
- 	}
- 	default:
--		throw InternalException("Invalid Encryption/Decryption Cipher: %d", static_cast<int>(cipher));
-+		throw InternalException("Invalid Encryption/Decryption Cipher: %d", static_cast<int>(metadata->GetCipher()));
+@@ -90,7 +90,7 @@ void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
  	}
  }
  
-@@ -86,24 +90,35 @@ void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
+-void AESStateSSL::InitializeIVEncrypt(EncryptionNonce nonce,  const_data_ptr_t key) {
++void AESStateSSL::InitializeIVEncrypt(EncryptionNonce &nonce,  const_data_ptr_t key) {
+ 	if (1 != EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_IVLEN, nonce.total_size(), NULL)) {
+ 		throw InternalException("EVP_CIPHER_CTX_ctrl failed (EVP_CTRL_GCM_SET_IVLEN)");
+ 	}
+@@ -100,7 +100,7 @@ void AESStateSSL::InitializeIVEncrypt(EncryptionNonce nonce,  const_data_ptr_t k
  	}
  }
  
--void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len_p,
--                                       const_data_ptr_t aad, idx_t aad_len) {
--	mode = EncryptionTypes::ENCRYPT;
-+void AESStateSSL::InitializeIVEncrypt(EncryptionNonce nonce,  const_data_ptr_t key) {
-+	if (1 != EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_IVLEN, nonce.total_size(), NULL)) {
-+		throw InternalException("EVP_CIPHER_CTX_ctrl failed (EVP_CTRL_GCM_SET_IVLEN)");
-+	}
+-void AESStateSSL::InitializeIVDecrypt(EncryptionNonce nonce, const_data_ptr_t key) {
++void AESStateSSL::InitializeIVDecrypt(EncryptionNonce &nonce, const_data_ptr_t key) {
+ 	if (1 != EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_IVLEN, nonce.total_size(), NULL)) {
+ 		throw InternalException("EVP_CIPHER_CTX_ctrl failed to set GCM iv len");
+ 	}
+@@ -109,7 +109,7 @@ void AESStateSSL::InitializeIVDecrypt(EncryptionNonce nonce, const_data_ptr_t ke
+ 	}
+ }
  
--	if (key_len_p != key_len) {
--		throw InternalException("Invalid encryption key length, expected %llu, got %llu", key_len, key_len_p);
-+	if (1 != EVP_EncryptInit_ex(context, NULL, NULL, key, nonce.data())) {
-+		throw InternalException("EncryptInit failed (attempt 2)");
- 	}
--	if (1 != EVP_EncryptInit_ex(context, GetCipher(key_len), NULL, NULL, NULL)) {
--		throw InternalException("EncryptInit failed (attempt 1)");
-+}
-+
-+void AESStateSSL::InitializeIVDecrypt(EncryptionNonce nonce, const_data_ptr_t key) {
-+	if (1 != EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_IVLEN, nonce.total_size(), NULL)) {
-+		throw InternalException("EVP_CIPHER_CTX_ctrl failed to set GCM iv len");
- 	}
--	if (1 != EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_IVLEN, iv_len, NULL)) {
--		throw InternalException("EVP_CIPHER_CTX_ctrl failed (EVP_CTRL_GCM_SET_IVLEN)");
-+	if (1 != EVP_DecryptInit_ex(context, NULL, NULL, key, nonce.data())) {
-+		throw InternalException("EVP_DecryptInit_ex failed to set iv/key");
- 	}
-+}
+-void AESStateSSL::InitializeEncryption(EncryptionNonce nonce, const_data_ptr_t key,
++void AESStateSSL::InitializeEncryption(EncryptionNonce &nonce, const_data_ptr_t key,
+                                        const_data_ptr_t aad, idx_t aad_len) {
+ 	mode = EncryptionTypes::ENCRYPT;
  
--	if (1 != EVP_EncryptInit_ex(context, NULL, NULL, key, iv)) {
--		throw InternalException("EncryptInit failed (attempt 2)");
-+void AESStateSSL::InitializeEncryption(EncryptionNonce nonce, const_data_ptr_t key,
-+                                       const_data_ptr_t aad, idx_t aad_len) {
-+	mode = EncryptionTypes::ENCRYPT;
-+
-+	if (1 != EVP_EncryptInit_ex(context, GetCipher(), NULL, NULL, NULL)) {
-+		throw InternalException("EncryptInit failed (attempt 1)");
+@@ -117,7 +117,7 @@ void AESStateSSL::InitializeEncryption(EncryptionNonce nonce, const_data_ptr_t k
+ 		throw InternalException("EncryptInit failed (attempt 1)");
  	}
  
-+	InitializeIVEncrypt(std::move(nonce), key);
-+
+-	InitializeIVEncrypt(std::move(nonce), key);
++	InitializeIVEncrypt(nonce, key);
+ 
  	int len;
  	if (aad_len > 0) {
- 		if (!EVP_DecryptUpdate(context, NULL, &len, aad, aad_len)) {
-@@ -112,24 +127,16 @@ void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_
+@@ -127,7 +127,7 @@ void AESStateSSL::InitializeEncryption(EncryptionNonce nonce, const_data_ptr_t k
  	}
  }
  
--void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len_p,
-+void AESStateSSL::InitializeDecryption(EncryptionNonce nonce, const_data_ptr_t key,
+-void AESStateSSL::InitializeDecryption(EncryptionNonce nonce, const_data_ptr_t key,
++void AESStateSSL::InitializeDecryption(EncryptionNonce &nonce, const_data_ptr_t key,
                                         const_data_ptr_t aad, idx_t aad_len) {
  	mode = EncryptionTypes::DECRYPT;
--	if (key_len_p != key_len) {
--		throw InternalException("Invalid encryption key length, expected %llu, got %llu", key_len, key_len_p);
--	}
--	if (1 != EVP_DecryptInit_ex(context, GetCipher(key_len), NULL, NULL, NULL)) {
-+
-+	if (1 != EVP_DecryptInit_ex(context, GetCipher(), NULL, NULL, NULL)) {
+ 
+@@ -135,7 +135,7 @@ void AESStateSSL::InitializeDecryption(EncryptionNonce nonce, const_data_ptr_t k
  		throw InternalException("EVP_DecryptInit_ex failed to set cipher");
  	}
--	// we use a bigger IV for GCM
--	if (cipher == EncryptionTypes::GCM) {
--		if (1 != EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_IVLEN, iv_len, NULL)) {
--			throw InternalException("EVP_CIPHER_CTX_ctrl failed to set GCM iv len");
--		}
--	}
--	if (1 != EVP_DecryptInit_ex(context, NULL, NULL, key, iv)) {
--		throw InternalException("EVP_DecryptInit_ex failed to set iv/key");
--	}
-+
-+	InitializeIVDecrypt(std::move(nonce), key);
-+
+ 
+-	InitializeIVDecrypt(std::move(nonce), key);
++	InitializeIVDecrypt(nonce, key);
+ 
  	int len;
  	if (aad_len > 0) {
- 		if (!EVP_DecryptUpdate(context, NULL, &len, aad, aad_len)) {
-@@ -201,7 +208,7 @@ size_t AESStateSSL::FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
- 
- size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
- 
--	if (cipher == EncryptionTypes::GCM) {
-+	if (metadata->GetCipher() == EncryptionTypes::GCM) {
- 		return FinalizeGCM(out, out_len, tag, tag_len);
- 	}
- 
 diff --git a/src/include/crypto.hpp b/src/include/crypto.hpp
-index a6fa268..909e8d8 100644
+index 909e8d8..0322478 100644
 --- a/src/include/crypto.hpp
 +++ b/src/include/crypto.hpp
-@@ -1,6 +1,7 @@
- #pragma once
- 
- #include "duckdb/common/encryption_state.hpp"
-+#include "duckdb/common/encryption_functions.hpp"
- #include "duckdb/common/helper.hpp"
- 
- #include <stddef.h>
-@@ -25,20 +26,22 @@ void hex256(hash_bytes &in, hash_str &out);
- class DUCKDB_EXTENSION_API AESStateSSL : public EncryptionState {
- 
- public:
--	explicit AESStateSSL(EncryptionTypes::CipherType cipher_p, idx_t key_len_p);
-+	explicit AESStateSSL(unique_ptr<EncryptionStateMetadata> metadata);
+@@ -30,9 +30,9 @@ public:
  	~AESStateSSL() override;
  
  public:
--	void InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len,
-+	void InitializeEncryption(EncryptionNonce nonce, const_data_ptr_t key,
+-	void InitializeEncryption(EncryptionNonce nonce, const_data_ptr_t key,
++	void InitializeEncryption(EncryptionNonce &nonce, const_data_ptr_t key,
  	                          const_data_ptr_t aad, idx_t aad_len) override;
--	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const_data_ptr_t key, idx_t key_len,
-+	void InitializeDecryption(EncryptionNonce nonce, const_data_ptr_t key,
+-	void InitializeDecryption(EncryptionNonce nonce, const_data_ptr_t key,
++	void InitializeDecryption(EncryptionNonce &nonce, const_data_ptr_t key,
  	                          const_data_ptr_t aad, idx_t aad_len) override;
  	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
  	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
- 	void GenerateRandomData(data_ptr_t data, idx_t len) override;
+@@ -40,8 +40,8 @@ public:
  
--	const EVP_CIPHER *GetCipher(idx_t key_len);
-+	const EVP_CIPHER *GetCipher();
+ 	const EVP_CIPHER *GetCipher();
  	size_t FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
-+	void InitializeIVEncrypt(EncryptionNonce nonce, const_data_ptr_t key);
-+	void InitializeIVDecrypt(EncryptionNonce nonce, const_data_ptr_t key);
+-	void InitializeIVEncrypt(EncryptionNonce nonce, const_data_ptr_t key);
+-	void InitializeIVDecrypt(EncryptionNonce nonce, const_data_ptr_t key);
++	void InitializeIVEncrypt(EncryptionNonce &nonce, const_data_ptr_t key);
++	void InitializeIVDecrypt(EncryptionNonce &nonce, const_data_ptr_t key);
  
  private:
  	EVP_CIPHER_CTX *context;
-@@ -54,9 +57,8 @@ public:
- 	explicit AESStateSSLFactory() {
- 	}
- 
--	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::EncryptionTypes::CipherType cipher_p,
--	                                                                  duckdb::idx_t key_len_p) const override {
--		return duckdb::make_shared_ptr<duckdb::AESStateSSL>(cipher_p, key_len_p);
-+	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata) const override {
-+		return duckdb::make_shared_ptr<duckdb::AESStateSSL>(std::move(metadata));
- 	}
- 
- 	~AESStateSSLFactory() override {
-diff --git a/test/sql/copy/encryption/different_aes_engines.test b/test/sql/copy/encryption/different_aes_engines.test
-index 5c09a38..229a889 100644
---- a/test/sql/copy/encryption/different_aes_engines.test
-+++ b/test/sql/copy/encryption/different_aes_engines.test
-@@ -3,6 +3,9 @@
- 
- foreach cipher GCM CTR
- 
-+statement ok
-+SET force_mbedtls_unsafe = 'true';
-+
- statement ok
- ATTACH '__TEST_DIR__/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
- 
-@@ -31,6 +34,9 @@ FROM enc.test
- 
- restart
- 
-+statement ok
-+SET force_mbedtls_unsafe = 'false';
-+
- endloop
- 
- 
