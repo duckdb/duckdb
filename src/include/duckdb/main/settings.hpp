@@ -1488,9 +1488,9 @@ struct WalAutocheckpointTransactionsSetting {
 	static constexpr const char *Name = "wal_autocheckpoint_transactions";
 	static constexpr const char *Description = "Checkpoint after every N committed transactions (0 = disabled)";
 	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = 87;
 };
 
 struct WriteBufferRowGroupCountSetting {
@@ -1501,7 +1501,7 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = 87;
+	static constexpr idx_t SettingIndex = 88;
 };
 
 struct ZstdMinStringLengthSetting {
@@ -1512,11 +1512,11 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "4096";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 88;
+	static constexpr idx_t SettingIndex = 89;
 };
 
 struct GeneratedSettingInfo {
-	static constexpr idx_t MaxSettingIndex = 89;
+	static constexpr idx_t MaxSettingIndex = 90;
 };
 
 //===----------------------------------------------------------------------===//
