@@ -1005,6 +1005,13 @@
         ]
     },
     {
+        "name": "using_key_syntax",
+        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
+        "type": "ENUM<UsingKeySyntax>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
+    },
+    {
         "name": "validate_external_file_cache",
         "description": "Cache validation mode: VALIDATE_ALL (default, validate all cache entries), VALIDATE_REMOTE (validate only remote cache entries), or NO_VALIDATION (disable cache validation).",
         "type": "ENUM<CacheValidationMode>",
