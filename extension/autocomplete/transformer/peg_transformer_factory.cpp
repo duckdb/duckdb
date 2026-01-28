@@ -601,6 +601,8 @@ void PEGTransformerFactory::RegisterMergeInto() {
 
 void PEGTransformerFactory::RegisterPivot() {
 	// pivot.gram
+	REGISTER_TRANSFORM(TransformPivotStatement);
+	REGISTER_TRANSFORM(TransformPivotUsing);
 	REGISTER_TRANSFORM(TransformUnpivotHeader);
 	REGISTER_TRANSFORM(TransformUnpivotHeaderSingle);
 	REGISTER_TRANSFORM(TransformUnpivotHeaderList);

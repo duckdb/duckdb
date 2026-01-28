@@ -1054,6 +1054,10 @@ private:
 	                                                             optional_ptr<ParseResult> parse_result);
 
 	// pivot.gram
+	static unique_ptr<SelectStatement> TransformPivotStatement(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformPivotUsing(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformUnpivotHeader(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformUnpivotHeaderSingle(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
