@@ -1483,6 +1483,17 @@ struct VariantMinimumShreddingSizeSetting {
 	static constexpr idx_t SettingIndex = 86;
 };
 
+struct WalAutocheckpointTransactionsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "wal_autocheckpoint_transactions";
+	static constexpr const char *Description =
+	    "The number of committed transactions at which to automatically trigger a checkpoint (0 = disabled)";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct WriteBufferRowGroupCountSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "write_buffer_row_group_count";

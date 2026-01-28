@@ -1019,6 +1019,16 @@
         "default_value": "30000"
     },
     {
+        "name": "wal_autocheckpoint_transactions",
+        "description": "The number of committed transactions at which to automatically trigger a checkpoint (0 = disabled)",
+        "type": "UBIGINT",
+        "scope": "global",
+        "custom_implementation": [
+            "set",
+            "get"
+        ]
+    },
+    {
         "name": "write_buffer_row_group_count",
         "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
         "type": "UBIGINT",

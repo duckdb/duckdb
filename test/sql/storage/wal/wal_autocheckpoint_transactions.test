@@ -1,0 +1,101 @@
+# name: test/sql/storage/wal/wal_autocheckpoint_transactions.test
+# description: Test automatic checkpoint based on committed transaction count
+# group: [wal]
+
+load __TEST_DIR__/wal_autocheckpoint_transactions.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE tbl(x INTEGER);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT wal_size FROM pragma_database_size();
+----
+0 bytes
+
+# Set threshold to 5 - checkpoint triggers when count+1 > 5 (i.e., on 6th transaction)
+statement ok
+SET wal_autocheckpoint_transactions=5;
+
+# Do 5 transactions (count goes 0→1→2→3→4→5, at limit but no checkpoint yet)
+statement ok
+INSERT INTO tbl VALUES (1);
+
+statement ok
+INSERT INTO tbl VALUES (1);
+
+statement ok
+INSERT INTO tbl VALUES (1);
+
+statement ok
+INSERT INTO tbl VALUES (1);
+
+statement ok
+INSERT INTO tbl VALUES (1);
+
+# WAL should be non-zero (5 entries, at limit but not exceeded)
+query I
+SELECT wal_size != '0 bytes' FROM pragma_database_size();
+----
+true
+
+# 6th transaction exceeds limit, triggers checkpoint, WAL should be 0 after
+statement ok
+INSERT INTO tbl VALUES (1);
+
+query I
+SELECT wal_size FROM pragma_database_size();
+----
+0 bytes
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+6
+
+# Now test with a higher threshold (1000)
+statement ok
+SET wal_autocheckpoint_transactions=1000;
+
+# Do 1000 transactions using a loop (at limit but not exceeded)
+loop i 0 1000
+
+statement ok
+INSERT INTO tbl VALUES (1);
+
+endloop
+
+# WAL should be non-zero (1000 entries, at limit but not exceeded)
+query I
+SELECT wal_size != '0 bytes' FROM pragma_database_size();
+----
+true
+
+# 1001st transaction exceeds limit, triggers checkpoint, WAL should be 0 after
+statement ok
+INSERT INTO tbl VALUES (1);
+
+query I
+SELECT wal_size FROM pragma_database_size();
+----
+0 bytes
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+1007
+
+restart
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+1007

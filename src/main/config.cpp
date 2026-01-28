@@ -191,6 +191,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(UsernameSetting),
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
     DUCKDB_SETTING(VariantMinimumShreddingSizeSetting),
+    DUCKDB_GLOBAL(WalAutocheckpointTransactionsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};

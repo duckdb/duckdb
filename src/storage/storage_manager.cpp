@@ -172,6 +172,18 @@ void StorageManager::SetWALSize(idx_t size) {
 	wal_size = size;
 }
 
+idx_t StorageManager::GetWALTransactionsCount() {
+	return wal_transactions_count;
+}
+
+void StorageManager::IncrementWALTransactionsCount() {
+	wal_transactions_count++;
+}
+
+void StorageManager::ResetWALTransactionsCount() {
+	wal_transactions_count = 0;
+}
+
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	if (InMemory() || read_only || !load_complete) {
 		return nullptr;
@@ -232,6 +244,8 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 
 void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 	D_ASSERT(wal.get());
+
+	ResetWALTransactionsCount();
 
 	// "wal" points to the checkpoint WAL
 	// first check if the checkpoint WAL has been written to
@@ -758,9 +772,22 @@ vector<MetadataBlockInfo> SingleFileStorageManager::GetMetadataInfo() {
 }
 
 bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
+	auto &config = DBConfig::Get(db).options;
+
+	// Check size-based threshold
 	auto initial_size = NumericCast<idx_t>(GetWALSize());
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
-	return expected_wal_size > DBConfig::Get(db).options.checkpoint_wal_size;
+	if (expected_wal_size > config.checkpoint_wal_size) {
+		return true;
+	}
+
+	// Check transaction-based threshold (if enabled)
+	auto transaction_limit = config.wal_autocheckpoint_transactions;
+	if (transaction_limit > 0 && GetWALTransactionsCount() + 1 > transaction_limit) {
+		return true;
+	}
+
+	return false;
 }
 
 shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCreateTableInfo *info /*info*/) {

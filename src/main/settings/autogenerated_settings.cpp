@@ -173,4 +173,11 @@ void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &p
 	EnumUtil::FromString<CacheValidationMode>(StringValue::Get(parameter));
 }
 
+//===----------------------------------------------------------------------===//
+// Wal Autocheckpoint Transactions
+//===----------------------------------------------------------------------===//
+void WalAutocheckpointTransactionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.wal_autocheckpoint_transactions = DBConfigOptions().wal_autocheckpoint_transactions;
+}
+
 } // namespace duckdb
