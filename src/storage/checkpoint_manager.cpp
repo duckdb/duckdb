@@ -512,22 +512,16 @@ void CheckpointReader::ReadIndex(CatalogTransaction transaction, Deserializer &d
 		// Read older duckdb files.
 		index_storage_info.name = index.name;
 		index_storage_info.root_block_ptr = root_block_pointer;
-
 	} else {
-		// Read the matching index storage info.
-		for (auto const &elem : table_info->GetIndexStorageInfo()) {
-			if (elem.name == index.name) {
-				index_storage_info = elem;
-				break;
-			}
-		}
+		// Extract the matching index storage info (moves it out of the stored collection).
+		index_storage_info = table_info->ExtractIndexStorageInfo(index.name);
 	}
 
 	D_ASSERT(index_storage_info.IsValid());
 	D_ASSERT(!index_storage_info.name.empty());
 
 	// Create an unbound index and add it to the table.
-	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), index_storage_info,
+	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_storage_info),
 	                                             TableIOManager::Get(data_table), data_table.db);
 	table_info->GetIndexes().AddIndex(std::move(unbound_index));
 }
@@ -622,7 +616,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 
 	if (!index_storage_infos.empty()) {
-		bound_info.indexes = index_storage_infos;
+		bound_info.indexes = std::move(index_storage_infos);
 
 	} else {
 		// This is an old duckdb file containing index pointers and deprecated storage.
@@ -630,7 +624,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 			// Deprecated storage is always true for old duckdb files.
 			IndexStorageInfo index_storage_info;
 			index_storage_info.root_block_ptr = index_pointers[i];
-			bound_info.indexes.push_back(index_storage_info);
+			bound_info.indexes.push_back(std::move(index_storage_info));
 		}
 	}
 
