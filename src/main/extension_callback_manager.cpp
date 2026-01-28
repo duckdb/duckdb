@@ -2,6 +2,7 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 
@@ -10,6 +11,8 @@ namespace duckdb {
 struct ExtensionCallbackRegistry {
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
+	//! Extensions made to the planner
+	vector<PlannerExtension> planner_extensions;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Extensions made to binder
@@ -41,6 +44,13 @@ void ExtensionCallbackManager::Register(ParserExtension extension) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
 	new_registry->parser_extensions.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
+}
+
+void ExtensionCallbackManager::Register(PlannerExtension extension) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->planner_extensions.push_back(std::move(extension));
 	callback_registry.atomic_store(new_registry);
 }
 
@@ -100,6 +110,12 @@ ExtensionCallbackIteratorHelper<ParserExtension> ExtensionCallbackManager::Parse
 	return ExtensionCallbackIteratorHelper<ParserExtension>(parser_extensions, std::move(registry));
 }
 
+ExtensionCallbackIteratorHelper<PlannerExtension> ExtensionCallbackManager::PlannerExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	auto &planner_extensions = registry->planner_extensions;
+	return ExtensionCallbackIteratorHelper<PlannerExtension>(planner_extensions, std::move(registry));
+}
+
 ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbackManager::ExtensionCallbacks() const {
 	auto registry = callback_registry.atomic_load();
 	auto &extension_callbacks = registry->extension_callbacks;
@@ -128,6 +144,10 @@ void ParserExtension::Register(DBConfig &config, ParserExtension extension) {
 	config.GetCallbackManager().Register(std::move(extension));
 }
 
+void PlannerExtension::Register(DBConfig &config, PlannerExtension extension) {
+	config.GetCallbackManager().Register(std::move(extension));
+}
+
 void OperatorExtension::Register(DBConfig &config, shared_ptr<OperatorExtension> extension) {
 	config.GetCallbackManager().Register(std::move(extension));
 }
@@ -149,5 +169,6 @@ template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
 template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
 template class ExtensionCallbackIteratorHelper<ParserExtension>;
+template class ExtensionCallbackIteratorHelper<PlannerExtension>;
 
 } // namespace duckdb
