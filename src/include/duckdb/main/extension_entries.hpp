@@ -1210,7 +1210,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"avro",
                                                           "postgres_scanner",
                                                           "tpcds",
                                                           "tpch",
-                                                          "uc_catalog",
+                                                          "unity_catalog",
                                                           "ui"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

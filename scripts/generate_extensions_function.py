@@ -906,7 +906,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "postgres_scanner",
     "tpcds",
     "tpch",
-    "uc_catalog",
+    "unity_catalog",
     "ui"
 }; // END_OF_AUTOLOADABLE_EXTENSIONS
 
