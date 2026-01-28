@@ -783,7 +783,7 @@ bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 
 	// Check transaction-based threshold (if enabled)
 	auto transaction_limit = config.wal_autocheckpoint_transactions;
-	if (transaction_limit > 0 && GetWALTransactionsCount() + 1 > transaction_limit) {
+	if (transaction_limit > 0 && GetWALTransactionsCount() + 1 >= transaction_limit) {
 		return true;
 	}
 

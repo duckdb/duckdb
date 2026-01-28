@@ -1020,7 +1020,7 @@
     },
     {
         "name": "wal_autocheckpoint_transactions",
-        "description": "The number of committed transactions at which to automatically trigger a checkpoint (0 = disabled)",
+        "description": "Checkpoint after every N committed transactions (0 = disabled)",
         "type": "UBIGINT",
         "scope": "global",
         "custom_implementation": [

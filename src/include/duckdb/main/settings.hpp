@@ -1486,8 +1486,7 @@ struct VariantMinimumShreddingSizeSetting {
 struct WalAutocheckpointTransactionsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "wal_autocheckpoint_transactions";
-	static constexpr const char *Description =
-	    "The number of committed transactions at which to automatically trigger a checkpoint (0 = disabled)";
+	static constexpr const char *Description = "Checkpoint after every N committed transactions (0 = disabled)";
 	static constexpr const char *InputType = "UBIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
