@@ -410,7 +410,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		logical_plan = optimizer.Optimize(std::move(logical_plan));
 		D_ASSERT(logical_plan);
 		profiler.EndPhase();
-
+		// Update result types from the optimized plan (in case optimizers modified them)
+		logical_plan->ResolveOperatorTypes();
+		result->types = logical_plan->types;
 #ifdef DEBUG
 		logical_plan->Verify(*this);
 #endif
