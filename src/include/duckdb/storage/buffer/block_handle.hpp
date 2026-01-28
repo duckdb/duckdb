@@ -30,13 +30,17 @@ using BlockLock = unique_lock<mutex>;
 
 class BlockMemory : public enable_shared_from_this<BlockMemory> {
 public:
-	BlockMemory(BufferManager &buffer_manager, MemoryTag tag_p, idx_t block_alloc_size);
-	BlockMemory(BufferManager &buffer_manager, MemoryTag tag_p, unique_ptr<FileBuffer> buffer_p,
+	BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p, idx_t block_alloc_size);
+	BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p, unique_ptr<FileBuffer> buffer_p,
 	            DestroyBufferUpon destroy_buffer_upon_p, idx_t size_p, BufferPoolReservation &&reservation);
+	~BlockMemory();
 
 public:
 	BufferManager &GetBufferManager() {
 		return buffer_manager;
+	}
+	block_id_t BlockId() const {
+		return block_id;
 	}
 	BlockLock GetLock() {
 		return BlockLock(lock);
@@ -172,9 +176,18 @@ public:
 	void ChangeMemoryUsage(BlockLock &l, int64_t delta);
 	void ConvertToPersistent(BlockLock &l, BlockHandle &new_block, unique_ptr<FileBuffer> new_buffer);
 	void ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_header_size, int64_t memory_delta);
+	//! Returns whether the block can be unloaded or not.
+	//! The state here can change if the block lock is held.
+	//! However, this method does not hold the block lock.
+	bool CanUnload() const;
+	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l);
+	void Unload(BlockLock &l);
 
 private:
+	//! A reference to the buffer manager.
 	BufferManager &buffer_manager;
+	//! The block id of the block.
+	const block_id_t block_id;
 	//! The block-level lock.
 	mutex lock;
 	//! Whether the block is loaded or unloaded.
@@ -243,17 +256,15 @@ public:
 	BlockMemory &GetMemory() {
 		return memory;
 	}
+	//! Returns a weak pointer to the block memory of a block.
+	weak_ptr<BlockMemory> GetMemoryWeak() const {
+		return weak_ptr<BlockMemory>(memory_p);
+	}
 
 public:
 	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
 	                            BufferPoolReservation reservation);
 	BufferHandle Load(QueryContext context, unique_ptr<FileBuffer> buffer = nullptr);
-	//! Returns whether the block can be unloaded or not.
-	//! The state here can change if the block lock is held.
-	//! However, this method does not hold the block lock.
-	bool CanUnload() const;
-	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l) const;
-	void Unload(BlockLock &l) const;
 
 private:
 	BlockManager &block_manager;

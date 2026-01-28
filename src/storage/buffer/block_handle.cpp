@@ -10,22 +10,53 @@
 
 namespace duckdb {
 
-BlockMemory::BlockMemory(BufferManager &buffer_manager, MemoryTag tag_p, idx_t block_alloc_size_p)
-    : buffer_manager(buffer_manager), state(BlockState::BLOCK_UNLOADED), readers(0), tag(tag_p),
+BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p,
+                         idx_t block_alloc_size_p)
+    : buffer_manager(buffer_manager), block_id(block_id_p), state(BlockState::BLOCK_UNLOADED), readers(0), tag(tag_p),
       buffer_type(FileBufferType::BLOCK), buffer(nullptr), eviction_seq_num(0), lru_timestamp_msec(),
       destroy_buffer_upon(DestroyBufferUpon::BLOCK), memory_usage(block_alloc_size_p),
       memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
       eviction_queue_idx(DConstants::INVALID_INDEX) {
 }
 
-BlockMemory::BlockMemory(BufferManager &buffer_manager, MemoryTag tag_p, unique_ptr<FileBuffer> buffer_p,
-                         DestroyBufferUpon destroy_buffer_upon_p, idx_t size_p, BufferPoolReservation &&reservation)
-    : buffer_manager(buffer_manager), state(BlockState::BLOCK_LOADED), readers(0), tag(tag_p),
+BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p,
+                         unique_ptr<FileBuffer> buffer_p, DestroyBufferUpon destroy_buffer_upon_p, idx_t size_p,
+                         BufferPoolReservation &&reservation)
+    : buffer_manager(buffer_manager), block_id(block_id_p), state(BlockState::BLOCK_LOADED), readers(0), tag(tag_p),
       buffer_type(buffer_p->GetBufferType()), buffer(std::move(buffer_p)), eviction_seq_num(0), lru_timestamp_msec(),
       destroy_buffer_upon(destroy_buffer_upon_p), memory_usage(size_p),
       memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
       eviction_queue_idx(DConstants::INVALID_INDEX) {
 	memory_charge = std::move(reservation); // Moved to constructor body due to tidy check.
+}
+
+BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
+	// The block memory is being destroyed, meaning that any unswizzled pointers are now binary junk.
+	SetSwizzling(nullptr);
+	D_ASSERT(!buffer || buffer->GetBufferType() == GetBufferType());
+	if (buffer && GetBufferType() != FileBufferType::TINY_BUFFER) {
+		// Kill the latest version in the eviction queue.
+		buffer_manager.GetBufferPool().IncrementDeadNodes(*this);
+	}
+
+	// Erase the block memory, if it is still loaded.
+	if (buffer && GetState() == BlockState::BLOCK_LOADED) {
+		D_ASSERT(MemoryCharge().size > 0);
+		SetBuffer(nullptr);
+		MemoryCharge().Resize(0);
+	} else {
+		D_ASSERT(MemoryCharge().size == 0);
+	}
+
+	try {
+		if (block_id >= MAXIMUM_BLOCK) {
+			// The memory buffer lives in memory.
+			// Thus, it could've been offloaded to disk, and we should remove the file.
+			buffer_manager.DeleteTemporaryFile(*this);
+		}
+	} catch (...) {
+		// FIXME: log the error.
+	}
 }
 
 void BlockMemory::ChangeMemoryUsage(BlockLock &l, int64_t delta) {
@@ -71,10 +102,53 @@ void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_heade
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
+bool BlockMemory::CanUnload() const {
+	if (GetState() == BlockState::BLOCK_UNLOADED) {
+		// The block has already been unloaded.
+		return false;
+	}
+	if (Readers() > 0) {
+		// There are active readers.
+		return false;
+	}
+	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !buffer_manager.HasTemporaryDirectory()) {
+		// The block memory cannot be destroyed upon eviction/unpinning.
+		// In order to unload this block we need to write it to a temporary buffer.
+		// However, no temporary directory is specified, hence, we cannot unload.
+		return false;
+	}
+	return true;
+}
+
+unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
+	VerifyMutex(l);
+
+	if (GetState() == BlockState::BLOCK_UNLOADED) {
+		// already unloaded: nothing to do
+		return nullptr;
+	}
+	D_ASSERT(!IsSwizzled());
+	D_ASSERT(CanUnload());
+
+	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
+		// This is a temporary block that cannot be destroyed upon evict/unpin.
+		// Thus, we write to it to a temporary file.
+		buffer_manager.WriteTemporaryBuffer(GetMemoryTag(), block_id, *GetBuffer());
+	}
+	memory_charge.Resize(0);
+	SetState(BlockState::BLOCK_UNLOADED);
+	return std::move(GetBuffer());
+}
+
+void BlockMemory::Unload(BlockLock &l) {
+	auto block = UnloadAndTakeBlock(l);
+	block.reset();
+}
+
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag_p)
     : block_manager(block_manager), block_alloc_size(block_manager.GetBlockAllocSize()),
       block_header_size(block_manager.GetBlockHeaderSize()), block_id(block_id_p),
-      memory_p(make_shared_ptr<BlockMemory>(block_manager.GetBufferManager(), tag_p, block_alloc_size)),
+      memory_p(make_shared_ptr<BlockMemory>(block_manager.GetBufferManager(), block_id_p, tag_p, block_alloc_size)),
       memory(*memory_p) {
 }
 
@@ -83,31 +157,14 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
                          BufferPoolReservation &&reservation)
     : block_manager(block_manager), block_alloc_size(block_manager.GetBlockAllocSize()),
       block_header_size(block_manager.GetBlockHeaderSize()), block_id(block_id_p),
-      memory_p(make_shared_ptr<BlockMemory>(block_manager.GetBufferManager(), tag_p, std::move(buffer_p),
+      memory_p(make_shared_ptr<BlockMemory>(block_manager.GetBufferManager(), block_id_p, tag_p, std::move(buffer_p),
                                             destroy_buffer_upon_p, size_p, std::move(reservation))),
       memory(*memory_p) {
 }
 
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
-	// The block handle is being destroyed, meaning that any unswizzled pointers are now binary junk.
-	memory.SetSwizzling(nullptr);
-	auto &buffer = memory.GetBuffer();
-	D_ASSERT(!buffer || buffer->GetBufferType() == memory.GetBufferType());
-	if (buffer && memory.GetBufferType() != FileBufferType::TINY_BUFFER) {
-		// Kill the latest version in the eviction queue.
-		memory.GetBufferManager().GetBufferPool().IncrementDeadNodes(*this);
-	}
-
-	// Erase the block memory, if it is still loaded.
-	if (buffer && memory.GetState() == BlockState::BLOCK_LOADED) {
-		D_ASSERT(memory.MemoryCharge().size > 0);
-		memory.SetBuffer(nullptr);
-		memory.MemoryCharge().Resize(0);
-	} else {
-		D_ASSERT(memory.MemoryCharge().size == 0);
-	}
 	try {
-		block_manager.UnregisterBlock(*this);
+		block_manager.UnregisterPersistentBlock(*this);
 	} catch (...) {
 		// FIXME: emit warning or similar.
 	}
@@ -169,49 +226,6 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 	memory.SetState(BlockState::BLOCK_LOADED);
 	memory.SetReaders(1);
 	return BufferHandle(shared_from_this(), memory.GetBuffer());
-}
-
-bool BlockHandle::CanUnload() const {
-	if (memory.GetState() == BlockState::BLOCK_UNLOADED) {
-		// The block has already been unloaded.
-		return false;
-	}
-	if (memory.Readers() > 0) {
-		// There are active readers.
-		return false;
-	}
-	if (block_id >= MAXIMUM_BLOCK && memory.MustWriteToTemporaryFile() &&
-	    !memory.GetBufferManager().HasTemporaryDirectory()) {
-		// The block memory cannot be destroyed upon eviction/unpinning.
-		// In order to unload this block we need to write it to a temporary buffer.
-		// However, no temporary directory is specified, hence, we cannot unload.
-		return false;
-	}
-	return true;
-}
-
-unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &l) const {
-	memory.VerifyMutex(l);
-
-	if (memory.GetState() == BlockState::BLOCK_UNLOADED) {
-		// already unloaded: nothing to do
-		return nullptr;
-	}
-	D_ASSERT(!memory.IsSwizzled());
-	D_ASSERT(CanUnload());
-
-	if (block_id >= MAXIMUM_BLOCK && memory.MustWriteToTemporaryFile()) {
-		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
-		memory.GetBufferManager().WriteTemporaryBuffer(memory.GetMemoryTag(), block_id, *memory.GetBuffer());
-	}
-	memory.MemoryCharge().Resize(0);
-	memory.SetState(BlockState::BLOCK_UNLOADED);
-	return std::move(memory.GetBuffer());
-}
-
-void BlockHandle::Unload(BlockLock &l) const {
-	auto block = UnloadAndTakeBlock(l);
-	block.reset();
 }
 
 } // namespace duckdb

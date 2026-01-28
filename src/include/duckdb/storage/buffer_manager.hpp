@@ -17,7 +17,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
-
+class BlockMemory;
 class Allocator;
 class BufferPool;
 class TemporaryMemoryManager;
@@ -134,8 +134,8 @@ public:
 	//! Read a temporary buffer.
 	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                                   unique_ptr<FileBuffer> buffer);
-	//! Delete the temporary file containing the block.
-	virtual void DeleteTemporaryFile(BlockHandle &block);
+	//! Delete the temporary file containing the block memory.
+	virtual void DeleteTemporaryFile(BlockMemory &memory);
 };
 
 } // namespace duckdb

@@ -198,8 +198,8 @@ public:
 	                                           unique_ptr<FileBuffer> buffer) override {
 		return buffer_manager.ReadTemporaryBuffer(context, tag, block, std::move(buffer));
 	}
-	void DeleteTemporaryFile(BlockHandle &block) override {
-		return buffer_manager.DeleteTemporaryFile(block);
+	void DeleteTemporaryFile(BlockMemory &memory) override {
+		return buffer_manager.DeleteTemporaryFile(memory);
 	}
 
 private:

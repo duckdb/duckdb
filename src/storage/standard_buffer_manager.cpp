@@ -442,7 +442,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 			if (handle->GetMemory().MustAddToEvictionQueue()) {
 				purge = buffer_pool.AddToEvictionQueue(handle);
 			} else {
-				handle->Unload(lock);
+				handle->GetMemory().Unload(lock);
 			}
 		}
 	}
@@ -590,15 +590,15 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	handle.reset();
 
 	// Delete the file and return the buffer.
-	DeleteTemporaryFile(block);
+	DeleteTemporaryFile(block.GetMemory());
 	return buffer;
 }
 
-void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
-	if (!block.GetMemory().IsUnloaded()) {
+void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
+	if (!memory.IsUnloaded()) {
 		return;
 	}
-	auto id = block.BlockId();
+	auto id = memory.BlockId();
 	if (temporary_directory.path.empty()) {
 		// no temporary directory specified: nothing to delete
 		return;
@@ -614,7 +614,7 @@ void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
 	// check if we should delete the file from the shared pool of files, or from the general file system
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		idx_t eviction_size = temporary_directory.handle->GetTempFile().DeleteTemporaryBuffer(id);
-		evicted_data_per_tag[uint8_t(block.GetMemory().GetMemoryTag())] -= eviction_size;
+		evicted_data_per_tag[uint8_t(memory.GetMemoryTag())] -= eviction_size;
 		return;
 	}
 
@@ -622,7 +622,7 @@ void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
 	if (fs.FileExists(path)) {
-		evicted_data_per_tag[uint8_t(block.GetMemory().GetMemoryTag())] -= block.GetMemory().GetMemoryUsage();
+		evicted_data_per_tag[uint8_t(memory.GetMemoryTag())] -= memory.GetMemoryUsage();
 		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 		auto content_size = handle->GetFileSize();
 		handle.reset();

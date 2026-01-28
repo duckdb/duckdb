@@ -119,17 +119,13 @@ void BlockManager::UnregisterBlock(block_id_t id) {
 	blocks.erase(id);
 }
 
-void BlockManager::UnregisterBlock(BlockHandle &block) {
+void BlockManager::UnregisterPersistentBlock(BlockHandle &block) {
 	if (in_destruction) {
 		return;
 	}
 	auto id = block.BlockId();
-	if (id >= MAXIMUM_BLOCK) {
-		// in-memory buffer: buffer could have been offloaded to disk: remove the file
-		buffer_manager.DeleteTemporaryFile(block);
-	} else {
-		UnregisterBlock(id);
-	}
+	D_ASSERT(id < MAXIMUM_BLOCK);
+	UnregisterBlock(id);
 }
 
 MetadataManager &BlockManager::GetMetadataManager() {

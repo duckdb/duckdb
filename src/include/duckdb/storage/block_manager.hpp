@@ -114,7 +114,7 @@ public:
 	                                            shared_ptr<BlockHandle> old_block,
 	                                            ConvertToPersistentMode mode = ConvertToPersistentMode::DESTRUCTIVE);
 
-	void UnregisterBlock(BlockHandle &block);
+	void UnregisterPersistentBlock(BlockHandle &block);
 	//! UnregisterBlock, only accepts non-temporary block ids
 	virtual void UnregisterBlock(block_id_t id);
 
