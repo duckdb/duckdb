@@ -25,28 +25,34 @@ SELECT wal_size FROM pragma_database_size();
 statement ok
 SET wal_autocheckpoint_transactions=5;
 
-# Do 4 transactions (count goes 0→1→2→3→4, no checkpoint yet)
+# Do 4 transactions with interleaved inserts/deletes/updates
 statement ok
 INSERT INTO tbl VALUES (1);
 
 statement ok
-INSERT INTO tbl VALUES (1);
+INSERT INTO tbl VALUES (2);
 
 statement ok
-INSERT INTO tbl VALUES (1);
+DELETE FROM tbl WHERE x = 1;
 
 statement ok
-INSERT INTO tbl VALUES (1);
+UPDATE tbl SET x = 3 WHERE x = 2;
 
-# WAL should be non-zero (4 entries, not yet at limit)
+# WAL should be non-zero (4 transactions, not yet at limit)
 query I
 SELECT wal_size != '0 bytes' FROM pragma_database_size();
 ----
 true
+
+# Verify current state
+query I
+SELECT * FROM tbl;
+----
+3
 
 # 5th transaction triggers checkpoint, WAL should be 0 after
 statement ok
-INSERT INTO tbl VALUES (1);
+INSERT INTO tbl VALUES (4);
 
 query I
 SELECT wal_size FROM pragma_database_size();
@@ -54,31 +60,38 @@ SELECT wal_size FROM pragma_database_size();
 0 bytes
 
 query I
-SELECT COUNT(*) FROM tbl;
+SELECT * FROM tbl ORDER BY x;
 ----
-5
+3
+4
 
-# Now test with a higher threshold (1000)
+# Now test with interleaved operations in a loop
 statement ok
-SET wal_autocheckpoint_transactions=1000;
+SET wal_autocheckpoint_transactions=10;
 
-# Do 999 transactions using a loop (not yet at limit)
-loop i 0 999
+# Do 9 transactions with mixed operations (not yet at limit)
+loop i 0 3
 
 statement ok
-INSERT INTO tbl VALUES (1);
+INSERT INTO tbl VALUES (${i} + 10);
+
+statement ok
+INSERT INTO tbl VALUES (${i} + 20);
+
+statement ok
+DELETE FROM tbl WHERE x = ${i} + 10;
 
 endloop
 
-# WAL should be non-zero (999 entries, not yet at limit)
+# WAL should be non-zero (9 transactions, not yet at limit)
 query I
 SELECT wal_size != '0 bytes' FROM pragma_database_size();
 ----
 true
 
-# 1000th transaction triggers checkpoint, WAL should be 0 after
+# 10th transaction triggers checkpoint
 statement ok
-INSERT INTO tbl VALUES (1);
+INSERT INTO tbl VALUES (100);
 
 query I
 SELECT wal_size FROM pragma_database_size();
@@ -88,11 +101,70 @@ SELECT wal_size FROM pragma_database_size();
 query I
 SELECT COUNT(*) FROM tbl;
 ----
-1005
+6
+
+restart
+
+query I
+SELECT * FROM tbl ORDER BY x;
+----
+3
+4
+20
+21
+22
+100
+
+# Test with higher threshold (1000) and interleaved operations in explicit transactions
+statement ok
+SET wal_autocheckpoint_transactions=1000;
+
+statement ok
+CHECKPOINT;
+
+# Do 999 transactions, each containing multiple operations (INSERT, INSERT, DELETE)
+loop i 0 999
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO tbl VALUES (${i} + 1000);
+
+statement ok
+INSERT INTO tbl VALUES (${i} + 2000);
+
+statement ok
+DELETE FROM tbl WHERE x = ${i} + 1000;
+
+statement ok
+COMMIT;
+
+# WAL should be non-zero (999 transactions, not yet at limit)
+query I
+SELECT wal_size != '0 bytes' FROM pragma_database_size();
+----
+true
+
+endloop
+
+# 1000th transaction triggers checkpoint
+statement ok
+INSERT INTO tbl VALUES (9999);
+
+query I
+SELECT wal_size FROM pragma_database_size();
+----
+0 bytes
+
+query I
+SELECT COUNT(*) FROM tbl;
+----
+1006
 
 restart
 
 query I
 SELECT COUNT(*) FROM tbl;
 ----
-1005
+1006
