@@ -142,6 +142,7 @@ public:
 	idx_t ParamCount() const;
 	unique_ptr<SQLStatement> CreatePivotStatement(unique_ptr<SQLStatement> statement);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
+	void PivotEntryCheck(const string &type);
 
 public:
 	ArenaAllocator &allocator;

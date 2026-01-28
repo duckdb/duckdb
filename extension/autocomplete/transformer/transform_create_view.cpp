@@ -85,6 +85,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTr
 	} else {
 		info->query = std::move(select_statement);
 	}
+	transformer.PivotEntryCheck("view");
 	result->info = std::move(info);
 	return result;
 }
