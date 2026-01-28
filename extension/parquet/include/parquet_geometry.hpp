@@ -85,8 +85,8 @@ class GeoParquetFileMetadata {
 public:
 	explicit GeoParquetFileMetadata(GeoParquetVersion geo_parquet_version) : version(geo_parquet_version) {
 	}
-	void AddGeoParquetStats(ClientContext &context, const string &column_name, const LogicalType &type, const GeometryStatsData &stats,
-	                        GeoParquetVersion version);
+	void AddGeoParquetStats(ClientContext &context, const string &column_name, const LogicalType &type,
+	                        const GeometryStatsData &stats, GeoParquetVersion version);
 	void Write(duckdb_parquet::FileMetaData &file_meta_data);
 
 	// Try to read GeoParquet metadata. Returns nullptr if not found, invalid or the required spatial extension is not
