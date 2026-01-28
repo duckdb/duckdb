@@ -11,6 +11,8 @@
 
 #include "zstd.h"
 
+#include "zstd/common/zstd_internal.h"
+
 /*
 Data layout per segment:
 +--------------------------------------------+
@@ -142,11 +144,6 @@ public:
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	// check if the storage version we are writing to supports sztd
 	auto &storage = col_data.GetStorageManager();
-	auto &block_manager = col_data.GetBlockManager();
-	if (block_manager.InMemory()) {
-		//! Can't use ZSTD in in-memory environment
-		return nullptr;
-	}
 	if (storage.GetStorageVersion() < 4) {
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
@@ -271,6 +268,12 @@ public:
 		auto &buffer_manager = block_manager.buffer_manager;
 
 		optional_ptr<BufferHandle> to_use;
+
+		if (block_manager.InMemory() && next_page_buffer.IsValid()) {
+			D_ASSERT(to_use.get() != &next_page_buffer);
+			*to_use = std::move(next_page_buffer);
+			return *to_use;
+		}
 
 		if (in_vector) {
 			// Currently in a Vector, we have to be mindful of the buffer that the string_lengths lives on
@@ -455,7 +458,14 @@ public:
 
 	block_id_t FinalizePage() {
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		auto new_id = partial_block_manager.GetFreeBlockId();
+		block_id_t new_id;
+		if (block_manager.InMemory()) {
+			auto &buffer_manager = block_manager.buffer_manager;
+			next_page_buffer = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, info.GetBlockSize(), false);
+			new_id = next_page_buffer.GetBlockHandle()->BlockId();
+		} else {
+			new_id = partial_block_manager.GetFreeBlockId();
+		}
 
 		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
@@ -473,9 +483,13 @@ public:
 			return;
 		}
 
-		// Write the current page to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
+		if (block_manager.InMemory()) {
+			auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
+			state.handles[block_id] = buffer.GetBlockHandle();
+		} else {
+			block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
+		}
 	}
 
 	void FlushVector() {
@@ -580,6 +594,7 @@ public:
 	idx_t vectors_per_segment = 0;
 	unique_ptr<ColumnSegment> segment;
 	BufferHandle segment_handle;
+	BufferHandle next_page_buffer; // Only relevant for in-memory storage
 
 	// Non-segment buffers
 	BufferHandle extra_pages[2];
@@ -1043,6 +1058,10 @@ unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deser
 }
 
 void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
+	if (segment.GetBlockManager().InMemory()) {
+		// This code would result in MarkBlockAsModified() getting called, no need to do this for in-memory blocks.
+		return;
+	}
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	for (auto &block_id : state.on_disk_blocks) {
 		visitor.Visit(block_id);

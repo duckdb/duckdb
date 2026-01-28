@@ -54,14 +54,13 @@ public:
 	void RegisterBlock(BlockManager &manager, block_id_t block_id);
 
 	string GetSegmentInfo() const override;
+	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
 
 	void InsertOverflowBlock(block_id_t block_id, reference<StringBlock> block);
 	reference<StringBlock> FindOverflowBlock(block_id_t block_id);
 
 private:
 	mutex block_lock;
-	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
-
 	StorageLock overflow_blocks_lock;
 };
 

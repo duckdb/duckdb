@@ -1,0 +1,49 @@
+# name: test/sql/storage/memory/in_memory_zstd_works_bigger_data.test
+# group: [memory]
+
+statement ok
+attach ':memory:' as db2 (compress);
+
+statement ok
+use db2;
+
+statement ok
+pragma force_compression='zstd';
+
+###########################
+# Test CRUD Functionality #
+###########################
+
+# 1. Create
+statement ok
+create table tbl as
+select
+    i // 5_000 as num,
+    num::varchar || list_reduce([uuid()::varchar for x in range(10)], lambda x, y: concat(x, y)) str
+from range(20_000) t(i) order by num;
+
+statement ok
+force checkpoint;
+
+query I
+select distinct compression = 'ZSTD' from pragma_storage_info('tbl') where segment_type = 'VARCHAR'
+----
+true
+
+# 2. Read
+statement ok
+FROM tbl;
+
+# 3. Update
+statement ok
+UPDATE tbl SET str = 'quacc' WHERE num = 0;
+
+statement ok
+FROM tbl;
+
+# 4. Delete
+statement ok
+DELETE FROM tbl WHERE num % 2 = 0;
+
+statement ok
+FROM tbl;
