@@ -1,16 +1,20 @@
 #include "catch.hpp"
+#include "duckdb/common/compressed_file_system.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
-static void create_dummy_file(string fname) {
+namespace {
+
+void create_dummy_file(string fname) {
 	string normalized_string;
 	if (StringUtil::StartsWith(fname, "file:///")) {
 #ifdef _WIN32
@@ -33,6 +37,49 @@ static void create_dummy_file(string fname) {
 	outfile << "I_AM_A_DUMMY" << endl;
 	outfile.close();
 }
+
+// Fake compress file handle and filesystem implementation, which doesn't contain any (de)compression functionality but
+// just the interface compatibility.
+class FakeCompressFileHandle : public FileHandle {
+public:
+	FakeCompressFileHandle(FileSystem &internal_file_system, duckdb::unique_ptr<FileHandle> internal_file_handle_p)
+	    : FileHandle(internal_file_system, internal_file_handle_p->GetPath(), internal_file_handle_p->GetFlags()),
+	      internal_file_handle(std::move(internal_file_handle_p)) {
+	}
+
+	void Close() override {
+		internal_file_handle->Close();
+	}
+
+	duckdb::unique_ptr<FileHandle> internal_file_handle;
+};
+class FakeCompressFileSystem : public CompressedFileSystem {
+public:
+	duckdb::unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, duckdb::unique_ptr<FileHandle> handle,
+	                                                  bool write) override {
+		(void)context; // Suppress compilation warning.
+		(void)write;
+		return make_uniq<FakeCompressFileHandle>(*this, std::move(handle));
+	}
+
+	bool CanHandleFile(const string &fpath) override {
+		return StringUtil::EndsWith(fpath, ".compress");
+	}
+	duckdb::unique_ptr<StreamWrapper> CreateStream() override {
+		return nullptr;
+	}
+	idx_t InBufferSize() override {
+		return 0;
+	}
+	idx_t OutBufferSize() override {
+		return 0;
+	}
+	string GetName() const override {
+		return "FakeCompress";
+	}
+};
+
+} // namespace
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
@@ -304,4 +351,37 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 	// Close the remaining handle; the file should not exist.
 	read_handle.reset();
 	REQUIRE(!fs->FileExists(fname));
+}
+
+TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
+	// Create a local file which pretends to be fake-compressed.
+	auto filepath = TestCreatePath("fake_compression_file.compress");
+	auto fs = FileSystem::CreateLocal();
+	{
+		const string payload = "CREATE_COMPRESSED_FILE";
+		auto write_handle = fs->OpenFile(filepath, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		write_handle->Write(QueryContext(), static_cast<void *>(const_cast<char *>(payload.c_str())), payload.size(),
+		                    0);
+		write_handle->Sync();
+	}
+
+	VirtualFileSystem vfs;
+	auto fake_compress_filesystem = make_uniq<FakeCompressFileSystem>();
+	vfs.RegisterCompressionFilesystem(std::move(fake_compress_filesystem));
+
+	FileOpenFlags flags = FileOpenFlags::FILE_FLAGS_READ;
+	flags.SetCompression(FileCompressionType::AUTO_DETECT);
+	auto file_handle = vfs.OpenFile(filepath, flags, /*opener=*/nullptr);
+
+	// Downcast to make sure compressed file handle is created.
+	REQUIRE(file_handle != nullptr);
+	auto &compressed_file_handle = file_handle->Cast<FakeCompressFileHandle>();
+	REQUIRE(compressed_file_handle.internal_file_handle != nullptr);
+	file_handle.reset();
+	fs->RemoveFile(filepath);
+
+	// If we give a new compressed file, which cannot be handled by already registered compression filesystems, we
+	// cannot proceed.
+	const string another_compressed_filepath = "fake_compression_file.another_compress";
+	REQUIRE_THROWS(vfs.OpenFile(filepath, flags, /*opener=*/nullptr));
 }
