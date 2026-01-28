@@ -12,7 +12,6 @@
 
 #include <limits>
 
-
 namespace duckdb {
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -764,7 +763,6 @@ const auto EPSG_3857_WKT2_2019 =
 const auto EPSG_3857_PROJJSON =
     R"WKT_LITERAL({"$schema":"https://proj.org/schemas/v0.7/projjson.schema.json","type":"ProjectedCRS","name":"WGS 84 / Pseudo-Mercator","base_crs":{"type":"GeographicCRS","name":"WGS 84","datum_ensemble":{"name":"World Geodetic System 1984 ensemble","members":[{"name":"World Geodetic System 1984 (Transit)","id":{"authority":"EPSG","code":1166}},{"name":"World Geodetic System 1984 (G730)","id":{"authority":"EPSG","code":1152}},{"name":"World Geodetic System 1984 (G873)","id":{"authority":"EPSG","code":1153}},{"name":"World Geodetic System 1984 (G1150)","id":{"authority":"EPSG","code":1154}},{"name":"World Geodetic System 1984 (G1674)","id":{"authority":"EPSG","code":1155}},{"name":"World Geodetic System 1984 (G1762)","id":{"authority":"EPSG","code":1156}},{"name":"World Geodetic System 1984 (G2139)","id":{"authority":"EPSG","code":1309}},{"name":"World Geodetic System 1984 (G2296)","id":{"authority":"EPSG","code":1383}}],"ellipsoid":{"name":"WGS 84","semi_major_axis":6378137,"inverse_flattening":298.257223563},"accuracy":"2.0","id":{"authority":"EPSG","code":6326}},"coordinate_system":{"subtype":"ellipsoidal","axis":[{"name":"Geodetic latitude","abbreviation":"Lat","direction":"north","unit":"degree"},{"name":"Geodetic longitude","abbreviation":"Lon","direction":"east","unit":"degree"}]},"id":{"authority":"EPSG","code":4326}},"conversion":{"name":"Popular Visualisation Pseudo-Mercator","method":{"name":"Popular Visualisation Pseudo Mercator","id":{"authority":"EPSG","code":1024}},"parameters":[{"name":"Latitude of natural origin","value":0,"unit":"degree","id":{"authority":"EPSG","code":8801}},{"name":"Longitude of natural origin","value":0,"unit":"degree","id":{"authority":"EPSG","code":8802}},{"name":"False easting","value":0,"unit":"metre","id":{"authority":"EPSG","code":8806}},{"name":"False northing","value":0,"unit":"metre","id":{"authority":"EPSG","code":8807}}]},"coordinate_system":{"subtype":"Cartesian","axis":[{"name":"Easting","abbreviation":"X","direction":"east","unit":"metre"},{"name":"Northing","abbreviation":"Y","direction":"north","unit":"metre"}]},"scope":"Web mapping and visualisation.","area":"World between 85.06°S and 85.06°N.","bbox":{"south_latitude":-85.06,"west_longitude":-180,"north_latitude":85.06,"east_longitude":180},"id":{"authority":"EPSG","code":3857}})WKT_LITERAL";
 
-
 struct DefaultCoordinateReferenceSystem {
 	const char *key;
 
@@ -777,11 +775,9 @@ struct DefaultCoordinateReferenceSystem {
 using builtin_crs_array = std::array<DefaultCoordinateReferenceSystem, 3>;
 
 const builtin_crs_array DEFAULT_CRS_DEFINITIONS = {
-	{
-		DefaultCoordinateReferenceSystem {"OGC:CRS84", "OGC:CRS84", "CRS84", OGC_CRS84_WKT2_2019, OGC_CRS84_PROJJSON},
-		DefaultCoordinateReferenceSystem {"EPSG:4326", "EPSG:4326", "4326", EPSG_4326_WKT2_2019, EPSG_4326_PROJJSON},
-		DefaultCoordinateReferenceSystem {"EPSG:3857", "EPSG:3857", "3857", EPSG_3857_WKT2_2019, EPSG_3857_PROJJSON}
-	}};
+    {DefaultCoordinateReferenceSystem {"OGC:CRS84", "OGC:CRS84", "CRS84", OGC_CRS84_WKT2_2019, OGC_CRS84_PROJJSON},
+     DefaultCoordinateReferenceSystem {"EPSG:4326", "EPSG:4326", "4326", EPSG_4326_WKT2_2019, EPSG_4326_PROJJSON},
+     DefaultCoordinateReferenceSystem {"EPSG:3857", "EPSG:3857", "3857", EPSG_3857_WKT2_2019, EPSG_3857_PROJJSON}}};
 
 class DefaultCoordinateReferenceSystemProvider final : public CoordinateReferenceSystemProvider {
 public:
