@@ -16,6 +16,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 
@@ -119,6 +120,12 @@ typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<
                                      const ScalarFunction &function);
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
 
+//! The type to filter a zone map/statistics
+typedef FilterPropagateResult (*filter_group_prune_t)(const FunctionData *bind_data, const BaseStatistics &stats);
+//! The type to filter a set of rows
+typedef idx_t (*filter_row_prune_t)(const FunctionData *bind_data, FunctionLocalState &state, Vector &vector,
+                                    SelectionVector &sel, idx_t count);
+
 //! The type to bind lambda-specific parameter types
 typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
 
@@ -181,6 +188,14 @@ public:
 	void SetDeserializeCallback(function_deserialize_t callback) { deserialize = callback; }
 	function_serialize_t GetSerializeCallback() const { return serialize; }
 	function_deserialize_t GetDeserializeCallback() const { return deserialize; }
+
+	bool HasFilterGroupPruneCallback() const { return filter_group_prune != nullptr; }
+	filter_group_prune_t GetFilterGroupPruneCallback() const { return filter_group_prune; }
+	void SetFilterGroupPruneCallback(filter_group_prune_t callback) { filter_group_prune = callback; }
+
+	bool HasFilterRowPruneCallback() const { return filter_row_prune != nullptr; }
+	filter_row_prune_t GetFilterRowPruneCallback() const { return filter_row_prune; }
+	void SetFilterRowPruneCallback(filter_row_prune_t callback) { filter_row_prune = callback; }
 	// clang-format on
 
 	bool HasExtraFunctionInfo() const {
@@ -218,6 +233,11 @@ public:
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
+
+	//! The group filter prune function (if any)
+	filter_group_prune_t filter_group_prune = nullptr;
+	//! The row filter prune function (if any)
+	filter_row_prune_t filter_row_prune = nullptr;
 	//! Additional function info, passed to the bind
 	shared_ptr<ScalarFunctionInfo> function_info;
 

@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+struct FunctionLocalState;
+
 //! Thread-local state for executing a table filter
 struct TableFilterState {
 public:
@@ -50,6 +52,7 @@ public:
 	ExpressionFilterState(ClientContext &context, const Expression &expression);
 
 	ExpressionExecutor executor;
+	unique_ptr<FunctionLocalState> row_prune_state;
 };
 
 struct BFTableFilterState final : public TableFilterState {

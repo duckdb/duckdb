@@ -4,11 +4,22 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
 
 namespace duckdb {
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) : executor(context) {
 	executor.AddExpression(expression);
+	if (expression.type == ExpressionType::BOUND_FUNCTION) {
+		auto &func_expr = expression.Cast<BoundFunctionExpression>();
+		if (func_expr.function.HasFilterRowPruneCallback() && func_expr.function.init_local_state) {
+			ExpressionExecutorState exec_state;
+			exec_state.executor = &executor;
+			ExpressionState expr_state(expression, exec_state);
+			row_prune_state = func_expr.function.init_local_state(expr_state, func_expr, func_expr.bind_info.get());
+		}
+	}
 }
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {
