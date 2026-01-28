@@ -23,6 +23,7 @@ REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)
 EXCLUDED_RULES = {
     "FunctionType",
     "IfExists",
+    "Database",
     "AbortOrRollback",
     "CommitOrEnd",
     "StartOrBegin",
@@ -32,7 +33,16 @@ EXCLUDED_RULES = {
     "SettingScope",
     "ColLabel",
     "MacroOrFunction",
-    # found in matcher.cpp
+    "GroupingOrGroupingId",
+    "DefaultValues",
+    "RowOrRows",
+    "Recursive",
+    "StarSymbol",
+    "IfNotExists",
+    "PlainIdentifier",
+    "QuotedIdentifier",
+    "CreateTableColumnElement",
+    "OrReplace",
     "ReservedIdentifier",
     "CatalogName",
     "SchemaName",
@@ -49,6 +59,10 @@ EXCLUDED_RULES = {
     "PragmaName",
     "SettingName",
     "CopyOptionName",
+    "AtTimeZoneOperator",
+    "Generated",
+    "ColumnConstraint",
+    "AlwaysOrByDefault",
 }
 
 

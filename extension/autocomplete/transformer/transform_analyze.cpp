@@ -17,7 +17,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTra
 		result->info->ref = std::move(target.ref);
 		result->info->has_table = true;
 	}
-	return std::move(result);
+	return result;
 }
 
 AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &transformer,

@@ -1,19 +1,22 @@
 SelectStatement <- SelectStatementInternal
-SelectStatementInternal <- SelectOrParens RepeatSetopSelect* ResultModifiers?
-RepeatSetopSelect <- SetOpClause SelectStatementInternal
+SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
+SelectSetOpChain <- SelectAtom (SetopClause SelectAtom)*
+SelectAtom <- SelectParens / SelectStatementType
+
+SelectParens <- Parens(SelectStatementInternal)
+
 SetopClause <- SetopType DistinctOrAll? ByName?
 SetopType <- SetopUnion / SetopExcept / SetopIntersect
 SetopUnion <- 'UNION'
 SetopExcept <- 'EXCEPT'
 SetopIntersect <- 'INTERSECT'
 ByName <- 'BY' 'NAME'
-SelectOrParens <- BaseSelect / SelectParens
-SelectParens <- Parens(SelectStatementInternal)
 
-BaseSelect <- WithClause? SelectStatementType ResultModifiers?
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
-ResultModifiers <- OrderByClause? LimitOffsetClause?
-LimitOffsetClause <- LimitClause? OffsetClause?
+ResultModifiers <- OrderByClause? LimitOffset?
+LimitOffset <- LimitOffsetClause / OffsetLimitClause
+LimitOffsetClause <- LimitClause OffsetClause?
+OffsetLimitClause <- OffsetClause LimitClause?
 TableStatement <- 'TABLE' BaseTableName
 OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
 SimpleSelectParens <- Parens(SimpleSelect)
@@ -84,7 +87,6 @@ JoinQualifier <- OnClause / UsingClause
 OnClause <- 'ON' Expression
 UsingClause <- 'USING' Parens(List(ColumnName))
 
-OuterJoinType <- 'FULL' / 'LEFT' / 'RIGHT'
 JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
 JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
 CrossJoinPrefix <- 'CROSS'
