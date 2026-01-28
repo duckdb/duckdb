@@ -80,7 +80,9 @@ string ParsedExtensionMetaData::GetInvalidMetadataError() {
 		throw InternalException("Unknown ABI type for extension: '%s'", extension_abi_metadata);
 	}
 
-	if (engine_platform != platform) {
+	if (engine_platform != platform && !(abi_type == ExtensionABIType::C_STRUCT &&
+	                                     ((engine_platform == "windows_amd64_mingw" && platform == "windows_amd64") ||
+	                                      (engine_platform == "windows_amd64" && platform == "windows_amd64_mingw")))) {
 		if (!result.empty()) {
 			result += " Also, t";
 		} else {
