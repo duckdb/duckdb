@@ -25,6 +25,14 @@ idx_t EncryptionTag::size() const {
 }
 
 EncryptionCanary::EncryptionCanary() : canary(new data_t[MainHeader::CANARY_BYTE_SIZE]()) {
+#ifdef DEBUG
+	// Check whether canary is zero-initialized
+	for (idx_t i = 0; i < MainHeader::CANARY_BYTE_SIZE; i++) {
+		if (canary[i] != 0) {
+			throw InvalidInputException("Nonce is not correctly zero-initialized!");
+		}
+	}
+#endif
 }
 
 data_ptr_t EncryptionCanary::data() {
@@ -51,7 +59,7 @@ EncryptionNonce::EncryptionNonce(CipherType cipher, Version version) {
 			nonce = unique_ptr<data_t[]>(new data_t[nonce_len]());
 			break;
 		}
-		// we fall through to NONE (Parquet) with a 12-byte nonce
+		// we fall through to NONE (often Parquet) with a 12-byte nonce
 	case Version::NONE:
 		nonce_len = MainHeader::AES_NONCE_LEN;
 		nonce = unique_ptr<data_t[]>(new data_t[nonce_len]());
@@ -60,8 +68,14 @@ EncryptionNonce::EncryptionNonce(CipherType cipher, Version version) {
 		throw InvalidConfigurationException("Encryption version not recognized!");
 	}
 
-	// Check if the nonce is zero-initialized
-	D_ASSERT(tag != nullptr);
+#ifdef DEBUG
+	// Check whether the nonce is zero-initialized
+	for (idx_t i = 0; i < nonce_len; i++) {
+		if (nonce[i] != 0) {
+			throw InvalidInputException("Nonce is not correctly zero-initialized!");
+		}
+	}
+#endif
 }
 
 data_ptr_t EncryptionNonce::data() {
@@ -76,7 +90,6 @@ idx_t EncryptionNonce::size() const {
 idx_t EncryptionNonce::total_size() const {
 	return nonce_len;
 }
-
 
 idx_t EncryptionNonce::size_deprecated() const {
 	return MainHeader::AES_NONCE_LEN_DEPRECATED;

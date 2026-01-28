@@ -222,10 +222,11 @@ public:
 
 private:
 	void Initialize(const string &key) {
+		EncryptionNonce nonce;
 		// Generate Nonce
-		aes->GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
+		aes->GenerateRandomData(nonce.data(), nonce.total_size());
 		// Initialize Encryption
-		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()));
+		aes->InitializeEncryption(std::move(nonce), reinterpret_cast<const_data_ptr_t>(key.data()));
 	}
 
 private:
@@ -309,16 +310,15 @@ private:
 		total_bytes = Load<uint32_t>(length_buf);
 		transport_remaining = total_bytes;
 		// Read nonce and initialize AES
-		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
+		transport_remaining -= trans.read(nonce.data(), nonce.total_size());
 		// check whether context is initialized
 		if (!crypto_meta_data.IsEmpty()) {
-			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
+			aes->InitializeDecryption(std::move(nonce), reinterpret_cast<const_data_ptr_t>(key.data()),
 			                          crypto_meta_data.additional_authenticated_data->data(),
 			                          crypto_meta_data.additional_authenticated_data->size());
 			crypto_meta_data.additional_authenticated_data->Rewind();
 		} else {
-			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES,
-			                          reinterpret_cast<const_data_ptr_t>(key.data()));
+			aes->InitializeDecryption(std::move(nonce), reinterpret_cast<const_data_ptr_t>(key.data()));
 		}
 	}
 
@@ -356,7 +356,7 @@ private:
 	uint32_t total_bytes;
 	uint32_t transport_remaining;
 	//! Nonce read by Initialize()
-	data_t nonce[ParquetCrypto::NONCE_BYTES];
+	EncryptionNonce nonce;
 };
 
 class SimpleReadTransport : public TTransport {

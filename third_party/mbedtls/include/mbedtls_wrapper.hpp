@@ -107,8 +107,8 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
 
 	public:
-		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata) const override {
-			auto mbedtls_state = duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(std::move(metadata));
+		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata_p) const override {
+			auto mbedtls_state = duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(std::move(metadata_p));
 
 			if (force_mbedtls_factory) {
 				mbedtls_state->ForceMbedTLSUnsafe();

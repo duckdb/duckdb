@@ -279,7 +279,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::SecureClearData(duckdb::data_ptr_t data, d
 	mbedtls_platform_zeroize(data, len);
 }
 
-MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata) : EncryptionState(std::move(metadata)), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
+MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::unique_ptr<duckdb::EncryptionStateMetadata> metadata_p) : EncryptionState(std::move(metadata_p)), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
 	mbedtls_cipher_init(context.get());
 
 	auto cipher_info = GetCipher();
@@ -329,7 +329,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::EncryptionNonce nonce, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len){
-	if (mbedtls_cipher_set_iv(context.get(), nonce.data(), nonce.size())) {
+	if (mbedtls_cipher_set_iv(context.get(), nonce.data(), nonce.total_size())) {
 		throw runtime_error("Failed to set IV for encryption");
 	}
 

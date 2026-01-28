@@ -100,70 +100,63 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-
-	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
-	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
-	EncryptionCanary encryption_canary;
-
+	EncryptionCanary canary;
 	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, encryption_state->metadata->GetVersion());
 	memset(nonce.data(), 0, nonce.size());
+	EncryptionTag tag;
 
 	switch (encryption_state->metadata->GetVersion()) {
 	case EncryptionTypes::V0_0:
-		D_ASSERT(nonce.size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
+		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
 		encryption_state->InitializeEncryption(std::move(nonce), derived_key);
-		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
-		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), canary.size(), canary.data(),
+		                          canary.size());
 		break;
 	case EncryptionTypes::V0_1:
-		EncryptionTag tag;
+		// for GCM, total nonce size should be always equal to 12 bytes
+		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN);
 		encryption_state->GenerateRandomData(nonce.data(), nonce.size());
 		main_header.SetCanaryIV(nonce.data());
 		encryption_state->InitializeEncryption(std::move(nonce), derived_key);
-		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
-		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
-		encryption_state->Finalize(canary_buffer, MainHeader::CANARY_BYTE_SIZE, tag.data(), MainHeader::AES_TAG_LEN);
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), canary.size(), canary.data(),
+		                          canary.size());
+		encryption_state->Finalize(canary.data(), canary.size(), tag.data(), MainHeader::AES_TAG_LEN);
 		main_header.SetCanaryTag(tag.data());
 		break;
 	default:
 		throw InvalidInputException("No valid encryption version found!");
 	}
 
-	main_header.SetEncryptedCanary(canary_buffer);
+	main_header.SetEncryptedCanary(canary.data());
 }
 
 bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    data_ptr_t derived_key) {
-	// just zero-out the iv
-	uint8_t iv[MainHeader::AES_NONCE_LEN];
-	memset(iv, 0, MainHeader::AES_NONCE_LEN);
-
-	//! allocate a buffer for the decrypted canary
-	data_t decrypted_canary[MainHeader::CANARY_BYTE_SIZE];
-	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
+	auto encryption_version = encryption_state->metadata->GetVersion();
+	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, encryption_version);
+	EncryptionTag tag;
+	EncryptionCanary decrypted_canary;
 
 	switch (encryption_state->metadata->GetVersion()) {
 	case EncryptionTypes::V0_0:
-		// generate a new, larger IV
-		uint8_t new_iv[MainHeader::MainHeader::AES_NONCE_LEN_DEPRECATED];
-		memset(iv, 0, MainHeader::AES_NONCE_LEN_DEPRECATED);
-		//! Decrypt the canary
-		encryption_state->InitializeDecryption(new_iv, MainHeader::AES_NONCE_LEN_DEPRECATED, derived_key);
-		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
-		                          MainHeader::CANARY_BYTE_SIZE);
+		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
+		//! Decrypt the canary, Nonce is zeroed out
+		encryption_state->InitializeDecryption(std::move(nonce), derived_key);
+		encryption_state->Process(main_header.GetEncryptedCanary(), decrypted_canary.size(), decrypted_canary.data(),
+		                          decrypted_canary.size());
 		break;
 	case EncryptionTypes::V0_1:
-		uint8_t tag[MainHeader::AES_TAG_LEN];
+		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN);
 		// get the IV and the Tag
-		memcpy(iv, main_header.GetIV(), MainHeader::AES_NONCE_LEN);
-		memcpy(tag, main_header.GetTag(), MainHeader::AES_TAG_LEN);
+		memcpy(nonce.data(), main_header.GetIV(), nonce.total_size());
+		memcpy(tag.data(), main_header.GetTag(), tag.size());
 
 		//! Decrypt the canary
-		encryption_state->InitializeDecryption(iv, MainHeader::AES_NONCE_LEN, derived_key);
-		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
-		                          MainHeader::CANARY_BYTE_SIZE);
+		encryption_state->InitializeDecryption(std::move(nonce), derived_key);
+		encryption_state->Process(main_header.GetEncryptedCanary(), decrypted_canary.size(), decrypted_canary.data(),
+		                          decrypted_canary.size());
 		try {
-			encryption_state->Finalize(decrypted_canary, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
+			encryption_state->Finalize(decrypted_canary.data(), decrypted_canary.size(), tag.data(), tag.size());
 		} catch (const std::exception &e) {
 			throw InvalidInputException("Wrong encryption key used to open the database file");
 		}
@@ -172,8 +165,8 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 		throw InvalidInputException("No valid encryption version found!");
 	}
 
-	//! compare if the decrypted canary is correct
-	if (memcmp(decrypted_canary, MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE) != 0) {
+	//! compare to check whether the decrypted canary is correct
+	if (memcmp(decrypted_canary.data(), MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE) != 0) {
 		return false;
 	}
 

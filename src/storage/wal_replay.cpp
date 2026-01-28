@@ -127,7 +127,8 @@ public:
 			auto offset = stream.CurrentOffset();
 			auto file_size = stream.FileSize();
 
-			EncryptionNonce nonce(state_p.db.GetStorageManager().GetCipher(), state_p.db.GetStorageManager().GetEncryptionVersion());
+			EncryptionNonce nonce(state_p.db.GetStorageManager().GetCipher(),
+			                      state_p.db.GetStorageManager().GetEncryptionVersion());
 			EncryptionTag tag;
 
 			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
