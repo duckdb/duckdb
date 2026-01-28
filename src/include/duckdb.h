@@ -3476,7 +3476,7 @@ DUCKDB_C_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
 /*!
 Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8.
-If the input is invalid UTF-8, the assignment is silently skipped (no-op).
+If the input is invalid UTF-8, a NULL value is assigned at that index.
 
 Superseded by `duckdb_unsafe_vector_assign_string_element_len`, optionally combined with `duckdb_valid_utf8_check`.
 
@@ -3488,7 +3488,7 @@ DUCKDB_C_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_
 
 /*!
 Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8.
-If the input is invalid UTF-8, the assignment is silently skipped (no-op). For BLOB vectors, no validation is performed.
+If the input is invalid UTF-8, a NULL value is assigned at that index. For BLOB vectors, no validation is performed.
 
 Superseded by `duckdb_unsafe_vector_assign_string_element_len`, optionally combined with `duckdb_valid_utf8_check`.
 

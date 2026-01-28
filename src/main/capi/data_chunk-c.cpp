@@ -142,6 +142,8 @@ void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, cons
 	auto error = duckdb_valid_utf8_check(str, str_len);
 	if (error != nullptr) {
 		duckdb_destroy_error_data(&error);
+		duckdb_vector_ensure_validity_writable(vector);
+		duckdb_validity_set_row_invalid(duckdb_vector_get_validity(vector), index);
 		return;
 	}
 	duckdb_unsafe_vector_assign_string_element_len(vector, index, str, str_len);
@@ -157,6 +159,8 @@ void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, 
 		auto error = duckdb_valid_utf8_check(str, str_len);
 		if (error != nullptr) {
 			duckdb_destroy_error_data(&error);
+			duckdb_vector_ensure_validity_writable(vector);
+			duckdb_validity_set_row_invalid(duckdb_vector_get_validity(vector), index);
 			return;
 		}
 	}

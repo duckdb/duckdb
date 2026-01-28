@@ -645,21 +645,63 @@ TEST_CASE("Test writing invalid UTF-8 to VARCHAR vector in data chunk", "[capi]"
 	// Write a valid string to initialize the data.
 	duckdb_vector_assign_string_element(vector, 0, valid_utf8.c_str());
 
-	// Write an invalid string via _len - should be silently skipped.
+	// Write an invalid string via _len - should assign NULL.
 	duckdb_vector_assign_string_element_len(vector, 0, invalid_utf8, len - 1);
 
-	// Ensure that nothing was written and the vector still contains the valid data.
-	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
-	REQUIRE((string_data[0].value.inlined.length == valid_utf8.length()));
+	// The row should now be NULL.
+	auto validity = duckdb_vector_get_validity(vector);
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
 
-	// Write an invalid null-terminated string via non-len version - should also be silently skipped.
+	// Reset validity to valid, then try invalid via non-len version.
+	duckdb_validity_set_row_valid(validity, 0);
+
+	// Write an invalid null-terminated string via non-len version - should also assign NULL.
 	invalid_utf8[len - 1] = '\0';
 	duckdb_vector_assign_string_element(vector, 0, invalid_utf8);
 	free(invalid_utf8);
 
-	// Vector still contains the valid data.
-	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
-	REQUIRE((string_data[0].value.inlined.length == valid_utf8.length()));
+	// The row should be NULL.
+	validity = duckdb_vector_get_validity(vector);
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
+
+	duckdb_destroy_data_chunk(&chunk);
+}
+
+TEST_CASE("Test invalid UTF-8 on uninitialized VARCHAR vector assigns NULL", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type types[] = {type};
+
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_destroy_logical_type(&type);
+	duckdb_data_chunk_set_size(chunk, 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// Do not write any valid data first — the vector data at index 0 is uninitialized.
+
+	// Invalid UTF-8: lone continuation byte.
+	char invalid_bytes[] = {(char)0xA9};
+
+	// Confirm the input is actually invalid UTF-8.
+	auto error = duckdb_valid_utf8_check(invalid_bytes, 1);
+	REQUIRE(error != nullptr);
+	duckdb_destroy_error_data(&error);
+
+	// Write invalid UTF-8 via _len on uninitialized row — should assign NULL.
+	duckdb_vector_assign_string_element_len(vector, 0, invalid_bytes, 1);
+
+	auto validity = duckdb_vector_get_validity(vector);
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
+
+	// Same test via non-len version with a null-terminated invalid string.
+	// Reset validity to valid first.
+	duckdb_validity_set_row_valid(validity, 0);
+	REQUIRE(duckdb_validity_row_is_valid(validity, 0));
+
+	char invalid_null_terminated[] = {(char)0xA9, '\0'};
+	duckdb_vector_assign_string_element(vector, 0, invalid_null_terminated);
+
+	validity = duckdb_vector_get_validity(vector);
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
 
 	duckdb_destroy_data_chunk(&chunk);
 }
@@ -737,12 +779,12 @@ TEST_CASE("Test BLOB vector bypasses UTF-8 validation", "[capi]") {
 	// Write a valid string first to initialize.
 	duckdb_vector_assign_string_element(varchar_vector, 0, "valid");
 
-	// Attempt to write invalid bytes - should be silently skipped.
+	// Attempt to write invalid bytes - should assign NULL.
 	duckdb_vector_assign_string_element_len(varchar_vector, 0, invalid_bytes, 3);
 
-	// Vector still contains the original valid string.
-	auto varchar_string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(varchar_vector));
-	REQUIRE(duckdb_string_t_length(varchar_string_data[0]) == 5);
+	// The row should now be NULL.
+	auto varchar_validity = duckdb_vector_get_validity(varchar_vector);
+	REQUIRE(!duckdb_validity_row_is_valid(varchar_validity, 0));
 
 	duckdb_destroy_data_chunk(&varchar_chunk);
 
