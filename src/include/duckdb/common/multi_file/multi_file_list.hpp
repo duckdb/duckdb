@@ -164,7 +164,7 @@ protected:
 //! Lazily expanded MultiFileList
 class LazyMultiFileList : public MultiFileList {
 public:
-	LazyMultiFileList();
+	explicit LazyMultiFileList(optional_ptr<ClientContext> context);
 
 	vector<OpenFileInfo> GetAllFiles() const override;
 	FileExpandResult GetExpandResult() const override;
@@ -187,6 +187,7 @@ protected:
 	mutable vector<OpenFileInfo> expanded_files;
 	//! Whether or not all files have been expanded
 	mutable bool all_files_expanded = false;
+	optional_ptr<ClientContext> context;
 };
 
 //! MultiFileList that takes a list of globs and resolves all of the globs lazily into files
