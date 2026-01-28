@@ -67,6 +67,11 @@ public:
 	//! Sync a file handle to disk
 	void FileSync(FileHandle &handle) override;
 
+	//! Checks if path is is an absolute path
+	bool IsPathAbsolute(const string &path) override;
+	string MakePathAbsolute(const string &input);
+	bool PathStartsWithDrive(const string &path);
+
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path
 		return false;

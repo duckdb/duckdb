@@ -807,6 +807,23 @@ bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 	return true;
 }
 
+bool LocalFileSystem::PathStartsWithDrive(const string &path) {
+	return false;
+}
+
+bool LocalFileSystem::IsPathAbsolute(const string &path) {
+	return FileSystem::IsPathAbsolute(path);
+}
+
+string LocalFileSystem::MakePathAbsolute(const string &path) {
+	if (!IsPathAbsolute(path)) {
+		// path is not absolute - join with working directory
+		return JoinPath(GetWorkingDirectory(), path);
+	} else {
+		// already absolute
+		return path;
+	}
+}
 #else
 
 constexpr char PIPE_PREFIX[] = "\\\\.\\pipe\\";
@@ -1353,6 +1370,52 @@ bool LocalFileSystem::TryCanonicalizeExistingPath(string &input) {
 	input = WindowsUtil::UnicodeToUTF8(resolved);
 	return true;
 }
+
+bool LocalFileSystem::PathStartsWithDrive(const string &path) {
+	return path.size() >= 2 && path[0] >= 'A' && path[0] <= 'Z' && path[1] == ':';
+}
+
+bool LocalFileSystem::IsPathAbsolute(const string &path) {
+	if (FileSystem::IsPathAbsolute(path)) {
+		return true;
+	}
+	// check if this is a drive letter (e.g. C:)
+	if (PathStartsWithDrive(path)) {
+		return true;
+	}
+	return false;
+}
+
+string LocalFileSystem::MakePathAbsolute(const string &path) {
+	if (FileSystem::IsPathAbsolute(path)) {
+		// already absolute - nothing to do
+		return path;
+	}
+	// check if this is a drive letter (e.g. C:)
+	if (PathStartsWithDrive(path)) {
+		// this starts with a drive letter
+		// we now have two options - either this is "C:" or this is "C:\"
+		// "C:" is the current working directory, C:\ is an absolute path
+		if (path.size() >= 3 && (path[2] == '\\' || path[2] == '/')) {
+			// C:\\ - this is already an absolute path
+			return path;
+		}
+		// this is "C:" - expand to current working directory if this is the current drive
+		auto working_directory = GetWorkingDirectory();
+		if (working_directory[0] != path[0]) {
+			// this is not the drive we are on right now (e.g. referencing D: while in C:)
+			// default to root of drive
+			working_directory = string(1, path[0]) + ":\\";
+		}
+		if (path.size() == 2) {
+			return working_directory;
+		}
+		return JoinPath(working_directory, path.substr(2));
+	}
+
+	return JoinPath(GetWorkingDirectory(), path);
+}
+
 #endif
 
 bool LocalFileSystem::CanSeek() {
@@ -1368,16 +1431,13 @@ string LocalFileSystem::CanonicalizePath(const string &input) {
 	if (path_sep.size() != 1) {
 		throw InternalException("path separator can only be a single byte for local file systems");
 	}
-	string path;
-	if (!IsPathAbsolute(input)) {
-		path = GetWorkingDirectory() + path_sep + input;
-	} else {
-		path = input;
-	}
+	// make the path absolute
+	string path = MakePathAbsolute(input);
 
 	string current = path;
 	string remainder;
 	idx_t dot_dot_count = 0;
+	bool is_drive = false;
 	while (!current.empty()) {
 		if (dot_dot_count == 0 && TryCanonicalizeExistingPath(current)) {
 			// successfully canonicalized "current" - add remainder if we have any
@@ -1389,13 +1449,27 @@ string LocalFileSystem::CanonicalizePath(const string &input) {
 			}
 			return current + path_sep + remainder;
 		}
+		if (is_drive) {
+			// this is a drive only (e.g. C:\)
+			// if we reach this, this is an unknown drive letter
+			// use fallback canonicalize for the remainder
+			return current + FileSystem::CanonicalizePath(remainder);
+		}
 		// move up one directory
-		size_t sep = current.find_last_of(path_sep[0]);
-		if (sep == std::string::npos) {
+		optional_idx sep_idx;
+		for (idx_t i = current.size(); i > 0; i--) {
+			// on windows we accept both separators (\ and /, and also :)
+			if (current[i - 1] == path_sep[0] || current[i - 1] == '/') {
+				sep_idx = i - 1;
+				break;
+			}
+		}
+		if (!sep_idx.IsValid()) {
 			// exhausted the full path and nothing exists - break out
 			current = string();
 			break;
 		}
+		auto sep = sep_idx.GetIndex();
 		auto component = current.substr(sep + 1);
 		if (component == "..") {
 			// dot dot - we need to move up a level
@@ -1416,6 +1490,14 @@ string LocalFileSystem::CanonicalizePath(const string &input) {
 		}
 		// continue with remainder
 		current = current.substr(0, sep);
+		if (current.size() == 2 && PathStartsWithDrive(current)) {
+			// Windows only
+			// C: and C:\\ mean different things (C: is relative, C:\\ is absolute)
+			// we should have already normalized to C:\\ earlier on in this function
+			// so turn this base drive letter into C:\\ for the final lookup
+			is_drive = true;
+			current += "\\";
+		}
 	}
 	// failed to canonicalize path - fallback to generic canonicalization
 	return FileSystem::CanonicalizePath(path);

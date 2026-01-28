@@ -344,7 +344,6 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 	test_cases.emplace_back("src/common/../../../CMakeLists.txt", "../CMakeLists.txt", "parent beyond root (relative)");
 	test_cases.emplace_back("src//common", "src/common", "double slash");
 	test_cases.emplace_back("src///common", "src/common", "triple slash");
-	test_cases.emplace_back("//src/common", "/src/common", "leading double slash");
 	test_cases.emplace_back("src/common/", "src/common", "trailing slash");
 	test_cases.emplace_back("src/common//", "src/common", "multiple trailing slashes");
 	test_cases.emplace_back(".", ".", "single dot");
@@ -358,21 +357,29 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 
 #ifdef _WIN32
 	// Backslash handling
-	test_cases.emplace_back("src\\common", "src\\common", "backslash separator");
+	test_cases.emplace_back("src\\common", "src/common", "backslash separator equivalant to forward slash");
 	test_cases.emplace_back("src\\..\\common", "common", "parent with backslash");
 	test_cases.emplace_back("src/common\\CMakeLists.txt", "src\\common\\CMakeLists.txt", "mixed separators");
 
 	// Drive letters
 	test_cases.emplace_back("C:\\src\\common", "C:\\src\\common", "absolute with drive");
 	test_cases.emplace_back("C:\\src\\..\\common", "C:\\common", "parent with drive");
-	test_cases.emplace_back("C:", "C:\\", "drive only");
-	test_cases.emplace_back("C:src", "C:src", "drive-relative path");
-	test_cases.emplace_back("C:\\", "C:\\", "drive root");
+	test_cases.emplace_back("C:src", "src", "drive-relative path");
+	test_cases.emplace_back("C:src\\..\\file", "file", "drive-relative with dots");
+	test_cases.emplace_back("C:", ".", "drive-relative root");
+	test_cases.emplace_back("C:\\", "\\\\?\\C:\\", "drive root");
+	test_cases.emplace_back("D:file", "D:\\file", "drive-relative in different drive");
+	test_cases.emplace_back("Z:\\src\\..\\common", "Z:\\common", "parent with drive in non-existent drive");
+	test_cases.emplace_back("C:\\..\\common", "C:\\common", ".. in root of known drive");
+	test_cases.emplace_back("Z:\\..\\common", "Z:\\common", ".. in root of unknown drive");
 
 	// UNC paths
 	test_cases.emplace_back("\\\\server\\share", "\\\\server\\share", "UNC path");
 	test_cases.emplace_back("\\\\server\\share\\src\\..\\common", "\\\\server\\share\\common", "UNC with parent");
+#else
+	test_cases.emplace_back("//src/common", "/src/common", "leading double slash");
 #endif
+
 	CanonicalizationTest::Test(test_cases);
 }
 

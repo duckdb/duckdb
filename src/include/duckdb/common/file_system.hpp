@@ -229,8 +229,8 @@ public:
 	DUCKDB_API static optional_idx GetAvailableDiskSpace(const string &path);
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
-	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)
-	DUCKDB_API bool IsPathAbsolute(const string &path);
+	//! Checks if path is is an absolute path
+	DUCKDB_API virtual bool IsPathAbsolute(const string &path);
 	//! Join two paths together
 	DUCKDB_API string JoinPath(const string &a, const string &path);
 	// Join N paths together
