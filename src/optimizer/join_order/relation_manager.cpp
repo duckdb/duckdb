@@ -562,7 +562,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 }
 
 //! Flatten a predicate into individual conjuncts
-static void FlattenConjunction(Expression &expr, vector<unique_ptr<Expression>> &result) {
+static inline void FlattenConjunction(Expression &expr, vector<unique_ptr<Expression>> &result) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
 		if (conj.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
