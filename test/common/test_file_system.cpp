@@ -208,9 +208,6 @@ TEST_CASE("absolute paths", "[file_system]") {
 	REQUIRE(fs.IsPathAbsolute(network));
 	REQUIRE(fs.IsPathAbsolute("C:\\folder\\filename.csv"));
 	REQUIRE(fs.IsPathAbsolute("C:/folder\\filename.csv"));
-	REQUIRE(fs.NormalizeAbsolutePath("C:/folder\\filename.csv") == "C:\\folder\\filename.csv");
-	REQUIRE(fs.NormalizeAbsolutePath(network) == network);
-	REQUIRE(fs.NormalizeAbsolutePath(long_path) == "\\\\?\\D:\\very long network\\");
 #endif
 }
 

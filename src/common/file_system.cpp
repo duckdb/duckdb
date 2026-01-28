@@ -174,11 +174,6 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get());
 }
 
-string FileSystem::NormalizeAbsolutePath(const string &path) {
-	D_ASSERT(IsPathAbsolute(path));
-	return path;
-}
-
 #else
 
 string FileSystem::GetEnvVariable(const string &env) {
@@ -226,17 +221,6 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 		return true;
 	}
 	return false;
-}
-
-string FileSystem::NormalizeAbsolutePath(const string &path) {
-	D_ASSERT(IsPathAbsolute(path));
-	auto result = FileSystem::ConvertSeparators(path);
-	if (StartsWithSingleBackslash(result)) {
-		// Path starts with a single backslash or forward slash
-		// prepend drive letter
-		return GetWorkingDirectory().substr(0, 2) + result;
-	}
-	return result;
 }
 
 string FileSystem::PathSeparator(const string &path) {
