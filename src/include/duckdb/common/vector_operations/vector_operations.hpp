@@ -13,6 +13,17 @@
 
 #include <functional>
 
+// Function Multi-Versioning attributes for auto SIMD optimizations
+#if defined(__GNUC__) && __GNUC__ >= 12 && !defined(__clang__)
+#if defined(__x86_64__)
+#define AUTO_VEC_DISPATCH __attribute__((target_clones("arch=x86-64-v4", "arch=x86-64-v3", "default")))
+#else
+#define AUTO_VEC_DISPATCH
+#endif
+#else
+#define AUTO_VEC_DISPATCH
+#endif
+
 namespace duckdb {
 class CastFunctionSet;
 struct GetCastFunctionInput;
