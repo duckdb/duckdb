@@ -238,6 +238,9 @@ struct NodeChildren {
 	array_ptr<Node> children;
 };
 
+//! NodeHandle is a mutable wrapper to access and modify a node.
+//! A segment handle is used for memory management and marks memory as modified.
+//! For read-only access, use ConstNodeHandle instead.
 template <class T>
 class NodeHandle {
 public:
@@ -245,7 +248,7 @@ public:
 	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
 		handle.MarkModified();
 	}
-
+	NodeHandle() = delete;
 	NodeHandle(const NodeHandle &) = delete;
 	NodeHandle &operator=(const NodeHandle &) = delete;
 
@@ -261,6 +264,31 @@ public:
 private:
 	SegmentHandle handle;
 	T &n;
+};
+
+//! ConstNodeHandle is a read-only wrapper to access a node.
+//! A segment handle is used for memory management, but it is not marked as modified.
+//! For mutable access, use NodeHandle instead.
+template <class T>
+class ConstNodeHandle {
+public:
+	ConstNodeHandle(const ART &art, const Node node)
+	    : handle(Node::GetAllocator(art, node.GetType()).GetHandle(node)), n(handle.GetRef<T>()) {
+	}
+	ConstNodeHandle() = delete;
+	ConstNodeHandle(const ConstNodeHandle &) = delete;
+	ConstNodeHandle &operator=(const ConstNodeHandle &) = delete;
+	ConstNodeHandle(ConstNodeHandle &&other) noexcept = delete;
+	ConstNodeHandle &operator=(ConstNodeHandle &&other) noexcept = delete;
+
+public:
+	const T &Get() const {
+		return n;
+	}
+
+private:
+	SegmentHandle handle;
+	const T &n;
 };
 
 } // namespace duckdb
