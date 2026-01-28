@@ -44,3 +44,60 @@ SELECT CASE WHEN EXISTS (SELECT 1 FROM deduction WHERE len(clause) = 0)
        (SELECT list(clause ORDER BY clause) FROM deduction) AS all_deduced_clauses;
 ----
 CONTRADICTION FOUND	[[], [-2], [-1], [-1, 2], [1], [2]]
+
+# Find broken parts whose primary AND secondary supporting dependencies
+# are broken.  Derived from Example 1.2 (Nonlinear Query) in
+#
+# I. S. Mumick, S. J. Finkelstein, Hamid Pirahesh, and Raghu
+# Ramakrishnan. 1990. "Magic is relevant". SIGMOD Rec. 19, 2 (Jun.
+# 1990), 247–258. DOI:https://doi.org/10.1145/93605.98734.
+# Sample component hierarchy
+# (a component is broken if its primary AND secondary
+#  dependencies are broken)
+#
+#      c1
+#    ᵖ/  \ˢ
+#  ᵇc2    c3
+#        /  \
+#     ᵇc4    c5ᵇ
+#     /  \
+#   c6    c7
+#
+# If c2, c4, c5 are broken, then
+#  - c3 is broken, and in turn
+#  - c1 is broken
+query I
+WITH RECURSIVE
+"primary"(c,p) AS (
+  VALUES ('c1', 'c2'),
+         ('c3', 'c4'),
+         ('c4', 'c6')
+),
+secondary(c,s) AS (
+  VALUES ('c1', 'c3'),
+         ('c3', 'c5'),
+         ('c4', 'c7')
+),
+broken(c) AS (
+  VALUES ('c2'),
+         ('c4'),
+         ('c5')
+),
+fail(c) AS (
+  SELECT b.c
+  FROM   broken AS b
+    UNION
+  SELECT p.c
+  FROM  "primary" AS p, secondary AS s, recurring.fail AS f1, recurring.fail AS f2
+  WHERE f1.c = p.p
+  AND   f2.c = s.s
+  AND   p.c = s.c
+)
+TABLE fail
+ORDER BY c;
+----
+c1
+c2
+c3
+c4
+c5
