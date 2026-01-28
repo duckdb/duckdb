@@ -15,7 +15,7 @@ FROM lineitem;
 ----
 3944753436594036139
 
-foreach mem 500MiB
+foreach mem 300MiB
 
 foreach threads 1 2 8
 
