@@ -26,7 +26,7 @@ index dfc5e22..07ec473 100644
  class OrderModifier;
  class UpdateSetInfo;
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index fc34c7c..5defc4e 100644
+index fc34c7c..61476f2 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
 @@ -373,8 +373,9 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
@@ -41,6 +41,17 @@ index fc34c7c..5defc4e 100644
  		switch (setop->setop_type) {
  		case SetOperationType::EXCEPT:
  		case SetOperationType::INTERSECT:
+@@ -467,7 +468,9 @@ unique_ptr<TableRef> StatementGenerator::GenerateBaseTableRef() {
+ 	}
+ 	case CatalogType::VIEW_ENTRY: {
+ 		auto &view = entry.Cast<ViewCatalogEntry>();
+-		column_count = view.types.size();
++		view.BindView(context);
++		auto view_columns = view.GetColumnInfo();
++		column_count = view_columns->types.size();
+ 		break;
+ 	}
+ 	default:
 diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
 index 2cd7f06..4602928 100644
 --- a/src/statement_simplifier.cpp

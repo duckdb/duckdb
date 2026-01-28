@@ -14,6 +14,7 @@ struct DuckDBViewsData : public GlobalTableFunctionState {
 	}
 
 	vector<reference<CatalogEntry>> entries;
+	vector<ColumnIndex> column_ids;
 	idx_t offset;
 };
 
@@ -67,6 +68,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, Tab
 		schema.get().Scan(context, CatalogType::VIEW_ENTRY,
 		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	};
+	result->column_ids = input.column_indexes;
 	return std::move(result);
 }
 
@@ -87,40 +89,74 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		}
 		auto &view = entry.Cast<ViewCatalogEntry>();
 
-		// return values:
-		idx_t col = 0;
-		// database_name, VARCHAR
-		output.SetValue(col++, count, view.catalog.GetName());
-		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.catalog.GetOid())));
-		// schema_name, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(view.schema.name));
-		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.schema.oid)));
-		// view_name, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(view.name));
-		// view_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.oid)));
-		// comment, LogicalType::VARCHARs
-		output.SetValue(col++, count, Value(view.comment));
-		// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
-		output.SetValue(col++, count, Value::MAP(view.tags));
-		// internal, LogicalType::BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(view.internal));
-		// temporary, LogicalType::BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(view.temporary));
-		// column_count, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(view.types.size())));
-		// sql, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(view.ToSQL()));
-
+		for (idx_t c = 0; c < data.column_ids.size(); c++) {
+			auto column_id = data.column_ids[c].GetPrimaryIndex();
+			switch (column_id) {
+			case 0:
+				// database_name, VARCHAR
+				output.SetValue(c, count, view.catalog.GetName());
+				break;
+			case 1:
+				// database_oid, BIGINT
+				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(view.catalog.GetOid())));
+				break;
+			case 2:
+				// schema_name, LogicalType::VARCHAR
+				output.SetValue(c, count, Value(view.schema.name));
+				break;
+			case 3:
+				// schema_oid, LogicalType::BIGINT
+				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(view.schema.oid)));
+				break;
+			case 4:
+				// view_name, LogicalType::VARCHAR
+				output.SetValue(c, count, Value(view.name));
+				break;
+			case 5:
+				// view_oid, LogicalType::BIGINT
+				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(view.oid)));
+				break;
+			case 6:
+				// comment, LogicalType::VARCHARs
+				output.SetValue(c, count, Value(view.comment));
+				break;
+			case 7:
+				// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
+				output.SetValue(c, count, Value::MAP(view.tags));
+				break;
+			case 8:
+				// internal, LogicalType::BOOLEAN
+				output.SetValue(c, count, Value::BOOLEAN(view.internal));
+				break;
+			case 9:
+				// temporary, LogicalType::BOOLEAN
+				output.SetValue(c, count, Value::BOOLEAN(view.temporary));
+				break;
+			case 10: {
+				// column_count, LogicalType::BIGINT
+				// make sure the view is bound so we know the columns it emits
+				view.BindView(context);
+				auto columns = view.GetColumnInfo();
+				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(columns->types.size())));
+				break;
+			}
+			case 11:
+				// sql, LogicalType::VARCHAR
+				output.SetValue(c, count, Value(view.ToSQL()));
+				break;
+			default:
+				throw InternalException("Unsupported column index for duckdb_views");
+			}
+		}
 		count++;
 	}
 	output.SetCardinality(count);
 }
 
 void DuckDBViewsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_views", {}, DuckDBViewsFunction, DuckDBViewsBind, DuckDBViewsInit));
+	TableFunction duckdb_views("duckdb_views", {}, DuckDBViewsFunction, DuckDBViewsBind, DuckDBViewsInit);
+	duckdb_views.projection_pushdown = true;
+	set.AddFunction(std::move(duckdb_views));
 }
 
 } // namespace duckdb

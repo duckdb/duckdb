@@ -1,0 +1,87 @@
+diff --git a/src/include/storage/ducklake_view_entry.hpp b/src/include/storage/ducklake_view_entry.hpp
+index aabb8cf..2234e7d 100644
+--- a/src/include/storage/ducklake_view_entry.hpp
++++ b/src/include/storage/ducklake_view_entry.hpp
+@@ -36,18 +36,12 @@ public:
+ 	LocalChange GetLocalChange() const {
+ 		return local_change;
+ 	}
+-	bool IsBound() const;
+-
+-	void Bind(ClientContext &context);
+ 
+ public:
+ 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
+ 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+ 
+ 	const SelectStatement &GetQuery() override;
+-	bool HasTypes() const override {
+-		return false;
+-	}
+ 	unique_ptr<CreateInfo> GetInfo() const override;
+ 	string ToSQL() const override;
+ 
+@@ -66,7 +60,6 @@ private:
+ 	string view_uuid;
+ 	string query_sql;
+ 	LocalChange local_change;
+-	bool is_bound = false;
+ };
+ 
+ } // namespace duckdb
+diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
+index e98be17..020cc3b 100644
+--- a/src/storage/ducklake_schema_entry.cpp
++++ b/src/storage/ducklake_schema_entry.cpp
+@@ -285,17 +285,6 @@ void DuckLakeSchemaEntry::Scan(ClientContext &context, CatalogType type,
+ 			// this entry exists in both the local and global set - emit only the transaction-local entry
+ 			continue;
+ 		}
+-		if (entry.second->type == CatalogType::VIEW_ENTRY) {
+-			auto &view_entry = entry.second->Cast<DuckLakeViewEntry>();
+-			if (!view_entry.IsBound()) {
+-				try {
+-					view_entry.Bind(context);
+-				} catch (...) {
+-					// if the view binding fails we continue so we can error when the view is actually queried
+-					continue;
+-				}
+-			}
+-		}
+ 		callback(*entry.second);
+ 	}
+ }
+diff --git a/src/storage/ducklake_view_entry.cpp b/src/storage/ducklake_view_entry.cpp
+index db84135..ed7b54f 100644
+--- a/src/storage/ducklake_view_entry.cpp
++++ b/src/storage/ducklake_view_entry.cpp
+@@ -91,29 +91,4 @@ string DuckLakeViewEntry::GetQuerySQL() {
+ 	return query_sql;
+ }
+ 
+-bool DuckLakeViewEntry::IsBound() const {
+-	return is_bound;
+-}
+-
+-void DuckLakeViewEntry::Bind(ClientContext &context) {
+-	D_ASSERT(!is_bound);
+-	is_bound = true;
+-	std::string create_view_sql = "CREATE VIEW mock_view_name_lake";
+-	if (!aliases.empty()) {
+-		create_view_sql += "(";
+-		for (const auto &alias : aliases) {
+-			create_view_sql += KeywordHelper::WriteOptionallyQuoted(alias);
+-			create_view_sql += ", ";
+-		}
+-		create_view_sql += ")";
+-	}
+-
+-	create_view_sql += " as " + query_sql;
+-	const auto view_info = CreateViewInfo::FromCreateView(context, schema, create_view_sql);
+-	// Fill aliases, types and names
+-	aliases = view_info->aliases;
+-	types = view_info->types;
+-	names = view_info->names;
+-}
+-
+ } // namespace duckdb

@@ -467,7 +467,7 @@ jobs:
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2" --new-unittest build/release/test/unittest
+        python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/test/unittest
 
     # TODO: clean this up: we should probably be able to run this whole test suite with httpfs
     # We want to run the remainder of tests with httpfs

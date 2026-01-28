@@ -205,17 +205,27 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
 	serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
-	serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", column_comments, vector<Value>());
+	if (!serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", GetColumnCommentsList());
+	}
+	if (serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<unordered_map<string, Value>>(206, "column_comments_map", column_comments_map, unordered_map<string, Value>());
+	}
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<CreateViewInfo>(new CreateViewInfo());
-	deserializer.ReadPropertyWithDefault<string>(200, "view_name", result->view_name);
-	deserializer.ReadPropertyWithDefault<vector<string>>(201, "aliases", result->aliases);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types", result->types);
-	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
-	deserializer.ReadPropertyWithDefault<vector<string>>(204, "names", result->names);
-	deserializer.ReadPropertyWithExplicitDefault<vector<Value>>(205, "column_comments", result->column_comments, vector<Value>());
+	auto view_name = deserializer.ReadPropertyWithDefault<string>(200, "view_name");
+	auto aliases = deserializer.ReadPropertyWithDefault<vector<string>>(201, "aliases");
+	auto types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "types");
+	auto query = deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query");
+	auto names = deserializer.ReadPropertyWithDefault<vector<string>>(204, "names");
+	auto column_comments = deserializer.ReadPropertyWithDefault<vector<Value>>(205, "column_comments");
+	auto column_comments_map = deserializer.ReadPropertyWithExplicitDefault<unordered_map<string, Value>>(206, "column_comments_map", unordered_map<string, Value>());
+	auto result = duckdb::unique_ptr<CreateViewInfo>(new CreateViewInfo(std::move(names), std::move(column_comments), std::move(column_comments_map)));
+	result->view_name = std::move(view_name);
+	result->aliases = std::move(aliases);
+	result->types = std::move(types);
+	result->query = std::move(query);
 	return std::move(result);
 }
 

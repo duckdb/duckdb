@@ -46,7 +46,7 @@ PRAGMA table_info('v2')
 1	b	VARCHAR	0	NULL	0
 
 statement ok
-CREATE VIEW v3(c, d) AS SELECT DATE '1992-01-01', 'hello' AS b
+CREATE VIEW v3(c, d) AS SELECT DATE '1992-01-01' a, 'hello' AS b
 
 query ITTTTT
 PRAGMA table_info('v3')

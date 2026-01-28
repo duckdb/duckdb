@@ -14,15 +14,19 @@
 
 namespace duckdb {
 using std::thread;
+using thread_id = std::thread::id;
 
-}
+} // namespace duckdb
 
+#else
+using thread_id = uint64_t;
 #endif
 
 namespace duckdb {
 
 struct ThreadUtil {
 	static void SleepMs(idx_t ms);
+	static thread_id GetThreadId();
 };
 
 } // namespace duckdb

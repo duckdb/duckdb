@@ -88,6 +88,7 @@ if len(output_lines) <= len(prev_output_lines) and prev_output_lines != output_l
     subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
     with tempfile.NamedTemporaryFile() as f:
         f.write(prev_diff)
+        f.flush()
         apply_patch(f.name)
 
     print("--------------------------------------------------")
