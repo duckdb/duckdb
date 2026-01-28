@@ -77,6 +77,14 @@ static bool AggregateStateToBlobCast(Vector &source, Vector &result, idx_t count
 	return true;
 }
 
+static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	if (source.IsAggregateStateStructType()) {
+		LogicalType dummy_struct = LogicalType::STRUCT(AggregateStateType::GetChildTypes(source));
+		return input.GetCastFunction(dummy_struct, target);
+	}
+	return AggregateStateToBlobCast;
+}
+
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// cast a NULL to another type, just copy the properties and change the type
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -169,7 +177,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::BIGNUM:
 		return BignumCastSwitch(input, source, target);
 	case LogicalTypeId::AGGREGATE_STATE:
-		return AggregateStateToBlobCast;
+		return AggregateStateCast(input, source, target);
 	default:
 		return nullptr;
 	}

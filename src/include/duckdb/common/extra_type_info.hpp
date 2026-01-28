@@ -127,6 +127,7 @@ private:
 
 struct StructTypeInfo : public ExtraTypeInfo {
 	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p);
+	explicit StructTypeInfo(ExtraTypeInfoType type, child_list_t<LogicalType> child_types_p);
 
 	child_list_t<LogicalType> child_types;
 
@@ -143,8 +144,10 @@ private:
 	StructTypeInfo();
 };
 
-struct AggregateStateTypeInfo : public ExtraTypeInfo {
-	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p);
+struct AggregateStateTypeInfo : public StructTypeInfo {
+	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p);
+
+	void VerifyStateAsStructSerialization(Serializer &serializer) const;
 
 	aggregate_state_t state_type;
 
@@ -152,6 +155,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
+	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;

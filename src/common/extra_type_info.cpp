@@ -218,6 +218,10 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::DeepCopy() const {
 StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {
 }
 
+StructTypeInfo::StructTypeInfo(ExtraTypeInfoType type, child_list_t<LogicalType> child_types_p)
+    : ExtraTypeInfo(type), child_types(std::move(child_types_p)) {
+}
+
 StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
     : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
 }
@@ -242,11 +246,79 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::DeepCopy() const {
 //===--------------------------------------------------------------------===//
 // Aggregate State Type Info
 //===--------------------------------------------------------------------===//
-AggregateStateTypeInfo::AggregateStateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO) {
+/*
+ * NOTE: In types.json, AggregateStateTypeInfo inherits directly from ExtraTypeInfo
+ * instead of StructTypeInfo. This is intentional for several reasons:
+ *
+ * 1. In older storage versions (pre-v1.5.0),
+ *    AggregateStateTypeInfo was a direct child of ExtraTypeInfo and did not contain
+ *    the 'child_types' field (ID 200). Flattening the JSON hierarchy allows us to
+ *    manually branch on the storage version and handle the 'child_types' field
+ *    explicitly without the generator's StructTypeInfo logic interfering
+ *    (not making StructTypeInfo custom implementation).
+ *
+ * 2. ID Conflict Management: StructTypeInfo uses ID 200 for 'child_types'.
+ *    In the old format, AggregateStateTypeInfo used ID 200 for 'function_name'.
+ *    By keeping them as "siblings" in the JSON, we avoid automated ID collision
+ *    checks while manually handling the remapping in this custom implementation.
+ *
+ * 3. Dispatch Logic: The generation script produces invalid C++ when handling
+ *    multi-level inheritance for these types (specifically, trying to access
+ *    non-static members in static Deserialize methods). Flattening the JSON
+ *    ensures the dispatch logic remains in ExtraTypeInfo::Deserialize where
+ *    the 'type' property is readily available.
+ */
+
+AggregateStateTypeInfo::AggregateStateTypeInfo() : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, {}) {
 }
 
-AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
+AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p)
+    : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, std::move(child_types_p)),
+      state_type(std::move(state_type_p)) {
+}
+
+void AggregateStateTypeInfo::VerifyStateAsStructSerialization(Serializer &serializer) const {
+	// We don't preserve forward compatibility for the new AggregateStateTypeInfo that inherits from StructTypeInfo.
+	// Therefore, we will have to throw an error when serializing to an older storage
+	// Forward compatibility will not be preserved since the whole Vector serialization is different when writing the
+	// new Struct-based AggregateState. Which means that even if we manage to restore the right AggregateStateTypeInfo,
+	// we will not be able to restore the DataChunk correctly unless we retrigger the whole EXPORT_STATE.
+	// However, we do preserve forward compatibility for Opaque AggregateStates
+	if (!serializer.ShouldSerialize(7) && !child_types.empty()) {
+		throw SerializationException("Cannot serialize aggregate state as a struct under your storage version '%s'",
+		                             serializer.GetOptions().serialization_compatibility.duckdb_version);
+	}
+}
+
+void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
+	VerifyStateAsStructSerialization(serializer);
+
+	// We intentionally don't call `StructTypeInfo::Serialize`, since we have a different ID for child_types, to
+	// maintain backward compatibility (forwards compatibility is not maintained here)
+	// NOLINTNEXTLINE(bugprone-parent-virtual-call) - Intentional for backward compatibility
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
+	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
+	                                                         state_type.bound_argument_types);
+
+	// This way we can still preserve forward compatibility for the legacy opaque aggregate state
+	if (serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<child_list_t<LogicalType>>(203, "child_types", child_types,
+		                                                               child_list_t<LogicalType> {});
+	}
+}
+
+shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
+	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types",
+	                                                          result->state_type.bound_argument_types);
+	// Backward compatibility - in older storage versions it will just be empty, leading to a `PhysicalType::VARCHAR`,
+	// as in older versions.
+	deserializer.ReadPropertyWithExplicitDefault(203, "child_types", result->child_types, child_list_t<LogicalType> {});
+	return std::move(result);
 }
 
 bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
@@ -257,7 +329,15 @@ bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
-	return make_shared_ptr<AggregateStateTypeInfo>(*this);
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, child_types);
+	result->alias = alias;
+	return std::move(result);
+}
+
+shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, child_types);
+	result->alias = alias;
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
