@@ -176,8 +176,17 @@ void ValidateExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &p
 //===----------------------------------------------------------------------===//
 // Wal Autocheckpoint Transactions
 //===----------------------------------------------------------------------===//
+void WalAutocheckpointTransactionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.wal_autocheckpoint_transactions = input.GetValue<idx_t>();
+}
+
 void WalAutocheckpointTransactionsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.wal_autocheckpoint_transactions = DBConfigOptions().wal_autocheckpoint_transactions;
+}
+
+Value WalAutocheckpointTransactionsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::UBIGINT(config.options.wal_autocheckpoint_transactions);
 }
 
 } // namespace duckdb

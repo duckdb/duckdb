@@ -296,18 +296,6 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// WAL Autocheckpoint Transactions
-//===----------------------------------------------------------------------===//
-void WalAutocheckpointTransactionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.wal_autocheckpoint_transactions = input.GetValue<idx_t>();
-}
-
-Value WalAutocheckpointTransactionsSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.wal_autocheckpoint_transactions);
-}
-
-//===----------------------------------------------------------------------===//
 // Custom Profiling Settings
 //===----------------------------------------------------------------------===//
 bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_optimizers) {
