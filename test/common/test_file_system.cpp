@@ -5,6 +5,7 @@
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "test_helpers.hpp"
 #if (!defined(_WIN32) && !defined(WIN32)) || defined(__MINGW32__)
 #define TEST_HAVE_SYMLINK
