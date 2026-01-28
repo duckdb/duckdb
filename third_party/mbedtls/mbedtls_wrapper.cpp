@@ -12,6 +12,7 @@
 
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <stdexcept>
 
@@ -300,12 +301,28 @@ MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
 	}
 }
 
-static void ThrowInsecureRNG() {
-	throw duckdb::InvalidConfigurationException("DuckDB requires a secure random engine to be loaded to enable secure crypto. Normally, this will be handled automatically by DuckDB by autoloading the `httpfs` Extension, but that seems to have failed. Please ensure the httpfs extension is loaded manually using `LOAD httpfs`.");
+void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataInsecure(duckdb::data_ptr_t data, duckdb::idx_t len) {
+	if (!force_mbedtls) {
+		// To use this insecure MbedTLS random number generator
+		// we double check if force_mbedtls_unsafe is set
+		// such that we do not accidentaly opt-in
+		throw duckdb::InternalException("Insecure random generation called without setting 'force_mbedtls_unsafe' = true");
+	}
+
+	duckdb::RandomEngine random_engine;
+
+	while (len != 0) {
+		const auto random_integer = random_engine.NextRandomInteger();
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
+		memcpy(data, duckdb::const_data_ptr_cast(&random_integer), next);
+		data += next;
+		len -= next;
+	}
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
-	ThrowInsecureRNG();
+	// generate insecure random data
+	GenerateRandomDataInsecure(data, len);
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len){
@@ -321,7 +338,13 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeInternal(duckdb::const_data_ptr_
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len_p, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
-	ThrowInsecureRNG();
+	mode = duckdb::EncryptionTypes::ENCRYPT;
+
+	if (mbedtls_cipher_setkey(context.get(), key, key_len_p * 8, MBEDTLS_ENCRYPT) != 0) {
+		runtime_error("Failed to set AES key for encryption");
+	}
+
+	InitializeInternal(iv, iv_len, aad, aad_len);
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, duckdb::const_data_ptr_t key, duckdb::idx_t key_len_p, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
