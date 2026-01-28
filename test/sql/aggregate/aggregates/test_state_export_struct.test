@@ -1,0 +1,164 @@
+# name: test/sql/aggregate/aggregates/test_state_export_struct.test
+# description: Test the state export functionality, for opted-in aggregate functions with struct-based AGGREGATE_STATE
+# group: [aggregates]
+
+# We know that forward compatibility won't be preserved
+require noforcestorage
+
+statement ok
+SET storage_compatibility_version = 'latest';
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# ungrouped aggr
+
+query IIIIII nosort res0
+SELECT avg(d)::integer FROM dummy;
+----
+
+query IIIIII nosort res0
+SELECT finalize(avg(d) EXPORT_STATE)::integer FROM dummy;
+----
+
+# grouped aggr
+query IIIIIII nosort res1
+SELECT g, avg(d)::integer FROM dummy GROUP BY g ORDER BY g;
+----
+
+query IIIIIII nosort res1
+SELECT g, finalize(avg(d) EXPORT_STATE)::integer FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist this
+
+statement ok
+CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state FROM dummy GROUP BY g ORDER BY g;
+
+query IIIIIII nosort res1
+SELECT g, finalize(avg_state)::integer FROM state ORDER BY g;
+----
+
+query II nosort res3
+SELECT g, avg(d)*2 combined_avg FROM dummy GROUP BY g ORDER BY g;
+----
+
+# combine aggregate state in UNION
+statement ok
+CREATE TABLE state2 AS SELECT g, avg(d) EXPORT_STATE avg_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
+
+query II rowsort res3
+select g, finalize(avg_state) * 2 combined_avg from (select g, avg(d) EXPORT_STATE avg_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
+----
+
+# combine aggregate states in JOINs with NULLs
+query II rowsort res3
+with groups as (select distinct g from dummy)
+select g, FINALIZE(COMBINE(avg_state, avg_state2)) * 2 from groups left join state2 using(g) left join (select g, avg(d) EXPORT_STATE avg_state2 from dummy where g >= 5 GROUP BY g) using (g);
+----
+
+# empty groups
+query IIIIII nosort res4
+SELECT avg(d)::integer FROM dummy WHERE FALSE;
+----
+
+query IIIIII nosort res4
+SELECT finalize(avg(d) EXPORT_STATE)::integer, FROM dummy WHERE FALSE;
+----
+
+# only null scanned
+query IIIIII nosort res5
+SELECT avg(d)::integer FROM (SELECT NULL::integer d);
+----
+
+query IIIIII nosort res5
+SELECT finalize(avg(d) EXPORT_STATE)::integer FROM (SELECT NULL::integer d);
+----
+
+# only null scanned, but grouped
+query IIIIII nosort res6
+SELECT avg(d)::integer FROM (SELECT NULL::integer d, g FROM dummy);
+----
+
+query IIIIII nosort res6
+SELECT finalize(avg(d) EXPORT_STATE)::integer FROM (SELECT NULL::integer d, g FROM dummy);
+----
+
+# more aggregates
+
+query IIIIIII nosort res8
+SELECT g, favg(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query IIIIIII nosort res8
+SELECT g, FINALIZE(favg(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# You're holding it wrong:
+
+statement error
+SELECT FINALIZE(COMBINE(SUM(d) EXPORT_STATE, AVG(d) EXPORT_STATE)) FROM dummy;
+----
+
+statement error
+SELECT combine(NULL, NULL);
+----
+
+statement error
+SELECT combine(42, 42);
+----
+
+statement error
+SELECT finalize(NULL);
+----
+
+statement error
+SELECT finalize(42);
+----
+
+statement error
+SELECT finalize(avg(d)) from dummy;
+----
+
+statement error
+SELECT finalize(avg(d)) from dummy group by g;
+----
+
+# can't finalize twice
+statement error
+SELECT finalize(finalize(avg(d) EXPORT_STATE)) from dummy;
+----
+
+# EXPORT_STATAE on a window function is not supported
+statement error
+select avg(42) EXPORT_STATE over ();
+----
+
+
+# tests with ze persistence
+# The storage version will be latest, so both opted-in to new AGGREGATE_STATE as struct an non-opted in will work
+load __TEST_DIR__/test_state_export.db readwrite latest
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# we can persist this
+statement ok
+CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state FROM dummy GROUP BY g ORDER BY g;
+
+statement ok
+CREATE VIEW state_view AS SELECT g, avg(d) EXPORT_STATE avg_state FROM dummy GROUP BY g ORDER BY g;
+
+restart
+
+query IIIIIII nosort res10
+SELECT g, avg(d)::integer FROM dummy GROUP BY g ORDER BY g;
+----
+
+query IIIIIII nosort res10
+SELECT g, finalize(avg_state)::integer FROM state ORDER BY g;
+----
+
+query IIIIIII nosort res10
+SELECT g, finalize(avg_state)::integer FROM state_view ORDER BY g;
+----

@@ -178,7 +178,12 @@ void LogicalOperator::Verify(ClientContext &context) {
 		MemoryStream stream(Allocator::Get(context));
 		// We are serializing a query plan
 		try {
-			BinarySerializer::Serialize(*expressions[expr_idx], stream);
+			// It is valid to set the compatibility as "latest"
+			// for more information look at `DataChunk::Verify`
+			SerializationOptions options;
+			options.serialization_compatibility = SerializationCompatibility::Latest();
+
+			BinarySerializer::Serialize(*expressions[expr_idx], stream, options);
 		} catch (NotImplementedException &ex) {
 			// ignore for now (FIXME)
 			continue;
