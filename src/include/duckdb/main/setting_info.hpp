@@ -92,6 +92,7 @@ struct ConfigurationOption {
 	SettingScopeTarget scope;
 	const char *default_value;
 	set_callback_t set_callback;
+	optional_idx setting_idx;
 };
 
 struct ConfigurationAlias {
@@ -102,6 +103,8 @@ struct ConfigurationAlias {
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
 
 struct ExtensionOption {
+	ExtensionOption() : set_function(nullptr), default_scope(SetScope::AUTOMATIC) {
+	}
 	// NOLINTNEXTLINE: work around bug in clang-tidy
 	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
 	                Value default_value_p, SetScope default_scope_p)
@@ -114,6 +117,7 @@ struct ExtensionOption {
 	set_option_callback_t set_function;
 	Value default_value;
 	SetScope default_scope;
+	optional_idx setting_index;
 };
 
 } // namespace duckdb

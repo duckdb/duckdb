@@ -155,7 +155,8 @@ unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const R
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 
-unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) {
+unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+                                                              const BaseStatistics &old_stats) {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 

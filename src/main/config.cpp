@@ -27,32 +27,33 @@ bool DBConfigOptions::debug_print_bindings = false;
 #define DUCKDB_SETTING(_PARAM)                                                                                         \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
-		    _PARAM::Scope, _PARAM::DefaultValue, nullptr                                                               \
+		    _PARAM::Scope, _PARAM::DefaultValue, nullptr, _PARAM::SettingIndex                                         \
 	}
 #define DUCKDB_SETTING_CALLBACK(_PARAM)                                                                                \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
-		    _PARAM::Scope, _PARAM::DefaultValue, _PARAM::OnSet                                                         \
+		    _PARAM::Scope, _PARAM::DefaultValue, _PARAM::OnSet, _PARAM::SettingIndex                                   \
 	}
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
-		    nullptr, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr                                 \
+		    nullptr, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx()                 \
 	}
 #define DUCKDB_LOCAL(_PARAM)                                                                                           \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,  \
-		    _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr                                          \
+		    _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx()                          \
 	}
 #define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal,                     \
-		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr \
+		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr,         \
+		    nullptr, optional_idx()                                                                                    \
 	}
 #define FINAL_SETTING                                                                                                  \
 	{                                                                                                                  \
 		nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, SettingScopeTarget::INVALID, nullptr,  \
-		    nullptr                                                                                                    \
+		    nullptr, optional_idx()                                                                                    \
 	}
 
 #define DUCKDB_SETTING_ALIAS(_ALIAS, _SETTING_INDEX)                                                                   \
@@ -134,6 +135,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
     DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
+    DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),
     DUCKDB_SETTING(HTTPProxySetting),
@@ -193,12 +195,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 90),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 91),
                                                      DUCKDB_SETTING_ALIAS("null_order", 38),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 109),
-                                                     DUCKDB_SETTING_ALIAS("user", 124),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 110),
+                                                     DUCKDB_SETTING_ALIAS("user", 125),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 123),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 124),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -290,10 +292,10 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 		return;
 	}
 
-	auto param = extension_parameters.find(name);
-	if (param != extension_parameters.end()) {
-		Value target_value = value.DefaultCastAs(param->second.type);
-		SetOption(name, std::move(target_value));
+	ExtensionOption extension_option;
+	if (TryGetExtensionOption(name, extension_option)) {
+		Value target_value = value.DefaultCastAs(extension_option.type);
+		SetOption(extension_option.setting_index.GetIndex(), std::move(target_value));
 	} else {
 		options.unrecognized_options[name] = value;
 	}
@@ -308,7 +310,6 @@ void DBConfig::SetOptionsByName(const case_insensitive_map_t<Value> &values) {
 }
 
 void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value) {
-	lock_guard<mutex> l(config_lock);
 	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
 	if (option.default_value) {
 		// generic option
@@ -316,52 +317,58 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 			SettingCallbackInfo info(*this, db);
 			option.set_callback(info, input);
 		}
-		options.set_variables[option.name] = std::move(input);
+		user_settings.SetUserSetting(option.setting_idx.GetIndex(), std::move(input));
 		return;
 	}
 	if (!option.set_global) {
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
+	lock_guard<mutex> guard(config_lock);
 	D_ASSERT(option.reset_global);
 	option.set_global(db.get(), *this, input);
 }
 
 void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option) {
-	lock_guard<mutex> l(config_lock);
 	if (option.default_value) {
 		// generic option
-		options.set_variables.erase(option.name);
+		user_settings.ClearSetting(option.setting_idx.GetIndex());
 		return;
 	}
 	if (!option.reset_global) {
 		throw InternalException("Could not reset option \"%s\" as a global option", option.name);
 	}
+	lock_guard<mutex> guard(config_lock);
 	D_ASSERT(option.set_global);
 	option.reset_global(db.get(), *this);
 }
 
-void DBConfig::SetOption(const String &name, Value value) {
-	lock_guard<mutex> l(config_lock);
-	options.set_variables[name.ToStdString()] = std::move(value);
+void DBConfig::SetOption(idx_t setting_index, Value value) {
+	user_settings.SetUserSetting(setting_index, std::move(value));
 }
 
-void DBConfig::ResetOption(const String &name) {
-	lock_guard<mutex> l(config_lock);
-	auto extension_option = extension_parameters.find(name.ToStdString());
-	D_ASSERT(extension_option != extension_parameters.end());
-	auto &default_value = extension_option->second.default_value;
+void DBConfig::SetOption(const string &name, Value value) {
+	optional_ptr<const ConfigurationOption> option;
+	auto setting_index = TryGetSettingIndex(name, option);
+	if (!setting_index.IsValid()) {
+		throw InternalException("Unrecognized option %s in DBConfig::SetOption", name);
+	}
+	SetOption(setting_index.GetIndex(), std::move(value));
+}
+
+void DBConfig::ResetOption(const ExtensionOption &extension_option) {
+	auto &default_value = extension_option.default_value;
+	auto setting_index = extension_option.setting_index.GetIndex();
 	if (!default_value.IsNull()) {
 		// Default is not NULL, override the setting
-		options.set_variables[name.ToStdString()] = default_value;
+		user_settings.SetUserSetting(setting_index, default_value);
 	} else {
 		// Otherwise just remove it from the 'set_variables' map
-		options.set_variables.erase(name.ToStdString());
+		user_settings.ClearSetting(setting_index);
 	}
 }
 
-void DBConfig::ResetGenericOption(const String &name) {
-	lock_guard<mutex> l(config_lock);
-	options.set_variables.erase(name.ToStdString());
+void DBConfig::ResetGenericOption(idx_t setting_index) {
+	user_settings.ClearSetting(setting_index);
 }
 
 LogicalType DBConfig::ParseLogicalType(const string &type) {
@@ -446,34 +453,41 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 		return LogicalType::STRUCT(struct_members);
 	}
 
-	LogicalType type_id = StringUtil::CIEquals(type, "ANY") ? LogicalType::ANY : TransformStringToLogicalTypeId(type);
-	if (type_id == LogicalTypeId::USER) {
+	const auto type_id = StringUtil::CIEquals(type, "ANY") ? LogicalTypeId::ANY : TransformStringToLogicalTypeId(type);
+	if (type_id == LogicalTypeId::UNBOUND) {
 		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
 		                        type);
 	}
 	return type_id;
 }
 
-bool DBConfig::HasExtensionOption(const string &name) {
-	lock_guard<mutex> l(config_lock);
-	return extension_parameters.find(name) != extension_parameters.end();
+bool DBConfig::HasExtensionOption(const string &name) const {
+	return user_settings.HasExtensionOption(name);
+}
+
+bool DBConfig::TryGetExtensionOption(const String &name, ExtensionOption &result) const {
+	return user_settings.TryGetExtensionOption(name, result);
 }
 
 void DBConfig::AddExtensionOption(const string &name, string description, LogicalType parameter,
                                   const Value &default_value, set_option_callback_t function, SetScope default_scope) {
-	lock_guard<mutex> l(config_lock);
-	extension_parameters.insert(make_pair(
-	    name, ExtensionOption(std::move(description), std::move(parameter), function, default_value, default_scope)));
+	ExtensionOption extension_option(std::move(description), std::move(parameter), function, default_value,
+	                                 default_scope);
+	auto setting_index = user_settings.AddExtensionOption(name, std::move(extension_option));
 	// copy over unrecognized options, if they match the new extension option
 	auto iter = options.unrecognized_options.find(name);
 	if (iter != options.unrecognized_options.end()) {
-		options.set_variables[name] = iter->second;
+		user_settings.SetUserSetting(setting_index, iter->second);
 		options.unrecognized_options.erase(iter);
 	}
-	if (!default_value.IsNull() && options.set_variables.find(name) == options.set_variables.end()) {
+	if (!default_value.IsNull() && !user_settings.IsSet(setting_index)) {
 		// Default value is set, insert it into the 'set_variables' list
-		options.set_variables[name] = default_value;
+		user_settings.SetUserSetting(setting_index, default_value);
 	}
+}
+
+case_insensitive_map_t<ExtensionOption> DBConfig::GetExtensionSettings() const {
+	return user_settings.GetExtensionSettings();
 }
 
 bool DBConfig::IsInMemoryDatabase(const char *database_path) {
@@ -492,7 +506,11 @@ bool DBConfig::IsInMemoryDatabase(const char *database_path) {
 }
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
-	return *cast_functions;
+	return type_manager->GetCastFunctions();
+}
+
+TypeManager &DBConfig::GetTypeManager() {
+	return *type_manager;
 }
 
 CollationBinding &DBConfig::GetCollationBinding() {
@@ -604,7 +622,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 
 	if (!error.empty()) {
 		if (error == "Memory cannot be negative") {
-			result = -1;
+			result = DConstants::INVALID_INDEX;
 		} else {
 			throw ParserException(error);
 		}
@@ -672,15 +690,8 @@ OrderType DBConfig::ResolveOrder(ClientContext &context, OrderType order_type) c
 	return Settings::Get<DefaultOrderSetting>(context);
 }
 
-SettingLookupResult DBConfig::TryGetCurrentUserSetting(const string &key, Value &result) const {
-	const auto &global_config_map = options.set_variables;
-
-	auto global_value = global_config_map.find(key);
-	if (global_value != global_config_map.end()) {
-		result = global_value->second;
-		return SettingLookupResult(SettingScope::GLOBAL);
-	}
-	return SettingLookupResult();
+SettingLookupResult DBConfig::TryGetCurrentUserSetting(idx_t setting_index, Value &result) const {
+	return user_settings.TryGetSetting(setting_index, result);
 }
 
 SettingLookupResult DBConfig::TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result) {
@@ -693,12 +704,30 @@ SettingLookupResult DBConfig::TryGetDefaultValue(optional_ptr<const Configuratio
 }
 
 SettingLookupResult DBConfig::TryGetCurrentSetting(const string &key, Value &result) const {
-	auto lookup_result = TryGetCurrentUserSetting(key, result);
-	if (lookup_result) {
-		return lookup_result;
+	optional_ptr<const ConfigurationOption> option;
+	auto setting_index = TryGetSettingIndex(key, option);
+	if (setting_index.IsValid()) {
+		auto lookup_result = TryGetCurrentUserSetting(setting_index.GetIndex(), result);
+		if (lookup_result) {
+			return lookup_result;
+		}
 	}
-	auto option = GetOptionByName(key);
 	return TryGetDefaultValue(option, result);
+}
+
+optional_idx DBConfig::TryGetSettingIndex(const String &name, optional_ptr<const ConfigurationOption> &option) const {
+	ExtensionOption extension_option;
+	if (TryGetExtensionOption(name, extension_option)) {
+		// extension setting
+		return extension_option.setting_index;
+	}
+	option = GetOptionByName(name);
+	if (option) {
+		// built-in setting
+		return option->setting_idx;
+	}
+	// unknown setting
+	return optional_idx();
 }
 
 OrderByNullType DBConfig::ResolveNullOrder(ClientContext &context, OrderType order_type,
@@ -739,12 +768,48 @@ const string DBConfig::UserAgent() const {
 	return user_agent;
 }
 
-string DBConfig::SanitizeAllowedPath(const string &path) const {
-	auto path_sep = file_system->PathSeparator(path);
+ExtensionCallbackManager &DBConfig::GetCallbackManager() {
+	return *callback_manager;
+}
+
+const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
+	return *callback_manager;
+}
+
+string DBConfig::SanitizeAllowedPath(const string &path_p) const {
+	auto path_sep = file_system->PathSeparator(path_p);
+	auto path = path_p;
 	if (path_sep != "/") {
 		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
-		return StringUtil::Replace(path, path_sep, "/");
+		path = StringUtil::Replace(path_p, path_sep, "/");
 	}
+
+	auto elements = StringUtil::Split(path, "/");
+	path.clear(); // later reconstructed
+	deque<string> path_stack;
+	for (idx_t i = 0; i < elements.size(); i++) {
+		if (elements[i].empty() || elements[i] == ".") {
+			// we ignore empty and `.`
+			continue;
+		}
+		if (elements[i] == "..") {
+			// .. pops from stack if possible, if already at root its ignored
+			if (!path_stack.empty()) {
+				path_stack.pop_back();
+			}
+		} else {
+			path_stack.push_back(elements[i]);
+		}
+	}
+	// we lost the leading / in the split/loop so leats put it back
+	if (path_p[0] == '/') {
+		path = "/";
+	}
+	while (!path_stack.empty()) {
+		path += path_stack.front() + '/';
+		path_stack.pop_front();
+	}
+
 	return path;
 }
 
@@ -771,10 +836,12 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 		return true;
 	}
 	string path = SanitizeAllowedPath(input_path);
+
 	if (options.allowed_paths.count(path) > 0) {
 		// path is explicitly allowed
 		return true;
 	}
+
 	if (options.allowed_directories.empty()) {
 		// no prefix directories specified
 		return false;
@@ -799,27 +866,6 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 		return false;
 	}
 	D_ASSERT(StringUtil::EndsWith(prefix, "/"));
-	// path is inside an allowed directory - HOWEVER, we could still exit the allowed directory using ".."
-	// we check if we ever exit the allowed directory using ".." by looking at the path fragments
-	idx_t directory_level = 0;
-	idx_t current_pos = prefix.size();
-	for (; current_pos < path.size(); current_pos++) {
-		idx_t dir_begin = current_pos;
-		// find either the end of the path or the directory separator
-		for (; path[current_pos] != '/' && current_pos < path.size(); current_pos++) {
-		}
-		idx_t path_length = current_pos - dir_begin;
-		if (path_length == 2 && path[dir_begin] == '.' && path[dir_begin + 1] == '.') {
-			// go up a directory
-			if (directory_level == 0) {
-				// we cannot go up past the prefix
-				return false;
-			}
-			--directory_level;
-		} else if (path_length > 0) {
-			directory_level++;
-		}
-	}
 	return true;
 }
 

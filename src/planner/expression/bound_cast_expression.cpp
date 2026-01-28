@@ -6,6 +6,7 @@
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 

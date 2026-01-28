@@ -1,0 +1,27 @@
+# name: test/sql/parallelism/interquery/concurrent_update_pk.test_slow
+# description: Test concurrent updates on primary key table
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers (i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO integers SELECT range FROM range(1000)
+
+concurrentloop threadid 0 10
+
+loop x 0 1000
+
+# Conflict on tuple deletion or violates primary key constraint
+statement maybe
+UPDATE integers SET i = 1000 + (i % 100) WHERE i = ${x}
+----
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT i) FROM integers
+----
+1000	1000

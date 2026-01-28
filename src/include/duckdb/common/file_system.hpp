@@ -38,6 +38,7 @@ class FileSystem;
 class Logger;
 class ClientContext;
 class QueryContext;
+class MultiFileList;
 
 enum class FileType {
 	//! Regular file
@@ -251,7 +252,11 @@ public:
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
-	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
+	DUCKDB_API unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input,
+	                                          optional_ptr<FileOpener> opener);
+	DUCKDB_API unique_ptr<MultiFileList> GlobFileList(const string &path,
+	                                                  const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
+	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &pattern,
 	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
@@ -314,6 +319,10 @@ protected:
 	                                          const std::function<void(OpenFileInfo &info)> &callback,
 	                                          optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsListFilesExtended() const;
+
+	DUCKDB_API virtual unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                                               optional_ptr<FileOpener> opener = nullptr);
+	DUCKDB_API virtual bool SupportsGlobExtended() const;
 
 public:
 	template <class TARGET>
