@@ -356,6 +356,9 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 	test_cases.emplace_back("a/b/c/../../d/e/../f", "a/d/f", "interleaved parents");
 
 #ifdef _WIN32
+	auto fs = FileSystem::CreateLocal();
+	auto current_drive = fs->GetWorkingDirectory().substr(0, 1);
+
 	// Backslash handling
 	test_cases.emplace_back("src\\common", "src/common", "backslash separator equivalant to forward slash");
 	test_cases.emplace_back("src\\..\\common", "common", "parent with backslash");
@@ -368,14 +371,20 @@ TEST_CASE("Test path canonicalization", "[file_system]") {
 	test_cases.emplace_back("C:src\\..\\file", "file", "drive-relative with dots");
 	test_cases.emplace_back("C:", ".", "drive-relative root");
 	test_cases.emplace_back("C:\\", "\\\\?\\C:\\", "drive root");
-	test_cases.emplace_back("D:file", "D:\\file", "drive-relative in different drive");
-	test_cases.emplace_back("Z:\\src\\..\\common", "Z:\\common", "parent with drive in non-existent drive");
 	test_cases.emplace_back("C:\\..\\common", "C:\\common", ".. in root of known drive");
+	test_cases.emplace_back("Z:file", "Z:\\file", "drive-relative in unknown drive");
+	test_cases.emplace_back("Z:\\src\\..\\common", "Z:\\common", "parent with drive in non-existent drive");
 	test_cases.emplace_back("Z:\\..\\common", "Z:\\common", ".. in root of unknown drive");
 
 	// UNC paths
 	test_cases.emplace_back("\\\\server\\share", "\\\\server\\share", "UNC path");
 	test_cases.emplace_back("\\\\server\\share\\src\\..\\common", "\\\\server\\share\\common", "UNC with parent");
+
+	// if the current drive is not C:
+	for (auto &test_case : test_cases) {
+		test_case.a = StringUtil::Replace(test_case.a, "C:", current_drive + ":");
+		test_case.b = StringUtil::Replace(test_case.b, "C:", current_drive + ":");
+	}
 #else
 	test_cases.emplace_back("//src/common", "/src/common", "leading double slash");
 #endif
