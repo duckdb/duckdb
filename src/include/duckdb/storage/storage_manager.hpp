@@ -131,7 +131,8 @@ public:
 	bool IsEncrypted() const {
 		return storage_options.encryption;
 	}
-	uint8_t GetEncryptionVersion() const {
+
+	EncryptionTypes::EncryptionVersion GetEncryptionVersion() const {
 		return storage_options.encryption_version;
 	}
 

@@ -42,6 +42,7 @@ add_library_unity(
   encryption_functions.cpp
   encryption_key_manager.cpp
   encryption_state.cpp
+  encryption_types.cpp
   exception.cpp
   exception_format_value.cpp
   extra_type_info.cpp

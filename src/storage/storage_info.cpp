@@ -8,6 +8,7 @@ constexpr idx_t Storage::MAX_ROW_GROUP_SIZE;
 constexpr idx_t Storage::MAX_BLOCK_ALLOC_SIZE;
 constexpr idx_t Storage::MIN_BLOCK_ALLOC_SIZE;
 constexpr idx_t Storage::DEFAULT_BLOCK_HEADER_SIZE;
+constexpr uint64_t MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
