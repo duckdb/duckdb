@@ -159,4 +159,19 @@ public:
 	                                  transaction_t transaction_id = MAX_TRANSACTION_ID);
 };
 
+class WaitEventLogType : public LogType {
+public:
+	static constexpr const char *NAME = "WaitEvent";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	//! Construct the log type
+	WaitEventLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const string &event, const string &state, optional_idx connection_id,
+	                                  optional_idx query_id, optional_idx thread_id,
+	                                  const vector<pair<string, string>> &metadata);
+};
+
 } // namespace duckdb

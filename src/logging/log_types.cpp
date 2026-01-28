@@ -16,6 +16,7 @@ constexpr LogLevel HTTPLogType::LEVEL;
 constexpr LogLevel PhysicalOperatorLogType::LEVEL;
 constexpr LogLevel MetricsLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
+constexpr LogLevel WaitEventLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -245,6 +246,39 @@ string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const
 	    {"database", db.name},
 	    {"type", log_type},
 	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
+	};
+
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// WaitEventLogType
+//===--------------------------------------------------------------------===//
+WaitEventLogType::WaitEventLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType WaitEventLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"event", LogicalType::VARCHAR},
+	    {"state", LogicalType::VARCHAR},
+	    {"connection_id", LogicalType::UBIGINT},
+	    {"query_id", LogicalType::UBIGINT},
+	    {"thread_id", LogicalType::UBIGINT},
+	    {"metadata", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string WaitEventLogType::ConstructLogMessage(const string &event, const string &state, optional_idx connection_id,
+                                             optional_idx query_id, optional_idx thread_id,
+                                             const vector<pair<string, string>> &metadata) {
+	child_list_t<Value> child_list = {
+	    {"event", Value(event)},
+	    {"state", Value(state)},
+	    {"connection_id", connection_id.IsValid() ? Value::UBIGINT(connection_id.GetIndex()) : Value()},
+	    {"query_id", query_id.IsValid() ? Value::UBIGINT(query_id.GetIndex()) : Value()},
+	    {"thread_id", thread_id.IsValid() ? Value::UBIGINT(thread_id.GetIndex()) : Value()},
+	    {"metadata", StringPairIterableToMap(metadata)},
 	};
 
 	return Value::STRUCT(std::move(child_list)).ToString();
