@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
@@ -213,6 +214,15 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	active_query->query = query;
 
 	query_progress.Initialize();
+	// Set query deadline if max_execution_time is configured
+	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
+	if (max_execution_time > 0) {
+		auto now = steady_clock::now();
+		auto deadline_tp = now + milliseconds(max_execution_time);
+		query_deadline = NumericCast<idx_t>(duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count());
+	} else {
+		query_deadline.SetInvalid();
+	}
 	// Notify any registered state of query begin
 	for (auto &state : registered_state->States()) {
 		state->QueryBegin(*this);
@@ -238,6 +248,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	active_query->progress_bar.reset();
 	D_ASSERT(active_query.get());
 	active_query.reset();
+	query_deadline.SetInvalid();
 	query_progress.Initialize();
 	ErrorData error;
 	try {
@@ -1123,6 +1134,23 @@ bool ClientContext::IsInterrupted() const {
 
 void ClientContext::ClearInterrupt() {
 	interrupted = false;
+}
+
+void ClientContext::InterruptCheck() const {
+	// Counter for throttling timeout checks - only check every N iterations
+	static constexpr uint32_t TIMEOUT_CHECK_INTERVAL = 256;
+	thread_local uint32_t timeout_check_counter = 0;
+
+	if (interrupted.load(std::memory_order_relaxed)) {
+		throw InterruptException();
+	}
+	// Only check timeout every N calls to avoid expensive steady_clock::now() syscall
+	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
+		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+		if (now >= query_deadline.GetIndex()) {
+			throw InterruptException();
+		}
+	}
 }
 
 void ClientContext::CancelTransaction() {

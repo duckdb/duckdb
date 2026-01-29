@@ -55,6 +55,7 @@ public:
 	optional_ptr<JoinRelationSet> right_set;
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
+	bool from_residual_predicate = false;
 
 	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
 	void SetRightSet(optional_ptr<JoinRelationSet> right_set_new);

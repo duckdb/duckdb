@@ -63,6 +63,14 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	// create the delete node
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->bound_constraints = BindConstraints(table);
+
+	// If RETURNING is present, add all physical table columns to the scan so we can pass them through
+	// instead of having to fetch them by row ID in PhysicalDelete.
+	// Generated columns will be computed in the RETURNING projection by the binder.
+	if (!stmt.returning_list.empty()) {
+		BindDeleteReturningColumns(table, get, del->return_columns);
+	}
+
 	del->AddChild(std::move(root));
 
 	// bind the row id columns and add them to the projection list

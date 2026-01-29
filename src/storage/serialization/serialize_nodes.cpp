@@ -344,10 +344,10 @@ void JoinCondition::Serialize(Serializer &serializer) const {
 }
 
 JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
-	JoinCondition result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "left", result.left);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "right", result.right);
-	deserializer.ReadProperty<ExpressionType>(102, "comparison", result.comparison);
+	auto left = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "left");
+	auto right = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "right");
+	auto comparison = deserializer.ReadProperty<ExpressionType>(102, "comparison");
+	JoinCondition result(std::move(left), std::move(right), comparison);
 	return result;
 }
 

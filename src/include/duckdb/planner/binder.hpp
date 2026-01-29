@@ -404,6 +404,15 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
+	//! Build a mapping from storage column index to scan chunk index for RETURNING.
+	//! Ensures all physical columns are present in the scan.
+	//! return_columns[storage_idx] = scan_chunk_idx
+	void BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns);
+	//! Overload for MERGE INTO: also creates projection expressions and maps to projection indices
+	//! return_columns[storage_idx] = projection_expr_idx
+	void BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+	                                vector<unique_ptr<Expression>> &projection_expressions,
+	                                LogicalOperator &target_binding);
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator,

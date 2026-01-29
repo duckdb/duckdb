@@ -1,7 +1,9 @@
 [
   {
     "class": "LogicalTypeModifier",
-    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "includes": [
+      "duckdb/common/extension_type_info.hpp"
+    ],
     "members": [
       {
         "id": 100,
@@ -15,11 +17,15 @@
       }
     ],
     "pointer_type": "none",
-    "constructor": ["value"]
+    "constructor": [
+      "value"
+    ]
   },
   {
     "class": "ExtensionTypeInfo",
-    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "includes": [
+      "duckdb/common/extension_type_info.hpp"
+    ],
     "members": [
       {
         "id": 100,
@@ -140,6 +146,14 @@
         "name": "bound_argument_types",
         "type": "vector<LogicalType>",
         "property": "state_type.bound_argument_types"
+      },
+      {
+        "id": 203,
+        "name": "state_type",
+        "type": "LogicalType",
+        "property": "state_type.state_type",
+        "default": "LogicalTypeId::INVALID",
+        "version": "v1.5.0"
       }
     ]
   },
@@ -159,7 +173,10 @@
         "type": "uint32_t"
       }
     ],
-    "constructor": ["child_type", "size"]
+    "constructor": [
+      "child_type",
+      "size"
+    ]
   },
   {
     "class": "EnumTypeInfo",
