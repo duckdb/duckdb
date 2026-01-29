@@ -24,16 +24,13 @@ CREATE TABLE kahan_context2 AS
 SELECT unnest([9007199254740990.0, 2.0, 2.0, 2.0, 2.0]) as val;
 
 query R
-WITH combined AS (
-  SELECT finalize(combine(
-	  (SELECT favg(val) EXPORT_STATE FROM kahan_context1),
-	  (SELECT favg(val) EXPORT_STATE FROM kahan_context2)
-  )) as combined_result
-),
-all_direct AS (
-  SELECT favg(val) as direct_all
-  FROM (SELECT val FROM kahan_context1 UNION ALL SELECT val FROM kahan_context2)
-)
-SELECT combined_result - direct_all FROM combined CROSS JOIN all_direct;
+  SELECT
+      finalize(combine(
+          (SELECT favg(val) EXPORT_STATE FROM kahan_context1),
+          (SELECT favg(val) EXPORT_STATE FROM kahan_context2)
+      )) -
+      (SELECT favg(val) FROM (
+          SELECT val FROM kahan_context1 UNION ALL SELECT val FROM kahan_context2
+      ));
 ----
 0
