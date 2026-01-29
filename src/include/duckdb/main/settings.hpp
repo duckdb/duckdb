@@ -1483,10 +1483,11 @@ struct VariantMinimumShreddingSizeSetting {
 	static constexpr idx_t SettingIndex = 86;
 };
 
-struct WalAutocheckpointTransactionsSetting {
+struct WalAutocheckpointEntriesSetting {
 	using RETURN_TYPE = idx_t;
-	static constexpr const char *Name = "wal_autocheckpoint_transactions";
-	static constexpr const char *Description = "Checkpoint after every N committed transactions (0 = disabled)";
+	static constexpr const char *Name = "wal_autocheckpoint_entries";
+	static constexpr const char *Description =
+	    "Trigger automatic checkpoint when WAL entry count reaches or exceeds N (0 = disabled)";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;

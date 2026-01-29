@@ -1019,8 +1019,8 @@
         "default_value": "30000"
     },
     {
-        "name": "wal_autocheckpoint_transactions",
-        "description": "Checkpoint after every N committed transactions (0 = disabled)",
+        "name": "wal_autocheckpoint_entries",
+        "description": "Trigger automatic checkpoint when WAL entry count reaches or exceeds N (0 = disabled)",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "0"

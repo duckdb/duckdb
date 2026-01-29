@@ -178,6 +178,10 @@ public:
 		memory_stream.Rewind();
 	}
 
+	WriteAheadLog &GetWAL() {
+		return wal;
+	}
+
 private:
 	WriteAheadLog &wal;
 	optional_ptr<WriteStream> stream;
@@ -200,6 +204,7 @@ public:
 	void End() {
 		serializer.End();
 		checksum_writer.Flush();
+		checksum_writer.GetWAL().IncrementWALEntriesCount();
 	}
 
 	template <class T>
@@ -532,7 +537,10 @@ void WriteAheadLog::Flush() {
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
 	storage_manager.SetWALSize(writer->GetFileSize());
-	storage_manager.IncrementWALTransactionsCount();
+}
+
+void WriteAheadLog::IncrementWALEntriesCount() {
+	storage_manager.IncrementWALEntriesCount();
 }
 
 } // namespace duckdb

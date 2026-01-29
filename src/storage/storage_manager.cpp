@@ -172,12 +172,12 @@ void StorageManager::SetWALSize(idx_t size) {
 	wal_size = size;
 }
 
-idx_t StorageManager::GetWALTransactionsCount() {
-	return wal_transactions_count;
+idx_t StorageManager::GetWALEntriesCount() {
+	return wal_entries_count;
 }
 
-void StorageManager::IncrementWALTransactionsCount() {
-	wal_transactions_count++;
+void StorageManager::IncrementWALEntriesCount() {
+	wal_entries_count++;
 }
 
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
@@ -249,7 +249,7 @@ void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 		// this is the common scenario if there are no concurrent writes happening while checkpointing
 		// in this case we can just remove the main WAL and re-instantiate it to empty
 		fs.TryRemoveFile(wal_path);
-		wal_transactions_count = 0;
+		wal_entries_count = 0;
 
 		wal = make_uniq<WriteAheadLog>(*this, wal_path);
 		return;
@@ -776,9 +776,9 @@ bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 		return true;
 	}
 
-	// Check transaction-based threshold (if enabled)
-	auto transaction_limit = Settings::Get<WalAutocheckpointTransactionsSetting>(DBConfig::Get(db));
-	if (transaction_limit > 0 && GetWALTransactionsCount() + 1 >= transaction_limit) {
+	// Check entry-based threshold (if enabled)
+	auto entry_limit = Settings::Get<WalAutocheckpointEntriesSetting>(DBConfig::Get(db));
+	if (entry_limit > 0 && GetWALEntriesCount() >= entry_limit) {
 		return true;
 	}
 
