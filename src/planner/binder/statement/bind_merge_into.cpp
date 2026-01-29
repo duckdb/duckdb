@@ -391,8 +391,8 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 			auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
 			BindDeleteReturningColumns(table, get, merge_into->delete_return_columns, projection_expressions,
 			                           *target_binding);
-		} else {
-			// If no RETURNING, but unique indexes exist, add indexed columns to the scan
+		} else if (table.IsDuckTable()) {
+			// Only optimize for DuckDB tables (not attached external tables like SQLite)
 			auto &storage = table.GetStorage();
 			if (storage.HasUniqueIndexes()) {
 				auto &target_binding = join_ref.get().children[inverted ? 0 : 1];

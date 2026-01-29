@@ -71,8 +71,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	if (!stmt.returning_list.empty()) {
 		// Add all physical columns for RETURNING
 		BindDeleteReturningColumns(table, get, del->return_columns);
-	} else {
-		// Check if table has unique indexes - if so, add indexed columns to scan
+	} else if (table.IsDuckTable()) {
+		// Only optimize for DuckDB tables (not attached external tables like SQLite)
 		auto &storage = table.GetStorage();
 		if (storage.HasUniqueIndexes()) {
 			BindDeleteIndexColumns(table, get, del->return_columns);
