@@ -8,10 +8,10 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include "zstd/common/zstd_internal.h"
 
 #include "zstd.h"
-
-#include "zstd/common/zstd_internal.h"
 
 /*
 Data layout per segment:
