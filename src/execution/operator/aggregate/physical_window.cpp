@@ -280,7 +280,7 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 	case ExpressionType::WINDOW_LAG:
 		return make_uniq<WindowLeadLagExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_FILL:
-		return make_uniq<WindowFillExecutor>(wexpr, shared);
+		return make_uniq<WindowFillExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_FIRST_VALUE:
 		return make_uniq<WindowFirstValueExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_LAST_VALUE:

@@ -83,11 +83,28 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 		string alias_name = colref.column_names.back();
 		// check the alias list
 		auto entry = bind_state.alias_map.find(alias_name);
-		if (entry == bind_state.alias_map.end()) {
-			break;
+		if (entry != bind_state.alias_map.end()) {
+			// this is an alias - return the index
+			return entry->second;
 		}
-		// this is an alias - return the index
-		return entry->second;
+		// check the expression list
+		vector<idx_t> matching_columns;
+		for (idx_t i = 0; i < bind_state.original_expressions.size(); i++) {
+			if (bind_state.original_expressions[i]->type != ExpressionType::COLUMN_REF) {
+				continue;
+			}
+			auto &colref = bind_state.original_expressions[i]->Cast<ColumnRefExpression>();
+			if (colref.HasAlias()) {
+				continue;
+			}
+			if (colref.GetColumnName() == alias_name) {
+				matching_columns.push_back(i);
+			}
+		}
+		if (matching_columns.size() == 1) {
+			return matching_columns[0];
+		}
+		break;
 	}
 	case ExpressionClass::POSITIONAL_REFERENCE: {
 		auto &posref = expr.Cast<PositionalReferenceExpression>();

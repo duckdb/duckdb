@@ -3,6 +3,8 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -82,6 +84,10 @@ static LogicalType TransformStringToUnboundType(const string &str) {
 static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContext &context) {
 	auto type = TransformStringToUnboundType(type_str);
 	if (type.IsUnbound()) {
+		if (!context.transaction.HasActiveTransaction()) {
+			throw InternalException(
+			    "Context does not have a transaction active, try running ClientContext::BindLogicalType instead");
+		}
 		auto binder = Binder::CreateBinder(context, nullptr);
 		binder->BindLogicalType(type);
 	}
@@ -90,6 +96,10 @@ static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContex
 
 LogicalType TypeManager::ParseLogicalType(const string &type_str, ClientContext &context) const {
 	return parse_function(type_str, context);
+}
+
+TypeManager &TypeManager::Get(DatabaseInstance &db) {
+	return DBConfig::GetConfig(db).GetTypeManager();
 }
 
 TypeManager &TypeManager::Get(ClientContext &context) {
