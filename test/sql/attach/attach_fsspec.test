@@ -7,7 +7,23 @@ ATTACH 'dummy_extension:/hello.world';
 ----
 not found
 
+statement ok
+ATTACH 'file://__TEST_DIR__/dummy.csv'
+
 statement error
-ATTACH 'file://dummy.csv'
+ATTACH '__TEST_DIR__/dummy.csv'
 ----
-IO Error: Cannot open file "file://dummy.csv"
+already attached
+
+statement ok
+CREATE TABLE dummy.tbl(i INTEGER);
+
+statement ok
+DETACH dummy
+
+statement ok
+ATTACH '__TEST_DIR__/dummy.csv'
+
+query I
+FROM dummy.tbl
+----

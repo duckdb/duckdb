@@ -349,12 +349,54 @@ string FileSystem::GetHomeDirectory() {
 	return GetHomeDirectory(nullptr);
 }
 
+// Helper function to handle file:/ URLs
+static idx_t GetFileUrlOffset(const string &path) {
+	if (!StringUtil::StartsWith(path, "file:/")) {
+		return 0;
+	}
+
+	// Url without host: file:/some/path
+	if (path[6] != '/') {
+#ifdef _WIN32
+		return 6;
+#else
+		return 5;
+#endif
+	}
+
+	// Url with empty host: file:///some/path
+	if (path[7] == '/') {
+#ifdef _WIN32
+		return 8;
+#else
+		return 7;
+#endif
+	}
+
+	// Url with localhost: file://localhost/some/path
+	if (path.compare(7, 10, "localhost/") == 0) {
+#ifdef _WIN32
+		return 17;
+#else
+		return 16;
+#endif
+	}
+
+	// unkown file:/ url format
+	return 0;
+}
+
 string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
 	if (path.empty()) {
 		return path;
 	}
 	if (path[0] == '~') {
 		return GetHomeDirectory(opener) + path.substr(1);
+	}
+	// handle file URIs
+	auto file_offset = GetFileUrlOffset(path);
+	if (file_offset > 0) {
+		return path.substr(file_offset);
 	}
 	return path;
 }

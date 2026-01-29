@@ -99,9 +99,6 @@ public:
 	//! Checks a file is private (checks for 600 on linux/macos, TODO: currently always returns true on windows)
 	static bool IsPrivateFile(const string &path_p, FileOpener *opener);
 
-	// returns a C-string of the path that trims any file:/ prefix
-	static const char *NormalizeLocalPath(const string &path);
-
 	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener, bool absolute_path);
 
 	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
