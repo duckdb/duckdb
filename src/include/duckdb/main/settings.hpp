@@ -418,7 +418,7 @@ struct DebugEvictionQueueSleepMicroSecondsSetting {
 	    "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "0";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = 19;
 };
 

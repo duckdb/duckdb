@@ -36,24 +36,32 @@ public:
 	~BlockMemory();
 
 public:
+	//! Returns a const reference to the buffer manager.
+	const BufferManager &GetBufferManager() const {
+		return buffer_manager;
+	}
+	//! Returns a reference to the buffer manager.
 	BufferManager &GetBufferManager() {
 		return buffer_manager;
 	}
+	//! Returns the block ID.
 	block_id_t BlockId() const {
 		return block_id;
 	}
+	//! Locks the memory block.
 	BlockLock GetLock() {
 		return BlockLock(lock);
 	}
+	//! Verification-only: ensure that the lock matches this memory's lock.
 	void VerifyMutex(BlockLock &l) const {
 		D_ASSERT(l.owns_lock());
 		D_ASSERT(l.mutex() == &lock);
 	}
-	//! Returns the block state of the memory.
+	//! Returns the block state.
 	BlockState GetState() const {
 		return state;
 	}
-	//! Sets the block state of the memory.
+	//! Sets the block state.
 	void SetState(BlockState state_p) {
 		state = state_p;
 	}
@@ -62,7 +70,7 @@ public:
 		return state == BlockState::BLOCK_UNLOADED;
 	}
 	//! Returns the number of readers.
-	int32_t Readers() const {
+	int32_t GetReaders() const {
 		return readers;
 	}
 	//! Increments the number of readers prior to returning it.
@@ -85,11 +93,12 @@ public:
 	FileBufferType GetBufferType() const {
 		return buffer_type;
 	}
-	//! Returns a reference to the unique file buffer pointer.
+	//! Returns a reference to the unique file buffer pointer while holding the block lock.
 	unique_ptr<FileBuffer> &GetBuffer(BlockLock &l) {
 		VerifyMutex(l);
 		return GetBuffer();
 	}
+	//! Returns a reference to the unique file buffer pointer.
 	unique_ptr<FileBuffer> &GetBuffer() {
 		return buffer;
 	}
@@ -98,7 +107,7 @@ public:
 		buffer = std::move(buffer_p);
 	}
 	//! Returns the eviction sequence number.
-	idx_t EvictionSequenceNumber() const {
+	idx_t GetEvictionSequenceNumber() const {
 		return eviction_seq_num;
 	}
 	//! Increments the eviction sequence number prior to returning it.
@@ -133,12 +142,13 @@ public:
 	void SetMemoryUsage(idx_t usage) {
 		memory_usage = usage;
 	}
-	//! Get the memory charge.
-	BufferPoolReservation &MemoryCharge(BlockLock &l) {
+	//! Get the memory charge while holding the block lock.
+	BufferPoolReservation &GetMemoryCharge(BlockLock &l) {
 		VerifyMutex(l);
-		return MemoryCharge();
+		return GetMemoryCharge();
 	}
-	BufferPoolReservation &MemoryCharge() {
+	//! Get the memory charge.
+	BufferPoolReservation &GetMemoryCharge() {
 		return memory_charge;
 	}
 	//! Resize the memory charge.
@@ -167,7 +177,7 @@ public:
 		D_ASSERT(GetBufferType() == FileBufferType::MANAGED_BUFFER);
 		eviction_queue_idx = index;
 	}
-	//! Returns the evication queue index.
+	//! Returns the eviction queue index.
 	idx_t GetEvictionQueueIndex() const {
 		return eviction_queue_idx;
 	}
@@ -225,14 +235,14 @@ public:
 	~BlockHandle();
 
 public:
+	//! Returns a reference to the block manager.
 	BlockManager &GetBlockManager() const {
 		return block_manager;
 	}
-
+	//! Returns the block id.
 	block_id_t BlockId() const {
 		return block_id;
 	}
-
 	//! Returns the block allocation size of this block.
 	idx_t GetBlockAllocSize() const {
 		return block_alloc_size;
@@ -247,16 +257,15 @@ public:
 	idx_t GetBlockSize() const {
 		return block_alloc_size - block_header_size;
 	}
-
-	//! Returns a reference to the memory of a block.
-	BlockMemory &GetMemory() const {
+	//! Returns a const reference to the memory of a block.
+	const BlockMemory &GetMemory() const {
 		return memory;
 	}
 	//! Returns a reference to the memory of a block.
 	BlockMemory &GetMemory() {
 		return memory;
 	}
-	//! Returns a weak pointer to the block memory of a block.
+	//! Returns a weak pointer to the memory of a block.
 	weak_ptr<BlockMemory> GetMemoryWeak() const {
 		return weak_ptr<BlockMemory>(memory_p);
 	}
@@ -267,6 +276,7 @@ public:
 	BufferHandle Load(QueryContext context, unique_ptr<FileBuffer> buffer = nullptr);
 
 private:
+	//! The block manager, which loads the block.
 	BlockManager &block_manager;
 
 	//! The block allocation size, which is determined by the block manager creating the block.
@@ -281,7 +291,7 @@ private:
 
 	//! Pointer to the underlying memory of the block.
 	const shared_ptr<BlockMemory> memory_p;
-	//! Reference for fast access to the block memory.
+	//! Memory for fast access to the block memory.
 	BlockMemory &memory;
 };
 

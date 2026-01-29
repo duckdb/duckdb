@@ -33,29 +33,35 @@ BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, M
 BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 	// The block memory is being destroyed, meaning that any unswizzled pointers are now binary junk.
 	SetSwizzling(nullptr);
-	D_ASSERT(!buffer || buffer->GetBufferType() == GetBufferType());
-	if (buffer && GetBufferType() != FileBufferType::TINY_BUFFER) {
+	D_ASSERT(!GetBuffer() || GetBuffer()->GetBufferType() == GetBufferType());
+	if (GetBuffer() && GetBufferType() != FileBufferType::TINY_BUFFER) {
 		// Kill the latest version in the eviction queue.
-		buffer_manager.GetBufferPool().IncrementDeadNodes(*this);
+		GetBufferManager().GetBufferPool().IncrementDeadNodes(*this);
 	}
 
 	// Erase the block memory, if it is still loaded.
-	if (buffer && GetState() == BlockState::BLOCK_LOADED) {
-		D_ASSERT(MemoryCharge().size > 0);
+	if (GetBuffer() && GetState() == BlockState::BLOCK_LOADED) {
+		D_ASSERT(GetMemoryCharge().size > 0);
 		SetBuffer(nullptr);
-		MemoryCharge().Resize(0);
+		GetMemoryCharge().Resize(0);
 	} else {
-		D_ASSERT(MemoryCharge().size == 0);
+		D_ASSERT(GetMemoryCharge().size == 0);
 	}
 
 	try {
-		if (block_id >= MAXIMUM_BLOCK) {
+		if (BlockId() >= MAXIMUM_BLOCK) {
 			// The memory buffer lives in memory.
 			// Thus, it could've been offloaded to disk, and we should remove the file.
-			buffer_manager.DeleteTemporaryFile(*this);
+			GetBufferManager().DeleteTemporaryFile(*this);
 		}
-	} catch (...) {
-		// FIXME: log the error.
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+		try {
+			DUCKDB_LOG_ERROR(GetBufferManager().GetDatabase(),
+			                 "Silent exception in BlockMemory::~BlockMemory():\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
+	} catch (...) { // NOLINT
 	}
 }
 
@@ -65,15 +71,15 @@ void BlockMemory::ChangeMemoryUsage(BlockLock &l, int64_t delta) {
 	// FIXME: It overflows twice to lead to the correct subtraction.
 	D_ASSERT(delta < 0);
 	memory_usage += static_cast<idx_t>(delta);
-	memory_charge.Resize(memory_usage);
+	GetMemoryCharge().Resize(GetMemoryUsage());
 }
 
 void BlockMemory::ConvertToPersistent(BlockLock &l, BlockHandle &new_block, unique_ptr<FileBuffer> new_buffer) {
 	VerifyMutex(l);
 
 	auto &new_block_memory = new_block.GetMemory();
-	D_ASSERT(tag == memory_charge.tag);
-	if (tag != new_block_memory.tag) {
+	D_ASSERT(GetMemoryTag() == memory_charge.tag);
+	if (GetMemoryTag() != new_block_memory.GetMemoryTag()) {
 		const auto memory_charge_size = memory_charge.size;
 		memory_charge.Resize(0);
 		memory_charge.tag = new_block_memory.tag;
@@ -81,14 +87,14 @@ void BlockMemory::ConvertToPersistent(BlockLock &l, BlockHandle &new_block, uniq
 	}
 
 	// Move the old block memory to the new block memory.
-	new_block_memory.state = BlockState::BLOCK_LOADED;
-	new_block_memory.buffer = std::move(new_buffer);
+	new_block_memory.SetState(BlockState::BLOCK_LOADED);
+	new_block_memory.GetBuffer() = std::move(new_buffer);
 	new_block_memory.memory_usage = memory_usage.load();
 	new_block_memory.memory_charge = std::move(memory_charge);
 
 	// Clear the buffered data of this block.
 	buffer.reset();
-	state = BlockState::BLOCK_UNLOADED;
+	SetState(BlockState::BLOCK_UNLOADED);
 	memory_usage = 0;
 }
 
@@ -97,7 +103,7 @@ void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_heade
 	VerifyMutex(l);
 	D_ASSERT(buffer);
 	buffer->Resize(block_size, block_header_size);
-	auto new_memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage.load()) + memory_delta);
+	const auto new_memory_usage = NumericCast<idx_t>(NumericCast<int64_t>(memory_usage.load()) + memory_delta);
 	memory_usage = new_memory_usage;
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
@@ -107,11 +113,11 @@ bool BlockMemory::CanUnload() const {
 		// The block has already been unloaded.
 		return false;
 	}
-	if (Readers() > 0) {
+	if (GetReaders() > 0) {
 		// There are active readers.
 		return false;
 	}
-	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !buffer_manager.HasTemporaryDirectory()) {
+	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile() && !GetBufferManager().HasTemporaryDirectory()) {
 		// The block memory cannot be destroyed upon eviction/unpinning.
 		// In order to unload this block we need to write it to a temporary buffer.
 		// However, no temporary directory is specified, hence, we cannot unload.
@@ -124,16 +130,16 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
 	VerifyMutex(l);
 
 	if (GetState() == BlockState::BLOCK_UNLOADED) {
-		// already unloaded: nothing to do
+		// The block was already unloaded: nothing to do.
 		return nullptr;
 	}
 	D_ASSERT(!IsSwizzled());
 	D_ASSERT(CanUnload());
 
-	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
+	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
 		// This is a temporary block that cannot be destroyed upon evict/unpin.
 		// Thus, we write to it to a temporary file.
-		buffer_manager.WriteTemporaryBuffer(GetMemoryTag(), block_id, *GetBuffer());
+		buffer_manager.WriteTemporaryBuffer(GetMemoryTag(), BlockId(), *GetBuffer());
 	}
 	memory_charge.Resize(0);
 	SetState(BlockState::BLOCK_UNLOADED);
@@ -165,17 +171,23 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	try {
 		block_manager.UnregisterPersistentBlock(*this);
-	} catch (...) {
-		// FIXME: emit warning or similar.
+	} catch (std::exception &ex) {
+		ErrorData data(ex);
+		try {
+			DUCKDB_LOG_ERROR(block_manager.GetBufferManager().GetDatabase(),
+			                 "Silent exception in BlockHandle::~BlockHandle():\t" + data.Message());
+		} catch (...) { // NOLINT
+		}
+	} catch (...) { // NOLINT
 	}
 }
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
                                 block_id_t block_id) {
 	if (reusable_buffer && reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
-		// re-usable buffer: re-use it
+		// Reusable buffer: reuse it.
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
-			// we can reuse the buffer entirely
+			// Reuse the entire buffer.
 			auto &block = reinterpret_cast<Block &>(*reusable_buffer);
 			block.id = block_id;
 			return unique_ptr_cast<FileBuffer, Block>(std::move(reusable_buffer));
@@ -184,7 +196,8 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 		reusable_buffer.reset();
 		return block;
 	}
-	// Not a re-usable buffer: allocate a new block.
+
+	// Not a reusable buffer: allocate a new block.
 	return block_manager.CreateBlock(block_id, nullptr);
 }
 
@@ -193,35 +206,37 @@ BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_p
 	memory.VerifyMutex(l);
 	// Copy the data of the file buffer into the block.
 	D_ASSERT(memory.GetState() != BlockState::BLOCK_LOADED);
-	D_ASSERT(memory.Readers() == 0);
+	D_ASSERT(memory.GetReaders() == 0);
 	auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 	memcpy(block->InternalBuffer(), data, block->AllocSize());
 	memory.GetBuffer() = std::move(block);
 	memory.SetState(BlockState::BLOCK_LOADED);
 	memory.SetReaders(1);
-	memory.MemoryCharge() = std::move(reservation);
+	memory.GetMemoryCharge() = std::move(reservation);
 	return BufferHandle(shared_from_this(), memory.GetBuffer());
 }
 
 BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reusable_buffer) {
 	if (memory.GetState() == BlockState::BLOCK_LOADED) {
-		// already loaded
+		// The block has already been loaded.
 		D_ASSERT(memory.GetBuffer());
 		memory.IncrementReaders();
 		return BufferHandle(shared_from_this(), memory.GetBuffer());
 	}
 
-	if (block_id < MAXIMUM_BLOCK) {
+	if (BlockId() < MAXIMUM_BLOCK) {
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 		block_manager.Read(context, *block);
 		memory.GetBuffer() = std::move(block);
 	} else {
-		if (memory.MustWriteToTemporaryFile()) {
-			memory.GetBuffer() = memory.GetBufferManager().ReadTemporaryBuffer(QueryContext(), memory.GetMemoryTag(),
-			                                                                   *this, std::move(reusable_buffer));
-		} else {
-			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
+		if (!memory.MustWriteToTemporaryFile()) {
+			// The buffer was destroyed upon unpin/evict, so there is no temporary buffer to read.
+			return BufferHandle();
 		}
+		auto &buffer_manager = memory.GetBufferManager();
+		auto &buffer = memory.GetBuffer();
+		buffer = buffer_manager.ReadTemporaryBuffer(QueryContext(), memory.GetMemoryTag(), *this,
+		                                            std::move(reusable_buffer));
 	}
 	memory.SetState(BlockState::BLOCK_LOADED);
 	memory.SetReaders(1);

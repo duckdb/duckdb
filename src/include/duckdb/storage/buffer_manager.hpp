@@ -120,6 +120,8 @@ public:
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 	//! Get the buffer pool.
 	virtual BufferPool &GetBufferPool() const;
+	//! Get the const database.
+	virtual const DatabaseInstance &GetDatabase() const = 0;
 	//! Get the database.
 	virtual DatabaseInstance &GetDatabase() = 0;
 	//! Get the manager assigning reservations for temporary memory, e.g., for query intermediates.

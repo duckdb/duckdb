@@ -216,7 +216,7 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 	auto handle_memory_usage = handle->GetMemory().GetMemoryUsage();
 	D_ASSERT(handle->GetMemory().GetState() == BlockState::BLOCK_LOADED);
 	D_ASSERT(handle_memory_usage == handle->GetMemory().GetBuffer(lock)->AllocSize());
-	D_ASSERT(handle_memory_usage == handle->GetMemory().MemoryCharge(lock).size);
+	D_ASSERT(handle_memory_usage == handle->GetMemory().GetMemoryCharge(lock).size);
 
 	auto req = handle->GetMemory().GetBuffer(lock)->CalculateMemory(block_size, handle->GetBlockHeaderSize());
 	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - NumericCast<int64_t>(handle_memory_usage);
@@ -375,13 +375,13 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 			buf = handle->Load(context);
 		} else {
 			// now we can actually load the current block
-			D_ASSERT(handle->GetMemory().Readers() == 0);
+			D_ASSERT(handle->GetMemory().GetReaders() == 0);
 			buf = handle->Load(context, std::move(reusable_buffer));
 			if (!buf.IsValid()) {
 				reservation.Resize(0);
 				return buf; // Buffer was destroyed (e.g., due to DestroyBufferUpon::Eviction)
 			}
-			auto &memory_charge = handle->GetMemory().MemoryCharge(lock);
+			auto &memory_charge = handle->GetMemory().GetMemoryCharge(lock);
 			memory_charge = std::move(reservation);
 			// in the case of a variable sized block, the buffer may be smaller than a full block.
 			int64_t delta = NumericCast<int64_t>(handle->GetMemory().GetBuffer(lock)->AllocSize()) -
@@ -435,7 +435,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 		    handle->GetMemory().GetBufferType() == FileBufferType::TINY_BUFFER) {
 			return;
 		}
-		D_ASSERT(handle->GetMemory().Readers() > 0);
+		D_ASSERT(handle->GetMemory().GetReaders() > 0);
 		auto new_readers = handle->GetMemory().DecrementReaders();
 		if (new_readers == 0) {
 			VerifyZeroReaders(lock, handle);

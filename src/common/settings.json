@@ -243,7 +243,7 @@
         "name": "debug_eviction_queue_sleep_micro_seconds",
         "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
         "type": "UBIGINT",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "0"
     },
     {

@@ -96,6 +96,9 @@ public:
 
 	DUCKDB_API Allocator &GetBufferAllocator() final;
 
+	const DatabaseInstance &GetDatabase() const override {
+		return db;
+	}
 	DatabaseInstance &GetDatabase() override {
 		return db;
 	}

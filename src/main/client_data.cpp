@@ -178,6 +178,9 @@ public:
 	BufferPool &GetBufferPool() const override {
 		return buffer_manager.GetBufferPool();
 	}
+	const DatabaseInstance &GetDatabase() const override {
+		return buffer_manager.GetDatabase();
+	}
 	DatabaseInstance &GetDatabase() override {
 		return buffer_manager.GetDatabase();
 	}

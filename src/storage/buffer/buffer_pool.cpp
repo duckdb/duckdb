@@ -44,7 +44,7 @@ BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockMemory> memory_p, idx_t evi
 }
 
 bool BufferEvictionNode::CanUnload(BlockMemory &memory) {
-	if (handle_sequence_number != memory.EvictionSequenceNumber()) {
+	if (handle_sequence_number != memory.GetEvictionSequenceNumber()) {
 		// handle was used in between
 		return false;
 	}
@@ -219,12 +219,13 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 
 	// retrieve all alive nodes that have been wrongly dequeued
 	idx_t alive_nodes = 0;
+	auto debug_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
 	for (idx_t i = 0; i < actually_dequeued; i++) {
 		auto &node = purge_nodes[i];
 		auto handle = node.TryGetBlockMemory();
-		if (debug_eviction_queue_sleep > 0) {
+		if (debug_sleep_micros > 0) {
 			// Debug race conditions regarding the ownership of the BlockMemory.
-			ThreadUtil::SleepMicroSeconds(debug_eviction_queue_sleep);
+			ThreadUtil::SleepMicroSeconds(debug_sleep_micros);
 		}
 		if (handle) {
 			purge_nodes[alive_nodes++] = std::move(node);
@@ -260,7 +261,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 
 	// The block handle is locked during this operation (Unpin),
 	// or the block handle is still a local variable (ConvertToPersistent)
-	D_ASSERT(handle->GetMemory().Readers() == 0);
+	D_ASSERT(handle->GetMemory().GetReaders() == 0);
 	auto ts = handle->GetMemory().NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
 		handle->GetMemory().SetLRUTimestamp(
@@ -414,6 +415,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 template <typename FN>
 void EvictionQueue::IterateUnloadableBlocks(FN fn) {
+	auto debug_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
 	for (;;) {
 		// get a block to unpin from the queue
 		BufferEvictionNode node;
@@ -427,10 +429,10 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 
 		// get a reference to the underlying block pointer
 		auto handle = node.TryGetBlockMemory();
-		if (debug_eviction_queue_sleep > 0) {
+		if (debug_sleep_micros > 0) {
 			// Debug race conditions regarding the ownership of the BlockMemory.
 			// Note that for this to trigger we need at least one purge iteration with the setting active.
-			ThreadUtil::SleepMicroSeconds(debug_eviction_queue_sleep);
+			ThreadUtil::SleepMicroSeconds(debug_sleep_micros);
 		}
 		if (!handle) {
 			DecrementDeadNodes();
@@ -452,10 +454,11 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 }
 
 void BufferPool::PurgeQueue(const BlockHandle &block) {
-	auto &memory = block.GetMemory();
-	auto &buffer_manager = memory.GetBufferManager();
-	auto &eviction_queue = GetEvictionQueueForBlockMemory(block.GetMemory());
-	auto queue_sleep_micros = Settings::Get<DebugEvictionQueueSleepMicroSecondsSetting>(buffer_manager.GetDatabase());
+	const auto &memory = block.GetMemory();
+	const auto &buffer_manager = memory.GetBufferManager();
+	auto &eviction_queue = GetEvictionQueueForBlockMemory(memory);
+	const auto queue_sleep_micros =
+	    Settings::Get<DebugEvictionQueueSleepMicroSecondsSetting>(buffer_manager.GetDatabase());
 	eviction_queue.debug_eviction_queue_sleep = queue_sleep_micros;
 	eviction_queue.Purge();
 }

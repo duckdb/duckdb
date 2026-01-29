@@ -55,7 +55,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 	// register a block with the new block id
 	auto new_block = RegisterBlock(block_id);
 	D_ASSERT(new_block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
-	D_ASSERT(new_block->GetMemory().Readers() == 0);
+	D_ASSERT(new_block->GetMemory().GetReaders() == 0);
 
 	if (mode == ConvertToPersistentMode::THREAD_SAFE) {
 		// safe mode - create a copy of the old block and operate on that
@@ -71,7 +71,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 	auto lock = old_block->GetMemory().GetLock();
 	D_ASSERT(old_block->GetMemory().GetState() == BlockState::BLOCK_LOADED);
 	D_ASSERT(old_block->GetMemory().GetBuffer(lock));
-	if (old_block->GetMemory().Readers() > 1) {
+	if (old_block->GetMemory().GetReaders() > 1) {
 		throw InternalException(
 		    "BlockManager::ConvertToPersistent in destructive mode - cannot be called for block %d as old_block has "
 		    "multiple readers active",
