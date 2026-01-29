@@ -47,7 +47,7 @@ CALL truncate_duckdb_logs();
 
 # Enable UNION as UNION ALL interpretation, should not log.
 statement ok
-SET using_key_syntax='UNION_AS_UNION_ALL';
+SET deprecated_using_key_syntax='UNION_AS_UNION_ALL';
 
 # UNION ALL still works as intended after the setting is applied
 query II

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/using_key_syntax.hpp
+// duckdb/common/enums/deprecated_using_key_syntax.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-enum class UsingKeySyntax : uint8_t { DEFAULT = 0, UNION_AS_UNION_ALL = 1 };
+enum class DeprecatedUsingKeySyntax : uint8_t { DEFAULT = 0, UNION_AS_UNION_ALL = 1 };
 
 } // namespace duckdb

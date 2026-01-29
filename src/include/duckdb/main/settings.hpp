@@ -543,7 +543,7 @@ struct DefaultSecretStorageSetting {
 };
 
 struct DeprecatedUsingKeySyntaxSetting {
-	using RETURN_TYPE = UsingKeySyntax;
+	using RETURN_TYPE = DeprecatedUsingKeySyntax;
 	static constexpr const char *Name = "deprecated_using_key_syntax";
 	static constexpr const char *Description = "Configures the use of the deprecated union syntax for USING KEY CTEs.";
 	static constexpr const char *InputType = "VARCHAR";

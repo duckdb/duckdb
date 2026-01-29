@@ -112,7 +112,7 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 // Deprecated Using Key Syntax
 //===----------------------------------------------------------------------===//
 void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	EnumUtil::FromString<UsingKeySyntax>(StringValue::Get(parameter));
+	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

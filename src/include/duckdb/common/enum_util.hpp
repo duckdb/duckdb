@@ -462,7 +462,7 @@ enum class UndoFlags : uint32_t;
 
 enum class UnionInvalidReason : uint8_t;
 
-enum class UsingKeySyntax : uint8_t;
+enum class DeprecatedUsingKeySyntax : uint8_t;
 
 enum class VariantChildLookupMode : uint8_t;
 
@@ -1141,7 +1141,7 @@ template<>
 const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value);
 
 template<>
-const char* EnumUtil::ToChars<UsingKeySyntax>(UsingKeySyntax value);
+const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value);
 
 template<>
 const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode value);
@@ -1835,7 +1835,7 @@ template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value);
 
 template<>
-UsingKeySyntax EnumUtil::FromString<UsingKeySyntax>(const char *value);
+DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value);
 
 template<>
 VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value);

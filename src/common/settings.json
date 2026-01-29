@@ -341,7 +341,7 @@
     {
         "name": "deprecated_using_key_syntax",
         "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
-        "type": "ENUM<UsingKeySyntax>",
+        "type": "ENUM<DeprecatedUsingKeySyntax>",
         "default_scope": "local",
         "default_value": "DEFAULT"
     },

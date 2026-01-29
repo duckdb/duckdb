@@ -70,7 +70,7 @@
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/tuple_data_layout_enums.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
-#include "duckdb/common/enums/using_key_syntax.hpp"
+#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
@@ -5164,20 +5164,20 @@ UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetUsingKeySyntaxValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(UsingKeySyntax::DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(UsingKeySyntax::UNION_AS_UNION_ALL), "UNION_AS_UNION_ALL" }
+		{ static_cast<uint32_t>(DeprecatedUsingKeySyntax::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL), "UNION_AS_UNION_ALL" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<UsingKeySyntax>(UsingKeySyntax value) {
-	return StringUtil::EnumToString(GetUsingKeySyntaxValues(), 2, "UsingKeySyntax", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value) {
+	return StringUtil::EnumToString(GetUsingKeySyntaxValues(), 2, "DeprecatedUsingKeySyntax", static_cast<uint32_t>(value));
 }
 
 template<>
-UsingKeySyntax EnumUtil::FromString<UsingKeySyntax>(const char *value) {
-	return static_cast<UsingKeySyntax>(StringUtil::StringToEnum(GetUsingKeySyntaxValues(), 2, "UsingKeySyntax", value));
+DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value) {
+	return static_cast<DeprecatedUsingKeySyntax>(StringUtil::StringToEnum(GetUsingKeySyntaxValues(), 2, "DeprecatedUsingKeySyntax", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVariantChildLookupModeValues() {

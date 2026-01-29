@@ -1,4 +1,4 @@
-#include "duckdb/common/enums/using_key_syntax.hpp"
+#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -31,7 +31,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		// variant proper (again with the ability to override the UNION syntax to
 		// use the "old" UNION ALL variant).
 
-		bool warn_deprecated_syntax = setting == UsingKeySyntax::DEFAULT && !statement.union_all;
+		bool warn_deprecated_syntax = setting == DeprecatedUsingKeySyntax::DEFAULT && !statement.union_all;
 		const string msg = "Deprecated UNION in USING KEY CTE detected."
 		                   "Please transition to using UNION ALL, before DuckDB's next release. \n"
 		                   "Use SET deprecated_using_key_syntax='UNION_AS_UNION_ALL' to enable the deprecated behavior. \n"
