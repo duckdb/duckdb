@@ -15,10 +15,10 @@ CREATE TABLE t1(a INT, b INT[0]);
 
 # Should not be able to create an array above limit
 # this is more than the postgres parser allows
-# statement error
-# CREATE TABLE t1(a INT, b INT[4294967299]);
-# ----
-# Parser Error: syntax error at or near "4294967299"
+statement error
+CREATE TABLE t1(a INT, b INT[4294967299]);
+----
+Parser Error: syntax error at or near "4294967299"
 
 # Should not be able to create an array above limit
 # this is more than what we allow
