@@ -600,19 +600,19 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
 	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file,
 	                                    default_value.row_groups_per_file);
-	serializer.WritePropertyWithDefault(111, "dictionary_size_limit", bind_data.dictionary_size_limit,
+	serializer.WritePropertyWithDefault(112, "dictionary_size_limit", bind_data.dictionary_size_limit,
 	                                    default_value.dictionary_size_limit);
-	serializer.WritePropertyWithDefault(112, "bloom_filter_false_positive_ratio",
+	serializer.WritePropertyWithDefault(113, "bloom_filter_false_positive_ratio",
 	                                    bind_data.bloom_filter_false_positive_ratio,
 	                                    default_value.bloom_filter_false_positive_ratio);
-	serializer.WritePropertyWithDefault(113, "parquet_version", bind_data.parquet_version,
+	serializer.WritePropertyWithDefault(114, "parquet_version", bind_data.parquet_version,
 	                                    default_value.parquet_version);
-	serializer.WritePropertyWithDefault(114, "string_dictionary_page_size_limit",
+	serializer.WritePropertyWithDefault(115, "string_dictionary_page_size_limit",
 	                                    bind_data.string_dictionary_page_size_limit,
 	                                    default_value.string_dictionary_page_size_limit);
-	serializer.WritePropertyWithDefault(115, "geoparquet_version", bind_data.geoparquet_version,
+	serializer.WritePropertyWithDefault(116, "geoparquet_version", bind_data.geoparquet_version,
 	                                    default_value.geoparquet_version);
-	serializer.WriteProperty(116, "shredding_types", bind_data.shredding_types);
+	serializer.WriteProperty(117, "shredding_types", bind_data.shredding_types);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -635,17 +635,18 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	ParquetWriteBindData default_value;
 	data->row_groups_per_file = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(
 	    110, "row_groups_per_file", default_value.row_groups_per_file);
+	deserializer.ReadDeletedProperty<bool>(111, "debug_use_openssl");
 	data->dictionary_size_limit =
-	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(111, "dictionary_size_limit", optional_idx());
+	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(112, "dictionary_size_limit", optional_idx());
 	data->bloom_filter_false_positive_ratio = deserializer.ReadPropertyWithExplicitDefault<double>(
-	    112, "bloom_filter_false_positive_ratio", default_value.bloom_filter_false_positive_ratio);
+	    113, "bloom_filter_false_positive_ratio", default_value.bloom_filter_false_positive_ratio);
 	data->parquet_version =
-	    deserializer.ReadPropertyWithExplicitDefault(113, "parquet_version", default_value.parquet_version);
+	    deserializer.ReadPropertyWithExplicitDefault(114, "parquet_version", default_value.parquet_version);
 	data->string_dictionary_page_size_limit = deserializer.ReadPropertyWithExplicitDefault(
-	    114, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
+	    115, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
 	data->geoparquet_version =
-	    deserializer.ReadPropertyWithExplicitDefault(115, "geoparquet_version", default_value.geoparquet_version);
-	data->shredding_types = deserializer.ReadProperty<ShreddingType>(116, "shredding_types");
+	    deserializer.ReadPropertyWithExplicitDefault(116, "geoparquet_version", default_value.geoparquet_version);
+	data->shredding_types = deserializer.ReadProperty<ShreddingType>(117, "shredding_types");
 
 	return std::move(data);
 }
