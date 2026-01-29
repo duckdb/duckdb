@@ -56,6 +56,7 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 }
 
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
+	function.extension_name = extension_name;
 	D_ASSERT(!function.functions.name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
@@ -75,6 +76,7 @@ void ExtensionLoader::RegisterFunction(AggregateFunctionSet function) {
 }
 
 void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
+	function.extension_name = extension_name;
 	D_ASSERT(!function.functions.name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
@@ -101,6 +103,7 @@ void ExtensionLoader::RegisterFunction(TableFunctionSet function) {
 }
 
 void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
+	info.extension_name = extension_name;
 	D_ASSERT(!info.functions.name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
@@ -118,6 +121,7 @@ void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
 	auto function_name = function.name;
 	CreatePragmaFunctionInfo info(std::move(function_name), std::move(function));
+	info.extension_name = extension_name;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreatePragmaFunction(data, info);
@@ -131,6 +135,7 @@ void ExtensionLoader::RegisterFunction(CopyFunction function) {
 }
 
 void ExtensionLoader::RegisterFunction(CreateMacroInfo &info) {
+	info.extension_name = extension_name;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
@@ -144,6 +149,7 @@ void ExtensionLoader::RegisterCollation(CreateCollationInfo &info) {
 
 	// Also register as a function for serialisation
 	CreateScalarFunctionInfo finfo(info.function);
+	finfo.extension_name = extension_name;
 	finfo.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateFunction(data, finfo);
 }

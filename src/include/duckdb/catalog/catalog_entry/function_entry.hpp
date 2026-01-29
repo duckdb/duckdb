@@ -20,11 +20,13 @@ public:
 	    : StandardEntry(type, schema, catalog, info.name) {
 		descriptions = std::move(info.descriptions);
 		alias_of = std::move(info.alias_of);
+		extension_name = std::move(info.extension_name);
 		this->dependencies = info.dependencies;
 		this->internal = info.internal;
 	}
 
 	string alias_of;
+	string extension_name;
 	vector<FunctionDescription> descriptions;
 };
 } // namespace duckdb

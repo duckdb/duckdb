@@ -34,6 +34,8 @@ struct CreateFunctionInfo : public CreateInfo {
 	string alias_of;
 	//! Function description
 	vector<FunctionDescription> descriptions;
+	//! Extension that registered this function (empty for builtins/user-defined)
+	string extension_name;
 
 	DUCKDB_API void CopyFunctionProperties(CreateFunctionInfo &other) const;
 };

@@ -95,6 +95,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("categories");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
+	names.emplace_back("extension_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	return nullptr;
 }
 
@@ -198,7 +201,7 @@ public:
 	WindowFunctionCatalogEntry(const SchemaCatalogEntry &schema, const string &name, vector<LogicalType> arguments,
 	                           LogicalType return_type)
 	    : CatalogEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, name, 0), schema(schema), arguments(std::move(arguments)),
-	      return_type(std::move(return_type)) {
+	      return_type(std::move(return_type)), extension_name("core_functions") {
 		internal = true;
 	}
 
@@ -208,6 +211,7 @@ public:
 	LogicalType return_type;
 	vector<FunctionDescription> descriptions;
 	string alias_of;
+	string extension_name;
 };
 
 } // namespace
@@ -721,6 +725,15 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	// categories, LogicalType::LIST(LogicalType::VARCHAR)
 	output.SetValue(col++, output_offset,
 	                Value::LIST(LogicalType::VARCHAR, ToValueVector(function_description.categories)));
+
+	// extension_name, LogicalType::VARCHAR
+	Value extension_name_value;
+	if (!function.extension_name.empty()) {
+		extension_name_value = Value(function.extension_name);
+	} else if (!function.internal) {
+		extension_name_value = Value("user-defined");
+	}
+	output.SetValue(col++, output_offset, extension_name_value);
 
 	return function_idx + 1 == OP::FunctionCount(function);
 }

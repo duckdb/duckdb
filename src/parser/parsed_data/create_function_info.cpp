@@ -13,6 +13,7 @@ void CreateFunctionInfo::CopyFunctionProperties(CreateFunctionInfo &other) const
 	other.name = name;
 	other.alias_of = alias_of;
 	other.descriptions = descriptions;
+	other.extension_name = extension_name;
 }
 
 } // namespace duckdb
