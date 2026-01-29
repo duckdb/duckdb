@@ -1,15 +1,16 @@
 SelectStatement <- SelectStatementInternal
 SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
-SelectSetOpChain <- SelectAtom (SetopClause SelectAtom)*
+SelectSetOpChain <- IntersectChain (SetopClause IntersectChain)*
+IntersectChain <- SelectAtom (SetopIntersect SelectAtom)*
+SetopIntersect <- 'INTERSECT' DistinctOrAll?
 SelectAtom <- SelectParens / SelectStatementType
 
 SelectParens <- Parens(SelectStatementInternal)
 
 SetopClause <- SetopType DistinctOrAll? ByName?
-SetopType <- SetopUnion / SetopExcept / SetopIntersect
+SetopType <- SetopUnion / SetopExcept
 SetopUnion <- 'UNION'
 SetopExcept <- 'EXCEPT'
-SetopIntersect <- 'INTERSECT'
 ByName <- 'BY' 'NAME'
 
 SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
