@@ -56,6 +56,39 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(PEG
 	return select;
 }
 
+unique_ptr<SelectStatement> PEGTransformerFactory::TransformIntersectChain(PEGTransformer &transformer,
+                                                                           optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto select = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
+	auto intersect_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!intersect_opt.HasResult()) {
+		return select;
+	}
+	auto intersect_repeat = intersect_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto &intersect : intersect_repeat.children) {
+		auto intersect_list = intersect->Cast<ListParseResult>();
+		auto intersect_node = transformer.Transform<unique_ptr<SetOperationNode>>(intersect_list.GetChild(0));
+		auto right_select = transformer.Transform<unique_ptr<SelectStatement>>(intersect_list.GetChild(1));
+		intersect_node->children.push_back(std::move(select->node));
+		intersect_node->children.push_back(std::move(right_select->node));
+		select->node = std::move(intersect_node);
+	}
+	return select;
+}
+
+unique_ptr<SetOperationNode>
+PEGTransformerFactory::TransformSetIntersectClause(PEGTransformer &transformer,
+                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = make_uniq<SetOperationNode>();
+	result->setop_type = SetOperationType::INTERSECT;
+	auto is_distinct_opt = list_pr.Child<OptionalParseResult>(1);
+	if (is_distinct_opt.HasResult()) {
+		result->setop_all = !transformer.Transform<bool>(is_distinct_opt.optional_result);
+	}
+	return result;
+}
+
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectAtom(PEGTransformer &transformer,
                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();

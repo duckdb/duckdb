@@ -1105,11 +1105,15 @@ private:
 	                                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectSetOpChain(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformIntersectChain(PEGTransformer &transformer,
+	                                                           optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectAtom(PEGTransformer &transformer,
 	                                                       optional_ptr<ParseResult> parse_result);
 	static SetOperationType TransformSetopType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SetOperationNode> TransformSetopClause(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SetOperationNode> TransformSetIntersectClause(PEGTransformer &transformer,
+	                                                                optional_ptr<ParseResult> parse_result);
 	static bool TransformDistinctOrAll(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SelectStatement> TransformSelectParens(PEGTransformer &transformer,
 	                                                         optional_ptr<ParseResult> parse_result);
