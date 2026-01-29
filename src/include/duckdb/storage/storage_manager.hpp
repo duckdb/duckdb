@@ -181,7 +181,7 @@ public:
 	SingleFileStorageManager() = delete;
 	SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
 
-	//! The BlockManager to read from and write to blocks (meta data and data).
+	//! The BlockManager to read from and write to blocks, both for the metadata and the data itself.
 	unique_ptr<BlockManager> block_manager;
 	//! The table I/O manager.
 	unique_ptr<TableIOManager> table_io_manager;

@@ -1,7 +1,9 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/block_allocator.hpp"
@@ -68,7 +70,8 @@ typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
 struct EvictionQueue {
 public:
 	explicit EvictionQueue(const vector<FileBufferType> &file_buffer_types_p)
-	    : file_buffer_types(file_buffer_types_p), evict_queue_insertions(0), total_dead_nodes(0) {
+	    : file_buffer_types(file_buffer_types_p), debug_eviction_queue_sleep(0), evict_queue_insertions(0),
+	      total_dead_nodes(0) {
 	}
 
 public:
@@ -90,6 +93,9 @@ public:
 	inline void DecrementDeadNodes() {
 		total_dead_nodes--;
 	}
+	bool HasFileBufferType(const FileBufferType &type) const {
+		return std::find(file_buffer_types.begin(), file_buffer_types.end(), type) != file_buffer_types.end();
+	}
 
 private:
 	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
@@ -98,11 +104,10 @@ private:
 public:
 	//! The type of the buffers in this queue and helper function (both for verification only)
 	const vector<FileBufferType> file_buffer_types;
-	bool HasFileBufferType(const FileBufferType &type) const {
-		return std::find(file_buffer_types.begin(), file_buffer_types.end(), type) != file_buffer_types.end();
-	}
 	//! The concurrent queue
 	eviction_queue_t q;
+	//! Debug-only: atomic holding the eviction queue sleep setting.
+	atomic<idx_t> debug_eviction_queue_sleep;
 
 private:
 	//! We trigger a purge of the eviction queue every INSERT_INTERVAL insertions
@@ -217,7 +222,10 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	for (idx_t i = 0; i < actually_dequeued; i++) {
 		auto &node = purge_nodes[i];
 		auto handle = node.TryGetBlockMemory();
-		// TODO: add sleep
+		if (debug_eviction_queue_sleep > 0) {
+			// Debug race conditions regarding the ownership of the BlockMemory.
+			ThreadUtil::SleepMicroSeconds(debug_eviction_queue_sleep);
+		}
 		if (handle) {
 			purge_nodes[alive_nodes++] = std::move(node);
 		}
@@ -404,34 +412,6 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	return {found, std::move(r)};
 }
 
-idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
-	int64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
-	                  .time_since_epoch()
-	                  .count();
-	int64_t limit = now - (static_cast<int64_t>(max_age_sec) * 1000);
-	idx_t purged_bytes = 0;
-	for (auto &queue : queues) {
-		purged_bytes += PurgeAgedBlocksInternal(*queue, max_age_sec, now, limit);
-	}
-	return purged_bytes;
-}
-
-idx_t BufferPool::PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit) {
-	idx_t purged_bytes = 0;
-	queue.IterateUnloadableBlocks(
-	    [&](BufferEvictionNode &node, const shared_ptr<BlockMemory> &handle, BlockLock &lock) {
-		    // We will unload this block regardless. But stop the iteration immediately afterward if this
-		    // block is younger than the age threshold.
-		    auto lru_timestamp_msec = handle->GetLRUTimestamp();
-		    bool is_fresh = lru_timestamp_msec >= limit && lru_timestamp_msec <= now;
-		    purged_bytes += handle->GetMemoryUsage();
-		    handle->Unload(lock);
-		    // Return false to stop iterating if the current block is_fresh
-		    return !is_fresh;
-	    });
-	return purged_bytes;
-}
-
 template <typename FN>
 void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 	for (;;) {
@@ -447,7 +427,11 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 
 		// get a reference to the underlying block pointer
 		auto handle = node.TryGetBlockMemory();
-		// TODO: add sleep
+		if (debug_eviction_queue_sleep > 0) {
+			// Debug race conditions regarding the ownership of the BlockMemory.
+			// Note that for this to trigger we need at least one purge iteration with the setting active.
+			ThreadUtil::SleepMicroSeconds(debug_eviction_queue_sleep);
+		}
 		if (!handle) {
 			DecrementDeadNodes();
 			continue;
@@ -468,7 +452,12 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 }
 
 void BufferPool::PurgeQueue(const BlockHandle &block) {
-	GetEvictionQueueForBlockMemory(block.GetMemory()).Purge();
+	auto &memory = block.GetMemory();
+	auto &buffer_manager = memory.GetBufferManager();
+	auto &eviction_queue = GetEvictionQueueForBlockMemory(block.GetMemory());
+	auto queue_sleep_micros = Settings::Get<DebugEvictionQueueSleepMicroSecondsSetting>(buffer_manager.GetDatabase());
+	eviction_queue.debug_eviction_queue_sleep = queue_sleep_micros;
+	eviction_queue.Purge();
 }
 
 void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
