@@ -788,6 +788,13 @@
         "default_value": "false"
     },
     {
+        "name": "operator_memory_limit",
+        "description": "The maximum memory for query intermediates (sorts, hash tables) per connection (e.g. 256MB)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "order_by_non_integer_literal",
         "description": "Allow ordering by non-integer literals - ordering by such literals has no effect.",
         "type": "BOOLEAN",

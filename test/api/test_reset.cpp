@@ -128,6 +128,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"validate_external_file_cache", {"NO_VALIDATION"}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
+	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
