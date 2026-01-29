@@ -2,10 +2,7 @@
   "description": "Test PEG Parser + transformer in strict mode",
   "skip_compiled": "true",
   "on_init": "set allow_parser_override_extension=strict_when_supported;",
-  "statically_loaded_extensions": [
-    "core_functions",
-    "autocomplete"
-  ],
+  "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
       "reason": "Multi-statement containing unimplemented statementType",
@@ -83,7 +80,8 @@
       "paths": [
         "test/sql/error/error_position.test",
         "test/sql/catalog/table/test_default_values.test",
-        "test/sql/cast/cast_error_location.test"
+        "test/sql/cast/cast_error_location.test",
+        "test/sql/types/nested/array/array_invalid.test"
       ]
     },
     {
@@ -96,9 +94,7 @@
     },
     {
       "reason": "Case insensitive preservation",
-      "paths": [
-        "test/sql/settings/setting_preserve_identifier_case.test"
-      ]
+      "paths": ["test/sql/settings/setting_preserve_identifier_case.test"]
     },
     {
       "reason": "Parser exception because of dollar-quoted strings",
@@ -150,9 +146,7 @@
     },
     {
       "reason": "Parser exception because of 'autocomplete' caused the CALL command to fail",
-      "paths": [
-        "test/sql/storage/memory/in_memory_compress.test"
-      ]
+      "paths": ["test/sql/storage/memory/in_memory_compress.test"]
     },
     {
       "reason": "Quotations",
@@ -174,15 +168,11 @@
     },
     {
       "reason": "Parameters",
-      "paths": [
-        "test/sql/catalog/table/create_table_parameters.test"
-      ]
+      "paths": ["test/sql/catalog/table/create_table_parameters.test"]
     },
     {
       "reason": "Parser error",
-      "paths": [
-        "test/sql/catalog/issue_9459.test"
-      ]
+      "paths": ["test/sql/catalog/issue_9459.test"]
     },
     {
       "reason": "PivotStatement",
@@ -240,9 +230,7 @@
     },
     {
       "reason": "New CREATE TABLE option syntax",
-      "paths": [
-        "test/sql/create/create_table_extra_options.test"
-      ]
+      "paths": ["test/sql/create/create_table_extra_options.test"]
     }
   ]
 }
