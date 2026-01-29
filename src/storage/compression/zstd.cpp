@@ -13,6 +13,8 @@
 
 #include "zstd.h"
 
+#include "duckdb/main/database.hpp"
+
 /*
 Data layout per segment:
 +--------------------------------------------+
@@ -1058,7 +1060,7 @@ unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deser
 }
 
 void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
-	if (segment.GetBlockManager().InMemory()) {
+	if (segment.block->GetBlockManager().InMemory()) {
 		// This code would result in MarkBlockAsModified() getting called, no need to do this for in-memory blocks.
 		return;
 	}
