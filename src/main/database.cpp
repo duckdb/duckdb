@@ -33,7 +33,6 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "mbedtls_wrapper.hpp"
-#include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
@@ -58,7 +57,6 @@ DBConfig::DBConfig() {
 	http_util = make_shared_ptr<HTTPUtil>();
 	callback_manager = make_uniq<ExtensionCallbackManager>();
 	callback_manager->Register("__open_file__", OpenFileStorageExtension::Create());
-	callback_manager->Register(CoordinateReferenceSystemProvider::CreateDefault());
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {

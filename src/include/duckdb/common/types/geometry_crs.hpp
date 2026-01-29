@@ -133,18 +133,4 @@ private:
 	string identifier;
 };
 
-class CoordinateReferenceSystemProvider {
-public:
-	//! Get the name of this provider
-	virtual string GetName() const = 0;
-
-	//! Try to convert a CRS to another format
-	virtual unique_ptr<CoordinateReferenceSystem> TryConvert(const CoordinateReferenceSystem &source_crs,
-	                                                         CoordinateReferenceSystemType target_type) = 0;
-
-	virtual ~CoordinateReferenceSystemProvider() = default;
-
-	static shared_ptr<CoordinateReferenceSystemProvider> CreateDefault();
-};
-
 } // namespace duckdb

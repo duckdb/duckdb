@@ -46,10 +46,10 @@ index 213c13d..5762359 100644
  	if (result->driver_name.empty()) {
  		throw BinderException("GDAL COPY option 'DRIVER' is required");
 diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
-index 616a9d0..76e9757 100644
+index 616a9d0..6f65e83 100644
 --- a/src/spatial/modules/proj/proj_module.cpp
 +++ b/src/spatial/modules/proj/proj_module.cpp
-@@ -8,10 +8,12 @@
+@@ -8,10 +8,13 @@
  #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
  #include "duckdb/execution/expression_executor.hpp"
  #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -59,10 +59,11 @@ index 616a9d0..76e9757 100644
  #include "geodesic.h"
  #include "sqlite3.h"
 +#include "duckdb/main/extension_callback_manager.hpp"
++#include "duckdb/parser/parsed_data/create_coordinate_system_info.hpp"
  
  // We embed the whole proj.db in the proj_db.c file, which we then link into the extension binary
  // We can then use the sqlite3 "memvfs" (which we also statically link to) to point to the proj.db database in memory
-@@ -1208,6 +1210,70 @@ struct DuckDB_Proj_Compiled_Version {
+@@ -1208,6 +1211,66 @@ struct DuckDB_Proj_Compiled_Version {
  
  } // namespace
  
@@ -71,61 +72,57 @@ index 616a9d0..76e9757 100644
 +//======================================================================================================================
 +namespace {
 +
-+class SpatialCoordinateReferenceSystemProvider final : public CoordinateReferenceSystemProvider {
-+public:
-+	string GetName() const override {
-+		return "spatial";
-+	}
++struct CoordinateSystemLoader {
 +
-+	unique_ptr<CoordinateReferenceSystem> TryConvert(const CoordinateReferenceSystem &source_crs,
-+	                                                 CoordinateReferenceSystemType target_type) override {
++	static void Load(ExtensionLoader &loader) {
 +
-+		const auto ctx = ProjModule::GetThreadProjContext();
-+		const auto pj = proj_create(ctx, source_crs.GetDefinition().c_str());
++		// Load all CRS from proj database
++		PJ_CONTEXT *ctx = ProjModule::GetThreadProjContext();
 +
-+		unique_ptr<CoordinateReferenceSystem> result = nullptr;
++		// List all EPSG CRS's
++		int ncrs = 0;
++		PROJ_CRS_INFO **crs_info = proj_get_crs_info_list_from_database(ctx, "epsg", nullptr, &ncrs);
 +
-+		if (pj) {
-+			switch (target_type) {
-+			case CoordinateReferenceSystemType::AUTH_CODE: {
-+				const auto auth_name = proj_get_id_auth_name(pj, 0);
-+				const auto auth_code = proj_get_id_code(pj, 0);
-+				if (auth_name != nullptr && auth_code != nullptr) {
-+					result = make_uniq<CoordinateReferenceSystem>(string(auth_name) + ":" + string(auth_code));
++		if (crs_info) {
++			for (int i = 0; i < ncrs; i++) {
++
++				string auth_name = crs_info[i]->auth_name ? crs_info[i]->auth_name : "";
++				string auth_code = crs_info[i]->code ? crs_info[i]->code : "";
++				string crs_name = auth_name + ":" + auth_code;
++				string wkt_text;
++				string projjson_text;
++
++				// Create PJ object
++				PJ *pj = proj_create_from_database(ctx, crs_info[i]->auth_name, crs_info[i]->code, PJ_CATEGORY_CRS,
++				                                   false, nullptr);
++				if (pj) {
++
++					static const char *const options[] = {"MULTILINE=NO", nullptr};
++
++					// WKT2_2019
++					const auto wkt = proj_as_wkt(ctx, pj, PJ_WKT2_2019, options);
++					if (wkt) {
++						wkt_text = wkt;
++					}
++					// PROJJSON
++					const auto pj_json = proj_as_projjson(ctx, pj, options);
++					if (pj_json) {
++						projjson_text = pj_json;
++					}
 +				}
-+			} break;
-+			case CoordinateReferenceSystemType::SRID: {
-+				const auto name = proj_get_name(pj);
-+				if (name != nullptr) {
-+					result = make_uniq<CoordinateReferenceSystem>(name);
-+				}
-+			} break;
-+			case CoordinateReferenceSystemType::PROJJSON: {
-+				const auto pj_json = proj_as_projjson(ctx, pj, nullptr);
-+				if (pj_json != nullptr) {
-+					result = make_uniq<CoordinateReferenceSystem>(pj_json);
-+				}
-+			} break;
-+			case CoordinateReferenceSystemType::WKT2_2019: {
-+				const auto wkt = proj_as_wkt(ctx, pj, PJ_WKT2_2019, nullptr);
-+				if (wkt != nullptr) {
-+					result = make_uniq<CoordinateReferenceSystem>(wkt);
-+				}
-+			} break;
-+			default:
-+				break;
++
++				proj_destroy(pj);
++
++				CreateCoordinateSystemInfo info(std::move(crs_name), std::move(auth_name), std::move(auth_code),
++				                                std::move(projjson_text), std::move(wkt_text));
++				info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
++
++				loader.RegisterCoordinateSystem(info);
 +			}
 +		}
 +
-+		proj_destroy(pj);
++		proj_crs_info_list_destroy(crs_info);
 +		proj_context_destroy(ctx);
-+
-+		return result;
-+	}
-+
-+	static void Register(ExtensionLoader &loader) {
-+		ExtensionCallbackManager::Get(loader.GetDatabaseInstance())
-+			.Register(make_shared_ptr<SpatialCoordinateReferenceSystemProvider>());
 +	}
 +};
 +
@@ -133,13 +130,12 @@ index 616a9d0..76e9757 100644
  //######################################################################################################################
  // Module Registration
  //######################################################################################################################
-@@ -1229,6 +1295,9 @@ void RegisterProjModule(ExtensionLoader &loader) {
+@@ -1229,6 +1292,8 @@ void RegisterProjModule(ExtensionLoader &loader) {
  	// Meta functions for proj lib
  	DuckDB_Proj_Version::Register(loader);
  	DuckDB_Proj_Compiled_Version::Register(loader);
 +
-+	// CRS Provider
-+	SpatialCoordinateReferenceSystemProvider::Register(loader);
++	CoordinateSystemLoader::Load(loader);
  }
  
  } // namespace duckdb
