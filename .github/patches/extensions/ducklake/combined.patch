@@ -1,0 +1,275 @@
+diff --git a/src/common/ducklake_types.cpp b/src/common/ducklake_types.cpp
+index b21dc7d..7e09400 100644
+--- a/src/common/ducklake_types.cpp
++++ b/src/common/ducklake_types.cpp
+@@ -12,7 +12,7 @@ struct DefaultType {
+ 	LogicalTypeId id;
+ };
+ 
+-using ducklake_type_array = std::array<DefaultType, 32>;
++using ducklake_type_array = std::array<DefaultType, 33>;
+ 
+ static constexpr const ducklake_type_array DUCKLAKE_TYPES {{{"boolean", LogicalTypeId::BOOLEAN},
+                                                             {"int8", LogicalTypeId::TINYINT},
+@@ -42,6 +42,7 @@ static constexpr const ducklake_type_array DUCKLAKE_TYPES {{{"boolean", LogicalT
+                                                             {"varchar", LogicalTypeId::VARCHAR},
+                                                             {"blob", LogicalTypeId::BLOB},
+                                                             {"uuid", LogicalTypeId::UUID},
++																{"geometry", LogicalTypeId::GEOMETRY},
+                                                             {"struct", LogicalTypeId::STRUCT},
+                                                             {"map", LogicalTypeId::MAP},
+                                                             {"list", LogicalTypeId::LIST},
+@@ -58,12 +59,6 @@ static LogicalType ParseBaseType(const string &str) {
+ 		return LogicalType::JSON();
+ 	}
+ 
+-	if (StringUtil::CIEquals(str, "geometry")) {
+-		LogicalType geo_type(LogicalTypeId::BLOB);
+-		geo_type.SetAlias("GEOMETRY");
+-		return geo_type;
+-	}
+-
+ 	throw InvalidInputException("Failed to parse DuckLake type - unsupported type '%s'", str);
+ }
+ 
+@@ -98,9 +93,7 @@ bool DuckLakeTypes::RequiresCast(const vector<LogicalType> &types) {
+ LogicalType DuckLakeTypes::GetCastedType(const LogicalType &type) {
+ 	return TypeVisitor::VisitReplace(type, [](const LogicalType &type) {
+ 		if (IsGeoType(type)) {
+-			LogicalType wkb_type(LogicalTypeId::BLOB);
+-			wkb_type.SetAlias("WKB_BLOB");
+-			return wkb_type;
++			return LogicalType::GEOMETRY();
+ 		}
+ 		return type;
+ 	});
+@@ -163,7 +156,7 @@ void DuckLakeTypes::CheckSupportedType(const LogicalType &type) {
+ 	});
+ 
+ 	// Special case for now, only allow GEOMETRY as top-level type
+-	if (!IsGeoType(type) && TypeVisitor::Contains(type, IsGeoType)) {
++	if ((!IsGeoType(type) && TypeVisitor::Contains(type, IsGeoType)) || (type.id() != LogicalTypeId::GEOMETRY && TypeVisitor::Contains(type, LogicalTypeId::GEOMETRY))) {
+ 		throw InvalidInputException("GEOMETRY type is only supported as a top-level type");
+ 	}
+ }
+diff --git a/src/common/ducklake_util.cpp b/src/common/ducklake_util.cpp
+index ba2af13..d615fb5 100644
+--- a/src/common/ducklake_util.cpp
++++ b/src/common/ducklake_util.cpp
+@@ -114,6 +114,8 @@ string ToSQLString(DuckLakeMetadataManager &metadata_manager, const Value &value
+ 	case LogicalTypeId::INTERVAL:
+ 	case LogicalTypeId::BLOB:
+ 		return "'" + value.ToString() + "'::" + value_type;
++	case LogicalTypeId::GEOMETRY:
++		return "'" + value.ToString() + "'::" + value_type;
+ 	case LogicalTypeId::VARCHAR:
+ 	case LogicalTypeId::ENUM: {
+ 		auto str_val = value.ToString();
+diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
+index a2aa41e..fa3ff5d 100644
+--- a/src/functions/ducklake_add_data_files.cpp
++++ b/src/functions/ducklake_add_data_files.cpp
+@@ -554,9 +554,7 @@ LogicalType DuckLakeParquetTypeChecker::DeriveLogicalType(const ParquetColumn &s
+ 		} else if (StringUtil::StartsWith(s_ele.logical_type, "UUIDType()")) {
+ 			return LogicalType::UUID;
+ 		} else if (StringUtil::StartsWith(s_ele.logical_type, "Geometry")) {
+-			LogicalType geo_type(LogicalTypeId::BLOB);
+-			geo_type.SetAlias("GEOMETRY");
+-			return geo_type;
++			return LogicalType::GEOMETRY();
+ 		}
+ 	}
+ 	if (!s_ele.converted_type.empty()) {
+@@ -771,8 +769,8 @@ void DuckLakeParquetTypeChecker::CheckMatchingType() {
+ 		return;
+ 	}
+ 
+-	if (DuckLakeTypes::IsGeoType(type)) {
+-		if (!DuckLakeTypes::IsGeoType(source_type)) {
++	if (type.id() == LogicalTypeId::GEOMETRY) {
++		if (source_type.id() != LogicalTypeId::GEOMETRY) {
+ 			failures.push_back(StringUtil::Format(
+ 			    "Expected type \"GEOMETRY\" but found type \"%s\". Is this a GeoParquet v1.*.* file? DuckLake only "
+ 			    "supports GEOMETRY types stored in native Parquet(V3) format, not GeoParquet(v1.*.*)",
+diff --git a/src/include/storage/ducklake_stats.hpp b/src/include/storage/ducklake_stats.hpp
+index b7ca903..b1bb392 100644
+--- a/src/include/storage/ducklake_stats.hpp
++++ b/src/include/storage/ducklake_stats.hpp
+@@ -55,7 +55,7 @@ public:
+ 
+ struct DuckLakeColumnStats {
+ 	explicit DuckLakeColumnStats(LogicalType type_p) : type(std::move(type_p)) {
+-		if (DuckLakeTypes::IsGeoType(type)) {
++		if (DuckLakeTypes::IsGeoType(type) || type.id() == LogicalTypeId::GEOMETRY) {
+ 			extra_stats = make_uniq<DuckLakeColumnGeoStats>();
+ 		}
+ 	}
+diff --git a/src/include/storage/ducklake_view_entry.hpp b/src/include/storage/ducklake_view_entry.hpp
+index aabb8cf..2234e7d 100644
+--- a/src/include/storage/ducklake_view_entry.hpp
++++ b/src/include/storage/ducklake_view_entry.hpp
+@@ -36,18 +36,12 @@ public:
+ 	LocalChange GetLocalChange() const {
+ 		return local_change;
+ 	}
+-	bool IsBound() const;
+-
+-	void Bind(ClientContext &context);
+ 
+ public:
+ 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
+ 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+ 
+ 	const SelectStatement &GetQuery() override;
+-	bool HasTypes() const override {
+-		return false;
+-	}
+ 	unique_ptr<CreateInfo> GetInfo() const override;
+ 	string ToSQL() const override;
+ 
+@@ -66,7 +60,6 @@ private:
+ 	string view_uuid;
+ 	string query_sql;
+ 	LocalChange local_change;
+-	bool is_bound = false;
+ };
+ 
+ } // namespace duckdb
+diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
+index deef757..f6b1642 100644
+--- a/src/storage/ducklake_insert.cpp
++++ b/src/storage/ducklake_insert.cpp
+@@ -81,6 +81,10 @@ DuckLakeColumnStats DuckLakeInsert::ParseColumnStats(const LogicalType &type, co
+ 			D_ASSERT(!column_stats.has_null_count);
+ 			column_stats.has_null_count = true;
+ 			column_stats.null_count = StringUtil::ToUnsigned(StringValue::Get(stats_children[1]));
++		} else if (stats_name == "num_values") {
++			D_ASSERT(!column_stats.has_num_values);
++			column_stats.has_num_values = true;
++			column_stats.num_values = StringUtil::ToUnsigned(StringValue::Get(stats_children[1]));
+ 		} else if (stats_name == "column_size_bytes") {
+ 			column_stats.column_size_bytes = StringUtil::ToUnsigned(StringValue::Get(stats_children[1]));
+ 		} else if (stats_name == "has_nan") {
+@@ -116,6 +120,8 @@ DuckLakeColumnStats DuckLakeInsert::ParseColumnStats(const LogicalType &type, co
+ 			for (const auto &child : ListValue::GetChildren(list_value)) {
+ 				geo_stats.geo_types.insert(StringValue::Get(child));
+ 			}
++		} else if (stats_name == "variant_type") {
++			continue;
+ 		} else {
+ 			throw NotImplementedException("Unsupported stats type \"%s\" in DuckLakeInsert::Sink()", stats_name);
+ 		}
+diff --git a/src/storage/ducklake_schema_entry.cpp b/src/storage/ducklake_schema_entry.cpp
+index e98be17..020cc3b 100644
+--- a/src/storage/ducklake_schema_entry.cpp
++++ b/src/storage/ducklake_schema_entry.cpp
+@@ -285,17 +285,6 @@ void DuckLakeSchemaEntry::Scan(ClientContext &context, CatalogType type,
+ 			// this entry exists in both the local and global set - emit only the transaction-local entry
+ 			continue;
+ 		}
+-		if (entry.second->type == CatalogType::VIEW_ENTRY) {
+-			auto &view_entry = entry.second->Cast<DuckLakeViewEntry>();
+-			if (!view_entry.IsBound()) {
+-				try {
+-					view_entry.Bind(context);
+-				} catch (...) {
+-					// if the view binding fails we continue so we can error when the view is actually queried
+-					continue;
+-				}
+-			}
+-		}
+ 		callback(*entry.second);
+ 	}
+ }
+diff --git a/src/storage/ducklake_view_entry.cpp b/src/storage/ducklake_view_entry.cpp
+index db84135..ed7b54f 100644
+--- a/src/storage/ducklake_view_entry.cpp
++++ b/src/storage/ducklake_view_entry.cpp
+@@ -91,29 +91,4 @@ string DuckLakeViewEntry::GetQuerySQL() {
+ 	return query_sql;
+ }
+ 
+-bool DuckLakeViewEntry::IsBound() const {
+-	return is_bound;
+-}
+-
+-void DuckLakeViewEntry::Bind(ClientContext &context) {
+-	D_ASSERT(!is_bound);
+-	is_bound = true;
+-	std::string create_view_sql = "CREATE VIEW mock_view_name_lake";
+-	if (!aliases.empty()) {
+-		create_view_sql += "(";
+-		for (const auto &alias : aliases) {
+-			create_view_sql += KeywordHelper::WriteOptionallyQuoted(alias);
+-			create_view_sql += ", ";
+-		}
+-		create_view_sql += ")";
+-	}
+-
+-	create_view_sql += " as " + query_sql;
+-	const auto view_info = CreateViewInfo::FromCreateView(context, schema, create_view_sql);
+-	// Fill aliases, types and names
+-	aliases = view_info->aliases;
+-	types = view_info->types;
+-	names = view_info->names;
+-}
+-
+ } // namespace duckdb
+diff --git a/test/sql/geo/ducklake_geometry.test b/test/sql/geo/ducklake_geometry.test
+index 83bfd0a..6cd3ede 100644
+--- a/test/sql/geo/ducklake_geometry.test
++++ b/test/sql/geo/ducklake_geometry.test
+@@ -82,8 +82,8 @@ query I
+ select * from t1 ORDER BY ALL;
+ ----
+ POINT (1 2)
+-POINT M (20 20 5)
+ POINT ZM (-30 -30 -30 -30)
++POINT M (20 20 5)
+ LINESTRING Z (5 5 5, 10 10 10)
+ 
+ # Check stats
+diff --git a/test/sql/geo/ducklake_geometry_inlining.test b/test/sql/geo/ducklake_geometry_inlining.test
+index 21b151f..525253b 100644
+--- a/test/sql/geo/ducklake_geometry_inlining.test
++++ b/test/sql/geo/ducklake_geometry_inlining.test
+@@ -24,13 +24,33 @@ USE ducklake;
+ statement ok
+ create table t1 (g GEOMETRY);
+ 
+-statement error
++statement ok
+ insert into t1 VALUES (ST_POINT(1,2));
+-----
+-Not implemented Error: DuckLake does not yet support data-inlining of 'GEOMETRY' columns
+ 
++query I
++SELECT * FROM t1;
++----
++POINT (1 2)
+ 
+-statement error
++statement ok
+ create table t2 as select ST_POINT(1,2) as g;
++
++statement ok
++insert into t1 VALUES (ST_POINT(1,2));
++
++statement ok
++insert into t1 VALUES (ST_POINT(1,2));
++
++statement ok
++insert into t1 VALUES (ST_POINT(1,2));
++
++statement ok
++insert into t1 VALUES (ST_POINT(1,2));
++
++statement ok
++insert into t1 VALUES (ST_POINT(1,2));
++
++query I
++SELECT COUNT(*) FROM t1;
+ ----
+-Not implemented Error: DuckLake does not yet support data-inlining of 'GEOMETRY' columns
++6
+\ No newline at end of file
