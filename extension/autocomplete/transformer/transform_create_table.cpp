@@ -261,6 +261,10 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 	auto generated_opt = list_pr.Child<OptionalParseResult>(2);
 	if (generated_opt.HasResult()) {
 		auto generated = transformer.Transform<GeneratedColumnDefinition>(generated_opt.optional_result);
+		if (generated.expr->HasSubquery()) {
+			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			                      qualified_name.name);
+		}
 		if (type != LogicalType::ANY) {
 			generated.expr = make_uniq<CastExpression>(type, std::move(generated.expr));
 		}
