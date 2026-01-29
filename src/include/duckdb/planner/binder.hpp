@@ -242,6 +242,11 @@ public:
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	void BindCreateViewInfo(CreateViewInfo &base);
+	static void BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
+	                     const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+	                     const vector<string> &aliases, vector<LogicalType> &result_types,
+	                     vector<string> &result_names);
+
 	void SearchSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
