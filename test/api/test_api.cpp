@@ -539,9 +539,6 @@ TEST_CASE("Test connection API", "[api]") {
 	con.Query("CREATE TABLE integers(i integer);");
 	auto table_info = con.TableInfo("integers");
 
-	DataChunk chunk;
-	REQUIRE_NOTHROW(con.Append(*table_info, chunk));
-
 	// no transaction active
 	REQUIRE_THROWS(con.Commit());
 	REQUIRE_THROWS(con.Rollback());

@@ -353,7 +353,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 	}
 	// DuckDB Configurations
 	duckdb::DBConfig config;
-	config.options.set_variables["debug_skip_checkpoint_on_commit"] = duckdb::Value(true);
+	config.SetOptionByName("debug_skip_checkpoint_on_commit", true);
 	config.options.trim_free_blocks = true;
 	config.options.checkpoint_on_shutdown = false;
 
@@ -445,7 +445,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 		case ActionType::TOGGLE_SKIP_CHECKPOINTS_ON_COMMIT:
 			skip_checkpoint_on_commit = !skip_checkpoint_on_commit;
 			PRINT_INFO("Setting skip commit=" << skip_checkpoint_on_commit);
-			config.options.set_variables["debug_skip_checkpoint_on_commit"] = duckdb::Value(skip_checkpoint_on_commit);
+			config.SetOptionByName("debug_skip_checkpoint_on_commit", skip_checkpoint_on_commit);
 			break;
 		case ActionType::SMALL_WRITE: {
 			std::string small_insert = "INSERT INTO t SELECT * FROM RANGE(" + std::to_string(offset) + ", " +

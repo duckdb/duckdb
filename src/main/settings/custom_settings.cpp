@@ -693,7 +693,7 @@ void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input)
 		return;
 	}
 	if (input.GetValue<bool>()) {
-		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
+		throw InvalidInputException("Cannot enable external access while database is running");
 	}
 	auto &config = info.config;
 	if (info.db && Settings::Get<EnableExternalAccessSetting>(*info.db)) {
@@ -703,8 +703,8 @@ void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input)
 		for (auto &path : attached_paths) {
 			config.AddAllowedPath(path);
 			config.AddAllowedPath(path + ".wal");
-			config.AddAllowedPath(path + ".checkpoint.wal");
-			config.AddAllowedPath(path + ".recovery.wal");
+			config.AddAllowedPath(path + ".wal.checkpoint");
+			config.AddAllowedPath(path + ".wal.recovery");
 		}
 	}
 	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
@@ -750,7 +750,12 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 		                            value.type().ToString());
 	}
 
-	auto logical_type = TransformStringToLogicalType(value.GetValue<string>());
+	auto logical_type = UnboundType::TryParseAndDefaultBind(value.GetValue<string>());
+	if (logical_type.id() == LogicalTypeId::INVALID) {
+		throw InvalidInputException("Could not parse the argument '%s' to 'force_variant_shredding' as a built in type",
+		                            value.GetValue<string>());
+	}
+
 	TypeVisitor::Contains(logical_type, [](const LogicalType &type) {
 		if (type.IsNested()) {
 			if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::LIST) {

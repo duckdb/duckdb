@@ -30,14 +30,13 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/optimizer/optimizer_extension.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/user_settings.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/common/types/type_manager.hpp"
 
 namespace duckdb {
 
@@ -58,6 +57,8 @@ class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
 class DatabaseFilePathManager;
+class ExtensionCallbackManager;
+class TypeManager;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
@@ -131,8 +132,6 @@ struct DBConfigOptions {
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific schema for VARIANT shredding
 	LogicalType force_variant_shredding = LogicalType::INVALID;
-	//! Database configuration variables as controlled by SET
-	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
 	case_insensitive_map_t<Value> set_variable_defaults;
 	//! Additional directories to store extension binaries in
@@ -177,12 +176,9 @@ public:
 	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
-	mutable mutex config_lock;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
 
-	//! Extra parameters that can be SET for loaded extensions
-	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
@@ -194,24 +190,14 @@ public:
 	unique_ptr<BlockAllocator> block_allocator;
 	//! Database configuration options
 	DBConfigOptions options;
-	//! Extensions made to the parser
-	vector<ParserExtension> parser_extensions;
-	//! Extensions made to the optimizer
-	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager
 	unique_ptr<ErrorManager> error_manager;
 	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
 	shared_ptr<Allocator> default_allocator;
-	//! Extensions made to binder
-	vector<unique_ptr<OperatorExtension>> operator_extensions;
-	//! Extensions made to storage
-	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
 	//! Provide a custom buffer manager implementation (if desired).
 	shared_ptr<BufferManager> buffer_manager;
-	//! Set of callbacks that can be installed by extensions
-	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! HTTP Request utility functions
@@ -220,6 +206,8 @@ public:
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 	//! Reference to the database file path manager
 	shared_ptr<DatabaseFilePathManager> path_manager;
+	//! Database configuration variables as controlled by SET
+	GlobalUserSettings user_settings;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -237,7 +225,9 @@ public:
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr,
 	                                   SetScope default_scope = SetScope::SESSION);
-	DUCKDB_API bool HasExtensionOption(const string &name);
+	DUCKDB_API bool HasExtensionOption(const string &name) const;
+	DUCKDB_API case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
+	DUCKDB_API bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetcha n alias by index, or nullptr if out of range
@@ -246,12 +236,15 @@ public:
 	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const String &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option, const Value &value);
+	DUCKDB_API void SetOption(const string &name, Value value);
+	DUCKDB_API void SetOption(idx_t setting_index, Value value);
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
 	DUCKDB_API void SetOptionsByName(const case_insensitive_map_t<Value> &values);
 	DUCKDB_API void ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option);
-	DUCKDB_API void SetOption(const String &name, Value value);
-	DUCKDB_API void ResetOption(const String &name);
-	DUCKDB_API void ResetGenericOption(const String &name);
+	DUCKDB_API void ResetOption(const ExtensionOption &extension_option);
+	DUCKDB_API void ResetGenericOption(idx_t setting_index);
+	DUCKDB_API optional_idx TryGetSettingIndex(const String &name,
+	                                           optional_ptr<const ConfigurationOption> &option) const;
 	static LogicalType ParseLogicalType(const string &type);
 
 	DUCKDB_API void CheckLock(const String &name);
@@ -284,6 +277,7 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
@@ -299,7 +293,7 @@ public:
 	//! Returns the value of a setting currently. If the setting is not set by the user, returns the default value.
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 	//! Returns the value of a setting set by the user currently
-	SettingLookupResult TryGetCurrentUserSetting(const string &key, Value &result) const;
+	SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 	//! Returns the default value of an option
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
@@ -307,14 +301,18 @@ public:
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;
+	ExtensionCallbackManager &GetCallbackManager();
+	const ExtensionCallbackManager &GetCallbackManager() const;
 
 private:
+	mutable mutex config_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
-	unique_ptr<CastFunctionSet> cast_functions;
+	unique_ptr<TypeManager> type_manager;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
+	unique_ptr<ExtensionCallbackManager> callback_manager;
 	bool is_user_config = true;
 };
 

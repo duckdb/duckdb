@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -446,7 +447,7 @@ struct IEJoinUnion {
 	IEJoinGlobalSourceState &gsource;
 
 	//! Inverted loop
-	idx_t JoinComplexBlocks(vector<idx_t> &lsel, vector<idx_t> &rsel);
+	idx_t JoinComplexBlocks(idx_t *lsel, idx_t *rsel);
 
 	//! B
 	vector<validity_t> bit_array;
@@ -672,11 +673,7 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	// Check the non-ragged entries
 	for (const auto entry_count = bits.EntryCount(n); entry_idx < entry_count; ++entry_idx) {
 		if (entry) {
-			for (; idx_in_entry < bits.BITS_PER_VALUE; ++idx_in_entry, ++j) {
-				if (bits.RowIsValid(entry, idx_in_entry)) {
-					return j;
-				}
-			}
+			return j + CountZeros<validity_t>::Trailing(entry) - idx_in_entry;
 		} else {
 			j += bits.BITS_PER_VALUE - idx_in_entry;
 		}
@@ -686,22 +683,14 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	}
 
 	// Check the final entry
-	for (; j < n; ++idx_in_entry, ++j) {
-		if (bits.RowIsValid(entry, idx_in_entry)) {
-			return j;
-		}
-	}
-
-	return j;
+	return MinValue(j + CountZeros<validity_t>::Trailing(entry) - idx_in_entry, n);
 }
 
-idx_t IEJoinUnion::JoinComplexBlocks(vector<idx_t> &lsel, vector<idx_t> &rsel) {
-	auto &li = gsource.li;
+idx_t IEJoinUnion::JoinComplexBlocks(idx_t *lsel, idx_t *rsel) {
+	auto li = gsource.li.data();
 
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
-	lsel.resize(0);
-	rsel.resize(0);
 
 	// 11. for(i←1 to n) do
 	while (i < n) {
@@ -731,8 +720,8 @@ idx_t IEJoinUnion::JoinComplexBlocks(vector<idx_t> &lsel, vector<idx_t> &rsel) {
 
 			D_ASSERT(lrid > 0 && rrid < 0);
 			// 15. add tuples w.r.t. (L1[j], L1[i]) to join result
-			lsel.emplace_back(idx_t(+lrid - 1));
-			rsel.emplace_back(idx_t(-rrid - 1));
+			lsel[result_count] = idx_t(+lrid - 1);
+			rsel[result_count] = idx_t(-rrid - 1);
 			++result_count;
 			if (result_count == STANDARD_VECTOR_SIZE) {
 				// out of space!
@@ -1181,7 +1170,7 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 	auto &right_table = *ie_sink.tables[1];
 
 	do {
-		auto result_count = joiner->JoinComplexBlocks(lsel, rsel);
+		auto result_count = joiner->JoinComplexBlocks(lsel.data(), rsel.data());
 		if (result_count == 0) {
 			// exhausted this pair
 			joiner.reset();

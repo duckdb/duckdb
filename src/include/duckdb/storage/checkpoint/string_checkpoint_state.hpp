@@ -56,8 +56,12 @@ public:
 	string GetSegmentInfo() const override;
 	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;
 
+	void InsertOverflowBlock(block_id_t block_id, reference<StringBlock> block);
+	reference<StringBlock> FindOverflowBlock(block_id_t block_id);
+
 private:
 	mutex block_lock;
+	StorageLock overflow_blocks_lock;
 };
 
 } // namespace duckdb
