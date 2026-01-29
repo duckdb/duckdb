@@ -246,6 +246,14 @@ LogicalType GetAvgStateType(const AggregateFunction &function) {
 	return LogicalType::STRUCT(std::move(children));
 }
 
+LogicalType GetKahanAvgStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("count", LogicalType::UBIGINT);
+	children.emplace_back("value", LogicalType::DOUBLE);
+	children.emplace_back("err", LogicalType::DOUBLE);
+	return LogicalType::STRUCT(std::move(children));
+}
+
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16: {
@@ -327,7 +335,7 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 AggregateFunction FAvgFun::GetFunction() {
 	auto function = AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
 	                    LogicalType::DOUBLE, LogicalType::DOUBLE)
-	                    .OptInToStructStateExport(GetAvgStateType);
+	                    .OptInToStructStateExport(GetKahanAvgStateType);
 	return function;
 }
 
