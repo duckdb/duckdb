@@ -82,8 +82,9 @@ void ParquetOptionsSerialization::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<MultiFileOptions>(102, "file_options", file_options);
 	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", parquet_options.schema);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", parquet_options.encryption_config, nullptr);
-	serializer.WritePropertyWithDefault<idx_t>(105, "explicit_cardinality", parquet_options.explicit_cardinality, 0);
-	serializer.WritePropertyWithDefault<bool>(106, "can_have_nan", parquet_options.can_have_nan, false);
+	/* [Deleted] (bool) "parquet_options.debug_use_openssl" */
+	serializer.WritePropertyWithDefault<idx_t>(106, "explicit_cardinality", parquet_options.explicit_cardinality, 0);
+	serializer.WritePropertyWithDefault<bool>(107, "can_have_nan", parquet_options.can_have_nan, false);
 }
 
 ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserializer &deserializer) {
@@ -93,8 +94,9 @@ ParquetOptionsSerialization ParquetOptionsSerialization::Deserialize(Deserialize
 	deserializer.ReadProperty<MultiFileOptions>(102, "file_options", result.file_options);
 	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.parquet_options.schema);
 	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.parquet_options.encryption_config, nullptr);
-	deserializer.ReadPropertyWithExplicitDefault<idx_t>(105, "explicit_cardinality", result.parquet_options.explicit_cardinality, 0);
-	deserializer.ReadPropertyWithExplicitDefault<bool>(106, "can_have_nan", result.parquet_options.can_have_nan, false);
+	deserializer.ReadDeletedProperty<bool>(105, "debug_use_openssl");
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "explicit_cardinality", result.parquet_options.explicit_cardinality, 0);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(107, "can_have_nan", result.parquet_options.can_have_nan, false);
 	return result;
 }
 
