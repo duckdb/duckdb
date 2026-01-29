@@ -38,42 +38,47 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	return std::move(result);
 }
 
+string CreateTableInfo::ExtraOptionsToString() const {
+	string ret;
+	if (!partition_keys.empty()) {
+		ret += " PARTITIONED BY (";
+		for (auto &partition : partition_keys) {
+			ret += partition->ToString() + ",";
+		}
+		ret.pop_back();
+		ret += ")";
+	}
+	if (!sort_keys.empty()) {
+		ret += " SORTED BY (";
+		for (auto &order : sort_keys) {
+			ret += order->ToString() + ",";
+		}
+		ret.pop_back();
+		ret += ")";
+	}
+	if (!options.empty()) {
+		ret += " WITH (";
+		for (auto &entry : options) {
+			ret += "'" + entry.first + "'=" + entry.second->ToString() + ",";
+		}
+		ret.pop_back();
+		ret += ")";
+	}
+	return ret;
+}
 string CreateTableInfo::ToString() const {
 	string ret = GetCreatePrefix("TABLE");
 	ret += QualifierToString(temporary ? "" : catalog, schema, table);
 
 	if (query != nullptr) {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);
+		ret += ExtraOptionsToString();
 		ret += " AS " + query->ToString();
 	} else {
 		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints);
-		if (!partition_keys.empty()) {
-			ret += " PARTITIONED BY (";
-			for (auto &partition : partition_keys) {
-				ret += partition->ToString() + ",";
-			}
-			ret.pop_back();
-			ret += ")";
-		}
-		if (!sort_keys.empty()) {
-			ret += " SORTED BY (";
-			for (auto &order : sort_keys) {
-				ret += order->ToString() + ",";
-			}
-			ret.pop_back();
-			ret += ")";
-		}
-		if (!options.empty()) {
-			ret += " WITH (";
-			for (auto &entry : options) {
-				ret += "'" + entry.first + "'=" + entry.second->ToString() + ",";
-			}
-			ret.pop_back();
-			ret += ")";
-		}
+		ret += ExtraOptionsToString();
 		ret += ";";
 	}
-
 	return ret;
 }
 
