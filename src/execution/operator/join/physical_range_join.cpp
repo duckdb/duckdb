@@ -155,6 +155,7 @@ public:
 			if (!table.sorted) {
 				table.MaterializeEmpty(execution.client);
 			}
+			table.global_source.reset();
 		}
 
 		event->FinishTask();
@@ -221,6 +222,7 @@ void PhysicalRangeJoin::GlobalSortedTable::GetSortedRun(ClientContext &client) {
 	if (!sorted) {
 		MaterializeEmpty(client);
 	}
+	global_source.reset();
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context, InterruptState &interrupt) {

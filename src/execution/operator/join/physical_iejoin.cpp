@@ -419,9 +419,25 @@ struct IEJoinUnion {
 			index = i;
 		}
 
+		inline idx_t GetChunkIndex() const {
+			idx_t chunk_idx;
+			idx_t tuple_idx;
+			state->RandomAccess(chunk_idx, tuple_idx, index);
+			return chunk_idx;
+		}
+
+		inline void SetChunkIndex(idx_t chunk_idx) {
+			index = state->GetDivisor() * chunk_idx;
+		}
+
 		UnionIterator &operator++() {
 			++index;
 			return *this;
+		}
+
+		void Repin() {
+			state->SetKeepPinned(true);
+			state->SetPinPayload(true);
 		}
 
 		unique_ptr<ExternalBlockIteratorState> state;
@@ -459,8 +475,6 @@ struct IEJoinUnion {
 	idx_t i;
 	idx_t n_j;
 	idx_t j;
-	unique_ptr<UnionIterator> op1;
-	unique_ptr<UnionIterator> off1;
 	unique_ptr<UnionIterator> op2;
 	unique_ptr<UnionIterator> off2;
 	int64_t lrid;
@@ -545,10 +559,6 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 
 IEJoinUnion::IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chunks) : gsource(gsource), n(0), i(0) {
 	auto &op = gsource.op;
-	auto &l1 = *gsource.l1;
-	const auto strict1 = IsStrictComparison(op.conditions[0].comparison);
-	op1 = make_uniq<UnionIterator>(l1, strict1);
-	off1 = make_uniq<UnionIterator>(l1, strict1);
 
 	// 7. initialize bit-array B (|B| = n), and set all bits to 0
 	auto &l2 = *gsource.l2;
@@ -617,6 +627,7 @@ bool IEJoinUnion::NextRow() {
 	auto &li = gsource.li;
 	auto &p = gsource.p;
 
+	auto pinned_idx = off2->GetChunkIndex();
 	for (; i < n; ++i) {
 		// 12. pos ← P[i]
 		auto pos = p[i];
@@ -628,6 +639,11 @@ bool IEJoinUnion::NextRow() {
 		// 16. B[pos] ← 1
 		op2->SetIndex(i);
 		for (; off2->GetIndex() < n_j; ++(*off2)) {
+			//	Prevent buildup of pinned blocks
+			if (off2->GetChunkIndex() != pinned_idx) {
+				off2->Repin();
+				pinned_idx = off2->GetChunkIndex();
+			}
 			if (!Compare(off2_itr[off2->GetIndex()], op2_itr[op2->GetIndex()], strict)) {
 				break;
 			}
@@ -709,6 +725,10 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 
 idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
 	const auto &li = gsource.li;
+
+	// Release pinned blocks
+	op2->Repin();
+	off2->Repin();
 
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
