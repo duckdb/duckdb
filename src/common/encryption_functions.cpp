@@ -60,7 +60,8 @@ EncryptionNonce::EncryptionNonce(CipherType cipher_p, Version version_p) : versi
 			break;
 		}
 		// we fall through to NONE (often Parquet) with a 12-byte nonce
-	case Version::NONE:
+		DUCKDB_EXPLICIT_FALLTHROUGH;
+		case Version::NONE:
 		nonce_len = MainHeader::AES_NONCE_LEN;
 		nonce = unique_ptr<data_t[]>(new data_t[nonce_len]());
 		break;

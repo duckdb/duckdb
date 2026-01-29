@@ -137,7 +137,7 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	EncryptionTag tag;
 	EncryptionCanary decrypted_canary;
 
-	switch (encryption_state->metadata->GetVersion()) {
+	switch (encryption_version) {
 	case EncryptionTypes::V0_0:
 		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
 		//! Decrypt the canary, Nonce is zeroed out
@@ -585,17 +585,17 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	memcpy(options.db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
 
-	// encryption version can be overridden by the real encryption version
-	options.encryption_options.encryption_version = main_header.GetEncryptionVersion();
-
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
 		// database is not encrypted, but is tried to be opened with a key
 	}
 
 	if (main_header.IsEncrypted()) {
+		auto &storage_manager = db.GetStorageManager();
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
+			D_ASSERT(db.GetStorageManager().IsEncrypted());
+			options.encryption_options.encryption_version = main_header.GetEncryptionVersion();
 
 			//! Check if our encryption module can write, if not, we throw
 			db.GetDatabase().GetEncryptionUtil(options.read_only);
@@ -612,7 +612,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 
 		// if a cipher was provided, check if it is the same as in the config
 		auto stored_cipher = main_header.GetEncryptionCipher();
-		auto config_cipher = db.GetStorageManager().GetCipher();
+		auto config_cipher = storage_manager.GetCipher();
 		if (config_cipher != EncryptionTypes::INVALID && config_cipher != stored_cipher) {
 			throw CatalogException("Cannot open encrypted database \"%s\" with a different cipher (%s) than the one "
 			                       "used to create it (%s)",
@@ -620,7 +620,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			                       EncryptionTypes::CipherToString(stored_cipher));
 		}
 
-		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation
+		// This avoids the cipher from being downgrades by an attacker
+		// FIXME: we likely want to have a proper validation
 		// of the cipher used instead of this trick to avoid downgrades
 		if (stored_cipher != EncryptionTypes::GCM) {
 			if (config_cipher == EncryptionTypes::INVALID) {
@@ -633,7 +634,9 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		}
 
 		// this is ugly, but the storage manager does not know the cipher type before
-		db.GetStorageManager().SetCipher(stored_cipher);
+		storage_manager.SetCipher(stored_cipher);
+		// encryption version can be overridden by the serialized encryption version
+		storage_manager.SetEncryptionVersion(main_header.GetEncryptionVersion());
 	}
 
 	options.version_number = main_header.version_number;
