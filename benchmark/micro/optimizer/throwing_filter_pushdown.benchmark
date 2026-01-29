@@ -1,4 +1,4 @@
-# name: benchmark/micro/optimizer/throwing_filrer_pushdown.benchmark
+# name: benchmark/micro/optimizer/throwing_filter_pushdown.benchmark
 # description: Benchmark of pushing down a filter that can throw
 # group: [optimizer]
 
