@@ -16,16 +16,12 @@ idx_t DatabaseFilePathManager::ApproxDatabaseCount() const {
 	return db_paths.size();
 }
 
-InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseManager &manager, const string &path_p,
+InsertDatabasePathResult DatabaseFilePathManager::InsertDatabasePath(DatabaseManager &manager, const string &path,
                                                                      const string &name, OnCreateConflict on_conflict,
                                                                      AttachOptions &options) {
-	if (path_p.empty() || path_p == IN_MEMORY_PATH) {
-		return InsertDatabasePathResult::SUCCESS;
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		throw InternalException("DatabaseFilePathManager::InsertDatabasePath - cannot insert in-memory database");
 	}
-	// canonicalize the path that we store
-	auto &fs = FileSystem::GetFileSystem(manager.GetInstance());
-	auto path = fs.CanonicalizePath(path_p);
-
 	lock_guard<mutex> path_lock(db_paths_lock);
 	auto entry = db_paths.emplace(path, DatabasePathInfo(manager, name, options.access_mode));
 	if (!entry.second) {

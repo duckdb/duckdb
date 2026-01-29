@@ -815,7 +815,10 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 	return FileSystem::IsPathAbsolute(path);
 }
 
-string LocalFileSystem::MakePathAbsolute(const string &path) {
+string LocalFileSystem::MakePathAbsolute(const string &path, optional_ptr<FileOpener> opener) {
+	if (path[0] == '~') {
+		return JoinPath(GetHomeDirectory(opener), path.substr(1));
+	}
 	if (!IsPathAbsolute(path)) {
 		// path is not absolute - join with working directory
 		return JoinPath(GetWorkingDirectory(), path);
@@ -1386,7 +1389,10 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 	return false;
 }
 
-string LocalFileSystem::MakePathAbsolute(const string &path) {
+string LocalFileSystem::MakePathAbsolute(const string &path, optional_ptr<FileOpener> opener) {
+	if (path[0] == '~') {
+		return JoinPath(GetHomeDirectory(opener), path.substr(1));
+	}
 	if (FileSystem::IsPathAbsolute(path)) {
 		// already absolute - nothing to do
 		return path;
@@ -1426,13 +1432,13 @@ bool LocalFileSystem::OnDiskFile(FileHandle &handle) {
 	return true;
 }
 
-string LocalFileSystem::CanonicalizePath(const string &input) {
+string LocalFileSystem::CanonicalizePath(const string &input, optional_ptr<FileOpener> opener) {
 	auto path_sep = PathSeparator(input);
 	if (path_sep.size() != 1) {
 		throw InternalException("path separator can only be a single byte for local file systems");
 	}
 	// make the path absolute
-	string path = MakePathAbsolute(input);
+	string path = MakePathAbsolute(input, opener);
 
 	string current = path;
 	string remainder;

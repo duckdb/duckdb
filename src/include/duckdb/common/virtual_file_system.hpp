@@ -68,7 +68,7 @@ public:
 
 	string PathSeparator(const string &path) override;
 
-	string CanonicalizePath(const string &path_p) override;
+	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
 
 protected:
 	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,

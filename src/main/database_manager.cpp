@@ -83,6 +83,20 @@ shared_ptr<AttachedDatabase> DatabaseManager::GetDatabaseInternal(const lock_gua
 	return entry->second;
 }
 
+bool RequiresTrackingAttaches(const string &path, const string &db_type) {
+	// we need to track attaches for file-based duckdb databases
+	if (!db_type.empty() && !StringUtil::CIEquals(db_type, "duckdb")) {
+		// not duckdb - don't track
+		return false;
+	}
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		// in-memory - don't track
+		return false;
+	}
+	// file-based duckdb - track
+	return true;
+}
+
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	string extension = "";
@@ -95,9 +109,13 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		}
 	}
 
-	if (options.db_type.empty() || StringUtil::CIEquals(options.db_type, "duckdb")) {
+	if (RequiresTrackingAttaches(info.path, options.db_type)) {
 		// Start timing the ATTACH-delay step.
 		auto profiler = context.client_data->profiler->StartTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
+
+		// canonicalize the path to the database
+		auto &fs = FileSystem::GetFileSystem(context);
+		info.path = fs.CanonicalizePath(info.path);
 
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists

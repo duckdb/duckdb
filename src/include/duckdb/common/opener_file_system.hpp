@@ -219,8 +219,9 @@ protected:
 		return true;
 	}
 
-	string CanonicalizePath(const string &path_p) override {
-		return GetFileSystem().CanonicalizePath(path_p);
+	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener = nullptr) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().CanonicalizePath(path_p, GetOpener());
 	}
 
 private:

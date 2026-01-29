@@ -69,7 +69,7 @@ public:
 
 	//! Checks if path is is an absolute path
 	bool IsPathAbsolute(const string &path) override;
-	string MakePathAbsolute(const string &input);
+	string MakePathAbsolute(const string &input, optional_ptr<FileOpener> opener);
 	bool PathStartsWithDrive(const string &path);
 
 	bool CanHandleFile(const string &fpath) override {
@@ -104,7 +104,7 @@ public:
 
 	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener, bool absolute_path);
 
-	string CanonicalizePath(const string &path_p) override;
+	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
 
 protected:
 	bool ListFilesExtended(const string &directory, const std::function<void(OpenFileInfo &info)> &callback,

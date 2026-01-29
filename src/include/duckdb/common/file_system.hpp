@@ -310,7 +310,7 @@ public:
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
 
 	//! Canonicalize a path
-	DUCKDB_API virtual string CanonicalizePath(const string &path);
+	DUCKDB_API virtual string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener = nullptr);
 
 protected:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
