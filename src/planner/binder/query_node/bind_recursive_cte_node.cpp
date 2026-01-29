@@ -20,7 +20,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	auto is_using_key = !statement.key_targets.empty();
 
 	if (is_using_key) {
-		auto setting = Settings::Get<UsingKeySyntaxSetting>(context);
+		auto setting = Settings::Get<DeprecatedUsingKeySyntaxSetting>(context);
 
 		// The USING KEY currently implement is actually the UNION ALL variant,
 		// but we use UNION syntax. This stands in the way of a possible addition of
@@ -34,7 +34,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		bool warn_deprecated_syntax = setting == UsingKeySyntax::DEFAULT && !statement.union_all;
 		const string msg = "Deprecated UNION in USING KEY CTE detected."
 		                   "Please transition to using UNION ALL, before DuckDB's next release. \n"
-		                   "Use SET using_key_syntax='UNION_AS_UNION_ALL' to enable the deprecated behavior. \n"
+		                   "Use SET deprecated_using_key_syntax='UNION_AS_UNION_ALL' to enable the deprecated behavior. \n"
 		                   "For more information, see "
 		                   "https://duckdb.org/docs/stable/sql/query_syntax/with#recursive-ctes-with-using-key.";
 

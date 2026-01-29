@@ -109,6 +109,13 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
+// Deprecated Using Key Syntax
+//===----------------------------------------------------------------------===//
+void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<UsingKeySyntax>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -164,13 +171,6 @@ void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 //===----------------------------------------------------------------------===//
 void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
-// Using Key Syntax
-//===----------------------------------------------------------------------===//
-void UsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	EnumUtil::FromString<UsingKeySyntax>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
