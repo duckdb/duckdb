@@ -273,7 +273,7 @@ idx_t SimpleMultiFileList::GetTotalFileCount() const {
 //===--------------------------------------------------------------------===//
 // LazyFileList
 //===--------------------------------------------------------------------===//
-LazyMultiFileList::LazyMultiFileList() {
+LazyMultiFileList::LazyMultiFileList(optional_ptr<ClientContext> context_p) : context(context_p) {
 }
 
 vector<OpenFileInfo> LazyMultiFileList::GetAllFiles() const {
@@ -332,6 +332,9 @@ bool LazyMultiFileList::ExpandNextPathInternal() const {
 	if (all_files_expanded) {
 		return false;
 	}
+	if (context && context->interrupted) {
+		throw InterruptException();
+	}
 	if (!ExpandNextPath()) {
 		all_files_expanded = true;
 		return false;
@@ -343,7 +346,8 @@ bool LazyMultiFileList::ExpandNextPathInternal() const {
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
 GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> globs_p, FileGlobInput glob_input_p)
-    : context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)), current_glob(0) {
+    : LazyMultiFileList(&context_p), context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)),
+      current_glob(0) {
 }
 
 vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(optional_idx max_files) const {
