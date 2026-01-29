@@ -1657,16 +1657,14 @@ private:
 
 LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p,
                                  optional_ptr<FileOpener> opener)
-    : fs(fs), path(path_p), opener(opener) {
+    : fs(fs), path(fs.ExpandPath(path_p, opener)), opener(opener) {
 	if (path.empty()) {
 		finished = true;
 		return;
 	}
 	// split up the path into separate chunks
-	idx_t file_url_path_offset = GetFileUrlOffset(path);
-
 	idx_t last_pos = 0;
-	for (idx_t i = file_url_path_offset; i < path.size(); i++) {
+	for (idx_t i = 0; i < path.size(); i++) {
 		if (path[i] == '\\' || path[i] == '/') {
 			if (i == last_pos) {
 				// empty: skip this position
