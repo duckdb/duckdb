@@ -642,7 +642,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			    make_uniq<BoundColumnRefExpression>(
 			        correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i)),
 			    make_uniq<BoundColumnRefExpression>(
-			        correlated_columns[i].type, ColumnBinding(right_binding.table_index, right_binding.column_index + i)),
+			        correlated_columns[i].type,
+			        ColumnBinding(right_binding.table_index, right_binding.column_index + i)),
 			    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 			join->conditions.push_back(std::move(cond));
 		}
