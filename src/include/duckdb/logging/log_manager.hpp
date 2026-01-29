@@ -28,7 +28,7 @@ class LogManager {
 
 public:
 	// Note: two step initialization because Logger needs shared pointer to log manager TODO: can we clean up?
-	explicit LogManager(shared_ptr<DatabaseInstance> db, LogConfig config = LogConfig());
+	explicit LogManager(weak_ptr<DatabaseInstance> db, LogConfig config = LogConfig());
 	~LogManager();
 	void Initialize();
 
@@ -85,14 +85,12 @@ protected:
 
 	void SetConfigInternal(LogConfig config);
 
-	shared_ptr<DatabaseInstance> GetDatabaseInstance();
-
+protected:
 	mutex lock;
 	LogConfig config;
 
 	shared_ptr<Logger> global_logger;
 	weak_ptr<DatabaseInstance> db_instance;
-
 	shared_ptr<LogStorage> log_storage;
 
 	idx_t next_registered_logging_context_index = 0;
