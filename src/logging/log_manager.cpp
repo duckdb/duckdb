@@ -5,6 +5,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb {
@@ -58,13 +59,19 @@ shared_ptr<LogStorage> LogManager::GetLogStorage() {
 	return log_storage;
 }
 
+shared_ptr<DatabaseInstance> LogManager::GetDatabaseInstance() {
+	unique_lock<mutex> lck(lock);
+	return db_instance.lock();
+}
+
 bool LogManager::CanScan(LoggingTargetTable table) {
 	unique_lock<mutex> lck(lock);
 	return log_storage->CanScan(table);
 }
 
-LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(std::move(config_p)) {
-	log_storage = make_uniq<InMemoryLogStorage>(db);
+LogManager::LogManager(shared_ptr<DatabaseInstance> db, LogConfig config_p) : config(std::move(config_p)) {
+	log_storage = make_uniq<InMemoryLogStorage>(*db);
+	db_instance = db;
 }
 
 LogManager::~LogManager() {
@@ -95,8 +102,12 @@ RegisteredLoggingContext LogManager::RegisterLoggingContextInternal(LoggingConte
 
 void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogLevel log_level, const char *log_message,
                                const RegisteredLoggingContext &context) {
-	unique_lock<mutex> lck(lock);
-	log_storage->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
+	if (log_level == LogLevel::LOG_WARNING && (Settings::Get<WarningsAsErrorsSetting>(*GetDatabaseInstance()))) {
+		throw InvalidInputException(log_message);
+	} else {
+		unique_lock<mutex> lck(lock);
+		log_storage->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
+	}
 }
 
 void LogManager::FlushCachedLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {

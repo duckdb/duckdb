@@ -287,7 +287,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
 
-	log_manager = make_uniq<LogManager>(*this, LogConfig());
+	log_manager = make_uniq<LogManager>(shared_from_this(), LogConfig());
 	log_manager->Initialize();
 
 	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
