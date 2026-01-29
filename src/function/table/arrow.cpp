@@ -83,7 +83,6 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	names = res->arrow_table.GetNames();
 	return_types = res->arrow_table.GetTypes();
 	res->all_types = return_types;
-	res->filter_pushdown_with_view_types = Settings::Get<ArrowFilterPushdownWithViewTypesSetting>(context);
 	if (return_types.empty()) {
 		throw InvalidInputException("Provided table/dataframe must have at least one column");
 	}
@@ -323,9 +322,8 @@ bool ArrowTableFunction::ArrowPushdownType(const FunctionData &bind_data, idx_t 
 	// PyArrow's array_filter kernel doesn't support string_view/binary_view types.
 	// The filter is applied to ALL columns in a record batch, so if any column has a
 	// view type, we must disable filter pushdown for the entire table.
-	// This check can be disabled via the arrow_filter_pushdown_with_view_types setting.
 	// See https://github.com/duckdb/duckdb-python/issues/227
-	if (!arrow_bind_data.filter_pushdown_with_view_types && TableHasViewTypes(column_info)) {
+	if (TableHasViewTypes(column_info)) {
 		return false;
 	}
 	const auto column_type = column_info.at(col_idx);

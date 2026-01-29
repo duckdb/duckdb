@@ -68,9 +68,6 @@ public:
 	ArrowTableSchema arrow_table;
 	//! Whether projection pushdown is enabled on the scan
 	bool projection_pushdown_enabled = true;
-	//! Whether filter pushdown is allowed on tables with view types (controlled by
-	//! arrow_filter_pushdown_with_view_types)
-	bool filter_pushdown_with_view_types = false;
 };
 
 struct ArrowRunEndEncodingState {
