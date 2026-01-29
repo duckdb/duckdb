@@ -273,7 +273,7 @@ public:
 
 		if (block_manager.InMemory() && next_page_buffer.IsValid()) {
 			D_ASSERT(to_use.get() != &next_page_buffer);
-			*to_use = std::move(next_page_buffer);
+			to_use = next_page_buffer;
 			return *to_use;
 		}
 
