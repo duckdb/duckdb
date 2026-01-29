@@ -46,7 +46,6 @@ CaseElse <- 'ELSE' Expression
 TypeLiteral <- ColId StringLiteral
 IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?
 IntervalParameter <- StringLiteral / NumberLiteral / ParensExpression
-IntervalUnit <- ColId
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS' / 'RANGE' / 'GROUPS'
 FrameExtent <- BetweenFrameExtent / SingleFrameExtent

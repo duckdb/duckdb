@@ -724,7 +724,6 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"TypeLiteral <- ColId StringLiteral\n"
 	"IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?\n"
 	"IntervalParameter <- StringLiteral / NumberLiteral / ParensExpression\n"
-	"IntervalUnit <- ColId\n"
 	"FrameClause <- Framing FrameExtent WindowExcludeClause?\n"
 	"Framing <- 'ROWS' / 'RANGE' / 'GROUPS'\n"
 	"FrameExtent <- BetweenFrameExtent / SingleFrameExtent\n"

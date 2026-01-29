@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ast/unpivot_name_values.hpp"
 #include "tokenizer.hpp"
 #include "parse_result.hpp"
 #include "transform_enum_result.hpp"
@@ -1080,6 +1081,10 @@ private:
 	static vector<string> TransformUnpivotHeaderSingle(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformUnpivotHeaderList(PEGTransformer &transformer,
+	                                                 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SelectStatement> TransformUnpivotStatement(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
+	static UnpivotNameValues TransformIntoNameValues(PEGTransformer &transformer,
 	                                                 optional_ptr<ParseResult> parse_result);
 
 	static bool TransformIncludeOrExcludeNulls(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

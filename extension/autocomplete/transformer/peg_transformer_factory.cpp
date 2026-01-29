@@ -612,6 +612,8 @@ void PEGTransformerFactory::RegisterPivot() {
 	REGISTER_TRANSFORM(TransformPivotColumnEntry);
 	REGISTER_TRANSFORM(TransformPivotColumnSubquery);
 	REGISTER_TRANSFORM(TransformPivotColumnEntryInternal);
+	REGISTER_TRANSFORM(TransformUnpivotStatement);
+	REGISTER_TRANSFORM(TransformIntoNameValues);
 
 	REGISTER_TRANSFORM(TransformUnpivotHeader);
 	REGISTER_TRANSFORM(TransformUnpivotHeaderSingle);
@@ -932,7 +934,6 @@ void PEGTransformerFactory::RegisterEnums() {
 
 	RegisterEnum<SetOperationType>("SetopUnion", SetOperationType::UNION);
 	RegisterEnum<SetOperationType>("SetopExcept", SetOperationType::EXCEPT);
-	RegisterEnum<SetOperationType>("SetopIntersect", SetOperationType::INTERSECT);
 
 	RegisterEnum<string>("TrimBoth", "trim");
 	RegisterEnum<string>("TrimLeading", "ltrim");

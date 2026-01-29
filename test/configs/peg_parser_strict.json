@@ -117,7 +117,8 @@
                 "test/sql/catalog/function/query_function.test",
                 "test/sql/cast/string_to_struct_escapes.test",
                 "test/sql/copy/csv/test_thousands_separator.test",
-                "test/sql/show_select/show_quote_identifier.test"
+                "test/sql/show_select/show_quote_identifier.test",
+                "test/sql/pivot/test_pivot_duplicate_aggregates.test"
             ]
         },
         {
@@ -126,13 +127,6 @@
                 "test/sql/catalog/issue_9459.test",
                 "test/sql/prepared/parameter_variants.test",
                 "test/sql/parser/digit_separators.test"
-            ]
-        },
-        {
-            "reason": "PivotStatement",
-            "paths": [
-                "test/sql/pivot/top_level_pivot_syntax.test",
-                "test/sql/pivot/pivot_storage.test"
             ]
         },
         {
