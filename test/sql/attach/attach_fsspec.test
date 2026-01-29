@@ -8,7 +8,7 @@ ATTACH 'dummy_extension:/hello.world';
 not found
 
 statement ok
-ATTACH 'file://__TEST_DIR__/dummy.csv'
+ATTACH 'file://{WORKING_DIR}/__TEST_DIR__/dummy.csv'
 
 statement error
 ATTACH '__TEST_DIR__/dummy.csv'
