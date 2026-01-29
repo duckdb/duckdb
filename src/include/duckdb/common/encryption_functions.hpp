@@ -9,54 +9,14 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/encryption_types.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
 class DatabaseInstance;
 class AttachedDatabase;
 class FileBuffer;
-
-using CipherType = EncryptionTypes::CipherType;
-using Version = EncryptionTypes::EncryptionVersion;
-
-struct EncryptionTag {
-	EncryptionTag();
-	data_ptr_t data();
-	idx_t size() const;
-
-private:
-	unique_ptr<data_t[]> tag;
-};
-
-struct EncryptionCanary {
-	EncryptionCanary();
-	data_ptr_t data();
-	idx_t size() const;
-
-private:
-	unique_ptr<data_t[]> canary;
-};
-
-struct EncryptionNonce {
-	explicit EncryptionNonce(CipherType cipher = EncryptionTypes::GCM,
-	                         Version version = EncryptionTypes::EncryptionVersion::V0_1);
-	data_ptr_t data();
-	idx_t size() const;
-	idx_t total_size() const;
-	idx_t size_deprecated() const;
-
-	void SetSize(idx_t length);
-
-private:
-	unique_ptr<data_t[]> nonce;
-	idx_t nonce_len;
-
-private:
-	Version version;
-	CipherType cipher;
-};
 
 class AdditionalAuthenticatedData {
 public:

@@ -368,7 +368,7 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHead
 	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(db.GetDatabase(), key_id);
 	// Encrypt canary with the derived key
 	shared_ptr<EncryptionState> encryption_state;
-	auto encryption_version = main_header.GetEncryptionVersion();
+	auto encryption_version = static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion());
 	if (encryption_version > EncryptionTypes::V0_0 && encryption_version != EncryptionTypes::NONE) {
 		// From Encryption Version 1+, always encrypt canary with GCM
 		auto metadata = make_uniq<EncryptionStateMetadata>(
@@ -377,7 +377,8 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHead
 		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	} else {
 		auto metadata = make_uniq<EncryptionStateMetadata>(
-		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
+		    static_cast<EncryptionTypes::CipherType>(main_header.GetEncryptionCipher()),
+		    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
 		encryption_state =
 		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	}
@@ -423,7 +424,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	EncryptionKeyManager::DeriveKey(user_key, db_identifier, derived_key);
 
 	shared_ptr<EncryptionState> encryption_state;
-	auto encryption_version = main_header.GetEncryptionVersion();
+	auto encryption_version = static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion());
 	if (encryption_version > EncryptionTypes::V0_0 && encryption_version != EncryptionTypes::NONE) {
 		// From Encryption Version 1+, always encrypt canary with GCM
 		auto metadata = make_uniq<EncryptionStateMetadata>(
@@ -432,7 +433,8 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	} else {
 		auto metadata = make_uniq<EncryptionStateMetadata>(
-		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
+		    static_cast<EncryptionTypes::CipherType>(main_header.GetEncryptionCipher()),
+		    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
 		encryption_state =
 		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	}
@@ -595,7 +597,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
 			D_ASSERT(db.GetStorageManager().IsEncrypted());
-			options.encryption_options.encryption_version = main_header.GetEncryptionVersion();
+			options.encryption_options.encryption_version =
+			    static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion());
 
 			//! Check if our encryption module can write, if not, we throw
 			db.GetDatabase().GetEncryptionUtil(options.read_only);
@@ -611,7 +614,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		}
 
 		// if a cipher was provided, check if it is the same as in the config
-		auto stored_cipher = main_header.GetEncryptionCipher();
+		auto stored_cipher = static_cast<EncryptionTypes::CipherType>(main_header.GetEncryptionCipher());
 		auto config_cipher = storage_manager.GetCipher();
 		if (config_cipher != EncryptionTypes::INVALID && config_cipher != stored_cipher) {
 			throw CatalogException("Cannot open encrypted database \"%s\" with a different cipher (%s) than the one "
@@ -636,7 +639,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		// this is ugly, but the storage manager does not know the cipher type before
 		storage_manager.SetCipher(stored_cipher);
 		// encryption version can be overridden by the serialized encryption version
-		storage_manager.SetEncryptionVersion(main_header.GetEncryptionVersion());
+		storage_manager.SetEncryptionVersion(
+		    static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion()));
 	}
 
 	options.version_number = main_header.version_number;

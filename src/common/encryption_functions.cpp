@@ -1,7 +1,6 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -9,101 +8,6 @@
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
-
-using CipherType = EncryptionTypes::CipherType;
-using Version = EncryptionTypes::EncryptionVersion;
-
-EncryptionTag::EncryptionTag() : tag(new data_t[MainHeader::AES_TAG_LEN]()) {
-}
-
-data_ptr_t EncryptionTag::data() {
-	return tag.get();
-}
-
-idx_t EncryptionTag::size() const {
-	return MainHeader::AES_TAG_LEN;
-}
-
-EncryptionCanary::EncryptionCanary() : canary(new data_t[MainHeader::CANARY_BYTE_SIZE]()) {
-#ifdef DEBUG
-	// Check whether canary is zero-initialized
-	for (idx_t i = 0; i < MainHeader::CANARY_BYTE_SIZE; i++) {
-		if (canary[i] != 0) {
-			throw InvalidInputException("Nonce is not correctly zero-initialized!");
-		}
-	}
-#endif
-}
-
-data_ptr_t EncryptionCanary::data() {
-	return canary.get();
-}
-
-idx_t EncryptionCanary::size() const {
-	return MainHeader::CANARY_BYTE_SIZE;
-}
-
-EncryptionNonce::EncryptionNonce(CipherType cipher_p, Version version_p) : version(version_p), cipher(cipher_p) {
-	switch (version) {
-	case Version::V0_0:
-		// for prior versions
-		// nonce len is 16 for both GCM and CTR
-		nonce_len = MainHeader::AES_NONCE_LEN_DEPRECATED;
-		nonce = unique_ptr<data_t[]>(new data_t[nonce_len]());
-		break;
-	case Version::V0_1:
-		if (cipher == CipherType::CTR) {
-			// for CTR we need a 16-byte nonce / iv
-			// the last 4 bytes (counter) are zeroed-out
-			nonce_len = MainHeader::AES_IV_LEN;
-			nonce = unique_ptr<data_t[]>(new data_t[nonce_len]());
-			break;
-		}
-		// we fall through to NONE (often Parquet) with a 12-byte nonce
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case Version::NONE:
-		nonce_len = MainHeader::AES_NONCE_LEN;
-		nonce = unique_ptr<data_t[]>(new data_t[nonce_len]());
-		break;
-	default:
-		throw InvalidConfigurationException("Encryption version not recognized!");
-	}
-
-#ifdef DEBUG
-	// Check whether the nonce is zero-initialized
-	for (idx_t i = 0; i < nonce_len; i++) {
-		if (nonce[i] != 0) {
-			throw InvalidInputException("Nonce is not correctly zero-initialized!");
-		}
-	}
-#endif
-}
-
-data_ptr_t EncryptionNonce::data() {
-	return nonce.get();
-}
-
-idx_t EncryptionNonce::size() const {
-	// always return 12 bytes
-	if (version == Version::V0_0) {
-		// in the first version, nonce was always 16
-		return MainHeader::AES_NONCE_LEN_DEPRECATED;
-	}
-	// in v1, nonce is always 12
-	return MainHeader::AES_NONCE_LEN;
-}
-
-idx_t EncryptionNonce::total_size() const {
-	return nonce_len;
-}
-
-idx_t EncryptionNonce::size_deprecated() const {
-	return MainHeader::AES_NONCE_LEN_DEPRECATED;
-}
-
-void EncryptionNonce::SetSize(idx_t length) {
-	nonce_len = length;
-}
 
 constexpr uint32_t AdditionalAuthenticatedData::INITIAL_AAD_CAPACITY;
 
@@ -254,15 +158,15 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	// we cannot encrypt temp buffers in read-only mode
 	auto encryption_util = db.GetEncryptionUtil(false);
 	// we hard-code GCM here for now, it's the safest and we don't know what is configured here
-	auto state_metadata =
-	    make_uniq<EncryptionStateMetadata>(CipherType::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, Version::V0_1);
+	auto state_metadata = make_uniq<EncryptionStateMetadata>(
+	    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, EncryptionTypes::V0_1);
 	auto encryption_state = encryption_util->CreateEncryptionState(std::move(state_metadata));
 
 	// zero-out the metadata buffer
 	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 
 	EncryptionTag tag;
-	EncryptionNonce nonce(CipherType::GCM, Version::V0_1);
+	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, EncryptionTypes::V0_1);
 
 	encryption_state->GenerateRandomData(nonce.data(), nonce.size());
 

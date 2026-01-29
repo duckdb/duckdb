@@ -13,9 +13,9 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/encryption_types.hpp"
 
 #include <stdexcept>
-#include <duckdb/common/encryption_functions.hpp>
 
 using namespace std;
 using namespace duckdb_mbedtls;

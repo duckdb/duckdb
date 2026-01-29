@@ -6,10 +6,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/string_util.hpp"
-
 #pragma once
+
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -25,6 +25,43 @@ public:
 	static string KDFToString(KeyDerivationFunction kdf_p);
 	static KeyDerivationFunction StringToKDF(const string &key_derivation_function_p);
 	static EncryptionVersion StringToVersion(const string &encryption_version_p);
+};
+
+struct EncryptionTag {
+	EncryptionTag();
+	data_ptr_t data();
+	idx_t size() const;
+
+private:
+	unique_ptr<data_t[]> tag;
+};
+
+struct EncryptionCanary {
+	EncryptionCanary();
+	data_ptr_t data();
+	idx_t size() const;
+
+private:
+	unique_ptr<data_t[]> canary;
+};
+
+struct EncryptionNonce {
+	explicit EncryptionNonce(EncryptionTypes::CipherType cipher = EncryptionTypes::GCM,
+	                         EncryptionTypes::EncryptionVersion version = EncryptionTypes::EncryptionVersion::V0_1);
+	data_ptr_t data();
+	idx_t size() const;
+	idx_t total_size() const;
+	idx_t size_deprecated() const;
+
+	void SetSize(idx_t length);
+
+private:
+	unique_ptr<data_t[]> nonce;
+	idx_t nonce_len;
+
+private:
+	EncryptionTypes::EncryptionVersion version;
+	EncryptionTypes::CipherType cipher;
 };
 
 } // namespace duckdb
