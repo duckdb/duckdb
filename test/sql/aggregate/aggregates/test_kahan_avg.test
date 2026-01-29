@@ -14,7 +14,7 @@ SELECT FAVG(n) - '2251799813685248.5'::DOUBLE FROM doubles;
 ----
 0
 
-# Test that Kahan avg preserves precision in combine operations, should fail if we miss the `err` value in the state export
+# Test that Kahan avg preserves precision in exported states combine operations, should fail if we miss the `err` value in the state export
 statement ok
 CREATE TABLE kahan_context1 AS
 SELECT unnest([9007199254740992.0, 1.0, 1.0, 1.0, 1.0]) as val;
