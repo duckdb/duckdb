@@ -48,6 +48,7 @@ public:
 
 protected:
 	ColumnWriter &GetChildWriter();
+	const ColumnWriter &GetChildWriter() const;
 };
 
 } // namespace duckdb

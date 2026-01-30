@@ -155,6 +155,7 @@ public:
 			if (!table.sorted) {
 				table.MaterializeEmpty(execution.client);
 			}
+			table.global_source.reset();
 		}
 
 		event->FinishTask();
@@ -221,6 +222,7 @@ void PhysicalRangeJoin::GlobalSortedTable::GetSortedRun(ClientContext &client) {
 	if (!sorted) {
 		MaterializeEmpty(client);
 	}
+	global_source.reset();
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context, InterruptState &interrupt) {
@@ -403,7 +405,7 @@ template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorted_run,
                                         ExternalBlockIteratorState &state, Vector &sort_key_pointers,
                                         SortedRunScanState &scan_state, const idx_t chunk_idx,
-                                        const vector<idx_t> &result) {
+                                        const unsafe_vector<idx_t> &result) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
@@ -421,7 +423,7 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,
                                            ExternalBlockIteratorState &state, TupleDataChunkState &chunk_state,
-                                           const idx_t chunk_idx, const vector<idx_t> &result,
+                                           const idx_t chunk_idx, const unsafe_vector<idx_t> &result,
                                            SortedRunScanState &scan_state) {
 	auto &sorted = *table.sorted;
 	auto &sort_keys = chunk_state.row_locations;

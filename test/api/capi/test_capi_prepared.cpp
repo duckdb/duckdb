@@ -694,7 +694,7 @@ TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[c
 
 	duckdb::vector<std::thread> threads;
 	for (idx_t t = 0; t < NUM_THREADS; t++) {
-		threads.emplace_back([ITERATIONS, &conn, &failures, &completed]() {
+		threads.emplace_back([&]() {
 			for (idx_t i = 0; i < ITERATIONS; i++) {
 				duckdb_prepared_statement stmt = nullptr;
 				if (duckdb_prepare(conn, "SELECT 1", &stmt) != DuckDBSuccess) {
