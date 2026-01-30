@@ -24,17 +24,32 @@ statement ok
 CREATE OR REPLACE TABLE test_structs(id INT, s VARIANT);
 
 statement ok
-INSERT INTO test_structs
-	VALUES (1, {
-		'a': 42,
-		'b': true
-	}),
-	(2, NULL),
-	(3, {
-		'a': 84,
-		'b': NULL
-	}),
-	(4, {'a': NULL, 'b': false});
+INSERT INTO test_structs VALUES
+	(
+		1,
+		{
+			'a': 42,
+			'b': true
+		}
+	),
+	(
+		2,
+		NULL
+	),
+	(
+		3,
+		{
+			'a': 84,
+			'b': NULL
+		}
+	),
+	(
+		4,
+		{
+			'a': NULL,
+			'b': false
+		}
+	);
 
 statement ok
 checkpoint

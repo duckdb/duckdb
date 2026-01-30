@@ -1172,6 +1172,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	if (require_new_transaction) {
 		D_ASSERT(!active_query);
 		transaction.BeginTransaction();
+		interrupted = false;
 	}
 	try {
 		fun();
