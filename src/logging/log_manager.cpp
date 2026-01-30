@@ -65,7 +65,7 @@ bool LogManager::CanScan(LoggingTargetTable table) {
 }
 
 LogManager::LogManager(weak_ptr<DatabaseInstance> db, LogConfig config_p)
-    : config(std::move(config_p)), db_instance(db) {
+    : config(std::move(config_p)), db_instance(std::move(db)) {
 	log_storage = make_uniq<InMemoryLogStorage>(*db_instance.lock());
 }
 
