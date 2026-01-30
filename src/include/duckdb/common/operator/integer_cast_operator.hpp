@@ -422,24 +422,20 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 		}
 		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP, decimal_separator>(buf, len, result, strict);
 	}
-	if (len > 1) {
-		if (*buf == '0') {
-			if (buf[1] == 'x' || buf[1] == 'X') {
-				// If it starts with 0x or 0X, we parse it as a hex value
-				buf++;
-				len--;
-				return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
-			} else if (buf[1] == 'b' || buf[1] == 'B') {
-				// If it starts with 0b or 0B, we parse it as a binary value
-				buf++;
-				len--;
-				return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
-			} else if (strict && StringUtil::CharacterIsDigit(buf[1])) {
-				// leading zeros are not allowed in strict mode
-				return false;
-			}
-		} else if (*buf == 'x' || *buf == 'X') {
+	if (len > 1 && *buf == '0') {
+		if (buf[1] == 'x' || buf[1] == 'X') {
+			// If it starts with 0x or 0X, we parse it as a hex value
+			buf++;
+			len--;
 			return IntegerHexCastLoop<T, false, false, OP>(buf, len, result, strict);
+		} else if (buf[1] == 'b' || buf[1] == 'B') {
+			// If it starts with 0b or 0B, we parse it as a binary value
+			buf++;
+			len--;
+			return IntegerBinaryCastLoop<T, false, false, OP>(buf, len, result, strict);
+		} else if (strict && StringUtil::CharacterIsDigit(buf[1])) {
+			// leading zeros are not allowed in strict mode
+			return false;
 		}
 	}
 	return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP, decimal_separator>(buf, len, result, strict);

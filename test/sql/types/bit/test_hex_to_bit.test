@@ -1,0 +1,20 @@
+# name: test/sql/types/bit/test_hex_to_bit.test
+# description: Hex to BIT tests
+# group: [bit]
+
+statement ok
+CREATE TABLE valid (v VARCHAR)
+
+statement ok
+INSERT INTO valid VALUES ('x0'), ('x04'), ('x0F0'), ('xFFFF'), ('xABCDE'), ('xabcdef');
+
+query I
+SELECT v::BIT FROM valid
+----
+0000
+00000100
+000011110000
+1111111111111111
+10101011110011011110
+101010111100110111101111
+

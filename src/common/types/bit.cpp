@@ -7,6 +7,23 @@
 
 namespace duckdb {
 
+namespace {
+
+char GetByteFromHex(data_t byte_1, data_t byte_2) {
+	static constexpr char lookup[103] = {
+	    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0,  1,  2,  3,
+	    4,  5,  6,  7,  8,  9,  -1, -1, -1, -1, -1, -1, -1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1,
+	    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 10, 11, 12, 13, 14, 15};
+	return UnsafeNumericCast<char>((lookup[byte_1] << 4) | lookup[byte_2]);
+}
+
+bool IsValidHexChar(data_t c) {
+	return (c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102);
+}
+
+} // namespace
+
 // **** helper functions ****
 static char ComputePadding(idx_t len) {
 	return UnsafeNumericCast<char>((8 - (len % 8)) % 8);
@@ -97,28 +114,48 @@ string Bit::ToString(bitstring_t str) {
 bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {
 	auto data = const_data_ptr_cast(str.GetData());
 	auto len = str.GetSize();
-	str_len = 0;
-	for (idx_t i = 0; i < len; i++) {
-		if (data[i] == '0' || data[i] == '1') {
-			str_len++;
-		} else {
-			string error = StringUtil::Format("Invalid character encountered in string -> bit conversion: '%s'",
-			                                  string(const_char_ptr_cast(data) + i, 1));
-			HandleCastError::AssignError(error, error_message);
-			return false;
+	idx_t bit_count = 0;
+
+	if (data[0] == 'x') {
+		// Get Bit String Size from hex string
+		for (idx_t i = 1; i < len; i++) {
+			if (IsValidHexChar(data[i])) {
+				bit_count += 4;
+			} else {
+				string error = StringUtil::Format("Invalid character encountered in hex string -> bit conversion: '%s'",
+				                                  string(const_char_ptr_cast(data) + i, 1));
+				HandleCastError::AssignError(error, error_message);
+				return false;
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < len; i++) {
+			if (data[i] == '0' || data[i] == '1') {
+				bit_count++;
+			} else {
+				string error = StringUtil::Format("Invalid character encountered in string -> bit conversion: '%s'",
+				                                  string(const_char_ptr_cast(data) + i, 1));
+				HandleCastError::AssignError(error, error_message);
+				return false;
+			}
 		}
 	}
-	if (str_len == 0) {
+
+	if (bit_count == 0) {
 		string error = "Cannot cast empty string to BIT";
 		HandleCastError::AssignError(error, error_message);
 		return false;
 	}
-	str_len = ComputeBitstringLen(str_len);
+	str_len = ComputeBitstringLen(bit_count);
 	return true;
 }
 
 void Bit::ToBit(string_t str, bitstring_t &output_str) {
 	auto data = const_data_ptr_cast(str.GetData());
+	if (data[0] == 'x') {
+		return HexToBit(str, output_str);
+	}
+
 	auto len = str.GetSize();
 	auto output = output_str.GetDataWriteable();
 
@@ -145,6 +182,27 @@ void Bit::ToBit(string_t str, bitstring_t &output_str) {
 		}
 		*(output++) = byte;
 	}
+	Bit::Finalize(output_str);
+}
+
+void Bit::HexToBit(string_t str, bitstring_t &output_str) {
+	const auto data = const_data_ptr_cast(str.GetData());
+	const auto len = str.GetSize() - 1;
+	auto output = output_str.GetDataWriteable();
+
+	idx_t input_idx = 1; // Index 0 is 'x', so the first important byte is at index 1
+	if (len % 2 != 0) {
+		// Add one padding byte for uneven hexadecimals
+		(*output++) = UnsafeNumericCast<char>(4);
+		(*output++) = GetByteFromHex(UnsafeNumericCast<data_t>('0'), data[input_idx++]);
+	} else {
+		(*output++) = UnsafeNumericCast<char>(0);
+	}
+
+	for (; input_idx < len; input_idx += 2) {
+		(*output++) = GetByteFromHex(data[input_idx], data[input_idx + 1]);
+	}
+
 	Bit::Finalize(output_str);
 }
 

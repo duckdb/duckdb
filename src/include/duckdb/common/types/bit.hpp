@@ -9,9 +9,6 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/hugeint.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
@@ -43,6 +40,8 @@ public:
 	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT
 	//! perform data validation.
 	DUCKDB_API static void ToBit(string_t str, bitstring_t &output);
+	//! Convert a hexadecimal string, e.g., 'x2F', to a bit string.
+	DUCKDB_API static void HexToBit(string_t str, bitstring_t &output);
 
 	DUCKDB_API static string ToBit(string_t str);
 
