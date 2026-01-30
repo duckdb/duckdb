@@ -77,7 +77,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
-		// Allow pushing down filters that can throw ONLY if this is the only expression
+		// Allow pushing down filters that can throw only if there is a single expression
 		// For now, do not push down single expressions with IN either. Later we can change InClauseRewriter to handle
 		// this case
 		if (expr.CanThrow() && (expr.type == ExpressionType::COMPARE_IN || filters.size() > 1)) {

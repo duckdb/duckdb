@@ -2,11 +2,6 @@
 # description: Test Filter push down on expressions that can throw errors
 # group: [pushdown]
 
-require parquet
-
-statement ok
-SET THREADS = 1;
-
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
