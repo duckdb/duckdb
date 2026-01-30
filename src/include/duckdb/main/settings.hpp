@@ -782,7 +782,7 @@ struct ErrorsAsJSONSetting {
 struct ExperimentalMetadataReuseSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "experimental_metadata_reuse";
-	static constexpr const char *Description = "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.";
+	static constexpr const char *Description = "EXPERIMENTAL: Reuse row group and table metadata when checkpointing.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;

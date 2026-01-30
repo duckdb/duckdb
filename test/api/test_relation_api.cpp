@@ -888,7 +888,7 @@ TEST_CASE("Test view relations", "[relation_api]") {
 	result = con.View("v2")->Project("a+b")->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 7, 9}));
 
-	// non-existant view
+	// non-existent view
 	REQUIRE_THROWS(con.View("blabla"));
 
 	// combining views
@@ -931,7 +931,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"[42]"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"42"}));
 
-	// non-existant table function
+	// non-existent table function
 	REQUIRE_THROWS(con.TableFunction("blabla"));
 }
 

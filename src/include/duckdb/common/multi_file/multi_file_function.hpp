@@ -336,7 +336,7 @@ public:
 			auto &file_mutex = *global_state.readers[file_index]->file_mutex;
 
 			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking. Note that this
-			// requires getting the ref to the file mutex pointer with the lock stil held: readers get be resized
+			// requires getting the ref to the file mutex pointer with the lock still held: readers get be resized
 			parallel_lock.unlock();
 			unique_lock<mutex> current_file_lock(file_mutex);
 			parallel_lock.lock();

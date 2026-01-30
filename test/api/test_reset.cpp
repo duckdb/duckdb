@@ -160,13 +160,13 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "search_path",
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
-	    "lock_configuration",            // cant change this while db is running
-	    "disabled_filesystems",          // cant change this while db is running
-	    "enable_external_access",        // cant change this while db is running
-	    "allow_unsigned_extensions",     // cant change this while db is running
-	    "allow_community_extensions",    // cant change this while db is running
-	    "allow_unredacted_secrets",      // cant change this while db is running
-	    "disable_database_invalidation", // cant change this while db is running
+	    "lock_configuration",            // can't change this while db is running
+	    "disabled_filesystems",          // can't change this while db is running
+	    "enable_external_access",        // can't change this while db is running
+	    "allow_unsigned_extensions",     // can't change this while db is running
+	    "allow_community_extensions",    // can't change this while db is running
+	    "allow_unredacted_secrets",      // can't change this while db is running
+	    "disable_database_invalidation", // can't change this while db is running
 	    "temp_file_encryption",
 	    "enable_object_cache",
 	    "force_variant_shredding",
@@ -192,7 +192,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
-	    "block_allocator_memory"}; // cant reduce
+	    "block_allocator_memory"}; // can't reduce
 	return excluded_options.count(name) == 1;
 }
 

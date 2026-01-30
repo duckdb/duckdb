@@ -23,7 +23,7 @@ namespace duckdb {
 
 #ifndef DUCKDB_QUOTE_DEFINE
 // Preprocessor trick to allow text to be converted to C-string / string
-// Expecte use is:
+// Expected use is:
 //	#ifdef SOME_DEFINE
 //	string str = DUCKDB_QUOTE_DEFINE(SOME_DEFINE)
 //	...do something with str
@@ -150,7 +150,7 @@ public:
 	DUCKDB_API static vector<string> SplitWithParentheses(const string &str, char delimiter = ',', char par_open = '(',
 	                                                      char par_close = ')');
 
-	//! Split the input string allong a quote. Note that any escaping is NOT supported.
+	//! Split the input string along a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator

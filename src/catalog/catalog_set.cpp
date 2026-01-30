@@ -510,7 +510,7 @@ bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t time
 		return true;
 	}
 	if (timestamp < transaction.start_time) {
-		// this version was commited before we started the transaction
+		// this version was committed before we started the transaction
 		return true;
 	}
 	return false;

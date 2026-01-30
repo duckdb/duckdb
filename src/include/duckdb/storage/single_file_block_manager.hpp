@@ -191,7 +191,7 @@ private:
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
 	set<block_id_t> free_list;
-	//! The list of blocks that have been freed, but cannot yet be re-used because they are still in-use
+	//! The list of blocks that have been freed, but cannot yet be reused because they are still in-use
 	set<block_id_t> free_blocks_in_use;
 	//! The list of blocks that are in-use, but haven't been written as part of a checkpoint yet
 	set<block_id_t> newly_used_blocks;
@@ -199,7 +199,7 @@ private:
 	//! When a multi-use block is marked as modified, the reference count is decreased by 1 instead of directly
 	//! Appending the block to the modified_blocks list
 	unordered_map<block_id_t, uint32_t> multi_use_blocks;
-	//! The list of blocks that are no longer in-use, but cannot be re-used until the next checkpoint
+	//! The list of blocks that are no longer in-use, but cannot be reused until the next checkpoint
 	unordered_set<block_id_t> modified_blocks;
 	//! The current meta block id
 	idx_t meta_block;

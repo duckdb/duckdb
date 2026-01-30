@@ -17,7 +17,7 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 	} else if (specifier == "century" || specifier == "cent" || specifier == "centuries" || specifier == "c") {
 		result = DatePartSpecifier::CENTURY;
 	} else if (specifier == "millennium" || specifier == "mil" || specifier == "millenniums" ||
-	           specifier == "millennia" || specifier == "mils" || specifier == "millenium") {
+	           specifier == "millennia" || specifier == "mils" || specifier == "millennium") {
 		result = DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds" || specifier == "microsecond" || specifier == "us" || specifier == "usec" ||
 	           specifier == "usecs" || specifier == "usecond" || specifier == "useconds") {

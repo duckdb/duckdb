@@ -625,7 +625,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		base.columns.SetAllowDuplicates(true);
 		if (!target_col_names.empty()) {
 			if (target_col_names.size() > sql_types.size()) {
-				throw BinderException("Target table has more colum names than query result.");
+				throw BinderException("Target table has more column names than query result.");
 			} else if (target_col_names.size() < sql_types.size()) {
 				// filled the target_col_names with the name of query names
 				for (idx_t i = target_col_names.size(); i < sql_types.size(); i++) {

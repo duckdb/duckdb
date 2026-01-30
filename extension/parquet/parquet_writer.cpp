@@ -344,7 +344,7 @@ ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, vec
 	chunk.Initialize(buffer.GetAllocator(), types);
 }
 
-//! TODO: this doesnt work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
+//! TODO: this doesn't work.. the ParquetWriteTransformData is shared with all threads, the method is stateful, but has
 //! no locks Either every local state needs its own copy of this or we need a lock so its used by one thread at a time..
 //! The former has my preference
 ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollection &input) {
@@ -697,7 +697,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteT
 	}
 
 	// "total_written" is only used for the FILE_SIZE_BYTES flag, and only when threads are writing in parallel.
-	// We pre-emptively increase it here to try to reduce overshooting when many threads are writing in parallel.
+	// We preemptively increase it here to try to reduce overshooting when many threads are writing in parallel.
 	// However, waiting for the exact value (PrepareRowGroup) takes too long, and would cause overshoots to happen.
 	// So, we guess the compression ratio. We guess 3x, but this will be off depending on the data.
 	// "total_written" is restored to the exact number of written bytes at the end of FlushRowGroup.

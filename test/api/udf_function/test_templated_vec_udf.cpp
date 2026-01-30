@@ -135,7 +135,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[coverage][.]") {
 		}
 	}
 
-	SECTION("Cheking NULLs with Vectorized UDF functions") {
+	SECTION("Checking NULLs with Vectorized UDF functions") {
 		for (LogicalType sql_type : sql_templated_types) {
 			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 			func_name = table_name;
@@ -159,7 +159,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[coverage][.]") {
 		}
 	}
 
-	SECTION("Cheking Vectorized UDF functions with several input columns") {
+	SECTION("Checking Vectorized UDF functions with several input columns") {
 		// UDF with 4 input ints, return the last one
 		con.CreateVectorizedFunction<int, int, int, int, int>("udf_four_ints", &udf_several_constant_input<int, 4>);
 		result = con.Query("SELECT udf_four_ints(1, 2, 3, 4)");
@@ -178,7 +178,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[coverage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	}
 
-	SECTION("Cheking Vectorized UDF functions with varargs and constant values") {
+	SECTION("Checking Vectorized UDF functions with varargs and constant values") {
 		// Test udf_max with integer
 		con.CreateVectorizedFunction<int, int>("udf_const_max_int", &udf_max_constant<int>, LogicalType::INTEGER);
 		result = con.Query("SELECT udf_const_max_int(1, 2, 3, 4, 999, 5, 6, 7)");
@@ -197,7 +197,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[coverage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {10.0}));
 	}
 
-	SECTION("Cheking Vectorized UDF functions with varargs and input columns") {
+	SECTION("Checking Vectorized UDF functions with varargs and input columns") {
 		// Test udf_max with integer
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers (a INTEGER, b INTEGER, c INTEGER, d INTEGER)"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES(1, 2, 3, 4), (10, 20, 30, 40), (100, 200, 300, 400), "

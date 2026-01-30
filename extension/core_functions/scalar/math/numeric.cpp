@@ -1058,7 +1058,7 @@ struct LogBaseOperator {
 	static inline TR Operation(TA b, TB x) {
 		auto divisor = Log10Operator::Operation<TA, TR>(b);
 		if (divisor == 0) {
-			throw OutOfRangeException("divison by zero in based logarithm");
+			throw OutOfRangeException("division by zero in based logarithm");
 		}
 		return Log10Operator::Operation<TB, TR>(x) / divisor;
 	}

@@ -111,7 +111,7 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 	if (destroyed || !reservoir_chunk || Chunk().size() == 0) {
 		return nullptr;
 	}
-	// cannot destory internal samples.
+	// cannot destroy internal samples.
 	auto ret = make_uniq<DataChunk>();
 
 	SelectionVector ret_sel(STANDARD_VECTOR_SIZE);
@@ -326,7 +326,7 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 	UpdateSampleAppend(reservoir_chunk->chunk, other.reservoir_chunk->chunk, chunk_sel, keep_from_other);
 	base_reservoir_sample->num_entries_seen_total += other.GetTuplesSeen();
 
-	// if THIS has too many samples now, we conver it to a slower sample.
+	// if THIS has too many samples now, we convert it to a slower sample.
 	if (GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
 		ConvertToReservoirSample();
 	}
@@ -351,7 +351,7 @@ void ReservoirSample::WeightedMerge(ReservoirSample &other_sample) {
 	for (idx_t i = num_samples_to_keep; i < total_samples; i++) {
 		auto min_weight_this = base_reservoir_sample->min_weight_threshold;
 		auto min_weight_other = other_sample.base_reservoir_sample->min_weight_threshold;
-		// min weight threshol is always positive
+		// min weight threshold is always positive
 		if (min_weight_this > min_weight_other) {
 			// pop from other
 			other_sample.base_reservoir_sample->reservoir_weights.pop();
@@ -771,7 +771,7 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 
 	Verify();
 
-	// if we are over the threshold, we ned to switch to slow sampling.
+	// if we are over the threshold, we need to switch to slow sampling.
 	if (GetSamplingState() == SamplingState::RANDOM && GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
 		ConvertToReservoirSample();
 	}
@@ -908,7 +908,7 @@ unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
 
 void ReservoirSamplePercentage::Finalize() {
 	// need to finalize the current sample, if any
-	// we are finializing, so we are starting to return chunks. Our last chunk has
+	// we are finalizing, so we are starting to return chunks. Our last chunk has
 	// sample_percentage * RESERVOIR_THRESHOLD entries that hold samples.
 	// if our current count is less than the sample_percentage * RESERVOIR_THRESHOLD
 	// then we have sampled too much for the current_sample and we need to redo the sample

@@ -660,7 +660,7 @@ EscapeSequence Terminal::ReadEscapeSequence(int ifd, KeyPress &key_press) {
 			if (seq[2] == ' ') {
 				// left mouse click
 				result_sequence = EscapeSequence::MOUSE_CLICK;
-				// get the co-ordinates, these are X + 32, Y + 32
+				// get the coordinates, these are X + 32, Y + 32
 				key_press.position.ws_col = static_cast<uint8_t>(seq[3]);
 				key_press.position.ws_row = static_cast<uint8_t>(seq[4]);
 				if (key_press.position.ws_col <= 32 || key_press.position.ws_row < 32) {

@@ -59,7 +59,7 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
                                 block_id_t block_id) {
 	if (reusable_buffer && reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
-		// re-usable buffer: re-use it
+		// reusable buffer: reuse it
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// we can reuse the buffer entirely
 			auto &block = reinterpret_cast<Block &>(*reusable_buffer);
@@ -70,7 +70,7 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 		reusable_buffer.reset();
 		return block;
 	} else {
-		// no re-usable buffer: allocate a new block
+		// no reusable buffer: allocate a new block
 		return block_manager.CreateBlock(block_id, nullptr);
 	}
 }

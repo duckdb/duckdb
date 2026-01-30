@@ -764,7 +764,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	iteration_count = header.iteration;
 	max_block = NumericCast<block_id_t>(header.block_count);
 	if (options.storage_version.IsValid()) {
-		// storage version specified explicity - use requested storage version
+		// storage version specified explicitly - use requested storage version
 		auto requested_compat_version = options.storage_version.GetIndex();
 		if (requested_compat_version < header.serialization_compatibility) {
 			throw InvalidInputException(
@@ -926,8 +926,8 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 			free_list.insert(block_id);
 		}
 	} else {
-		// this block was used in storage, we cannot directly re-use it
-		// add it to the modified blocks indicating it will be re-usable after the next checkpoint
+		// this block was used in storage, we cannot directly reuse it
+		// add it to the modified blocks indicating it will be reusable after the next checkpoint
 		modified_blocks.insert(block_id);
 	}
 }
@@ -1237,7 +1237,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	for (auto &block : modified_blocks) {
 		all_free_blocks.insert(block);
 		if (!BlockIsRegistered(block)) {
-			// if the block is no longer registered it is not in use - so it can be re-used after this point
+			// if the block is no longer registered it is not in use - so it can be reused after this point
 			free_list.insert(block);
 			fully_freed_blocks.insert(block);
 		} else {
@@ -1334,7 +1334,7 @@ void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
 	lock_guard<mutex> lock(block_lock);
 	auto entry = free_blocks_in_use.find(id);
 	if (entry != free_blocks_in_use.end()) {
-		// it is! move it to the regular free list so the block can be re-used
+		// it is! move it to the regular free list so the block can be reused
 		free_list.insert(id);
 		free_blocks_in_use.erase(entry);
 	}

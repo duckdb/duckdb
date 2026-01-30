@@ -38,7 +38,7 @@ public:
 	//! is destroyed
 	explicit MemoryStream(data_ptr_t buffer, idx_t capacity);
 
-	//! Cant copy!
+	//! Can't copy!
 	MemoryStream(const MemoryStream &) = delete;
 	MemoryStream &operator=(const MemoryStream &) = delete;
 

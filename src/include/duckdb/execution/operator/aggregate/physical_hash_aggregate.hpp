@@ -81,7 +81,7 @@ public:
 	//! The radix partitioned hash tables (one per grouping set)
 	vector<HashAggregateGroupingData> groupings;
 	unique_ptr<DistinctAggregateCollectionInfo> distinct_collection_info;
-	//! A recreation of the input chunk, with nulls for everything that isnt a group
+	//! A recreation of the input chunk, with nulls for everything that isn't a group
 	vector<LogicalType> input_group_types;
 
 	//! Filters given to Sink and friends

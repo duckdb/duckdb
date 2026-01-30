@@ -223,7 +223,7 @@ private:
 			pos++;
 		}
 		if (pos == start) {
-			// Didnt match any text
+			// Didn't match any text
 			return false;
 		}
 		result = string(start, UnsafeNumericCast<size_t>(pos - start));

@@ -49,7 +49,7 @@ public:
 		                      schema_name.empty() ? DEFAULT_SCHEMA : schema_name, name);
 
 		if (func_catalog.type != catalog_type) {
-			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
+			throw InternalException("DeserializeFunction - can't find catalog entry for function %s", name);
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
 		auto function = functions.functions.GetFunctionByArguments(

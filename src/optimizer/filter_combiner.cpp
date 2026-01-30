@@ -1003,7 +1003,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			// create filter j [>, >=] 10 and add the filter j [>=, <=] i into the remaining filters
 			info.comparison_type = right_constant.comparison_type; // create filter j [>, >=, <, <=] 10
 			if (!is_inserted) {
-				// Add the filter j >= i in the remaing filters
+				// Add the filter j >= i in the remaining filters
 				auto filter = make_uniq<BoundComparisonExpression>(comparison.GetExpressionType(),
 				                                                   comparison.left->Copy(), comparison.right->Copy());
 				remaining_filters.push_back(std::move(filter));

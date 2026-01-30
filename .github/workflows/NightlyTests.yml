@@ -656,3 +656,18 @@ jobs:
      - name: Test
        shell: bash
        run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+
+  codespell:
+    # Codespell configuration is within .codespellrc
+    name: Check for spelling errors
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Annotate locations with typos
+        uses: codespell-project/codespell-problem-matcher@v1
+
+      - name: Codespell
+        uses: codespell-project/actions-codespell@v2

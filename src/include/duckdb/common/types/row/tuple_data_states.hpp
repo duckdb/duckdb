@@ -127,7 +127,7 @@ struct TupleDataChunkState {
 	vector<unique_ptr<Vector>> cached_cast_vectors;
 	vector<unique_ptr<VectorCache>> cached_cast_vector_cache;
 
-	//! Re-usable arrays used while building buffer space
+	//! Reusable arrays used while building buffer space
 	unsafe_vector<reference<TupleDataChunkPart>> chunk_parts;
 	unsafe_vector<pair<idx_t, idx_t>> chunk_part_indices;
 };

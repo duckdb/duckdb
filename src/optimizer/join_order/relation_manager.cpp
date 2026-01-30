@@ -614,7 +614,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				optional_ptr<JoinRelationSet> right_set;
 				optional_ptr<JoinRelationSet> full_set;
 				// here we create a left_set that unions all relations from the left side of
-				// every expression and a right_set that unions all relations frmo the right side of a
+				// every expression and a right_set that unions all relations from the right side of a
 				// every expression (although this should always be 1).
 				for (auto &bound_expr : conjunction_expression->children) {
 					D_ASSERT(bound_expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);

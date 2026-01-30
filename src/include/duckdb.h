@@ -2903,7 +2903,7 @@ Creates a map value from a map type and two arrays, one for the keys and one for
 * @param map_type The map type
 * @param keys The keys of the map
 * @param values The values of the map
-* @param entry_count The number of entrys (key-value pairs) in the map
+* @param entry_count The number of entries (key-value pairs) in the map
 * @return The map value, or nullptr, if the parameters are invalid.
 */
 DUCKDB_C_API duckdb_value duckdb_create_map_value(duckdb_logical_type map_type, duckdb_value *keys,

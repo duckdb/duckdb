@@ -388,7 +388,7 @@ inline std::ostream &on_white(std::ostream &stream) {
 
 //! Since C++ hasn't a way to hide something in the header from
 //! the outer access, I have to introduce this namespace which
-//! is used for internal purpose and should't be access from
+//! is used for internal purpose and shouldn't be access from
 //! the user code.
 namespace _internal {
 //! Since C++ hasn't a true way to extract stream handler

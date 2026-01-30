@@ -282,7 +282,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		auto &distinct = op.Cast<LogicalDistinct>();
 		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
 			// distinct type references columns that need to be distinct on, so no
-			// need to implicity reference everything.
+			// need to implicitly reference everything.
 			break;
 		}
 		// distinct, all projected columns are used for the DISTINCT computation

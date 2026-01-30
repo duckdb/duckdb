@@ -224,7 +224,7 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 }
 
-TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
+TEST_CASE("Test buffer manager buffer reuse", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 	config->SetOptionByName("default_block_size", Value::UBIGINT(DEFAULT_BLOCK_ALLOC_SIZE));
@@ -244,7 +244,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", block_alloc_size * pin_count)));
 
 	// Create 40 blocks, but don't hold the pin
-	// They will be added to the eviction queue and the buffers will be re-used
+	// They will be added to the eviction queue and the buffers will be reused
 	idx_t block_count = 40;
 	duckdb::vector<duckdb::shared_ptr<BlockHandle>> blocks;
 	blocks.reserve(block_count);
@@ -255,7 +255,7 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * block_alloc_size);
 	}
 
-	// now pin them one by one - cycling through should trigger more buffer re-use
+	// now pin them one by one - cycling through should trigger more buffer reuse
 	for (idx_t i = 0; i < block_count; i++) {
 		auto pin = buffer_manager.Pin(blocks[i]);
 		CHECK(buffer_manager.GetUsedMemory() == pin_count * block_alloc_size);

@@ -11,7 +11,7 @@ typedef struct batcher_s batcher_t;
 struct batcher_s {
 	/*
 	 * Optimize for locality -- nelems_max and nelems are always touched
-	 * togehter, along with the front of the mutex. The end of the mutex is
+	 * together, along with the front of the mutex. The end of the mutex is
 	 * only touched if there's contention.
 	 */
 	atomic_zu_t nelems;

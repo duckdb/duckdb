@@ -118,7 +118,7 @@ struct hooks_s {
 /*
  * The realloc pathways haven't gotten any refactoring love in a while, and it's
  * fairly difficult to pass information from the entry point to the hooks.  We
- * put the informaiton the hooks will need into a struct to encapsulate
+ * put the information the hooks will need into a struct to encapsulate
  * everything.
  *
  * Much of these pathways are force-inlined, so that the compiler can avoid
