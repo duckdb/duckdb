@@ -118,6 +118,7 @@ typedef struct PGIntoClause {
 	PGList *options;           /* options from WITH clause */
 	PGList *partition_list;		/* e.g. expression list for partitioned by */
 	PGList *sort_list;			/* e.g. expression list for sort by */
+	PGList *constraints;		/* constraints for CREATE TABLE AS */
 	PGOnCommitAction onCommit; /* what do we do at COMMIT? */
 	char *tableSpaceName;      /* table space to use, or NULL */
 	PGNode *viewQuery;         /* materialized view's SELECT query */

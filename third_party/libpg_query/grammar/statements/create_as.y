@@ -58,7 +58,7 @@ opt_with_data:
 
 
 create_as_target:
-			qualified_name opt_column_list OptPartitionSortedOptions OptWith OnCommitOption
+			qualified_name opt_column_list OptPartitionSortedOptions OptConstraints OptWith OnCommitOption
 				{
 					$$ = makeNode(PGIntoClause);
 					$$->rel = $1;
@@ -72,8 +72,9 @@ create_as_target:
 							$$->sort_list = (PGList *)de->arg;
 						}
 					}
-					$$->options = $4;
-					$$->onCommit = $5;
+					$$->constraints = $4;
+					$$->options = $5;
+					$$->onCommit = $6;
 					$$->viewQuery = NULL;
 					$$->skipData = false;		/* might get changed later */
 				}

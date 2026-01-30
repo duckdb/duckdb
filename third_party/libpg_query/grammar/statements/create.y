@@ -424,6 +424,34 @@ OptPartitionSortedOption:
 				}
 		;
 
+OptConstraints:
+			CONSTRAINTS '(' ctas_constraint_list_opt_comma ')'	{ $$ = $3; }
+			| /*EMPTY*/											{ $$ = NIL; }
+		;
+
+ctas_constraint_list_opt_comma:
+			ctas_constraint_list
+			| ctas_constraint_list ','
+		;
+
+ctas_constraint_list:
+			ctas_constraint_elem							{ $$ = list_make1($1); }
+			| ctas_constraint_list ',' ctas_constraint_elem	{ $$ = lappend($1, $3); }
+		;
+
+ctas_constraint_elem:
+			ColId ColConstraintElem
+				{
+					PGConstraint *n = castNode(PGConstraint, $2);
+					/* Store the column name in the keys list so this behaves
+					 * like a table-level constraint referencing that column */
+					n->keys = list_make1(makeString($1));
+					n->location = @1;
+					$$ = (PGNode *) n;
+				}
+			| ConstraintElem						{ $$ = $1; }
+		;
+
 OptWith:
 			WITH reloptions				{ $$ = $2; }
 			| WITH OIDS					{ $$ = list_make1(makeDefElem("oids", (PGNode *) makeInteger(true), @1)); }

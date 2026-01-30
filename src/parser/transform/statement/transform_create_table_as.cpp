@@ -63,6 +63,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 			info->columns.AddColumn(ColumnDefinition(cols[i], LogicalType::UNKNOWN));
 		}
 	}
+
+	if (stmt.into->constraints) {
+		for (auto cell = stmt.into->constraints->head; cell != nullptr; cell = cell->next) {
+			auto pg_constraint = PGPointerCast<duckdb_libpgquery::PGConstraint>(cell->data.ptr_value);
+			info->constraints.push_back(TransformConstraint(*pg_constraint));
+		}
+	}
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->table = qname.name;

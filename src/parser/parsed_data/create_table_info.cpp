@@ -66,6 +66,21 @@ string CreateTableInfo::ExtraOptionsToString() const {
 	}
 	return ret;
 }
+
+string CreateTableInfo::ConstraintsToString() const {
+	if (constraints.empty()) {
+		return "";
+	}
+	string ret = " CONSTRAINTS (";
+	for (auto &constraint : constraints) {
+		ret += constraint->ToString();
+		ret += ",";
+	}
+	ret.pop_back();
+	ret += ") ";
+	return ret;
+}
+
 string CreateTableInfo::ToString() const {
 	string ret = GetCreatePrefix("TABLE");
 	ret += QualifierToString(temporary ? "" : catalog, schema, table);
@@ -73,6 +88,7 @@ string CreateTableInfo::ToString() const {
 	if (query != nullptr) {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);
 		ret += ExtraOptionsToString();
+		ret += ConstraintsToString();
 		ret += " AS " + query->ToString();
 	} else {
 		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints);

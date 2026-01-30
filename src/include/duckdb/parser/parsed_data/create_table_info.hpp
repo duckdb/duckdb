@@ -43,6 +43,7 @@ public:
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
 	string ExtraOptionsToString() const;
+	string ConstraintsToString() const;
 	string ToString() const override;
 };
 
