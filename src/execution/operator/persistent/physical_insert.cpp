@@ -701,10 +701,9 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		LocalAppendState append_state;
 		storage.InitializeLocalAppend(append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-		collection.Scan(transaction, [&](DataChunk &insert_chunk) {
+		for (auto &insert_chunk : collection.Chunks(transaction)) {
 			storage.LocalAppend(append_state, context.client, insert_chunk, false);
-			return true;
-		});
+		}
 		storage.FinalizeLocalAppend(append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage

@@ -307,39 +307,86 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 	return false;
 }
 
-bool RowGroupCollection::Scan(DuckTransaction &transaction, const vector<StorageIndex> &column_ids,
-                              const std::function<bool(DataChunk &chunk)> &fun) {
-	vector<LogicalType> scan_types;
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		scan_types.push_back(types[column_ids[i].GetPrimaryIndex()]);
-	}
-	DataChunk chunk;
-	chunk.Initialize(GetAllocator(), scan_types);
-
-	// initialize the scan
-	TableScanState state;
-	state.Initialize(column_ids, nullptr);
-	InitializeScan(QueryContext(), state.local_state, column_ids, nullptr);
-
-	while (true) {
-		chunk.Reset();
-		state.local_state.Scan(transaction, chunk);
-		if (chunk.size() == 0) {
-			return true;
-		}
-		if (!fun(chunk)) {
-			return false;
-		}
-	}
+//===--------------------------------------------------------------------===//
+// Iterator
+//===--------------------------------------------------------------------===//
+RowGroupIterationHelper::RowGroupIterationHelper(RowGroupCollection &collection, DuckTransaction &transaction,
+                                                 vector<StorageIndex> column_ids_p)
+    : collection(collection), transaction(transaction), column_ids(std::move(column_ids_p)) {
 }
 
-bool RowGroupCollection::Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun) {
+RowGroupIterationHelper::RowGroupIterator RowGroupIterationHelper::begin() { // NOLINT: match stl API
+	return RowGroupIterator(collection, &transaction, column_ids);
+}
+RowGroupIterationHelper::RowGroupIterator RowGroupIterationHelper::end() { // NOLINT: match stl API
+	return RowGroupIterator(nullptr, nullptr, column_ids);
+}
+
+RowGroupIterationHelper::RowGroupIterator::RowGroupIterator(optional_ptr<RowGroupCollection> collection,
+                                                            optional_ptr<DuckTransaction> transaction,
+                                                            const vector<StorageIndex> &column_ids)
+    : collection(collection), transaction(transaction) {
+	if (collection) {
+		vector<LogicalType> scan_types;
+		auto &types = collection->GetTypes();
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			scan_types.push_back(types[column_ids[i].GetPrimaryIndex()]);
+		}
+		chunk = make_uniq<DataChunk>();
+		chunk->Initialize(collection->GetAllocator(), scan_types);
+
+		// initialize the scan
+		state = make_uniq<TableScanState>();
+		state->Initialize(column_ids, nullptr);
+		collection->InitializeScan(QueryContext(), state->local_state, column_ids, nullptr);
+		// scan the first chunk
+		this->operator++();
+	}
+}
+RowGroupIterationHelper::RowGroupIterator::~RowGroupIterator() {
+}
+
+RowGroupIterationHelper::RowGroupIterator::RowGroupIterator(RowGroupIterator &&other) noexcept {
+	std::swap(collection, other.collection);
+	std::swap(transaction, other.transaction);
+	std::swap(chunk, other.chunk);
+	std::swap(state, other.state);
+}
+
+RowGroupIterationHelper::RowGroupIterator &RowGroupIterationHelper::RowGroupIterator::operator++() {
+	// scan the next chunk
+	chunk->Reset();
+	state->local_state.Scan(*transaction, *chunk);
+	if (chunk->size() == 0) {
+		// done
+		collection = nullptr;
+		transaction = nullptr;
+		chunk.reset();
+		state.reset();
+	}
+	return *this;
+}
+
+bool RowGroupIterationHelper::RowGroupIterator::operator!=(const RowGroupIterator &other) const {
+	return collection != other.collection || transaction != other.transaction;
+}
+
+DataChunk &RowGroupIterationHelper::RowGroupIterator::operator*() const {
+	return *chunk;
+}
+
+RowGroupIterationHelper RowGroupCollection::Chunks(DuckTransaction &transaction) {
 	vector<StorageIndex> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
 		column_ids.emplace_back(i);
 	}
-	return Scan(transaction, column_ids, fun);
+	return Chunks(transaction, column_ids);
+}
+
+RowGroupIterationHelper RowGroupCollection::Chunks(DuckTransaction &transaction,
+                                                   const vector<StorageIndex> &column_ids) {
+	return RowGroupIterationHelper(*this, transaction, column_ids);
 }
 
 //===--------------------------------------------------------------------===//

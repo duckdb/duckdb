@@ -186,7 +186,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 
 	// index_chunk scans are created here in the mapped_column_ids ordering (see note above).
 	ErrorData error;
-	source.Scan(transaction, mapped_column_ids, [&](DataChunk &index_chunk) -> bool {
+	for (auto &index_chunk : source.Chunks(transaction, mapped_column_ids)) {
 		D_ASSERT(index_chunk.ColumnCount() == mapped_column_ids.size());
 		for (idx_t i = 0; i < mapped_column_ids.size(); i++) {
 			auto col_id = mapped_column_ids[i].GetPrimaryIndex();
@@ -200,11 +200,10 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		error = DataTable::AppendToIndexes(index_list, delete_indexes, table_chunk, index_chunk, mapped_column_ids,
 		                                   start_row, index_append_mode, checkpoint_id);
 		if (error.HasError()) {
-			return false;
+			break;
 		}
 		start_row += UnsafeNumericCast<row_t>(index_chunk.size());
-		return true;
-	});
+	}
 	return error;
 }
 
@@ -212,11 +211,10 @@ void LocalTableStorage::AppendToTable(DuckTransaction &transaction, TableAppendS
 	auto &table = table_ref.get();
 	table.InitializeAppend(transaction, append_state);
 	auto &collection = *row_groups->collection;
-	collection.Scan(transaction, [&](DataChunk &table_chunk) -> bool {
+	for (auto &table_chunk : collection.Chunks(transaction)) {
 		// Append to the base table.
 		table.Append(table_chunk, append_state);
-		return true;
-	});
+	}
 	table.FinalizeAppend(transaction, append_state);
 }
 
@@ -236,22 +234,21 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// Revert all appended row IDs.
 		row_t current_row = append_state.row_start;
 		// Remove the data from the indexes, if any.
-		collection.Scan(transaction, [&](DataChunk &chunk) -> bool {
+		for (auto &chunk : collection.Chunks(transaction)) {
 			if (current_row >= append_state.current_row) {
 				// Finished deleting all rows from the index.
-				return false;
+				break;
 			}
 			// Remove the chunk.
 			try {
 				table.RevertIndexAppend(append_state, chunk, current_row);
 			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = ErrorData(ex);
-				return false;
+				break;
 			} // LCOV_EXCL_STOP
 
 			current_row += UnsafeNumericCast<row_t>(chunk.size());
-			return true;
-		});
+		}
 
 #ifdef DEBUG
 		// Verify that our index memory is stable.
