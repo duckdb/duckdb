@@ -2,6 +2,8 @@
 # description: Test attach using fsspec
 # group: [attach]
 
+require notwindows
+
 statement error
 ATTACH 'dummy_extension:/hello.world';
 ----
