@@ -210,7 +210,7 @@ private:
 		RowGroupIterator(optional_ptr<RowGroupCollection> collection, optional_ptr<DuckTransaction> transaction,
 		                 const vector<StorageIndex> &column_ids);
 		~RowGroupIterator();
-		//! enable move constructors
+		//! enable move constructor
 		RowGroupIterator(RowGroupIterator &&other) noexcept;
 
 		optional_ptr<RowGroupCollection> collection;
