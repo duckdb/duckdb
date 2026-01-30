@@ -58,13 +58,15 @@ opt_with_data:
 
 
 create_as_target:
-			qualified_name opt_column_list OptWith OnCommitOption
+			qualified_name opt_column_list OptConstraints OptWith OnCommitOption
 				{
 					$$ = makeNode(PGIntoClause);
 					$$->rel = $1;
 					$$->colNames = $2;
-					$$->options = $3;
-					$$->onCommit = $4;
+					PGListCell *lc;
+					$$->constraints = $3;
+					$$->options = $4;
+					$$->onCommit = $5;
 					$$->viewQuery = NULL;
 					$$->skipData = false;		/* might get changed later */
 				}

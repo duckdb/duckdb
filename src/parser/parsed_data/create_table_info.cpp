@@ -38,12 +38,27 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	return std::move(result);
 }
 
+string CreateTableInfo::ConstraintsToString() const {
+	if (constraints.empty()) {
+		return "";
+	}
+	string ret = " CONSTRAINTS (";
+	for (auto &constraint : constraints) {
+		ret += constraint->ToString();
+		ret += ",";
+	}
+	ret.pop_back();
+	ret += ") ";
+	return ret;
+}
+
 string CreateTableInfo::ToString() const {
 	string ret = GetCreatePrefix("TABLE");
 	ret += QualifierToString(temporary ? "" : catalog, schema, table);
 
 	if (query != nullptr) {
 		ret += TableCatalogEntry::ColumnNamesToSQL(columns);
+		ret += ConstraintsToString();
 		ret += " AS " + query->ToString();
 	} else {
 		ret += TableCatalogEntry::ColumnsToSQL(columns, constraints);

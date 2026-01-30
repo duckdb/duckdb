@@ -116,6 +116,7 @@ typedef struct PGIntoClause {
 	PGRangeVar *rel;           /* target relation name */
 	PGList *colNames;          /* column names to assign, or NIL */
 	PGList *options;           /* options from WITH clause */
+	PGList *constraints;		/* constraints for CREATE TABLE AS */
 	PGOnCommitAction onCommit; /* what do we do at COMMIT? */
 	char *tableSpaceName;      /* table space to use, or NULL */
 	PGNode *viewQuery;         /* materialized view's SELECT query */
