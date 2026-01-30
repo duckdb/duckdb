@@ -146,16 +146,23 @@ void MultiFileList::InitializeScan(MultiFileListScanData &iterator) const {
 	iterator.current_file_idx = 0;
 }
 
-vector<OpenFileInfo> MultiFileList::GetDisplayFileList(idx_t max_files) const {
+vector<OpenFileInfo> MultiFileList::GetDisplayFileList(optional_idx max_files) const {
 	vector<OpenFileInfo> files;
-	for (idx_t i = 0; i < max_files; i++) {
+	for (idx_t i = 0;; i++) {
+		if (max_files.IsValid() && files.size() >= max_files.GetIndex()) {
+			break;
+		}
 		auto file = GetFile(i);
 		if (file.path.empty()) {
-			continue;
+			break;
 		}
 		files.push_back(std::move(file));
 	}
 	return files;
+}
+
+MultiFileCount MultiFileList::GetFileCount(idx_t min_exact_count) const {
+	return MultiFileCount(GetTotalFileCount());
 }
 
 bool MultiFileList::Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file) const {
@@ -266,33 +273,42 @@ idx_t SimpleMultiFileList::GetTotalFileCount() const {
 //===--------------------------------------------------------------------===//
 // LazyFileList
 //===--------------------------------------------------------------------===//
-LazyMultiFileList::LazyMultiFileList() {
+LazyMultiFileList::LazyMultiFileList(optional_ptr<ClientContext> context_p) : context(context_p) {
 }
 
 vector<OpenFileInfo> LazyMultiFileList::GetAllFiles() const {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath()) {
+	while (ExpandNextPathInternal()) {
 	}
 	return expanded_files;
 }
 
 idx_t LazyMultiFileList::GetTotalFileCount() const {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath()) {
+	while (ExpandNextPathInternal()) {
 	}
 	return expanded_files.size();
+}
+
+MultiFileCount LazyMultiFileList::GetFileCount(idx_t min_exact_count) const {
+	lock_guard<mutex> lck(lock);
+	// expand files so that we get to min_exact_count
+	while (!all_files_expanded && expanded_files.size() < min_exact_count && ExpandNextPathInternal()) {
+	}
+	auto type = all_files_expanded ? FileExpansionType::ALL_FILES_EXPANDED : FileExpansionType::NOT_ALL_FILES_KNOWN;
+	return MultiFileCount(expanded_files.size(), type);
 }
 
 FileExpandResult LazyMultiFileList::GetExpandResult() const {
 	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
 	(void)GetFile(1);
 
+	lock_guard<mutex> lck(lock);
 	if (expanded_files.size() > 1) {
 		return FileExpandResult::MULTIPLE_FILES;
 	} else if (expanded_files.size() == 1) {
 		return FileExpandResult::SINGLE_FILE;
 	}
-
 	return FileExpandResult::NO_FILES;
 }
 
@@ -304,7 +320,7 @@ bool LazyMultiFileList::FileIsAvailable(idx_t i) const {
 OpenFileInfo LazyMultiFileList::GetFile(idx_t i) const {
 	lock_guard<mutex> lck(lock);
 	while (expanded_files.size() <= i) {
-		if (!ExpandNextPath()) {
+		if (!ExpandNextPathInternal()) {
 			return OpenFileInfo("");
 		}
 	}
@@ -312,17 +328,35 @@ OpenFileInfo LazyMultiFileList::GetFile(idx_t i) const {
 	return expanded_files[i];
 }
 
+bool LazyMultiFileList::ExpandNextPathInternal() const {
+	if (all_files_expanded) {
+		return false;
+	}
+	if (context && context->interrupted) {
+		throw InterruptException();
+	}
+	if (!ExpandNextPath()) {
+		all_files_expanded = true;
+		return false;
+	}
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // GlobMultiFileList
 //===--------------------------------------------------------------------===//
 GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> globs_p, FileGlobInput glob_input_p)
-    : context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)), current_glob(0) {
+    : LazyMultiFileList(&context_p), context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)),
+      current_glob(0) {
 }
 
-vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(idx_t max_files) const {
+vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(optional_idx max_files) const {
 	// for globs we display the actual globs in the ToString() - instead of expanding to the files read
 	vector<OpenFileInfo> result;
 	for (auto &glob : globs) {
+		if (max_files.IsValid() && result.size() >= max_files.GetIndex()) {
+			break;
+		}
 		result.emplace_back(glob);
 	}
 	return result;

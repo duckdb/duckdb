@@ -355,9 +355,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnionType(PEGTransf
 	case_insensitive_string_set_t union_names;
 	vector<unique_ptr<ParsedExpression>> union_children;
 	for (auto &colid : colid_list) {
-		if (union_names.find(colid.first) != union_names.end()) {
-			throw ParserException("Duplicate union type tag name \"%s\"", colid.first);
-		}
 		union_names.insert(colid.first);
 		auto &type_expr = UnboundType::GetTypeExpression(colid.second);
 		auto new_type_expr = type_expr->Copy();

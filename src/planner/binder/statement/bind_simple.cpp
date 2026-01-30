@@ -119,6 +119,11 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// Extra step for column comments: They can alter a table or a view, and we resolve that here.
 		auto &info = stmt.info->Cast<SetColumnCommentInfo>();
 		entry = info.TryResolveCatalogEntry(entry_retriever);
+		if (entry && info.catalog_entry_type == CatalogType::VIEW_ENTRY) {
+			// when running SET COLUMN on a VIEW - ensure the view is bound
+			auto &view = entry->Cast<ViewCatalogEntry>();
+			view.BindView(context);
+		}
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
 		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->name);

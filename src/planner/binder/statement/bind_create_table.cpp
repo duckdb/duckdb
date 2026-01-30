@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 

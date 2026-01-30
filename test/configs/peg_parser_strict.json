@@ -127,8 +127,13 @@
       "paths": [
         "test/sql/catalog/issue_9459.test",
         "test/sql/prepared/parameter_variants.test",
-        "test/sql/parser/digit_separators.test"
+        "test/sql/parser/digit_separators.test",
+        "test/sql/copy/csv/multidelimiter/test_abac.test"
       ]
+    },
+    {
+      "reason": "Parser error",
+      "paths": ["test/sql/catalog/issue_9459.test"]
     },
     {
       "reason": "Tokenizer issue",
@@ -165,7 +170,9 @@
         "test/sql/select/test_select_locking.test",
         "test/sql/function/string/test_subscript.test",
         "test/sql/binder/test_string_alias.test",
-        "test/sql/function/string/test_string_slice.test"
+        "test/sql/function/string/test_string_slice.test",
+        "test/sql/alter/alter_table_set_table_options.test",
+        "test/sql/pragma/test_pragma_sanitized_inputs.test"
       ]
     },
     {

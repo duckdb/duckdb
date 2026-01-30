@@ -18,6 +18,7 @@
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/planner/planner_extension.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,15 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 	}
 	for (auto &child : op.children) {
 		CheckTreeDepth(*child, max_depth, depth + 1);
+	}
+}
+
+static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
+	for (auto &planner_extension : PlannerExtension::Iterate(context)) {
+		if (planner_extension.post_bind_function) {
+			PlannerExtensionInput input {context, binder, planner_extension.planner_info.get()};
+			planner_extension.post_bind_function(input, statement);
+		}
 	}
 }
 
@@ -46,6 +56,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
 		profiler.EndPhase();
+
+		RunPostBindExtensions(context, *binder, bound_statement);
 
 		this->names = bound_statement.names;
 		this->types = bound_statement.types;
@@ -64,6 +76,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 				auto bound_statement =
 				    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
 				if (bound_statement.plan != nullptr) {
+					RunPostBindExtensions(context, *this->binder, bound_statement);
+
 					this->names = bound_statement.names;
 					this->types = bound_statement.types;
 					this->plan = std::move(bound_statement.plan);

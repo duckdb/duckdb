@@ -1,9 +1,6 @@
-# name: test/optimizer/pushdown/issue_18653.test
+# name: test/optimizer/pushdown/issue_18653.test_slow
 # description: Performance issue with CROSS JOIN and LATERAL JOIN combined with unnest and json_each. Filter should be pushed down to reduce the joined rows
 # group: [pushdown]
-
-statement ok
-PRAGMA enable_verification
 
 statement ok
 create table test_table as

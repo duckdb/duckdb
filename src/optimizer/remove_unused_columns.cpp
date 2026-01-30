@@ -443,7 +443,7 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		}
 		path_iter = path_iter.get().GetChildIndex(0);
 	}
-	return std::move(target);
+	return target;
 }
 
 void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expression_count) {

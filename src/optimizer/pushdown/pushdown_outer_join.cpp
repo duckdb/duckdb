@@ -71,7 +71,7 @@ static unique_ptr<Expression> ReplaceIn(unique_ptr<Expression> expr, const expre
 		}
 	});
 
-	return std::move(expr);
+	return expr;
 }
 
 //! True if replacing all the `args` expressions occurring in `expr` with a

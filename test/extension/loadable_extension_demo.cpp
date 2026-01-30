@@ -6,6 +6,10 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/planner/extension_callback.hpp"
+#include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
@@ -270,6 +274,55 @@ public:
 			return ParserOverrideResult(not_implemented_exception);
 		}
 		return ParserOverrideResult(std::move(statements));
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// Planner extension - adds an extra constant column to every query
+//===--------------------------------------------------------------------===//
+class AddColumnExtension : public PlannerExtension {
+public:
+	AddColumnExtension() {
+		post_bind_function = AddColumnPostBind;
+	}
+
+	static void AddColumnPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
+		// Check if extension is enabled
+		Value enabled;
+		if (!input.context.TryGetCurrentSetting("add_column_enabled", enabled) || !enabled.GetValue<bool>()) {
+			return;
+		}
+
+		// Only modify statements that return query results (SELECT, INSERT/UPDATE/DELETE RETURNING, etc.)
+		auto &properties = input.binder.GetStatementProperties();
+		if (properties.return_type != StatementReturnType::QUERY_RESULT) {
+			return;
+		}
+
+		// Get the column bindings from the existing plan
+		auto column_bindings = statement.plan->GetColumnBindings();
+
+		// Get a new table index for the projection
+		auto table_index = input.binder.GenerateTableIndex();
+
+		// Create references to all existing columns using BoundColumnRefExpression
+		vector<unique_ptr<Expression>> projections;
+		for (idx_t i = 0; i < column_bindings.size(); i++) {
+			projections.push_back(make_uniq<BoundColumnRefExpression>(statement.types[i], column_bindings[i]));
+		}
+
+		// Add a constant column
+		projections.push_back(make_uniq<BoundConstantExpression>(Value("quack")));
+
+		// Create a projection operator wrapping the existing plan
+		auto projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
+		projection->children.push_back(std::move(statement.plan));
+		projection->ResolveOperatorTypes();
+
+		// Update the statement with the new plan, names, and types
+		statement.plan = std::move(projection);
+		statement.names.push_back("extra_column");
+		statement.types.push_back(LogicalType::VARCHAR);
 	}
 };
 
@@ -613,6 +666,11 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	auto &config = DBConfig::GetConfig(db);
 	ParserExtension::Register(config, QuackExtension());
 	ExtensionCallback::Register(config, make_shared_ptr<QuackLoadExtension>());
+
+	// add a planner extension that adds an extra column to queries
+	PlannerExtension::Register(config, AddColumnExtension());
+	config.AddExtensionOption("add_column_enabled", "enable adding extra column to queries", LogicalType::BOOLEAN,
+	                          Value::BOOLEAN(false));
 
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();

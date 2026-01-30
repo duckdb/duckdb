@@ -61,6 +61,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -633,6 +634,10 @@ void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 
 void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> sub_fs) {
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
+}
+
+void FileSystem::UnregisterSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
 }
 
 unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {

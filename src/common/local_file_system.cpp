@@ -1528,7 +1528,7 @@ private:
 
 LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, FileGlobOptions options_p,
                                  optional_ptr<FileOpener> opener)
-    : fs(fs), path(path_p), opener(opener) {
+    : LazyMultiFileList(FileOpener::TryGetClientContext(opener)), fs(fs), path(path_p), opener(opener) {
 	if (path.empty()) {
 		finished = true;
 		return;

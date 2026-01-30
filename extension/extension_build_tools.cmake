@@ -53,6 +53,7 @@ function(get_statically_linked_extensions DUCKDB_EXTENSION_NAMES OUT_VARIABLE)
 endfunction()
 
 function(link_extension_libraries LIBRARY LINKAGE)
+    target_link_libraries(${LIBRARY} ${LINKAGE} duckdb_generated_extension_loader)
     get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
     # Now link against any registered out-of-tree extensions
     foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
@@ -61,7 +62,6 @@ function(link_extension_libraries LIBRARY LINKAGE)
             target_link_libraries(${LIBRARY} ${LINKAGE} ${EXT_NAME}_extension)
         endif()
     endforeach()
-    target_link_libraries(${LIBRARY} ${LINKAGE} duckdb_generated_extension_loader)
 endfunction()
 
 function(link_threads LIBRARY LINKAGE)
