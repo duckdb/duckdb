@@ -32,6 +32,7 @@ WriteAheadLog::WriteAheadLog(StorageManager &storage_manager, const string &wal_
     : storage_manager(storage_manager), wal_path(wal_path), init_state(init_state),
       checkpoint_iteration(checkpoint_iteration) {
 	storage_manager.SetWALSize(wal_size);
+	storage_manager.ResetWALEntriesCount();
 }
 
 WriteAheadLog::~WriteAheadLog() {

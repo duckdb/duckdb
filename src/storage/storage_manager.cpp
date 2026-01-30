@@ -172,8 +172,12 @@ void StorageManager::SetWALSize(idx_t size) {
 	wal_size = size;
 }
 
-idx_t StorageManager::GetWALEntriesCount() {
+idx_t StorageManager::GetWALEntriesCount() const {
 	return wal_entries_count;
+}
+
+void StorageManager::ResetWALEntriesCount() {
+	wal_entries_count = 0;
 }
 
 void StorageManager::IncrementWALEntriesCount() {
@@ -249,7 +253,7 @@ void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 		// this is the common scenario if there are no concurrent writes happening while checkpointing
 		// in this case we can just remove the main WAL and re-instantiate it to empty
 		fs.TryRemoveFile(wal_path);
-		wal_entries_count = 0;
+		ResetWALEntriesCount();
 
 		wal = make_uniq<WriteAheadLog>(*this, wal_path);
 		return;

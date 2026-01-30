@@ -72,7 +72,8 @@ public:
 	void AddWALSize(idx_t size);
 	void SetWALSize(idx_t size);
 	//! Gets the number of WAL entries since last checkpoint
-	idx_t GetWALEntriesCount();
+	idx_t GetWALEntriesCount() const;
+	void ResetWALEntriesCount();
 	void IncrementWALEntriesCount();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
