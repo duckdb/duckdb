@@ -60,7 +60,6 @@ add_library(
   erarules.cpp
   ethpccal.cpp
   fmtable.cpp
-  fmtable_cnv.cpp
   format.cpp
   formatted_string_builder.cpp
   formattedval_iterimpl.cpp
@@ -131,11 +130,9 @@ add_library(
   rbnf.cpp
   rbtz.cpp
   region.cpp
-  reldatefmt.cpp
   reldtfmt.cpp
   rulebasedcollator.cpp
   scientificnumberformatter.cpp
-  search.cpp
   selfmt.cpp
   simpletz.cpp
   smpdtfmt.cpp
@@ -143,13 +140,11 @@ add_library(
   sortkey.cpp
   standardplural.cpp
   string_segment.cpp
-  stsearch.cpp
   taiwncal.cpp
   timezone.cpp
   tmunit.cpp
   tmutamt.cpp
   tmutfmt.cpp
-  translit.cpp
   tzfmt.cpp
   tzgnames.cpp
   tznames.cpp
@@ -178,7 +173,6 @@ add_library(
   unumsys.cpp
   upluralrules.cpp
   uregion.cpp
-  usearch.cpp
   utf16collationiterator.cpp
   utf8collationiterator.cpp
   utmscale.cpp
