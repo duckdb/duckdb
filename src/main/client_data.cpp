@@ -73,15 +73,6 @@ public:
 		}
 		return result;
 	}
-	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) override {
-		// Track the difference in size (new size - old size)
-		idx_t old_size = handle->GetMemory().GetMemoryUsage();
-		buffer_manager.ReAllocate(handle, block_size);
-		idx_t new_size = handle->GetMemory().GetMemoryUsage();
-		if (new_size > old_size) {
-			TrackMemoryAllocation(new_size - old_size);
-		}
-	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
 		return Pin(QueryContext(), handle);
 	}

@@ -208,42 +208,6 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	return Pin(block);
 }
 
-void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
-	//! is this function ever used?
-	D_ASSERT(block_size >= GetBlockSize());
-	auto lock = handle->GetMemory().GetLock();
-
-	auto handle_memory_usage = handle->GetMemory().GetMemoryUsage();
-	D_ASSERT(handle->GetMemory().GetState() == BlockState::BLOCK_LOADED);
-	D_ASSERT(handle_memory_usage == handle->GetMemory().GetBuffer(lock)->AllocSize());
-	D_ASSERT(handle_memory_usage == handle->GetMemory().GetMemoryCharge(lock).size);
-
-	auto req = handle->GetMemory().GetBuffer(lock)->CalculateMemory(block_size, handle->GetBlockHeaderSize());
-	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - NumericCast<int64_t>(handle_memory_usage);
-
-	if (memory_delta == 0) {
-		return;
-	} else if (memory_delta > 0) {
-		// evict blocks until we have space to resize this block
-		// unlock the handle lock during the call to EvictBlocksOrThrow
-		lock.unlock();
-		auto reservation = EvictBlocksOrThrow(handle->GetMemory().GetMemoryTag(), NumericCast<idx_t>(memory_delta),
-		                                      nullptr, "failed to resize block from %s to %s%s",
-		                                      StringUtil::BytesToHumanReadableString(handle_memory_usage),
-		                                      StringUtil::BytesToHumanReadableString(req.alloc_size));
-		lock.lock();
-
-		// EvictBlocks decrements 'current_memory' for us.
-		handle->GetMemory().MergeMemoryReservation(lock, std::move(reservation));
-	} else {
-		// no need to evict blocks, but we do need to decrement 'current_memory'.
-		handle->GetMemory().ResizeMemory(lock, req.alloc_size);
-	}
-
-	auto &block_manager = handle->GetBlockManager();
-	handle->GetMemory().ResizeBuffer(lock, block_size, block_manager.GetBlockHeaderSize(), memory_delta);
-}
-
 void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
                                       block_id_t first_block, block_id_t last_block) {
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
@@ -274,9 +238,10 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 		auto &handle = handles[entry->second];
 
 		// reserve memory for the block
-		idx_t required_memory = handle->GetMemory().GetMemoryUsage();
+		auto &block_memory = handle->GetMemory();
+		idx_t required_memory = block_memory.GetMemoryUsage();
 		unique_ptr<FileBuffer> reusable_buffer;
-		auto reservation = EvictBlocksOrThrow(handle->GetMemory().GetMemoryTag(), required_memory, &reusable_buffer,
+		auto reservation = EvictBlocksOrThrow(block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
 		                                      "failed to pin block of size %s%s",
 		                                      StringUtil::BytesToHumanReadableString(required_memory));
 		// now load the block from the buffer
@@ -284,8 +249,8 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 		// the prefetching relies on the block handle being pinned again during the actual read before it is evicted
 		BufferHandle buf;
 		{
-			auto lock = handle->GetMemory().GetLock();
-			if (handle->GetMemory().GetState() == BlockState::BLOCK_LOADED) {
+			auto lock = block_memory.GetLock();
+			if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
 				// the block is loaded already by another thread - free up the reservation and continue
 				reservation.Resize(0);
 				continue;
@@ -346,51 +311,52 @@ BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<
 	BufferHandle buf;
 
 	idx_t required_memory;
+	auto &block_memory = handle->GetMemory();
 	{
 		// lock the block
-		auto lock = handle->GetMemory().GetLock();
+		auto lock = block_memory.GetLock();
 		// check if the block is already loaded
-		if (handle->GetMemory().GetState() == BlockState::BLOCK_LOADED) {
+		if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
 			// the block is loaded, increment the reader count and set the BufferHandle
 			buf = handle->Load(context);
 		}
-		required_memory = handle->GetMemory().GetMemoryUsage();
+		required_memory = block_memory.GetMemoryUsage();
 	}
 
 	if (buf.IsValid()) {
 		return buf; // the block was already loaded, return it without holding the BlockHandle's lock
-	} else {
-		// evict blocks until we have space for the current block
-		unique_ptr<FileBuffer> reusable_buffer;
-		auto reservation = EvictBlocksOrThrow(handle->GetMemory().GetMemoryTag(), required_memory, &reusable_buffer,
-		                                      "failed to pin block of size %s%s",
-		                                      StringUtil::BytesToHumanReadableString(required_memory));
+	}
 
-		// lock the handle again and repeat the check (in case anybody loaded in the meantime)
-		auto lock = handle->GetMemory().GetLock();
-		// check if the block is already loaded
-		if (handle->GetMemory().GetState() == BlockState::BLOCK_LOADED) {
-			// the block is loaded, increment the reader count and return a pointer to the handle
+	// evict blocks until we have space for the current block
+	unique_ptr<FileBuffer> reusable_buffer;
+	auto reservation =
+	    EvictBlocksOrThrow(block_memory.GetMemoryTag(), required_memory, &reusable_buffer,
+	                       "failed to pin block of size %s%s", StringUtil::BytesToHumanReadableString(required_memory));
+
+	// lock the handle again and repeat the check (in case anybody loaded in the meantime)
+	auto lock = block_memory.GetLock();
+	// check if the block is already loaded
+	if (block_memory.GetState() == BlockState::BLOCK_LOADED) {
+		// the block is loaded, increment the reader count and return a pointer to the handle
+		reservation.Resize(0);
+		buf = handle->Load(context);
+	} else {
+		// now we can actually load the current block
+		D_ASSERT(block_memory.GetReaders() == 0);
+		buf = handle->Load(context, std::move(reusable_buffer));
+		if (!buf.IsValid()) {
 			reservation.Resize(0);
-			buf = handle->Load(context);
-		} else {
-			// now we can actually load the current block
-			D_ASSERT(handle->GetMemory().GetReaders() == 0);
-			buf = handle->Load(context, std::move(reusable_buffer));
-			if (!buf.IsValid()) {
-				reservation.Resize(0);
-				return buf; // Buffer was destroyed (e.g., due to DestroyBufferUpon::Eviction)
-			}
-			auto &memory_charge = handle->GetMemory().GetMemoryCharge(lock);
-			memory_charge = std::move(reservation);
-			// in the case of a variable sized block, the buffer may be smaller than a full block.
-			int64_t delta = NumericCast<int64_t>(handle->GetMemory().GetBuffer(lock)->AllocSize()) -
-			                NumericCast<int64_t>(handle->GetMemory().GetMemoryUsage());
-			if (delta) {
-				handle->GetMemory().ChangeMemoryUsage(lock, delta);
-			}
-			D_ASSERT(handle->GetMemory().GetMemoryUsage() == handle->GetMemory().GetBuffer(lock)->AllocSize());
+			return buf; // Buffer was destroyed (e.g., due to DestroyBufferUpon::Eviction)
 		}
+		auto &memory_charge = block_memory.GetMemoryCharge(lock);
+		memory_charge = std::move(reservation);
+		// in the case of a variable sized block, the buffer may be smaller than a full block.
+		int64_t delta = NumericCast<int64_t>(block_memory.GetBuffer(lock)->AllocSize()) -
+		                NumericCast<int64_t>(block_memory.GetMemoryUsage());
+		if (delta) {
+			block_memory.ChangeMemoryUsage(lock, delta);
+		}
+		D_ASSERT(block_memory.GetMemoryUsage() == block_memory.GetBuffer(lock)->AllocSize());
 	}
 
 	// we should have a valid BufferHandle by now, either because the block was already loaded, or because we loaded it
@@ -429,20 +395,20 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 
 void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	bool purge = false;
+	auto &block_memory = handle->GetMemory();
 	{
-		auto lock = handle->GetMemory().GetLock();
-		if (!handle->GetMemory().GetBuffer(lock) ||
-		    handle->GetMemory().GetBufferType() == FileBufferType::TINY_BUFFER) {
+		auto lock = block_memory.GetLock();
+		if (!block_memory.GetBuffer(lock) || block_memory.GetBufferType() == FileBufferType::TINY_BUFFER) {
 			return;
 		}
-		D_ASSERT(handle->GetMemory().GetReaders() > 0);
-		auto new_readers = handle->GetMemory().DecrementReaders();
+		D_ASSERT(block_memory.GetReaders() > 0);
+		auto new_readers = block_memory.DecrementReaders();
 		if (new_readers == 0) {
 			VerifyZeroReaders(lock, handle);
-			if (handle->GetMemory().MustAddToEvictionQueue()) {
+			if (block_memory.MustAddToEvictionQueue()) {
 				purge = buffer_pool.AddToEvictionQueue(handle);
 			} else {
-				handle->GetMemory().Unload(lock);
+				block_memory.Unload(lock);
 			}
 		}
 	}

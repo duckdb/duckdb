@@ -25,6 +25,7 @@ class BlockManager;
 class BufferHandle;
 class BufferManager;
 class DatabaseInstance;
+class BlockHandle;
 
 using BlockLock = unique_lock<mutex>;
 

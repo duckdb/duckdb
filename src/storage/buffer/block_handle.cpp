@@ -133,7 +133,7 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
 		// The block was already unloaded: nothing to do.
 		return nullptr;
 	}
-	D_ASSERT(!IsSwizzled());
+	D_ASSERT(IsSwizzled());
 	D_ASSERT(CanUnload());
 
 	if (BlockId() >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {

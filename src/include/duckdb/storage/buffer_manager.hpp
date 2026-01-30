@@ -54,8 +54,6 @@ public:
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) = 0;
 	//! Allocate block-based memory and pin it.
 	virtual BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) = 0;
-	//! Reallocate a pinned in-memory buffer.
-	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	//! Pin a block handle.
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
 	virtual BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) = 0;
