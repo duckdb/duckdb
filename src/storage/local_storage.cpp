@@ -19,17 +19,17 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	auto &collection = *row_groups->collection;
 	collection.InitializeEmpty();
 
-	data_table_info->GetIndexes().Scan([&](Index &index) {
+	for (auto &index : data_table_info->GetIndexes().Indexes()) {
 		auto constraint = index.GetConstraintType();
 		if (constraint == IndexConstraintType::NONE) {
-			return false;
+			continue;
 		}
 		if (!index.IsBound()) {
-			return false;
+			continue;
 		}
 		auto &bound_index = index.Cast<BoundIndex>();
 		if (!bound_index.SupportsDeltaIndexes()) {
-			return false;
+			continue;
 		}
 
 		// Create a delete index and a local index.
@@ -38,8 +38,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 
 		auto append_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_APPEND);
 		append_indexes.AddIndex(std::move(append_index));
-		return false;
-	});
+	}
 }
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
@@ -124,13 +123,12 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// get the index size
 	idx_t index_sizes = 0;
-	append_indexes.Scan([&](Index &index) {
+	for (auto &index : append_indexes.Indexes()) {
 		if (!index.IsBound()) {
-			return false;
+			continue;
 		}
 		index_sizes += index.Cast<BoundIndex>().GetInMemorySize();
-		return false;
-	});
+	}
 
 	// return the size of the appended rows and the index size
 	return data_size + index_sizes;
@@ -431,18 +429,17 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 		return;
 	}
 
-	delete_indexes.Scan([&](Index &index) {
+	for (auto &index : delete_indexes.Indexes()) {
 		D_ASSERT(index.IsBound());
 		if (!index.IsUnique()) {
-			return false;
+			continue;
 		}
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
 		auto result = index.Cast<BoundIndex>().Append(delete_chunk, row_ids, index_append_info);
 		if (result.HasError()) {
 			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 		}
-		return false;
-	});
+	}
 }
 
 void LocalStorage::Append(LocalAppendState &state, DataChunk &table_chunk, DataTableInfo &data_table_info) {

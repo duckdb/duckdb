@@ -861,11 +861,11 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
                                            optional_idx active_checkpoint) {
 	// Collect all Indexed columns on the table.
 	unordered_set<column_t> indexed_column_id_set;
-	indexes.Scan([&](Index &index) {
+
+	for (auto &index : indexes.Indexes()) {
 		auto &set = index.GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
-		return false;
-	});
+	}
 
 	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
 	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
@@ -912,7 +912,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	DataChunk remaining_result_chunk;
 	unique_ptr<Vector> remaining_row_ids;
 
-	indexes.ScanEntries([&](IndexEntry &entry) {
+	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
 		if (index.IsBound()) {
 			lock_guard<mutex> guard(entry.lock);
@@ -963,7 +963,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			if (targets.remove_target) {
 				targets.remove_target->Delete(result_chunk, row_identifiers);
 			}
-			return false;
+			continue;
 		}
 		// Buffering takes only the indexed columns in ordering of the column_ids mapping.
 		DataChunk index_column_chunk;
@@ -975,8 +975,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 		index_column_chunk.SetCardinality(result_chunk.size());
 		auto &unbound_index = index.Cast<UnboundIndex>();
 		unbound_index.BufferChunk(index_column_chunk, row_identifiers, column_ids, BufferedIndexReplay::DEL_ENTRY);
-		return false;
-	});
+	}
 }
 
 void RowGroupCollection::UpdateColumn(TransactionData transaction, DataTable &data_table, Vector &row_ids,
