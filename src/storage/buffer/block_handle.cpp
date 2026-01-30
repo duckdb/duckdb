@@ -169,6 +169,10 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
 }
 
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
+	// Early-out for temporary blocks.
+	if (block_id >= MAXIMUM_BLOCK) {
+		return;
+	}
 	try {
 		block_manager.UnregisterPersistentBlock(*this);
 	} catch (std::exception &ex) {
