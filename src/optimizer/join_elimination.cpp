@@ -264,14 +264,14 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 		// 2. inner table join condition columns contains a whole distinct group
 		vector<ColumnBinding> col_bindings;
 		for (auto &condition : join.conditions) {
-			if (condition.comparison != ExpressionType::COMPARE_EQUAL ||
-			    condition.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
-			    condition.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
+			    condition.GetLHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+			    condition.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				is_output_unique = false;
 				break;
 			}
-			auto inner_binding = inner_idx == 0 ? condition.left->Cast<BoundColumnRefExpression>().binding
-			                                    : condition.right->Cast<BoundColumnRefExpression>().binding;
+			auto inner_binding = inner_idx == 0 ? condition.GetLHS().Cast<BoundColumnRefExpression>().binding
+			                                    : condition.GetRHS().Cast<BoundColumnRefExpression>().binding;
 			col_bindings.push_back(inner_binding);
 		}
 		if (is_output_unique && !ContainDistinctGroup(col_bindings)) {

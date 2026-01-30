@@ -62,8 +62,8 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	case ExtraTypeInfoType::TEMPLATE_TYPE_INFO:
 		result = TemplateTypeInfo::Deserialize(deserializer);
 		break;
-	case ExtraTypeInfoType::USER_TYPE_INFO:
-		result = UserTypeInfo::Deserialize(deserializer);
+	case ExtraTypeInfoType::UNBOUND_TYPE_INFO:
+		result = UnboundTypeInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of ExtraTypeInfo!");
@@ -78,6 +78,9 @@ void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
 	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
+	if (serializer.ShouldSerialize(7)) {
+		serializer.WritePropertyWithDefault<LogicalType>(203, "state_type", state_type.state_type, LogicalTypeId::INVALID);
+	}
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
@@ -85,6 +88,7 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
 	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
+	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(203, "state_type", result->state_type.state_type, LogicalTypeId::INVALID);
 	return std::move(result);
 }
 
@@ -214,23 +218,6 @@ void TemplateTypeInfo::Serialize(Serializer &serializer) const {
 shared_ptr<ExtraTypeInfo> TemplateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<TemplateTypeInfo>(new TemplateTypeInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
-	return std::move(result);
-}
-
-void UserTypeInfo::Serialize(Serializer &serializer) const {
-	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "user_type_name", user_type_name);
-	serializer.WritePropertyWithDefault<string>(201, "catalog", catalog, string());
-	serializer.WritePropertyWithDefault<string>(202, "schema", schema, string());
-	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_modifiers);
-}
-
-shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::shared_ptr<UserTypeInfo>(new UserTypeInfo());
-	deserializer.ReadPropertyWithDefault<string>(200, "user_type_name", result->user_type_name);
-	deserializer.ReadPropertyWithExplicitDefault<string>(201, "catalog", result->catalog, string());
-	deserializer.ReadPropertyWithExplicitDefault<string>(202, "schema", result->schema, string());
-	deserializer.ReadPropertyWithDefault<vector<Value>>(203, "user_type_modifiers", result->user_type_modifiers);
 	return std::move(result);
 }
 

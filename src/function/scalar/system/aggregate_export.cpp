@@ -312,8 +312,12 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	}
 #endif
 	auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
+	LogicalType state_layout = LogicalType::INVALID;
+	if (bound_function.HasGetStateTypeCallback()) {
+		state_layout = bound_function.GetStateType();
+	}
 	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.GetReturnType(),
-	                             child_aggregate->function.arguments);
+	                             child_aggregate->function.arguments, state_layout);
 	auto return_type = LogicalType::AGGREGATE_STATE(std::move(state_type));
 
 	auto export_function =

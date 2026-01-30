@@ -776,6 +776,7 @@ typedef struct {
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
 	                               idx_t src_offset, idx_t dst_offset);
+	duckdb_error_data (*duckdb_vector_safe_assign_string_element)(duckdb_vector vector, idx_t index, const char *str);
 #endif
 
 } duckdb_ext_api_v1;
@@ -1366,15 +1367,16 @@ typedef struct {
 #define duckdb_create_union_value duckdb_ext_api.duckdb_create_union_value
 
 // Version unstable_new_vector_functions
-#define duckdb_create_vector                 duckdb_ext_api.duckdb_create_vector
-#define duckdb_destroy_vector                duckdb_ext_api.duckdb_destroy_vector
-#define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
-#define duckdb_vector_copy_sel               duckdb_ext_api.duckdb_vector_copy_sel
-#define duckdb_vector_reference_value        duckdb_ext_api.duckdb_vector_reference_value
-#define duckdb_vector_reference_vector       duckdb_ext_api.duckdb_vector_reference_vector
-#define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
-#define duckdb_destroy_selection_vector      duckdb_ext_api.duckdb_destroy_selection_vector
-#define duckdb_selection_vector_get_data_ptr duckdb_ext_api.duckdb_selection_vector_get_data_ptr
+#define duckdb_create_vector                     duckdb_ext_api.duckdb_create_vector
+#define duckdb_destroy_vector                    duckdb_ext_api.duckdb_destroy_vector
+#define duckdb_vector_safe_assign_string_element duckdb_ext_api.duckdb_vector_safe_assign_string_element
+#define duckdb_slice_vector                      duckdb_ext_api.duckdb_slice_vector
+#define duckdb_vector_copy_sel                   duckdb_ext_api.duckdb_vector_copy_sel
+#define duckdb_vector_reference_value            duckdb_ext_api.duckdb_vector_reference_value
+#define duckdb_vector_reference_vector           duckdb_ext_api.duckdb_vector_reference_vector
+#define duckdb_create_selection_vector           duckdb_ext_api.duckdb_create_selection_vector
+#define duckdb_destroy_selection_vector          duckdb_ext_api.duckdb_destroy_selection_vector
+#define duckdb_selection_vector_get_data_ptr     duckdb_ext_api.duckdb_selection_vector_get_data_ptr
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
@@ -1414,9 +1416,9 @@ typedef struct {
 	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_CAPI_ENTRY_VISIBILITY DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE( \
 	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, struct duckdb_extension_access * access) {     \
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);                                  \
-		duckdb_database db = access->get_database(info);                                                               \
+		duckdb_database *db = access->get_database(info);                                                              \
 		duckdb_connection conn;                                                                                        \
-		if (duckdb_connect(db, &conn) == DuckDBError) {                                                                \
+		if (duckdb_connect(*db, &conn) == DuckDBError) {                                                               \
 			access->set_error(info, "Failed to open connection to database");                                          \
 			return false;                                                                                              \
 		}                                                                                                              \

@@ -288,8 +288,8 @@ public:
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
-	void BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
-	                     const string &schema = INVALID_SCHEMA);
+
+	void BindLogicalType(LogicalType &type);
 
 	optional_ptr<Binding> GetMatchingBinding(const string &table_name, const string &column_name, ErrorData &error);
 	optional_ptr<Binding> GetMatchingBinding(const string &schema_name, const string &table_name,
@@ -320,6 +320,8 @@ public:
 	                                  optional_ptr<duckdb_re2::RE2> regex);
 
 	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+
+	void SetSearchPath(Catalog &catalog, const string &schema);
 
 private:
 	//! The parent binder (if any)
@@ -397,6 +399,22 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
+	//! Build a mapping from storage column index to scan chunk index for RETURNING.
+	//! Ensures all physical columns are present in the scan.
+	//! return_columns[storage_idx] = scan_chunk_idx
+	void BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns);
+	//! Overload for MERGE INTO: also creates projection expressions and maps to projection indices
+	//! return_columns[storage_idx] = projection_expr_idx
+	void BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+	                                vector<unique_ptr<Expression>> &projection_expressions,
+	                                LogicalOperator &target_binding);
+	//! Build a sparse mapping for unique index columns only (for DELETE without RETURNING)
+	//! return_columns[storage_idx] = scan_chunk_idx (only for indexed columns)
+	void BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns);
+	//! Overload for MERGE INTO: builds projection expressions and maps storage_idx -> projection_expr_idx
+	void BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+	                            vector<unique_ptr<Expression>> &projection_expressions,
+	                            LogicalOperator &target_binding);
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator,
@@ -505,7 +523,7 @@ private:
 
 	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const string &schema_name);
 
-	LogicalType BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog, const string &schema);
+	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 

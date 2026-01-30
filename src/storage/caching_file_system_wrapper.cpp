@@ -137,7 +137,7 @@ unique_ptr<FileHandle> CachingFileSystemWrapper::OpenFileExtended(const OpenFile
 	}
 
 	if (ShouldUseCache(path.path)) {
-		auto caching_handle = caching_file_system.OpenFile(path, flags);
+		auto caching_handle = caching_file_system.OpenFile(path, flags, opener);
 		return make_uniq<CachingFileHandleWrapper>(shared_from_this(), std::move(caching_handle), flags);
 	}
 	// Bypass cache, use underlying file system directly.
@@ -310,10 +310,6 @@ void CachingFileSystemWrapper::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) 
 
 void CachingFileSystemWrapper::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) {
 	underlying_file_system.RegisterSubSystem(compression_type, std::move(fs));
-}
-
-void CachingFileSystemWrapper::UnregisterSubSystem(const string &name) {
-	underlying_file_system.UnregisterSubSystem(name);
 }
 
 unique_ptr<FileSystem> CachingFileSystemWrapper::ExtractSubSystem(const string &name) {

@@ -2,7 +2,6 @@
 # description: Test parallel CREATE TABLE AS with ORDER BY
 # group: [order]
 
-# load the DB from disk
 load __TEST_DIR__/order_parallel_ctas.db
 
 statement ok

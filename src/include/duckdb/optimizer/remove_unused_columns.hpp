@@ -89,13 +89,16 @@ protected:
 	//! ret: The amount of bindings created
 	idx_t ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding);
 
-	bool HandleStructExtract(unique_ptr<Expression> *expression,
-	                         optional_ptr<unique_ptr<Expression>> cast_expression = nullptr);
+	bool HandleExtractExpression(unique_ptr<Expression> *expression,
+	                             optional_ptr<unique_ptr<Expression>> cast_expression = nullptr);
 
-	bool HandleStructExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
-	                                  vector<idx_t> &indexes, vector<ReferencedExtractComponent> &expressions);
+	bool HandleStructExtract(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	                         reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
+	bool HandleVariantExtract(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	                          reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
+	bool HandleExtractRecursive(unique_ptr<Expression> &expr, optional_ptr<BoundColumnRefExpression> &colref,
+	                            reference<ColumnIndex> &path_ref, vector<ReferencedExtractComponent> &expressions);
 	void SetMode(BaseColumnPrunerMode mode);
-	bool HandleStructPack(Expression &expr);
 	BaseColumnPrunerMode GetMode() const;
 
 private:
@@ -134,6 +137,6 @@ private:
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void WritePushdownExtractColumns(
 	    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
-	    const std::function<idx_t(const ColumnIndex &new_index, optional_ptr<LogicalType> cast_type)> &callback);
+	    const std::function<idx_t(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)> &callback);
 };
 } // namespace duckdb
