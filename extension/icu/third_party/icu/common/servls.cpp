@@ -179,7 +179,8 @@ private:
 
             length = other._ids.size();
             for(i = 0; i < length; ++i) {
-                _ids.addElement(((UnicodeString *)other._ids.elementAt(i))->clone(), status);
+                LocalPointer<UnicodeString> clonedId(((UnicodeString *)other._ids.elementAt(i))->clone(), status);
+                _ids.adoptElement(clonedId.orphan(), status);
             }
 
             if(U_SUCCESS(status)) {
@@ -201,7 +202,7 @@ public:
 
     virtual ~ServiceEnumeration();
 
-    virtual StringEnumeration *clone() const {
+    virtual StringEnumeration *clone() const override {
         UErrorCode status = U_ZERO_ERROR;
         ServiceEnumeration *cl = new ServiceEnumeration(*this, status);
         if(U_FAILURE(status)) {
@@ -214,25 +215,25 @@ public:
     UBool upToDate(UErrorCode& status) const {
         if (U_SUCCESS(status)) {
             if (_timestamp == _service->getTimestamp()) {
-                return TRUE;
+                return true;
             }
             status = U_ENUM_OUT_OF_SYNC_ERROR;
         }
-        return FALSE;
+        return false;
     }
 
-    virtual int32_t count(UErrorCode& status) const {
+    virtual int32_t count(UErrorCode& status) const override {
         return upToDate(status) ? _ids.size() : 0;
     }
 
-    virtual const UnicodeString* snext(UErrorCode& status) {
+    virtual const UnicodeString* snext(UErrorCode& status) override {
         if (upToDate(status) && (_pos < _ids.size())) {
             return (const UnicodeString*)_ids[_pos++];
         }
         return NULL;
     }
 
-    virtual void reset(UErrorCode& status) {
+    virtual void reset(UErrorCode& status) override {
         if (status == U_ENUM_OUT_OF_SYNC_ERROR) {
             status = U_ZERO_ERROR;
         }
@@ -245,7 +246,7 @@ public:
 
 public:
     static UClassID U_EXPORT2 getStaticClassID(void);
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID(void) const override;
 };
 
 ServiceEnumeration::~ServiceEnumeration() {}

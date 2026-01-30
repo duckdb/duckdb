@@ -55,19 +55,19 @@ u_catgets(u_nl_catd catd, int32_t set_num, int32_t msg_num,
     const UChar* result;
 
     if (ec == NULL || U_FAILURE(*ec)) {
-        goto ucat_ERROR;
+        goto ERROR;
     }
 
     result = ures_getStringByKey((const UResourceBundle*) catd,
                                  _catkey(key, set_num, msg_num),
                                  len, ec);
     if (U_FAILURE(*ec)) {
-        goto ucat_ERROR;
+        goto ERROR;
     }
 
     return result;
 
- ucat_ERROR:
+ ERROR:
     /* In case of any failure, return s */
     if (len != NULL) {
         *len = u_strlen(s);

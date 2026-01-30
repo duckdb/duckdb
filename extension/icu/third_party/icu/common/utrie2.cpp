@@ -66,7 +66,7 @@ utrie2_get32(const UTrie2 *trie, UChar32 c) {
     } else if((uint32_t)c>0x10ffff) {
         return trie->errorValue;
     } else {
-        return get32(trie->newTrie, c, TRUE);
+        return get32(trie->newTrie, c, true);
     }
 }
 
@@ -80,7 +80,7 @@ utrie2_get32FromLeadSurrogateCodeUnit(const UTrie2 *trie, UChar32 c) {
     } else if(trie->data32!=NULL) {
         return UTRIE2_GET32_FROM_U16_SINGLE_LEAD(trie, c);
     } else {
-        return get32(trie->newTrie, c, FALSE);
+        return get32(trie->newTrie, c, false);
     }
 }
 
@@ -136,16 +136,16 @@ utrie2_openFromSerialized(UTrie2ValueBits valueBits,
     UTrie2 tempTrie;
     UTrie2 *trie;
 
-    if (U_FAILURE(*pErrorCode)) {
+    if(U_FAILURE(*pErrorCode)) {
         return 0;
     }
 
-//    if( length<=0 || (U_POINTER_MASK_LSB(data, 3)!=0) ||
-//        valueBits<0 || UTRIE2_COUNT_VALUE_BITS<=valueBits
-//    ) {
-//        *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
-//        return 0;
-//    }
+    if( length<=0 || (U_POINTER_MASK_LSB(data, 3)!=0) ||
+        valueBits<0 || UTRIE2_COUNT_VALUE_BITS<=valueBits
+    ) {
+        *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
+        return 0;
+    }
 
     /* enough data for a trie header? */
     if(length<(int32_t)sizeof(UTrie2Header)) {
@@ -200,7 +200,7 @@ utrie2_openFromSerialized(UTrie2ValueBits valueBits,
     uprv_memcpy(trie, &tempTrie, sizeof(tempTrie));
     trie->memory=(uint32_t *)data;
     trie->length=actualLength;
-    trie->isMemoryOwned=FALSE;
+    trie->isMemoryOwned=false;
 #ifdef UTRIE2_DEBUG
     trie->name="fromSerialized";
 #endif
@@ -279,7 +279,7 @@ utrie2_openDummy(UTrie2ValueBits valueBits,
         return 0;
     }
     trie->length=length;
-    trie->isMemoryOwned=TRUE;
+    trie->isMemoryOwned=true;
 
     /* set the UTrie2 fields */
     if(valueBits==UTRIE2_16_VALUE_BITS) {
@@ -422,7 +422,7 @@ utrie2_serialize(const UTrie2 *trie,
 
 /* default UTrie2EnumValue() returns the input value itself */
 static uint32_t U_CALLCONV
-utrie2_enumSameValue(const void * /*context*/, uint32_t value) {
+enumSameValue(const void * /*context*/, uint32_t value) {
     return value;
 }
 
@@ -454,7 +454,7 @@ enumEitherTrie(const UTrie2 *trie,
         return;
     }
     if(enumValue==NULL) {
-        enumValue=utrie2_enumSameValue;
+        enumValue=enumSameValue;
     }
 
     if(trie->newTrie==NULL) {

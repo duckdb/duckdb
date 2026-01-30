@@ -11,8 +11,8 @@ set -e
 mkdir -p build
 pushd build
 
-# download ICU 66
-code_version=66-1
+# download ICU 72
+code_version=72-1
 wget -nc ${icu/version/$code_version}
 unzip -o ${zip_file/version/$code_version}
 

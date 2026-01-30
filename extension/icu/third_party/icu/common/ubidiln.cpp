@@ -31,7 +31,7 @@
  * text in a single paragraph or in a line of a single paragraph
  * which has already been processed according to
  * the Unicode 6.3 BiDi algorithm as defined in
- * http://www.unicode.org/unicode/reports/tr9/ , version 28,
+ * https://www.unicode.org/reports/tr9/ , version 28,
  * also described in The Unicode Standard, Version 6.3.0 .
  *
  * This means that there is a UBiDi object with a levels
@@ -101,7 +101,7 @@ setTrailingWSStart(UBiDi *pBiDi) {
        are already set to paragraph level.
        Setting trailingWSStart to pBidi->length will avoid changing the
        level of B chars from 0 to paraLevel in ubidi_getLevels when
-       orderParagraphsLTR==TRUE.
+       orderParagraphsLTR==true.
      */
     if(dirProps[start-1]==B) {
         pBiDi->trailingWSStart=start;   /* currently == pBiDi->length */
@@ -530,12 +530,12 @@ static int32_t getRunFromLogicalIndex(UBiDi *pBiDi, int32_t logicalIndex) {
         visualStart+=length;
     }
     /* we should never get here */
-    UPRV_UNREACHABLE;
+    UPRV_UNREACHABLE_EXIT;
 }
 
 /*
  * Compute the runs array from the levels array.
- * After ubidi_getRuns() returns TRUE, runCount is guaranteed to be >0
+ * After ubidi_getRuns() returns true, runCount is guaranteed to be >0
  * and the runs are reordered.
  * Odd-level runs have visualStart on their visual right edge and
  * they progress visually to the left.
@@ -551,7 +551,7 @@ ubidi_getRuns(UBiDi *pBiDi, UErrorCode*) {
      * includes the case of length==0 (handled in setPara)..
      */
     if (pBiDi->runCount>=0) {
-        return TRUE;
+        return true;
     }
 
     if(pBiDi->direction!=UBIDI_MIXED) {
@@ -608,7 +608,7 @@ ubidi_getRuns(UBiDi *pBiDi, UErrorCode*) {
             if(getRunsMemory(pBiDi, runCount)) {
                 runs=pBiDi->runsMemory;
             } else {
-                return FALSE;
+                return false;
             }
 
             /* set the runs */
@@ -703,7 +703,7 @@ ubidi_getRuns(UBiDi *pBiDi, UErrorCode*) {
         }
     }
 
-    return TRUE;
+    return true;
 }
 
 static UBool
@@ -714,7 +714,7 @@ prepareReorder(const UBiDiLevel *levels, int32_t length,
     UBiDiLevel level, minLevel, maxLevel;
 
     if(levels==NULL || length<=0) {
-        return FALSE;
+        return false;
     }
 
     /* determine minLevel and maxLevel */
@@ -723,7 +723,7 @@ prepareReorder(const UBiDiLevel *levels, int32_t length,
     for(start=length; start>0;) {
         level=levels[--start];
         if(level>UBIDI_MAX_EXPLICIT_LEVEL+1) {
-            return FALSE;
+            return false;
         }
         if(level<minLevel) {
             minLevel=level;
@@ -741,7 +741,7 @@ prepareReorder(const UBiDiLevel *levels, int32_t length,
         indexMap[start]=start;
     }
 
-    return TRUE;
+    return true;
 }
 
 /* reorder a line based on a levels array (L2) ------------------------------ */

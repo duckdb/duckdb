@@ -1,5 +1,5 @@
 // © 2019 and later: Unicode, Inc. and others.
-// License & terms of use: http://www.unicode.org/copyright.html#License
+// License & terms of use: http://www.unicode.org/copyright.html
 
 // loclikelysubtags.cpp
 // created: 2019may08 Markus W. Scherer
@@ -20,6 +20,7 @@
 #include "uhash.h"
 #include "uinvchar.h"
 #include "umutex.h"
+#include "uniquecharstr.h"
 #include "uresdata.h"
 #include "uresimp.h"
 
@@ -32,71 +33,6 @@ constexpr char PSEUDO_BIDI_PREFIX = '+';  // -XB, -PSBIDI
 constexpr char PSEUDO_CRACKED_PREFIX = ',';  // -XC, -PSCRACK
 
 }  // namespace
-
-/**
- * Stores NUL-terminated strings with duplicate elimination.
- * Checks for unique UTF-16 string pointers and converts to invariant characters.
- */
-class UniqueCharStrings {
-public:
-    UniqueCharStrings(UErrorCode &errorCode) : strings(nullptr) {
-        uhash_init(&map, uhash_hashUChars, uhash_compareUChars, uhash_compareLong, &errorCode);
-        if (U_FAILURE(errorCode)) { return; }
-        strings = new CharString();
-        if (strings == nullptr) {
-            errorCode = U_MEMORY_ALLOCATION_ERROR;
-        }
-    }
-    ~UniqueCharStrings() {
-        uhash_close(&map);
-        delete strings;
-    }
-
-    /** Returns/orphans the CharString that contains all strings. */
-    CharString *orphanCharStrings() {
-        CharString *result = strings;
-        strings = nullptr;
-        return result;
-    }
-
-    /** Adds a string and returns a unique number for it. */
-    int32_t add(const UnicodeString &s, UErrorCode &errorCode) {
-        if (U_FAILURE(errorCode)) { return 0; }
-        if (isFrozen) {
-            errorCode = U_NO_WRITE_PERMISSION;
-            return 0;
-        }
-        // The string points into the resource bundle.
-        const char16_t *p = s.getBuffer();
-        int32_t oldIndex = uhash_geti(&map, p);
-        if (oldIndex != 0) {  // found duplicate
-            return oldIndex;
-        }
-        // Explicit NUL terminator for the previous string.
-        // The strings object is also terminated with one implicit NUL.
-        strings->append(0, errorCode);
-        int32_t newIndex = strings->length();
-        strings->appendInvariantChars(s, errorCode);
-        uhash_puti(&map, const_cast<char16_t *>(p), newIndex, &errorCode);
-        return newIndex;
-    }
-
-    void freeze() { isFrozen = true; }
-
-    /**
-     * Returns a string pointer for its unique number, if this object is frozen.
-     * Otherwise nullptr.
-     */
-    const char *get(int32_t i) const {
-        U_ASSERT(isFrozen);
-        return isFrozen && i > 0 ? strings->data() + i : nullptr;
-    }
-
-private:
-    UHashtable map;
-    CharString *strings;
-    bool isFrozen = false;
-};
 
 LocaleDistanceData::LocaleDistanceData(LocaleDistanceData &&data) :
         distanceTrieBytes(data.distanceTrieBytes),
@@ -250,7 +186,8 @@ struct XLikelySubtagsData {
         for (int32_t i = 0, j = 0; i < lsrSubtagsLength; i += 3, ++j) {
             lsrs[j] = LSR(strings.get(lsrSubtagIndexes[i]),
                           strings.get(lsrSubtagIndexes[i + 1]),
-                          strings.get(lsrSubtagIndexes[i + 2]));
+                          strings.get(lsrSubtagIndexes[i + 2]),
+                          LSR::IMPLICIT_LSR);
         }
 
         if (partitionsLength > 0) {
@@ -275,7 +212,8 @@ struct XLikelySubtagsData {
             for (int32_t i = 0, j = 0; i < paradigmSubtagsLength; i += 3, ++j) {
                 paradigms[j] = LSR(strings.get(paradigmSubtagIndexes[i]),
                                    strings.get(paradigmSubtagIndexes[i + 1]),
-                                   strings.get(paradigmSubtagIndexes[i + 2]));
+                                   strings.get(paradigmSubtagIndexes[i + 2]),
+                                   LSR::DONT_CARE_FLAGS);
             }
             distanceData.paradigms = paradigms;
         }
@@ -295,7 +233,7 @@ private:
                 return false;
             }
             for (int i = 0; i < length; ++i) {
-                stringArray.getValue(i, value);  // returns TRUE because i < length
+                stringArray.getValue(i, value);  // returns true because i < length
                 rawIndexes[i] = strings.add(value.getUnicodeString(errorCode), errorCode);
                 if (U_FAILURE(errorCode)) { return false; }
             }
@@ -307,13 +245,13 @@ private:
 namespace {
 
 XLikelySubtags *gLikelySubtags = nullptr;
-UInitOnce loclikelysubtags_gInitOnce = U_INITONCE_INITIALIZER;
+UInitOnce gInitOnce {};
 
-UBool U_CALLCONV loclikelysubtags_cleanup() {
+UBool U_CALLCONV cleanup() {
     delete gLikelySubtags;
     gLikelySubtags = nullptr;
-    loclikelysubtags_gInitOnce.reset();
-    return TRUE;
+    gInitOnce.reset();
+    return true;
 }
 
 }  // namespace
@@ -329,12 +267,12 @@ void U_CALLCONV XLikelySubtags::initLikelySubtags(UErrorCode &errorCode) {
         errorCode = U_MEMORY_ALLOCATION_ERROR;
         return;
     }
-    ucln_common_registerCleanup(UCLN_COMMON_LIKELY_SUBTAGS, loclikelysubtags_cleanup);
+    ucln_common_registerCleanup(UCLN_COMMON_LIKELY_SUBTAGS, cleanup);
 }
 
 const XLikelySubtags *XLikelySubtags::getSingleton(UErrorCode &errorCode) {
     if (U_FAILURE(errorCode)) { return nullptr; }
-    umtx_initOnce(loclikelysubtags_gInitOnce, &XLikelySubtags::initLikelySubtags, errorCode);
+    umtx_initOnce(gInitOnce, &XLikelySubtags::initLikelySubtags, errorCode);
     return gLikelySubtags;
 }
 
@@ -382,8 +320,9 @@ XLikelySubtags::~XLikelySubtags() {
 LSR XLikelySubtags::makeMaximizedLsrFrom(const Locale &locale, UErrorCode &errorCode) const {
     const char *name = locale.getName();
     if (uprv_isAtSign(name[0]) && name[1] == 'x' && name[2] == '=') {  // name.startsWith("@x=")
-        // Private use language tag x-subtag-subtag...
-        return LSR(name, "", "");
+        // Private use language tag x-subtag-subtag... which CLDR changes to
+        // und-x-subtag-subtag...
+        return LSR(name, "", "", LSR::EXPLICIT_LSR);
     }
     return makeMaximizedLsr(locale.getLanguage(), locale.getScript(), locale.getCountry(),
                             locale.getVariant(), errorCode);
@@ -407,26 +346,31 @@ LSR XLikelySubtags::makeMaximizedLsr(const char *language, const char *script, c
     if (region[0] == 'X' && (c1 = region[1]) != 0 && region[2] == 0) {
         switch (c1) {
         case 'A':
-            return LSR(PSEUDO_ACCENTS_PREFIX, language, script, region, errorCode);
+            return LSR(PSEUDO_ACCENTS_PREFIX, language, script, region,
+                       LSR::EXPLICIT_LSR, errorCode);
         case 'B':
-            return LSR(PSEUDO_BIDI_PREFIX, language, script, region, errorCode);
+            return LSR(PSEUDO_BIDI_PREFIX, language, script, region,
+                       LSR::EXPLICIT_LSR, errorCode);
         case 'C':
-            return LSR(PSEUDO_CRACKED_PREFIX, language, script, region, errorCode);
+            return LSR(PSEUDO_CRACKED_PREFIX, language, script, region,
+                       LSR::EXPLICIT_LSR, errorCode);
         default:  // normal locale
             break;
         }
     }
 
     if (variant[0] == 'P' && variant[1] == 'S') {
+        int32_t lsrFlags = *region == 0 ?
+            LSR::EXPLICIT_LANGUAGE | LSR::EXPLICIT_SCRIPT : LSR::EXPLICIT_LSR;
         if (uprv_strcmp(variant, "PSACCENT") == 0) {
             return LSR(PSEUDO_ACCENTS_PREFIX, language, script,
-                       *region == 0 ? "XA" : region, errorCode);
+                       *region == 0 ? "XA" : region, lsrFlags, errorCode);
         } else if (uprv_strcmp(variant, "PSBIDI") == 0) {
             return LSR(PSEUDO_BIDI_PREFIX, language, script,
-                       *region == 0 ? "XB" : region, errorCode);
+                       *region == 0 ? "XB" : region, lsrFlags, errorCode);
         } else if (uprv_strcmp(variant, "PSCRACK") == 0) {
             return LSR(PSEUDO_CRACKED_PREFIX, language, script,
-                       *region == 0 ? "XC" : region, errorCode);
+                       *region == 0 ? "XC" : region, lsrFlags, errorCode);
         }
         // else normal locale
     }
@@ -448,7 +392,7 @@ LSR XLikelySubtags::maximize(const char *language, const char *script, const cha
         region = "";
     }
     if (*script != 0 && *region != 0 && *language != 0) {
-        return LSR(language, script, region);  // already maximized
+        return LSR(language, script, region, LSR::EXPLICIT_LSR);  // already maximized
     }
 
     uint32_t retainOldMask = 0;
@@ -535,7 +479,7 @@ LSR XLikelySubtags::maximize(const char *language, const char *script, const cha
     if (retainOldMask == 0) {
         // Quickly return a copy of the lookup-result LSR
         // without new allocation of the subtags.
-        return LSR(result.language, result.script, result.region);
+        return LSR(result.language, result.script, result.region, result.flags);
     }
     if ((retainOldMask & 4) == 0) {
         language = result.language;
@@ -546,7 +490,108 @@ LSR XLikelySubtags::maximize(const char *language, const char *script, const cha
     if ((retainOldMask & 1) == 0) {
         region = result.region;
     }
-    return LSR(language, script, region);
+    // retainOldMask flags = LSR explicit-subtag flags
+    return LSR(language, script, region, retainOldMask);
+}
+
+int32_t XLikelySubtags::compareLikely(const LSR &lsr, const LSR &other, int32_t likelyInfo) const {
+    // If likelyInfo >= 0:
+    // likelyInfo bit 1 is set if the previous comparison with lsr
+    // was for equal language and script.
+    // Otherwise the scripts differed.
+    if (uprv_strcmp(lsr.language, other.language) != 0) {
+        return 0xfffffffc;  // negative, lsr not better than other
+    }
+    if (uprv_strcmp(lsr.script, other.script) != 0) {
+        int32_t index;
+        if (likelyInfo >= 0 && (likelyInfo & 2) == 0) {
+            index = likelyInfo >> 2;
+        } else {
+            index = getLikelyIndex(lsr.language, "");
+            likelyInfo = index << 2;
+        }
+        const LSR &likely = lsrs[index];
+        if (uprv_strcmp(lsr.script, likely.script) == 0) {
+            return likelyInfo | 1;
+        } else {
+            return likelyInfo & ~1;
+        }
+    }
+    if (uprv_strcmp(lsr.region, other.region) != 0) {
+        int32_t index;
+        if (likelyInfo >= 0 && (likelyInfo & 2) != 0) {
+            index = likelyInfo >> 2;
+        } else {
+            index = getLikelyIndex(lsr.language, lsr.region);
+            likelyInfo = (index << 2) | 2;
+        }
+        const LSR &likely = lsrs[index];
+        if (uprv_strcmp(lsr.region, likely.region) == 0) {
+            return likelyInfo | 1;
+        } else {
+            return likelyInfo & ~1;
+        }
+    }
+    return likelyInfo & ~1;  // lsr not better than other
+}
+
+// Subset of maximize().
+int32_t XLikelySubtags::getLikelyIndex(const char *language, const char *script) const {
+    if (uprv_strcmp(language, "und") == 0) {
+        language = "";
+    }
+    if (uprv_strcmp(script, "Zzzz") == 0) {
+        script = "";
+    }
+
+    BytesTrie iter(trie);
+    uint64_t state;
+    int32_t value;
+    // Small optimization: Array lookup for first language letter.
+    int32_t c0;
+    if (0 <= (c0 = uprv_lowerOrdinal(language[0])) && c0 <= 25 &&
+            language[1] != 0 &&  // language.length() >= 2
+            (state = trieFirstLetterStates[c0]) != 0) {
+        value = trieNext(iter.resetToState64(state), language, 1);
+    } else {
+        value = trieNext(iter, language, 0);
+    }
+    if (value >= 0) {
+        state = iter.getState64();
+    } else {
+        iter.resetToState64(trieUndState);  // "und" ("*")
+        state = 0;
+    }
+
+    if (value > 0) {
+        // Intermediate or final value from just language.
+        if (value == SKIP_SCRIPT) {
+            value = 0;
+        }
+    } else {
+        value = trieNext(iter, script, 0);
+        if (value >= 0) {
+            state = iter.getState64();
+        } else {
+            if (state == 0) {
+                iter.resetToState64(trieUndZzzzState);  // "und-Zzzz" ("**")
+            } else {
+                iter.resetToState64(state);
+                value = trieNext(iter, "", 0);
+                U_ASSERT(value >= 0);
+                state = iter.getState64();
+            }
+        }
+    }
+
+    if (value > 0) {
+        // Final value from just language or language+script.
+    } else {
+        value = trieNext(iter, "", 0);
+        U_ASSERT(value > 0);
+    }
+    U_ASSERT(value < lsrsLength);
+    return value;
 }
 
 int32_t XLikelySubtags::trieNext(BytesTrie &iter, const char *s, int32_t i) {
@@ -615,9 +660,9 @@ LSR XLikelySubtags::minimizeSubtags(const char *languageIn, const char *scriptIn
     boolean favorRegionOk = false;
     if (result.script.equals(value00.script)) { //script is default
         if (result.region.equals(value00.region)) {
-            return new LSR(result.language, "", "");
+            return new LSR(result.language, "", "", LSR.DONT_CARE_FLAGS);
         } else if (fieldToFavor == ULocale.Minimize.FAVOR_REGION) {
-            return new LSR(result.language, "", result.region);
+            return new LSR(result.language, "", result.region, LSR.DONT_CARE_FLAGS);
         } else {
             favorRegionOk = true;
         }
@@ -627,9 +672,9 @@ LSR XLikelySubtags::minimizeSubtags(const char *languageIn, const char *scriptIn
     // Maybe do later, but for now use the straightforward code.
     LSR result2 = maximize(languageIn, scriptIn, "");
     if (result2.equals(result)) {
-        return new LSR(result.language, result.script, "");
+        return new LSR(result.language, result.script, "", LSR.DONT_CARE_FLAGS);
     } else if (favorRegionOk) {
-        return new LSR(result.language, "", result.region);
+        return new LSR(result.language, "", result.region, LSR.DONT_CARE_FLAGS);
     }
     return result;
 }

@@ -60,6 +60,7 @@ unum_open(  UNumberFormatStyle    style,
     case UNUM_CURRENCY_ACCOUNTING:
     case UNUM_CASH_CURRENCY:
     case UNUM_CURRENCY_STANDARD:
+    case UNUM_NUMBERING_SYSTEM:
         retVal = NumberFormat::createInstance(Locale(locale), style, *status);
         break;
 
@@ -111,10 +112,6 @@ unum_open(  UNumberFormatStyle    style,
 
     case UNUM_DURATION:
         retVal = new RuleBasedNumberFormat(URBNF_DURATION, Locale(locale), *status);
-        break;
-
-    case UNUM_NUMBERING_SYSTEM:
-        retVal = new RuleBasedNumberFormat(URBNF_NUMBERING_SYSTEM, Locale(locale), *status);
         break;
 #endif
 
@@ -508,6 +505,28 @@ unum_countAvailable()
     return uloc_countAvailable();
 }
 
+U_CAPI bool U_EXPORT2
+unum_hasAttribute(const UNumberFormat*          fmt,
+          UNumberFormatAttribute  attr)
+{
+    const NumberFormat* nf = reinterpret_cast<const NumberFormat*>(fmt);
+    bool isDecimalFormat = dynamic_cast<const DecimalFormat*>(nf) != NULL;
+    
+    switch (attr) {
+        case UNUM_LENIENT_PARSE:
+        case UNUM_MAX_INTEGER_DIGITS:
+        case UNUM_MIN_INTEGER_DIGITS:
+        case UNUM_INTEGER_DIGITS:
+        case UNUM_MAX_FRACTION_DIGITS:
+        case UNUM_MIN_FRACTION_DIGITS:
+        case UNUM_FRACTION_DIGITS:
+        case UNUM_ROUNDING_MODE:
+            return true;
+        default:
+            return isDecimalFormat;
+    }
+}
+
 U_CAPI int32_t U_EXPORT2
 unum_getAttribute(const UNumberFormat*          fmt,
           UNumberFormatAttribute  attr)
@@ -898,7 +917,7 @@ unum_getContext(const UNumberFormat *fmt, UDisplayContextType type, UErrorCode* 
     return ((const NumberFormat*)fmt)->getContext(type, *status);
 }
 
-U_INTERNAL UFormattable * U_EXPORT2
+U_CAPI UFormattable * U_EXPORT2
 unum_parseToUFormattable(const UNumberFormat* fmt,
                          UFormattable *result,
                          const UChar* text,
@@ -922,7 +941,7 @@ unum_parseToUFormattable(const UNumberFormat* fmt,
   return result;
 }
 
-U_INTERNAL int32_t U_EXPORT2
+U_CAPI int32_t U_EXPORT2
 unum_formatUFormattable(const UNumberFormat* fmt,
                         const UFormattable *number,
                         UChar *result,

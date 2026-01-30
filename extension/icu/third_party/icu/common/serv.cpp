@@ -8,6 +8,7 @@
 */
 
 #include "unicode/utypes.h"
+#include "unicode/localpointer.h"
 
 #if !UCONFIG_NO_SERVICE
 
@@ -63,7 +64,7 @@ ICUServiceKey::currentDescriptor(UnicodeString& result) const
 UBool 
 ICUServiceKey::fallback() 
 {
-    return FALSE;
+    return false;
 }
 
 UBool 
@@ -237,7 +238,7 @@ public:
     * you're removing pointer to this somewhere.  Management of that
     * pointer will have to know how to deal with refcounts.  Once
     * the refcount drops to zero, the resource is released.  Return
-    * false if the resouce has been released.
+    * false if the resource has been released.
     */
     CacheEntry* unref() {
         if ((--refcount) == 0) {
@@ -248,7 +249,7 @@ public:
     }
 
     /**
-    * Return TRUE if there is at least one reference to this and the
+    * Return true if there is at least one reference to this and the
     * resource has not been released.
     */
     UBool isShared() const {
@@ -256,20 +257,13 @@ public:
     }
 };
 
-// UObjectDeleter for serviceCache
+// Deleter for serviceCache
 U_CDECL_BEGIN
 static void U_CALLCONV
 cacheDeleter(void* obj) {
     U_NAMESPACE_USE ((CacheEntry*)obj)->unref();
 }
 
-/**
-* Deleter for UObjects
-*/
-static void U_CALLCONV
-deleteUObject(void *obj) {
-    U_NAMESPACE_USE delete (UObject*) obj;
-}
 U_CDECL_END
 
 /*
@@ -418,12 +412,6 @@ private:
     UBool fActive;
 };
 
-struct UVectorDeleter {
-    UVector* _obj;
-    UVectorDeleter() : _obj(NULL) {}
-    ~UVectorDeleter() { delete _obj; }
-};
-
 // called only by factories, treat as private
 UObject* 
 ICUService::getKey(ICUServiceKey& key, UnicodeString* actualReturn, const ICUServiceFactory* factory, UErrorCode& status) const 
@@ -454,6 +442,7 @@ ICUService::getKey(ICUServiceKey& key, UnicodeString* actualReturn, const ICUSer
         if (serviceCache == NULL) {
             ncthis->serviceCache = new Hashtable(status);
             if (ncthis->serviceCache == NULL) {
+                status = U_MEMORY_ALLOCATION_ERROR;
                 return NULL;
             }
             if (U_FAILURE(status)) {
@@ -464,12 +453,12 @@ ICUService::getKey(ICUServiceKey& key, UnicodeString* actualReturn, const ICUSer
         }
 
         UnicodeString currentDescriptor;
-        UVectorDeleter cacheDescriptorList;
-        UBool putInCache = FALSE;
+        LocalPointer<UVector> cacheDescriptorList;
+        UBool putInCache = false;
 
         int32_t startIndex = 0;
         int32_t limit = factories->size();
-        UBool cacheResult = TRUE;
+        UBool cacheResult = true;
 
         if (factory != NULL) {
             for (int32_t i = 0; i < limit; ++i) {
@@ -483,7 +472,7 @@ ICUService::getKey(ICUServiceKey& key, UnicodeString* actualReturn, const ICUSer
                 status = U_ILLEGAL_ARGUMENT_ERROR;
                 return NULL;
             }
-            cacheResult = FALSE;
+            cacheResult = false;
         }
 
         do {
@@ -497,23 +486,22 @@ ICUService::getKey(ICUServiceKey& key, UnicodeString* actualReturn, const ICUSer
             // first test of cache failed, so we'll have to update
             // the cache if we eventually succeed-- that is, if we're 
             // going to update the cache at all.
-            putInCache = TRUE;
+            putInCache = true;
 
             int32_t index = startIndex;
             while (index < limit) {
                 ICUServiceFactory* f = (ICUServiceFactory*)factories->elementAt(index++);
-                UObject* service = f->create(key, this, status);
+                LocalPointer<UObject> service(f->create(key, this, status));
                 if (U_FAILURE(status)) {
-                    delete service;
                     return NULL;
                 }
-                if (service != NULL) {
-                    result = new CacheEntry(currentDescriptor, service);
+                if (service.isValid()) {
+                    result = new CacheEntry(currentDescriptor, service.getAlias());
                     if (result == NULL) {
-                        delete service;
                         status = U_MEMORY_ALLOCATION_ERROR;
                         return NULL;
                     }
+                    service.orphan(); // result now owns service.
 
                     goto outerEnd;
                 }
@@ -524,19 +512,22 @@ ICUService::getKey(ICUServiceKey& key, UnicodeString* actualReturn, const ICUSer
             // don't want to keep querying on an id that's going to
             // fallback to the one that succeeded, we want to hit the
             // cache the first time next goaround.
-            if (cacheDescriptorList._obj == NULL) {
-                cacheDescriptorList._obj = new UVector(uprv_deleteUObject, NULL, 5, status);
+            if (cacheDescriptorList.isNull()) {
+                cacheDescriptorList.adoptInsteadAndCheckErrorCode(new UVector(uprv_deleteUObject, NULL, 5, status), status);
                 if (U_FAILURE(status)) {
                     return NULL;
                 }
             }
-            UnicodeString* idToCache = new UnicodeString(currentDescriptor);
-            if (idToCache == NULL || idToCache->isBogus()) {
+
+            LocalPointer<UnicodeString> idToCache(new UnicodeString(currentDescriptor), status);
+            if (U_FAILURE(status)) {
+                return NULL;
+            }
+            if (idToCache->isBogus()) {
                 status = U_MEMORY_ALLOCATION_ERROR;
                 return NULL;
             }
-
-            cacheDescriptorList._obj->addElement(idToCache, status);
+            cacheDescriptorList->adoptElement(idToCache.orphan(), status);
             if (U_FAILURE(status)) {
                 return NULL;
             }
@@ -550,9 +541,9 @@ outerEnd:
                     return NULL;
                 }
 
-                if (cacheDescriptorList._obj != NULL) {
-                    for (int32_t i = cacheDescriptorList._obj->size(); --i >= 0;) {
-                        UnicodeString* desc = (UnicodeString*)cacheDescriptorList._obj->elementAt(i);
+                if (cacheDescriptorList.isValid()) {
+                    for (int32_t i = cacheDescriptorList->size(); --i >= 0;) {
+                        UnicodeString* desc = (UnicodeString*)cacheDescriptorList->elementAt(i);
 
                         serviceCache->put(*desc, result, status);
                         if (U_FAILURE(status)) {
@@ -560,7 +551,7 @@ outerEnd:
                         }
 
                         result->ref();
-                        cacheDescriptorList._obj->removeElementAt(i);
+                        cacheDescriptorList->removeElementAt(i);
                     }
                 }
             }
@@ -613,6 +604,7 @@ ICUService::getVisibleIDs(UVector& result, const UnicodeString* matchID, UErrorC
     if (U_FAILURE(status)) {
         return result;
     }
+    UObjectDeleter *savedDeleter = result.setDeleter(uprv_deleteUObject);
 
     {
         Mutex mutex(&lock);
@@ -620,7 +612,7 @@ ICUService::getVisibleIDs(UVector& result, const UnicodeString* matchID, UErrorC
         if (map != NULL) {
             ICUServiceKey* fallbackKey = createKey(matchID, status);
 
-            for (int32_t pos = UHASH_FIRST;;) {
+            for (int32_t pos = UHASH_FIRST; U_SUCCESS(status); ) {
                 const UHashElement* e = map->nextElement(pos);
                 if (e == NULL) {
                     break;
@@ -633,17 +625,8 @@ ICUService::getVisibleIDs(UVector& result, const UnicodeString* matchID, UErrorC
                     }
                 }
 
-                UnicodeString* idClone = new UnicodeString(*id);
-                if (idClone == NULL || idClone->isBogus()) {
-                    delete idClone;
-                    status = U_MEMORY_ALLOCATION_ERROR;
-                    break;
-                }
-                result.addElement(idClone, status);
-                if (U_FAILURE(status)) {
-                    delete idClone;
-                    break;
-                }
+                LocalPointer<UnicodeString> idClone(id->clone(), status);
+                result.adoptElement(idClone.orphan(), status);
             }
             delete fallbackKey;
         }
@@ -651,6 +634,7 @@ ICUService::getVisibleIDs(UVector& result, const UnicodeString* matchID, UErrorC
     if (U_FAILURE(status)) {
         result.removeAllElements();
     }
+    result.setDeleter(savedDeleter);
     return result;
 }
 
@@ -798,7 +782,7 @@ ICUService::getDisplayNames(UVector& result,
         }
         const UnicodeString* dn = (const UnicodeString*)entry->key.pointer;
         StringPair* sp = StringPair::create(*id, *dn, status);
-        result.addElement(sp, status);
+        result.adoptElement(sp, status);
         if (U_FAILURE(status)) {
             result.removeAllElements();
             break;
@@ -812,7 +796,7 @@ ICUService::getDisplayNames(UVector& result,
 URegistryKey
 ICUService::registerInstance(UObject* objToAdopt, const UnicodeString& id, UErrorCode& status) 
 {
-    return registerInstance(objToAdopt, id, TRUE, status);
+    return registerInstance(objToAdopt, id, true, status);
 }
 
 URegistryKey
@@ -846,45 +830,47 @@ ICUService::createSimpleFactory(UObject* objToAdopt, const UnicodeString& id, UB
 }
 
 URegistryKey
-ICUService::registerFactory(ICUServiceFactory* factoryToAdopt, UErrorCode& status) 
+ICUService::registerFactory(ICUServiceFactory* factoryToAdopt, UErrorCode& status)
 {
-    if (U_SUCCESS(status) && factoryToAdopt != NULL) {
+    LocalPointer<ICUServiceFactory>lpFactoryToAdopt(factoryToAdopt);
+    if (U_FAILURE(status) || factoryToAdopt == nullptr) {
+        return nullptr;
+    }
+    {
         Mutex mutex(&lock);
 
-        if (factories == NULL) {
-            factories = new UVector(deleteUObject, NULL, status);
+        if (factories == nullptr) {
+            LocalPointer<UVector> lpFactories(new UVector(uprv_deleteUObject, nullptr, status), status);
             if (U_FAILURE(status)) {
-                delete factories;
-                return NULL;
+                return nullptr;
             }
+            factories = lpFactories.orphan();
         }
-        factories->insertElementAt(factoryToAdopt, 0, status);
+        factories->insertElementAt(lpFactoryToAdopt.orphan(), 0, status);
         if (U_SUCCESS(status)) {
             clearCaches();
-        } else {
-            delete factoryToAdopt;
-            factoryToAdopt = NULL;
         }
-    }
+    }   // Close of mutex lock block.
 
-    if (factoryToAdopt != NULL) {
+    if (U_SUCCESS(status)) {
         notifyChanged();
+        return (URegistryKey)factoryToAdopt;
+    } else {
+        return nullptr;
     }
-
-    return (URegistryKey)factoryToAdopt;
 }
 
 UBool 
 ICUService::unregister(URegistryKey rkey, UErrorCode& status) 
 {
     ICUServiceFactory *factory = (ICUServiceFactory*)rkey;
-    UBool result = FALSE;
+    UBool result = false;
     if (factory != NULL && factories != NULL) {
         Mutex mutex(&lock);
 
         if (factories->removeElement(factory)) {
             clearCaches();
-            result = TRUE;
+            result = true;
         } else {
             status = U_ILLEGAL_ARGUMENT_ERROR;
             delete factory;

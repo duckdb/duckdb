@@ -38,6 +38,7 @@
 #include "uassert.h"
 #include "unicode/numberformatter.h"
 #include "number_longnames.h"
+#include "number_utypes.h"
 
 #include "sharednumberformat.h"
 #include "sharedpluralrules.h"
@@ -46,6 +47,8 @@
 
 
 U_NAMESPACE_BEGIN
+
+using number::impl::UFormattedNumberData;
 
 static constexpr int32_t WIDTH_INDEX_COUNT = UMEASFMT_WIDTH_NARROW + 1;
 
@@ -180,10 +183,10 @@ static UBool getString(
     int32_t len = 0;
     const UChar *resStr = ures_getString(resource, &len, &status);
     if (U_FAILURE(status)) {
-        return FALSE;
+        return false;
     }
-    result.setTo(TRUE, resStr, len);
-    return TRUE;
+    result.setTo(true, resStr, len);
+    return true;
 }
 
 static UnicodeString loadNumericDateFormatterPattern(
@@ -236,7 +239,7 @@ static NumericDateFormatters *loadNumericDateFormatters(
     return result;
 }
 
-template<> U_I18N_API
+template<> 
 const MeasureFormatCacheData *LocaleCacheKey<MeasureFormatCacheData>::createObject(
         const void * /*unused*/, UErrorCode &status) const {
     const char *localeId = fLoc.getName();
@@ -426,10 +429,10 @@ MeasureFormat::~MeasureFormat() {
 
 bool MeasureFormat::operator==(const Format &other) const {
     if (this == &other) { // Same object, equal
-        return TRUE;
+        return true;
     }
     if (!Format::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const MeasureFormat &rhs = static_cast<const MeasureFormat &>(other);
 
@@ -438,7 +441,7 @@ bool MeasureFormat::operator==(const Format &other) const {
 
     // differing widths aren't equivalent
     if (fWidth != rhs.fWidth) {
-        return FALSE;
+        return false;
     }
     // Width the same check locales.
     // We don't need to check locales if both objects have same cache.
@@ -448,10 +451,10 @@ bool MeasureFormat::operator==(const Format &other) const {
         const char *rhsLocaleId = rhs.getLocaleID(status);
         if (U_FAILURE(status)) {
             // On failure, assume not equal
-            return FALSE;
+            return false;
         }
         if (uprv_strcmp(localeId, rhsLocaleId) != 0) {
-            return FALSE;
+            return false;
         }
     }
     // Locales same, check NumberFormat if shared data differs.
@@ -504,12 +507,13 @@ UnicodeString &MeasureFormat::formatMeasurePerUnit(
         status = U_UNSUPPORTED_ERROR;
         return appendTo;
     }
-    number::FormattedNumber result;
+    UFormattedNumberData result;
     if (auto* lnf = df->toNumberFormatter(status)) {
-        result = lnf->unit(measure.getUnit())
+        result.quantity.setToDouble(measure.getNumber().getDouble(status));
+        lnf->unit(measure.getUnit())
             .perUnit(perUnit)
             .unitWidth(getUnitWidth(fWidth))
-            .formatDouble(measure.getNumber().getDouble(status), status);
+            .formatImpl(&result, status);
     }
     DecimalFormat::fieldPositionHelper(result, pos, appendTo.length(), status);
     appendTo.append(result.toTempString(status));
@@ -577,7 +581,10 @@ void MeasureFormat::initMeasureFormat(
         UMeasureFormatWidth w,
         NumberFormat *nfToAdopt,
         UErrorCode &status) {
-    static const char *listStyles[] = {"unit", "unit-short", "unit-narrow"};
+    static const UListFormatterWidth listWidths[] = {
+        ULISTFMT_WIDTH_WIDE,
+        ULISTFMT_WIDTH_SHORT,
+        ULISTFMT_WIDTH_NARROW};
     LocalPointer<NumberFormat> nf(nfToAdopt);
     if (U_FAILURE(status)) {
         return;
@@ -616,7 +623,8 @@ void MeasureFormat::initMeasureFormat(
     delete listFormatter;
     listFormatter = ListFormatter::createInstance(
             locale,
-            listStyles[getRegularWidth(fWidth)],
+            ULISTFMT_TYPE_UNITS,
+            listWidths[getRegularWidth(fWidth)],
             status);
 }
 
@@ -637,7 +645,7 @@ void MeasureFormat::adoptNumberFormat(
 
 UBool MeasureFormat::setMeasureFormatLocale(const Locale &locale, UErrorCode &status) {
     if (U_FAILURE(status) || locale == getLocale(status)) {
-        return FALSE;
+        return false;
     }
     initMeasureFormat(locale, fWidth, NULL, status);
     return U_SUCCESS(status);
@@ -699,11 +707,12 @@ UnicodeString &MeasureFormat::formatMeasure(
         SimpleFormatter formatter(pattern, 0, 1, status);
         return QuantityFormatter::format(formatter, formattedNumber, appendTo, pos, status);
     }
-    number::FormattedNumber result;
+    UFormattedNumberData result;
     if (auto* lnf = df->toNumberFormatter(status)) {
-        result = lnf->unit(amtUnit)
+        result.quantity.setToDouble(amtNumber.getDouble(status));
+        lnf->unit(amtUnit)
             .unitWidth(getUnitWidth(fWidth))
-            .formatDouble(amtNumber.getDouble(status), status);
+            .formatImpl(&result, status);
     }
     DecimalFormat::fieldPositionHelper(result, pos, appendTo.length(), status);
     appendTo.append(result.toTempString(status));
@@ -760,7 +769,7 @@ UnicodeString &MeasureFormat::formatNumeric(
 
     FormattedStringBuilder fsb;
 
-    UBool protect = FALSE;
+    UBool protect = false;
     const int32_t patternLength = pattern.length();
     for (int32_t i = 0; i < patternLength; i++) {
         char16_t c = pattern[i];
@@ -774,11 +783,6 @@ UnicodeString &MeasureFormat::formatNumeric(
             case u's': value = seconds; break;
         }
 
-        // For undefined field we use UNUM_FIELD_COUNT, for historical reasons.
-        // See cleanup bug: https://unicode-org.atlassian.net/browse/ICU-20665
-        // But we give it a clear name, to keep "the ugly part" in one place.
-        constexpr UNumberFormatFields undefinedField = UNUM_FIELD_COUNT;
-
         // There is not enough info to add Field(s) for the unit because all we have are plain
         // text patterns. For example in "21:51" there is no text for something like "hour",
         // while in something like "21h51" there is ("h"). But we can't really tell...
@@ -787,7 +791,7 @@ UnicodeString &MeasureFormat::formatNumeric(
             case u'm':
             case u's':
                 if (protect) {
-                    fsb.appendChar16(c, undefinedField, status);
+                    fsb.appendChar16(c, kUndefinedField, status);
                 } else {
                     UnicodeString tmp;
                     if ((i + 1 < patternLength) && pattern[i + 1] == c) { // doubled
@@ -797,20 +801,20 @@ UnicodeString &MeasureFormat::formatNumeric(
                         numberFormatter->format(value, tmp, status);
                     }
                     // TODO: Use proper Field
-                    fsb.append(tmp, undefinedField, status);
+                    fsb.append(tmp, kUndefinedField, status);
                 }
                 break;
             case u'\'':
                 // '' is escaped apostrophe
                 if ((i + 1 < patternLength) && pattern[i + 1] == c) {
-                    fsb.appendChar16(c, undefinedField, status);
+                    fsb.appendChar16(c, kUndefinedField, status);
                     i++;
                 } else {
                     protect = !protect;
                 }
                 break;
             default:
-                fsb.appendChar16(c, undefinedField, status);
+                fsb.appendChar16(c, kUndefinedField, status);
         }
     }
 
@@ -861,7 +865,7 @@ UnicodeString &MeasureFormat::formatMeasuresSlowTrack(
         return appendTo;
     }
     // Fix up FieldPosition indexes if our field is found.
-    if (offset != -1) {
+    if (fieldPositionFoundIndex != -1 && offset != -1) {
         pos.setBeginIndex(fpos.getBeginIndex() + offset);
         pos.setEndIndex(fpos.getEndIndex() + offset);
     }

@@ -30,7 +30,9 @@
 #include "unicode/unorm2.h"
 #include "unicode/uscript.h"
 #include "unicode/ustring.h"
+#include "unicode/utf16.h"
 #include "cstring.h"
+#include "emojiprops.h"
 #include "mutex.h"
 #include "normalizer2impl.h"
 #include "umutex.h"
@@ -47,7 +49,7 @@ U_NAMESPACE_USE
 
 namespace {
 
-icu::UInitOnce gLayoutInitOnce = U_INITONCE_INITIALIZER;
+icu::UInitOnce gLayoutInitOnce {};
 UDataMemory *gLayoutMemory = nullptr;
 
 UCPTrie *gInpcTrie = nullptr;  // Indic_Positional_Category
@@ -74,7 +76,7 @@ UBool U_CALLCONV uprops_cleanup() {
     gMaxVoValue = 0;
 
     gLayoutInitOnce.reset();
-    return TRUE;
+    return true;
 }
 
 UBool U_CALLCONV
@@ -139,7 +141,7 @@ void U_CALLCONV ulayout_load(UErrorCode &errorCode) {
 }
 
 UBool ulayout_ensureData(UErrorCode &errorCode) {
-    if (U_FAILURE(errorCode)) { return FALSE; }
+    if (U_FAILURE(errorCode)) { return false; }
     umtx_initOnce(gLayoutInitOnce, &ulayout_load, errorCode);
     return U_SUCCESS(errorCode);
 }
@@ -186,7 +188,7 @@ static UBool isJoinControl(const BinaryProperty &/*prop*/, UChar32 c, UProperty 
 
 #if UCONFIG_NO_NORMALIZATION
 static UBool hasFullCompositionExclusion(const BinaryProperty &, UChar32, UProperty) {
-    return FALSE;
+    return false;
 }
 #else
 static UBool hasFullCompositionExclusion(const BinaryProperty &/*prop*/, UChar32 c, UProperty /*which*/) {
@@ -200,7 +202,7 @@ static UBool hasFullCompositionExclusion(const BinaryProperty &/*prop*/, UChar32
 // UCHAR_NF*_INERT properties
 #if UCONFIG_NO_NORMALIZATION
 static UBool isNormInert(const BinaryProperty &, UChar32, UProperty) {
-    return FALSE;
+    return false;
 }
 #else
 static UBool isNormInert(const BinaryProperty &/*prop*/, UChar32 c, UProperty which) {
@@ -213,7 +215,7 @@ static UBool isNormInert(const BinaryProperty &/*prop*/, UChar32 c, UProperty wh
 
 #if UCONFIG_NO_NORMALIZATION
 static UBool changesWhenCasefolded(const BinaryProperty &, UChar32, UProperty) {
-    return FALSE;
+    return false;
 }
 #else
 static UBool changesWhenCasefolded(const BinaryProperty &/*prop*/, UChar32 c, UProperty /*which*/) {
@@ -221,7 +223,7 @@ static UBool changesWhenCasefolded(const BinaryProperty &/*prop*/, UChar32 c, UP
     UErrorCode errorCode=U_ZERO_ERROR;
     const Normalizer2 *nfcNorm2=Normalizer2::getNFCInstance(errorCode);
     if(U_FAILURE(errorCode)) {
-        return FALSE;
+        return false;
     }
     if(nfcNorm2->getDecomposition(c, nfd)) {
         /* c has a decomposition */
@@ -235,7 +237,7 @@ static UBool changesWhenCasefolded(const BinaryProperty &/*prop*/, UChar32 c, UP
             c=U_SENTINEL;
         }
     } else if(c<0) {
-        return FALSE;  /* protect against bad input */
+        return false;  /* protect against bad input */
     }
     if(c>=0) {
         /* single code point */
@@ -250,21 +252,21 @@ static UBool changesWhenCasefolded(const BinaryProperty &/*prop*/, UChar32 c, UP
                                   U_FOLD_CASE_DEFAULT, &errorCode);
         return (UBool)(U_SUCCESS(errorCode) &&
                        0!=u_strCompare(nfd.getBuffer(), nfd.length(),
-                                       dest, destLength, FALSE));
+                                       dest, destLength, false));
     }
 }
 #endif
 
 #if UCONFIG_NO_NORMALIZATION
 static UBool changesWhenNFKC_Casefolded(const BinaryProperty &, UChar32, UProperty) {
-    return FALSE;
+    return false;
 }
 #else
 static UBool changesWhenNFKC_Casefolded(const BinaryProperty &/*prop*/, UChar32 c, UProperty /*which*/) {
     UErrorCode errorCode=U_ZERO_ERROR;
     const Normalizer2Impl *kcf=Normalizer2Factory::getNFKC_CFImpl(errorCode);
     if(U_FAILURE(errorCode)) {
-        return FALSE;
+        return false;
     }
     UnicodeString src(c);
     UnicodeString dest;
@@ -275,8 +277,8 @@ static UBool changesWhenNFKC_Casefolded(const BinaryProperty &/*prop*/, UChar32 
         // Small destCapacity for NFKC_CF(c).
         if(buffer.init(5, errorCode)) {
             const UChar *srcArray=src.getBuffer();
-            kcf->compose(srcArray, srcArray+src.length(), FALSE,
-                          TRUE, buffer, errorCode);
+            kcf->compose(srcArray, srcArray+src.length(), false,
+                          true, buffer, errorCode);
         }
     }
     return U_SUCCESS(errorCode) && dest!=src;
@@ -285,7 +287,7 @@ static UBool changesWhenNFKC_Casefolded(const BinaryProperty &/*prop*/, UChar32 
 
 #if UCONFIG_NO_NORMALIZATION
 static UBool isCanonSegmentStarter(const BinaryProperty &, UChar32, UProperty) {
-    return FALSE;
+    return false;
 }
 #else
 static UBool isCanonSegmentStarter(const BinaryProperty &/*prop*/, UChar32 c, UProperty /*which*/) {
@@ -320,6 +322,10 @@ static UBool isPOSIX_xdigit(const BinaryProperty &/*prop*/, UChar32 c, UProperty
 static UBool isRegionalIndicator(const BinaryProperty &/*prop*/, UChar32 c, UProperty /*which*/) {
     // Property starts are a subset of lb=RI etc.
     return 0x1F1E6<=c && c<=0x1F1FF;
+}
+
+static UBool hasEmojiProperty(const BinaryProperty &/*prop*/, UChar32 c, UProperty which) {
+    return EmojiProps::hasBinaryProperty(c, which);
 }
 
 static const BinaryProperty binProps[UCHAR_BINARY_LIMIT]={
@@ -388,14 +394,21 @@ static const BinaryProperty binProps[UCHAR_BINARY_LIMIT]={
     { UPROPS_SRC_CASE_AND_NORM,  0, changesWhenCasefolded },
     { UPROPS_SRC_CASE,  0, caseBinaryPropertyContains },  // UCHAR_CHANGES_WHEN_CASEMAPPED
     { UPROPS_SRC_NFKC_CF, 0, changesWhenNFKC_Casefolded },
-    { 2,                U_MASK(UPROPS_2_EMOJI), defaultContains },
-    { 2,                U_MASK(UPROPS_2_EMOJI_PRESENTATION), defaultContains },
-    { 2,                U_MASK(UPROPS_2_EMOJI_MODIFIER), defaultContains },
-    { 2,                U_MASK(UPROPS_2_EMOJI_MODIFIER_BASE), defaultContains },
-    { 2,                U_MASK(UPROPS_2_EMOJI_COMPONENT), defaultContains },
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_EMOJI
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_EMOJI_PRESENTATION
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_EMOJI_MODIFIER
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_EMOJI_MODIFIER_BASE
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_EMOJI_COMPONENT
     { 2,                0, isRegionalIndicator },
     { 1,                U_MASK(UPROPS_PREPENDED_CONCATENATION_MARK), defaultContains },
-    { 2,                U_MASK(UPROPS_2_EXTENDED_PICTOGRAPHIC), defaultContains },
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_EXTENDED_PICTOGRAPHIC
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_BASIC_EMOJI
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_EMOJI_KEYCAP_SEQUENCE
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_RGI_EMOJI_MODIFIER_SEQUENCE
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_RGI_EMOJI_FLAG_SEQUENCE
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_RGI_EMOJI_TAG_SEQUENCE
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_RGI_EMOJI_ZWJ_SEQUENCE
+    { UPROPS_SRC_EMOJI, 0, hasEmojiProperty },  // UCHAR_RGI_EMOJI
 };
 
 U_CAPI UBool U_EXPORT2
@@ -403,11 +416,31 @@ u_hasBinaryProperty(UChar32 c, UProperty which) {
     /* c is range-checked in the functions that are called from here */
     if(which<UCHAR_BINARY_START || UCHAR_BINARY_LIMIT<=which) {
         /* not a known binary property */
-        return FALSE;
+        return false;
     } else {
         const BinaryProperty &prop=binProps[which];
         return prop.contains(prop, c, which);
     }
+}
+
+U_CAPI UBool U_EXPORT2
+u_stringHasBinaryProperty(const UChar *s, int32_t length, UProperty which) {
+    if (s == nullptr && length != 0) { return false; }
+    if (length == 1) {
+        return u_hasBinaryProperty(s[0], which);  // single code point
+    } else if (length == 2 || (length < 0 && *s != 0)) {  // not empty string
+        // first code point
+        int32_t i = 0;
+        UChar32 c;
+        U16_NEXT(s, i, length, c);
+        if (length > 0 ? i == length : s[i] == 0) {
+            return u_hasBinaryProperty(c, which);  // single code point
+        }
+    }
+    // Only call into EmojiProps for a relevant property,
+    // so that we not unnecessarily try to load its data file.
+    return UCHAR_BASIC_EMOJI <= which && which <= UCHAR_RGI_EMOJI &&
+        EmojiProps::hasBinaryProperty(s, length, which);
 }
 
 struct IntProperty;
@@ -637,7 +670,7 @@ U_CAPI int32_t U_EXPORT2
 u_getIntPropertyMaxValue(UProperty which) {
     if(which<UCHAR_INT_START) {
         if(UCHAR_BINARY_START<=which && which<UCHAR_BINARY_LIMIT) {
-            return 1;  // maximum TRUE for all binary properties
+            return 1;  // maximum true for all binary properties
         }
     } else if(which<UCHAR_INT_LIMIT) {
         const IntProperty &prop=intProps[which-UCHAR_INT_START];
@@ -779,7 +812,7 @@ u_getFC_NFKC_Closure(UChar32 c, UChar *dest, int32_t destCapacity, UErrorCode *p
         if(folded1Length>UCASE_MAX_STRING_LENGTH) {
             folded1String.setTo(folded1Length);
         } else {
-            folded1String.setTo(FALSE, folded1, folded1Length);
+            folded1String.setTo(false, folded1, folded1Length);
         }
     }
     UnicodeString kc1=nfkc->normalize(folded1String, *pErrorCode);

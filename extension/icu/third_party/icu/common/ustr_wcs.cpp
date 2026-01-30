@@ -106,7 +106,7 @@ _strToWCS(wchar_t *dest,
         if(*pErrorCode==U_BUFFER_OVERFLOW_ERROR){
             tempBuf = saveBuf;
             
-            /* we dont have enough room on the stack grow the buffer */
+            /* we don't have enough room on the stack grow the buffer */
             int32_t newCapacity = 2 * srcLength;
             if(newCapacity <= tempBufCapacity) {
                 newCapacity = _BUFFER_CAPACITY_MULTIPLIER * tempBufCapacity;
@@ -132,7 +132,7 @@ _strToWCS(wchar_t *dest,
     /* done with conversion null terminate the char buffer */
     if(count>=tempBufCapacity){
         tempBuf = saveBuf;
-        /* we dont have enough room on the stack grow the buffer */
+        /* we don't have enough room on the stack grow the buffer */
         if(!u_growAnyBufferFromStatic(stackBuffer,(void**) &tempBuf, &tempBufCapacity, 
                 count+1, count, 1)) {
             goto cleanup;
@@ -334,7 +334,7 @@ _strFromWCS( UChar   *dest,
         
     }else{
         /* here the source is not null terminated 
-         * so it may have nulls embeded and we need to
+         * so it may have nulls embedded and we need to
          * do some extra processing 
          */
         int32_t remaining =cStackCap;
@@ -364,7 +364,7 @@ _strFromWCS( UChar   *dest,
                 }
 
                 /* we have found a null  so convert the 
-                 * chunk from begining of non-null char to null
+                 * chunk from beginning of non-null char to null
                  */
                 retVal = uprv_wcstombs(pCSrc,pSrc,remaining);
 
@@ -387,7 +387,7 @@ _strFromWCS( UChar   *dest,
                  * null terminate it and convert wchar_ts to chars
                  */
                 if(nulLen >= _STACK_BUFFER_CAPACITY){
-                    /* Should rarely occcur */
+                    /* Should rarely occur */
                     /* allocate new buffer buffer */
                     pWStack =(wchar_t*) uprv_malloc(sizeof(wchar_t) * (nulLen + 1));
                     if(pWStack==NULL){

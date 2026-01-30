@@ -38,6 +38,16 @@ if(NOT WITH_INTERNAL_ICU)
 endif()
 disable_target_warnings(icu_extension)
 set(PARAMETERS "-no-warnings")
+set_property(
+    TARGET duckdb_icu_i18n
+    APPEND
+    PROPERTY STATIC_LIBRARY_OPTIONS "-no_warning_for_no_symbols"
+)
+set_property(
+    TARGET duckdb_icu_common
+    APPEND
+    PROPERTY STATIC_LIBRARY_OPTIONS "-no_warning_for_no_symbols"
+)
 build_loadable_extension(icu ${PARAMETERS} ${ICU_EXTENSION_FILES})
 if(NOT WITH_INTERNAL_ICU)
   target_link_libraries(icu_loadable_extension ICU::i18n ICU::uc ICU::data)

@@ -85,16 +85,16 @@ StringTrieBuilder::build(UStringTrieBuildOption buildOption, int32_t elementsLen
 // have a common prefix of length unitIndex.
 int32_t
 StringTrieBuilder::writeNode(int32_t start, int32_t limit, int32_t unitIndex) {
-    UBool hasValue=FALSE;
+    UBool hasValue=false;
     int32_t value=0;
     int32_t type;
     if(unitIndex==getElementStringLength(start)) {
         // An intermediate or final value.
         value=getElementValue(start++);
         if(start==limit) {
-            return writeValueAndFinal(value, TRUE);  // final-value node
+            return writeValueAndFinal(value, true);  // final-value node
         }
-        hasValue=TRUE;
+        hasValue=true;
     }
     // Now all [start..limit[ strings are longer than unitIndex.
     int32_t minUnit=getElementUnit(start, unitIndex);
@@ -209,7 +209,7 @@ StringTrieBuilder::makeNode(int32_t start, int32_t limit, int32_t unitIndex, UEr
     if(U_FAILURE(errorCode)) {
         return NULL;
     }
-    UBool hasValue=FALSE;
+    UBool hasValue=false;
     int32_t value=0;
     if(unitIndex==getElementStringLength(start)) {
         // An intermediate or final value.
@@ -217,7 +217,7 @@ StringTrieBuilder::makeNode(int32_t start, int32_t limit, int32_t unitIndex, UEr
         if(start==limit) {
             return registerFinalValue(value, errorCode);
         }
-        hasValue=TRUE;
+        hasValue=true;
     }
     Node *node;
     // Now all [start..limit[ strings are longer than unitIndex.
@@ -399,10 +399,10 @@ StringTrieBuilder::Node::markRightEdgesFirst(int32_t edgeNumber) {
 bool
 StringTrieBuilder::FinalValueNode::operator==(const Node &other) const {
     if(this==&other) {
-        return TRUE;
+        return true;
     }
     if(!Node::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const FinalValueNode &o=(const FinalValueNode &)other;
     return value==o.value;
@@ -410,16 +410,16 @@ StringTrieBuilder::FinalValueNode::operator==(const Node &other) const {
 
 void
 StringTrieBuilder::FinalValueNode::write(StringTrieBuilder &builder) {
-    offset=builder.writeValueAndFinal(value, TRUE);
+    offset=builder.writeValueAndFinal(value, true);
 }
 
 bool
 StringTrieBuilder::ValueNode::operator==(const Node &other) const {
     if(this==&other) {
-        return TRUE;
+        return true;
     }
     if(!Node::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const ValueNode &o=(const ValueNode &)other;
     return hasValue==o.hasValue && (!hasValue || value==o.value);
@@ -428,10 +428,10 @@ StringTrieBuilder::ValueNode::operator==(const Node &other) const {
 bool
 StringTrieBuilder::IntermediateValueNode::operator==(const Node &other) const {
     if(this==&other) {
-        return TRUE;
+        return true;
     }
     if(!ValueNode::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const IntermediateValueNode &o=(const IntermediateValueNode &)other;
     return next==o.next;
@@ -448,16 +448,16 @@ StringTrieBuilder::IntermediateValueNode::markRightEdgesFirst(int32_t edgeNumber
 void
 StringTrieBuilder::IntermediateValueNode::write(StringTrieBuilder &builder) {
     next->write(builder);
-    offset=builder.writeValueAndFinal(value, FALSE);
+    offset=builder.writeValueAndFinal(value, false);
 }
 
 bool
 StringTrieBuilder::LinearMatchNode::operator==(const Node &other) const {
     if(this==&other) {
-        return TRUE;
+        return true;
     }
     if(!ValueNode::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const LinearMatchNode &o=(const LinearMatchNode &)other;
     return length==o.length && next==o.next;
@@ -474,18 +474,18 @@ StringTrieBuilder::LinearMatchNode::markRightEdgesFirst(int32_t edgeNumber) {
 bool
 StringTrieBuilder::ListBranchNode::operator==(const Node &other) const {
     if(this==&other) {
-        return TRUE;
+        return true;
     }
     if(!Node::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const ListBranchNode &o=(const ListBranchNode &)other;
     for(int32_t i=0; i<length; ++i) {
         if(units[i]!=o.units[i] || values[i]!=o.values[i] || equal[i]!=o.equal[i]) {
-            return FALSE;
+            return false;
         }
     }
-    return TRUE;
+    return true;
 }
 
 int32_t
@@ -526,7 +526,7 @@ StringTrieBuilder::ListBranchNode::write(StringTrieBuilder &builder) {
     // not jump for it at all.
     unitNumber=length-1;
     if(rightEdge==NULL) {
-        builder.writeValueAndFinal(values[unitNumber], TRUE);
+        builder.writeValueAndFinal(values[unitNumber], true);
     } else {
         rightEdge->write(builder);
     }
@@ -538,12 +538,12 @@ StringTrieBuilder::ListBranchNode::write(StringTrieBuilder &builder) {
         if(equal[unitNumber]==NULL) {
             // Write the final value for the one string ending with this unit.
             value=values[unitNumber];
-            isFinal=TRUE;
+            isFinal=true;
         } else {
             // Write the delta to the start position of the sub-node.
             U_ASSERT(equal[unitNumber]->getOffset()>0);
             value=offset-equal[unitNumber]->getOffset();
-            isFinal=FALSE;
+            isFinal=false;
         }
         builder.writeValueAndFinal(value, isFinal);
         offset=builder.write(units[unitNumber]);
@@ -553,10 +553,10 @@ StringTrieBuilder::ListBranchNode::write(StringTrieBuilder &builder) {
 bool
 StringTrieBuilder::SplitBranchNode::operator==(const Node &other) const {
     if(this==&other) {
-        return TRUE;
+        return true;
     }
     if(!Node::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const SplitBranchNode &o=(const SplitBranchNode &)other;
     return unit==o.unit && lessThan==o.lessThan && greaterOrEqual==o.greaterOrEqual;
@@ -587,10 +587,10 @@ StringTrieBuilder::SplitBranchNode::write(StringTrieBuilder &builder) {
 bool
 StringTrieBuilder::BranchHeadNode::operator==(const Node &other) const {
     if(this==&other) {
-        return TRUE;
+        return true;
     }
     if(!ValueNode::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const BranchHeadNode &o=(const BranchHeadNode &)other;
     return length==o.length && next==o.next;

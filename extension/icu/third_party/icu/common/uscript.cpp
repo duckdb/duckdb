@@ -58,8 +58,8 @@ static int32_t
 getCodesFromLocale(const char *locale,
                    UScriptCode *scripts, int32_t capacity, UErrorCode *err) {
     UErrorCode internalErrorCode = U_ZERO_ERROR;
-    char lang[8];
-    char script[8];
+    char lang[8] = {0};
+    char script[8] = {0};
     int32_t scriptLength;
     if(U_FAILURE(*err)) { return 0; }
     // Multi-script languages, equivalent to the LocaleScript data
@@ -113,14 +113,14 @@ uscript_getCode(const char* nameOrAbbrOrLocale,
         return 0;
     }
 
-    triedCode = FALSE;
+    triedCode = false;
     if(uprv_strchr(nameOrAbbrOrLocale, '-')==NULL && uprv_strchr(nameOrAbbrOrLocale, '_')==NULL ){
         /* try long and abbreviated script names first */
         UScriptCode code = (UScriptCode) u_getPropertyValueEnum(UCHAR_SCRIPT, nameOrAbbrOrLocale);
         if(code!=USCRIPT_INVALID_CODE) {
             return setOneCode(code, fillIn, capacity, err);
         }
-        triedCode = TRUE;
+        triedCode = true;
     }
     internalErrorCode = U_ZERO_ERROR;
     length = getCodesFromLocale(nameOrAbbrOrLocale, fillIn, capacity, err);

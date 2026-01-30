@@ -1,4 +1,4 @@
-add_library_unity(
+add_library(
   duckdb_icu_common
   OBJECT
   appendable.cpp
@@ -22,6 +22,7 @@ add_library_unity(
   dictionarydata.cpp
   dtintrv.cpp
   edits.cpp
+  emojiprops.cpp
   errorcode.cpp
   filteredbrk.cpp
   filterednormalizer2.cpp

@@ -59,8 +59,8 @@ struct UPlugData {
   void *context;          /**< user context data */
   char name[UPLUG_NAME_MAX];   /**< name of plugin */
   UPlugLevel  level; /**< level of plugin */
-  UBool   awaitingLoad; /**< TRUE if the plugin is awaiting a load call */
-  UBool   dontUnload; /**< TRUE if plugin must stay resident (leak plugin and lib) */
+  UBool   awaitingLoad; /**< true if the plugin is awaiting a load call */
+  UBool   dontUnload; /**< true if plugin must stay resident (leak plugin and lib) */
   UErrorCode pluginStatus; /**< status code of plugin */
 };
 
@@ -145,7 +145,7 @@ static int32_t searchForLibrary(void *lib) {
   return -1;
 }
 
-U_INTERNAL char * U_EXPORT2
+U_CAPI char * U_EXPORT2
 uplug_findLibrary(void *lib, UErrorCode *status) {
   int32_t libEnt;
   char *ret = NULL;
@@ -161,7 +161,7 @@ uplug_findLibrary(void *lib, UErrorCode *status) {
   return ret;
 }
 
-U_INTERNAL void * U_EXPORT2
+U_CAPI void * U_EXPORT2
 uplug_openLibrary(const char *libName, UErrorCode *status) {
   int32_t libEntry = -1;
   void *lib = NULL;
@@ -209,7 +209,7 @@ uplug_openLibrary(const char *libName, UErrorCode *status) {
   return lib;
 }
 
-U_INTERNAL void U_EXPORT2
+U_CAPI void U_EXPORT2
 uplug_closeLibrary(void *lib, UErrorCode *status) {
   int32_t i;
     
@@ -284,7 +284,7 @@ static void uplug_callPlug(UPlugData *plug, UPlugReason reason, UErrorCode *stat
 
 
 static void uplug_unloadPlug(UPlugData *plug, UErrorCode *status) {
-  if(plug->awaitingLoad) {  /* shouldn't happen. Plugin hasn'tbeen loaded yet.*/
+  if(plug->awaitingLoad) {  /* shouldn't happen. Plugin hasn't been loaded yet.*/
     *status = U_INTERNAL_PROGRAM_ERROR;
     return; 
   }
@@ -295,7 +295,7 @@ static void uplug_unloadPlug(UPlugData *plug, UErrorCode *status) {
 }
 
 static void uplug_queryPlug(UPlugData *plug, UErrorCode *status) {
-  if(!plug->awaitingLoad || !(plug->level == UPLUG_LEVEL_UNKNOWN) ) {  /* shouldn't happen. Plugin hasn'tbeen loaded yet.*/
+  if(!plug->awaitingLoad || !(plug->level == UPLUG_LEVEL_UNKNOWN) ) {  /* shouldn't happen. Plugin hasn't been loaded yet.*/
     *status = U_INTERNAL_PROGRAM_ERROR;
     return; 
   }
@@ -304,11 +304,11 @@ static void uplug_queryPlug(UPlugData *plug, UErrorCode *status) {
   if(U_SUCCESS(*status)) { 
     if(plug->level == UPLUG_LEVEL_INVALID) {
       plug->pluginStatus = U_PLUGIN_DIDNT_SET_LEVEL;
-      plug->awaitingLoad = FALSE;
+      plug->awaitingLoad = false;
     }
   } else {
     plug->pluginStatus = U_INTERNAL_PROGRAM_ERROR;
-    plug->awaitingLoad = FALSE;
+    plug->awaitingLoad = false;
   }
 }
 
@@ -317,12 +317,12 @@ static void uplug_loadPlug(UPlugData *plug, UErrorCode *status) {
   if(U_FAILURE(*status)) {
     return;
   }
-  if(!plug->awaitingLoad || (plug->level < UPLUG_LEVEL_LOW) ) {  /* shouldn't happen. Plugin hasn'tbeen loaded yet.*/
+  if(!plug->awaitingLoad || (plug->level < UPLUG_LEVEL_LOW) ) {  /* shouldn't happen. Plugin hasn't been loaded yet.*/
     *status = U_INTERNAL_PROGRAM_ERROR;
     return;
   }
   uplug_callPlug(plug, UPLUG_REASON_LOAD, status);
-  plug->awaitingLoad = FALSE;
+  plug->awaitingLoad = false;
   if(!U_SUCCESS(*status)) {
     plug->pluginStatus = U_INTERNAL_PROGRAM_ERROR;
   }
@@ -347,8 +347,8 @@ static UPlugData *uplug_allocateEmptyPlug(UErrorCode *status)
   plug->structSize = sizeof(UPlugData);
   plug->name[0]=0;
   plug->level = UPLUG_LEVEL_UNKNOWN; /* initialize to null state */
-  plug->awaitingLoad = TRUE;
-  plug->dontUnload = FALSE;
+  plug->awaitingLoad = true;
+  plug->dontUnload = false;
   plug->pluginStatus = U_ZERO_ERROR;
   plug->libName[0] = 0;
   plug->config[0]=0;
@@ -403,9 +403,9 @@ static void uplug_deallocatePlug(UPlugData *plug, UErrorCode *status) {
     pluginCount = uplug_removeEntryAt(pluginList, pluginCount, sizeof(plug[0]), uplug_pluginNumber(plug));
   } else {
     /* not ok- leave as a message. */
-    plug->awaitingLoad=FALSE;
+    plug->awaitingLoad=false;
     plug->entrypoint=0;
-    plug->dontUnload=TRUE;
+    plug->dontUnload=true;
   }
 }
 
@@ -507,7 +507,7 @@ uplug_getConfiguration(UPlugData *data) {
   return data->config;
 }
 
-U_INTERNAL UPlugData* U_EXPORT2
+U_CAPI UPlugData* U_EXPORT2
 uplug_getPlugInternal(int32_t n) { 
   if(n <0 || n >= pluginCount) {
     return NULL;
@@ -526,7 +526,7 @@ uplug_getPlugLoadStatus(UPlugData *plug) {
 
 
 /**
- * Initialize a plugin fron an entrypoint and library - but don't load it.
+ * Initialize a plugin from an entrypoint and library - but don't load it.
  */
 static UPlugData* uplug_initPlugFromEntrypointAndLibrary(UPlugEntrypoint *entrypoint, const char *config, void *lib, const char *sym,
                                                          UErrorCode *status) {
@@ -558,8 +558,8 @@ uplug_initErrorPlug(const char *libName, const char *sym, const char *config, co
   if(U_FAILURE(*status)) return NULL;
 
   plug->pluginStatus = loadStatus;
-  plug->awaitingLoad = FALSE; /* Won't load. */
-  plug->dontUnload = TRUE; /* cannot unload. */
+  plug->awaitingLoad = false; /* Won't load. */
+  plug->dontUnload = true; /* cannot unload. */
 
   if(sym!=NULL) {
     uprv_strncpy(plug->sym, sym, UPLUG_NAME_MAX);
@@ -646,7 +646,7 @@ static UBool U_CALLCONV uplug_cleanup(void)
   }
   /* close other held libs? */
   gCurrentLevel = UPLUG_LEVEL_LOW;
-  return TRUE;
+  return true;
 }
 
 #if U_ENABLE_DYLOAD
@@ -678,7 +678,7 @@ static void uplug_loadWaitingPlugs(UErrorCode *status) {
             currentLevel = newLevel;
           }
         }
-        pluginToLoad->awaitingLoad = FALSE;
+        pluginToLoad->awaitingLoad = false;
       } 
     }
   }    
@@ -694,7 +694,7 @@ static void uplug_loadWaitingPlugs(UErrorCode *status) {
       } else {
         uplug_loadPlug(pluginToLoad, &subStatus);
       }
-      pluginToLoad->awaitingLoad = FALSE;
+      pluginToLoad->awaitingLoad = false;
     }
   }
     
@@ -707,7 +707,7 @@ static void uplug_loadWaitingPlugs(UErrorCode *status) {
 static char plugin_file[2048] = "";
 #endif
 
-U_INTERNAL const char* U_EXPORT2
+U_CAPI const char* U_EXPORT2
 uplug_getPluginFile() {
 #if U_ENABLE_DYLOAD && !UCONFIG_NO_FILE_IO
   return plugin_file;
@@ -782,8 +782,8 @@ uplug_init(UErrorCode *status) {
     /* plugin_file is not used for processing - it is only used 
        so that uplug_getPluginFile() works (i.e. icuinfo)
     */
-    uprv_strncpy(plugin_file, pluginFile.data(), sizeof(plugin_file));
-        
+    pluginFile.extract(plugin_file, sizeof(plugin_file), *status);
+
 #if UPLUG_TRACE
     DBG((stderr, "pluginfile= %s len %d/%d\n", plugin_file, (int)strlen(plugin_file), (int)sizeof(plugin_file)));
 #endif
