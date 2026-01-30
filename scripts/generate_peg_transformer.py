@@ -5,12 +5,8 @@ from pathlib import Path
 
 GRAMMAR_DIR = Path("extension/autocomplete/grammar/statements")
 TRANSFORMER_DIR = Path("extension/autocomplete/transformer")
-FACTORY_REG_FILE = Path(
-    "extension/autocomplete/transformer/peg_transformer_factory.cpp"
-)
-FACTORY_HPP_FILE = Path(
-    "extension/autocomplete/include/transformer/peg_transformer.hpp"
-)
+FACTORY_REG_FILE = Path("extension/autocomplete/transformer/peg_transformer_factory.cpp")
+FACTORY_HPP_FILE = Path("extension/autocomplete/include/transformer/peg_transformer.hpp")
 
 # Matches: RuleName <- ...
 GRAMMAR_REGEX = re.compile(r"^(\w+)\s*<-")
@@ -240,18 +236,14 @@ def generate_code_for_missing_rules(generation_queue):
 
         # Constraint: Do not generate code for non-existent files
         if not cpp_path.is_file():
-            print(
-                f"\n// --- SKIPPING: {rule_name} (File not found: {cpp_filename}) ---"
-            )
+            print(f"\n// --- SKIPPING: {rule_name} (File not found: {cpp_filename}) ---")
             continue
 
         print(f"--- Generation for rule: {rule_name} ---")
         print(f"1. Add DECLARATION to: {FACTORY_HPP_FILE}")
         print(generate_declaration_stub(rule_name))
 
-        print(
-            f"2. Add REGISTRATION to: {FACTORY_REG_FILE}\nInside the appropriate Register...() function:"
-        )
+        print(f"2. Add REGISTRATION to: {FACTORY_REG_FILE}\nInside the appropriate Register...() function:")
         print(generate_registration_stub(rule_name))
 
         print(f"3. Add IMPLEMENTATION to: {cpp_path}")
@@ -263,18 +255,14 @@ def main():
     """
     Main script to find rules, compare them, and print a report.
     """
-    parser = argparse.ArgumentParser(
-        description="Check transformer coverage and optionally generate stubs."
-    )
+    parser = argparse.ArgumentParser(description="Check transformer coverage and optionally generate stubs.")
     parser.add_argument(
         "-g",
         "--generate",
         action="store_true",
         help="Generate C++ stubs (declaration, registration, implementation) for missing rules.",
     )
-    parser.add_argument(
-        "-s", "--skip-found", action="store_true", help="Skip output of [ FOUND ] rules"
-    )
+    parser.add_argument("-s", "--skip-found", action="store_true", help="Skip output of [ FOUND ] rules")
 
     args = parser.parse_args()
 
@@ -355,9 +343,7 @@ def main():
 
     total_covered = total_found_enum + total_found_registered
     total_issues = total_missing_implementation + total_missing_registration
-    coverage = (
-        (total_covered / total_grammar_rules) * 100 if total_grammar_rules > 0 else 0
-    )
+    coverage = (total_covered / total_grammar_rules) * 100 if total_grammar_rules > 0 else 0
 
     print("\n--- Summary: Rule Coverage ---")
     print(f"{'TOTAL RULES SCANNED':<25} : {total_rules_scanned}")
