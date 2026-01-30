@@ -1215,7 +1215,7 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 static DWORD WindowsGetFileAttributes(LocalFileSystem &fs, const string &filename, optional_ptr<FileOpener> opener) {
-	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
+	auto unicode_path = NormalizePathAndConvertToUnicode(fs, filename, opener);
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
