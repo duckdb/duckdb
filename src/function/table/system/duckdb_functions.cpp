@@ -712,8 +712,7 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	output.SetValue(col++, output_offset, Value::BOOLEAN(function.internal));
 
 	// extension_name, LogicalType::VARCHAR - display empty as NULL
-	output.SetValue(col++, output_offset,
-	                function.extension_name.empty() ? Value() : Value(function.extension_name));
+	output.SetValue(col++, output_offset, function.extension_name.empty() ? Value() : Value(function.extension_name));
 
 	// function_oid, LogicalType::BIGINT
 	output.SetValue(col++, output_offset, Value::BIGINT(NumericCast<int64_t>(function.oid)));

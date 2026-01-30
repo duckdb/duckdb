@@ -183,8 +183,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		// internal, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(type_entry.internal));
 		// extension_name, VARCHAR - display empty as NULL
-		output.SetValue(col++, count,
-		                type_entry.extension_name.empty() ? Value() : Value(type_entry.extension_name));
+		output.SetValue(col++, count, type_entry.extension_name.empty() ? Value() : Value(type_entry.extension_name));
 		// labels, VARCHAR[]
 		if (type.id() == LogicalTypeId::ENUM && type.AuxInfo()) {
 			auto data = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type));
