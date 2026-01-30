@@ -7,13 +7,16 @@
 #include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
+#include "reader/variant_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "reader/uuid_column_reader.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -319,17 +322,100 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 	}
 }
 
+static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::UINTEGER);
+
+	if (!input_p) {
+		return false;
+	}
+	auto &input = *input_p;
+	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB);
+	result.CopyValidity(input);
+
+	auto min = StringStats::Min(input);
+	auto max = StringStats::Max(input);
+
+	if (!result.CanHaveNoNull()) {
+		return true;
+	}
+
+	if (min.empty() && max.empty()) {
+		//! All non-shredded values are NULL or VARIANT_NULL, set the stats to indicate this
+		NumericStats::SetMin<uint32_t>(result, 0);
+		NumericStats::SetMax<uint32_t>(result, 0);
+		result.SetHasNoNull();
+	}
+	return true;
+}
+
+static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p);
+
+static bool ConvertShreddedStatsItem(BaseStatistics &result, BaseStatistics &input) {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::STRUCT);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::STRUCT);
+
+	auto &untyped_value_index_stats = StructStats::GetChildStats(result, 0);
+	auto &typed_value_result = StructStats::GetChildStats(result, 1);
+
+	auto &value_stats = StructStats::GetChildStats(input, 0);
+	auto &typed_value_input = StructStats::GetChildStats(input, 1);
+
+	if (!ConvertUnshreddedStats(untyped_value_index_stats, value_stats)) {
+		return false;
+	}
+	if (!ConvertShreddedStats(typed_value_result, typed_value_input)) {
+		return false;
+	}
+	return true;
+}
+
+static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
+	if (!input_p) {
+		return false;
+	}
+	auto &input = *input_p;
+	result.CopyValidity(input);
+
+	auto type_id = result.GetType().id();
+	if (type_id == LogicalTypeId::LIST) {
+		auto &child_result = ListStats::GetChildStats(result);
+		auto &child_input = ListStats::GetChildStats(input);
+		return ConvertShreddedStatsItem(child_result, child_input);
+	}
+	if (type_id == LogicalTypeId::STRUCT) {
+		auto field_count = StructType::GetChildCount(result.GetType());
+		for (idx_t i = 0; i < field_count; i++) {
+			auto &result_field = StructStats::GetChildStats(result, i);
+			auto &input_field = StructStats::GetChildStats(input, i);
+			if (!ConvertShreddedStatsItem(result_field, input_field)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	result.Copy(input);
+	return true;
+}
+
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
                                                                              const vector<ColumnChunk> &columns,
                                                                              bool can_have_nan) {
 	// Not supported types
 	auto &type = schema.type;
-	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP || type.id() == LogicalTypeId::LIST) {
+	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP) {
 		return nullptr;
 	}
 
 	unique_ptr<BaseStatistics> row_group_stats;
 
+	if (type.id() == LogicalTypeId::LIST) {
+		auto list_stats = ListStats::CreateUnknown(type);
+		auto &child_schema = schema.children[0];
+		auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns, can_have_nan);
+		ListStats::SetChildStats(list_stats, std::move(child_stats));
+		row_group_stats = list_stats.ToUnique();
+		return row_group_stats;
+	}
 	// Structs are handled differently (they dont have stats)
 	if (type.id() == LogicalTypeId::STRUCT) {
 		auto struct_stats = StructStats::CreateUnknown(type);
@@ -340,19 +426,52 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			StructStats::SetChildStats(struct_stats, i, std::move(child_stats));
 		}
 		row_group_stats = struct_stats.ToUnique();
-
-		// null count is generic
-		if (row_group_stats) {
-			row_group_stats->Set(StatsInfo::CAN_HAVE_NULL_AND_VALID_VALUES);
-		}
 		return row_group_stats;
 	} else if (schema.schema_type == ParquetColumnSchemaType::VARIANT) {
-		//! FIXME: there are situations where VARIANT columns can have stats
-		return nullptr;
+		auto children_count = schema.children.size();
+		if (children_count != 3) {
+			return nullptr;
+		}
+		//! Create the VARIANT stats
+		auto &typed_value = schema.children[2];
+		LogicalType logical_type;
+		if (!VariantColumnReader::TypedValueLayoutToType(typed_value.type, logical_type)) {
+			//! We couldn't convert the parquet typed_value to a structured type (likely because a nested 'typed_value'
+			//! field is missing)
+			return nullptr;
+		}
+		auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
+			return LogicalType::STRUCT({{"untyped_value_index", LogicalType::UINTEGER}, {"typed_value", type}});
+		});
+		auto variant_stats = VariantStats::CreateShredded(shredding_type);
+
+		//! Take the root stats
+		auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
+		auto &untyped_value_index_stats = StructStats::GetChildStats(shredded_stats, 0);
+		auto &typed_value_stats = StructStats::GetChildStats(shredded_stats, 1);
+
+		//! Convert the root 'value' -> 'untyped_value_index'
+		auto &value = schema.children[1];
+		D_ASSERT(value.name == "value");
+		auto value_stats = ParquetStatisticsUtils::TransformColumnStatistics(value, columns, can_have_nan);
+		if (!ConvertUnshreddedStats(untyped_value_index_stats, value_stats.get())) {
+			//! Couldn't convert the stats, or there are no stats
+			return nullptr;
+		}
+
+		auto parquet_typed_value_stats =
+		    ParquetStatisticsUtils::TransformColumnStatistics(typed_value, columns, can_have_nan);
+		if (!ConvertShreddedStats(typed_value_stats, parquet_typed_value_stats.get())) {
+			//! Couldn't convert the stats, or there are no stats
+			return nullptr;
+		}
+		//! Set validity to UNKNOWN
+		variant_stats.SetHasNoNull();
+		variant_stats.SetHasNull();
+		return variant_stats.ToUnique();
 	}
 
 	// Otherwise, its a standard column with stats
-
 	auto &column_chunk = columns[schema.column_index];
 	if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
 		// no stats present for row group
@@ -393,16 +512,18 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			row_group_stats = CreateNumericStats(type, schema, parquet_stats);
 		}
 		break;
+	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateUnknown(type);
-		if (parquet_stats.__isset.min_value && StringColumnReader::IsValid(parquet_stats.min_value, true)) {
+		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
+		if (parquet_stats.__isset.min_value && StringColumnReader::IsValid(parquet_stats.min_value, is_varchar)) {
 			StringStats::SetMin(string_stats, parquet_stats.min_value);
-		} else if (parquet_stats.__isset.min && StringColumnReader::IsValid(parquet_stats.min, true)) {
+		} else if (parquet_stats.__isset.min && StringColumnReader::IsValid(parquet_stats.min, is_varchar)) {
 			StringStats::SetMin(string_stats, parquet_stats.min);
 		}
-		if (parquet_stats.__isset.max_value && StringColumnReader::IsValid(parquet_stats.max_value, true)) {
+		if (parquet_stats.__isset.max_value && StringColumnReader::IsValid(parquet_stats.max_value, is_varchar)) {
 			StringStats::SetMax(string_stats, parquet_stats.max_value);
-		} else if (parquet_stats.__isset.max && StringColumnReader::IsValid(parquet_stats.max, true)) {
+		} else if (parquet_stats.__isset.max && StringColumnReader::IsValid(parquet_stats.max, is_varchar)) {
 			StringStats::SetMax(string_stats, parquet_stats.max);
 		}
 		row_group_stats = string_stats.ToUnique();
@@ -456,7 +577,9 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		break;
 	}
 	default:
-		// no stats for you
+		// no specific stats, only create unknown stats to hold validity information
+		auto unknown_stats = BaseStatistics::CreateUnknown(type);
+		row_group_stats = unknown_stats.ToUnique();
 		break;
 	} // end of type switch
 

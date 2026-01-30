@@ -34,7 +34,7 @@ string MinimumUniqueAlias(const BindingAlias &alias, const BindingAlias &other) 
 	return alias.ToString();
 }
 
-optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name) {
+optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name, QueryErrorContext context) {
 	optional_ptr<Binding> result;
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
@@ -45,6 +45,7 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name)
 		if (binding.HasMatchingBinding(column_name)) {
 			if (result || is_using_binding) {
 				throw BinderException(
+				    context,
 				    "Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				    "or \"%s.%s\")",
 				    column_name, MinimumUniqueAlias(result->GetBindingAlias(), binding.GetBindingAlias()), column_name,
@@ -548,7 +549,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		auto binding = GetBinding(expr.relation_name, error);
 		bool is_struct_ref = false;
 		if (!binding) {
-			binding = GetMatchingBinding(expr.relation_name);
+			binding = GetMatchingBinding(expr.relation_name, expr);
 			if (!binding) {
 				error.Throw();
 			}
