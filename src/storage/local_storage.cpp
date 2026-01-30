@@ -583,7 +583,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// Append to the indexes.
 		storage.AppendToIndexes(transaction, append_state);
 		// finally move over the row groups
-		table.MergeStorage(storage.GetCollection(), storage.append_indexes, commit_state);
+		table.MergeStorage(storage.GetCollection(), commit_state);
 	} else {
 		// check if we have written data
 		// if we have, we cannot merge to disk after all

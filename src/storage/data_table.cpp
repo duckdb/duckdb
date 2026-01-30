@@ -1123,8 +1123,7 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 	}
 }
 
-void DataTable::MergeStorage(RowGroupCollection &data, TableIndexList &,
-                             optional_ptr<StorageCommitState> commit_state) {
+void DataTable::MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state) {
 	row_groups->MergeStorage(data, this, commit_state);
 	row_groups->Verify();
 }
