@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -64,11 +65,18 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->bound_constraints = BindConstraints(table);
 
-	// If RETURNING is present, add all physical table columns to the scan so we can pass them through
-	// instead of having to fetch them by row ID in PhysicalDelete.
-	// Generated columns will be computed in the RETURNING projection by the binder.
+	// Add columns to the scan to avoid fetching by row ID in PhysicalDelete:
+	// - If RETURNING: add all physical columns (for RETURNING projection)
+	// - Else if unique indexes exist: add only indexed columns (for delete index tracking)
 	if (!stmt.returning_list.empty()) {
+		// Add all physical columns for RETURNING
 		BindDeleteReturningColumns(table, get, del->return_columns);
+	} else if (table.IsDuckTable()) {
+		// Only optimize for DuckDB tables (not attached external tables like SQLite)
+		auto &storage = table.GetStorage();
+		if (storage.HasUniqueIndexes()) {
+			BindDeleteIndexColumns(table, get, del->return_columns);
+		}
 	}
 
 	del->AddChild(std::move(root));

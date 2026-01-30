@@ -413,6 +413,13 @@ private:
 	void BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
 	                                vector<unique_ptr<Expression>> &projection_expressions,
 	                                LogicalOperator &target_binding);
+	//! Build a sparse mapping for unique index columns only (for DELETE without RETURNING)
+	//! return_columns[storage_idx] = scan_chunk_idx (only for indexed columns)
+	void BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns);
+	//! Overload for MERGE INTO: builds projection expressions and maps storage_idx -> projection_expr_idx
+	void BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+	                            vector<unique_ptr<Expression>> &projection_expressions,
+	                            LogicalOperator &target_binding);
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator,
