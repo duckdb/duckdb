@@ -3,28 +3,28 @@
 # group: [extensions]
 
 statement error
-COPY (SELECT 42) TO 'name.duckdb_extension';
+COPY (SELECT 42) TO '{TEMP_DIR}/name.duckdb_extension';
 ----
 reserved for DuckDB extensions
 
 statement ok
-COPY (SELECT 42) TO 'name_duckdb_extension';
+COPY (SELECT 42) TO '{TEMP_DIR}/name_duckdb_extension';
 
 statement error
-COPY (SELECT NULL::BLOB) TO 'name.duckdb_extension' (FORMAT BLOB);
+COPY (SELECT NULL::BLOB) TO '{TEMP_DIR}/name.duckdb_extension' (FORMAT BLOB);
 ----
 reserved for DuckDB extensions
 
 statement ok
-COPY (SELECT NULL::BLOB) TO 'name.duckdb_extensionz' (FORMAT BLOB);
+COPY (SELECT NULL::BLOB) TO '{TEMP_DIR}/name.duckdb_extensionz' (FORMAT BLOB);
 
 statement error
-ATTACH 'my_name.duckdb_extension'
+ATTACH '{TEMP_DIR}/my_name.duckdb_extension'
 ----
 reserved for DuckDB extensions
 
 statement ok
-ATTACH 'my_name_duckdb_extension'
+ATTACH '{TEMP_DIR}/my_name_duckdb_extension'
 
 statement ok
 FROM read_blob('build/*/repository/*/*/parquet.duckdb_extension');
