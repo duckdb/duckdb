@@ -2,6 +2,7 @@
 # description: Test attach using fsspec
 # group: [attach]
 
+# this doesn't work on Windows because this expands to "file:///Users/..." on Mac/Linux, but "file://C:\.." on Windows
 require notwindows
 
 statement error
