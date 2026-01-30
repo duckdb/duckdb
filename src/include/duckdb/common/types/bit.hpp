@@ -40,7 +40,8 @@ public:
 	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT
 	//! perform data validation.
 	DUCKDB_API static void ToBit(string_t str, bitstring_t &output);
-	//! Convert a hexadecimal string, e.g., 'x2F', to a bit string.
+	//! Convert a hexadecimal string, e.g., 'x2F', to a bit string. This function should ONLY be called after calling
+	//! GetBitSize, since it does NOT perform data validation.
 	DUCKDB_API static void HexToBit(string_t str, bitstring_t &output);
 
 	DUCKDB_API static string ToBit(string_t str);
