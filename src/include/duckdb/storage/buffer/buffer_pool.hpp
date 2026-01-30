@@ -26,7 +26,7 @@ struct EvictionQueue;
 struct BufferEvictionNode {
 	BufferEvictionNode() {
 	}
-	BufferEvictionNode(weak_ptr<BlockMemory> memory_p, idx_t eviction_seq_num);
+	BufferEvictionNode(weak_ptr<BlockMemory> block_memory_p, idx_t eviction_seq_num);
 
 	weak_ptr<BlockMemory> memory_p;
 	idx_t handle_sequence_number;

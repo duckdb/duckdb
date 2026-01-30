@@ -39,8 +39,9 @@ static vector<FileBufferType> EvictionQueueTypeIdxToFileBufferTypes(const idx_t 
 	}
 }
 
-BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockMemory> memory_p, idx_t eviction_seq_num)
-    : memory_p(std::move(memory_p)), handle_sequence_number(eviction_seq_num) {
+BufferEvictionNode::BufferEvictionNode(weak_ptr<BlockMemory> block_memory_p, idx_t eviction_seq_num)
+    : memory_p(std::move(block_memory_p)), handle_sequence_number(eviction_seq_num) {
+	D_ASSERT(!memory_p.expired());
 }
 
 bool BufferEvictionNode::CanUnload(BlockMemory &memory) {
@@ -257,17 +258,17 @@ BufferPool::~BufferPool() {
 }
 
 bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
-	auto &queue = GetEvictionQueueForBlockMemory(handle->GetMemory());
+	auto &memory = handle->GetMemory();
+	auto &queue = GetEvictionQueueForBlockMemory(memory);
 
 	// The block handle is locked during this operation (Unpin),
 	// or the block handle is still a local variable (ConvertToPersistent)
-	D_ASSERT(handle->GetMemory().GetReaders() == 0);
-	auto ts = handle->GetMemory().NextEvictionSequenceNumber();
+	D_ASSERT(memory.GetReaders() == 0);
+	auto ts = memory.NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
-		handle->GetMemory().SetLRUTimestamp(
-		    std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
-		        .time_since_epoch()
-		        .count());
+		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
+		                           .time_since_epoch()
+		                           .count());
 	}
 
 	if (ts != 1) {
