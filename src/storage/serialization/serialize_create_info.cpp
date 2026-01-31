@@ -24,12 +24,12 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(104, "internal", internal);
 	serializer.WriteProperty<OnCreateConflict>(105, "on_conflict", on_conflict);
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
-	serializer.WritePropertyWithDefault<string>(110, "extension_name", extension_name);
 	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
 	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(108, "tags", tags, InsertionOrderPreservingMap<string>());
 	if (serializer.ShouldSerialize(2)) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
+	serializer.WritePropertyWithDefault<string>(110, "extension_name", extension_name);
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -81,10 +81,10 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->internal = internal;
 	result->on_conflict = on_conflict;
 	result->sql = std::move(sql);
-	result->extension_name = std::move(extension_name);
 	result->comment = comment;
 	result->tags = std::move(tags);
 	result->dependencies = dependencies;
+	result->extension_name = std::move(extension_name);
 	return result;
 }
 
