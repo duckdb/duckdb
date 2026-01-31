@@ -1060,7 +1060,8 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
-	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), 0);
+	auto base_row = storage.GetTotalRows();
+	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), base_row);
 	new_row_groups.Initialize(data);
 
 	// if we have any indexes - scan the row groups and add data to the indexes
