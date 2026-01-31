@@ -23,7 +23,8 @@ namespace duckdb {
 
 // A LRU cache implementation, whose value could be accessed in a shared manner with shared pointer.
 // Notice, it's not thread-safe.
-template <typename Key, typename Val, typename KeyHash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>>
+template <typename Key, typename Val, typename Payload, typename Cleanup, typename KeyHash = std::hash<Key>,
+          typename KeyEqual = std::equal_to<Key>>
 class SharedLruCache {
 public:
 	using key_type = Key;
@@ -42,21 +43,16 @@ public:
 	~SharedLruCache() = default;
 
 	// Insert `value` with key `key` and explicit memory size. This will replace any previous entry with the same key.
-	void Put(Key key, shared_ptr<Val> value, unique_ptr<BufferPoolReservation> reservation) {
-		if (reservation == nullptr) {
-			throw InvalidInputException("Reservation cannot be null when emplace into LRU!");
-		}
-
+	void Put(Key key, shared_ptr<Val> value, unique_ptr<Payload> payload, idx_t payload_size) {
 		// Remove existing entry if present
-		const idx_t memory_size = reservation->size;
 		auto existing_it = entry_map.find(key);
 		if (existing_it != entry_map.end()) {
 			DeleteImpl(existing_it);
 		}
 
 		// Evict entries if needed to make room
-		if (max_memory > 0 && memory_size > 0) {
-			EvictIfNeeded(memory_size);
+		if (max_memory > 0 && payload_size > 0) {
+			EvictIfNeeded(payload_size);
 		}
 
 		// Add new entry
@@ -64,10 +60,11 @@ public:
 		Entry new_entry;
 		new_entry.value = std::move(value);
 		new_entry.lru_iterator = lru_list.begin();
-		new_entry.reservation = std::move(reservation);
+		new_entry.payload = std::move(payload);
+		new_entry.payload_size = payload_size;
 
 		entry_map[std::move(key)] = std::move(new_entry);
-		current_memory += memory_size;
+		current_memory += payload_size;
 	}
 
 	// Delete the entry with key `key`.
@@ -96,8 +93,8 @@ public:
 	// Clear the whole cache.
 	void Clear() {
 		for (auto &entry : entry_map) {
-			D_ASSERT(entry.second.reservation != nullptr);
-			entry.second.reservation->Resize(0);
+			Cleanup cleanup;
+			cleanup(entry.second.payload);
 		}
 		entry_map.clear();
 		lru_list.clear();
@@ -112,7 +109,7 @@ public:
 			const auto &stale_key = lru_list.back();
 			auto stale_it = entry_map.find(stale_key);
 			D_ASSERT(stale_it != entry_map.end());
-			freed += stale_it->second.reservation->size;
+			freed += stale_it->second.payload_size;
 			DeleteImpl(stale_it);
 		}
 		return freed;
@@ -137,15 +134,17 @@ private:
 		idx_t memory;
 		typename list<Key>::iterator lru_iterator;
 		// Record memory reservation in the buffer pool, which is used for global memory control.
-		unique_ptr<BufferPoolReservation> reservation;
+		unique_ptr<Payload> payload;
+		idx_t payload_size;
 	};
 
 	using EntryMap = unordered_map<Key, Entry, KeyHash, KeyEqual>;
 
 	void DeleteImpl(typename EntryMap::iterator iter) {
-		current_memory -= iter->second.reservation->size;
+		current_memory -= iter->second.payload_size;
 		D_ASSERT(current_memory >= 0);
-		iter->second.reservation->Resize(0);
+		Cleanup cleanup;
+		cleanup(iter->second.payload);
 		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
 	}

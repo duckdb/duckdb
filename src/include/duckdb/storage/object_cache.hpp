@@ -35,6 +35,13 @@ public:
 	virtual optional_idx GetEstimatedCacheMemory() const = 0;
 };
 
+struct CleanupBufferPool {
+	void operator()(unique_ptr<BufferPoolReservation> &buffer) {
+		D_ASSERT(buffer);
+		buffer->Resize(0);
+	}
+};
+
 class ObjectCache {
 public:
 	//! Default max memory 8GiB for non-evictable cache entries.
@@ -98,7 +105,8 @@ public:
 
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
-		lru_cache.Put(key, value, std::move(reservation));
+		idx_t reservation_size = reservation->size;
+		lru_cache.Put(key, value, std::move(reservation), reservation_size);
 		return value;
 	}
 
@@ -117,7 +125,8 @@ public:
 
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
-		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
+		auto reservation_size = reservation->size;
+		lru_cache.Put(std::move(key), std::move(value), std::move(reservation), reservation_size);
 	}
 
 	void Delete(const string &key) {
@@ -157,7 +166,7 @@ public:
 private:
 	mutable mutex lock_mutex;
 	//! LRU cache for evictable entries
-	SharedLruCache<string, ObjectCacheEntry> lru_cache;
+	SharedLruCache<string, ObjectCacheEntry, BufferPoolReservation, CleanupBufferPool> lru_cache;
 	//! Separate storage for non-evictable entries (i.e., encryption keys)
 	unordered_map<string, shared_ptr<ObjectCacheEntry>> non_evictable_entries;
 	//! Used to create buffer pool reservation on entries creation.
