@@ -21,6 +21,68 @@ IndexEntry::IndexEntry(unique_ptr<Index> index_p) : index(std::move(index_p)) {
 	}
 }
 
+template <class T>
+TableIndexIterationHelper<T>::TableIndexIterationHelper(mutex &index_lock,
+                                                        const vector<unique_ptr<IndexEntry>> &index_entries)
+    : lock(index_lock), index_entries(index_entries) {
+}
+
+template <class T>
+TableIndexIterationHelper<T>::TableIndexIterator::TableIndexIterator(
+    optional_ptr<const vector<unique_ptr<IndexEntry>>> index_entries_p)
+    : index_entries(index_entries_p) {
+	if (index_entries) {
+		if (index_entries->empty()) {
+			index_entries = nullptr;
+		} else {
+			index = 0;
+		}
+	}
+}
+
+template <class T>
+typename TableIndexIterationHelper<T>::TableIndexIterator &
+TableIndexIterationHelper<T>::TableIndexIterator::operator++() {
+	if (index_entries) {
+		auto next_index = index.GetIndex() + 1;
+		if (next_index >= index_entries->size()) {
+			// reached the end
+			index = optional_idx();
+			index_entries = nullptr;
+		} else {
+			// next index
+			index = next_index;
+		}
+	}
+	return *this;
+}
+
+template <class T>
+bool TableIndexIterationHelper<T>::TableIndexIterator::operator!=(const TableIndexIterator &other) const {
+	return index != other.index || index_entries != other.index_entries;
+}
+
+template <>
+IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*() const {
+	return *index_entries->at(index.GetIndex());
+}
+
+template <>
+Index &TableIndexIterationHelper<Index>::TableIndexIterator::operator*() const {
+	return *index_entries->at(index.GetIndex())->index;
+}
+
+TableIndexIterationHelper<IndexEntry> TableIndexList::IndexEntries() const {
+	return TableIndexIterationHelper<IndexEntry>(index_entries_lock, index_entries);
+}
+
+TableIndexIterationHelper<Index> TableIndexList::Indexes() const {
+	return TableIndexIterationHelper<Index>(index_entries_lock, index_entries);
+}
+
+template class TableIndexIterationHelper<IndexEntry>;
+template class TableIndexIterationHelper<Index>;
+
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
 	lock_guard<mutex> lock(index_entries_lock);
