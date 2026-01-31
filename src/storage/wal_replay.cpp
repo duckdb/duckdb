@@ -1078,7 +1078,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 		auto current_row_id = storage.GetTotalRows();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
 			for (idx_t r = 0; r < chunk.size(); r++) {
-				row_ids[r] = current_row_id + r;
+				row_ids[r] = NumericCast<row_t>(current_row_id + r);
 			}
 			current_row_id += chunk.size();
 			for (auto &index : indexes.Indexes()) {
