@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/constraints/not_null_constraint.hpp
+// duckdb/parser/constraints/compression_constraint.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,20 +9,22 @@
 #pragma once
 
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/common/enums/compression_type.hpp"
 
 namespace duckdb {
 
-class NotNullConstraint : public Constraint {
+class CompressionConstraint : public Constraint {
 public:
-	static constexpr const ConstraintType TYPE = ConstraintType::NOT_NULL;
+	static constexpr const ConstraintType TYPE = ConstraintType::COMPRESSION;
 
 public:
-	DUCKDB_API explicit NotNullConstraint(LogicalIndex index, const string column_name = "");
-	DUCKDB_API ~NotNullConstraint() override;
+	DUCKDB_API CompressionConstraint(string column_name, CompressionType compression_type);
+	DUCKDB_API ~CompressionConstraint() override;
 
-	//! Column index this constraint pertains to
-	mutable LogicalIndex index;
+	//! Column name this constraint pertains to
 	string column_name;
+	//! The compression type
+	CompressionType compression_type;
 
 public:
 	DUCKDB_API string ToString() const override;

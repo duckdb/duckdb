@@ -26,6 +26,7 @@ enum class ConstraintType : uint8_t {
 	CHECK = 2,       // CHECK constraint
 	UNIQUE = 3,      // UNIQUE constraint
 	FOREIGN_KEY = 4, // FOREIGN KEY constraint
+	COMPRESSION = 5, // COMPRESSION constraint
 };
 
 enum class ForeignKeyType : uint8_t {

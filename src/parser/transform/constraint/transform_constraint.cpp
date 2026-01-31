@@ -93,6 +93,36 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 	}
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
 		return TransformForeignKeyConstraint(constraint);
+	case duckdb_libpgquery::PG_CONSTR_NOTNULL: {
+		// get column name
+		vector<string> columns;
+		for (auto kc = constraint.keys->head; kc; kc = kc->next) {
+			auto value = PGPointerCast<duckdb_libpgquery::PGValue>(kc->data.ptr_value);
+			columns.emplace_back(value->val.str);
+		}
+		D_ASSERT(columns.size() == 1);
+		// set the Not NULL and use the column name.
+		return make_uniq<NotNullConstraint>(LogicalIndex(DConstants::INVALID_INDEX), columns[0]);
+	}
+	case duckdb_libpgquery::PG_CONSTR_COMPRESSION: {
+		auto compression_type = EnumUtil::FromString<CompressionType>(constraint.compression_name);
+		switch (compression_type) {
+		case CompressionType::COMPRESSION_AUTO:
+		case CompressionType::COMPRESSION_CONSTANT:
+		case CompressionType::COMPRESSION_EMPTY:
+			throw InvalidInputException("Compression method %d cannot be forced", constraint.compression_name);
+		default:
+			break;
+		}
+		// get column name
+		vector<string> columns;
+		for (auto kc = constraint.keys->head; kc; kc = kc->next) {
+			auto value = PGPointerCast<duckdb_libpgquery::PGValue>(kc->data.ptr_value);
+			columns.emplace_back(value->val.str);
+		}
+		D_ASSERT(columns.size() == 1);
+		return make_uniq<CompressionConstraint>(columns[0], compression_type);
+	}
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
 	}

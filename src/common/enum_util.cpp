@@ -1222,19 +1222,20 @@ const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {
 		{ static_cast<uint32_t>(ConstraintType::NOT_NULL), "NOT_NULL" },
 		{ static_cast<uint32_t>(ConstraintType::CHECK), "CHECK" },
 		{ static_cast<uint32_t>(ConstraintType::UNIQUE), "UNIQUE" },
-		{ static_cast<uint32_t>(ConstraintType::FOREIGN_KEY), "FOREIGN_KEY" }
+		{ static_cast<uint32_t>(ConstraintType::FOREIGN_KEY), "FOREIGN_KEY" },
+		{ static_cast<uint32_t>(ConstraintType::COMPRESSION), "COMPRESSION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value) {
-	return StringUtil::EnumToString(GetConstraintTypeValues(), 5, "ConstraintType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetConstraintTypeValues(), 6, "ConstraintType", static_cast<uint32_t>(value));
 }
 
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
-	return static_cast<ConstraintType>(StringUtil::StringToEnum(GetConstraintTypeValues(), 5, "ConstraintType", value));
+	return static_cast<ConstraintType>(StringUtil::StringToEnum(GetConstraintTypeValues(), 6, "ConstraintType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCoordinateReferenceSystemTypeValues() {

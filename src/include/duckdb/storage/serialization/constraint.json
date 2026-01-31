@@ -22,9 +22,14 @@
         "id": 200,
         "name": "index",
         "type": "LogicalIndex"
+      },
+      {
+        "id": 201,
+        "name": "column_name",
+        "type": "string"
       }
     ],
-    "constructor": ["index"]
+    "constructor": ["index", "column_name"]
   },
   {
     "class": "CheckConstraint",
@@ -107,5 +112,23 @@
         "type": "vector<string>"
       }
     ]
+  },
+  {
+    "class": "CompressionConstraint",
+    "base": "Constraint",
+    "enum": "COMPRESSION",
+    "members": [
+      {
+        "id": 200,
+        "name": "column_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "compression_type",
+        "type": "CompressionType"
+      }
+    ],
+    "constructor": ["column_name", "compression_type"]
   }
 ]

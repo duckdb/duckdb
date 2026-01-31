@@ -233,6 +233,17 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 	}
 	case ConstraintType::NOT_NULL: {
 		auto &not_null = constraint.Cast<NotNullConstraint>();
+		if (!not_null.index.IsValid()) {
+			// this came from a create table as statement
+			auto logical_columns = columns.Logical();
+			for (auto &column_def : logical_columns) {
+				auto name = column_def.GetName();
+				if (name == not_null.column_name) {
+					not_null.index = LogicalIndex(column_def.Logical());
+					break;
+				}
+			}
+		}
 		auto &col = columns.GetColumn(not_null.index);
 		return make_uniq<BoundNotNullConstraint>(col.Physical());
 	}
@@ -589,6 +600,30 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		D_ASSERT(fk.info.pk_keys.size() == fk.info.fk_keys.size());
 		D_ASSERT(fk.info.pk_keys.size() == fk.pk_columns.size());
 		D_ASSERT(fk.info.fk_keys.size() == fk.fk_columns.size());
+	}
+
+	// Handle compression constraints: apply compression type to columns and remove from constraint list
+	vector<idx_t> constraints_to_delete;
+	for (idx_t i = 0; i < create_info.constraints.size(); i++) {
+		auto &constraint = create_info.constraints.at(i);
+		if (constraint->type != ConstraintType::COMPRESSION) {
+			continue;
+		}
+		constraints_to_delete.push_back(i);
+		auto &compression = constraint->Cast<CompressionConstraint>();
+		auto &columns = create_info.columns;
+
+		for (idx_t column_index = 0; column_index < columns.LogicalColumnCount(); column_index++) {
+			auto &column_def = columns.GetColumnMutable(LogicalIndex(column_index));
+			if (column_def.GetName() == compression.column_name) {
+				column_def.SetCompressionType(compression.compression_type);
+				break;
+			}
+		}
+	}
+	std::reverse(constraints_to_delete.begin(), constraints_to_delete.end());
+	for (auto &i : constraints_to_delete) {
+		create_info.constraints.erase_at(i);
 	}
 }
 
