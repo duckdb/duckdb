@@ -2787,7 +2787,7 @@ int ShellState::ProcessInput(InputMode mode) {
 			if (startup_text == StartupText::ALL) {
 				ShellHighlight highlight(*this);
 				highlight.PrintText(StringUtil::Format("-- Loading resources from %s\n", duckdb_rc_path),
-				                    PrintOutput::STDERR, HighlightElementType::STARTUP_TEXT);
+                                    PrintOutput::STDERR, HighlightElementType::STARTUP_TEXT);
 				displayed_loading_resources_message = true;
 			}
 			mode = InputMode::FILE;
@@ -2867,7 +2867,8 @@ static string GetHomeDirectory() {
 }
 
 string ShellState::GetDefaultDuckDBRC() {
-	return GetHomeDirectory() + "/.duckdbrc";
+	duckdb::LocalFileSystem lfs;
+	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
 }
 
 /*
