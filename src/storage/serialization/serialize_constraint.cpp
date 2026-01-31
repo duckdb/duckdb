@@ -17,11 +17,11 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ConstraintType>(100, "type");
 	unique_ptr<Constraint> result;
 	switch (type) {
-	case ConstraintType::COMPRESSION:
-		result = CompressionConstraint::Deserialize(deserializer);
-		break;
 	case ConstraintType::CHECK:
 		result = CheckConstraint::Deserialize(deserializer);
+		break;
+	case ConstraintType::COMPRESSION:
+		result = CompressionConstraint::Deserialize(deserializer);
 		break;
 	case ConstraintType::FOREIGN_KEY:
 		result = ForeignKeyConstraint::Deserialize(deserializer);
@@ -46,6 +46,19 @@ void CheckConstraint::Serialize(Serializer &serializer) const {
 unique_ptr<Constraint> CheckConstraint::Deserialize(Deserializer &deserializer) {
 	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "expression");
 	auto result = duckdb::unique_ptr<CheckConstraint>(new CheckConstraint(std::move(expression)));
+	return std::move(result);
+}
+
+void CompressionConstraint::Serialize(Serializer &serializer) const {
+	Constraint::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "column_name", column_name);
+	serializer.WriteProperty<CompressionType>(201, "compression_type", compression_type);
+}
+
+unique_ptr<Constraint> CompressionConstraint::Deserialize(Deserializer &deserializer) {
+	auto column_name = deserializer.ReadPropertyWithDefault<string>(200, "column_name");
+	auto compression_type = deserializer.ReadProperty<CompressionType>(201, "compression_type");
+	auto result = duckdb::unique_ptr<CompressionConstraint>(new CompressionConstraint(std::move(column_name), compression_type));
 	return std::move(result);
 }
 
@@ -97,19 +110,6 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &deserializer)
 	deserializer.ReadPropertyWithDefault<bool>(200, "is_primary_key", result->is_primary_key);
 	deserializer.ReadProperty<LogicalIndex>(201, "index", result->index);
 	deserializer.ReadPropertyWithDefault<vector<string>>(202, "columns", result->columns);
-	return std::move(result);
-}
-
-void CompressionConstraint::Serialize(Serializer &serializer) const {
-	Constraint::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "column_name", column_name);
-	serializer.WriteProperty<CompressionType>(201, "compression_type", compression_type);
-}
-
-unique_ptr<Constraint> CompressionConstraint::Deserialize(Deserializer &deserializer) {
-	auto column_name = deserializer.ReadPropertyWithDefault<string>(200, "column_name");
-	auto compression_type = deserializer.ReadProperty<CompressionType>(201, "compression_type");
-	auto result = duckdb::unique_ptr<CompressionConstraint>(new CompressionConstraint(std::move(column_name), compression_type));
 	return std::move(result);
 }
 
