@@ -118,6 +118,7 @@ add_library(
   numparse_scientific.cpp
   numparse_symbols.cpp
   numparse_validators.cpp
+  numrange_capi.cpp
   numrange_fluent.cpp
   numrange_impl.cpp
   numsys.cpp
