@@ -238,8 +238,8 @@ string CSVWriter::AddEscapes(char to_be_escaped, char escape, const string &val)
 		}
 		if (escape != '\0') {
 			new_val += escape;
-			found = val.find(to_be_escaped, found + 1);
 		}
+		found = val.find(to_be_escaped, found + 1);
 	}
 	while (i < val.length()) {
 		new_val += val[i];
