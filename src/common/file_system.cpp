@@ -916,6 +916,10 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 }
 
 string FileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+	if (IsRemoteFile(path_p)) {
+		// don't canonicalize remote paths
+		return path_p;
+	}
 	auto path_sep = PathSeparator(path_p);
 	auto elements = StringUtil::Split(path_p, path_sep);
 
