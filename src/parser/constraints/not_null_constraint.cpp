@@ -1,6 +1,6 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/helper.hpp"
 
 namespace duckdb {

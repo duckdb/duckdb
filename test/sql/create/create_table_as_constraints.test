@@ -5,53 +5,53 @@
 statement ok
 pragma enable_verification
 
-# statement ok
-# create table t1 CONSTRAINTS (a primary key) as select range a from range(10);
-#
-# statement error
-# insert into t1 values (0), (1), (2);
-# ----
-# <REGEX>:.*Duplicate key.*violates primary key constraint.*
-#
-#
-# # Check contraints.
-# statement ok
-# create or replace table t1 CONSTRAINTS (id CHECK (id is not null)) as select (range+1)::VARCHAR id from range(10);
-#
-# statement error
-# insert into t1 values (NULL);
-# ----
-# <REGEX>:.*CHECK constraint failed.*
-#
-# statement ok
-# create or replace table t1 CONSTRAINTS (id CHECK (NOT contains(id, '100' ))) as select (range+1)::VARCHAR id from range(10);
-#
-# statement error
-# insert into t1 values ('100');
-# ----
-# <REGEX>:.*CHECK constraint failed.*
-#
-# statement ok
-# create or replace table t1 CONSTRAINTS (a NOT NULL) as select range a from range(10);
-#
-# statement error
-# insert into t1 values (NULL);
-# ----
-# <REGEX>:.*NOT NULL constraint failed.*
-#
-# # primary key double constraint
-# statement ok
-# create or replace table t1 CONSTRAINTS (PRIMARY KEY(a, b)) as select range a, range b from range(10);
-#
-# # can insert still unique value
-# statement ok
-# insert into t1 values (1, 2);
-#
-# # constraint violation
-# statement error
-# insert into t1 values (1, 1);
-# ----
-# <REGEX>:.*violates primary key constraint.*
+statement ok
+create table t1 CONSTRAINTS (a primary key) as select range a from range(10);
+
+statement error
+insert into t1 values (0), (1), (2);
+----
+<REGEX>:.*Duplicate key.*violates primary key constraint.*
+
+
+# Check contraints.
+statement ok
+create or replace table t1 CONSTRAINTS (id CHECK (id is not null)) as select (range+1)::VARCHAR id from range(10);
+
+statement error
+insert into t1 values (NULL);
+----
+<REGEX>:.*CHECK constraint failed.*
 
 statement ok
-create table t1 CONSTRAINTS (a using compression RLE) as select range a from range(10);
+create or replace table t1 CONSTRAINTS (id CHECK (NOT contains(id, '100' ))) as select (range+1)::VARCHAR id from range(10);
+
+statement error
+insert into t1 values ('100');
+----
+<REGEX>:.*CHECK constraint failed.*
+
+statement ok
+create or replace table t1 CONSTRAINTS (a NOT NULL) as select range a from range(10);
+
+statement error
+insert into t1 values (NULL);
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+# primary key double constraint
+statement ok
+create or replace table t1 CONSTRAINTS (PRIMARY KEY(a, b)) as select range a, range b from range(10);
+
+# can insert still unique value
+statement ok
+insert into t1 values (1, 2);
+
+# constraint violation
+statement error
+insert into t1 values (1, 1);
+----
+<REGEX>:.*violates primary key constraint.*
+
+statement ok
+create or replace table t1 CONSTRAINTS (a using compression RLE) as select range a from range(10);
