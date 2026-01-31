@@ -49,3 +49,4 @@ Please also refer to our [Build Guide](https://duckdb.org/docs/stable/dev/buildi
 ## Support
 
 See the [Support Options](https://duckdblabs.com/support/) page.
+ 
