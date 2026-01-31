@@ -120,9 +120,12 @@ static T DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
 	data++;
 
 	auto result = Load<T>(data);
-	//! FIXME: The spec says:
-	//! The implied precision of a decimal value is `floor(log_10(val)) + 1`
-	width = DecimalWidth<T>::max;
+	auto abs_val = result;
+	if (abs_val < 0) {
+		abs_val = -abs_val;
+	}
+	uint8_t digits = floor(log10(abs_val)) + 1;
+	width = digits;
 	return result;
 }
 
@@ -181,24 +184,21 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		uint8_t width;
 
 		auto value = DecodeDecimal<int32_t>(data, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DECIMAL8: {
 		uint8_t scale;
 		uint8_t width;
 
 		auto value = DecodeDecimal<int64_t>(data, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DECIMAL16: {
 		uint8_t scale;
 		uint8_t width;
 
 		auto value = DecodeDecimal<hugeint_t>(data, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DATE: {
 		date_t value;
@@ -215,8 +215,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		micros_ts.value = Load<int64_t>(data);
 
 		auto value = Value::TIMESTAMP(micros_ts);
-		auto value_str = value.ToString();
-		return VariantValue(Value(value_str));
+		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::BINARY: {
 		//! Follow the JSON serialization guide by converting BINARY to Base64:
@@ -252,13 +251,11 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
 		nanos_ts.value = Load<int64_t>(data);
 
 		auto value = Value::TIMESTAMPNS(nanos_ts);
-		auto value_str = value.ToString();
-		return VariantValue(Value(value_str));
+		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::UUID: {
 		auto uuid_value = UUIDValueConversion::ReadParquetUUID(data);
-		auto value_str = UUID::ToString(uuid_value);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::UUID(uuid_value));
 	}
 	default:
 		throw NotImplementedException("Variant PrimitiveTypeDecode not implemented for type (%d)",

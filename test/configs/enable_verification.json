@@ -130,6 +130,7 @@
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/optimizer/statistics/statistics_numeric.test",
         "test/parquet/parquet_stats_function.test",
+        "test/sql/copy/parquet/shredded_variant_stats.test",
         "test/sql/alter/add_col/test_add_col_stats.test",
         "test/sql/function/generic/test_stats.test",
         "test/sql/pg_catalog/pg_prepared_statements.test",
