@@ -219,6 +219,9 @@ public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(CatalogTransaction transaction, const string &entry_name) override;
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;
 	vector<string> GetDefaultEntries() override;
+	bool LockDuringCreate() const override {
+		return true;
+	}
 
 protected:
 	unique_ptr<CatalogEntry> CreateDefaultEntryInternal(const string &entry_name);
