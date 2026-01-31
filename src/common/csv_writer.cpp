@@ -228,25 +228,26 @@ void CSVWriter::WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
 }
 
 string CSVWriter::AddEscapes(char to_be_escaped, char escape, const string &val) {
-	idx_t i = 0;
-	string new_val = "";
-	idx_t found = val.find(to_be_escaped);
+    if (escape == '\0') {
+        return val;
+    }
+    idx_t i = 0;
+    string new_val = "";
+    idx_t found = val.find(to_be_escaped);
 
-	while (found != string::npos) {
-		while (i < found) {
-			new_val += val[i];
-			i++;
-		}
-		if (escape != '\0') {
-			new_val += escape;
-			found = val.find(to_be_escaped, found + 1);
-		}
-	}
-	while (i < val.length()) {
-		new_val += val[i];
-		i++;
-	}
-	return new_val;
+    while (found != string::npos) {
+        while (i < found) {
+            new_val += val[i];
+            i++;
+        }
+        new_val += escape;
+        found = val.find(to_be_escaped, found + 1);
+    }
+    while (i < val.length()) {
+        new_val += val[i];
+        i++;
+    }
+    return new_val;
 }
 
 bool CSVWriter::RequiresQuotes(const char *str, idx_t len, const string &null_str,
