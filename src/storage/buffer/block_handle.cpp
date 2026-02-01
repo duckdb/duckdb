@@ -54,14 +54,8 @@ BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 			// Thus, it could've been offloaded to disk, and we should remove the file.
 			GetBufferManager().DeleteTemporaryFile(*this);
 		}
-	} catch (std::exception &ex) {
-		ErrorData data(ex);
-		try {
-			DUCKDB_LOG_ERROR(GetBufferManager().GetDatabase(),
-			                 "Silent exception in BlockMemory::~BlockMemory():\t" + data.Message());
-		} catch (...) { // NOLINT
-		}
 	} catch (...) { // NOLINT
+		            // FIXME: log silent exceptions.
 	}
 }
 
@@ -175,14 +169,8 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 	}
 	try {
 		block_manager.UnregisterPersistentBlock(*this);
-	} catch (std::exception &ex) {
-		ErrorData data(ex);
-		try {
-			DUCKDB_LOG_ERROR(block_manager.GetBufferManager().GetDatabase(),
-			                 "Silent exception in BlockHandle::~BlockHandle():\t" + data.Message());
-		} catch (...) { // NOLINT
-		}
 	} catch (...) { // NOLINT
+		            // FIXME: log silent exceptions.
 	}
 }
 
