@@ -32,8 +32,8 @@ public:
 	using hasher = KeyHash;
 	using key_equal = KeyEqual;
 
-	// @param max_memory_p: Maximum total memory (in bytes) of entries. 0 means unlimited.
-	explicit SharedLruCache(idx_t max_memory_p) : max_memory(max_memory_p), current_memory(0) {
+	// @param max_total_weight_p: Maximum total weight (in relevant unit) of entries. 0 means unlimited.
+	explicit SharedLruCache(idx_t max_total_weight_p) : max_total_weight(max_total_weight_p), current_total_weight(0) {
 	}
 
 	// Disable copy and move
@@ -52,11 +52,11 @@ public:
 		}
 
 		auto payload = make_uniq<Payload>(std::forward<Types>(constructor_args)...);
-		auto payload_size = payload->GetWeight();
+		auto payload_weight = payload->GetWeight();
 
 		// Evict entries if needed to make room
-		if (max_memory > 0 && payload_size > 0) {
-			EvictIfNeeded(payload_size);
+		if (max_total_weight > 0 && payload_weight > 0) {
+			EvictIfNeeded(payload_weight);
 		}
 
 		// Add new entry
@@ -65,10 +65,10 @@ public:
 		new_entry.value = std::move(value);
 		new_entry.lru_iterator = lru_list.begin();
 		new_entry.payload = std::move(payload);
-		new_entry.payload_size = payload_size;
+		new_entry.payload_weight = payload_weight;
 
 		entry_map[std::move(key)] = std::move(new_entry);
-		current_memory += payload_size;
+		current_total_weight += payload_weight;
 	}
 
 	// Delete the entry with key `key`.
@@ -98,7 +98,7 @@ public:
 	void Clear() {
 		entry_map.clear();
 		lru_list.clear();
-		current_memory = 0;
+		current_total_weight = 0;
 	}
 
 	// Evict entries based on their access, until we've freed at least the target number of bytes or there's no entries
@@ -109,17 +109,17 @@ public:
 			const auto &stale_key = lru_list.back();
 			auto stale_it = entry_map.find(stale_key);
 			D_ASSERT(stale_it != entry_map.end());
-			freed += stale_it->second.payload_size;
+			freed += stale_it->second.payload_weight;
 			DeleteImpl(stale_it);
 		}
 		return freed;
 	}
 
 	idx_t MaxMemory() const {
-		return max_memory;
+		return max_total_weight;
 	}
 	idx_t CurrentMemory() const {
-		return current_memory;
+		return current_total_weight;
 	}
 	size_t Size() const {
 		return entry_map.size();
@@ -133,27 +133,27 @@ private:
 		shared_ptr<Val> value;
 		idx_t memory;
 		typename list<Key>::iterator lru_iterator;
-		// Record memory reservation in the buffer pool, which is used for global memory control.
+		// Record payload weight, which is used for global weight control.
 		unique_ptr<Payload> payload;
-		idx_t payload_size;
+		idx_t payload_weight;
 	};
 
 	using EntryMap = unordered_map<Key, Entry, KeyHash, KeyEqual>;
 
 	void DeleteImpl(typename EntryMap::iterator iter) {
-		current_memory -= iter->second.payload_size;
-		D_ASSERT(current_memory >= 0);
+		current_total_weight -= iter->second.payload_weight;
+		D_ASSERT(current_total_weight >= 0);
 		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
 	}
 
-	void EvictIfNeeded(idx_t required_memory) {
-		if (max_memory == 0) {
+	void EvictIfNeeded(idx_t required_weight) {
+		if (max_total_weight == 0) {
 			return;
 		}
 
 		// Evict LRU entries until we have enough space
-		while (!lru_list.empty() && (current_memory + required_memory > max_memory)) {
+		while (!lru_list.empty() && (current_total_weight + required_weight > max_total_weight)) {
 			const auto &stale_key = lru_list.back();
 			auto stale_it = entry_map.find(stale_key);
 			if (stale_it != entry_map.end()) {
@@ -165,8 +165,8 @@ private:
 		}
 	}
 
-	const idx_t max_memory;
-	idx_t current_memory;
+	const idx_t max_total_weight;
+	idx_t current_total_weight;
 	EntryMap entry_map;
 	list<Key> lru_list;
 };
