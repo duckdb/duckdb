@@ -117,7 +117,6 @@ public:
 
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
-		idx_t reservation_size = reservation->size;
 		lru_cache.Put(key, value, std::move(reservation));
 		return value;
 	}
@@ -137,7 +136,6 @@ public:
 
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
-		auto reservation_size = reservation->size;
 		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
 	}
 
