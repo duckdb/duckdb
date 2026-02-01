@@ -2,13 +2,6 @@
 # description: Test the AGGREGATE_STATE type name with get_state_type callback
 # group: [aggregates]
 
-require noforcestorage
-
-# We would like to serialize the type info with the latest storage version
-# Forward compatability won't be harmed, as older DuckDB versions are used in CI
-statement ok
-SET storage_compatibility_version = 'latest';
-
 foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
 
 # avg() has the new get_state_type callback
@@ -58,9 +51,9 @@ endloop
 query T
 SELECT typeof(sum(1) EXPORT_STATE);
 ----
-AGGREGATE_STATE<sum(INTEGER)::HUGEINT>
+LEGACY_AGGREGATE_STATE<sum(INTEGER)::HUGEINT>
 
-# sum(INT) (as not opted-in) is still serialized correctly in both storage modes (backward & forward compatibiltiy will be run in CI)
+# sum(INT) (as not opted-in) is still serialized correctly (backward & forward compatibiltiy will be run in CI)
 statement ok
 CREATE TABLE t2_sum_int AS SELECT sum(range::INT) EXPORT_STATE as state FROM range(10);
 
@@ -68,7 +61,7 @@ CREATE TABLE t2_sum_int AS SELECT sum(range::INT) EXPORT_STATE as state FROM ran
 query T
 SELECT typeof(corr(1.0::DOUBLE, 2.0::DOUBLE) EXPORT_STATE);
 ----
-AGGREGATE_STATE<corr(DOUBLE, DOUBLE)::DOUBLE>
+LEGACY_AGGREGATE_STATE<corr(DOUBLE, DOUBLE)::DOUBLE>
 
 # Test with interval type
 query T
@@ -118,10 +111,3 @@ query T
 SELECT (avg(42) export_state)::struct(count ubigint, "value" double);
 ----
 {'count': 1, 'value': 42.0}
-
-# Test that we block serialization of struct based aggregate states to older storage compatibility versions
-load __TEST_DIR__/test_state_export.db readwrite v1.4.4
-
-statement error
-CREATE TABLE my_table AS SELECT avg(5) EXPORT_STATE;
-----

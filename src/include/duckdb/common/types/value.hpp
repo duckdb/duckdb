@@ -209,7 +209,7 @@ public:
 	DUCKDB_API static Value TYPE(const string_t &serialized_type);
 
 	//! Creates an aggregate state
-	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
+	DUCKDB_API static Value LEGACY_AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
 
 	template <class T>
 	T GetValue() const;
