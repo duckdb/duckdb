@@ -23,7 +23,7 @@ namespace duckdb {
 
 // A LRU cache implementation, whose value could be accessed in a shared manner with shared pointer.
 // Notice, it's not thread-safe.
-template <typename Key, typename Val, typename Payload, typename Cleanup, typename KeyHash = std::hash<Key>,
+template <typename Key, typename Val, typename Payload, typename KeyHash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
 class SharedLruCache {
 public:
@@ -43,12 +43,16 @@ public:
 	~SharedLruCache() = default;
 
 	// Insert `value` with key `key` and explicit memory size. This will replace any previous entry with the same key.
-	void Put(Key key, shared_ptr<Val> value, unique_ptr<Payload> payload, idx_t payload_size) {
+	template <typename... Types>
+	void Put(Key key, shared_ptr<Val> value, Types... constructor_args) {
 		// Remove existing entry if present
 		auto existing_it = entry_map.find(key);
 		if (existing_it != entry_map.end()) {
 			DeleteImpl(existing_it);
 		}
+
+		auto payload = make_uniq<Payload>(std::forward<Types>(constructor_args)...);
+		auto payload_size = payload->GetWeight();
 
 		// Evict entries if needed to make room
 		if (max_memory > 0 && payload_size > 0) {
@@ -92,10 +96,6 @@ public:
 
 	// Clear the whole cache.
 	void Clear() {
-		for (auto &entry : entry_map) {
-			Cleanup cleanup;
-			cleanup(entry.second.payload);
-		}
 		entry_map.clear();
 		lru_list.clear();
 		current_memory = 0;
@@ -143,8 +143,6 @@ private:
 	void DeleteImpl(typename EntryMap::iterator iter) {
 		current_memory -= iter->second.payload_size;
 		D_ASSERT(current_memory >= 0);
-		Cleanup cleanup;
-		cleanup(iter->second.payload);
 		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
 	}

@@ -19,6 +19,18 @@
 
 namespace duckdb {
 
+struct BufferPoolPayload {
+	BufferPoolPayload(unique_ptr<TempBufferPoolReservation> &&res) : reservation(std::move(res)) {
+	}
+	~BufferPoolPayload() {
+		reservation->Resize(0);
+	}
+	idx_t GetWeight() const {
+		return reservation->size;
+	}
+	unique_ptr<BufferPoolReservation> reservation;
+};
+
 // Forward declaration.
 class BufferPool;
 
@@ -106,7 +118,7 @@ public:
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
 		idx_t reservation_size = reservation->size;
-		lru_cache.Put(key, value, std::move(reservation), reservation_size);
+		lru_cache.Put(key, value, std::move(reservation));
 		return value;
 	}
 
@@ -126,7 +138,7 @@ public:
 		auto reservation =
 		    make_uniq<TempBufferPoolReservation>(MemoryTag::OBJECT_CACHE, buffer_pool, estimated_memory.GetIndex());
 		auto reservation_size = reservation->size;
-		lru_cache.Put(std::move(key), std::move(value), std::move(reservation), reservation_size);
+		lru_cache.Put(std::move(key), std::move(value), std::move(reservation));
 	}
 
 	void Delete(const string &key) {
@@ -166,7 +178,8 @@ public:
 private:
 	mutable mutex lock_mutex;
 	//! LRU cache for evictable entries
-	SharedLruCache<string, ObjectCacheEntry, BufferPoolReservation, CleanupBufferPool> lru_cache;
+
+	SharedLruCache<string, ObjectCacheEntry, duckdb::BufferPoolPayload> lru_cache;
 	//! Separate storage for non-evictable entries (i.e., encryption keys)
 	unordered_map<string, shared_ptr<ObjectCacheEntry>> non_evictable_entries;
 	//! Used to create buffer pool reservation on entries creation.
