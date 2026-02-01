@@ -107,6 +107,18 @@ SELECT typeof(avg(1.2) EXPORT_STATE) = 'AGGREGATE_STATE<avg(DECIMAL(2,1))::DOUBL
 ----
 true
 
+# Casting to struct should work
+query T
+SELECT (avg(42) export_state)::struct(count ubigint, "value" integer);
+----
+{'count': 1, 'value': 42}
+
+# Casting to struct that should be casted to a different struct should also work
+query T
+SELECT (avg(42) export_state)::struct(count ubigint, "value" double);
+----
+{'count': 1, 'value': 42.0}
+
 # Test that we block serialization of struct based aggregate states to older storage compatibility versions
 load __TEST_DIR__/test_state_export.db readwrite v1.4.4
 
