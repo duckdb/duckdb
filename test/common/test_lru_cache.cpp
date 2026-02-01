@@ -38,7 +38,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 		REQUIRE(result != nullptr);
 		REQUIRE(result->value == 42);
 		REQUIRE(cache.Size() == 1);
-		REQUIRE(cache.CurrentMemory() == 100);
+		REQUIRE(cache.CurrentTotalWeight() == 100);
 	}
 
 	SECTION("Get non-existent key") {
@@ -59,7 +59,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 		auto result = cache.Get("key1");
 		REQUIRE(result != nullptr);
 		REQUIRE(result->value == 2);
-		REQUIRE(cache.CurrentMemory() == 150);
+		REQUIRE(cache.CurrentTotalWeight() == 150);
 	}
 
 	SECTION("Delete") {
@@ -71,7 +71,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 		REQUIRE(deleted == true);
 		REQUIRE(cache.Get("key1") == nullptr);
 		REQUIRE(cache.Size() == 0);
-		REQUIRE(cache.CurrentMemory() == 0);
+		REQUIRE(cache.CurrentTotalWeight() == 0);
 
 		const bool deleted_again = cache.Delete("key1");
 		REQUIRE(!deleted_again);
@@ -104,7 +104,7 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 		REQUIRE(cache.Get("key2") != nullptr);
 		REQUIRE(cache.Get("key3") != nullptr);
 		REQUIRE(cache.Size() == 2);
-		REQUIRE(cache.CurrentMemory() <= 500);
+		REQUIRE(cache.CurrentTotalWeight() <= 500);
 	}
 
 	SECTION("LRU ordering") {
@@ -173,7 +173,7 @@ TEST_CASE("LRU Cache Clear", "[lru_cache]") {
 	cache.Clear();
 
 	REQUIRE(cache.Size() == 0);
-	REQUIRE(cache.CurrentMemory() == 0);
+	REQUIRE(cache.CurrentTotalWeight() == 0);
 	REQUIRE(cache.Get("key1") == nullptr);
 	REQUIRE(cache.Get("key2") == nullptr);
 }
@@ -195,14 +195,14 @@ TEST_CASE("LRU Cache Evict To Reduce Memory", "[lru_cache]") {
 		cache.Put(StringUtil::Format("key%d", idx), val, std::move(reservation));
 	}
 	REQUIRE(cache.Size() == 10);
-	REQUIRE(cache.CurrentMemory() == 10 * obj_size);
+	REQUIRE(cache.CurrentTotalWeight() == 10 * obj_size);
 
 	// Perform cache entries eviction, and check memory consumption.
 	// Evict 4 * objects, leaving 6 objects in cache
 	const idx_t bytes_to_free = 4 * obj_size;
-	const idx_t freed = cache.EvictToReduceMemory(bytes_to_free);
+	const idx_t freed = cache.EvictToReduceAtLeast(bytes_to_free);
 	REQUIRE(freed >= bytes_to_free); // Should free at least the requested amount
-	REQUIRE(cache.CurrentMemory() == 6 * obj_size);
+	REQUIRE(cache.CurrentTotalWeight() == 6 * obj_size);
 	REQUIRE(cache.Size() == 6);
 
 	// The first 4 items should be evicted.

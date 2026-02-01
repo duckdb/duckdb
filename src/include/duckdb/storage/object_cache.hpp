@@ -153,11 +153,11 @@ public:
 
 	idx_t GetMaxMemory() const {
 		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.MaxMemory();
+		return lru_cache.Capacity();
 	}
 	idx_t GetCurrentMemory() const {
 		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.CurrentMemory();
+		return lru_cache.CurrentTotalWeight();
 	}
 	size_t GetEntryCount() const {
 		const lock_guard<mutex> lock(lock_mutex);
@@ -170,7 +170,7 @@ public:
 
 	idx_t EvictToReduceMemory(idx_t target_bytes) {
 		const lock_guard<mutex> lock(lock_mutex);
-		return lru_cache.EvictToReduceMemory(target_bytes);
+		return lru_cache.EvictToReduceAtLeast(target_bytes);
 	}
 
 private:

@@ -103,9 +103,9 @@ public:
 
 	// Evict entries based on their access, until we've freed at least the target number of bytes or there's no entries
 	// in the cache. Return number of bytes freed.
-	idx_t EvictToReduceMemory(idx_t target_bytes) {
+	idx_t EvictToReduceAtLeast(idx_t target_weight) {
 		idx_t freed = 0;
-		while (!lru_list.empty() && freed < target_bytes) {
+		while (!lru_list.empty() && freed < target_weight) {
 			const auto &stale_key = lru_list.back();
 			auto stale_it = entry_map.find(stale_key);
 			D_ASSERT(stale_it != entry_map.end());
@@ -115,10 +115,10 @@ public:
 		return freed;
 	}
 
-	idx_t MaxMemory() const {
+	idx_t Capacity() const {
 		return max_total_weight;
 	}
-	idx_t CurrentMemory() const {
+	idx_t CurrentTotalWeight() const {
 		return current_total_weight;
 	}
 	size_t Size() const {
