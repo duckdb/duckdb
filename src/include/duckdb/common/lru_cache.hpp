@@ -21,9 +21,15 @@
 
 namespace duckdb {
 
+struct DefaultPayload {
+	idx_t GetWeight() const {
+		return 1;
+	}
+};
+
 // A LRU cache implementation, whose value could be accessed in a shared manner with shared pointer.
 // Notice, it's not thread-safe.
-template <typename Key, typename Val, typename Payload, typename KeyHash = std::hash<Key>,
+template <typename Key, typename Val, typename Payload = DefaultPayload, typename KeyHash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
 class SharedLruCache {
 public:
