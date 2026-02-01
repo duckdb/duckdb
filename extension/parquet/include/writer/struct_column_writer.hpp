@@ -18,6 +18,9 @@ public:
 	                   vector<unique_ptr<ColumnWriter>> child_writers_p)
 	    : ColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 		child_writers = std::move(child_writers_p);
+		for (auto &writer : child_writers) {
+			writer->parent = *this;
+		}
 	}
 	~StructColumnWriter() override = default;
 

@@ -32,3 +32,18 @@ group by item_id;
 ----
 ss_items.item_id
 
+# check that error location is reported
+statement error
+select item_id
+from ss_items,cs_items
+where ss_items.item_id = cs_items.item_id;
+----
+^
+
+statement error
+select ss_items.item_id, cs_items.item_id
+from ss_items,cs_items
+where ss_items.item_id = cs_items.item_id
+order by item_id
+----
+^
