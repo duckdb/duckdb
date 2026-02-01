@@ -20,7 +20,7 @@
 namespace duckdb {
 
 struct BufferPoolPayload {
-	BufferPoolPayload(unique_ptr<TempBufferPoolReservation> &&res) : reservation(std::move(res)) {
+	explicit BufferPoolPayload(unique_ptr<TempBufferPoolReservation> &&res) : reservation(std::move(res)) {
 	}
 	~BufferPoolPayload() {
 		reservation->Resize(0);
