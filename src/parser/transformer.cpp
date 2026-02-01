@@ -245,7 +245,7 @@ void Transformer::SetQueryLocation(TableRef &ref, int query_location) {
 }
 
 void Transformer::TransformTableOptions(case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
-                                        optional_ptr<duckdb_libpgquery::PGList> pg_options) {
+                                        optional_ptr<duckdb_libpgquery::PGList> pg_options, bool throw_if_value) {
 	if (!pg_options) {
 		return;
 	}
@@ -258,10 +258,13 @@ void Transformer::TransformTableOptions(case_insensitive_map_t<unique_ptr<Parsed
 			throw ParserException("Duplicate table property \"%s\"", lower_name);
 		}
 		if (!def_elem->arg) {
-			options.emplace(lower_name, make_uniq<ConstantExpression>(Value::BOOLEAN(true)));
+			options.emplace(lower_name, make_uniq<ConstantExpression>(Value()));
 			continue;
 		}
 		auto expr = TransformExpression(def_elem->arg);
+		if (throw_if_value) {
+			throw ParserException("\"%s\"", expr->ToString());
+		}
 		options.emplace(lower_name, std::move(expr));
 	}
 }

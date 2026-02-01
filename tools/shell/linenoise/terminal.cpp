@@ -427,6 +427,13 @@ void Terminal::BufferAvailableInput() {
 }
 
 bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
+#if defined(_WIN32) || defined(WIN32)
+	// FIXME: always emit black background on Windows
+	color.r = 0;
+	color.g = 0;
+	color.b = 0;
+	return true;
+#else
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;
 
@@ -464,6 +471,7 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	}
 	Terminal::DisableRawMode();
 	return success;
+#endif
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80

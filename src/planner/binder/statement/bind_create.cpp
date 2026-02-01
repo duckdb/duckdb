@@ -161,36 +161,41 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 	entry_retriever.SetCallback(std::move(callback));
 }
 
-void Binder::BindCreateViewInfo(CreateViewInfo &base) {
-	// bind the view as if it were a query so we can catch errors
-	// note that we bind the original, and replace the original with a copy
+void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
+                      const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+                      const vector<string> &aliases, vector<LogicalType> &result_types, vector<string> &result_names) {
 	auto view_binder = Binder::CreateBinder(context);
-	auto &dependencies = base.dependencies;
-	auto &catalog = Catalog::GetCatalog(context, base.catalog);
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
-	bool should_create_dependencies = Settings::Get<EnableViewDependenciesSetting>(context);
-	if (should_create_dependencies) {
+	if (dependencies) {
 		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
 				// Don't register dependencies between catalogs
 				return;
 			}
-			dependencies.AddDependency(entry);
+			dependencies->AddDependency(entry);
 		});
 	}
 	view_binder->can_contain_nulls = true;
 
-	auto view_search_path = GetSearchPath(catalog, base.schema);
+	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
-	auto copy = base.query->Copy();
-	auto query_node = view_binder->Bind(*base.query);
-	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(copy));
-	if (base.aliases.size() > query_node.names.size()) {
+	auto copy = stmt.Copy();
+	auto query_node = view_binder->Bind(*copy);
+	if (aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
-	base.types = query_node.types;
-	base.names = query_node.names;
+	result_types = query_node.types;
+	result_names = query_node.names;
+}
+
+void Binder::BindCreateViewInfo(CreateViewInfo &base) {
+	optional_ptr<LogicalDependencyList> dependencies;
+	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
+		dependencies = base.dependencies;
+	}
+	BindView(context, *base.query, base.catalog, base.schema, dependencies, base.aliases, base.types, base.names);
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {

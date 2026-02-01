@@ -224,10 +224,6 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	auto input_data = reinterpret_cast<validity_t *>(input);
 
 #ifdef DEBUG
-	// this method relies on all the bits we are going to write to being set to valid
-	for (idx_t i = 0; i < scan_count; i++) {
-		D_ASSERT(result_mask.RowIsValid(result_offset + i));
-	}
 	// save boundary entries to verify we don't corrupt surrounding bits later.
 	idx_t debug_first_entry = result_offset / ValidityMask::BITS_PER_VALUE;
 	idx_t debug_last_entry = (result_offset + scan_count - 1) / ValidityMask::BITS_PER_VALUE;
@@ -397,11 +393,12 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 #endif
 
 #ifdef DEBUG
-	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
-	ValidityMask input_mask(input_data, input_size);
-	for (idx_t i = 0; i < scan_count; i++) {
-		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(input_start + i));
-	}
+	// FIXME: Previously, this function had an assumption that all the bits in the result range we are copying
+	// to were all set to valid. with dict_fsst compression, this is no longer the case, so if we want to have
+	// a debug verification of the result here, we need to check that all the bits that were initially valid
+	// in the result range have the same value as the corresponding bit in the input, and if they are invalid
+	// they remain invalid.
+
 	// verify surrounding bits weren't modified
 	auto debug_final_result_data = (validity_t *)result_mask.GetData();
 	validity_t debug_final_first_entry =
