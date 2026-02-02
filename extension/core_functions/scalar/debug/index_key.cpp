@@ -140,9 +140,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
 	}
 
-	auto &struct_expr = *arguments[0];
-	bound_function.arguments[0] = struct_expr.return_type;
-	auto path = EvaluateTableDescription(context, struct_expr);
+	auto path = EvaluateTableDescription(context, *arguments[0]);
 	auto index_name = GetStringArgument(context, *arguments[1], "index_name");
 
 	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.database, path.schema, path.table)
@@ -163,12 +161,11 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		                      index_name, key_types.size(), num_key_args);
 	}
 
-	bound_function.arguments.resize(INDEX_KEY_FIXED_ARGS + key_types.size());
-	for (idx_t i = 0; i < key_types.size(); i++) {
-		bound_function.arguments[INDEX_KEY_FIXED_ARGS + i] = key_types[i];
-	}
+	// Remove the path and index_name arguments - they're only needed for binding
+	arguments.erase(arguments.begin(), arguments.begin() + INDEX_KEY_FIXED_ARGS);
+	bound_function.arguments = key_types;
 
-	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types), index_name);
+	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types), std::move(index_name));
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -189,17 +186,10 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
 	}
 
-	DataChunk key_chunk;
-	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.key_types);
-	key_chunk.SetCardinality(count);
-	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
-		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
-	}
-
 	auto &art = bind_data.bound_index.Cast<ART>();
 	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	art.GenerateKeys<>(allocator, key_chunk, keys);
+	art.GenerateKeys<>(allocator, args, keys);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
