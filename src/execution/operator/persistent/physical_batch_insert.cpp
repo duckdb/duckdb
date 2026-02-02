@@ -672,10 +672,9 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 		auto &optimistic_collection = data_table.GetOptimisticCollection(context, entry.collection_index);
 		auto &collection = *optimistic_collection.collection;
-		collection.Scan(transaction, [&](DataChunk &insert_chunk) {
+		for (auto &insert_chunk : collection.Chunks(transaction)) {
 			data_table.LocalAppend(append_state, context, insert_chunk, false);
-			return true;
-		});
+		}
 		data_table.ResetOptimisticCollection(context, entry.collection_index);
 	}
 

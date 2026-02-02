@@ -845,6 +845,10 @@ public:
 					                       tokenized_statement[tokenized_statement.size() - 1].length);
 				}
 				statement->query = query;
+				if (statement->type == StatementType::CREATE_STATEMENT) {
+					auto &create = statement->Cast<CreateStatement>();
+					create.info->sql = statement->query;
+				}
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(std::move(result));

@@ -74,6 +74,39 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto types = table.GetTypes();
+	auto to_be_fetched = vector<bool>(types.size(), return_chunk);
+	vector<StorageIndex> column_ids;
+	vector<LogicalType> column_types;
+	if (return_chunk) {
+		// Fetch all columns.
+		column_types = types;
+		for (idx_t i = 0; i < table.ColumnCount(); i++) {
+			column_ids.emplace_back(i);
+		}
+
+	} else {
+		// Fetch only the required columns for updating the delete indexes.
+		auto &local_storage = LocalStorage::Get(context.client, table.db);
+		auto storage = local_storage.GetStorage(table);
+		unordered_set<column_t> indexed_column_id_set;
+		for (auto &index : storage->delete_indexes.Indexes()) {
+			if (!index.IsBound() || !index.IsUnique()) {
+				continue;
+			}
+			auto &set = index.GetColumnIdSet();
+			indexed_column_id_set.insert(set.begin(), set.end());
+		}
+		for (auto &col : indexed_column_id_set) {
+			column_ids.emplace_back(col);
+		}
+		sort(column_ids.begin(), column_ids.end());
+		for (auto &col : column_ids) {
+			auto i = col.GetPrimaryIndex();
+			to_be_fetched[i] = true;
+			column_types.push_back(types[i]);
+		}
+	}
+
 	l_state.delete_chunk.Reset();
 	row_ids.Flatten(chunk.size());
 
@@ -99,17 +132,16 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		storage->delete_indexes.Scan([&](Index &index) {
+		for (auto &index : storage->delete_indexes.Indexes()) {
 			if (!index.IsBound() || !index.IsUnique()) {
-				return false;
+				continue;
 			}
 			auto &bound_index = index.Cast<BoundIndex>();
 			auto error = bound_index.Append(l_state.delete_chunk, row_ids, index_append_info);
 			if (error.HasError()) {
 				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
 			}
-			return false;
-		});
+		}
 	}
 
 	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
