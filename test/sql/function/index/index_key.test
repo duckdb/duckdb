@@ -122,26 +122,21 @@ SELECT index_key({'table': 'tbl2'}, 'FOREIGN_tbl2_1', 1);
 ########################################################################################################################
 
 statement error
-SELECT index_key({'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1::BIGINT);
+SELECT index_key({'table': 'tbl1'}, 'PRIMARY_tbl1_0', 143243243242432::BIGINT);
 ----
-Invalid Input Error: index_key: argument 1 has type BIGINT but index 'PRIMARY_tbl1_0' expects INTEGER
+Conversion Error: Type INT64 with value 143243243242432 can't be cast because the value is out of range for the destination type INT32
 
-statement error
-SELECT index_key({'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1::SMALLINT);
-----
-Invalid Input Error: index_key: argument 1 has type SMALLINT but index 'PRIMARY_tbl1_0' expects INTEGER
-
-# Type mismatch on last column of multi-column index (tbl3_idx expects INTEGER, VARCHAR, BIGINT)
+# Type mismatch - passing columns in wrong order (tbl3_idx expects INTEGER, VARCHAR, BIGINT)
 statement ok
-CREATE TABLE tbl3_wrong_type(c1 INTEGER, c2 VARCHAR, c3 INTEGER);
+CREATE TABLE tbl3_wrong_type(c1 VARCHAR, c2 INTEGER, c3 BIGINT);
 
 statement ok
-INSERT INTO tbl3_wrong_type VALUES (1, 'test', 100);
+INSERT INTO tbl3_wrong_type VALUES ('test', 1, 100);
 
 statement error
 SELECT index_key({'table': 'tbl3'}, 'tbl3_idx', c1, c2, c3) FROM tbl3_wrong_type;
 ----
-Invalid Input Error: index_key: argument 3 has type INTEGER but index 'tbl3_idx' expects BIGINT
+Conversion Error: Could not convert string 'test' to INT32
 
 ########################################################################################################################
 #                                                                                                                      #
