@@ -104,7 +104,7 @@ int Terminal::EnableRawMode() {
 	raw.c_iflag |= IUTF8;
 #endif
 	raw.c_cflag |= CS8;
-	/* local modes - choing off, canonical off, no extended functions,
+	/* local modes - echoing off, canonical off, no extended functions,
 	 * no signal chars (^Z,^C) */
 	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 	/* control chars - set return condition: min number of bytes and timer.
@@ -427,6 +427,13 @@ void Terminal::BufferAvailableInput() {
 }
 
 bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
+#if defined(_WIN32) || defined(WIN32)
+	// FIXME: always emit black background on Windows
+	color.r = 0;
+	color.g = 0;
+	color.b = 0;
+	return true;
+#else
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;
 
@@ -441,8 +448,8 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 		idx_t i = 0;
 		while (i < sizeof(buf) - 1) {
 			// check if we have data to read
-			// wait up till 1ms
-			if (!HasMoreData(ifd, 10000)) {
+			// wait up till 1s
+			if (!HasMoreData(ifd, 1000000)) {
 				// no more data available - done
 				break;
 			}
@@ -464,6 +471,7 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	}
 	Terminal::DisableRawMode();
 	return success;
+#endif
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80

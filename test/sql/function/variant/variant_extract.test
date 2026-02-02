@@ -74,3 +74,14 @@ query I
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
 ----
 test
+
+query I
+SELECT [
+	x.a for x in [
+		{'a': 42, 'b': [1,2,3]}::VARIANT,
+		NULL,
+		84
+	]
+]
+----
+[42, NULL, NULL]

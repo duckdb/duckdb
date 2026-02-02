@@ -211,6 +211,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"get_bit", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_current_time", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_current_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"get_type", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"grade_up", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"greatest", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"greatest_common_divisor", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -453,6 +454,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"make_timestamp_ms", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamp_ns", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamptz", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"make_type", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_concat", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_entries", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -628,6 +630,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_hasm", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_hasz", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_hilbert", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_interiorringn", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_interpolatepoint", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_intersection", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_intersection_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
@@ -1207,7 +1210,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"avro",
                                                           "postgres_scanner",
                                                           "tpcds",
                                                           "tpch",
-                                                          "uc_catalog",
+                                                          "unity_catalog",
                                                           "ui"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

@@ -75,7 +75,7 @@ NULL
 
 # neither checkpoint WAL nor WAL is cleared when attaching in read-only mode
 query I
-SELECT COUNT(*) FROM glob('__TEST_DIR__/concurrent_abort.db.*wal')
+SELECT COUNT(*) FROM glob('__TEST_DIR__/concurrent_abort.db.wal*')
 ----
 2
 

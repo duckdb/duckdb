@@ -53,11 +53,9 @@ public:
 	bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener) override;
 	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override;
 
-	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
-
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
-
+	void UnregisterSubSystem(const string &name) override;
 	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
 
 	vector<string> ListSubSystems() override;
@@ -84,6 +82,12 @@ protected:
 		return true;
 	}
 
+	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                            optional_ptr<FileOpener> opener) override;
+	bool SupportsGlobExtended() const override {
+		return true;
+	}
+
 private:
 	FileSystem &FindFileSystem(const string &path, optional_ptr<FileOpener> file_opener);
 	FileSystem &FindFileSystem(shared_ptr<FileSystemRegistry> &registry, const string &path,
@@ -93,6 +97,7 @@ private:
 private:
 	mutex registry_lock;
 	shared_ptr<FileSystemRegistry> file_system_registry;
+	vector<unique_ptr<FileSystem>> unregistered_file_systems;
 };
 
 } // namespace duckdb

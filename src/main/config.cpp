@@ -153,6 +153,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(LoggingLevel),
     DUCKDB_GLOBAL(LoggingMode),
     DUCKDB_GLOBAL(LoggingStorage),
+    DUCKDB_SETTING(MaxExecutionTimeSetting),
     DUCKDB_SETTING(MaxExpressionDepthSetting),
     DUCKDB_GLOBAL(MaxMemorySetting),
     DUCKDB_GLOBAL(MaxTempDirectorySizeSetting),
@@ -160,6 +161,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(MergeJoinThresholdSetting),
     DUCKDB_SETTING(NestedLoopJoinThresholdSetting),
     DUCKDB_SETTING(OldImplicitCastingSetting),
+    DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
     DUCKDB_SETTING_CALLBACK(OrderedAggregateThresholdSetting),
     DUCKDB_SETTING(PartitionedWriteFlushThresholdSetting),
@@ -195,12 +197,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 91),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 92),
                                                      DUCKDB_SETTING_ALIAS("null_order", 38),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 110),
-                                                     DUCKDB_SETTING_ALIAS("user", 125),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 112),
+                                                     DUCKDB_SETTING_ALIAS("user", 127),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 124),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 126),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -453,8 +455,8 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 		return LogicalType::STRUCT(struct_members);
 	}
 
-	LogicalType type_id = StringUtil::CIEquals(type, "ANY") ? LogicalType::ANY : TransformStringToLogicalTypeId(type);
-	if (type_id == LogicalTypeId::USER) {
+	const auto type_id = StringUtil::CIEquals(type, "ANY") ? LogicalTypeId::ANY : TransformStringToLogicalTypeId(type);
+	if (type_id == LogicalTypeId::UNBOUND) {
 		throw InternalException("Error while generating extension function overloads - unrecognized logical type %s",
 		                        type);
 	}
@@ -506,7 +508,11 @@ bool DBConfig::IsInMemoryDatabase(const char *database_path) {
 }
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
-	return *cast_functions;
+	return type_manager->GetCastFunctions();
+}
+
+TypeManager &DBConfig::GetTypeManager() {
+	return *type_manager;
 }
 
 CollationBinding &DBConfig::GetCollationBinding() {
@@ -764,12 +770,48 @@ const string DBConfig::UserAgent() const {
 	return user_agent;
 }
 
-string DBConfig::SanitizeAllowedPath(const string &path) const {
-	auto path_sep = file_system->PathSeparator(path);
+ExtensionCallbackManager &DBConfig::GetCallbackManager() {
+	return *callback_manager;
+}
+
+const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
+	return *callback_manager;
+}
+
+string DBConfig::SanitizeAllowedPath(const string &path_p) const {
+	auto path_sep = file_system->PathSeparator(path_p);
+	auto path = path_p;
 	if (path_sep != "/") {
 		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
-		return StringUtil::Replace(path, path_sep, "/");
+		path = StringUtil::Replace(path_p, path_sep, "/");
 	}
+
+	auto elements = StringUtil::Split(path, "/");
+	path.clear(); // later reconstructed
+	deque<string> path_stack;
+	for (idx_t i = 0; i < elements.size(); i++) {
+		if (elements[i].empty() || elements[i] == ".") {
+			// we ignore empty and `.`
+			continue;
+		}
+		if (elements[i] == "..") {
+			// .. pops from stack if possible, if already at root its ignored
+			if (!path_stack.empty()) {
+				path_stack.pop_back();
+			}
+		} else {
+			path_stack.push_back(elements[i]);
+		}
+	}
+	// we lost the leading / in the split/loop so leats put it back
+	if (path_p[0] == '/') {
+		path = "/";
+	}
+	while (!path_stack.empty()) {
+		path += path_stack.front() + '/';
+		path_stack.pop_front();
+	}
+
 	return path;
 }
 
@@ -796,10 +838,12 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 		return true;
 	}
 	string path = SanitizeAllowedPath(input_path);
+
 	if (options.allowed_paths.count(path) > 0) {
 		// path is explicitly allowed
 		return true;
 	}
+
 	if (options.allowed_directories.empty()) {
 		// no prefix directories specified
 		return false;
@@ -824,27 +868,6 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 		return false;
 	}
 	D_ASSERT(StringUtil::EndsWith(prefix, "/"));
-	// path is inside an allowed directory - HOWEVER, we could still exit the allowed directory using ".."
-	// we check if we ever exit the allowed directory using ".." by looking at the path fragments
-	idx_t directory_level = 0;
-	idx_t current_pos = prefix.size();
-	for (; current_pos < path.size(); current_pos++) {
-		idx_t dir_begin = current_pos;
-		// find either the end of the path or the directory separator
-		for (; path[current_pos] != '/' && current_pos < path.size(); current_pos++) {
-		}
-		idx_t path_length = current_pos - dir_begin;
-		if (path_length == 2 && path[dir_begin] == '.' && path[dir_begin + 1] == '.') {
-			// go up a directory
-			if (directory_level == 0) {
-				// we cannot go up past the prefix
-				return false;
-			}
-			--directory_level;
-		} else if (path_length > 0) {
-			directory_level++;
-		}
-	}
 	return true;
 }
 
