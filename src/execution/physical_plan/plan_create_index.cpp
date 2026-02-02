@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 

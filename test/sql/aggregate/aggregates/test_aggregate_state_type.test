@@ -1,0 +1,73 @@
+# name: test/sql/aggregate/aggregates/test_aggregate_state_type.test
+# description: Test the AGGREGATE_STATE type name with get_state_type callback
+# group: [aggregates]
+
+require noforcestorage
+
+# We would like to serialize the type info with the latest storage version
+# Forward compatability won't be harmed, as older DuckDB versions are used in CI
+statement ok
+SET storage_compatibility_version = 'latest';
+
+foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
+
+# avg() has the new get_state_type callback
+query T
+SELECT typeof(avg(1.0::${type}) EXPORT_STATE) = 'AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>';
+----
+true
+
+# Works in a table
+# (Forward compatability tests are covered because of this statement) 
+statement ok
+CREATE TABLE t1_${type} AS SELECT avg(range::${type}) EXPORT_STATE as state FROM range(10);
+
+# Test reading from the table
+# We cannot run in force storage mode, as this configuration still uses the old serialization version
+query T
+SELECT column_type='AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>' FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
+----
+true
+
+# Test combine and finalize
+query R
+SELECT finalize(combine(state, state)) FROM t1_${type};
+----
+4.500000
+
+# Test mixing structured and blob aggregate states
+query R
+SELECT finalize(combine(state, state::BLOB)) FROM t1_${type};
+----
+4.500000
+
+# Test that state typing is independent of input expressions
+statement ok
+INSERT INTO t1_${type} SELECT avg((range::${type} + 10.0)::${type}) EXPORT_STATE FROM range(10);
+
+query R
+SELECT finalize(state) FROM t1_${type} ORDER BY 1;
+----
+4.500000
+14.500000
+
+# Test combine with multiple states
+query R
+SELECT finalize(combine(state, state)) FROM t1_${type} ORDER BY 1;
+----
+4.500000
+14.500000
+
+endloop
+
+# sum(INT) does NOT have the new get_state_type callback yet, so it should show the return type
+query T
+SELECT typeof(sum(1) EXPORT_STATE);
+----
+AGGREGATE_STATE<sum(INTEGER)::HUGEINT>
+
+# other aggregate functions (with multiple arguments) that are not opted-in are not broken
+query T
+SELECT typeof(corr(1.0::DOUBLE, 2.0::DOUBLE) EXPORT_STATE);
+----
+AGGREGATE_STATE<corr(DOUBLE, DOUBLE)::DOUBLE>

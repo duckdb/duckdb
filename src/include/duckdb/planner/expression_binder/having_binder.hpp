@@ -27,6 +27,8 @@ protected:
 
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) override;
 
+	bool DoesColumnAliasExist(const ColumnRefExpression &colref) override;
+
 private:
 	ColumnAliasBinder column_alias_binder;
 	AggregateHandling aggregate_handling;

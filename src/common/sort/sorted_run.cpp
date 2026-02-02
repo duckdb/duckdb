@@ -47,6 +47,11 @@ void SortedRunScanState::Scan(const SortedRun &sorted_run, const Vector &sort_ke
 	}
 }
 
+void SortedRunScanState::Clear() {
+	payload_state.pin_state.row_handles.clear();
+	payload_state.pin_state.heap_handles.clear();
+}
+
 template <class SORT_KEY, class PHYSICAL_TYPE>
 void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count,
                                DataChunk &key, data_ptr_t *const payload_ptrs) {
@@ -258,9 +263,7 @@ static void TemplatedSort(ClientContext &context, const TupleDataCollection &key
 	};
 	duckdb_vergesort::vergesort(begin, end, std::less<SORT_KEY>(), fallback);
 
-	if (context.interrupted.load(std::memory_order_relaxed)) {
-		throw InterruptException();
-	}
+	context.InterruptCheck();
 }
 
 static void SortSwitch(ClientContext &context, const TupleDataCollection &key_data, bool is_index_sort) {
@@ -364,9 +367,7 @@ static void TemplatedReorder(ClientContext &context, unique_ptr<TupleDataCollect
 
 	idx_t index = 0;
 	while (index < total_count) {
-		if (context.interrupted.load(std::memory_order_relaxed)) {
-			throw InterruptException();
-		}
+		context.InterruptCheck();
 
 		const auto next = MinValue<idx_t>(total_count - index, STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < next; i++) {

@@ -253,6 +253,7 @@ string GetTypeName(duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::DATE:
 		return "DATE";
 	case duckdb::LogicalTypeId::TIME:
+	case duckdb::LogicalTypeId::TIME_NS:
 		return "TIME";
 	case duckdb::LogicalTypeId::TIMESTAMP:
 	case duckdb::LogicalTypeId::TIMESTAMP_NS:
@@ -1815,20 +1816,20 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
                                     const string &log_message, const duckdb::RegisteredLoggingContext &context) {
 	HighlightElementType element_type;
 	switch (level) {
-	case (duckdb::LogLevel::LOG_TRACE):
+	case duckdb::LogLevel::LOG_TRACE:
 		element_type = HighlightElementType::LOG_TRACE;
 		break;
-	case (duckdb::LogLevel::LOG_DEBUG):
+	case duckdb::LogLevel::LOG_DEBUG:
 		element_type = HighlightElementType::LOG_DEBUG;
 		break;
-	case (duckdb::LogLevel::LOG_INFO):
+	case duckdb::LogLevel::LOG_INFO:
 		element_type = HighlightElementType::LOG_INFO;
 		break;
-	case (duckdb::LogLevel::LOG_WARNING):
+	case duckdb::LogLevel::LOG_WARNING:
 		element_type = HighlightElementType::LOG_WARNING;
 		break;
-	case (duckdb::LogLevel::LOG_ERROR):
-	case (duckdb::LogLevel::LOG_FATAL):
+	case duckdb::LogLevel::LOG_ERROR:
+	case duckdb::LogLevel::LOG_FATAL:
 		element_type = HighlightElementType::ERROR_TOKEN;
 		break;
 	default:

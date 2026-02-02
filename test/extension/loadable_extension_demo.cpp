@@ -6,6 +6,10 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/planner/extension_callback.hpp"
+#include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
@@ -210,19 +214,28 @@ public:
 			// use original error
 			return ParserExtensionParseResult();
 		}
-		auto splits = StringUtil::Split(lcase, "quack");
-		for (auto &split : splits) {
-			StringUtil::Trim(split);
-			if (!split.empty()) {
-				// we only accept quacks here
-				if (StringUtil::CIEquals(split, ";")) {
-					continue;
-				}
-				return ParserExtensionParseResult("This is not a quack: " + split);
+
+		idx_t count = 0;
+		size_t pos = 0;
+		size_t last_end = 0;
+		while ((pos = lcase.find("quack", last_end)) != string::npos) {
+			string between = lcase.substr(last_end, pos - last_end);
+			StringUtil::Trim(between);
+			if (!between.empty() && !StringUtil::CIEquals(between, ";")) {
+				return ParserExtensionParseResult("This is not a quack: " + between);
 			}
+			count++;
+			last_end = pos + 5;
 		}
+
+		string after = lcase.substr(last_end);
+		StringUtil::Trim(after);
+		if (!after.empty() && !StringUtil::CIEquals(after, ";")) {
+			return ParserExtensionParseResult("This is not a quack: " + after);
+		}
+
 		// QUACK
-		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(splits.size()));
+		return ParserExtensionParseResult(make_uniq<QuackExtensionData>(count));
 	}
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
@@ -264,6 +277,55 @@ public:
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// Planner extension - adds an extra constant column to every query
+//===--------------------------------------------------------------------===//
+class AddColumnExtension : public PlannerExtension {
+public:
+	AddColumnExtension() {
+		post_bind_function = AddColumnPostBind;
+	}
+
+	static void AddColumnPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
+		// Check if extension is enabled
+		Value enabled;
+		if (!input.context.TryGetCurrentSetting("add_column_enabled", enabled) || !enabled.GetValue<bool>()) {
+			return;
+		}
+
+		// Only modify statements that return query results (SELECT, INSERT/UPDATE/DELETE RETURNING, etc.)
+		auto &properties = input.binder.GetStatementProperties();
+		if (properties.return_type != StatementReturnType::QUERY_RESULT) {
+			return;
+		}
+
+		// Get the column bindings from the existing plan
+		auto column_bindings = statement.plan->GetColumnBindings();
+
+		// Get a new table index for the projection
+		auto table_index = input.binder.GenerateTableIndex();
+
+		// Create references to all existing columns using BoundColumnRefExpression
+		vector<unique_ptr<Expression>> projections;
+		for (idx_t i = 0; i < column_bindings.size(); i++) {
+			projections.push_back(make_uniq<BoundColumnRefExpression>(statement.types[i], column_bindings[i]));
+		}
+
+		// Add a constant column
+		projections.push_back(make_uniq<BoundConstantExpression>(Value("quack")));
+
+		// Create a projection operator wrapping the existing plan
+		auto projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
+		projection->children.push_back(std::move(statement.plan));
+		projection->ResolveOperatorTypes();
+
+		// Update the statement with the new plan, names, and types
+		statement.plan = std::move(projection);
+		statement.names.push_back("extra_column");
+		statement.types.push_back(LogicalType::VARCHAR);
+	}
+};
+
 static set<string> test_loaded_extension_list;
 
 class QuackLoadExtension : public ExtensionCallback {
@@ -287,19 +349,19 @@ static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &st
 //===--------------------------------------------------------------------===//
 
 struct BoundedType {
-	static LogicalType Bind(const BindLogicalTypeInput &input) {
+	static LogicalType Bind(BindLogicalTypeInput &input) {
 		auto &modifiers = input.modifiers;
 
 		if (modifiers.size() != 1) {
 			throw BinderException("BOUNDED type must have one modifier");
 		}
-		if (modifiers[0].type() != LogicalType::INTEGER) {
+		if (modifiers[0].GetValue().type() != LogicalType::INTEGER) {
 			throw BinderException("BOUNDED type modifier must be integer");
 		}
-		if (modifiers[0].IsNull()) {
+		if (modifiers[0].GetValue().IsNull()) {
 			throw BinderException("BOUNDED type modifier cannot be NULL");
 		}
-		auto bound_val = modifiers[0].GetValue<int32_t>();
+		auto bound_val = modifiers[0].GetValue().GetValue<int32_t>();
 		return Get(bound_val);
 	}
 
@@ -460,21 +522,22 @@ static bool IntToBoundedCast(Vector &source, Vector &result, idx_t count, CastPa
 // to verify that the range is valid
 
 struct MinMaxType {
-	static LogicalType Bind(const BindLogicalTypeInput &input) {
+	static LogicalType Bind(BindLogicalTypeInput &input) {
 		auto &modifiers = input.modifiers;
 
 		if (modifiers.size() != 2) {
 			throw BinderException("MINMAX type must have two modifiers");
 		}
-		if (modifiers[0].type() != LogicalType::INTEGER || modifiers[1].type() != LogicalType::INTEGER) {
+		if (modifiers[0].GetValue().type() != LogicalType::INTEGER ||
+		    modifiers[1].GetValue().type() != LogicalType::INTEGER) {
 			throw BinderException("MINMAX type modifiers must be integers");
 		}
-		if (modifiers[0].IsNull() || modifiers[1].IsNull()) {
+		if (modifiers[0].GetValue().IsNull() || modifiers[1].GetValue().IsNull()) {
 			throw BinderException("MINMAX type modifiers cannot be NULL");
 		}
 
-		const auto min_val = modifiers[0].GetValue<int32_t>();
-		const auto max_val = modifiers[1].GetValue<int32_t>();
+		const auto min_val = modifiers[0].GetValue().GetValue<int32_t>();
+		const auto max_val = modifiers[1].GetValue().GetValue<int32_t>();
 
 		if (min_val >= max_val) {
 			throw BinderException("MINMAX type min value must be less than max value");
@@ -601,8 +664,13 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
-	config.parser_extensions.push_back(QuackExtension());
-	config.extension_callbacks.push_back(make_uniq<QuackLoadExtension>());
+	ParserExtension::Register(config, QuackExtension());
+	ExtensionCallback::Register(config, make_shared_ptr<QuackLoadExtension>());
+
+	// add a planner extension that adds an extra column to queries
+	PlannerExtension::Register(config, AddColumnExtension());
+	config.AddExtensionOption("add_column_enabled", "enable adding extra column to queries", LogicalType::BOOLEAN,
+	                          Value::BOOLEAN(false));
 
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();

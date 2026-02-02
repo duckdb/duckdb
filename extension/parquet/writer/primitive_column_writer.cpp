@@ -264,11 +264,11 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	if (!state.stats_state) {
 		return;
 	}
-	if (MaxRepeat() == 0) {
-		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
-		column_chunk.meta_data.statistics.__isset.null_count = true;
-		column_chunk.meta_data.__isset.statistics = true;
-	}
+	auto null_count = MaxRepeat() == 0 ? state.null_count : state.null_count + state.parent_null_count;
+	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(null_count);
+	column_chunk.meta_data.statistics.__isset.null_count = true;
+	column_chunk.meta_data.__isset.statistics = true;
+
 	// if we have NaN values - don't write the min/max here
 	if (!state.stats_state->HasNaN()) {
 		// set min/max/min_value/max_value
@@ -322,7 +322,7 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		if (has_json_stats) {
 			// Add the geospatial statistics to the extra GeoParquet metadata
 			writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
-			                                              *state.stats_state->GetGeoStats());
+			                                              *state.stats_state->GetGeoStats(), gpq_version);
 		}
 	}
 
@@ -382,7 +382,6 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));
 	}
-
 	// finalize the stats
 	writer.FlushColumnStats(state.col_idx, column_chunk, state.stats_state.get());
 }
@@ -431,7 +430,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }
 
-void PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;
@@ -458,6 +457,7 @@ void PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement>
 	schemas.push_back(std::move(schema_element));
 
 	D_ASSERT(child_writers.empty());
+	return 1;
 }
 
 } // namespace duckdb
