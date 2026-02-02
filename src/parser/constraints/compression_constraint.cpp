@@ -5,8 +5,7 @@
 namespace duckdb {
 
 CompressionConstraint::CompressionConstraint(string column_name, CompressionType compression_type)
-    : Constraint(ConstraintType::COMPRESSION), column_name(std::move(column_name)),
-      compression_type(compression_type) {
+    : Constraint(ConstraintType::COMPRESSION), column_name(std::move(column_name)), compression_type(compression_type) {
 }
 
 CompressionConstraint::~CompressionConstraint() {
