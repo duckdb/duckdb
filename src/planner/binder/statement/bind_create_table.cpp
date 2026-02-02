@@ -236,12 +236,17 @@ unique_ptr<BoundConstraint> Binder::BindConstraint(const Constraint &constraint,
 		if (!not_null.index.IsValid()) {
 			// this came from a create table as statement
 			auto logical_columns = columns.Logical();
+			bool column_found = false;
 			for (auto &column_def : logical_columns) {
 				auto name = column_def.GetName();
 				if (name == not_null.column_name) {
 					not_null.index = LogicalIndex(column_def.Logical());
+					column_found = true;
 					break;
 				}
+			}
+			if (!column_found) {
+				throw BinderException("Column %s does not exist", not_null.column_name);
 			}
 		}
 		auto &col = columns.GetColumn(not_null.index);
@@ -603,28 +608,29 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 	}
 
 	// Handle compression constraints: apply compression type to columns and remove from constraint list
-	vector<idx_t> constraints_to_delete;
-	for (idx_t i = 0; i < create_info.constraints.size(); i++) {
-		auto &constraint = create_info.constraints.at(i);
+	auto &columns = create_info.columns;
+	for (auto &constraint : create_info.constraints) {
 		if (constraint->type != ConstraintType::COMPRESSION) {
 			continue;
 		}
-		constraints_to_delete.push_back(i);
 		auto &compression = constraint->Cast<CompressionConstraint>();
-		auto &columns = create_info.columns;
-
-		for (idx_t column_index = 0; column_index < columns.LogicalColumnCount(); column_index++) {
-			auto &column_def = columns.GetColumnMutable(LogicalIndex(column_index));
+		bool column_found = false;
+		for (idx_t col_idx = 0; col_idx < columns.LogicalColumnCount(); col_idx++) {
+			auto &column_def = columns.GetColumnMutable(LogicalIndex(col_idx));
 			if (column_def.GetName() == compression.column_name) {
 				column_def.SetCompressionType(compression.compression_type);
+				column_found = true;
 				break;
 			}
 		}
+		if (!column_found) {
+			throw BinderException("Column %s does not exist", compression.column_name);
+		}
 	}
-	std::reverse(constraints_to_delete.begin(), constraints_to_delete.end());
-	for (auto &i : constraints_to_delete) {
-		create_info.constraints.erase_at(i);
-	}
+	auto &constraints = create_info.constraints;
+	auto it = std::remove_if(constraints.begin(), constraints.end(),
+	                         [](const unique_ptr<Constraint> &c) { return c->type == ConstraintType::COMPRESSION; });
+	constraints.erase(it, constraints.end());
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,

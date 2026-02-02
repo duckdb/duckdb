@@ -249,6 +249,18 @@ create or replace table t1 CONSTRAINTS (nonexistent PRIMARY KEY) as select range
 ----
 <REGEX>:.*does not have a column named \"nonexistent\".*
 
+# Error: constraint references non-existent column
+statement error
+create or replace table t1 CONSTRAINTS (nonexistent NOT NULL) as select range a from range(10);
+----
+<REGEX>:.*Column nonexistent does not exist.*
+
+# Error: constraint references non-existent column
+statement error
+create or replace table t1 CONSTRAINTS (nonexistent using compression RLE) as select range a from range(10);
+----
+<REGEX>:.*Column nonexistent does not exist.*
+
 # Error: invalid compression type
 statement error
 create or replace table t1 CONSTRAINTS (a using compression Auto) as select range a from range(10);
