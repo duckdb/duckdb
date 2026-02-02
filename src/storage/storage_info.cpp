@@ -91,7 +91,7 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.4.2", 67},
 	{"v1.4.3", 67},
 	{"v1.4.4", 67},
-	{"v1.5.0", 67}, // TODO: do we need to bump here?
+	{"v1.5.0", 68},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO
@@ -121,7 +121,7 @@ static const SerializationVersionInfo serialization_version_info[] = {
 	{"v1.4.2", 6},
 	{"v1.4.3", 6},
 	{"v1.4.4", 6},
-	{"v1.5.0", 7}, // TODO: because we bumped here...
+	{"v1.5.0", 7},
 	{"latest", 7},
 	{nullptr, 0}
 };
