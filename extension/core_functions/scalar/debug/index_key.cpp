@@ -116,22 +116,21 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &inde
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(BoundIndex &bound_index, vector<LogicalType> key_types, string index_name)
-	    : bound_index(bound_index), key_types(std::move(key_types)), index_name(std::move(index_name)) {
+	IndexKeyBindData(BoundIndex &bound_index, vector<LogicalType> key_types)
+	    : bound_index(bound_index), key_types(std::move(key_types)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<IndexKeyBindData>(bound_index, key_types, index_name);
+		return make_uniq<IndexKeyBindData>(bound_index, key_types);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return &bound_index == &other.bound_index && key_types == other.key_types && index_name == other.index_name;
+		return &bound_index == &other.bound_index && key_types == other.key_types;
 	}
 
 	BoundIndex &bound_index;
 	vector<LogicalType> key_types;
-	string index_name;
 };
 
 static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
@@ -161,12 +160,15 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		                      index_name, key_types.size(), num_key_args);
 	}
 
-	// Only needed for binding (simplifies key generation during execution).
-	Function::EraseArgument(bound_function, arguments, 0);
-	Function::EraseArgument(bound_function, arguments, 0);
-	bound_function.arguments = key_types;
+	// Set bound_function.arguments to actual types for proper casting.
+	bound_function.arguments.clear();
+	bound_function.arguments.push_back(arguments[0]->return_type);
+	bound_function.arguments.push_back(arguments[1]->return_type);
+	for (auto &key_type : key_types) {
+		bound_function.arguments.push_back(key_type);
+	}
 
-	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types), std::move(index_name));
+	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types));
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -187,10 +189,18 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
 	}
 
+	// Create a DataChunk referencing only the key columns (skip path and index_name).
+	DataChunk key_chunk;
+	key_chunk.InitializeEmpty(bind_data.key_types);
+	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
+		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
+	}
+	key_chunk.SetCardinality(count);
+
 	auto &art = bind_data.bound_index.Cast<ART>();
 	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
-	art.GenerateKeys<>(allocator, args, keys);
+	art.GenerateKeys<>(allocator, key_chunk, keys);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
