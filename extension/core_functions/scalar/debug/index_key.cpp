@@ -161,6 +161,11 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		                      index_name, key_types.size(), num_key_args);
 	}
 
+	// Store the original arguments for serialization before modifying
+	for (auto &arg : arguments) {
+		bound_function.original_arguments.push_back(arg->return_type);
+	}
+
 	// Remove the path and index_name arguments - they're only needed for binding
 	arguments.erase(arguments.begin(), arguments.begin() + INDEX_KEY_FIXED_ARGS);
 	bound_function.arguments = key_types;
