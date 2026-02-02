@@ -178,10 +178,13 @@ void LogicalOperator::Verify(ClientContext &context) {
 		MemoryStream stream(Allocator::Get(context));
 		// We are serializing a query plan
 		try {
-			// It is valid to set the compatibility as "latest"
-			// for more information look at `DataChunk::Verify`
+			auto &config = DBConfig::GetConfig(context);;
 			SerializationOptions options;
-			options.serialization_compatibility = SerializationCompatibility::Latest();
+			if (config.options.serialization_compatibility.manually_set) {
+				options.serialization_compatibility = config.options.serialization_compatibility;
+			} else {
+				options.serialization_compatibility = SerializationCompatibility::Latest();
+			}
 
 			BinarySerializer::Serialize(*expressions[expr_idx], stream, options);
 		} catch (NotImplementedException &ex) {
