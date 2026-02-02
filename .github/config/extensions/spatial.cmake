@@ -1,4 +1,3 @@
-if (FALSE)
 if (${BUILD_COMPLETE_EXTENSION_SET})
 ################# SPATIAL
 duckdb_extension_load(spatial
@@ -9,5 +8,4 @@ duckdb_extension_load(spatial
     TEST_DIR test/sql
     APPLY_PATCHES
     )
-endif()
 endif()
