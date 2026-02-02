@@ -1,0 +1,22 @@
+# name: test/sql/collate/test_pragma_collations.test
+# description: Test pragma_collations with ICU
+# group: [collate]
+
+require icu
+
+# Check Norwegian collations are primary, not aliases
+query I
+from pragma_collations() 
+where collname like 'n%'
+order by all
+----
+nb
+nb_no
+ne
+nfc
+nl
+nn
+no
+noaccent
+nocase
+nso
