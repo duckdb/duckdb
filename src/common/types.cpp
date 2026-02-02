@@ -1588,11 +1588,6 @@ const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &ty
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-
-	if (type.IsAggregateStateStructType()) {
-		return info->Cast<AggregateStateTypeInfo>().child_types;
-	}
-
 	return info->Cast<StructTypeInfo>().child_types;
 }
 

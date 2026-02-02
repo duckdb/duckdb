@@ -268,19 +268,48 @@ bool LegacyAggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const 
 //===--------------------------------------------------------------------===//
 // Aggregate State Type Info
 //===--------------------------------------------------------------------===//
-AggregateStateTypeInfo::AggregateStateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO) {
+/*
+ * NOTE: In types.json, AggregateStateTypeInfo inherits directly from ExtraTypeInfo
+ * instead of StructTypeInfo. This is intentional because of a bug in the generation script logic:
+ * the generation script produces invalid C++ when handling
+ *    multi-level inheritance for these types (specifically, trying to access
+ *    non-static members in static Deserialize methods). Flattening the JSON
+ *    ensures the dispatch logic remains in ExtraTypeInfo::Deserialize where
+ *    the 'type' property is readily available.
+ *    FIXME
+ */
+
+AggregateStateTypeInfo::AggregateStateTypeInfo() : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, {}) {
 }
 
 AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), child_types(std::move(child_types_p)),
+    : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, std::move(child_types_p)),
       state_type(std::move(state_type_p)) {
+}
+
+void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
+	StructTypeInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(300, "function_name", state_type.function_name);
+	serializer.WriteProperty<LogicalType>(301, "return_type", state_type.return_type);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(302, "bound_argument_types",
+	                                                         state_type.bound_argument_types);
+}
+
+shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
+	deserializer.ReadPropertyWithExplicitDefault(200, "child_types", result->child_types, child_list_t<LogicalType> {});
+	deserializer.ReadPropertyWithDefault<string>(300, "function_name", result->state_type.function_name);
+	deserializer.ReadProperty<LogicalType>(301, "return_type", result->state_type.return_type);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(302, "bound_argument_types",
+	                                                          result->state_type.bound_argument_types);
+	return std::move(result);
 }
 
 bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<AggregateStateTypeInfo>();
 	return state_type.function_name == other.state_type.function_name &&
 	       state_type.return_type == other.state_type.return_type &&
-	       state_type.bound_argument_types == other.state_type.bound_argument_types && child_types == other.child_types;
+	       state_type.bound_argument_types == other.state_type.bound_argument_types;
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {

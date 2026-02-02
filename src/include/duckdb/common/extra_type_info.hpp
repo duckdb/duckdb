@@ -162,12 +162,9 @@ private:
 	LegacyAggregateStateTypeInfo();
 };
 
-// We don't inherit from `StructTypeInfo` because code-generation-scripts don't seamlessly
-// support multi-level inheritance
-struct AggregateStateTypeInfo : public ExtraTypeInfo {
+struct AggregateStateTypeInfo : public StructTypeInfo {
 	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p);
 
-	child_list_t<LogicalType> child_types;
 	aggregate_state_t state_type;
 
 public:
