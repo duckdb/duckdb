@@ -1926,6 +1926,6 @@ PEGTransformerFactory::TransformGroupingExpression(PEGTransformer &transformer,
 		grouping_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::GROUPING_FUNCTION, std::move(grouping_expressions));
-	return result;
+	return std::move(result);
 }
 } // namespace duckdb

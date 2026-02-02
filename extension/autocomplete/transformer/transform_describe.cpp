@@ -21,7 +21,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowSelect(PEGTransformer 
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(result);
-	return select_node;
+	return std::move(select_node);
 }
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransformer &transformer,
@@ -33,7 +33,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransform
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(result);
-	return select_node;
+	return std::move(select_node);
 }
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTransformer &transformer,
@@ -71,7 +71,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(result);
-	return select_node;
+	return std::move(select_node);
 }
 
 ShowType PEGTransformerFactory::TransformShowOrDescribeOrSummarize(PEGTransformer &transformer,
