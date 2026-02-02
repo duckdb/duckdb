@@ -205,3 +205,7 @@ jobs:
     - name: Symbol Leakage Test
       shell: bash
       run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+    - name: Banned Symbol Check
+      shell: bash
+      run: python3 scripts/banned_symbols_check.py --directory build/release/src

@@ -1,0 +1,14 @@
+# name: benchmark/micro/optimizer/throwing_filter_pushdown.benchmark
+# description: Benchmark of pushing down a filter that can throw
+# group: [optimizer]
+
+name TopN Optimization
+group micro
+subgroup optimizer
+
+load
+CREATE or replace table t AS SELECT random() AS column_0, repeat('a', 1000) AS v1, repeat('b', 1000) AS v2, repeat('c', 1000) AS v3, repeat('d', 1000) AS v4 FROM range(5000000);
+set threads = 1;
+
+run
+select * from t where sqrt(column_0) < 0.001;

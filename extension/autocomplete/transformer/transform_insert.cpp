@@ -140,13 +140,13 @@ InsertValues PEGTransformerFactory::TransformInsertValues(PEGTransformer &transf
 		result.default_values = true;
 		result.select_statement = nullptr;
 		return result;
-	} else if (choice_pr.result->name == "SelectStatementInternal") {
+	}
+	if (choice_pr.result->name == "SelectStatementInternal") {
 		result.default_values = false;
 		result.select_statement = transformer.Transform<unique_ptr<SelectStatement>>(choice_pr.result);
 		return result;
-	} else {
-		throw InternalException("Unexpected choice in InsertValues statement.");
 	}
+	throw InternalException("Unexpected choice in InsertValues statement.");
 }
 
 InsertColumnOrder PEGTransformerFactory::TransformByNameOrPosition(PEGTransformer &transformer,

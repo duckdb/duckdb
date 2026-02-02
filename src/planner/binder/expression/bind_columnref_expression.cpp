@@ -54,7 +54,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string 
 	return make_uniq<FunctionExpression>(value_function, std::move(children));
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, ErrorData &error) {
+unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const ParsedExpression &expr,
+                                                                 const string &column_name, ErrorData &error) {
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
 		// we are referencing a USING column
@@ -81,14 +82,14 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	}
 
 	// find a table binding that contains this column name
-	auto table_binding = binder.bind_context.GetMatchingBinding(column_name);
+	auto table_binding = binder.bind_context.GetMatchingBinding(column_name, expr);
 
 	// throw an error if a macro parameter name conflicts with a column name
 	auto is_macro_column = false;
 	if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(column_name)) {
 		is_macro_column = true;
 		if (table_binding) {
-			throw BinderException("Conflicting column names for column " + column_name + "!");
+			throw BinderException(expr, "Conflicting column names for column " + column_name + "!");
 		}
 	}
 
@@ -341,7 +342,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInte
 	}
 	// part1 could be a column
 	ErrorData unused_error;
-	auto result_expr = QualifyColumnName(col_ref.column_names[0], unused_error);
+	auto result_expr = QualifyColumnName(col_ref, col_ref.column_names[0], unused_error);
 	if (result_expr) {
 		// it is! add the struct extract calls
 		struct_extract_start = 1;
@@ -462,7 +463,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// no dots (i.e. "part1")
 		// -> part1 refers to a column
 		// check if we can qualify the column name with the table name
-		auto qualified_col_ref = QualifyColumnName(col_ref.GetColumnName(), error);
+		auto qualified_col_ref = QualifyColumnName(col_ref, col_ref.GetColumnName(), error);
 		if (qualified_col_ref) {
 			// we could: return it
 			return qualified_col_ref;
@@ -486,7 +487,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 
 		// otherwise check if we can turn this into a struct extract
 		ErrorData other_error;
-		auto qualified_col_ref = QualifyColumnName(col_ref.column_names[0], other_error);
+		auto qualified_col_ref = QualifyColumnName(col_ref, col_ref.column_names[0], other_error);
 		if (qualified_col_ref) {
 			// we could: create a struct extract
 			return CreateStructExtract(std::move(qualified_col_ref), col_ref.column_names[1]);
