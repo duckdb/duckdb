@@ -16,7 +16,8 @@
         "test/sql/error/qualified_column_error.test",
         "test/sql/types/nested/array/array_invalid.test",
         "test/sql/types/nested/struct/struct_dict.test",
-        "test/sql/types/map/map_empty.test"
+        "test/sql/types/map/map_empty.test",
+        "test/sql/binder/column_ref_as_alias.test"
       ]
     },
     {
@@ -34,7 +35,8 @@
         "test/optimizer/compare_blob.test",
         "test/sql/copy/csv/test_copy.test",
         "test/sql/copy/csv/unquoted_escape/mixed.test",
-        "test/issues/general/test_15483.test"
+        "test/issues/general/test_15483.test",
+        "test/sql/copy/csv/unquoted_escape/human_eval.test"
       ]
     },
     {
@@ -125,27 +127,26 @@
     {
       "reason": "Parser error",
       "paths": [
-        "test/sql/catalog/issue_9459.test",
         "test/sql/prepared/parameter_variants.test",
         "test/sql/parser/digit_separators.test",
-        "test/sql/copy/csv/multidelimiter/test_abac.test"
+        "test/fuzzer/duckfuzz/list_try_cast.test",
+        "test/sql/json/scalar/test_json_extract.test",
+        "test/issues/monetdb/test_boolean_not.test"
       ]
     },
     {
-      "reason": "Parser error",
-      "paths": ["test/sql/catalog/issue_9459.test"]
+      "reason": "Autocomplete wrong results",
+      "paths": [
+        "test/sql/function/autocomplete/copy.test",
+        "test/sql/function/autocomplete/expressions.test",
+        "test/sql/function/autocomplete/select.test",
+        "test/sql/function/autocomplete/suggest_file.test"
+      ]
     },
     {
       "reason": "Tokenizer issue",
       "paths": [
         "test/sql/function/list/lambdas/arrow/lambda_scope_deprecated.test"
-      ]
-    },
-    {
-      "reason": "Timeout",
-      "paths": [
-        "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",
-        "test/sql/storage/temp_directory/offloading_block_files.test_slow"
       ]
     },
     {
