@@ -5,11 +5,9 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 
 #include <chrono>
 #include <thread>
-#include <duckdb/common/local_file_system.hpp>
 
 using namespace duckdb;
 using namespace std;
@@ -21,58 +19,6 @@ TEST_CASE("Test comment in CPP API", "[api]") {
 	con.SendQuery("--ups");
 	//! Should not crash
 	REQUIRE(1);
-}
-
-TEST_CASE("Test wal spil", "[boaz]") {
-	int threads = 10;
-	int rows = DEFAULT_ROW_GROUP_SIZE * threads - DEFAULT_STANDARD_VECTOR_SIZE;
-	bool use_preservation_order = true;
-	bool use_join = true;
-	std::string q = "CREATE TABLE long_wal AS SELECT a FROM tbl1";
-	if (use_join) {
-		q += " WHERE a not in (select b from tbl2)";
-	}
-
-	LocalFileSystem lfs;
-	{
-		std::remove("/tmp/long_wal.db.wal");
-		std::remove("/tmp/long_wal.db");
-		DBConfig config;
-		config.options.checkpoint_on_shutdown = false;
-		config.SetOption("debug_skip_checkpoint_on_commit", true);
-		DuckDB db("/tmp/long_wal.db", &config);
-		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS tbl1 AS SELECT 'item_' || range AS a FROM RANGE(" +
-		                          std::to_string(rows) + ")"));
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS tbl2 AS SELECT 'non_item_' || range AS b FROM RANGE(3)"));
-		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
-		REQUIRE_NO_FAIL(con.Query("set threads = " + std::to_string(threads)));
-		if (!use_preservation_order) {
-			REQUIRE_NO_FAIL(con.Query("set preserve_insertion_order = false;"));
-		}
-		printf("%s\n", con.Query("explain " + q)->ToString().c_str());
-		REQUIRE_NO_FAIL(con.Query(q));
-	};
-	printf("wal size: %lluMB\n",
-	       lfs.OpenFile("/tmp/long_wal.db.wal", FileOpenFlags::FILE_FLAGS_READ, nullptr)->GetFileSize() / 1024 / 1024);
-	for (int iter = 0; iter < 10; iter++) {
-		std::remove("/tmp/long_wal.db.wal");
-		{
-			DBConfig config;
-			config.options.checkpoint_on_shutdown = false;
-			config.SetOption("debug_skip_checkpoint_on_commit", true);
-			DuckDB db("/tmp/long_wal.db", &config);
-			Connection con(db);
-			if (!use_preservation_order) {
-				REQUIRE_NO_FAIL(con.Query("set preserve_insertion_order = false;"));
-			}
-			REQUIRE_NO_FAIL(con.Query("set threads = " + std::to_string(threads)));
-			REQUIRE_NO_FAIL(con.Query(q));
-		}
-		printf("wal size: %lluMB\n",
-		       lfs.OpenFile("/tmp/long_wal.db.wal", FileOpenFlags::FILE_FLAGS_READ, nullptr)->GetFileSize() / 1024 /
-		           1024);
-	}
 }
 
 TEST_CASE("Test StarExpression replace_list parameter", "[api]") {
