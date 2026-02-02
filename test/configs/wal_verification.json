@@ -12,7 +12,8 @@
       "paths": [
         "test/sql/attach/attach_use_rollback.test",
         "test/sql/storage/read_duckdb/read_duckdb_basic.test",
-        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test",
+        "test/sql/cte/warn_deprecated_union_in_using_key.test"
       ]
     },
     {"reason": "Loading from disk is necessary to trigger expected OOM.",
