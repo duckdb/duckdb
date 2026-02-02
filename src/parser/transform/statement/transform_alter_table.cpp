@@ -60,15 +60,16 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
 	/* Here we do a workaround that consists of the following statements:
 	 *	 1. `SET search_path = <schema_of_table>;`
 	 *	 2. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
-	 *	 3. `UPDATE t SET u = <expression>;`
-	 *	 4. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	 *	 3. `UPDATE t SET col = <expression>;`
+	 *	 4. `ALTER TABLE t ALTER col SET DEFAULT <expression>;`
 	 *	 5. `RESET search_path;`
 	 *
 	 * This workaround exists because, when statements like this were executed:
 	 *	`ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>`
 	 * the WAL replay would re-run the default expression, and with expressions such as RANDOM or CURRENT_TIMESTAMP, the
-	 * value would be different from that of the original run. By now doing an UPDATE, we force materialization of these
-	 * values, which makes WAL replays consistent.
+	 * value would be different from that of the original run. By now doing an UPDATE in statement 3, we force
+	 * materialization of these values for all existing rows, which makes WAL replays consistent. Statement 4 then
+	 * reinstates restores the intended default so that new rows inserted later get the correct default behavior.
 	 */
 
 	// 1. SET search_path = 'schema_of_table'
