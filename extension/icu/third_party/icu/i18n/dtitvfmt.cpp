@@ -1726,10 +1726,10 @@ DateIntervalFormat::adjustFieldWidth(const UnicodeString& inputSkeleton,
     DateIntervalInfo::parseSkeleton(bestMatchSkeleton, bestMatchSkeletonFieldWidth);
     if (suppressDayPeriodField) {
         // remove the 'a' and any NBSP/NNBSP on one side of it
-        findReplaceInPattern(adjustedPtn, UnicodeString(u"\u00A0a"), UnicodeString());
-        findReplaceInPattern(adjustedPtn, UnicodeString(u"\u202Fa"), UnicodeString());
-        findReplaceInPattern(adjustedPtn, UnicodeString(u"a\u00A0"), UnicodeString());
-        findReplaceInPattern(adjustedPtn, UnicodeString(u"a\u202F"), UnicodeString());
+        findReplaceInPattern(adjustedPtn, UnicodeString(u"\u00A0a",-1), UnicodeString());
+        findReplaceInPattern(adjustedPtn, UnicodeString(u"\u202Fa",-1), UnicodeString());
+        findReplaceInPattern(adjustedPtn, UnicodeString(u"a\u00A0",-1), UnicodeString());
+        findReplaceInPattern(adjustedPtn, UnicodeString(u"a\u202F",-1), UnicodeString());
         findReplaceInPattern(adjustedPtn, UnicodeString(LOW_A), UnicodeString());
         // adjust interior double spaces, remove exterior whitespace
         findReplaceInPattern(adjustedPtn, UnicodeString("  "), UnicodeString(" "));
