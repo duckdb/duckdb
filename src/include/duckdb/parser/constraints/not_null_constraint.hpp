@@ -17,7 +17,7 @@ public:
 	static constexpr const ConstraintType TYPE = ConstraintType::NOT_NULL;
 
 public:
-	DUCKDB_API explicit NotNullConstraint(LogicalIndex index, const string column_name = "");
+	DUCKDB_API explicit NotNullConstraint(LogicalIndex index, const string &column_name = "");
 	DUCKDB_API ~NotNullConstraint() override;
 
 	//! Column index this constraint pertains to
