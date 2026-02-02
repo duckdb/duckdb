@@ -14,11 +14,10 @@ namespace duckdb {
 
 PhysicalDelete::PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
                                DataTable &table, vector<unique_ptr<BoundConstraint>> bound_constraints,
-                               idx_t row_id_index, idx_t estimated_cardinality, bool return_chunk,
-                               vector<idx_t> return_columns)
+                               idx_t row_id_index, idx_t estimated_cardinality, vector<idx_t> return_columns)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
       tableref(tableref), table(table), bound_constraints(std::move(bound_constraints)), row_id_index(row_id_index),
-      return_chunk(return_chunk), return_columns(std::move(return_columns)) {
+      return_columns(std::move(return_columns)) {
 }
 //===--------------------------------------------------------------------===//
 // Sink
@@ -68,7 +67,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &row_ids = chunk.data[row_id_index];
 
 	lock_guard<mutex> delete_guard(g_state.delete_lock);
-	if (!return_chunk && !g_state.has_unique_indexes) {
+	if (!ReturnChunk() && !g_state.has_unique_indexes) {
 		g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -116,7 +115,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	g_state.deleted_count += deleted_count;
 
 	// Append the return_chunk to the return collection.
-	if (return_chunk) {
+	if (ReturnChunk()) {
 		// Rows can be duplicated, so we get the chunk indexes for new row id values.
 		map<row_t, idx_t> new_row_ids_deleted;
 		auto flat_ids = FlatVector::GetData<row_t>(row_ids);
@@ -163,7 +162,7 @@ unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &c
 class DeleteSourceState : public GlobalSourceState {
 public:
 	explicit DeleteSourceState(const PhysicalDelete &op) {
-		if (op.return_chunk) {
+		if (op.ReturnChunk()) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<DeleteGlobalState>();
 			g.return_collection.InitializeScan(scan_state);
@@ -181,7 +180,7 @@ SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, Data
                                                  OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<DeleteSourceState>();
 	auto &g = sink_state->Cast<DeleteGlobalState>();
-	if (!return_chunk) {
+	if (!ReturnChunk()) {
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.deleted_count)));
 		return SourceResultType::FINISHED;

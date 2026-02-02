@@ -22,14 +22,18 @@ public:
 public:
 	PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
 	               DataTable &table, vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
-	               idx_t estimated_cardinality, bool return_chunk, vector<idx_t> return_columns);
+	               idx_t estimated_cardinality, vector<idx_t> return_columns);
 
 	TableCatalogEntry &tableref;
 	DataTable &table;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	idx_t row_id_index;
-	bool return_chunk;
 	vector<idx_t> return_columns;
+
+	//! Whether to return the deleted rows (derived from return_columns)
+	bool ReturnChunk() const {
+		return !return_columns.empty();
+	}
 
 public:
 	// Source interface
