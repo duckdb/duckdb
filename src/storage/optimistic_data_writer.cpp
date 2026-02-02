@@ -72,7 +72,7 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 		// we have crossed our flush threshold - flush any unwritten row groups to disk
 		vector<const_reference<RowGroup>> to_flush;
 		vector<int64_t> segment_indexes;
-		for(auto &unflushed_idx : row_groups.unflushed_row_groups) {
+		for (auto &unflushed_idx : row_groups.unflushed_row_groups) {
 			auto segment_index = NumericCast<int64_t>(unflushed_idx);
 			to_flush.push_back(*row_groups.collection->GetRowGroup(segment_index));
 			segment_indexes.push_back(segment_index);
@@ -87,19 +87,27 @@ void OptimisticDataWriter::WriteUnflushedRowGroups(OptimisticWriteCollection &ro
 	if (!PrepareWrite()) {
 		return;
 	}
-	// flush the last batch of row groups
-	vector<const_reference<RowGroup>> to_flush;
-	vector<int64_t> segment_indexes;
-	for(auto &unflushed_idx : row_groups.unflushed_row_groups) {
-		auto segment_index = NumericCast<int64_t>(unflushed_idx);
-		to_flush.push_back(*row_groups.collection->GetRowGroup(segment_index));
-		segment_indexes.push_back(segment_index);
+	// add any incomplete row groups to the set of unflushed row groups
+	auto total_row_groups = row_groups.collection->GetRowGroupCount();
+	if (row_groups.complete_row_groups > total_row_groups) {
+		throw InternalException("WriteUnflushedRowGroups - complete row groups > total_row_groups");
 	}
-	// add the last (incomplete) row group
-	to_flush.push_back(*row_groups.collection->GetRowGroup(-1));
-	segment_indexes.push_back(-1);
+	for (idx_t i = row_groups.complete_row_groups; i < total_row_groups; i++) {
+		row_groups.unflushed_row_groups.insert(i);
+		row_groups.complete_row_groups++;
+	}
+	if (!row_groups.unflushed_row_groups.empty()) {
+		// flush the last batch of row groups
+		vector<const_reference<RowGroup>> to_flush;
+		vector<int64_t> segment_indexes;
+		for (auto &unflushed_idx : row_groups.unflushed_row_groups) {
+			auto segment_index = NumericCast<int64_t>(unflushed_idx);
+			to_flush.push_back(*row_groups.collection->GetRowGroup(segment_index));
+			segment_indexes.push_back(segment_index);
+		}
 
-	FlushToDisk(row_groups, to_flush, segment_indexes);
+		FlushToDisk(row_groups, to_flush, segment_indexes);
+	}
 
 	for (auto &partial_manager : row_groups.partial_block_managers) {
 		Merge(partial_manager);
@@ -118,19 +126,27 @@ void OptimisticWriteCollection::MergeStorage(OptimisticWriteCollection &merge_co
 	// that means any trailing row groups that are not yet complete are now complete (even if they are half empty)
 	// add them to the unflushed set
 	idx_t current_row_group_count = collection->GetRowGroupCount();
-	for(idx_t i = complete_row_groups; i < current_row_group_count; i++) {
+	if (complete_row_groups > current_row_group_count) {
+		throw InternalException("MergeStorage - complete row groups > total_row_groups");
+	}
+	for (idx_t i = complete_row_groups; i < current_row_group_count; i++) {
 		unflushed_row_groups.insert(i);
 		complete_row_groups++;
 	}
 
 	// now we merge the target collection into this one - take over any unflushed row groups but adjust their index
-	idx_t merge_row_group_count = merge_row_groups.GetRowGroupCount();
-	for(auto &unflushed_idx : merge_collection.unflushed_row_groups) {
+	for (auto &unflushed_idx : merge_collection.unflushed_row_groups) {
 		unflushed_row_groups.insert(current_row_group_count + unflushed_idx);
 	}
 	complete_row_groups += merge_collection.complete_row_groups;
 	// finally perform the actual merge
 	collection->MergeStorage(merge_row_groups, nullptr, nullptr);
+	// check if all row groups have been flushed
+	// we cannot append into a row group that has been flushed
+	if (complete_row_groups == collection->GetRowGroupCount()) {
+		// if the last row group has been flushed move any new appends to a new row group
+		collection->SetAppendRequiresNewRowGroup();
+	}
 }
 
 void OptimisticDataWriter::FlushToDisk(OptimisticWriteCollection &collection,

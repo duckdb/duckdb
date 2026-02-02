@@ -680,7 +680,8 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 			auto &row_group = entry->GetNode();
 			if (!row_group.IsPersistent()) {
 				if (optimistically_written_count > 0) {
-					throw InternalException("Partially optimistically written data");
+					throw InternalException("Partially optimistically written data at position %d (row start %d)",
+					                        entry->GetIndex(), entry->GetRowStart());
 				}
 				break;
 			}

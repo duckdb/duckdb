@@ -30,7 +30,7 @@ TEST_CASE("Test wal spil", "[boaz]") {
 	bool use_join = true;
 	std::string q = "CREATE TABLE long_wal AS SELECT a FROM tbl1";
 	if (use_join) {
-		q+= " WHERE a not in (select b from tbl2)";
+		q += " WHERE a not in (select b from tbl2)";
 	}
 
 	LocalFileSystem lfs;
@@ -42,7 +42,8 @@ TEST_CASE("Test wal spil", "[boaz]") {
 		config.SetOption("debug_skip_checkpoint_on_commit", true);
 		DuckDB db("/tmp/long_wal.db", &config);
 		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS tbl1 AS SELECT 'item_' || range AS a FROM RANGE(" + std::to_string(rows) + ")"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS tbl1 AS SELECT 'item_' || range AS a FROM RANGE(" +
+		                          std::to_string(rows) + ")"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS tbl2 AS SELECT 'non_item_' || range AS b FROM RANGE(3)"));
 		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
 		REQUIRE_NO_FAIL(con.Query("set threads = " + std::to_string(threads)));
@@ -51,11 +52,10 @@ TEST_CASE("Test wal spil", "[boaz]") {
 		}
 		printf("%s\n", con.Query("explain " + q)->ToString().c_str());
 		REQUIRE_NO_FAIL(con.Query(q));
-	}
-	;
-	printf("wal size: %lluMB\n", lfs.OpenFile("/tmp/long_wal.db.wal", FileOpenFlags::FILE_FLAGS_READ, nullptr)->GetFileSize() / 1024 / 1024);
-	for (int iter = 0; iter < 10; iter++ )
-	{
+	};
+	printf("wal size: %lluMB\n",
+	       lfs.OpenFile("/tmp/long_wal.db.wal", FileOpenFlags::FILE_FLAGS_READ, nullptr)->GetFileSize() / 1024 / 1024);
+	for (int iter = 0; iter < 10; iter++) {
 		std::remove("/tmp/long_wal.db.wal");
 		{
 			DBConfig config;
@@ -69,7 +69,9 @@ TEST_CASE("Test wal spil", "[boaz]") {
 			REQUIRE_NO_FAIL(con.Query("set threads = " + std::to_string(threads)));
 			REQUIRE_NO_FAIL(con.Query(q));
 		}
-		printf("wal size: %lluMB\n", lfs.OpenFile("/tmp/long_wal.db.wal", FileOpenFlags::FILE_FLAGS_READ, nullptr)->GetFileSize() / 1024 / 1024);
+		printf("wal size: %lluMB\n",
+		       lfs.OpenFile("/tmp/long_wal.db.wal", FileOpenFlags::FILE_FLAGS_READ, nullptr)->GetFileSize() / 1024 /
+		           1024);
 	}
 }
 
