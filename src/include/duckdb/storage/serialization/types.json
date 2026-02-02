@@ -153,6 +153,12 @@
     "class": "AggregateStateTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "AGGREGATE_STATE_TYPE_INFO",
+    "ignore_clang_tidy_rules": [
+      {
+        "name": "bugprone-parent-virtual-call",
+        "reason": "Multi-level inheritance is not supported in the generation tool"
+      }
+    ],
     "members": [
       {
         "id": 300,

@@ -75,6 +75,8 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	result->extension_info = std::move(extension_info);
 	return result;
 }
+// NOLINTBEGIN(bugprone-parent-virtual-call)
+// reasons: Multi-level inheritance is not supported in the generation tool
 
 void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
@@ -92,6 +94,8 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 	deserializer.ReadPropertyWithDefault<child_list_t<LogicalType>>(303, "child_types", result->child_types);
 	return std::move(result);
 }
+
+// NOLINTEND(bugprone-parent-virtual-call)
 
 void AnyTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);

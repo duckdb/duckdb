@@ -286,24 +286,6 @@ AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p, c
       state_type(std::move(state_type_p)) {
 }
 
-void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
-	StructTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(300, "function_name", state_type.function_name);
-	serializer.WriteProperty<LogicalType>(301, "return_type", state_type.return_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(302, "bound_argument_types",
-	                                                         state_type.bound_argument_types);
-}
-
-shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
-	deserializer.ReadPropertyWithExplicitDefault(200, "child_types", result->child_types, child_list_t<LogicalType> {});
-	deserializer.ReadPropertyWithDefault<string>(300, "function_name", result->state_type.function_name);
-	deserializer.ReadProperty<LogicalType>(301, "return_type", result->state_type.return_type);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(302, "bound_argument_types",
-	                                                          result->state_type.bound_argument_types);
-	return std::move(result);
-}
-
 bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<AggregateStateTypeInfo>();
 	return state_type.function_name == other.state_type.function_name &&
