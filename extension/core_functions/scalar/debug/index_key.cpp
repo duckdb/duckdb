@@ -161,13 +161,9 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		                      index_name, key_types.size(), num_key_args);
 	}
 
-	// Store the original arguments for serialization before modifying
-	for (auto &arg : arguments) {
-		bound_function.original_arguments.push_back(arg->return_type);
-	}
-
-	// Remove the path and index_name arguments - they're only needed for binding
-	arguments.erase(arguments.begin(), arguments.begin() + INDEX_KEY_FIXED_ARGS);
+	// Only needed for binding (simplifies key generation during execution).
+	Function::EraseArgument(bound_function, arguments, 0);
+	Function::EraseArgument(bound_function, arguments, 0);
 	bound_function.arguments = key_types;
 
 	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types), std::move(index_name));
