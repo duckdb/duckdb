@@ -157,9 +157,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	}
 
 	auto &struct_expr = *arguments[0];
-	auto &struct_type = struct_expr.return_type;
-	bound_function.arguments[0] = struct_type;
-
+	bound_function.arguments[0] = struct_expr.return_type;
 	auto path = EvaluateTableDescription(context, struct_expr);
 	auto index = GetStringArgument(context, *arguments[1], "index_name");
 
@@ -198,44 +196,41 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &bind_data = func_expr.bind_info->Cast<IndexKeyBindData>();
 
 	idx_t count = args.size();
-	D_ASSERT(args.ColumnCount() >= INDEX_KEY_FIXED_ARGS + bind_data.key_types.size());
+
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_validity = FlatVector::Validity(result);
+
+	auto index_type = bind_data.bound_index.GetIndexType();
+
+	if (index_type != ART::TYPE_NAME) {
+		throw NotImplementedException(
+		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
+	}
 
 	DataChunk key_chunk;
 	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.key_types);
 	key_chunk.SetCardinality(count);
-
-	for (idx_t col_idx = 0; col_idx < bind_data.key_types.size(); col_idx++) {
-		key_chunk.data[col_idx].Reference(args.data[INDEX_KEY_FIXED_ARGS + col_idx]);
+	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
+		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-	result_validity.SetAllValid(count);
+	auto &art = bind_data.bound_index.Cast<ART>();
+	unsafe_vector<ARTKey> keys(count);
+	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	art.GenerateKeys<>(allocator, key_chunk, keys);
 
-	auto index_type = bind_data.bound_index.GetIndexType();
-	if (index_type == ART::TYPE_NAME) {
-		auto &art = bind_data.bound_index.Cast<ART>();
-		unsafe_vector<ARTKey> keys(count);
-		ArenaAllocator allocator(Allocator::DefaultAllocator());
-		art.GenerateKeys<>(allocator, key_chunk, keys);
-
-		for (idx_t i = 0; i < count; i++) {
-			auto &key = keys[i];
-			if (key.Empty()) {
-				result_validity.SetInvalid(i);
-			} else {
-				result_data[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data), key.len);
-			}
+	for (idx_t i = 0; i < count; i++) {
+		auto &key = keys[i];
+		if (key.Empty()) {
+			result_validity.SetInvalid(i);
+		} else {
+			result_data[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data), key.len);
 		}
-		if (count == 1) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		}
-		result.Verify(count);
-		return;
 	}
-	throw NotImplementedException("index_key: index type '%s' is not yet supported (only ART indexes are supported)",
-	                              index_type);
+	if (count == 1) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	result.Verify(count);
 }
 
 } // namespace
