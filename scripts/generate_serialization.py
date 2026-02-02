@@ -156,8 +156,8 @@ TRY_GET_DESERIALIZE_PARAMETER_FORMAT = 'deserializer.TryGet<{property_type}>()'
 SWITCH_HEADER_FORMAT = '\tcase {enum_type}::{enum_value}:\n'
 
 SWITCH_STATEMENT_FORMAT = (
-        SWITCH_HEADER_FORMAT
-        + '''\t\tresult = {class_deserialize}::Deserialize(deserializer);
+    SWITCH_HEADER_FORMAT
+    + '''\t\tresult = {class_deserialize}::Deserialize(deserializer);
 \t\tbreak;
 '''
 )
@@ -218,15 +218,15 @@ def get_default_argument(default_value):
 
 
 def get_deserialize_element_template(
-        template,
-        property_name,
-        property_key,
-        property_id,
-        property_type,
-        has_default,
-        default_value,
-        status: MemberVariableStatus,
-        pointer_type,
+    template,
+    property_name,
+    property_key,
+    property_id,
+    property_type,
+    has_default,
+    default_value,
+    status: MemberVariableStatus,
+    pointer_type,
 ):
     if status == MemberVariableStatus.READ_ONLY and not has_default:
         print("'read_only' status is not allowed without a default value")
@@ -418,8 +418,7 @@ class SerializableClass:
         self.finalize_deserialization = None
         self.ignore_clang_tidy_rules: List[ClangTidyIgnoreRule] = []
         if 'ignore_clang_tidy_rules' in entry:
-            self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(
-                entry['ignore_clang_tidy_rules'])
+            self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(entry['ignore_clang_tidy_rules'])
         if 'finalize_deserialization' in entry:
             self.finalize_deserialization = entry['finalize_deserialization']
         if self.is_base_class:
@@ -476,7 +475,7 @@ class SerializableClass:
         self.pointer_type = base_class.pointer_type
 
     def get_deserialize_element(
-            self, entry: MemberVariable, *, base: Optional[str] = None, pointer_type: Optional[str] = None
+        self, entry: MemberVariable, *, base: Optional[str] = None, pointer_type: Optional[str] = None
     ):
         property_name = entry.deserialize_property
         property_id = entry.id
@@ -660,7 +659,8 @@ def wrap_with_clang_tidy_ignore(code: str, rules: List[ClangTidyIgnoreRule]) -> 
         return code
     rule_names_to_inject = ", ".join([rule.name for rule in rules])
     return "// NOLINTBEGIN({rule_names})\n// reasons: {reasons}\n{code}\n// NOLINTEND({rule_names})\n".format(
-        code=code, rule_names=rule_names_to_inject, reasons=", ".join([rule.reason for rule in rules]))
+        code=code, rule_names=rule_names_to_inject, reasons=", ".join([rule.reason for rule in rules])
+    )
 
 
 def generate_class_code(class_entry: SerializableClass):
@@ -886,8 +886,9 @@ for entry in file_list:
         # generate the base class serialization
         for base_class in base_classes:
             base_class_generation = generate_base_class_code(base_class)
-            base_class_generation = wrap_with_clang_tidy_ignore(base_class_generation,
-                                                                base_class.ignore_clang_tidy_rules)
+            base_class_generation = wrap_with_clang_tidy_ignore(
+                base_class_generation, base_class.ignore_clang_tidy_rules
+            )
             f.write(base_class_generation)
 
         # generate the class serialization
