@@ -320,22 +320,22 @@ Expected 1 parameters, but none were supplied
 statement error
 SELECT index_key({'schema': 'main'}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: table_path must contain a 'table' field
+Binder Error: index_key: table_path must contain a non-empty 'table' field
 
 statement error
 SELECT index_key({'table': NULL::VARCHAR}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: table_path must contain a non-NULL 'table' field
+Binder Error: index_key: table_path must contain a non-empty 'table' field
 
 statement error
 SELECT index_key({'table': 123}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: table_path field 'table' must be VARCHAR
+Binder Error: index_key: path field 'table' must be VARCHA
 
 statement error
 SELECT index_key({'table': ''}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: table_path field 'table' cannot be empty
+Binder Error: index_key: table_path must contain a non-empty 'table' field
 
 
 statement error

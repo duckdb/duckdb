@@ -20,51 +20,42 @@ namespace {
 
 static constexpr idx_t INDEX_KEY_FIXED_ARGS = 2;
 
-static optional_idx FindStructFieldIndex(const LogicalType &struct_type, const string &field_name) {
-	auto &struct_children = StructType::GetChildTypes(struct_type);
-	for (idx_t i = 0; i < struct_children.size(); i++) {
-		if (StringUtil::CIEquals(struct_children[i].first, field_name)) {
-			return optional_idx(i);
+static TableDescription ExtractTableDescription(const child_list_t<LogicalType> &field_types,
+                                                const vector<Value> &field_values) {
+	unordered_map<string, string> fields;
+	fields["catalog"] = INVALID_CATALOG;
+	fields["schema"] = DEFAULT_SCHEMA;
+	fields["table"] = "";
+
+	for (idx_t i = 0; i < field_types.size(); i++) {
+		auto field_name = StringUtil::Lower(field_types[i].first);
+
+		if (fields.find(field_name) == fields.end()) {
+			throw BinderException("index_key: unknown field '%s' in table_path", field_types[i].first);
+		}
+
+		auto &field_value = field_values[i];
+		if (field_value.IsNull()) {
+			continue;
+		}
+		if (field_value.type().id() != LogicalTypeId::VARCHAR) {
+			throw BinderException("index_key: path field '%s' must be VARCHAR", field_types[i].first);
+		}
+
+		auto value = StringValue::Get(field_value);
+		if (!value.empty()) {
+			fields[field_name] = value;
 		}
 	}
-	return optional_idx();
+
+	if (fields["table"].empty()) {
+		throw BinderException("index_key: table_path must contain a non-empty 'table' field");
+	}
+
+	return TableDescription(fields["catalog"], fields["schema"], fields["table"]);
 }
 
-static string GetOptionalStructField(const vector<Value> &children, const LogicalType &struct_type,
-                                     const string &field_name, const string &default_value) {
-	auto field_idx = FindStructFieldIndex(struct_type, field_name);
-	if (!field_idx.IsValid()) {
-		return default_value;
-	}
-	auto &field_value = children[field_idx.GetIndex()];
-	if (!field_value.IsNull() && field_value.type().id() == LogicalTypeId::VARCHAR) {
-		auto result = StringValue::Get(field_value);
-		return result.empty() ? default_value : result;
-	}
-	return default_value;
-}
-
-static string GetRequiredStructField(const vector<Value> &children, const LogicalType &struct_type,
-                                     const string &field_name) {
-	auto field_idx = FindStructFieldIndex(struct_type, field_name);
-	if (!field_idx.IsValid()) {
-		throw BinderException("index_key: table_path must contain a '%s' field", field_name);
-	}
-	auto &field_value = children[field_idx.GetIndex()];
-	if (field_value.IsNull()) {
-		throw BinderException("index_key: table_path must contain a non-NULL '%s' field", field_name);
-	}
-	if (field_value.type().id() != LogicalTypeId::VARCHAR) {
-		throw BinderException("index_key: table_path field '%s' must be VARCHAR", field_name);
-	}
-	auto result = StringValue::Get(field_value);
-	if (result.empty()) {
-		throw BinderException("index_key: table_path field '%s' cannot be empty", field_name);
-	}
-	return result;
-}
-
-static TableDescription EvaluateTablePath(ClientContext &context, const Expression &expr) {
+static TableDescription EvaluateTableDescription(ClientContext &context, const Expression &expr) {
 	if (expr.HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -81,12 +72,7 @@ static TableDescription EvaluateTablePath(ClientContext &context, const Expressi
 		throw BinderException("index_key: table_path parameter must evaluate to a STRUCT");
 	}
 
-	auto &input_children = StructValue::GetChildren(input_struct);
-	auto &struct_type = expr.return_type;
-
-	return TableDescription(GetOptionalStructField(input_children, struct_type, "catalog", INVALID_CATALOG),
-	                        GetOptionalStructField(input_children, struct_type, "schema", DEFAULT_SCHEMA),
-	                        GetRequiredStructField(input_children, struct_type, "table"));
+	return ExtractTableDescription(StructType::GetChildTypes(expr.return_type), StructValue::GetChildren(input_struct));
 }
 
 static string GetStringArgument(ClientContext &context, const Expression &expr, const string &param_name) {
@@ -180,7 +166,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	auto &struct_type = struct_expr.return_type;
 	bound_function.arguments[0] = struct_type;
 
-	auto path = EvaluateTablePath(context, struct_expr);
+	auto path = EvaluateTableDescription(context, struct_expr);
 	auto index = GetStringArgument(context, *arguments[1], "index_name");
 
 	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.database, path.schema, path.table)
