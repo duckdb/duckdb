@@ -153,7 +153,6 @@
     "class": "AggregateStateTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "AGGREGATE_STATE_TYPE_INFO",
-    "custom_implementation": true,
     "members": [
       {
         "id": 300,
@@ -174,7 +173,7 @@
         "property": "state_type.bound_argument_types"
       },
       {
-        "id": 200,
+        "id": 303,
         "name": "child_types",
         "type": "child_list_t<LogicalType>"
       }
