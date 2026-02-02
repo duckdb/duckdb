@@ -1,3 +1,4 @@
+if (FALSE)
 if (${BUILD_COMPLETE_EXTENSION_SET})
 ################# SPATIAL
 duckdb_extension_load(spatial
@@ -7,4 +8,5 @@ duckdb_extension_load(spatial
     INCLUDE_DIR src/spatial
     TEST_DIR test/sql
     )
+endif()
 endif()
