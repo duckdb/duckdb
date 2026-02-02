@@ -15,8 +15,8 @@
     },
     {
         "name": "index_key",
-        "parameters": "table_path, index_name, [key_column_1, key_column_2, ...]",
-        "description": "Generate an ART index key from variadic key column arguments",
+        "parameters": "path, name, [key_column_1, key_column_2, ...]",
+        "description": "Generate index keys from key column arguments. Currently only supports ART indexes.",
         "example": "index_key({'schema': 'main', 'table': 'tbl3'}, 'tbl3_idx', key1, key2, key3)",
         "type": "scalar_function",
         "struct": "IndexKeyFun"

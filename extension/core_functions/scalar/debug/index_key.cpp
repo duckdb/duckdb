@@ -5,14 +5,12 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -21,16 +19,6 @@ namespace duckdb {
 namespace {
 
 static constexpr idx_t INDEX_KEY_FIXED_ARGS = 2;
-
-struct TablePath {
-	TablePath(string catalog, string schema, string table)
-	    : catalog(std::move(catalog)), schema(std::move(schema)), table(std::move(table)) {
-	}
-
-	string catalog;
-	string schema;
-	string table;
-};
 
 static optional_idx FindStructFieldIndex(const LogicalType &struct_type, const string &field_name) {
 	auto &struct_children = StructType::GetChildTypes(struct_type);
@@ -76,7 +64,7 @@ static string GetRequiredStructField(const vector<Value> &children, const Logica
 	return result;
 }
 
-static TablePath EvaluateTablePath(ClientContext &context, const Expression &expr) {
+static TableDescription EvaluateTablePath(ClientContext &context, const Expression &expr) {
 	if (expr.HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -96,9 +84,9 @@ static TablePath EvaluateTablePath(ClientContext &context, const Expression &exp
 	auto &input_children = StructValue::GetChildren(input_struct);
 	auto &struct_type = expr.return_type;
 
-	return TablePath(GetOptionalStructField(input_children, struct_type, "catalog", INVALID_CATALOG),
-	                 GetOptionalStructField(input_children, struct_type, "schema", DEFAULT_SCHEMA),
-	                 GetRequiredStructField(input_children, struct_type, "table"));
+	return TableDescription(GetOptionalStructField(input_children, struct_type, "catalog", INVALID_CATALOG),
+	                        GetOptionalStructField(input_children, struct_type, "schema", DEFAULT_SCHEMA),
+	                        GetRequiredStructField(input_children, struct_type, "table"));
 }
 
 static string GetStringArgument(ClientContext &context, const Expression &expr, const string &param_name) {
@@ -118,14 +106,15 @@ static string GetStringArgument(ClientContext &context, const Expression &expr, 
 	return StringValue::Get(value);
 }
 
-static string FormatQualifiedTableName(const TablePath &path) {
-	if (path.catalog.empty() || path.catalog == INVALID_CATALOG) {
+static string FormatQualifiedTableName(const TableDescription &path) {
+	if (path.database.empty() || path.database == INVALID_CATALOG) {
 		return path.schema + "." + path.table;
 	}
-	return path.catalog + "." + path.schema + "." + path.table;
+	return path.database + "." + path.schema + "." + path.table;
 }
 
-static optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &index, const TablePath &path) {
+static optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &index,
+                                           const TableDescription &path) {
 	optional_ptr<Index> found_index = nullptr;
 	index_list.Scan([&](Index &candidate) {
 		if (candidate.GetIndexName() == index) {
@@ -155,7 +144,7 @@ static optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const str
 	return found_index;
 }
 
-static void ValidateIndex(const Index &index, const TablePath &path, const string &index_name) {
+static void ValidateIndex(const Index &index, const TableDescription &path, const string &index_name) {
 	if (!index.IsBound()) {
 		auto qualified_table = FormatQualifiedTableName(path);
 		throw CatalogException("index_key: index '%s' on table %s is not yet bound", index_name, qualified_table);
@@ -194,7 +183,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	auto path = EvaluateTablePath(context, struct_expr);
 	auto index = GetStringArgument(context, *arguments[1], "index_name");
 
-	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.catalog, path.schema, path.table)
+	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.database, path.schema, path.table)
 	                        .Cast<TableCatalogEntry>();
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
