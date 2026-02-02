@@ -296,6 +296,59 @@ insert into t1 values (5);
 ----
 <REGEX>:.*violates unique constraint.*
 
+# DEFAULT constraint is not supported in CTAS
+statement error
+create or replace table t1 CONSTRAINTS (a DEFAULT 42) as select range a from range(10);
+----
+<REGEX>:.*Default Column values not handled here.*
+
+# REFERENCES (inline foreign key) in CTAS
+statement ok
+create or replace table pk_table (id INTEGER PRIMARY KEY);
+
+statement ok
+insert into pk_table select range id from range(10);
+
+statement ok
+create or replace table t1 CONSTRAINTS (a REFERENCES pk_table(id)) as select range::INT a from range(10);
+
+# FK violation: value doesn't exist in referenced table
+statement error
+insert into t1 values (99);
+----
+<REGEX>:.*Violates foreign key constraint because key.*99.*does not exist in the referenced table.*
+
+# valid insert: value exists in referenced table
+statement ok
+insert into pk_table values (42);
+
+statement ok
+insert into t1 values (42);
+
+# cannot drop referenced table
+statement error
+drop table pk_table;
+----
+<REGEX>:.*Could not drop the table because this table is main key table of the table.*t1.*
+
+statement ok
+drop table t1;
+
+statement ok
+drop table pk_table;
+
+# GENERATED ALWAYS AS is not valid in CTAS constraints (parse error)
+statement error
+create or replace table t1 CONSTRAINTS (b GENERATED ALWAYS AS (a + 1) VIRTUAL) as select range a, range b from range(10);
+----
+<REGEX>:.*Generated Columns not handled here.*
+
+# NULL constraint (explicit nullable) is not supported in CTAS
+statement error
+create or replace table t1 CONSTRAINTS (a NULL) as select range a from range(10);
+----
+<REGEX>:.*Default NULL values not handled here.*
+
 # Cleanup
 statement ok
 drop table if exists t1;

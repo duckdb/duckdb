@@ -449,6 +449,15 @@ ctas_constraint_elem:
 					n->location = @1;
 					$$ = (PGNode *) n;
 				}
+			| ColId GeneratedConstraintElem
+				{
+					PGConstraint *n = castNode(PGConstraint, $2);
+					/* Store the column name in the keys list so this behaves
+					 * like a table-level constraint referencing that column */
+					n->keys = list_make1(makeString($1));
+					n->location = @1;
+					$$ = (PGNode *) n;
+				}
 			| ConstraintElem						{ $$ = $1; }
 		;
 

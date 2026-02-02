@@ -52,6 +52,14 @@ TransformForeignKeyConstraint(duckdb_libpgquery::PGConstraint &constraint,
 			auto value = Transformer::PGPointerCast<duckdb_libpgquery::PGValue>(kc->data.ptr_value);
 			fk_columns.emplace_back(value->val.str);
 		}
+	} else if (!constraint.fk_attrs && constraint.keys && constraint.keys->length > 0) {
+		// For CTAS statement, fk_columns is empty, and it needs to be pulled from the constraint.keys
+		auto break_here = 0;
+		// pull the foreign key info from the keys in the constraint.
+		for (auto kc = constraint.keys->head; kc; kc = kc->next) {
+			auto value = Transformer::PGPointerCast<duckdb_libpgquery::PGValue>(kc->data.ptr_value);
+			fk_columns.emplace_back(value->val.str);
+		}
 	}
 
 	if (constraint.pk_attrs) {
@@ -123,8 +131,18 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		D_ASSERT(columns.size() == 1);
 		return make_uniq<CompressionConstraint>(columns[0], compression_type);
 	}
+	case duckdb_libpgquery::PG_CONSTR_GENERATED_STORED:
+	case duckdb_libpgquery::PG_CONSTR_GENERATED_VIRTUAL: {
+		throw NotImplementedException("Generated Columns not handled here");
+	}
+	case duckdb_libpgquery::PG_CONSTR_DEFAULT: {
+		throw NotImplementedException("Default Column values not handled here");
+	}
+	case duckdb_libpgquery::PG_CONSTR_NULL: {
+		throw NotImplementedException("Default NULL values not handled here");
+	}
 	default:
-		throw NotImplementedException("Constraint type not handled yet!");
+		throw NotImplementedException("Constraint not implemented");
 	}
 }
 
