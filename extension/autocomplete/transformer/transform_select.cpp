@@ -26,8 +26,16 @@ unique_ptr<SelectStatement>
 PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transformer,
                                                         optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	CommonTableExpressionMap cte_map;
+	transformer.TransformOptional<CommonTableExpressionMap>(list_pr, 0, cte_map);
+	if (!cte_map.map.empty()) {
+		transformer.stored_cte_map.push_back(cte_map);
+	}
 	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
-	transformer.TransformOptional<CommonTableExpressionMap>(list_pr, 0, select_statement->node->cte_map);
+
+	if (!cte_map.map.empty()) {
+		select_statement->node->cte_map = std::move(cte_map);
+	}
 	vector<unique_ptr<ResultModifier>> result_modifiers;
 	transformer.TransformOptional<vector<unique_ptr<ResultModifier>>>(list_pr, 2, result_modifiers);
 	for (auto &result_modifier : result_modifiers) {

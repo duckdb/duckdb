@@ -49,6 +49,7 @@ void PEGTransformer::ClearParameters() {
 void PEGTransformer::Clear() {
 	ClearParameters();
 	pivot_entries.clear();
+	stored_cte_map.clear();
 }
 
 idx_t PEGTransformer::ParamCount() const {
@@ -126,6 +127,20 @@ void PEGTransformer::PivotEntryCheck(const string &type) {
 		    "PIVOT statements with pivot elements extracted from the data cannot be used in %ss.\nIn order to use "
 		    "PIVOT in a %s the PIVOT values must be manually specified, e.g.:\nPIVOT ... ON %s IN (val1, val2, ...)",
 		    type, type, pivot_entries[0]->column->ToString());
+	}
+}
+
+void PEGTransformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
+	// Traverse the stack from the most recent scope back to the global scope
+	// Use reverse iterator if you push new scopes to the back
+	for (auto it = stored_cte_map.rbegin(); it != stored_cte_map.rend(); ++it) {
+		auto &current_scope = it->get();
+		for (auto &entry : current_scope.map) {
+			// Check if this CTE name is already in our result map
+			if (cte_map.map.find(entry.first) == cte_map.map.end()) {
+				cte_map.map[entry.first] = entry.second->Copy();
+			}
+		}
 	}
 }
 

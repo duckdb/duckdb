@@ -144,6 +144,7 @@ public:
 	unique_ptr<SQLStatement> CreatePivotStatement(unique_ptr<SQLStatement> statement);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 	void PivotEntryCheck(const string &type);
+	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 
 public:
 	ArenaAllocator &allocator;
@@ -158,6 +159,7 @@ public:
 	case_insensitive_map_t<unique_ptr<WindowExpression>> window_clauses;
 
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
+	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 
 	bool in_window_definition = false;
 
