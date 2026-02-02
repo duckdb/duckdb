@@ -32,7 +32,7 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 		auto field_name = StringUtil::Lower(field_types[i].first);
 
 		if (fields.find(field_name) == fields.end()) {
-			throw BinderException("index_key: unknown field '%s' in table_path", field_types[i].first);
+			throw BinderException("index_key: unknown field '%s' in path", field_types[i].first);
 		}
 
 		auto &field_value = field_values[i];
@@ -50,7 +50,7 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 	}
 
 	if (fields["table"].empty()) {
-		throw BinderException("index_key: table_path must contain a non-empty 'table' field");
+		throw BinderException("index_key: path must contain a non-empty 'table' field");
 	}
 
 	return TableDescription(fields["catalog"], fields["schema"], fields["table"]);
@@ -61,16 +61,16 @@ static TableDescription EvaluateTableDescription(ClientContext &context, const E
 		throw ParameterNotResolvedException();
 	}
 	if (!expr.IsFoldable()) {
-		throw BinderException("index_key: table_path parameter must be a constant");
+		throw BinderException("index_key: path parameter must be a constant");
 	}
 
 	auto input_struct = ExpressionExecutor::EvaluateScalar(context, expr);
 	if (input_struct.IsNull()) {
-		throw BinderException("index_key: table_path parameter cannot be NULL");
+		throw BinderException("index_key: path parameter cannot be NULL");
 	}
 
 	if (input_struct.type().id() != LogicalTypeId::STRUCT) {
-		throw BinderException("index_key: table_path parameter must evaluate to a STRUCT");
+		throw BinderException("index_key: path parameter must evaluate to a STRUCT");
 	}
 
 	return ExtractTableDescription(StructType::GetChildTypes(expr.return_type), StructValue::GetChildren(input_struct));
@@ -137,7 +137,7 @@ struct IndexKeyBindData : public FunctionData {
 static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() < INDEX_KEY_FIXED_ARGS) {
-		throw BinderException("index_key: requires at least two arguments - table_path (STRUCT), index_name");
+		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
 	}
 
 	auto &struct_expr = *arguments[0];
