@@ -1313,7 +1313,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PE
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
 	window_function->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
-	return window_function;
+	return std::move(window_function);
 }
 
 } // namespace duckdb

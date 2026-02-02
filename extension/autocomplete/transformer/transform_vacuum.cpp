@@ -16,7 +16,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformVacuumStatement(PEGTran
 		result->info->ref = std::move(target.ref);
 		result->info->has_table = true;
 	}
-	return result;
+	return std::move(result);
 }
 
 VacuumOptions PEGTransformerFactory::TransformVacuumOptions(PEGTransformer &transformer,
