@@ -5,6 +5,7 @@
 statement ok
 pragma enable_verification
 
+# PRIMARY KEY (single column)
 statement ok
 create table t1 CONSTRAINTS (a primary key) as select range a from range(10);
 
@@ -13,24 +14,53 @@ insert into t1 values (0), (1), (2);
 ----
 <REGEX>:.*Duplicate key.*violates primary key constraint.*
 
+# verify data is queryable
+query I
+select count(*) from t1;
+----
+10
 
-# Check contraints.
+# PRIMARY KEY (composite)
 statement ok
-create or replace table t1 CONSTRAINTS (id CHECK (id is not null)) as select (range+1)::VARCHAR id from range(10);
+create or replace table t1 CONSTRAINTS (PRIMARY KEY(a, b)) as select range a, range b from range(10);
+
+# can insert a row with one column matching but other different
+statement ok
+insert into t1 values (1, 2);
+
+# full duplicate violates constraint
+statement error
+insert into t1 values (1, 1);
+----
+<REGEX>:.*violates primary key constraint.*
+
+# UNIQUE (single column)
+statement ok
+create or replace table t1 CONSTRAINTS (a UNIQUE) as select range a from range(10);
+
+# duplicate value
+statement error
+insert into t1 values (5);
+----
+<REGEX>:.*Constraint Error.*violates unique constraint.*
+
+# NULL is allowed (multiple times) in unique columns
+statement ok
+insert into t1 values (NULL), (NULL);
+
+# UNIQUE (composite)
+statement ok
+create or replace table t1 CONSTRAINTS (UNIQUE(a, b)) as select range a, range b from range(10);
+
+statement ok
+insert into t1 values (0, 99);
 
 statement error
-insert into t1 values (NULL);
+insert into t1 values (0, 0);
 ----
-<REGEX>:.*CHECK constraint failed.*
+<REGEX>:.*violates unique constraint.*
 
-statement ok
-create or replace table t1 CONSTRAINTS (id CHECK (NOT contains(id, '100' ))) as select (range+1)::VARCHAR id from range(10);
-
-statement error
-insert into t1 values ('100');
-----
-<REGEX>:.*CHECK constraint failed.*
-
+# NOT NULL
 statement ok
 create or replace table t1 CONSTRAINTS (a NOT NULL) as select range a from range(10);
 
@@ -39,19 +69,227 @@ insert into t1 values (NULL);
 ----
 <REGEX>:.*NOT NULL constraint failed.*
 
-# primary key double constraint
-statement ok
-create or replace table t1 CONSTRAINTS (PRIMARY KEY(a, b)) as select range a, range b from range(10);
-
-# can insert still unique value
-statement ok
-insert into t1 values (1, 2);
-
-# constraint violation
+# update to NULL should also fail
 statement error
-insert into t1 values (1, 1);
+update t1 set a = NULL where a = 5;
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+# CHECK constraint (simple)
+statement ok
+create or replace table t1 CONSTRAINTS (a CHECK (a >= 0)) as select range a from range(10);
+
+statement error
+insert into t1 values (-1);
+----
+<REGEX>:.*CHECK constraint failed.*
+
+# valid insert should succeed
+statement ok
+insert into t1 values (100);
+
+# update should fail
+statement error
+update t1 set a = -1 where a = 5;
+----
+<REGEX>:.*CHECK constraint failed.*
+
+# CHECK constraint (IS NOT NULL)
+statement ok
+create or replace table t1 CONSTRAINTS (id CHECK (id is not null)) as select (range+1)::VARCHAR id from range(10);
+
+statement error
+insert into t1 values (NULL);
+----
+<REGEX>:.*CHECK constraint failed.*
+
+# update should fail
+statement error
+update t1 set id = NULL where id = 5;
+----
+<REGEX>:.*CHECK constraint failed.*
+
+# CHECK constraint (string function)
+statement ok
+create or replace table t1 CONSTRAINTS (id CHECK (NOT contains(id, '100' ))) as select (range+1)::VARCHAR id from range(10);
+
+statement error
+insert into t1 values ('100');
+----
+<REGEX>:.*CHECK constraint failed.*
+
+# CHECK constraint (expression over multiple columns)
+statement ok
+create or replace table t1 CONSTRAINTS (CHECK(a + b < 20)) as select range a, range b from range(10);
+
+statement error
+insert into t1 values (10, 10);
+----
+<REGEX>:.*CHECK constraint failed.*
+
+statement ok
+insert into t1 values (5, 5);
+
+# Multiple constraints combined
+statement ok
+create or replace table t1 CONSTRAINTS (a PRIMARY KEY, b NOT NULL) as select range a, range b from range(10);
+
+# PK violation
+statement error
+insert into t1 values (0, 99);
 ----
 <REGEX>:.*violates primary key constraint.*
 
+# NOT NULL violation
+statement error
+insert into t1 values (99, NULL);
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+# valid insert
+statement ok
+insert into t1 values (99, 99);
+
+# Three constraints: PK + NOT NULL + CHECK
+statement ok
+create or replace table t1 CONSTRAINTS (a PRIMARY KEY, b NOT NULL, CHECK(b > 0)) as select range + 1 as a, range + 1 as b from range(10);
+
+statement error
+insert into t1 values (1, 5);
+----
+<REGEX>:.*violates primary key constraint.*
+
+statement error
+insert into t1 values (999, NULL);
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+statement error
+insert into t1 values (999, -1);
+----
+<REGEX>:.*CHECK constraint failed.*
+
+statement ok
+insert into t1 values (999, 1);
+
+# UNIQUE + NOT NULL combined
+statement ok
+create or replace table t1 CONSTRAINTS (a UNIQUE, a NOT NULL) as select range a from range(10);
+
+statement error
+insert into t1 values (NULL);
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+statement error
+insert into t1 values (5);
+----
+<REGEX>:.*violates unique constraint.*
+
+statement ok
+insert into t1 values (100);
+
+# Compression constraint
 statement ok
 create or replace table t1 CONSTRAINTS (a using compression RLE) as select range a from range(10);
+
+query I
+select count(*) from t1;
+----
+10
+
+# verify data roundtrips
+query I
+select sum(a) from t1;
+----
+45
+
+# Compression constraint with other constraints
+statement ok
+create or replace table t1 CONSTRAINTS (a NOT NULL, a using compression RLE) as select range a from range(10);
+
+statement error
+insert into t1 values (NULL);
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+statement ok
+insert into t1 values (100);
+
+# CTAS with no data source rows
+statement ok
+create or replace table t1 CONSTRAINTS (a PRIMARY KEY) as select range a from range(0);
+
+# constraint still active on empty table
+statement ok
+insert into t1 values (1);
+
+statement error
+insert into t1 values (1);
+----
+<REGEX>:.*violates primary key constraint.*
+
+# CTAS with IF NOT EXISTS
+statement ok
+create or replace table t1 CONSTRAINTS (a PRIMARY KEY) as select range a from range(5);
+
+# second create should be no-op because table already exists
+statement ok
+create table if not exists t1 CONSTRAINTS (a UNIQUE) as select range a from range(5);
+
+# original PK constraint should still be enforced
+statement error
+insert into t1 values (0);
+----
+<REGEX>:.*violates primary key constraint.*
+
+# Error: constraint references non-existent column
+statement error
+create or replace table t1 CONSTRAINTS (nonexistent PRIMARY KEY) as select range a from range(10);
+----
+<REGEX>:.*does not have a column named \"nonexistent\".*
+
+# Error: invalid compression type
+statement error
+create or replace table t1 CONSTRAINTS (a using compression Auto) as select range a from range(10);
+----
+<REGEX>:.*Compression method Auto cannot be forced.*
+
+# CTAS from a join query
+statement ok
+create or replace table src1 as select range a from range(5);
+
+statement ok
+create or replace table src2 as select range b from range(5);
+
+statement ok
+create or replace table t1 CONSTRAINTS (a NOT NULL, b NOT NULL) as select * from src1, src2;
+
+query I
+select count(*) from t1;
+----
+25
+
+statement error
+insert into t1 values (NULL, 1);
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+# CTAS from subquery
+statement ok
+create or replace table t1 CONSTRAINTS (a UNIQUE) as select * from (select range a from range(10)) sub;
+
+statement error
+insert into t1 values (5);
+----
+<REGEX>:.*violates unique constraint.*
+
+# Cleanup
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists src1;
+
+statement ok
+drop table if exists src2;

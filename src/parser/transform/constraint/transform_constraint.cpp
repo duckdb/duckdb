@@ -110,7 +110,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		case CompressionType::COMPRESSION_AUTO:
 		case CompressionType::COMPRESSION_CONSTANT:
 		case CompressionType::COMPRESSION_EMPTY:
-			throw InvalidInputException("Compression method %d cannot be forced", constraint.compression_name);
+			throw InvalidInputException("Compression method %s cannot be forced", constraint.compression_name);
 		default:
 			break;
 		}
@@ -160,7 +160,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		case CompressionType::COMPRESSION_AUTO:
 		case CompressionType::COMPRESSION_CONSTANT:
 		case CompressionType::COMPRESSION_EMPTY:
-			throw InvalidInputException("Compression method %d cannot be forced", constraint.compression_name);
+			throw InvalidInputException("Compression method %s cannot be forced", constraint.compression_name);
 		default:
 			break;
 		}
