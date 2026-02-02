@@ -1026,6 +1026,13 @@
         "default_value": "30000"
     },
     {
+        "name": "wal_autocheckpoint_entries",
+        "description": "Trigger automatic checkpoint when WAL entry count reaches or exceeds N (0 = disabled)",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "write_buffer_row_group_count",
         "description": "The amount of row groups to buffer in bulk ingestion prior to flushing them together. Reducing this setting can reduce memory consumption.",
         "type": "UBIGINT",

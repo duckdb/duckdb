@@ -2,6 +2,7 @@
 #include "duckdb/common/lru_cache.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/object_cache.hpp"
 #include "duckdb/main/database.hpp"
 #include "test_helpers.hpp"
 
@@ -26,7 +27,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 	auto &context = *con.context;
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 
-	SharedLruCache<string, TestValue> cache(1000);
+	SharedLruCache<string, TestValue, BufferPoolPayload> cache(1000);
 
 	SECTION("Put and Get") {
 		auto val1 = make_shared_ptr<TestValue>(42, 100);
@@ -37,7 +38,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 		REQUIRE(result != nullptr);
 		REQUIRE(result->value == 42);
 		REQUIRE(cache.Size() == 1);
-		REQUIRE(cache.CurrentMemory() == 100);
+		REQUIRE(cache.CurrentTotalWeight() == 100);
 	}
 
 	SECTION("Get non-existent key") {
@@ -58,7 +59,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 		auto result = cache.Get("key1");
 		REQUIRE(result != nullptr);
 		REQUIRE(result->value == 2);
-		REQUIRE(cache.CurrentMemory() == 150);
+		REQUIRE(cache.CurrentTotalWeight() == 150);
 	}
 
 	SECTION("Delete") {
@@ -70,7 +71,7 @@ TEST_CASE("LRU Cache Basic Operations", "[lru_cache]") {
 		REQUIRE(deleted == true);
 		REQUIRE(cache.Get("key1") == nullptr);
 		REQUIRE(cache.Size() == 0);
-		REQUIRE(cache.CurrentMemory() == 0);
+		REQUIRE(cache.CurrentTotalWeight() == 0);
 
 		const bool deleted_again = cache.Delete("key1");
 		REQUIRE(!deleted_again);
@@ -84,7 +85,7 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 
 	SECTION("Evict LRU when exceeding max weight") {
-		SharedLruCache<string, TestValue> cache(500);
+		SharedLruCache<string, TestValue, BufferPoolPayload> cache(500);
 
 		auto val1 = make_shared_ptr<TestValue>(1, 200);
 		auto val2 = make_shared_ptr<TestValue>(2, 200);
@@ -103,11 +104,11 @@ TEST_CASE("LRU Cache Eviction", "[lru_cache]") {
 		REQUIRE(cache.Get("key2") != nullptr);
 		REQUIRE(cache.Get("key3") != nullptr);
 		REQUIRE(cache.Size() == 2);
-		REQUIRE(cache.CurrentMemory() <= 500);
+		REQUIRE(cache.CurrentTotalWeight() <= 500);
 	}
 
 	SECTION("LRU ordering") {
-		SharedLruCache<string, TestValue> cache(300);
+		SharedLruCache<string, TestValue, BufferPoolPayload> cache(300);
 
 		auto val1 = make_shared_ptr<TestValue>(1, 100);
 		auto val2 = make_shared_ptr<TestValue>(2, 100);
@@ -141,7 +142,7 @@ TEST_CASE("LRU Cache Unlimited Memory", "[lru_cache]") {
 	auto &context = *con.context;
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 
-	SharedLruCache<string, TestValue> cache(0);
+	SharedLruCache<string, TestValue, BufferPoolPayload> cache(0);
 
 	for (int idx = 0; idx < 100; ++idx) {
 		auto val = make_shared_ptr<TestValue>(idx, 100);
@@ -158,7 +159,7 @@ TEST_CASE("LRU Cache Clear", "[lru_cache]") {
 	auto &context = *con.context;
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 
-	SharedLruCache<string, TestValue> cache(1000);
+	SharedLruCache<string, TestValue, BufferPoolPayload> cache(1000);
 
 	auto val1 = make_shared_ptr<TestValue>(1, 100);
 	auto val2 = make_shared_ptr<TestValue>(2, 100);
@@ -172,7 +173,7 @@ TEST_CASE("LRU Cache Clear", "[lru_cache]") {
 	cache.Clear();
 
 	REQUIRE(cache.Size() == 0);
-	REQUIRE(cache.CurrentMemory() == 0);
+	REQUIRE(cache.CurrentTotalWeight() == 0);
 	REQUIRE(cache.Get("key1") == nullptr);
 	REQUIRE(cache.Get("key2") == nullptr);
 }
@@ -184,7 +185,7 @@ TEST_CASE("LRU Cache Evict To Reduce Memory", "[lru_cache]") {
 	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
 
 	// Set max memory to a large value, which exceeds all entries emplaced.
-	SharedLruCache<string, TestValue> cache(20000);
+	SharedLruCache<string, TestValue, BufferPoolPayload> cache(20000);
 
 	// Put a few entries, and check memory consumption.
 	constexpr idx_t obj_size = 1000;
@@ -194,14 +195,14 @@ TEST_CASE("LRU Cache Evict To Reduce Memory", "[lru_cache]") {
 		cache.Put(StringUtil::Format("key%d", idx), val, std::move(reservation));
 	}
 	REQUIRE(cache.Size() == 10);
-	REQUIRE(cache.CurrentMemory() == 10 * obj_size);
+	REQUIRE(cache.CurrentTotalWeight() == 10 * obj_size);
 
 	// Perform cache entries eviction, and check memory consumption.
 	// Evict 4 * objects, leaving 6 objects in cache
 	const idx_t bytes_to_free = 4 * obj_size;
-	const idx_t freed = cache.EvictToReduceMemory(bytes_to_free);
+	const idx_t freed = cache.EvictToReduceAtLeast(bytes_to_free);
 	REQUIRE(freed >= bytes_to_free); // Should free at least the requested amount
-	REQUIRE(cache.CurrentMemory() == 6 * obj_size);
+	REQUIRE(cache.CurrentTotalWeight() == 6 * obj_size);
 	REQUIRE(cache.Size() == 6);
 
 	// The first 4 items should be evicted.
