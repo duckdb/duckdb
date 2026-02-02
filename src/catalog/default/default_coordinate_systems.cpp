@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/create_coordinate_system_info.hpp"
 #include "duckdb/catalog/default/default_coordinate_systems.hpp"
 #include "duckdb/catalog/catalog_entry/coordinate_system_catalog_entry.hpp"
+#include "duckdb/common/array.hpp"
 
 namespace duckdb {
 class CoordinateSystemCatalogEntry;
