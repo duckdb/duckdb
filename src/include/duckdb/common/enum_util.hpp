@@ -160,6 +160,8 @@ enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
 
+enum class DeprecatedUsingKeySyntax : uint8_t;
+
 enum class DestroyBufferUpon : uint8_t;
 
 enum class DistinctType : uint8_t;
@@ -462,8 +464,6 @@ enum class UndoFlags : uint32_t;
 
 enum class UnionInvalidReason : uint8_t;
 
-enum class DeprecatedUsingKeySyntax : uint8_t;
-
 enum class VariantChildLookupMode : uint8_t;
 
 enum class VariantLogicalType : uint8_t;
@@ -686,6 +686,9 @@ const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
+
+template<>
+const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value);
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
@@ -1141,9 +1144,6 @@ template<>
 const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value);
 
 template<>
-const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value);
-
-template<>
 const char* EnumUtil::ToChars<VariantChildLookupMode>(VariantChildLookupMode value);
 
 template<>
@@ -1380,6 +1380,9 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 
 template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
+
+template<>
+DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value);
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
@@ -1833,9 +1836,6 @@ UndoFlags EnumUtil::FromString<UndoFlags>(const char *value);
 
 template<>
 UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value);
-
-template<>
-DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value);
 
 template<>
 VariantChildLookupMode EnumUtil::FromString<VariantChildLookupMode>(const char *value);
