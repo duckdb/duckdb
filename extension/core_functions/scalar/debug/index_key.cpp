@@ -184,6 +184,12 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		throw BinderException("index_key: index '%s' expects %llu key column(s), but %llu argument(s) provided", index,
 		                      key_types.size(), num_key_args);
 	}
+
+	bound_function.arguments.resize(INDEX_KEY_FIXED_ARGS + key_types.size());
+	for (idx_t i = 0; i < key_types.size(); i++) {
+		bound_function.arguments[INDEX_KEY_FIXED_ARGS + i] = key_types[i];
+	}
+
 	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types), index);
 }
 
@@ -193,15 +199,6 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	idx_t count = args.size();
 	D_ASSERT(args.ColumnCount() >= INDEX_KEY_FIXED_ARGS + bind_data.key_types.size());
-
-	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
-		auto &key_vector = args.data[INDEX_KEY_FIXED_ARGS + i];
-		if (key_vector.GetType() != bind_data.key_types[i]) {
-			throw InvalidInputException("index_key: argument %llu has type %s but index '%s' expects %s", i + 1,
-			                            key_vector.GetType().ToString().c_str(), bind_data.index_name.c_str(),
-			                            bind_data.key_types[i].ToString().c_str());
-		}
-	}
 
 	DataChunk key_chunk;
 	key_chunk.Initialize(Allocator::DefaultAllocator(), bind_data.key_types);
