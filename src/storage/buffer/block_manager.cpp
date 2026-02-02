@@ -57,18 +57,18 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(QueryContext context, 
 	D_ASSERT(new_block->GetMemory().GetState() == BlockState::BLOCK_UNLOADED);
 	D_ASSERT(new_block->GetMemory().GetReaders() == 0);
 
-	auto &old_block_memory = old_block->GetMemory();
 	if (mode == ConvertToPersistentMode::THREAD_SAFE) {
 		// safe mode - create a copy of the old block and operate on that
 		// this ensures we don't modify the old block - which allows other concurrent operations on the old block to
 		// continue
-		auto old_block_copy = buffer_manager.AllocateMemory(old_block_memory.GetMemoryTag(), this, false);
+		auto old_block_copy = buffer_manager.AllocateMemory(old_block->GetMemory().GetMemoryTag(), this, false);
 		auto copy_pin = buffer_manager.Pin(old_block_copy);
 		memcpy(copy_pin.Ptr(), old_handle.Ptr(), GetBlockSize());
 		old_block = std::move(old_block_copy);
 		old_handle = std::move(copy_pin);
 	}
 
+	auto &old_block_memory = old_block->GetMemory();
 	auto lock = old_block_memory.GetLock();
 	D_ASSERT(old_block_memory.GetState() == BlockState::BLOCK_LOADED);
 	D_ASSERT(old_block_memory.GetBuffer(lock));

@@ -18,12 +18,12 @@ namespace duckdb {
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 static void WriteGarbageIntoBuffer(BlockLock &lock, BlockHandle &block) {
-	auto &buffer = block.GetBuffer(lock);
+	auto &buffer = block.GetMemory().GetBuffer(lock);
 	memset(buffer->buffer, 0xa5, buffer->size); // 0xa5 is default memory in debug mode
 }
 
 static void WriteGarbageIntoBuffer(BlockHandle &block) {
-	auto lock = block.GetLock();
+	auto lock = block.GetMemory().GetLock();
 	WriteGarbageIntoBuffer(lock, block);
 }
 #endif
@@ -377,10 +377,10 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	unique_ptr<FileBuffer> replacement_buffer;
 	auto &block_allocator = BlockAllocator::Get(db);
-	auto &buffer = handle->GetBuffer(lock);
+	auto &buffer = handle->GetMemory().GetBuffer(lock);
 	auto block_header_size = buffer->GetHeaderSize();
 	auto alloc_size = buffer->AllocSize() - block_header_size;
-	if (handle->GetBufferType() == FileBufferType::BLOCK) {
+	if (handle->GetMemory().GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());
 		replacement_buffer = make_uniq<Block>(block_allocator, block->id, alloc_size, block_header_size);
 	} else {
