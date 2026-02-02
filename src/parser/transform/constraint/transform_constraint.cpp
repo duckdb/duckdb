@@ -54,8 +54,6 @@ TransformForeignKeyConstraint(duckdb_libpgquery::PGConstraint &constraint,
 		}
 	} else if (!constraint.fk_attrs && constraint.keys && constraint.keys->length > 0) {
 		// For CTAS statement, fk_columns is empty, and it needs to be pulled from the constraint.keys
-		auto break_here = 0;
-		// pull the foreign key info from the keys in the constraint.
 		for (auto kc = constraint.keys->head; kc; kc = kc->next) {
 			auto value = Transformer::PGPointerCast<duckdb_libpgquery::PGValue>(kc->data.ptr_value);
 			fk_columns.emplace_back(value->val.str);
