@@ -61,6 +61,7 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_NULL_IF_EXISTS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING;
+constexpr FileOpenFlags FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL;
 
 void FileOpenFlags::Verify() {
 #ifdef DEBUG
@@ -173,11 +174,6 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get());
 }
 
-string FileSystem::NormalizeAbsolutePath(const string &path) {
-	D_ASSERT(IsPathAbsolute(path));
-	return path;
-}
-
 #else
 
 string FileSystem::GetEnvVariable(const string &env) {
@@ -225,17 +221,6 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 		return true;
 	}
 	return false;
-}
-
-string FileSystem::NormalizeAbsolutePath(const string &path) {
-	D_ASSERT(IsPathAbsolute(path));
-	auto result = FileSystem::ConvertSeparators(path);
-	if (StartsWithSingleBackslash(result)) {
-		// Path starts with a single backslash or forward slash
-		// prepend drive letter
-		return GetWorkingDirectory().substr(0, 2) + result;
-	}
-	return result;
 }
 
 string FileSystem::PathSeparator(const string &path) {
@@ -364,12 +349,54 @@ string FileSystem::GetHomeDirectory() {
 	return GetHomeDirectory(nullptr);
 }
 
+// Helper function to handle file:/ URLs
+static idx_t GetFileUrlOffset(const string &path) {
+	if (!StringUtil::StartsWith(path, "file:/")) {
+		return 0;
+	}
+
+	// Url without host: file:/some/path
+	if (path[6] != '/') {
+#ifdef _WIN32
+		return 6;
+#else
+		return 5;
+#endif
+	}
+
+	// Url with empty host: file:///some/path
+	if (path[7] == '/') {
+#ifdef _WIN32
+		return 8;
+#else
+		return 7;
+#endif
+	}
+
+	// Url with localhost: file://localhost/some/path
+	if (path.compare(7, 10, "localhost/") == 0) {
+#ifdef _WIN32
+		return 17;
+#else
+		return 16;
+#endif
+	}
+
+	// unkown file:/ url format
+	return 0;
+}
+
 string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
 	if (path.empty()) {
 		return path;
 	}
 	if (path[0] == '~') {
 		return GetHomeDirectory(opener) + path.substr(1);
+	}
+	// handle file URIs
+	auto file_offset = GetFileUrlOffset(path);
+	if (file_offset > 0) {
+		return path.substr(file_offset);
 	}
 	return path;
 }
@@ -635,6 +662,10 @@ void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
 
+void FileSystem::UnregisterSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
+}
+
 unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't extract a sub system on a non-virtual file system", GetName());
 }
@@ -882,6 +913,45 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 		}
 	}
 	return false;
+}
+
+string FileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+	if (IsRemoteFile(path_p)) {
+		// don't canonicalize remote paths
+		return path_p;
+	}
+	auto path_sep = PathSeparator(path_p);
+	auto elements = StringUtil::Split(path_p, path_sep);
+
+	deque<string> path_stack;
+	string result;
+	for (idx_t i = 0; i < elements.size(); i++) {
+		if (elements[i].empty() || elements[i] == ".") {
+			// we ignore empty and `.`
+			continue;
+		}
+		if (elements[i] == "..") {
+			// .. pops from stack if possible, if already at root its ignored
+			if (!path_stack.empty()) {
+				path_stack.pop_back();
+			}
+		} else {
+			path_stack.push_back(elements[i]);
+		}
+	}
+	// we lost the leading / in the split/loop so lets put it back
+	if (path_p[0] == '/') {
+		result = "/";
+	}
+	while (!path_stack.empty()) {
+		result += path_stack.front();
+		path_stack.pop_front();
+		if (!path_stack.empty()) {
+			result += path_sep;
+		}
+	}
+
+	return result;
 }
 
 } // namespace duckdb

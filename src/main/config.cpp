@@ -191,6 +191,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(UsernameSetting),
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
     DUCKDB_SETTING(VariantMinimumShreddingSizeSetting),
+    DUCKDB_SETTING(WalAutocheckpointEntriesSetting),
     DUCKDB_SETTING(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
@@ -777,13 +778,14 @@ const ExtensionCallbackManager &DBConfig::GetCallbackManager() const {
 	return *callback_manager;
 }
 
-string DBConfig::SanitizeAllowedPath(const string &path) const {
-	auto path_sep = file_system->PathSeparator(path);
+string DBConfig::SanitizeAllowedPath(const string &path_p) const {
+	auto result = file_system->CanonicalizePath(path_p);
+	// allowed_directories/allowed_path always uses forward slashes regardless of the OS
+	auto path_sep = file_system->PathSeparator(path_p);
 	if (path_sep != "/") {
-		// allowed_directories/allowed_path always uses forward slashes regardless of the OS
-		return StringUtil::Replace(path, path_sep, "/");
+		result = StringUtil::Replace(result, path_sep, "/");
 	}
-	return path;
+	return result;
 }
 
 void DBConfig::AddAllowedDirectory(const string &path) {
@@ -809,10 +811,12 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 		return true;
 	}
 	string path = SanitizeAllowedPath(input_path);
+
 	if (options.allowed_paths.count(path) > 0) {
 		// path is explicitly allowed
 		return true;
 	}
+
 	if (options.allowed_directories.empty()) {
 		// no prefix directories specified
 		return false;
@@ -837,27 +841,6 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 		return false;
 	}
 	D_ASSERT(StringUtil::EndsWith(prefix, "/"));
-	// path is inside an allowed directory - HOWEVER, we could still exit the allowed directory using ".."
-	// we check if we ever exit the allowed directory using ".." by looking at the path fragments
-	idx_t directory_level = 0;
-	idx_t current_pos = prefix.size();
-	for (; current_pos < path.size(); current_pos++) {
-		idx_t dir_begin = current_pos;
-		// find either the end of the path or the directory separator
-		for (; path[current_pos] != '/' && current_pos < path.size(); current_pos++) {
-		}
-		idx_t path_length = current_pos - dir_begin;
-		if (path_length == 2 && path[dir_begin] == '.' && path[dir_begin + 1] == '.') {
-			// go up a directory
-			if (directory_level == 0) {
-				// we cannot go up past the prefix
-				return false;
-			}
-			--directory_level;
-		} else if (path_length > 0) {
-			directory_level++;
-		}
-	}
 	return true;
 }
 

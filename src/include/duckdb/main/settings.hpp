@@ -1483,6 +1483,17 @@ struct VariantMinimumShreddingSizeSetting {
 	static constexpr idx_t SettingIndex = 86;
 };
 
+struct WalAutocheckpointEntriesSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "wal_autocheckpoint_entries";
+	static constexpr const char *Description =
+	    "Trigger automatic checkpoint when WAL entry count reaches or exceeds N (0 = disabled)";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = 87;
+};
+
 struct WarningsAsErrorsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "warnings_as_errors";
@@ -1490,7 +1501,7 @@ struct WarningsAsErrorsSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 87;
+	static constexpr idx_t SettingIndex = 88;
 };
 
 struct WriteBufferRowGroupCountSetting {
@@ -1501,7 +1512,7 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = 88;
+	static constexpr idx_t SettingIndex = 89;
 };
 
 struct ZstdMinStringLengthSetting {
@@ -1512,11 +1523,11 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "4096";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 89;
+	static constexpr idx_t SettingIndex = 90;
 };
 
 struct GeneratedSettingInfo {
-	static constexpr idx_t MaxSettingIndex = 90;
+	static constexpr idx_t MaxSettingIndex = 91;
 };
 
 //===----------------------------------------------------------------------===//

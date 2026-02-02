@@ -2,10 +2,7 @@
   "description": "Test PEG Parser + transformer in strict mode",
   "skip_compiled": "true",
   "on_init": "set allow_parser_override_extension=strict_when_supported;",
-  "statically_loaded_extensions": [
-    "core_functions",
-    "autocomplete"
-  ],
+  "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
       "reason": "Multi-statement containing unimplemented statementType",
@@ -73,7 +70,9 @@
     {
       "reason": "Implement transform sample",
       "paths": [
-        "test/sql/index/art/scan/test_random_uuid.test"
+        "test/sql/index/art/scan/test_random_uuid.test",
+        "test/sql/index/art/issues/test_art_internal_issue_4742.test",
+        "test/sql/show_select/show_quote_identifier.test"
       ]
     },
     {
@@ -81,7 +80,8 @@
       "paths": [
         "test/sql/error/error_position.test",
         "test/sql/catalog/table/test_default_values.test",
-        "test/sql/cast/cast_error_location.test"
+        "test/sql/cast/cast_error_location.test",
+        "test/sql/types/nested/array/array_invalid.test"
       ]
     },
     {
@@ -94,17 +94,7 @@
     },
     {
       "reason": "Case insensitive preservation",
-      "paths": [
-        "test/sql/settings/setting_preserve_identifier_case.test"
-      ]
-    },
-    {
-      "reason": "Create Table Statement",
-      "paths": [
-        "test/sql/export/parquet/export_parquet_enum.test",
-        "test/sql/export/export_generated_columns.test",
-        "test/sql/export/export_database.test"
-      ]
+      "paths": ["test/sql/settings/setting_preserve_identifier_case.test"]
     },
     {
       "reason": "Parser exception because of dollar-quoted strings",
@@ -156,9 +146,7 @@
     },
     {
       "reason": "Parser exception because of 'autocomplete' caused the CALL command to fail",
-      "paths": [
-        "test/sql/storage/memory/in_memory_compress.test"
-      ]
+      "paths": ["test/sql/storage/memory/in_memory_compress.test"]
     },
     {
       "reason": "Quotations",
@@ -166,17 +154,31 @@
         "test/sql/table_function/sqlite_master_quotes.test",
         "test/sql/keywords/escaped_quotes_expressions.test",
         "test/sql/export/export_quoted_enum.test",
+        "test/sql/cast/string_to_struct_cast.test",
         "test/sql/json/issues/large_quoted_string_constant.test",
         "test/sql/attach/attach_dbname_quotes.test",
         "test/sql/pragma/test_show_tables_from.test",
         "test/sql/catalog/test_quoted_column_name.test",
-        "test/sql/cast/string_to_struct_cast.test"
+        "test/sql/keywords/keywords_in_expressions.test",
+        "test/sql/export/export_database.test",
+        "test/sql/export/parquet/export_parquet_enum.test",
+        "test/sql/copy/return_stats.test",
+        "test/sql/copy/csv/multidelimiter/test_abac.test"
       ]
     },
     {
+      "reason": "Parameters",
+      "paths": ["test/sql/catalog/table/create_table_parameters.test"]
+    },
+    {
       "reason": "Parser error",
+      "paths": ["test/sql/catalog/issue_9459.test"]
+    },
+    {
+      "reason": "PivotStatement",
       "paths": [
-        "test/sql/catalog/issue_9459.test"
+        "test/sql/pivot/top_level_pivot_syntax.test",
+        "test/sql/pivot/pivot_storage.test"
       ]
     },
     {
@@ -190,7 +192,8 @@
       "reason": "Setting option to 'strict' changes behavior of first tests",
       "paths": [
         "test/extension/loadable_parser_override.test",
-        "test/sql/peg_parser/transformer/peg_transformer.test"
+        "test/sql/peg_parser/transformer/peg_transformer.test",
+        "test/sql/collate/test_unsupported_collations.test"
       ]
     },
     {
@@ -220,8 +223,14 @@
         "test/sql/pragma/profiling/call_enable_profiling_function.test",
         "test/sql/secrets/create_secret_persistence_no_client_context.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
+        "test/sql/alter/alter_table_set_table_options.test",
+        "test/sql/pragma/test_pragma_sanitized_inputs.test"
       ]
+    },
+    {
+      "reason": "New CREATE TABLE option syntax",
+      "paths": ["test/sql/create/create_table_extra_options.test"]
     }
   ]
 }

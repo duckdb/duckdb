@@ -267,6 +267,10 @@ string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path, nullptr).PathSeparator(path);
 }
 
+string VirtualFileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(path_p, opener).CanonicalizePath(path_p, opener);
+}
+
 unique_ptr<MultiFileList> VirtualFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
                                                                optional_ptr<FileOpener> opener) {
 	return FindFileSystem(path, opener).Glob(path, input, opener);
@@ -282,6 +286,13 @@ void VirtualFileSystem::RegisterSubSystem(FileCompressionType compression_type, 
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = file_system_registry->RegisterSubSystem(compression_type, std::move(fs));
 	file_system_registry.atomic_store(new_registry);
+}
+
+void VirtualFileSystem::UnregisterSubSystem(const string &name) {
+	auto sub_system = ExtractSubSystem(name);
+
+	lock_guard<mutex> guard(registry_lock);
+	unregistered_file_systems.push_back(std::move(sub_system));
 }
 
 void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {

@@ -1019,6 +1019,13 @@
         "default_value": "30000"
     },
     {
+        "name": "wal_autocheckpoint_entries",
+        "description": "Trigger automatic checkpoint when WAL entry count reaches or exceeds N (0 = disabled)",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "warnings_as_errors",
         "description": "Escalate all warnings to errors.",
         "type": "BOOLEAN",
