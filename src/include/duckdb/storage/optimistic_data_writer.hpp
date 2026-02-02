@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/common/set.hpp"
 
 namespace duckdb {
 class PartialBlockManager;
@@ -17,7 +18,7 @@ struct OptimisticWriteCollection {
 	~OptimisticWriteCollection();
 
 	shared_ptr<RowGroupCollection> collection;
-	unordered_set<idx_t> unflushed_row_groups;
+	set<idx_t> unflushed_row_groups;
 	idx_t complete_row_groups = 0;
 	vector<unique_ptr<PartialBlockManager>> partial_block_managers;
 
