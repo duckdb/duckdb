@@ -64,9 +64,8 @@ bool LogManager::CanScan(LoggingTargetTable table) {
 	return log_storage->CanScan(table);
 }
 
-LogManager::LogManager(weak_ptr<DatabaseInstance> db, LogConfig config_p)
-    : config(std::move(config_p)), db_instance(std::move(db)) {
-	log_storage = make_uniq<InMemoryLogStorage>(*db_instance.lock());
+LogManager::LogManager(DatabaseInstance &db, LogConfig config_p) : config(std::move(config_p)), db_instance(db) {
+	log_storage = make_uniq<InMemoryLogStorage>(db);
 }
 
 LogManager::~LogManager() {
@@ -97,7 +96,7 @@ RegisteredLoggingContext LogManager::RegisterLoggingContextInternal(LoggingConte
 
 void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogLevel log_level, const char *log_message,
                                const RegisteredLoggingContext &context) {
-	if (log_level == LogLevel::LOG_WARNING && (Settings::Get<WarningsAsErrorsSetting>(*db_instance.lock()))) {
+	if (log_level == LogLevel::LOG_WARNING && Settings::Get<WarningsAsErrorsSetting>(db_instance)) {
 		throw InvalidInputException(log_message);
 	} else {
 		unique_lock<mutex> lck(lock);
