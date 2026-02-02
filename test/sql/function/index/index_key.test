@@ -416,12 +416,12 @@ Catalog Error: Table with name nonexistent_table does not exist!
 statement error
 SELECT index_key({'table': 'tbl1'}, 'nonexistent_index', 1);
 ----
-Catalog Error: index_key: index 'nonexistent_index' was not found on table main.tbl1. Available indexes: PRIMARY_tbl1_0, UNIQUE_tbl1_1, tbl1_idx_composite, tbl1_idx_txt
+Catalog Error: index_key: index 'nonexistent_index' was not found on table tbl1. Available indexes: PRIMARY_tbl1_0, UNIQUE_tbl1_1, tbl1_idx_composite, tbl1_idx_txt
 
 statement error
 SELECT index_key({'table': 'tbl2'}, 'FOREIGN_tbl2_2', 1);
 ----
-Catalog Error: index_key: index 'FOREIGN_tbl2_2' was not found on table main.tbl2. Available indexes: PRIMARY_tbl2_0, FOREIGN_tbl2_1
+Catalog Error: index_key: index 'FOREIGN_tbl2_2' was not found on table tbl2. Available indexes: PRIMARY_tbl2_0, FOREIGN_tbl2_1
 
 statement ok
 CREATE TABLE no_index_tbl(id INTEGER, value VARCHAR);
@@ -429,7 +429,7 @@ CREATE TABLE no_index_tbl(id INTEGER, value VARCHAR);
 statement error
 SELECT index_key({'table': 'no_index_tbl'}, 'some_index', 1);
 ----
-Catalog Error: index_key: index 'some_index' was not found on table main.no_index_tbl. No indexes found on this table.
+Catalog Error: index_key: index 'some_index' was not found on table no_index_tbl. No indexes found on this table.
 
 statement error
 SELECT index_key({'schema': 'nonexistent_schema', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);

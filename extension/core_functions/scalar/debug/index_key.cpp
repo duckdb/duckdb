@@ -11,6 +11,7 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/table_description.hpp"
+#include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
@@ -92,13 +93,6 @@ static string GetStringArgument(ClientContext &context, const Expression &expr, 
 	return StringValue::Get(value);
 }
 
-static string FormatQualifiedTableName(const TableDescription &path) {
-	if (path.database.empty() || path.database == INVALID_CATALOG) {
-		return path.schema + "." + path.table;
-	}
-	return path.database + "." + path.schema + "." + path.table;
-}
-
 static optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &index,
                                            const TableDescription &path) {
 	optional_ptr<Index> found_index = nullptr;
@@ -111,7 +105,7 @@ static optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const str
 	});
 
 	if (!found_index) {
-		auto qualified_table = FormatQualifiedTableName(path);
+		auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
 		vector<string> available;
 		index_list.Scan([&](Index &idx) {
 			available.push_back(idx.GetIndexName());
@@ -132,7 +126,7 @@ static optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const str
 
 static void ValidateIndex(const Index &index, const TableDescription &path, const string &index_name) {
 	if (!index.IsBound()) {
-		auto qualified_table = FormatQualifiedTableName(path);
+		auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
 		throw CatalogException("index_key: index '%s' on table %s is not yet bound", index_name, qualified_table);
 	}
 }
