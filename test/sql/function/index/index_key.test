@@ -138,6 +138,12 @@ SELECT index_key({'table': 'tbl3'}, 'tbl3_idx', c1, c2, c3) FROM tbl3_wrong_type
 ----
 Conversion Error: Could not convert string 'test' to INT32
 
+# Implicit cast from SMALLINT to BIGINT - result should be 8 bytes (BIGINT size)
+query I
+SELECT index_key({'table': 'tbl1'}, 'UNIQUE_tbl1_1', 42::SMALLINT);
+----
+\x80\x00\x00\x00\x00\x00\x00*
+
 ########################################################################################################################
 #                                                                                                                      #
 #   Multi-row operations                                                                                               #

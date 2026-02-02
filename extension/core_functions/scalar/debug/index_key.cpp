@@ -93,42 +93,26 @@ static string GetStringArgument(ClientContext &context, const Expression &expr, 
 	return StringValue::Get(value);
 }
 
-static optional_ptr<Index> FindIndexByName(TableIndexList &index_list, const string &index,
-                                           const TableDescription &path) {
-	optional_ptr<Index> found_index = nullptr;
-	index_list.Scan([&](Index &candidate) {
-		if (candidate.GetIndexName() == index) {
-			found_index = &candidate;
-			return true;
-		}
+static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &index_name, const TableDescription &path) {
+	auto found = index_list.Find(index_name);
+	if (found) {
+		return *found;
+	}
+
+	auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
+	vector<string> available;
+	index_list.Scan([&](Index &idx) {
+		available.push_back(idx.GetIndexName());
 		return false;
 	});
 
-	if (!found_index) {
-		auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
-		vector<string> available;
-		index_list.Scan([&](Index &idx) {
-			available.push_back(idx.GetIndexName());
-			return false;
-		});
-
-		if (available.empty()) {
-			throw CatalogException("index_key: index '%s' was not found on table %s. No indexes found on this table.",
-			                       index, qualified_table);
-		}
-		auto available_list = StringUtil::Join(available, ", ");
-		throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s", index,
-		                       qualified_table, available_list);
+	if (available.empty()) {
+		throw CatalogException("index_key: index '%s' was not found on table %s. No indexes found on this table.",
+		                       index_name, qualified_table);
 	}
-
-	return found_index;
-}
-
-static void ValidateIndex(const Index &index, const TableDescription &path, const string &index_name) {
-	if (!index.IsBound()) {
-		auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
-		throw CatalogException("index_key: index '%s' on table %s is not yet bound", index_name, qualified_table);
-	}
+	auto available_list = StringUtil::Join(available, ", ");
+	throw CatalogException("index_key: index '%s' was not found on table %s. Available indexes: %s", index_name,
+	                       qualified_table, available_list);
 }
 
 struct IndexKeyBindData : public FunctionData {
@@ -170,11 +154,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	data_table_info.BindIndexes(context);
 
 	auto &index_list = data_table_info.GetIndexes();
-
-	auto found_index = FindIndexByName(index_list, index, path);
-	ValidateIndex(*found_index, path, index);
-
-	auto &bound_index = found_index->Cast<BoundIndex>();
+	auto &bound_index = FindBoundIndex(index_list, index, path);
 	auto key_types = bound_index.logical_types;
 
 	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
@@ -202,6 +182,8 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	auto index_type = bind_data.bound_index.GetIndexType();
 
+	// Early return: although the binding phase works for any bound index, this is only currently implemented for
+	// ART indexes. More implementations can be added here for various index types.
 	if (index_type != ART::TYPE_NAME) {
 		throw NotImplementedException(
 		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
