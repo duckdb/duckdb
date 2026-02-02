@@ -143,7 +143,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	auto &struct_expr = *arguments[0];
 	bound_function.arguments[0] = struct_expr.return_type;
 	auto path = EvaluateTableDescription(context, struct_expr);
-	auto index = GetStringArgument(context, *arguments[1], "index_name");
+	auto index_name = GetStringArgument(context, *arguments[1], "index_name");
 
 	auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, path.database, path.schema, path.table)
 	                        .Cast<TableCatalogEntry>();
@@ -154,13 +154,13 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	data_table_info.BindIndexes(context);
 
 	auto &index_list = data_table_info.GetIndexes();
-	auto &bound_index = FindBoundIndex(index_list, index, path);
+	auto &bound_index = FindBoundIndex(index_list, index_name, path);
 	auto key_types = bound_index.logical_types;
 
 	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
 	if (num_key_args != key_types.size()) {
-		throw BinderException("index_key: index '%s' expects %llu key column(s), but %llu argument(s) provided", index,
-		                      key_types.size(), num_key_args);
+		throw BinderException("index_key: index '%s' expects %llu key column(s), but %llu argument(s) provided",
+		                      index_name, key_types.size(), num_key_args);
 	}
 
 	bound_function.arguments.resize(INDEX_KEY_FIXED_ARGS + key_types.size());
@@ -168,7 +168,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		bound_function.arguments[INDEX_KEY_FIXED_ARGS + i] = key_types[i];
 	}
 
-	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types), index);
+	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types), index_name);
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
