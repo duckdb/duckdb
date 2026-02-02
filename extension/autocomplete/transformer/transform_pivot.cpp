@@ -28,8 +28,13 @@ vector<PivotColumn> PEGTransformerFactory::TransformPivotColumnList(PEGTransform
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto pivot_column_list = ExtractParseResultsFromList(list_pr.GetChild(0));
 	vector<PivotColumn> result;
-	for (auto pivot_column : pivot_column_list) {
+	for (auto &pivot_column : pivot_column_list) {
 		auto col = transformer.Transform<PivotColumn>(pivot_column);
+		if (col.pivot_expressions.size() > 1) {
+			auto row_function =
+			    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(col.pivot_expressions));
+			col.pivot_expressions.push_back(std::move(row_function));
+		}
 		for (auto &expr : col.pivot_expressions) {
 			if (expr->IsScalar()) {
 				throw ParserException(expr->GetQueryLocation(), "Cannot pivot on constant value \"%s\"",
@@ -39,7 +44,7 @@ vector<PivotColumn> PEGTransformerFactory::TransformPivotColumnList(PEGTransform
 				throw ParserException(expr->GetQueryLocation(), "Cannot pivot on subquery \"%s\"", expr->ToString());
 			}
 		}
-		result.push_back(transformer.Transform<PivotColumn>(pivot_column));
+		result.push_back(std::move(col));
 	}
 	return result;
 }
