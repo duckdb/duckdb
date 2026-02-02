@@ -80,7 +80,7 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 	chunk.data[1].Reference(slice);
 	chunk.data[2].Reference(payload_vector);
 	chunk.SetCardinality(offset_lists_indices);
-	chunk.Verify();
+	chunk.Verify(context.client);
 
 	// sink
 	chunk.Flatten();

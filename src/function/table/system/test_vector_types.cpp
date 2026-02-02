@@ -306,12 +306,12 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 	TestVectorDictionary::Generate(info);
 	TestVectorSequence::Generate(info);
 	for (auto &entry : result->entries) {
-		entry->Verify();
+		entry->Verify(context);
 	}
 	if (bind_data.all_flat) {
 		for (auto &entry : result->entries) {
 			entry->Flatten();
-			entry->Verify();
+			entry->Verify(context);
 		}
 	}
 	return std::move(result);

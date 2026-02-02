@@ -357,9 +357,11 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 	}
 }
 
-void DataChunk::Verify() {
+void DataChunk::Verify(optional_ptr<ClientContext> context, optional_ptr<DBConfig> config) {
 #ifdef DEBUG
 	D_ASSERT(size() <= capacity);
+	// We want to make sure that only one of context or config is set, or no one is set
+	D_ASSERT(!(context && config));
 
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
@@ -376,7 +378,29 @@ void DataChunk::Verify() {
 	// verify that we can round-trip chunk serialization
 	Allocator allocator;
 	MemoryStream mem_stream(allocator);
-	BinarySerializer serializer(mem_stream);
+
+	// this is the way we can ensure that the `Serialize` and `Deserialize` methods of a `DataChunk` are consistent with
+	// each other within the current and previous versions of the code.
+	// This is an internal round-trip sanity check performed in memory. It does not write to a
+	// persistent database file. Therefore, when a version is not indicated (latest),
+	// it should always use the full set of capabilities currently supported by the engine to ensure that all
+	// valid in-memory states can be verified.
+
+	SerializationOptions options;
+	options.serialization_compatibility = SerializationCompatibility::Latest();
+
+	optional_ptr<DBConfig> config_to_use;
+	if (context) {
+		config_to_use = &DBConfig::GetConfig(*context);
+	} else {
+		config_to_use = config;
+	}
+
+	if (config_to_use && config_to_use->options.serialization_compatibility.manually_set) {
+		options.serialization_compatibility = config_to_use->options.serialization_compatibility;
+	}
+
+	BinarySerializer serializer(mem_stream, options);
 
 	serializer.Begin();
 	Serialize(serializer);

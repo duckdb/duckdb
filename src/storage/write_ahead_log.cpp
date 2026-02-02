@@ -454,7 +454,7 @@ void WriteAheadLog::WriteSetTable(const string &schema, const string &table) {
 
 void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 	D_ASSERT(chunk.size() > 0);
-	chunk.Verify();
+	chunk.Verify(nullptr, GetDatabase().GetDatabase().config);
 
 	WriteAheadLogSerializer serializer(*this, WALType::INSERT_TUPLE);
 	serializer.WriteProperty(101, "chunk", chunk);
@@ -483,7 +483,7 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 	D_ASSERT(chunk.size() > 0);
 	D_ASSERT(chunk.ColumnCount() == 2);
 	D_ASSERT(chunk.data[1].GetType().id() == LogicalType::ROW_TYPE);
-	chunk.Verify();
+	chunk.Verify(nullptr, GetDatabase().GetDatabase().config);
 
 	WriteAheadLogSerializer serializer(*this, WALType::UPDATE_TUPLE);
 	serializer.WriteProperty(101, "column_indexes", column_indexes);

@@ -1026,7 +1026,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 		executor.Evaluate(context, position, eval_chunk, result, sink);
 	}
 	output_chunk.SetCardinality(input_chunk);
-	output_chunk.Verify();
+	output_chunk.Verify(context.client);
 
 	idx_t out_idx = 0;
 	result.SetCardinality(input_chunk);
@@ -1040,7 +1040,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	// Move to the next chunk
 	++task->begin_idx;
 
-	result.Verify();
+	result.Verify(context.client);
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,

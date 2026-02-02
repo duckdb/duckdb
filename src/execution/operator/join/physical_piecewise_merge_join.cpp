@@ -572,7 +572,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(context, input);
-			state.lhs_payload.Verify();
+			state.lhs_payload.Verify(context.client);
 
 			state.right_chunk_index = 0;
 			state.right_base = 0;
@@ -690,7 +690,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					gstate.table->found_match[state.right_base + right_info.rhs[sel->get_index(i)]] = true;
 				}
 			}
-			chunk.Verify();
+			chunk.Verify(context.client);
 		}
 	} while (chunk.size() == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -711,7 +711,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 		}
 	}
 
-	input.Verify();
+	input.Verify(context.client);
 	switch (join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:

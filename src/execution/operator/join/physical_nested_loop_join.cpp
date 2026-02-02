@@ -444,9 +444,9 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 		auto &right_payload = state.right_payload;
 
 		// sanity check
-		left_chunk.Verify();
-		right_condition.Verify();
-		right_payload.Verify();
+		left_chunk.Verify(context.client);
+		right_condition.Verify(context.client);
+		right_payload.Verify(context.client);
 
 		// now perform the join
 		SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);

@@ -189,7 +189,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		}
 	}
 	arguments.SetCardinality(count);
-	arguments.Verify();
+	arguments.Verify(context);
 
 	D_ASSERT(expr.function.HasFunctionCallback());
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
