@@ -10,6 +10,7 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/statement/set_statement.hpp"
 
 namespace duckdb {
 
@@ -57,9 +58,11 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
                                                         unique_ptr<ParsedExpression> expression) {
 	auto multi_statement = make_uniq<MultiStatement>();
 	/* Here we do a workaround that consists of the following statements:
-	 *	 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
-	 *	 2. `UPDATE t SET u = <expression>;`
-	 *	 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	 *	 1. `SET search_path = <schema_of_table>;`
+	 *	 2. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	 *	 3. `UPDATE t SET u = <expression>;`
+	 *	 4. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	 *	 5. `RESET search_path;`
 	 *
 	 * This workaround exists because, when statements like this were executed:
 	 *	`ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>`
@@ -68,36 +71,36 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
 	 * values, which makes WAL replays consistent.
 	 */
 
-	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
-		auto &fun = expression->Cast<FunctionExpression>();
-		if (fun.function_name == "nextval" || fun.function_name == "currval" && !fun.children.empty() &&
-		                                          fun.children[0]->GetExpressionClass() == ExpressionClass::CONSTANT) {
-			for (size_t i = 0; i < fun.children.size(); i++) {
-				auto &constant_expr = fun.children[i]->Cast<ConstantExpression>();
-				if (constant_expr.value.type().id() == LogicalTypeId::VARCHAR) {
-					auto seq_name = constant_expr.value.GetValue<string>();
-					if (seq_name.find('.') == string::npos && !data.schema.empty()) {
-						auto qualified_seq_name = data.schema + "." + seq_name;
-						if (!data.catalog.empty()) {
-							qualified_seq_name = data.catalog + "." + qualified_seq_name;
-						}
-						fun.children[i] = make_uniq<ConstantExpression>(Value(qualified_seq_name));
-					}
-				}
-			}
+	// 1. SET search_path = 'schema_of_table'
+	bool need_custom_search_path = !data.catalog.empty() || !data.schema.empty();
+	if (need_custom_search_path) {
+		string new_search_path;
+		if (!data.catalog.empty()) {
+			new_search_path += KeywordHelper::WriteOptionallyQuoted(data.catalog) + ".";
 		}
-		expression = make_uniq<FunctionExpression>(std::move(fun));
+		new_search_path += KeywordHelper::WriteOptionallyQuoted(data.schema);
+		auto set_value_expr = make_uniq<ConstantExpression>(Value(new_search_path));
+		auto set_statement =
+		    make_uniq<SetVariableStatement>("search_path", std::move(set_value_expr), SetScope::SESSION);
+		multi_statement->statements.push_back(std::move(set_statement));
 	}
 
-	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	// 2. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
 	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
 
-	// 2. `UPDATE t SET u = <expression>;`
+	// 3. `UPDATE t SET u = <expression>;`
 	AddUpdateToMultiStatement(multi_statement, column_name, data, expression);
 
-	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	// 4. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
 	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
+
+	// 5. RESET search_path
+	if (need_custom_search_path) {
+		auto reset_statement = make_uniq<ResetVariableStatement>("search_path", SetScope::SESSION);
+		multi_statement->statements.push_back(std::move(reset_statement));
+	}
+
 	return multi_statement;
 }
 
