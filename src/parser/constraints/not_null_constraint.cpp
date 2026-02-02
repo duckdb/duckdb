@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-NotNullConstraint::NotNullConstraint(LogicalIndex index, const string &column_name)
+NotNullConstraint::NotNullConstraint(LogicalIndex index, string column_name)
     : Constraint(ConstraintType::NOT_NULL), index(index), column_name(column_name) {
 }
 
