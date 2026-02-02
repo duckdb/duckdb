@@ -30,7 +30,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 	recursive_node->right = std::move(owned_set_node->children[1]);
 	recursive_node->union_all = owned_set_node->setop_all;
 
-	return recursive_node;
+	return std::move(recursive_node);
 }
 
 void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> inner_node) {
