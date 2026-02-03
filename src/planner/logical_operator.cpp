@@ -178,7 +178,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		MemoryStream stream(Allocator::Get(context));
 		// We are serializing a query plan
 		try {
-			auto &config = DBConfig::GetConfig(context);;
+			auto &config = DBConfig::GetConfig(context);
 			SerializationOptions options;
 			if (config.options.serialization_compatibility.manually_set) {
 				options.serialization_compatibility = config.options.serialization_compatibility;
