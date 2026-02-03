@@ -261,18 +261,6 @@ PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
 			throw ParserException("EXCLUDE is not supported for the window function \"%s\"",
 			                      expr->function_name.c_str());
 		}
-		const auto is_range =
-		    (expr->start == WindowBoundary::EXPR_PRECEDING_RANGE ||
-		     expr->start == WindowBoundary::EXPR_FOLLOWING_RANGE || expr->end == WindowBoundary::EXPR_PRECEDING_RANGE ||
-		     expr->end == WindowBoundary::EXPR_FOLLOWING_RANGE);
-		if (is_range && expr->orders.size() != 1) {
-			throw BinderException("RANGE frames must have only one ORDER BY expression, found %d instead.",
-			                      expr->orders.size());
-		}
-		if (expr->GetExpressionType() == ExpressionType::WINDOW_FILL &&
-		    (expr->arg_orders.size() > 1 || (expr->arg_orders.empty() && expr->orders.size() != 1))) {
-			throw BinderException("FILL functions must have only one ORDER BY expression");
-		}
 		transformer.in_window_definition = false;
 		return std::move(expr);
 	}
