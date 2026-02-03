@@ -1633,15 +1633,15 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
-LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type,
-                                         child_list_t<LogicalType> struct_child_types) { // NOLINT
-	if (struct_child_types.empty()) {
-		// Legacy BLOB aggregate state
-		auto info = make_shared_ptr<LegacyAggregateStateTypeInfo>(std::move(state_type));
-		return LogicalType(LogicalTypeId::LEGACY_AGGREGATE_STATE, std::move(info));
-	}
+LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type, child_list_t<LogicalType> struct_child_types) {
 	auto info = make_shared_ptr<AggregateStateTypeInfo>(std::move(state_type), std::move(struct_child_types));
 	return LogicalType(LogicalTypeId::AGGREGATE_STATE, std::move(info));
+}
+
+LogicalType LogicalType::LEGACY_AGGREGATE_STATE(aggregate_state_t state_type) {
+	// Legacy BLOB aggregate state
+	auto info = make_shared_ptr<LegacyAggregateStateTypeInfo>(std::move(state_type));
+	return LogicalType(LogicalTypeId::LEGACY_AGGREGATE_STATE, std::move(info));
 }
 
 //===--------------------------------------------------------------------===//
