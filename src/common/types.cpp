@@ -503,8 +503,9 @@ string LogicalType::ToString() const {
 	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
 		return LegacyAggregateStateType::GetTypeName(*this);
 	}
-	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::AGGREGATE_STATE: {
 		return AggregateStateType::GetTypeName(*this);
+	}
 	case LogicalTypeId::SQLNULL: {
 		return "\"NULL\"";
 	}
@@ -1555,6 +1556,9 @@ const string LegacyAggregateStateType::GetTypeName(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 
 const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE) {
+		return LegacyAggregateStateType::GetStateType(type);
+	}
 	D_ASSERT(type.IsAggregateStateStructType());
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
