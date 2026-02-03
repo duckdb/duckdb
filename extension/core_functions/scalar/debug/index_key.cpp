@@ -148,6 +148,9 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();
 
+	// Note: It may come up in testing that we don't want to force binding here, e.g. if the test should explicitly
+	// exercise a code path that binds, not forcing a bind in testing code here. In that case we may want to add an
+	// option to this function to bind or not.
 	data_table_info.BindIndexes(context);
 
 	auto &index_list = data_table_info.GetIndexes();
