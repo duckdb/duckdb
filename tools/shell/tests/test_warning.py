@@ -52,6 +52,16 @@ def test_warning(shell):
     result.check_stdout("WARNING:")
     result.check_stdout("Deprecated lambda arrow (->) detected.")
     result.check_stdout("[1]")
+    result.check_stderr(None)
+
+
+def test_warning_as_error(shell):
+    test = ShellTest(shell)
+    test.statement("SET warnings_as_errors = true")
+    test.statement("SELECT list_transform([1], x -> x + 1)")
+    result = test.run()
+    result.check_stderr("Deprecated lambda arrow (->) detected.")
+    assert result.status_code == 1
 
 
 def test_changing_logging_settings(shell, tmp_path):
