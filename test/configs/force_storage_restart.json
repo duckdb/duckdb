@@ -19,6 +19,12 @@
       "paths": [
         "test/sql/storage/external_file_cache/external_file_cache_validate.test"
       ]
+    },
+    {
+      "reason": "Doesn't OOM when restarting",
+      "paths": [
+        "test/sql/storage/temp_directory/offloading_block_files.test_slow"
+      ]
     }
   ]
 }
