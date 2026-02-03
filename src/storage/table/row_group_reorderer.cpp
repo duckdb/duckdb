@@ -157,7 +157,7 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 			if (!current_stats->CanHaveNull()) {
 				// This row group has exactly row_group.count valid values. We can exclude those
 				pruned_row_group_count++;
-				new_row_offset -= tuple_count;
+				new_row_offset -= last_unresolved_entry->second.count;
 			}
 
 			++last_unresolved_entry;
