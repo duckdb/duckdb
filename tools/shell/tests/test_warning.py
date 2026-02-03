@@ -61,6 +61,7 @@ def test_multiple_warnings(shell):
     )
 
     result = test.run()
+    assert result.stdout.count("WARNING:") == 1
     result.check_stdout("WARNING:")
     result.check_stdout("Deprecated lambda arrow (->) detected.")
     result.check_stdout("│ [3]     │ [3]     │ [3]     │")
