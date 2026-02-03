@@ -158,12 +158,15 @@ void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, c
 	PrintExpectedResult(result_values, expected_column_count, false);
 }
 
-void SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {
+string SQLLogicTestLogger::ResultToString(MaterializedQueryResult &result) {
 	BoxRendererConfig config;
 	config.max_rows = 2000;
 	config.max_width = -1;
-	string result_str = result.ToBox(*connection.context, config);
-	LogFailure(result_str);
+	return result.ToBox(*connection.context, config);
+}
+
+void SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {
+	LogFailure(ResultToString(result));
 }
 
 void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
@@ -299,19 +302,18 @@ void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_c
 	PrintLineSep();
 }
 
-void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result,
+void SQLLogicTestLogger::WrongResultHash(const string &expected_result, MaterializedQueryResult &result,
                                          const string &expected_hash, const string &actual_hash) {
-	if (expected_result) {
-		expected_result->Print();
-		expected_result->ToString();
-	} else {
-		LogFailure("???\n");
-	}
 	PrintErrorHeader("Wrong result hash!");
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
 	PrintHeader("Expected result:");
+	if (!expected_result.empty()) {
+		LogFailure(expected_result);
+	} else {
+		LogFailure("???\n");
+	}
 	PrintLineSep();
 	PrintHeader("Actual result:");
 	PrintLineSep();
