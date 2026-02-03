@@ -155,9 +155,9 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
 	validity->FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
 
 	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
-	                row_group_start);
+	               row_group_start);
 	validity->UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
-	                          row_group_start);
+	                         row_group_start);
 }
 
 void StandardColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,

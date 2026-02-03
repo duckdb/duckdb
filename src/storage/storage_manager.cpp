@@ -217,7 +217,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	}
 	// verify the main WAL is the active WAL currently
 	if (wal->GetPath() != wal_path) {
-		throw InternalException("Current WAL path %s does not match base WAL path %s in WALStartCheckpoint",
+		throw InternalException("Current WAL path \"%s\" does not match base WAL path \"%s\" in WALStartCheckpoint",
 		                        wal->GetPath(), wal_path);
 	}
 	// write to the main WAL that we have initiated a checkpoint
