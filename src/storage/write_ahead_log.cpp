@@ -32,6 +32,7 @@ WriteAheadLog::WriteAheadLog(StorageManager &storage_manager, const string &wal_
     : storage_manager(storage_manager), wal_path(wal_path), init_state(init_state),
       checkpoint_iteration(checkpoint_iteration) {
 	storage_manager.SetWALSize(wal_size);
+	storage_manager.ResetWALEntriesCount();
 }
 
 WriteAheadLog::~WriteAheadLog() {
@@ -180,6 +181,10 @@ public:
 		memory_stream.Rewind();
 	}
 
+	WriteAheadLog &GetWAL() {
+		return wal;
+	}
+
 private:
 	WriteAheadLog &wal;
 	optional_ptr<WriteStream> stream;
@@ -202,6 +207,7 @@ public:
 	void End() {
 		serializer.End();
 		checksum_writer.Flush();
+		checksum_writer.GetWAL().IncrementWALEntriesCount();
 	}
 
 	template <class T>
@@ -366,7 +372,7 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
 		options["v1_0_0_storage"] = v1_0_0_storage;
 	}
 
-	list.Scan([&](Index &index) {
+	for (auto &index : list.Indexes()) {
 		if (name == index.GetIndexName()) {
 			// We never write an unbound index to the WAL.
 			D_ASSERT(index.IsBound());
@@ -378,10 +384,9 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
 					list.WriteElement(buffer.buffer_ptr, buffer.allocation_size);
 				}
 			});
-			return true;
+			break;
 		}
-		return false;
-	});
+	}
 }
 
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
@@ -534,6 +539,10 @@ void WriteAheadLog::Flush() {
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
 	storage_manager.SetWALSize(writer->GetFileSize());
+}
+
+void WriteAheadLog::IncrementWALEntriesCount() {
+	storage_manager.IncrementWALEntriesCount();
 }
 
 } // namespace duckdb

@@ -213,14 +213,23 @@ ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataC
 }
 
 ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
-    const ColumnDataCollection *collection_p, vector<column_t> column_ids_p)
-    : collection(collection_p), scan_chunk(make_shared_ptr<DataChunk>()), row_index(0) {
+    optional_ptr<const ColumnDataCollection> collection_p, vector<column_t> column_ids_p)
+    : collection(collection_p), scan_chunk(make_uniq<DataChunk>()), row_index(0) {
 	if (!collection) {
 		return;
 	}
 	collection->InitializeScan(scan_state, std::move(column_ids_p));
 	collection->InitializeScanChunk(scan_state, *scan_chunk);
 	collection->Scan(scan_state, *scan_chunk);
+}
+
+ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
+    ColumnDataChunkIterator &&other) noexcept
+    : row_index(0) {
+	std::swap(collection, other.collection);
+	std::swap(scan_state, other.scan_state);
+	std::swap(scan_chunk, other.scan_chunk);
+	std::swap(row_index, other.row_index);
 }
 
 void ColumnDataChunkIterationHelper::ColumnDataChunkIterator::Next() {
