@@ -13,12 +13,12 @@
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "matcher.hpp"
-#include "duckdb/catalog/default/builtin_types/types.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb {
 
@@ -228,6 +228,17 @@ static vector<reference<CatalogEntry>> GetAllTables(ClientContext &context, bool
 	return result;
 }
 
+static vector<reference<CatalogEntry>> GetAllTypes(ClientContext &context) {
+	vector<reference<CatalogEntry>> result;
+	// scan all the schemas for types and collect them
+	auto schemas = Catalog::GetAllSchemas(context);
+	for (auto &schema_ref : schemas) {
+		auto &schema = schema_ref.get();
+		schema.Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) { result.push_back(entry); });
+	};
+	return result;
+}
+
 static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllCatalogs(context);
@@ -264,10 +275,14 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 	return suggestions;
 }
 
-static vector<AutoCompleteCandidate> SuggestType(ClientContext &) {
+static vector<AutoCompleteCandidate> SuggestType(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
-	for (auto &type_entry : BUILTIN_TYPES) {
-		suggestions.emplace_back(type_entry.name, SuggestionState::SUGGEST_TYPE_NAME, 0, CandidateType::KEYWORD);
+	auto all_entries = GetAllTypes(context);
+	for (auto &entry_ref : all_entries) {
+		auto &entry = entry_ref.get();
+		// prioritize user-defined types
+		int32_t bonus = (entry.internal) ? 0 : 1;
+		suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TYPE_NAME, bonus, CandidateType::KEYWORD);
 	}
 	return suggestions;
 }
@@ -830,6 +845,10 @@ public:
 					                       tokenized_statement[tokenized_statement.size() - 1].length);
 				}
 				statement->query = query;
+				if (statement->type == StatementType::CREATE_STATEMENT) {
+					auto &create = statement->Cast<CreateStatement>();
+					create.info->sql = statement->query;
+				}
 				result.push_back(std::move(statement));
 			}
 			return ParserOverrideResult(std::move(result));
@@ -852,7 +871,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(check_peg_parser_fun);
 
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	config.parser_extensions.push_back(PEGParserExtension());
+	ParserExtension::Register(config, PEGParserExtension());
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {

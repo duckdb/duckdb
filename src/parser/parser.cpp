@@ -1,5 +1,6 @@
 #include "duckdb/parser/parser.hpp"
 
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
+
 #include "postgres_parser.hpp"
 
 namespace duckdb {
@@ -240,7 +242,7 @@ void Parser::ParseQuery(const string &query) {
 	}
 	{
 		if (options.extensions) {
-			for (auto &ext : *options.extensions) {
+			for (auto &ext : options.extensions->ParserExtensions()) {
 				if (!ext.parser_override) {
 					continue;
 				}
@@ -262,7 +264,10 @@ void Parser::ParseQuery(const string &query) {
 					}
 					bool is_supported = false;
 					switch (statement->type) {
+					case StatementType::ANALYZE_STATEMENT:
+					case StatementType::VACUUM_STATEMENT:
 					case StatementType::CALL_STATEMENT:
+					case StatementType::MERGE_INTO_STATEMENT:
 					case StatementType::TRANSACTION_STATEMENT:
 					case StatementType::VARIABLE_SET_STATEMENT:
 					case StatementType::LOAD_STATEMENT:
@@ -275,22 +280,8 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::INSERT_STATEMENT:
 					case StatementType::UPDATE_STATEMENT:
 					case StatementType::COPY_DATABASE_STATEMENT:
-						is_supported = true;
-						break;
 					case StatementType::CREATE_STATEMENT: {
-						auto &create_statement = statement->Cast<CreateStatement>();
-						switch (create_statement.info->type) {
-						case CatalogType::INDEX_ENTRY:
-						case CatalogType::MACRO_ENTRY:
-						case CatalogType::SCHEMA_ENTRY:
-						case CatalogType::SECRET_ENTRY:
-						case CatalogType::SEQUENCE_ENTRY:
-						case CatalogType::TYPE_ENTRY:
-							is_supported = true;
-							break;
-						default:
-							is_supported = false;
-						}
+						is_supported = true;
 						break;
 					}
 					default:
@@ -335,7 +326,7 @@ void Parser::ParseQuery(const string &query) {
 			// no-op
 			// return here would require refactoring into another function. o.w. will just no-op in order to run wrap up
 			// code at the end of this function
-		} else if (!options.extensions || options.extensions->empty()) {
+		} else if (!options.extensions || !options.extensions->HasParserExtensions()) {
 			throw ParserException::SyntaxError(query, parser_error, parser_error_location);
 		} else {
 			// split sql string into statements and re-parse using extension
@@ -371,7 +362,7 @@ void Parser::ParseQuery(const string &query) {
 				// LCOV_EXCL_START
 				// let extensions parse the statement which DuckDB failed to parse
 				bool parsed_single_statement = false;
-				for (auto &ext : *options.extensions) {
+				for (auto &ext : options.extensions->ParserExtensions()) {
 					D_ASSERT(!parsed_single_statement);
 					if (!ext.parse_function) {
 						continue;

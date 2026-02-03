@@ -5,6 +5,7 @@ add_library_unity(
   peg_transformer_factory.cpp
   transform_alter.cpp
   transform_attach.cpp
+  transform_analyze.cpp
   transform_call.cpp
   transform_checkpoint.cpp
   transform_comment.cpp
@@ -20,6 +21,7 @@ add_library_unity(
   transform_create_type.cpp
   transform_deallocate.cpp
   transform_delete.cpp
+  transform_describe.cpp
   transform_detach.cpp
   transform_drop.cpp
   transform_export.cpp
@@ -27,12 +29,15 @@ add_library_unity(
   transform_import.cpp
   transform_insert.cpp
   transform_load.cpp
+  transform_merge_into.cpp
   transform_pragma.cpp
   transform_select.cpp
   transform_set.cpp
   transform_transaction.cpp
   transform_update.cpp
-  transform_use.cpp)
+  transform_use.cpp
+  transform_vacuum.cpp)
+
 set(AUTOCOMPLETE_EXTENSION_FILES
     ${AUTOCOMPLETE_EXTENSION_FILES} $<TARGET_OBJECTS:duckdb_peg_transformer>
     PARENT_SCOPE)

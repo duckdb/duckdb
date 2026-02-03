@@ -28,6 +28,7 @@
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -765,7 +766,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto &storage = table.GetStorage();
-	CreateIndexInput input(TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
 	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
 	                       index_storage_info.options);
 
@@ -1059,10 +1060,39 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
-	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), 0);
+	auto base_row = storage.GetTotalRows();
+	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), base_row);
 	new_row_groups.Initialize(data);
-	TableIndexList index_list;
-	storage.MergeStorage(new_row_groups, index_list, nullptr);
+
+	// if we have any indexes - scan the row groups and add data to the indexes
+	auto &indexes = table_info->GetIndexes();
+	if (!indexes.Empty()) {
+		auto &transaction = DuckTransaction::Get(context, db);
+		// we have indexes - append
+		vector<StorageIndex> column_ids;
+		for (auto &col : state.current_table->GetColumns().Physical()) {
+			column_ids.emplace_back(col.StorageOid());
+		}
+		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
+		auto row_ids = FlatVector::GetData<row_t>(row_id_vector);
+		auto current_row_id = storage.GetTotalRows();
+		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
+			for (idx_t r = 0; r < chunk.size(); r++) {
+				row_ids[r] = NumericCast<row_t>(current_row_id + r);
+			}
+			current_row_id += chunk.size();
+			for (auto &index : indexes.Indexes()) {
+				if (!index.IsBound()) {
+					auto &unbound_index = index.Cast<UnboundIndex>();
+					unbound_index.BufferChunk(chunk, row_id_vector, column_ids, BufferedIndexReplay::INSERT_ENTRY);
+					continue;
+				}
+				auto &bound_index = index.Cast<BoundIndex>();
+				bound_index.Append(chunk, row_id_vector);
+			}
+		}
+	}
+	storage.MergeStorage(new_row_groups, nullptr);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {

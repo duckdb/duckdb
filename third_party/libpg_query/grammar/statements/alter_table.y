@@ -459,7 +459,7 @@ alter_table_cmd:
 				{
 					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
 					n->subtype = PG_AT_SetRelOptions;
-					n->def = (PGNode *)$2;
+					n->options = $2;
 					$$ = (PGNode *)n;
 				}
 			/* ALTER TABLE <name> RESET (...) */
@@ -467,7 +467,7 @@ alter_table_cmd:
 				{
 					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
 					n->subtype = PG_AT_ResetRelOptions;
-					n->def = (PGNode *)$2;
+					n->options = $2;
 					$$ = (PGNode *)n;
 				}
 			| alter_generic_options

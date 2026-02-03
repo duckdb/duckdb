@@ -276,7 +276,7 @@ SELECT *
       AS p
   ORDER BY EMPID;
 ----
-Parser Error: PIVOT IN list must contain columns or lists of columns
+Binder Error: STAR expression is not supported here
 
 query I
 FROM
