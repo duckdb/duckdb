@@ -40,10 +40,6 @@
 %type <list> TableElementList
 %type <list> OptPartitionSortedOptions
 %type <defelt> OptPartitionSortedOption
-%type <list> OptConstraints
-%type <list> ctas_constraint_list_opt_comma
-%type <list> ctas_constraint_list
-%type <node> ctas_constraint_elem
 %type <ival> key_match
 %type <node> TableLikeClause
 %type <ival> OptTemp
