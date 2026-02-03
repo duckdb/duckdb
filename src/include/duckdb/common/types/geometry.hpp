@@ -35,6 +35,7 @@ struct VertexXY {
 	static constexpr auto TYPE = VertexType::XY;
 	static constexpr auto HAS_Z = false;
 	static constexpr auto HAS_M = false;
+	static constexpr auto WIDTH = 2;
 
 	double x;
 	double y;
@@ -48,6 +49,7 @@ struct VertexXYZ {
 	static constexpr auto TYPE = VertexType::XYZ;
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = false;
+	static constexpr auto WIDTH = 3;
 
 	double x;
 	double y;
@@ -61,6 +63,7 @@ struct VertexXYM {
 	static constexpr auto TYPE = VertexType::XYM;
 	static constexpr auto HAS_M = true;
 	static constexpr auto HAS_Z = false;
+	static constexpr auto WIDTH = 3;
 
 	double x;
 	double y;
@@ -75,6 +78,7 @@ struct VertexXYZM {
 	static constexpr auto TYPE = VertexType::XYZM;
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = true;
+	static constexpr auto WIDTH = 4;
 
 	double x;
 	double y;
@@ -219,6 +223,17 @@ public:
 
 	//! Update the bounding box, return number of vertices processed
 	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent);
+	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty);
+
+	//! Convert to vectorized format
+	DUCKDB_API static void ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+	                                          VertexType vert_type);
+	//! Convert from vectorized format
+	DUCKDB_API static void FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+	                                            VertexType vert_type, idx_t result_offset);
+
+	//! Get the vectorized logical type for a given geometry and vertex type
+	DUCKDB_API static LogicalType GetVectorizedType(GeometryType geom_type, VertexType vert_type);
 };
 
 } // namespace duckdb

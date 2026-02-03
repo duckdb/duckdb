@@ -12,10 +12,10 @@
         "name": "allocator_background_threads",
         "description": "Whether to enable the allocator background thread.",
         "type": "BOOLEAN",
-        "scope": "global",
+        "default_scope": "global",
+        "default_value": "false",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
@@ -37,27 +37,24 @@
         "description": "Allow to load community built extensions",
         "type": "BOOLEAN",
         "scope": "global",
+        "default_value": "true",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
         "name": "allow_extensions_metadata_mismatch",
         "description": "Allow to load extensions with not compatible metadata",
         "type": "BOOLEAN",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "false"
     },
     {
         "name": "allow_parser_override_extension",
         "description": "Allow extensions to override the current parser",
-        "type": "VARCHAR",
-        "scope": "global",
-        "on_callbacks": [
-            "set",
-            "reset"
-        ]
+        "type": "ENUM<AllowParserOverride>",
+        "default_scope": "global",
+        "default_value": "DEFAULT"
     },
     {
         "name": "allow_persistent_secrets",
@@ -71,9 +68,9 @@
         "description": "Allow printing unredacted secrets",
         "type": "BOOLEAN",
         "scope": "global",
+        "default_value": "false",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
@@ -81,9 +78,9 @@
         "description": "Allow to load extensions with invalid or missing signatures",
         "type": "BOOLEAN",
         "scope": "global",
+        "default_value": "false",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
@@ -141,19 +138,28 @@
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "VARCHAR",
         "internal_setting": "autoinstall_extension_repo",
-        "scope": "global"
+        "scope": "global",
+        "default_value": ""
     },
     {
         "name": "autoinstall_known_extensions",
         "description": "Whether known extensions are allowed to be automatically installed when a query depends on them",
         "type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "default_value": "false",
+        "conditional_defaults": {
+            "#if defined(DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT) && DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT": "true"
+        }
     },
     {
         "name": "autoload_known_extensions",
         "description": "Whether known extensions are allowed to be automatically loaded when a query depends on them",
         "type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "default_value": "false",
+        "conditional_defaults": {
+            "#if defined(DUCKDB_EXTENSION_AUTOLOAD_DEFAULT) && DUCKDB_EXTENSION_AUTOLOAD_DEFAULT": "true"
+        }
     },
     {
         "name": "block_allocator_memory",
@@ -192,7 +198,8 @@
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "VARCHAR",
         "internal_setting": "custom_extension_repo",
-        "scope": "global"
+        "scope": "global",
+        "default_value": ""
     },
     {
         "name": "custom_profiling_settings",
@@ -286,7 +293,10 @@
         "description": "The default block size for new duckdb database files (new as-in, they do not yet exist).",
         "type": "UBIGINT",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "262144",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "default_collation",
@@ -333,9 +343,9 @@
         "description": "Disables invalidating the database instance when encountering a fatal error. Should be used with great care, as DuckDB cannot guarantee correct behavior after a fatal error.",
         "type": "BOOLEAN",
         "scope": "global",
+        "default_value": "false",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
@@ -379,7 +389,10 @@
         "description": "DuckDB API surface",
         "type": "VARCHAR",
         "scope": "global",
-        "custom_implementation": true,
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ],
         "struct": "DuckDBAPISetting"
     },
     {
@@ -394,9 +407,9 @@
         "description": "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV \"\n\t    \"readers, pandas replacement scans, etc)",
         "type": "BOOLEAN",
         "scope": "global",
+        "default_value": "true",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
@@ -404,13 +417,16 @@
         "description": "Allow the database to cache external files (e.g., Parquet) in memory.",
         "type": "BOOLEAN",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "true",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "enable_fsst_vectors",
         "description": "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression",
         "type": "BOOLEAN",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "false",
         "struct": "EnableFSSTVectorsSetting"
     },
@@ -426,8 +442,8 @@
         "name": "enable_http_metadata_cache",
         "description": "Whether or not the global http metadata is used to cache HTTP metadata",
         "type": "BOOLEAN",
-        "scope": "global",
-        "internal_setting": "http_metadata_cache_enable",
+        "default_scope": "global",
+        "default_value": "false",
         "struct": "EnableHTTPMetadataCacheSetting"
     },
     {
@@ -495,22 +511,23 @@
         "name": "errors_as_json",
         "description": "Output error messages as structured JSON instead of as a raw string",
         "type": "BOOLEAN",
-        "scope": "local",
+        "default_scope": "local",
+        "default_value": "false",
         "struct": "ErrorsAsJSONSetting"
     },
     {
         "name": "experimental_metadata_reuse",
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "true"
     },
     {
         "name": "explain_output",
         "description": "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)",
         "type": "ENUM<ExplainOutputType>",
-        "scope": "local",
-        "internal_setting": "explain_output_type"
+        "default_scope": "local",
+        "default_value": "PHYSICAL_ONLY"
     },
     {
         "name": "extension_directories",
@@ -523,38 +540,42 @@
         "name": "extension_directory",
         "description": "Set the directory to store extensions in",
         "type": "VARCHAR",
-        "scope": "global"
+        "scope": "global",
+        "default_value": ""
     },
     {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",
         "scope": "global",
+        "default_value": "1",
         "on_callbacks": [
-            "set",
-            "reset"
+            "set"
         ]
     },
     {
         "name": "file_search_path",
         "description": "A comma separated list of directories to search for input files",
         "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
+        "default_scope": "local",
+        "default_value": ""
     },
     {
         "name": "force_bitpacking_mode",
         "description": "DEBUG SETTING: forces a specific bitpacking mode",
-        "type": "VARCHAR",
+        "type": "ENUM<BitpackingMode>",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "AUTO"
     },
     {
         "name": "force_compression",
         "description": "DEBUG SETTING: forces a specific compression method to be used",
-        "type": "VARCHAR",
+        "type": "ENUM<CompressionType>",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "auto",
+        "custom_implementation": [
+            "set"
+        ]
     },
     {
         "name": "force_variant_shredding",
@@ -565,11 +586,20 @@
         "custom_implementation": true
     },
     {
+        "name": "geometry_minimum_shredding_size",
+        "description": "Minimum size of a rowgroup to enable GEOMETRY shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "30000",
+        "struct": "GeometryMinimumShreddingSize"
+    },
+    {
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": [
+        "default_scope": "local",
+        "default_value": "",
+        "on_callbacks": [
             "set"
         ]
     },
@@ -586,6 +616,7 @@
         "description": "HTTP proxy host",
         "type": "VARCHAR",
         "scope": "global",
+        "default_value": "",
         "struct": "HTTPProxySetting"
     },
     {
@@ -593,6 +624,7 @@
         "description": "Password for HTTP proxy",
         "type": "VARCHAR",
         "scope": "global",
+        "default_value": "",
         "struct": "HTTPProxyPasswordSetting"
     },
     {
@@ -600,6 +632,7 @@
         "description": "Username for HTTP proxy",
         "type": "VARCHAR",
         "scope": "global",
+        "default_value": "",
         "struct": "HTTPProxyUsernameSetting"
     },
     {
@@ -643,9 +676,9 @@
     {
         "name": "lambda_syntax",
         "description": "Configures the use of the deprecated single arrow operator (->) for lambda functions.",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
+        "type": "ENUM<LambdaSyntax>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
     },
     {
         "name": "late_materialization_max_rows",
@@ -658,14 +691,18 @@
         "name": "lock_configuration",
         "description": "Whether or not the configuration can be altered",
         "type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "log_query_path",
         "description": "Specifies the path to which queries should be logged (default: NULL, queries are not logged)",
         "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
+        "default_scope": "local",
+        "default_value": "",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "logging_level",
@@ -692,10 +729,18 @@
         "custom_implementation": true
     },
     {
+        "name": "max_execution_time",
+        "description": "The maximum execution time per query in milliseconds (0 = no limit)",
+        "type": "BIGINT",
+        "scope": "local",
+        "default_value": "0"
+    },
+    {
         "name": "max_expression_depth",
         "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
         "type": "UBIGINT",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "1000"
     },
     {
         "name": "max_memory",
@@ -718,7 +763,7 @@
         "name": "max_vacuum_tasks",
         "description": "The maximum vacuum tasks to schedule during a checkpoint.",
         "type": "UBIGINT",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "100"
     },
     {
@@ -741,6 +786,13 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
+    },
+    {
+        "name": "operator_memory_limit",
+        "description": "The maximum memory for query intermediates (sorts, hash tables) per connection (e.g. 256MB)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "order_by_non_integer_literal",
@@ -777,8 +829,8 @@
         "name": "password",
         "description": "The password to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true
+        "default_scope": "global",
+        "default_value": ""
     },
     {
         "name": "perfect_ht_threshold",
@@ -794,7 +846,8 @@
         "name": "pin_threads",
         "description": "Whether to pin threads to cores (Linux only, default AUTO: on when there are more than 64 cores)",
         "type": "ENUM<ThreadPinMode>",
-        "scope": "global"
+        "scope": "global",
+        "default_value": "auto"
     },
     {
         "name": "pivot_filter_threshold",
@@ -880,7 +933,11 @@
         "name": "scheduler_process_partial",
         "description": "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries",
         "type": "BOOLEAN",
-        "scope": "global"
+        "scope": "global",
+        "default_value": "false",
+        "conditional_defaults": {
+            "#ifdef DUCKDB_ALTERNATIVE_VERIFY": "true"
+        }
     },
     {
         "name": "schema",
@@ -907,7 +964,7 @@
         "name": "storage_block_prefetch",
         "description": "In which scenarios to use storage block prefetching",
         "type": "ENUM<StorageBlockPrefetch>",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "REMOTE_ONLY"
     },
     {
@@ -936,7 +993,10 @@
         "description": "Encrypt all temporary files if database is encrypted",
         "type": "BOOLEAN",
         "scope": "global",
-        "custom_implementation": true
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "threads",
@@ -952,8 +1012,8 @@
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",
-        "scope": "global",
-        "custom_implementation": true,
+        "default_scope": "global",
+        "default_value": "",
         "aliases": [
             "user"
         ]
@@ -970,8 +1030,7 @@
         "description": "Minimum size of a rowgroup to enable VARIANT shredding, or set to -1 to disable entirely. Defaults to 1/4th of a rowgroup",
         "type": "BIGINT",
         "scope": "global",
-        "default_value": "30000",
-        "struct": "VariantMinimumShreddingSize"
+        "default_value": "30000"
     },
     {
         "name": "write_buffer_row_group_count",
@@ -984,6 +1043,7 @@
         "name": "zstd_min_string_length",
         "description": "The (average) length at which to enable ZSTD compression, defaults to 4096",
         "type": "UBIGINT",
-        "scope": "global"
+        "scope": "global",
+        "default_value": "4096"
     }
 ]

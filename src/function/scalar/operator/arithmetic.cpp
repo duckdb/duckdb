@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/negate.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -531,35 +532,6 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
-namespace {
-
-struct NegateOperator {
-	template <class T>
-	static bool CanNegate(T input) {
-		using Limits = NumericLimits<T>;
-		return !(Limits::IsSigned() && Limits::Minimum() == input);
-	}
-
-	template <class TA, class TR>
-	static inline TR Operation(TA input) {
-		auto cast = (TR)input;
-		if (!CanNegate<TR>(cast)) {
-			throw OutOfRangeException("Overflow in negation of integer!");
-		}
-		return -cast;
-	}
-};
-
-template <>
-bool NegateOperator::CanNegate(float input) {
-	return true;
-}
-
-template <>
-bool NegateOperator::CanNegate(double input) {
-	return true;
-}
-
 template <>
 interval_t NegateOperator::Operation(interval_t input) {
 	interval_t result;
@@ -669,8 +641,6 @@ unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, Function
 	stats.CopyValidity(istats);
 	return stats.ToUnique();
 }
-
-} // namespace
 
 ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
@@ -1100,7 +1070,7 @@ scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 template <class OP>
 unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
-	if (DBConfig::GetSetting<IeeeFloatingPointOpsSetting>(context)) {
+	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
 		bound_function.SetFunctionCallback(

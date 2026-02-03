@@ -90,11 +90,11 @@ TEST_CASE("Test external threads", "[api]") {
 	REQUIRE(config.options.maximum_threads == 13);
 	REQUIRE(db.NumberOfThreads() == 13);
 	con.Query("SET external_threads=13");
-	REQUIRE(config.options.external_threads == 13);
+	REQUIRE(Settings::Get<ExternalThreadsSetting>(config) == 13);
 	REQUIRE(db.NumberOfThreads() == 13);
 
 	con.Query("SET external_threads=0");
-	REQUIRE(config.options.external_threads == 0);
+	REQUIRE(Settings::Get<ExternalThreadsSetting>(config) == 0);
 	REQUIRE(db.NumberOfThreads() == 13);
 
 	auto res = con.Query("SET external_threads=-1");
@@ -106,11 +106,11 @@ TEST_CASE("Test external threads", "[api]") {
 	REQUIRE(StringUtil::Contains(res->GetError(), "smaller"));
 
 	con.Query("SET external_threads=5");
-	REQUIRE(config.options.external_threads == 5);
+	REQUIRE(Settings::Get<ExternalThreadsSetting>(config) == 5);
 	REQUIRE(db.NumberOfThreads() == 13);
 
 	con.Query("RESET external_threads");
-	REQUIRE(config.options.external_threads == DBConfig().options.external_threads);
+	REQUIRE(Settings::Get<ExternalThreadsSetting>(config) == 1);
 	REQUIRE(db.NumberOfThreads() == 13);
 
 	con.Query("RESET threads");

@@ -175,7 +175,7 @@ idx_t NestedLoopJoinInner::Perform(idx_t &lpos, idx_t &rpos, DataChunk &left_con
 	// we initialize them using the InitialNestedLoopJoin
 	idx_t match_count = NestedLoopJoinComparisonSwitch<InitialNestedLoopJoin>(
 	    left_conditions.data[0], right_conditions.data[0], left_conditions.size(), right_conditions.size(), lpos, rpos,
-	    lvector, rvector, 0, conditions[0].comparison);
+	    lvector, rvector, 0, conditions[0].GetComparisonType());
 	// now resolve the rest of the conditions
 	for (idx_t i = 1; i < conditions.size(); i++) {
 		// check if we have run out of tuples to compare
@@ -188,7 +188,7 @@ idx_t NestedLoopJoinInner::Perform(idx_t &lpos, idx_t &rpos, DataChunk &left_con
 		// then we refine the currently obtained results using the RefineNestedLoopJoin
 		match_count = NestedLoopJoinComparisonSwitch<RefineNestedLoopJoin>(
 		    l, r, left_conditions.size(), right_conditions.size(), lpos, rpos, lvector, rvector, match_count,
-		    conditions[i].comparison);
+		    conditions[i].GetComparisonType());
 	}
 	return match_count;
 }

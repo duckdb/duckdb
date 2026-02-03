@@ -20,9 +20,6 @@ void DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &
 }
 
 void DeltaByteArrayDecoder::InitializePage() {
-	if (reader.Type().InternalType() != PhysicalType::VARCHAR) {
-		throw std::runtime_error("Delta Byte Array encoding is only supported for string/blob data");
-	}
 	auto &block = *reader.block;
 	auto &allocator = reader.reader.allocator;
 	idx_t prefix_count, suffix_count;
@@ -33,71 +30,77 @@ void DeltaByteArrayDecoder::InitializePage() {
 	if (prefix_count != suffix_count) {
 		throw std::runtime_error("DELTA_BYTE_ARRAY - prefix and suffix counts are different - corrupt file?");
 	}
-	if (prefix_count == 0) {
-		// no values
-		byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, nullptr);
-		return;
-	}
+
 	auto prefix_data = reinterpret_cast<uint32_t *>(prefix_buffer.ptr);
 	auto suffix_data = reinterpret_cast<uint32_t *>(suffix_buffer.ptr);
-	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, prefix_count);
-	byte_array_count = prefix_count;
-	delta_offset = 0;
-	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
+
+	// Allocate the plain data buffer
+	if (!plain_data) {
+		plain_data = make_shared_ptr<ResizeableBuffer>();
+	}
+	plain_data->reset();
+
+	if (prefix_count == 0) {
+		plain_data->resize(allocator, 0);
+		return;
+	}
+
+	// Decode DELTA_BYTE_ARRAY into plain Parquet page format
+	// Plain format for BYTE_ARRAY: [4-byte length][data] repeated
+	// Plain format for FIXED_LEN_BYTE_ARRAY: [data] repeated (no length prefix)
+	auto &schema = reader.Schema();
+	bool is_fixed_len = (schema.parquet_type == duckdb_parquet::Type::FIXED_LEN_BYTE_ARRAY);
+	idx_t fixed_len = is_fixed_len ? schema.type_length : 0;
+
+	// Calculate total buffer size and max value length in one pass
+	idx_t total_size = 0;
+	idx_t max_len = 0;
 	for (idx_t i = 0; i < prefix_count; i++) {
-		auto str_len = prefix_data[i] + suffix_data[i];
-		block.available(suffix_data[i]);
-		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
-		auto result_data = string_data[i].GetDataWriteable();
-		if (prefix_data[i] > 0) {
-			if (i == 0 || prefix_data[i] > string_data[i - 1].GetSize()) {
-				throw std::runtime_error("DELTA_BYTE_ARRAY - prefix is out of range - corrupt file?");
-			}
-			memcpy(result_data, string_data[i - 1].GetData(), prefix_data[i]);
+		idx_t len = prefix_data[i] + suffix_data[i];
+		if (is_fixed_len && len != fixed_len) {
+			throw std::runtime_error(
+			    "DELTA_BYTE_ARRAY on FIXED_LEN_BYTE_ARRAY: decoded length does not match type length");
 		}
-		memcpy(result_data + prefix_data[i], block.ptr, suffix_data[i]);
-		block.inc(suffix_data[i]);
-		string_data[i].Finalize();
+		total_size += len + (is_fixed_len ? 0 : sizeof(uint32_t));
+		max_len = MaxValue(max_len, len);
+	}
+
+	plain_data->resize(allocator, total_size);
+	unsafe_vector<uint8_t> prev_value(max_len);
+	idx_t prev_len = 0;
+
+	auto output = plain_data->ptr;
+	for (idx_t i = 0; i < prefix_count; i++) {
+		auto prefix_len = prefix_data[i];
+		auto suffix_len = suffix_data[i];
+		auto value_len = prefix_len + suffix_len;
+
+		if (prefix_len > prev_len) {
+			throw std::runtime_error("DELTA_BYTE_ARRAY - prefix is out of range - corrupt file?");
+		}
+
+		if (!is_fixed_len) {
+			Store<uint32_t>(static_cast<uint32_t>(value_len), output);
+			output += sizeof(uint32_t);
+		}
+
+		memcpy(output, prev_value.data(), prefix_len);
+		block.available(suffix_len);
+		memcpy(output + prefix_len, block.ptr, suffix_len);
+		block.inc(suffix_len);
+
+		memcpy(prev_value.data(), output, value_len);
+		prev_len = value_len;
+		output += value_len;
 	}
 }
 
 void DeltaByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
-	if (!byte_array_data) {
-		throw std::runtime_error("Internal error - DeltaByteArray called but there was no byte_array_data set");
-	}
-	auto result_ptr = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
-	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
-	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
-		if (defines && defines[row_idx + result_offset] != reader.MaxDefine()) {
-			result_mask.SetInvalid(row_idx + result_offset);
-			continue;
-		}
-		if (delta_offset >= byte_array_count) {
-			throw IOException("DELTA_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
-			                  "read of %d from %d entries) - corrupt file?",
-			                  delta_offset + 1, byte_array_count);
-		}
-		result_ptr[row_idx + result_offset] = string_data[delta_offset++];
-	}
-	StringVector::AddHeapReference(result, *byte_array_data);
+	reader.Plain(plain_data, defines, read_count, result_offset, result);
 }
 
 void DeltaByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
-	if (!byte_array_data) {
-		throw std::runtime_error("Internal error - DeltaByteArray called but there was no byte_array_data set");
-	}
-	for (idx_t row_idx = 0; row_idx < skip_count; row_idx++) {
-		if (defines && defines[row_idx] != reader.MaxDefine()) {
-			continue;
-		}
-		if (delta_offset >= byte_array_count) {
-			throw IOException("DELTA_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
-			                  "read of %d from %d entries) - corrupt file?",
-			                  delta_offset + 1, byte_array_count);
-		}
-		delta_offset++;
-	}
+	reader.PlainSkip(*plain_data, defines, skip_count);
 }
 
 } // namespace duckdb

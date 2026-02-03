@@ -157,7 +157,7 @@ bool Pipeline::IsOrderDependent() const {
 			return true;
 		}
 	}
-	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(executor.context)) {
+	if (!Settings::Get<PreserveInsertionOrderSetting>(executor.context)) {
 		return false;
 	}
 	if (sink && sink->SinkOrderDependent()) {
@@ -253,6 +253,10 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dependencies.push_back(weak_ptr<Pipeline>(pipeline));
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
+}
+
+vector<weak_ptr<Pipeline>> Pipeline::GetDependencies() const {
+	return dependencies;
 }
 
 string Pipeline::ToString() const {

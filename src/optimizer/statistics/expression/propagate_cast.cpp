@@ -5,6 +5,10 @@ namespace duckdb {
 
 static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics &input,
                                                                          const LogicalType &target) {
+	// Bail out if the stats are not numeric
+	if (input.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+		return nullptr;
+	}
 	if (!NumericStats::HasMinMax(input)) {
 		return nullptr;
 	}
@@ -142,7 +146,8 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 	return true;
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(BaseStatistics &stats, const LogicalType &source,
+unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStatistics &stats,
+                                                                  const LogicalType &source,
                                                                   const LogicalType &target) {
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;

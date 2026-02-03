@@ -5,6 +5,7 @@
 #include "reader/variant/variant_binary_decoder.hpp"
 #include "parquet_shredding.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -809,7 +810,7 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	}
 }
 
-void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = Schema();
@@ -817,6 +818,7 @@ void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &
 
 	auto &repetition_type = schema.repetition_type;
 	auto &name = schema.name;
+	auto &field_id = schema.field_id;
 
 	// variant group
 	duckdb_parquet::SchemaElement top_element;
@@ -829,11 +831,17 @@ void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &
 	top_element.__isset.num_children = true;
 	top_element.__isset.repetition_type = true;
 	top_element.name = name;
+	if (field_id.IsValid()) {
+		top_element.__isset.field_id = true;
+		top_element.field_id = field_id.GetIndex();
+	}
 	schemas.push_back(std::move(top_element));
 
+	idx_t unique_columns = 0;
 	for (auto &child_writer : child_writers) {
-		child_writer->FinalizeSchema(schemas);
+		unique_columns += child_writer->FinalizeSchema(schemas);
 	}
+	return unique_columns;
 }
 
 LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType &type) {
@@ -865,7 +873,7 @@ LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType 
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::ARRAY:
-		throw BinderException("'%s' can't appear inside the a 'typed_value' shredded type!", type.ToString());
+		throw BinderException("'%s' can't appear inside a 'typed_value' shredded type!", type.ToString());
 	default:
 		return type;
 	}
@@ -875,7 +883,7 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	child_list_t<LogicalType> children;
 	children.emplace_back("metadata", LogicalType::BLOB);
 	children.emplace_back("value", LogicalType::BLOB);
-	if (shredding) {
+	if (shredding && shredding->id() != LogicalTypeId::VARIANT) {
 		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
 	}
 	auto res = LogicalType::STRUCT(std::move(children));
@@ -906,7 +914,7 @@ static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunc
 		if (type_str.IsNull()) {
 			throw BinderException("Optional second argument 'shredding' can not be NULL");
 		}
-		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>());
+		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context);
 		bound_function.SetReturnType(GetParquetVariantType(shredded_type));
 	} else {
 		bound_function.SetReturnType(GetParquetVariantType());

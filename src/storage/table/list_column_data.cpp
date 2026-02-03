@@ -1,6 +1,5 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -89,11 +88,6 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                            idx_t scan_count) {
-	return ScanCount(state, result, scan_count);
-}
-
-idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                    idx_t scan_count) {
 	return ScanCount(state, result, scan_count);
 }
 
@@ -281,8 +275,8 @@ unique_ptr<BaseStatistics> ListColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                              idx_t result_idx) {
+void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                              row_t row_id, Vector &result, idx_t result_idx) {
 	// insert any child states that are required
 	// we need two (validity & list child)
 	// note that we need a scan state for the child vector
@@ -295,7 +289,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	// now perform the fetch within the segment
 	auto start_offset = row_id == 0 ? 0 : FetchListOffset(UnsafeNumericCast<idx_t>(row_id - 1));
 	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
-	validity->FetchRow(transaction, *state.child_states[0], row_id, result, result_idx);
+	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 
 	auto &validity_mask = FlatVector::Validity(result);
 	auto list_data = FlatVector::GetData<list_entry_t>(result);
@@ -330,6 +324,14 @@ void ListColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	ColumnData::VisitBlockIds(visitor);
 	validity->VisitBlockIds(visitor);
 	child_column->VisitBlockIds(visitor);
+}
+
+const BaseStatistics &ListColumnData::GetChildStats(const ColumnData &child) const {
+	if (!RefersToSameObject(child, *child_column)) {
+		throw InternalException("ListColumnData::GetChildStats provided column data is not a child of this list");
+	}
+	auto &stats = GetStatisticsRef();
+	return ListStats::GetChildStats(stats);
 }
 
 void ListColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity_p) {
@@ -396,10 +398,11 @@ unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(const Ro
 }
 
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(const RowGroup &row_group,
-                                                             ColumnCheckpointInfo &checkpoint_info) {
-	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
-	auto validity_state = validity->Checkpoint(row_group, checkpoint_info);
-	auto child_state = child_column->Checkpoint(row_group, checkpoint_info);
+                                                             ColumnCheckpointInfo &checkpoint_info,
+                                                             const BaseStatistics &old_stats) {
+	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info, old_stats);
+	auto validity_state = validity->Checkpoint(row_group, checkpoint_info, old_stats);
+	auto child_state = child_column->Checkpoint(row_group, checkpoint_info, ListStats::GetChildStats(old_stats));
 
 	auto &checkpoint_state = base_state->Cast<ListColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);

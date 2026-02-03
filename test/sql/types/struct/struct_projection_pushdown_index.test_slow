@@ -2,30 +2,67 @@
 # description: Test struct projection pushdown with an index
 # group: [struct]
 
+load __TEST_DIR__/struct_projection_pushdown_index.db
+
+# Always shred
 statement ok
-CREATE TABLE test_structs(id INT PRIMARY KEY, s STRUCT(a integer, b bool, c varchar, d int[]));
+SET variant_minimum_shredding_size = 0;
+
+foreach type struct variant
+
+onlyif type=struct
+statement ok
+CREATE TABLE test_structs(
+	id INT PRIMARY KEY,
+	s STRUCT(
+		a integer,
+		b bool,
+		c varchar,
+		d int[]
+	)
+);
+
+onlyif type=variant
+statement ok
+CREATE OR REPLACE TABLE test_structs(
+	id INT PRIMARY KEY,
+	s VARIANT
+);
 
 statement ok
 INSERT INTO test_structs
 SELECT i, case when i%10=0 then null else {'a': i, b: i%2, c: 'thisisastring' || i::VARCHAR, 'd': [i, i + 2]} end
 FROM range(1000000) t(i);
 
+statement ok
+checkpoint
+
+restart
+
 query II
-SELECT SUM(LENGTH(s.c)), COUNT(s.c) FROM test_structs
+SELECT SUM(LENGTH(s.c::VARCHAR)), COUNT(s.c::VARCHAR) FROM test_structs
 ----
 17000001	900000
 
 query I
-SELECT s.c FROM test_structs WHERE id=473564
+SELECT s.c::VARCHAR FROM test_structs WHERE id=473564
+----
+thisisastring473564
+
+# Add a cast
+query I
+SELECT s.c::BLOB FROM test_structs WHERE id=473564
 ----
 thisisastring473564
 
 query I
-SELECT s.d FROM test_structs WHERE id=473564
+SELECT s.d::INT[] FROM test_structs WHERE id=473564
 ----
 [473564, 473566]
 
 query II
-SELECT SUM(LENGTH(s.c)), COUNT(s.c) FROM test_structs WHERE id > 47356
+SELECT SUM(LENGTH(s.c::VARCHAR)), COUNT(s.c::VARCHAR) FROM test_structs WHERE id > 47356
 ----
 16242822	857379
+
+endloop

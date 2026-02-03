@@ -1,0 +1,38 @@
+# name: test/parquet/delta_encoding/delta_byte_array_uuid.test
+# description: Test reading DELTA_BYTE_ARRAY encoded FIXED_LEN_BYTE_ARRAY (UUID) columns from Parquet v2 files
+# group: [delta_encoding]
+
+require parquet
+
+# This test verifies that DuckDB can read Parquet files where FIXED_LEN_BYTE_ARRAY columns
+# (such as UUID) are encoded with DELTA_BYTE_ARRAY encoding.
+# The Parquet spec (version 2) explicitly allows DELTA_BYTE_ARRAY for FIXED_LEN_BYTE_ARRAY types.
+
+# Test reading UUID columns - the file uses dictionary encoding for data pages,
+# but DELTA_BYTE_ARRAY is listed as a fallback encoding
+query I
+SELECT COUNT(*) FROM 'data/parquet-testing/uuid_v2.parquet'
+----
+100000
+
+# Verify first few UUIDs can be read correctly
+query I
+SELECT * FROM 'data/parquet-testing/uuid_v2.parquet' LIMIT 5
+----
+0196e8fb-0adf-7355-ba39-d4c2e62dc4bd
+0196e8fb-0ae4-74cf-afe1-4ac9bb05f642
+0196e8fb-0ae4-7d67-933b-039c773086f1
+0196e8fb-0ae4-7abc-8779-45b210bb2d5f
+0196e8fb-0ae4-73cd-b917-f716c0ccaef2
+
+# Verify the metadata shows the expected encodings
+query I
+SELECT encodings FROM parquet_metadata('data/parquet-testing/uuid_v2.parquet')
+----
+DELTA_BYTE_ARRAY, PLAIN, RLE_DICTIONARY
+
+# Verify it's a FIXED_LEN_BYTE_ARRAY with UUID logical type
+query III
+SELECT type, type_length, logical_type FROM parquet_schema('data/parquet-testing/uuid_v2.parquet') WHERE name = 'uuid'
+----
+FIXED_LEN_BYTE_ARRAY	16	UUIDType()

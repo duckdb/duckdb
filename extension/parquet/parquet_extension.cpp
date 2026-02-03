@@ -248,7 +248,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 						}
 					}
 					const auto &child_value = struct_children[i];
-					bind_data->shredding_types.AddChild(col_name, ShreddingType::GetShreddingTypes(child_value));
+					bind_data->shredding_types.AddChild(col_name,
+					                                    ShreddingType::GetShreddingTypes(child_value, context));
 				}
 			}
 		} else if (loption == "kv_metadata") {
@@ -340,7 +341,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		}
 	}
 	if (row_group_size_bytes_set) {
-		if (DBConfig::GetSetting<PreserveInsertionOrderSetting>(context)) {
+		if (Settings::Get<PreserveInsertionOrderSetting>(context)) {
 			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
 			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
 		}
@@ -659,7 +660,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    115, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
 	data->geoparquet_version =
 	    deserializer.ReadPropertyWithExplicitDefault(116, "geoparquet_version", default_value.geoparquet_version);
-	data->shredding_types = deserializer.ReadProperty<ShreddingType>(117, "shredding_types");
+	data->shredding_types =
+	    deserializer.ReadPropertyWithExplicitDefault<ShreddingType>(117, "shredding_types", ShreddingType());
 
 	return std::move(data);
 }

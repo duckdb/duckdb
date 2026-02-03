@@ -214,7 +214,6 @@ void QueryProfiler::EndQuery() {
 	if (IsEnabled() && !is_explain_analyze) {
 		if (root) {
 			auto &info = root->GetProfilingInfo();
-			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			auto &child_info = root->children[0]->GetProfilingInfo();
 
 			const auto &settings = info.expanded_settings;
@@ -262,11 +261,11 @@ void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
 }
 
 idx_t QueryProfiler::GetBytesRead() const {
-	return query_metrics.GetMetricsIndex(MetricType::TOTAL_BYTES_READ);
+	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_READ);
 }
 
 idx_t QueryProfiler::GetBytesWritten() const {
-	return query_metrics.GetMetricsIndex(MetricType::TOTAL_BYTES_WRITTEN);
+	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_WRITTEN);
 }
 
 ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
@@ -802,13 +801,11 @@ string QueryProfiler::ToJSON() const {
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {
-	ofstream out(path);
-	out << info;
-	out.close();
-	// throw an IO exception if it fails to write the file
-	if (out.fail()) {
-		throw IOException(strerror(errno));
-	}
+	auto &fs = FileSystem::GetFileSystem(context);
+	auto flags = FileOpenFlags::FILE_FLAGS_WRITE | FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW;
+	auto file = fs.OpenFile(path, flags);
+	file->Write((void *)info.c_str(), info.size());
+	file->Close();
 }
 
 profiler_settings_t EraseQueryRootSettings(profiler_settings_t settings) {

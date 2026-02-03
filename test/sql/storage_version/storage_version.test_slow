@@ -7,8 +7,8 @@
 # 2) Run the script in scripts/generate_storage_version.py
 # 3) Commit the newly generated database file in test/sql/storage_version/storage_version.db
 
-statement ok
-PRAGMA enable_verification
+# The database was written with a vector size of 2048.
+require exact_vector_size 2048
 
 load test/sql/storage_version/storage_version.db readonly
 

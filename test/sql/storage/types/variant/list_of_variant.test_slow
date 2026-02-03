@@ -1,0 +1,90 @@
+# name: test/sql/storage/types/variant/list_of_variant.test_slow
+# group: [variant]
+
+load __TEST_DIR__/list_of_variant.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE variant_list(col VARIANT[]);
+
+statement ok
+insert into variant_list select [{'a': 42, 'b': [1,2,3]}::VARIANT, NULL, 84] from range(122881)
+
+statement ok
+checkpoint
+
+restart
+
+query I
+select list_aggr([x.a::INTEGER for x in col if variant_typeof(x).starts_with('OBJECT')], 'sum') from variant_list limit 10
+----
+42
+42
+42
+42
+42
+42
+42
+42
+42
+42
+
+statement ok
+delete from variant_list
+
+statement ok
+insert into variant_list select [{'a': i::INTEGER}, {'a': i::INTEGER}, {'a': i::INTEGER}] from range(100) t(i)
+
+statement ok
+checkpoint
+
+restart
+
+query I
+select [x.a::INTEGER for x in col] from variant_list offset 50 limit 10
+----
+[50, 50, 50]
+[51, 51, 51]
+[52, 52, 52]
+[53, 53, 53]
+[54, 54, 54]
+[55, 55, 55]
+[56, 56, 56]
+[57, 57, 57]
+[58, 58, 58]
+[59, 59, 59]
+
+statement ok
+delete from variant_list
+
+statement ok
+insert into variant_list select [{'a': i::INTEGER}, {'a': i::INTEGER}, {'a': i::INTEGER}] from range(122881) t(i)
+
+statement ok
+checkpoint
+
+restart
+
+query I
+select [x.a::INTEGER for x in col] from variant_list offset 122880
+----
+[122880, 122880, 122880]
+
+statement ok
+delete from variant_list
+
+statement ok
+insert into variant_list select [{'a': i::INTEGER} for i in range(122881)]
+
+statement ok
+checkpoint
+
+restart
+
+query I
+select list_aggr([x.a::INTEGER for x in col], 'max') from variant_list
+----
+122880

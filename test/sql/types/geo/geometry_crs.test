@@ -1,0 +1,60 @@
+# name: test/sql/types/geo/geometry_crs.test
+# group: [geo]
+
+query I
+select st_crs(st_setcrs('POINT(0 1)', 'EPSG:4326'));
+----
+EPSG:4326
+
+statement ok
+create table t1 (g GEOMETRY('EPSG:4326'));
+
+statement ok
+create table t2 (g GEOMETRY('EPSG:3857'));
+
+statement ok
+insert into t2 values ('POINT(0 1)');
+
+# We cannot insert into t1 from t2 because of CRS mismatch
+statement error
+insert into t1 select * from t2;
+----
+Binder Error: Cannot cast GEOMETRY with CRS 'EPSG:3857' to GEOMETRY with different CRS 'EPSG:4326'
+
+# But we can insert unknown CRS
+statement ok
+insert into t2 select st_setcrs(g, '') from t1;
+
+query I
+select * from t2;
+----
+POINT (0 1)
+
+query I
+select st_crs(g) from t2;
+----
+EPSG:3857
+
+# CRS Must be a string
+statement error
+select 'POINT(0 1)'::GEOMETRY((['abc']));
+----
+Parser Error: Expected a constant as type modifier
+
+statement error
+select 'POINT(0 1)'::GEOMETRY(4326);
+----
+Binder Error: GEOMETRY type modifier must be a string with a coordinate system definition
+
+# ST_SetCRS must be constant
+statement ok
+create table t3 (srid VARCHAR, g GEOMETRY);
+
+statement ok
+insert into t3 values ('EPSG:4326', 'POINT(0 1)');
+
+statement error
+select st_setcrs(g, srid) from t3;
+----
+Binder Error: ST_SetCRS: CRS argument must be constant!
+

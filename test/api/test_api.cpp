@@ -539,9 +539,6 @@ TEST_CASE("Test connection API", "[api]") {
 	con.Query("CREATE TABLE integers(i integer);");
 	auto table_info = con.TableInfo("integers");
 
-	DataChunk chunk;
-	REQUIRE_NOTHROW(con.Append(*table_info, chunk));
-
 	// no transaction active
 	REQUIRE_THROWS(con.Commit());
 	REQUIRE_THROWS(con.Rollback());
@@ -694,7 +691,7 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 
 TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
 	DBConfig config;
-	config.options.enable_external_access = false;
+	config.SetOptionByName("enable_external_access", false);
 	auto path = TestCreatePath("external_access_test");
 	DuckDB db(path, &config);
 	Connection con(db);

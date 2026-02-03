@@ -5,6 +5,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include "vergesort.h"
 #include "pdqsort.h"
@@ -102,6 +103,8 @@ public:
 	bool TaskFinished() const;
 	//! Do the work this thread has been assigned
 	SourceResultType ExecuteTask(SortedRunMergerGlobalState &gstate, optional_ptr<DataChunk> chunk);
+	//! Clear outstanding allocations
+	void Clear();
 
 private:
 	//! Computes upper partition boundaries using K-way Merge Path
@@ -296,7 +299,7 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
     : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
       task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs),
       merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX),
-      sorted_run_scan_state(gstate.context, gstate.merger.sort), sort_key_pointers(LogicalType::POINTER) {
+      sort_key_pointers(LogicalType::POINTER), sorted_run_scan_state(gstate.context, gstate.merger.sort) {
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
@@ -312,6 +315,13 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 			                              EnumUtil::ToString(iterator_state_type));
 		}
 	}
+}
+
+void SortedRunMergerLocalState::Clear() {
+	in_memory_states.clear();
+	external_states.clear();
+	merged_partition.Reset();
+	sorted_run_scan_state.Clear();
 }
 
 bool SortedRunMergerLocalState::TaskFinished() const {
@@ -783,12 +793,6 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			}
 		}
 
-		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
-		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
-		                            count);
-		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
-		                               *FlatVector::IncrementalSelectionVector(), count);
-
 		if (SORT_KEY::HAS_PAYLOAD) {
 			if (!sorted_run->payload_data->GetLayout().AllConstant()) {
 				sorted_run->payload_data->FindHeapPointers(payload_data_input, count);
@@ -798,7 +802,20 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			                                sorted_run->payload_append_state.chunk_state, 0, count);
 			sorted_run->payload_data->CopyRows(sorted_run->payload_append_state.chunk_state, payload_data_input,
 			                                   *FlatVector::IncrementalSelectionVector(), count);
+
+			const auto new_payload_locations =
+			    FlatVector::GetData<const data_ptr_t>(sorted_run->payload_append_state.chunk_state.row_locations);
+			for (idx_t i = 0; i < count; i++) {
+				auto &key = merged_partition_keys[merged_partition_index + i];
+				key.SetPayload(new_payload_locations[i]);
+			}
 		}
+
+		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
+		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
+		                            count);
+		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
+		                               *FlatVector::IncrementalSelectionVector(), count);
 
 		merged_partition_index += count;
 	}
@@ -816,8 +833,13 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 //===--------------------------------------------------------------------===//
 SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  idx_t partition_size_p, bool external_p, bool is_index_sort_p)
-    : sort(sort_p), sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
-      partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p) {
+    : scheduler(TaskScheduler::GetScheduler(*sort_p.context.db)), sort(sort_p), sorted_runs(std::move(sorted_runs_p)),
+      total_count(SortedRunsTotalCount(sorted_runs)), partition_size(partition_size_p), external(external_p),
+      is_index_sort(is_index_sort_p) {
+}
+
+SortedRunMerger::~SortedRunMerger() {
+	ParallelDestroyTask<decltype(sorted_runs)>::Schedule(scheduler, sorted_runs);
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
@@ -843,7 +865,13 @@ SourceResultType SortedRunMerger::GetData(ExecutionContext &, DataChunk &chunk, 
 		}
 	}
 
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	if (chunk.size() != 0) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	}
+
+	// Done
+	lstate.Clear();
+	return SourceResultType::FINISHED;
 }
 
 OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &, DataChunk &, GlobalSourceState &,
@@ -877,6 +905,7 @@ SourceResultType SortedRunMerger::MaterializeSortedRun(ExecutionContext &, Opera
 			break;
 		}
 	}
+	lstate.Clear(); // Done
 
 	// The thread that completes the materialization returns FINISHED, all other threads return HAVE_MORE_OUTPUT
 	return res;
@@ -891,11 +920,12 @@ unique_ptr<SortedRun> SortedRunMerger::GetSortedRun(GlobalSourceState &global_st
 	}
 	auto &target = *gstate.materialized_partitions[0];
 	for (idx_t i = 1; i < gstate.materialized_partitions.size(); i++) {
-		auto &source = *gstate.materialized_partitions[i];
-		target.key_data->Combine(*source.key_data);
+		auto &source = gstate.materialized_partitions[i];
+		target.key_data->Combine(*source->key_data);
 		if (target.payload_data) {
-			target.payload_data->Combine(*source.payload_data);
+			target.payload_data->Combine(*source->payload_data);
 		}
+		source.reset();
 	}
 	auto res = std::move(gstate.materialized_partitions[0]);
 	gstate.materialized_partitions.clear();

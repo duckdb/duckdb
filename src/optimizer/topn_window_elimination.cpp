@@ -97,8 +97,7 @@ ColumnBinding GetRowNumberColumnBinding(const unique_ptr<LogicalOperator> &op) {
 		return {projection.table_index, projection.types.size() - 1};
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		const auto &join = op->Cast<LogicalComparisonJoin>();
-		D_ASSERT(!join.right_projection_map.empty());
+		D_ASSERT(!op->Cast<LogicalComparisonJoin>().right_projection_map.empty());
 		const auto child_bindings = op->GetColumnBindings();
 		return child_bindings[child_bindings.size() - 1];
 	}
@@ -361,7 +360,7 @@ TopNWindowElimination::TryCreateUnnestOperator(unique_ptr<LogicalOperator> op,
 
 	if (params.limit <= 1) {
 		// LIMIT 1 -> we do not need to unnest
-		return std::move(op);
+		return op;
 	}
 
 	// Create unnest expression for aggregate args
@@ -421,10 +420,16 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	const auto op_column_bindings = op->GetColumnBindings();
 
 	vector<unique_ptr<Expression>> proj_exprs;
-	// Only project necessary group columns
+	// Only project necessary group columns, but in the same order as they appear in the aggregate operator.
+	// For that, we need the group_idxs ordered by value.
+	std::set<idx_t> ordered_group_projection_idxs;
 	for (const auto &group_idx : group_idxs) {
-		proj_exprs.push_back(
-		    make_uniq<BoundColumnRefExpression>(op->types[group_idx.second], op_column_bindings[group_idx.second]));
+		ordered_group_projection_idxs.insert(group_idx.second);
+	}
+
+	for (const idx_t group_projection_idx : ordered_group_projection_idxs) {
+		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(op->types[group_projection_idx],
+		                                                         op_column_bindings[group_projection_idx]));
 	}
 
 	auto aggregate_column_ref =
@@ -466,7 +471,13 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	if (filter.expressions[0]->type != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+	const auto comparison = filter.expressions[0]->type;
+	switch (comparison) {
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_EQUAL:
+		break;
+	default:
 		return false;
 	}
 
@@ -478,7 +489,29 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (filter_value.value.type() != LogicalType::BIGINT) {
 		return false;
 	}
-	if (filter_value.value.GetValue<int64_t>() < 1) {
+	if (filter_value.value.IsNull()) {
+		return false;
+	}
+
+	const auto bigint_value = filter_value.value.GetValue<int64_t>();
+	switch (comparison) {
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		if (bigint_value < 1) {
+			return false;
+		}
+		break;
+	case ExpressionType::COMPARE_LESSTHAN:
+		if (bigint_value < 2) {
+			return false;
+		}
+		break;
+	case ExpressionType::COMPARE_EQUAL:
+		//	TODO: Handle other values
+		if (bigint_value != 1) {
+			return false;
+		}
+		break;
+	default:
 		return false;
 	}
 
@@ -688,8 +721,12 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
                                                   vector<unique_ptr<Expression>> &aggregate_payload) {
 	TopNWindowEliminationParameters params;
 
-	auto &limit_expr = filter.expressions[0]->Cast<BoundComparisonExpression>().right;
+	auto &filter_expr = filter.expressions[0]->Cast<BoundComparisonExpression>();
+	auto &limit_expr = filter_expr.right;
 	params.limit = limit_expr->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
+	if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
+		--params.limit;
+	}
 	params.include_row_number = BindingsReferenceRowNumber(bindings, window);
 	params.payload_type = aggregate_payload.size() > 1 ? TopNPayloadType::STRUCT_PACK : TopNPayloadType::SINGLE_COLUMN;
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
@@ -763,13 +800,13 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			// However, we allow replacing references to join columns as they are equal to the other side by condition.
 			column_binding_map_t<ColumnBinding> replaceable_bindings;
 			for (auto &condition : join.conditions) {
-				if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
+				if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
 					return false;
 				}
-				VisitExpression(&condition.left);
+				VisitExpression(&condition.LeftReference());
 				auto left_binding = column_references.begin()->first;
 				column_references.clear();
-				VisitExpression(&condition.right);
+				VisitExpression(&condition.RightReference());
 				auto right_binding = column_references.begin()->first;
 				column_references.clear();
 
@@ -988,12 +1025,11 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		const idx_t rhs_rowid_idx = rhs_binding_offset + i;
 		const auto &alias = GetLHSRowIdColumnName(lhs, lhs_rowid_idx);
 
-		JoinCondition condition;
-		condition.comparison = ExpressionType::COMPARE_EQUAL;
-		condition.left = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
+		auto left_expr = make_uniq<BoundColumnRefExpression>(alias, lhs->types[lhs_rowid_idx],
 		                                                     ColumnBinding {lhs->GetTableIndex()[0], lhs_rowid_idx});
-		condition.right = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
+		auto right_expr = make_uniq<BoundColumnRefExpression>(alias, rhs->types[aggregate_offset + i],
 		                                                      ColumnBinding {GetAggregateIdx(rhs), rhs_rowid_idx});
+		JoinCondition condition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL);
 		join->conditions.push_back(std::move(condition));
 	}
 

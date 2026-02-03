@@ -8,12 +8,11 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "matcher.hpp"
-#include "duckdb/catalog/default/builtin_types/types.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "include/parser/tokenizer/base_tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
@@ -21,6 +20,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "parser/tokenizer/highlight_tokenizer.hpp"
 #include "parser/tokenizer/parser_tokenizer.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb {
 
@@ -244,6 +244,17 @@ static vector<reference<CatalogEntry>> GetAllTables(ClientContext &context, bool
 	return result;
 }
 
+static vector<reference<CatalogEntry>> GetAllTypes(ClientContext &context) {
+	vector<reference<CatalogEntry>> result;
+	// scan all the schemas for types and collect them
+	auto schemas = Catalog::GetAllSchemas(context);
+	for (auto &schema_ref : schemas) {
+		auto &schema = schema_ref.get();
+		schema.Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) { result.push_back(entry); });
+	};
+	return result;
+}
+
 static vector<AutoCompleteCandidate> SuggestCatalogName(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
 	auto all_entries = GetAllCatalogs(context);
@@ -280,10 +291,14 @@ static vector<AutoCompleteCandidate> SuggestTableName(ClientContext &context) {
 	return suggestions;
 }
 
-static vector<AutoCompleteCandidate> SuggestType(ClientContext &) {
+static vector<AutoCompleteCandidate> SuggestType(ClientContext &context) {
 	vector<AutoCompleteCandidate> suggestions;
-	for (auto &type_entry : BUILTIN_TYPES) {
-		suggestions.emplace_back(type_entry.name, SuggestionState::SUGGEST_TYPE_NAME, 0, CandidateType::KEYWORD);
+	auto all_entries = GetAllTypes(context);
+	for (auto &entry_ref : all_entries) {
+		auto &entry = entry_ref.get();
+		// prioritize user-defined types
+		int32_t bonus = (entry.internal) ? 0 : 1;
+		suggestions.emplace_back(entry.name, SuggestionState::SUGGEST_TYPE_NAME, bonus, CandidateType::KEYWORD);
 	}
 	return suggestions;
 }
@@ -348,7 +363,7 @@ static vector<AutoCompleteCandidate> SuggestSettingName(ClientContext &context) 
 		AutoCompleteCandidate candidate(option_alias.alias, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
-	for (auto &entry : db_config.extension_parameters) {
+	for (auto &entry : db_config.GetExtensionSettings()) {
 		AutoCompleteCandidate candidate(entry.first, SuggestionState::SUGGEST_SETTING_NAME, 0);
 		suggestions.push_back(std::move(candidate));
 	}
@@ -379,8 +394,7 @@ static vector<AutoCompleteCandidate> SuggestTableFunctionName(ClientContext &con
 
 static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, string &prefix, idx_t &last_pos) {
 	vector<AutoCompleteCandidate> result;
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
 		// if enable_external_access is disabled we don't search the file system
 		return result;
 	}
@@ -914,7 +928,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                           SQLTokenizeInit);
 	loader.RegisterFunction(tokenize_fun);
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	config.parser_extensions.push_back(PEGParserExtension());
+	ParserExtension::Register(config, PEGParserExtension());
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {

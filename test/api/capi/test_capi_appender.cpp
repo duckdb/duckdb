@@ -1206,7 +1206,7 @@ TEST_CASE("Test appending default value to data chunk in the C API") {
 	tester.Cleanup();
 }
 
-TEST_CASE("Test upserting using the C API", "[capi]") {
+TEST_CASE("Test UPSERT using the C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -1321,7 +1321,7 @@ TEST_CASE("Test the appender with parallel appends and multiple data types in th
 			}
 			duckdb_destroy_result(&t_ret);
 
-			for (int j = 0; j < STANDARD_VECTOR_SIZE + 10; j++) {
+			for (unsigned j = 0; j < STANDARD_VECTOR_SIZE + 10; j++) {
 				if (!success) {
 					return;
 				}

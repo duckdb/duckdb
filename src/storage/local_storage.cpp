@@ -1,16 +1,10 @@
 #include "duckdb/transaction/local_storage.hpp"
 
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 
@@ -30,31 +24,19 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		if (constraint == IndexConstraintType::NONE) {
 			return false;
 		}
-		if (index.GetIndexType() != ART::TYPE_NAME) {
-			return false;
-		}
 		if (!index.IsBound()) {
 			return false;
 		}
-		auto &art = index.Cast<ART>();
-
-		// UNIQUE constraint.
-		vector<unique_ptr<Expression>> expressions;
-		vector<unique_ptr<Expression>> delete_expressions;
-		for (auto &expr : art.unbound_expressions) {
-			expressions.push_back(expr->Copy());
-			delete_expressions.push_back(expr->Copy());
+		auto &bound_index = index.Cast<BoundIndex>();
+		if (!bound_index.SupportsDeltaIndexes()) {
+			return false;
 		}
 
 		// Create a delete index and a local index.
-		auto &name = art.GetIndexName();
-		auto &io_manager = art.table_io_manager;
-		auto delete_index =
-		    make_uniq<ART>(name, constraint, art.GetColumnIds(), io_manager, std::move(delete_expressions), art.db);
+		auto delete_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_DELETE);
 		delete_indexes.AddIndex(std::move(delete_index));
 
-		auto append_index =
-		    make_uniq<ART>(name, constraint, art.GetColumnIds(), io_manager, std::move(expressions), art.db);
+		auto append_index = bound_index.CreateDeltaIndex(DeltaIndexType::LOCAL_APPEND);
 		append_indexes.AddIndex(std::move(append_index));
 		return false;
 	});
@@ -118,13 +100,26 @@ void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<
 idx_t LocalTableStorage::EstimatedSize() {
 	// count the appended rows
 	auto &collection = *row_groups->collection;
-	idx_t appended_rows = collection.GetTotalRows() - deleted_rows;
+	idx_t data_size = 0;
 
-	// get the (estimated) size of a row (no compressions, etc.)
-	idx_t row_size = 0;
-	auto &types = collection.GetTypes();
-	for (auto &type : types) {
-		row_size += GetTypeIdSize(type.InternalType());
+	if (collection.GetTotalRows() >= collection.GetRowGroupSize() && deleted_rows == 0) {
+		// Optimistic insertion does not generate many WAL logs, so we estimate the size of the Data Block Pointers here
+		idx_t row_group_count = row_groups->complete_row_groups + 1;
+		idx_t column_count = collection.GetTypes().size();
+
+		data_size = row_group_count * (sizeof(PersistentRowGroupData) +
+		                               column_count * (sizeof(PersistentColumnData) + sizeof(DataPointer)));
+	} else {
+		idx_t appended_rows = collection.GetTotalRows() - deleted_rows;
+
+		// get the (estimated) size of a row (no compressions, etc.)
+		idx_t row_size = 0;
+		auto &types = collection.GetTypes();
+		for (auto &type : types) {
+			row_size += GetTypeIdSize(type.InternalType());
+		}
+
+		data_size = appended_rows * row_size;
 	}
 
 	// get the index size
@@ -138,7 +133,7 @@ idx_t LocalTableStorage::EstimatedSize() {
 	});
 
 	// return the size of the appended rows and the index size
-	return appended_rows * row_size + index_sizes;
+	return data_size + index_sizes;
 }
 
 void LocalTableStorage::WriteNewRowGroup() {
@@ -244,6 +239,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		row_t current_row = append_state.row_start;
 		// Remove the data from the indexes, if any.
 		collection.Scan(transaction, [&](DataChunk &chunk) -> bool {
+			if (current_row >= append_state.current_row) {
+				// Finished deleting all rows from the index.
+				return false;
+			}
 			// Remove the chunk.
 			try {
 				table.RevertIndexAppend(append_state, chunk, current_row);
@@ -253,10 +252,6 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			} // LCOV_EXCL_STOP
 
 			current_row += UnsafeNumericCast<row_t>(chunk.size());
-			if (current_row >= append_state.current_row) {
-				// Finished deleting all rows from the index.
-				return false;
-			}
 			return true;
 		});
 
