@@ -494,15 +494,13 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 
 	if (conflict_type == ARTConflictType::TRANSACTION) {
 		// chunk is only null when called from MergeCheckpointDeltas.
-		D_ASSERT(chunk);
-		auto msg = AppendRowError(*chunk, conflict_idx.GetIndex());
+		auto msg = chunk ? AppendRowError(*chunk, conflict_idx.GetIndex()) : string("???");
 		return ErrorData(TransactionException("write-write conflict on key: \"%s\"", msg));
 	}
 
 	if (conflict_type == ARTConflictType::CONSTRAINT) {
 		// chunk is only null when called from MergeCheckpointDeltas.
-		D_ASSERT(chunk);
-		auto msg = AppendRowError(*chunk, conflict_idx.GetIndex());
+		auto msg = chunk ? AppendRowError(*chunk, conflict_idx.GetIndex()) : string("???");
 		return ErrorData(ConstraintException("PRIMARY KEY or UNIQUE constraint violation: duplicate key \"%s\"", msg));
 	}
 
