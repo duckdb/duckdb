@@ -240,6 +240,13 @@
         "default_value": "0"
     },
     {
+        "name": "debug_eviction_queue_sleep_micro_seconds",
+        "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
