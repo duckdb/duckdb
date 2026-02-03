@@ -102,7 +102,7 @@ Interval <- YearKeyword /
     (MinuteKeyword 'TO' SecondKeyword)
 
 BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
-GeometryType <- 'GEOMETRY'
+GeometryType <- 'GEOMETRY' Parens(Expression)?
 VariantType <- 'VARIANT'
 
 NumericType <- SimpleNumericType / DecimalNumericType

@@ -71,6 +71,10 @@ public:
 	bool HasWAL() const;
 	void AddWALSize(idx_t size);
 	void SetWALSize(idx_t size);
+	//! Gets the number of WAL entries since last checkpoint
+	idx_t GetWALEntriesCount() const;
+	void ResetWALEntriesCount();
+	void IncrementWALEntriesCount();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
@@ -165,6 +169,7 @@ protected:
 	//! Estimated size of changes for determining automatic checkpointing on in-memory databases and databases without a
 	//! WAL.
 	atomic<idx_t> wal_size;
+	atomic<idx_t> wal_entries_count;
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
 
