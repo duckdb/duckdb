@@ -216,6 +216,11 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		// this function does not support late materialization
 		return false;
 	}
+	if (get.extra_info.sample_options && !get.extra_info.sample_options->is_percentage) {
+		// we should not apply late materialization when row-count sampling is pushed down
+		// the sample scan is already fast and creating a semi-join would duplicate the full table scan
+		return false;
+	}
 	if (!get.function.get_row_id_columns) {
 		throw InternalException("Function supports late materialization but not get_row_id_columns");
 	}

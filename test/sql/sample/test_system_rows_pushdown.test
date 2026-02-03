@@ -1,0 +1,46 @@
+# name: test/sql/sample/test_system_rows_pushdown.test
+# description: Test that system sampling with row counts gets pushed down correctly
+# group: [sample]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE pushdown_test AS SELECT i FROM range(1000000) tbl(i);
+
+# Verify pushdown happens in explain plan (no STREAMING_SAMPLE operator)
+query II
+EXPLAIN SELECT * FROM pushdown_test USING SAMPLE 100 ROWS (system);
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 100 rows.*
+
+# Verify with repeatable seed
+query II
+EXPLAIN SELECT * FROM pushdown_test USING SAMPLE 500 ROWS (system, 42);
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 500 rows.*
+
+# Test with filter - pushdown still happens at scan level
+query I
+SELECT COUNT(*) >= 40 AND COUNT(*) <= 60 FROM (
+    SELECT * FROM pushdown_test WHERE i % 2 = 0
+) USING SAMPLE 50 ROWS (system);
+----
+true
+
+# System rows sampling should work with projections
+query I
+SELECT COUNT(*) FROM (SELECT i FROM pushdown_test) USING SAMPLE 200 ROWS (system);
+----
+200
+
+# Multiple system samples in same query
+query I
+SELECT COUNT(*) FROM (
+    SELECT a.i FROM 
+        (SELECT * FROM pushdown_test USING SAMPLE 1000 ROWS (system)) a,
+        (SELECT * FROM pushdown_test USING SAMPLE 1000 ROWS (system)) b
+    WHERE a.i = b.i
+);
+----
+1000

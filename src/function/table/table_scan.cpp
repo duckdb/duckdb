@@ -283,7 +283,8 @@ public:
 			l_state->scan_state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
 		}
 
-		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
+		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options,
+		                               total_rows);
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
 		if (input.CanRemoveFilterColumns()) {

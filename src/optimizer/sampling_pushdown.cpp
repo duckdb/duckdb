@@ -1,19 +1,48 @@
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/common/types/value.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
+
 namespace duckdb {
 
 unique_ptr<LogicalOperator> SamplingPushdown::Optimize(unique_ptr<LogicalOperator> op) {
-	if (op->type == LogicalOperatorType::LOGICAL_SAMPLE &&
-	    op->Cast<LogicalSample>().sample_options->method == SampleMethod::SYSTEM_SAMPLE &&
-	    op->Cast<LogicalSample>().sample_options->is_percentage && !op->children.empty() &&
-	    op->children[0]->type == LogicalOperatorType::LOGICAL_GET &&
-	    op->children[0]->Cast<LogicalGet>().function.sampling_pushdown && op->children[0]->children.empty()) {
+	if (op->type == LogicalOperatorType::LOGICAL_SAMPLE && !op->children.empty() &&
+	    op->children[0]->type == LogicalOperatorType::LOGICAL_GET && op->children[0]->children.empty()) {
+		auto &sample_op = op->Cast<LogicalSample>();
 		auto &get = op->children[0]->Cast<LogicalGet>();
-		// set sampling option
-		get.extra_info.sample_options = std::move(op->Cast<LogicalSample>().sample_options);
-		op = std::move(op->children[0]);
+		const auto &sample_options = *sample_op.sample_options;
+		const bool can_push_system_sample =
+		    get.function.sampling_pushdown && sample_options.method == SampleMethod::SYSTEM_SAMPLE;
+
+		if (can_push_system_sample) {
+			const bool is_row_count_sampling = !sample_options.is_percentage;
+			int64_t row_limit = 0;
+			if (is_row_count_sampling) {
+				// For row-count sampling, calculate the sampling rate based on estimated cardinality.
+				// Use EstimateCardinality which can query table function stats if has_estimated_cardinality is not set.
+				row_limit = sample_options.sample_size.GetValue<int64_t>();
+				const idx_t estimated_card =
+				    op->has_estimated_cardinality ? op->estimated_cardinality : get.EstimateCardinality(context);
+				if (estimated_card > 0) {
+					sample_op.sample_options->sample_rate =
+					    static_cast<double>(row_limit) / static_cast<double>(estimated_card);
+				} else {
+					sample_op.sample_options->sample_rate = 1.0;
+				}
+			}
+
+			get.extra_info.sample_options = std::move(sample_op.sample_options);
+			op = std::move(op->children[0]);
+
+			if (is_row_count_sampling) {
+				// Wrap with LIMIT to ensure exact row count and enable early stopping.
+				// The pushdown sampling may oversample due to the distributed chunk-based
+				// approach, so LIMIT ensures we stop as soon as the target is reached.
+				auto limit = make_uniq<LogicalLimit>(BoundLimitNode::ConstantValue(row_limit), BoundLimitNode());
+				limit->children.push_back(std::move(op));
+				op = std::move(limit);
+			}
+		}
 	}
 	for (auto &child : op->children) {
 		child = Optimize(std::move(child));
