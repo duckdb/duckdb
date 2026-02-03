@@ -434,7 +434,7 @@ shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name
 		search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
 	}
 	new_binder->entry_retriever.SetSearchPath(std::move(search_path));
-	return std::move(new_binder);
+	return new_binder;
 }
 
 } // namespace duckdb
