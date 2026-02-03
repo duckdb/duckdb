@@ -22,10 +22,10 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 	const auto &op = global_table.op;
 	vector<LogicalType> types;
 	for (const auto &cond : op.conditions) {
-		const auto &expr = child ? cond.right : cond.left;
-		executor.AddExpression(*expr);
+		const auto &expr = child ? cond.GetRHS() : cond.GetLHS();
+		executor.AddExpression(expr);
 
-		types.push_back(expr->return_type);
+		types.push_back(expr.return_type);
 	}
 	auto &allocator = Allocator::Get(context.client);
 	keys.Initialize(allocator, types);
@@ -246,7 +246,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 		idx_t range_position = 0;
 		idx_t other_position = conditions_p.size();
 		for (idx_t i = 0; i < conditions_p.size(); ++i) {
-			switch (conditions_p[i].comparison) {
+			switch (conditions_p[i].GetComparisonType()) {
 			case ExpressionType::COMPARE_LESSTHAN:
 			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			case ExpressionType::COMPARE_GREATERTHAN:
@@ -318,7 +318,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		}
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
-			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
 			auto &v = keys.data[c];
@@ -343,7 +343,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
-			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
 			//	ToUnifiedFormat the rest, as the sort code will do this anyway.

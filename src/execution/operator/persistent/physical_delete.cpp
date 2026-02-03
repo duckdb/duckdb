@@ -14,10 +14,11 @@ namespace duckdb {
 
 PhysicalDelete::PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
                                DataTable &table, vector<unique_ptr<BoundConstraint>> bound_constraints,
-                               idx_t row_id_index, idx_t estimated_cardinality, bool return_chunk)
+                               idx_t row_id_index, idx_t estimated_cardinality, bool return_chunk,
+                               vector<idx_t> return_columns)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
       tableref(tableref), table(table), bound_constraints(std::move(bound_constraints)), row_id_index(row_id_index),
-      return_chunk(return_chunk) {
+      return_chunk(return_chunk), return_columns(std::move(return_columns)) {
 }
 //===--------------------------------------------------------------------===//
 // Sink
@@ -64,7 +65,6 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &g_state = input.global_state.Cast<DeleteGlobalState>();
 	auto &l_state = input.local_state.Cast<DeleteLocalState>();
 
-	auto &transaction = DuckTransaction::Get(context.client, table.db);
 	auto &row_ids = chunk.data[row_id_index];
 
 	lock_guard<mutex> delete_guard(g_state.delete_lock);
@@ -110,22 +110,21 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	l_state.delete_chunk.Reset();
 	row_ids.Flatten(chunk.size());
 
-	// Fetch the to-be-deleted chunk.
-	DataChunk fetch_chunk;
-	fetch_chunk.Initialize(Allocator::Get(context.client), column_types, chunk.size());
-	auto fetch_state = ColumnFetchState();
-	table.Fetch(transaction, fetch_chunk, column_ids, row_ids, chunk.size(), fetch_state);
-
-	// Reference the necessary columns of the fetch_chunk.
-	idx_t fetch_idx = 0;
+	// Use columns from the input chunk - they were passed through from the scan
+	// return_columns maps storage_idx -> chunk_idx
+	// For RETURNING: all columns have valid indices
+	// For index-only: only indexed columns have valid indices (sparse mapping)
+	D_ASSERT(!return_columns.empty() && "return_columns should always be populated for RETURNING or unique indexes");
 	for (idx_t i = 0; i < table.ColumnCount(); i++) {
-		if (to_be_fetched[i]) {
-			l_state.delete_chunk.data[i].Reference(fetch_chunk.data[fetch_idx++]);
-			continue;
+		if (return_columns[i] != DConstants::INVALID_INDEX) {
+			// Column was passed through from the scan
+			l_state.delete_chunk.data[i].Reference(chunk.data[return_columns[i]]);
+		} else {
+			// Column not in scan (sparse mapping for index-only case) - use NULL placeholder
+			l_state.delete_chunk.data[i].Reference(Value(types[i]));
 		}
-		l_state.delete_chunk.data[i].Reference(Value(types[i]));
 	}
-	l_state.delete_chunk.SetCardinality(fetch_chunk);
+	l_state.delete_chunk.SetCardinality(chunk.size());
 
 	// Append the deleted row IDs to the delete indexes.
 	// If we only delete local row IDs, then the delete_chunk is empty.

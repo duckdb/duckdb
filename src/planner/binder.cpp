@@ -19,7 +19,9 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
@@ -363,6 +365,144 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 			        "'excluded' qualified columns are not supported in the RETURNING clause yet");
 		    }
 	    });
+}
+
+void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns) {
+	// Build a mapping from storage column index to scan chunk index for RETURNING.
+	// This allows PhysicalDelete to pass columns through from the scan instead of
+	// fetching them by row ID. Generated columns will be computed by the RETURNING projection.
+	auto &column_ids = get.GetColumnIds();
+	auto &columns = table.GetColumns();
+	auto physical_count = columns.PhysicalColumnCount();
+
+	// Initialize the mapping with INVALID_INDEX
+	return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+	// First, map columns already in the scan to their storage indices
+	for (idx_t chunk_idx = 0; chunk_idx < column_ids.size(); chunk_idx++) {
+		auto &col_id = column_ids[chunk_idx];
+		if (col_id.IsVirtualColumn()) {
+			continue;
+		}
+		// Get the column by logical index, then get its storage index
+		auto logical_idx = col_id.GetPrimaryIndex();
+		auto &col = columns.GetColumn(LogicalIndex(logical_idx));
+		if (!col.Generated()) {
+			auto storage_idx = col.StorageOid();
+			return_columns[storage_idx] = chunk_idx;
+		}
+	}
+
+	// Add any missing physical columns to the scan
+	for (auto &col : columns.Physical()) {
+		auto storage_idx = col.StorageOid();
+		if (return_columns[storage_idx] == DConstants::INVALID_INDEX) {
+			return_columns[storage_idx] = column_ids.size();
+			get.AddColumnId(col.Logical().index);
+		}
+	}
+}
+
+//! Helper: convert scan column mapping to projection expression mapping for MERGE INTO
+static void ConvertScanToProjectionMapping(TableCatalogEntry &table, const vector<idx_t> &scan_return_columns,
+                                           vector<idx_t> &return_columns,
+                                           vector<unique_ptr<Expression>> &projection_expressions,
+                                           LogicalOperator &target_binding) {
+	target_binding.ResolveOperatorTypes();
+	auto target_bindings = target_binding.GetColumnBindings();
+	auto &target_types = target_binding.types;
+
+	auto physical_count = table.GetColumns().PhysicalColumnCount();
+	return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+	for (idx_t storage_idx = 0; storage_idx < scan_return_columns.size(); storage_idx++) {
+		auto scan_idx = scan_return_columns[storage_idx];
+		if (scan_idx != DConstants::INVALID_INDEX && scan_idx < target_bindings.size()) {
+			return_columns[storage_idx] = projection_expressions.size();
+			projection_expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(target_types[scan_idx], target_bindings[scan_idx]));
+		}
+	}
+}
+
+void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+                                        vector<unique_ptr<Expression>> &projection_expressions,
+                                        LogicalOperator &target_binding) {
+	vector<idx_t> scan_return_columns;
+	BindDeleteReturningColumns(table, get, scan_return_columns);
+	ConvertScanToProjectionMapping(table, scan_return_columns, return_columns, projection_expressions, target_binding);
+}
+
+void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns) {
+	// Build a mapping from storage column index to scan chunk index for unique index tracking.
+	// This is a sparse mapping - only indexed columns have valid indices.
+	// Used when DELETE has no RETURNING but table has unique indexes.
+	auto &storage = table.GetStorage();
+	auto &info = storage.GetDataTableInfo();
+	auto &indexes = info->GetIndexes();
+
+	// Collect column IDs from unique indexes
+	unordered_set<column_t> indexed_column_ids;
+	indexes.Scan([&](Index &index) {
+		if (index.IsUnique()) {
+			auto &col_ids = index.GetColumnIdSet();
+			indexed_column_ids.insert(col_ids.begin(), col_ids.end());
+		}
+		return false;
+	});
+
+	if (indexed_column_ids.empty()) {
+		return;
+	}
+
+	auto &column_ids = get.GetColumnIds();
+	auto &columns = table.GetColumns();
+	auto physical_count = columns.PhysicalColumnCount();
+
+	// Initialize the mapping with INVALID_INDEX
+	return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+	// First, map columns already in the scan to their storage indices
+	for (idx_t chunk_idx = 0; chunk_idx < column_ids.size(); chunk_idx++) {
+		auto &col_id = column_ids[chunk_idx];
+		if (col_id.IsVirtualColumn()) {
+			continue;
+		}
+		auto logical_idx = col_id.GetPrimaryIndex();
+		auto &col = columns.GetColumn(LogicalIndex(logical_idx));
+		if (!col.Generated()) {
+			auto storage_idx = col.StorageOid();
+			// Only map if this column is in a unique index
+			if (indexed_column_ids.count(storage_idx)) {
+				return_columns[storage_idx] = chunk_idx;
+			}
+		}
+	}
+
+	// Add any missing indexed columns to the scan
+	for (auto col_idx : indexed_column_ids) {
+		if (return_columns[col_idx] == DConstants::INVALID_INDEX) {
+			return_columns[col_idx] = column_ids.size();
+			// Find the logical index for this storage index
+			for (auto &col : columns.Physical()) {
+				if (col.StorageOid() == col_idx) {
+					get.AddColumnId(col.Logical().index);
+					break;
+				}
+			}
+		}
+	}
+}
+
+void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+                                    vector<unique_ptr<Expression>> &projection_expressions,
+                                    LogicalOperator &target_binding) {
+	vector<idx_t> scan_return_columns;
+	BindDeleteIndexColumns(table, get, scan_return_columns);
+	if (!scan_return_columns.empty()) {
+		ConvertScanToProjectionMapping(table, scan_return_columns, return_columns, projection_expressions,
+		                               target_binding);
+	}
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,

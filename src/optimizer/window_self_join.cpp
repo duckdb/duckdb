@@ -231,13 +231,12 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 
 		// Inner Join on the partition keys
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-
 		for (size_t i = 0; i < partitions.size(); ++i) {
-			JoinCondition cond;
-			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-			cond.left = partitions[i]->Copy();
-			cond.right = make_uniq<BoundColumnRefExpression>(partitions[i]->return_type, ColumnBinding(group_index, i));
-			join->conditions.push_back(std::move(cond));
+			auto left_expr = partitions[i]->Copy();
+			auto right_expr =
+			    make_uniq<BoundColumnRefExpression>(partitions[i]->return_type, ColumnBinding(group_index, i));
+			join->conditions.push_back(
+			    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_NOT_DISTINCT_FROM));
 		}
 
 		join->children.push_back(std::move(original_child));

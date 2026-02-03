@@ -54,6 +54,9 @@ public:
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Whether or not to return the input data
 	bool return_chunk = false;
+	//! For DELETE with RETURNING: maps storage_idx -> input chunk position
+	//! Used to pass columns through instead of fetching by row ID
+	vector<idx_t> delete_return_columns;
 
 	map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>> actions;
 
