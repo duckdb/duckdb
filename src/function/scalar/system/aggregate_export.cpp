@@ -260,7 +260,8 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
 	D_ASSERT(input.data.size() == 1);
-	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
+	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::LEGACY_AGGREGATE_STATE ||
+	         input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 
 	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
 
@@ -326,7 +327,8 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	D_ASSERT(bind_data.state_size == bind_data.aggr.GetStateSizeCallback()(bind_data.aggr));
 
 	D_ASSERT(input.data.size() == 2);
-	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
+	D_ASSERT(input.data[0].GetType().id() == LogicalTypeId::LEGACY_AGGREGATE_STATE ||
+	         input.data[0].GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 	D_ASSERT(input.data[0].GetType() == result.GetType());
 
 	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
@@ -386,7 +388,8 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 		arg_type = arg_return_type;
 	}
 
-	if (arg_return_type.id() != LogicalTypeId::AGGREGATE_STATE) {
+	if (arg_return_type.id() != LogicalTypeId::LEGACY_AGGREGATE_STATE &&
+	    arg_return_type.id() != LogicalTypeId::AGGREGATE_STATE) {
 		throw BinderException("Can only FINALIZE aggregate state, not %s", arg_return_type.ToString());
 	}
 	// combine
@@ -568,23 +571,48 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 	return aggregate->Equals(*other.aggregate);
 }
 
-ScalarFunction FinalizeFun::GetFunction() {
-	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
-	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
-	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.SetSerializeCallback(ExportStateScalarSerialize);
-	result.SetDeserializeCallback(ExportStateScalarDeserialize);
-	return result;
+ScalarFunction CreateFinalizeFun(LogicalTypeId aggregate_state_logical_type_id) {
+	auto function = ScalarFunction("finalize", {aggregate_state_logical_type_id}, LogicalTypeId::INVALID,
+	                               AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	function.SetSerializeCallback(ExportStateScalarSerialize);
+	function.SetDeserializeCallback(ExportStateScalarDeserialize);
+
+	return function;
 }
 
-ScalarFunction CombineFun::GetFunction() {
-	auto result =
-	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
-	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
-	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.SetSerializeCallback(ExportStateScalarSerialize);
-	result.SetDeserializeCallback(ExportStateScalarDeserialize);
-	return result;
+ScalarFunction CreateCombineFun(LogicalTypeId aggregate_state_logical_type_id) {
+	auto function = ScalarFunction("combine", {aggregate_state_logical_type_id, LogicalTypeId::ANY},
+	                               aggregate_state_logical_type_id, AggregateStateCombine, BindAggregateState, nullptr,
+	                               nullptr, InitCombineState);
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	function.SetSerializeCallback(ExportStateScalarSerialize);
+	function.SetDeserializeCallback(ExportStateScalarDeserialize);
+	return function;
+}
+
+ScalarFunctionSet FinalizeFun::GetFunctions() {
+	ScalarFunctionSet finalize_set;
+
+	auto blob_finalize = CreateFinalizeFun(LogicalTypeId::LEGACY_AGGREGATE_STATE);
+	finalize_set.AddFunction(blob_finalize);
+
+	auto struct_based_finalize = CreateFinalizeFun(LogicalTypeId::AGGREGATE_STATE);
+	finalize_set.AddFunction(struct_based_finalize);
+
+	return finalize_set;
+}
+
+ScalarFunctionSet CombineFun::GetFunctions() {
+	ScalarFunctionSet combine_set;
+
+	auto blob_combine = CreateCombineFun(LogicalTypeId::LEGACY_AGGREGATE_STATE);
+	combine_set.AddFunction(blob_combine);
+
+	auto struct_based_combine = CreateCombineFun(LogicalTypeId::AGGREGATE_STATE);
+	combine_set.AddFunction(struct_based_combine);
+
+	return combine_set;
 }
 
 } // namespace duckdb

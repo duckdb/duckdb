@@ -27,12 +27,13 @@ enum class ExtraTypeInfoType : uint8_t {
 	STRUCT_TYPE_INFO = 5,
 	ENUM_TYPE_INFO = 6,
 	UNBOUND_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8,
+	LEGACY_AGGREGATE_STATE_TYPE_INFO = 8,
 	ARRAY_TYPE_INFO = 9,
 	ANY_TYPE_INFO = 10,
 	INTEGER_LITERAL_TYPE_INFO = 11,
 	TEMPLATE_TYPE_INFO = 12,
 	GEO_TYPE_INFO = 13,
+	AGGREGATE_STATE_TYPE_INFO = 14
 };
 
 struct ExtraTypeInfo {
@@ -144,10 +145,25 @@ private:
 	StructTypeInfo();
 };
 
+struct LegacyAggregateStateTypeInfo : public ExtraTypeInfo {
+	explicit LegacyAggregateStateTypeInfo(aggregate_state_t state_type_p);
+
+	aggregate_state_t state_type;
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	LegacyAggregateStateTypeInfo();
+};
+
 struct AggregateStateTypeInfo : public StructTypeInfo {
 	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p);
-
-	void VerifyStateAsStructSerialization(Serializer &serializer) const;
 
 	aggregate_state_t state_type;
 

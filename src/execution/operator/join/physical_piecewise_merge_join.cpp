@@ -462,7 +462,7 @@ struct ChunkMergeInfo {
 	//! The left chunk offsets that match
 	SelectionVector lhs;
 	//! The right table offsets that match
-	vector<idx_t> rhs;
+	unsafe_vector<idx_t> rhs;
 
 	ChunkMergeInfo(ExternalBlockIteratorState &state, idx_t block_idx, idx_t &entry_idx, idx_t not_null)
 	    : state(state), block_idx(block_idx), not_null(not_null), entry_idx(entry_idx), lhs(STANDARD_VECTOR_SIZE) {

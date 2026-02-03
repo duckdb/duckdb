@@ -240,11 +240,12 @@ enum class LogicalTypeId : uint8_t {
 	MAP = 102,
 	TABLE = 103,
 	ENUM = 104,
-	AGGREGATE_STATE = 105,
+	LEGACY_AGGREGATE_STATE = 105,
 	LAMBDA = 106,
 	UNION = 107,
 	ARRAY = 108,
-	VARIANT = 109
+	VARIANT = 109,
+	AGGREGATE_STATE = 110, // struct-based aggregate state
 };
 
 struct ExtraTypeInfo;
@@ -530,6 +531,11 @@ struct ArrayType {
 	DUCKDB_API static constexpr idx_t MAX_ARRAY_SIZE = 100000; // 100k for now
 	//! Recursively replace all ARRAY types to LIST types within the given type
 	DUCKDB_API static LogicalType ConvertToList(const LogicalType &type);
+};
+
+struct LegacyAggregateStateType {
+	DUCKDB_API static const string GetTypeName(const LogicalType &type);
+	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
 };
 
 struct AggregateStateType : public StructType {

@@ -291,6 +291,11 @@ public:
 		return get_state_type != nullptr;
 	}
 
+	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
+		get_state_type = get_state_type_callback;
+		return *this;
+	}
+
 	LogicalType GetStateType() const {
 		D_ASSERT(get_state_type);
 		const auto result = get_state_type(*this);

@@ -165,6 +165,14 @@
         "test/sql/attach/attach_read_only.test",
         "test/sql/function/list/lambdas/test_lambda_storage.test"
       ]
+    },
+    {
+      "reason": "Contents of view were altered",
+      "paths": [
+        "test/sql/table_function/duckdb_columns.test",
+        "test/sql/catalog/view/test_view_schema_change.test",
+        "test/sql/catalog/dependencies/add_column_to_table_referenced_by_view.test"
+      ]
     }
   ]
 }

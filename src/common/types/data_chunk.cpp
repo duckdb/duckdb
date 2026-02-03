@@ -376,15 +376,7 @@ void DataChunk::Verify() {
 	// verify that we can round-trip chunk serialization
 	Allocator allocator;
 	MemoryStream mem_stream(allocator);
-
-	// It is valid to set the compatibility as "latest", as the primary purpose of `DataChunk::Verify()` is to ensure
-	// that the `Serialize` and `Deserialize` methods of a `DataChunk` are consistent with each other within the current
-	// version of the code. This is an internal round-trip sanity check performed in memory. It does not write to a
-	// persistent database file. Therefore, it should always use the full set of capabilities currently supported by the
-	// engine to ensure that all valid in-memory states can be verified.
-	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
-	BinarySerializer serializer(mem_stream, options);
+	BinarySerializer serializer(mem_stream);
 
 	serializer.Begin();
 	Serialize(serializer);

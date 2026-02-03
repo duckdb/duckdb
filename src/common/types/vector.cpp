@@ -735,9 +735,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
-	case LogicalTypeId::AGGREGATE_STATE: {
+	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
-		return Value::AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
+		return Value::LEGACY_AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::BIT: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -775,6 +775,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		children.emplace_back(VariantVector::GetData(*vector).GetValue(index_p));
 		return Value::VARIANT(children);
 	}
+	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
 		auto &child_entries = StructVector::GetEntries(*vector);
@@ -819,7 +820,8 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	if (v_p.GetType().HasAlias()) {
 		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
 	}
-	if (v_p.GetType().id() != LogicalTypeId::AGGREGATE_STATE && value.type().id() != LogicalTypeId::AGGREGATE_STATE) {
+	if (v_p.GetType().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE &&
+	    value.type().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE) {
 		D_ASSERT(v_p.GetType() == value.type());
 	}
 	return value;
