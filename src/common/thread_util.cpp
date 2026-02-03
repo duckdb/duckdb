@@ -1,5 +1,6 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/original/std/sstream.hpp"
 
 namespace duckdb {
 
@@ -11,6 +12,12 @@ void ThreadUtil::SleepMs(idx_t sleep_ms) {
 thread_id ThreadUtil::GetThreadId() {
 	return std::this_thread::get_id();
 }
+
+string ThreadUtil::GetThreadIdString() {
+	std::ostringstream ss;
+	ss << std::this_thread::get_id();
+	return ss.str();
+}
 #else
 
 void ThreadUtil::SleepMs(idx_t sleep_ms) {
@@ -19,6 +26,10 @@ void ThreadUtil::SleepMs(idx_t sleep_ms) {
 
 thread_id ThreadUtil::GetThreadId() {
 	return 0;
+}
+
+string ThreadUtil::GetThreadIdString() {
+	return "0";
 }
 #endif
 } // namespace duckdb

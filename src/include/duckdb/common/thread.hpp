@@ -27,6 +27,7 @@ namespace duckdb {
 struct ThreadUtil {
 	static void SleepMs(idx_t ms);
 	static thread_id GetThreadId();
+	static string GetThreadIdString();
 };
 
 } // namespace duckdb
