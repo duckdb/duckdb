@@ -209,6 +209,11 @@ static inline bool ValueIsAligned(T n) {
 	return (n % val) == 0;
 }
 
+template<class T>
+static inline bool PointerIsAligned(const_data_ptr_t ptr) {
+	return (reinterpret_cast<uintptr_t>(ptr) % alignof(T)) == 0;
+}
+
 template <typename T>
 T SignValue(T a) {
 	return a < 0 ? -1 : 1;

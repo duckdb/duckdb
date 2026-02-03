@@ -30,6 +30,8 @@ public:
 public:
 	void WriteString(UncompressedStringSegmentState &state, string_t string, block_id_t &result_block,
 	                 int32_t &result_offset) override;
+	void WriteGeometry(UncompressedStringSegmentState &state, const geometry_t &geom, block_id_t &result_block,
+	                   int32_t &result_offset) override;
 	void Flush() override;
 
 private:

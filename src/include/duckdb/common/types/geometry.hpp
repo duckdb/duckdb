@@ -11,25 +11,14 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/geometry_type.hpp"
+
 #include <limits>
 #include <cmath>
 
 namespace duckdb {
 
 struct GeometryStatsData;
-
-enum class GeometryType : uint8_t {
-	INVALID = 0,
-	POINT = 1,
-	LINESTRING = 2,
-	POLYGON = 3,
-	MULTIPOINT = 4,
-	MULTILINESTRING = 5,
-	MULTIPOLYGON = 6,
-	GEOMETRYCOLLECTION = 7,
-};
-
-enum class VertexType : uint8_t { XY = 0, XYZ = 1, XYM = 2, XYZM = 3 };
 
 struct VertexXY {
 	static constexpr auto TYPE = VertexType::XY;
@@ -201,29 +190,30 @@ public:
 	double m_max;
 };
 
+class ArenaAllocator;
+
 class Geometry {
 public:
 	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
 
 	//! Convert from WKT
-	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict);
+	DUCKDB_API static bool FromString(const string_t &wkt_text, geometry_t &result, Vector &result_vector, bool strict);
 
 	//! Convert to WKT
-	DUCKDB_API static string_t ToString(Vector &result, const string_t &geom);
+	DUCKDB_API static string_t ToString(Vector &result, const geometry_t &geom);
 
 	//! Convert from WKB
-	DUCKDB_API static bool FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict);
+	DUCKDB_API static geometry_t FromBinary(const string_t &wkb, Vector &result_vector);
 	DUCKDB_API static bool FromBinary(Vector &source, Vector &result, idx_t count, bool strict);
 
 	//! Convert to WKB
 	DUCKDB_API static void ToBinary(Vector &source, Vector &result, idx_t count);
-
-	//! Get the geometry type and vertex type from the WKB
-	DUCKDB_API static pair<GeometryType, VertexType> GetType(const string_t &wkb);
+	DUCKDB_API static string ToBinary(const geometry_t &geom);
+	DUCKDB_API static idx_t ToBinarySize(const geometry_t &geom);
 
 	//! Update the bounding box, return number of vertices processed
-	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent);
-	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty);
+	DUCKDB_API static uint32_t GetExtent(const geometry_t &geom, GeometryExtent &extent);
+	DUCKDB_API static uint32_t GetExtent(const geometry_t &geom, GeometryExtent &extent, bool &has_any_empty);
 
 	//! Convert to vectorized format
 	DUCKDB_API static void ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
@@ -234,6 +224,8 @@ public:
 
 	//! Get the vectorized logical type for a given geometry and vertex type
 	DUCKDB_API static LogicalType GetVectorizedType(GeometryType geom_type, VertexType vert_type);
+
+	DUCKDB_API static geometry_t Copy(const geometry_t &other, ArenaAllocator &allocator);
 };
 
 } // namespace duckdb

@@ -247,6 +247,12 @@ private:
 	                                                   TupleDataVectorFormat &source_format,
 	                                                   const SelectionVector &append_sel, const idx_t append_count,
 	                                                   const UnifiedVectorFormat &list_data);
+	//! Computes the heap sizes for the geometry Vector that will be appended (within a list)
+	static void GeometryWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+	                                                     TupleDataVectorFormat &source_format,
+	                                                     const SelectionVector &append_sel, const idx_t append_count,
+	                                                     const UnifiedVectorFormat &list_data);
+
 	//! Computes the heap sizes for the struct Vector that will be appended (within a list)
 	static void StructWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
 	                                                   TupleDataVectorFormat &source_format,

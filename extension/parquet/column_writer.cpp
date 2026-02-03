@@ -476,7 +476,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetBlobOperator>>(writer, std::move(schema),
 		                                                                                std::move(path_in_schema));
 	case LogicalTypeId::GEOMETRY:
-		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetGeometryOperator>>(writer, std::move(schema),
+		// TODO: Dont make this convert to a "string", instead figure out how to reuse buffer
+		return make_uniq<StandardColumnWriter<geometry_t, string, ParquetGeometryOperator>>(writer, std::move(schema),
 		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(writer, std::move(schema),

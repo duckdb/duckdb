@@ -30,7 +30,8 @@ enum class VectorBufferType : uint8_t {
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
 	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
-	ARRAY_BUFFER         // array buffer, holds a single flatvector child
+	ARRAY_BUFFER,        // array buffer, holds a single flatvector child
+	GEOMETRY_BUFFER      // geometry buffer, holds geometry parts and vertex arrays
 };
 
 enum class VectorAuxiliaryDataType : uint8_t {
@@ -262,6 +263,26 @@ private:
 	buffer_ptr<void> duckdb_fsst_decoder;
 	idx_t total_string_count = 0;
 	vector<unsigned char> decompress_buffer;
+};
+
+class VectorGeometryBuffer : public VectorBuffer {
+public:
+	explicit VectorGeometryBuffer(Allocator &allocator);
+	~VectorGeometryBuffer() override;
+
+	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {
+		references.push_back(std::move(heap));
+	}
+
+	ArenaAllocator &GetArena() {
+		return arena;
+	}
+
+private:
+	//! The string heap of this buffer
+	ArenaAllocator arena;
+	//! References to additional vector buffers referenced by this string buffer
+	vector<buffer_ptr<VectorBuffer>> references;
 };
 
 class VectorStructBuffer : public VectorBuffer {

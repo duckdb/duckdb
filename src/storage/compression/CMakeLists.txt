@@ -20,6 +20,7 @@ add_library_unity(
   zstd.cpp
   alprd.cpp
   fsst.cpp
+  geometry_uncompressed.cpp
   dict_fsst.cpp
   empty_validity.cpp)
 set(ALL_OBJECT_FILES

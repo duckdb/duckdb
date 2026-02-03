@@ -74,6 +74,8 @@ idx_t CompressionFunctionSet::GetCompressionIndex(PhysicalType physical_type) {
 		return 17;
 	case PhysicalType::BIT:
 		return 18;
+	case PhysicalType::GEOMETRY:
+		return 19;
 	default:
 		throw InternalException("Unsupported physical type for compression index");
 	}

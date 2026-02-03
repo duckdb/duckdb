@@ -1,5 +1,6 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
+#include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -345,6 +346,8 @@ void ColumnDataCopyValidity(const UnifiedVectorFormat &source_data, validity_t *
 	}
 }
 
+namespace {
+
 template <class T>
 struct BaseValueCopy {
 	static idx_t TypeSize() {
@@ -370,6 +373,13 @@ struct StandardValueCopy : public BaseValueCopy<T> {
 struct StringValueCopy : public BaseValueCopy<string_t> {
 	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
 		return input.IsInlined() ? input : meta_data.segment.heap->AddBlob(input);
+	}
+};
+
+struct GeometryValueCopy : public BaseValueCopy<geometry_t> {
+	static geometry_t Operation(ColumnDataMetaData &meta_data, geometry_t input) {
+		auto &arena = meta_data.segment.heap->GetAllocator();
+		return Geometry::Copy(input, arena);
 	}
 };
 
@@ -402,6 +412,8 @@ struct StructValueCopy {
 	                   idx_t source_idx) {
 	}
 };
+
+} // namespace
 
 template <class OP>
 static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
@@ -739,6 +751,131 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 }
 
 template <>
+void ColumnDataCopy<geometry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
+                                idx_t offset, idx_t copy_count) {
+	const auto &allocator_type = meta_data.segment.allocator->GetType();
+	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
+	    allocator_type == ColumnDataAllocatorType::HYBRID) {
+		// For in-memory allocation, copy geometry data directly to the StringHeap's ArenaAllocator
+
+		TemplatedColumnDataCopy<GeometryValueCopy>(meta_data, source_data, source, offset, copy_count);
+		return;
+	}
+	D_ASSERT(allocator_type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+
+	// For buffer-managed allocation, serialize geometries to contiguous blobs
+	// This allows the data to be spilled to disk and reloaded correctly
+	auto &segment = meta_data.segment;
+	auto &append_state = meta_data.state;
+
+	VectorDataIndex child_index;
+	if (meta_data.GetVectorMetaData().child_index.IsValid()) {
+		// Find the last child index
+		child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+		auto next_child_index = segment.GetVectorData(child_index).next_data;
+		while (next_child_index.IsValid()) {
+			child_index = next_child_index;
+			next_child_index = segment.GetVectorData(child_index).next_data;
+		}
+	}
+
+	auto current_index = meta_data.vector_data_index;
+	idx_t remaining = copy_count;
+	auto block_size = meta_data.segment.allocator->GetBufferManager().GetBlockSize();
+
+	while (remaining > 0) {
+		// How many values fit in the current geometry vector
+		const auto vector_remaining =
+		    MinValue<idx_t>(STANDARD_VECTOR_SIZE - segment.GetVectorData(current_index).count, remaining);
+
+		// Calculate total serialized size for this batch
+		const auto source_entries = UnifiedVectorFormat::GetData<geometry_t>(source_data);
+		idx_t append_count = 0;
+		idx_t heap_size = 0;
+
+		for (; append_count < vector_remaining; append_count++) {
+			auto source_idx = source_data.sel->get_index(offset + append_count);
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				continue;
+			}
+			const auto &entry = source_entries[source_idx];
+			auto serialized_size = geometry_t::GetHeapSize(entry);
+			if (heap_size + serialized_size > block_size) {
+				break;
+			}
+			heap_size += serialized_size;
+		}
+
+		if (vector_remaining != 0 && append_count == 0) {
+			// The geometry exceeds block size, allocate one block at a time for large geometries
+			auto source_idx = source_data.sel->get_index(offset + append_count);
+			D_ASSERT(source_data.validity.RowIsValid(source_idx));
+			heap_size += geometry_t::GetHeapSize(source_entries[source_idx]);
+			append_count++;
+		}
+
+		data_ptr_t base_heap_ptr = nullptr;
+		// Allocate heap for the serialized geometries
+		if (heap_size != 0) {
+			child_index = segment.AllocateStringHeap(heap_size, meta_data.chunk_data, append_state, child_index);
+			if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+				meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
+			}
+			const auto &child_segment = segment.GetVectorData(child_index);
+			base_heap_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, child_segment.block_id,
+			                                                  child_segment.offset);
+		}
+
+		// Get reference to current_segment after heap allocation (which can resize vector_data)
+		auto &current_segment = segment.GetVectorData(current_index);
+		auto base_ptr = segment.allocator->GetDataPointer(append_state.current_chunk_state, current_segment.block_id,
+		                                                  current_segment.offset);
+		auto validity_data = ColumnDataCollectionSegment::GetValidityPointerForWriting(base_ptr, sizeof(geometry_t));
+		ValidityMask target_validity(validity_data, STANDARD_VECTOR_SIZE);
+		if (current_segment.count == 0) {
+			target_validity.SetAllValid(STANDARD_VECTOR_SIZE);
+		}
+
+		auto target_entries = reinterpret_cast<geometry_t *>(base_ptr);
+		data_ptr_t heap_ptr = base_heap_ptr;
+
+		for (idx_t i = 0; i < append_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			auto target_idx = current_segment.count + i;
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				target_validity.SetInvalid(target_idx);
+				continue;
+			}
+			const auto &source_entry = source_entries[source_idx];
+			D_ASSERT(base_heap_ptr != nullptr);
+
+			// Serialize the geometry into the heap
+			auto serialized_size = geometry_t::GetHeapSize(source_entry);
+			target_entries[target_idx] = geometry_t::CopyToHeap(source_entry, heap_ptr, serialized_size);
+			heap_ptr += serialized_size;
+		}
+
+		if (heap_size != 0) {
+			// Track swizzle metadata for pointer fixup on read
+			current_segment.swizzle_data.emplace_back(child_index, base_heap_ptr, current_segment.count, append_count);
+		}
+
+		current_segment.count += append_count;
+		offset += append_count;
+		remaining -= append_count;
+
+		if (remaining != 0 && vector_remaining - append_count == 0) {
+			// Need to append more, allocate a new vector if needed
+			if (!current_segment.next_data.IsValid()) {
+				segment.AllocateVector(source.GetType(), meta_data.chunk_data, append_state, current_index);
+			}
+			D_ASSERT(segment.GetVectorData(current_index).next_data.IsValid());
+			current_index = segment.GetVectorData(current_index).next_data;
+		}
+	}
+}
+
+template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                                   idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
@@ -921,6 +1058,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		break;
 	case PhysicalType::VARCHAR:
 		function = ColumnDataCopy<string_t>;
+		break;
+	case PhysicalType::GEOMETRY:
+		function = ColumnDataCopy<geometry_t>;
 		break;
 	case PhysicalType::STRUCT: {
 		function = ColumnDataCopyStruct;

@@ -491,7 +491,7 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::UUID:
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, hugeint_t, duckdb::TryCastToUUID>);
 	case LogicalTypeId::GEOMETRY:
-		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToGeometry>);
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, geometry_t, duckdb::TryCastToGeometry>);
 	case LogicalTypeId::SQLNULL:
 		return &DefaultCasts::TryVectorNullCast;
 	case LogicalTypeId::VARCHAR:

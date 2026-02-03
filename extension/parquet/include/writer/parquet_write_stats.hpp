@@ -267,7 +267,7 @@ public:
 	GeometryStatsData geo_stats;
 
 public:
-	void Update(const string_t &val) {
+	void Update(const geometry_t &val) {
 		geo_stats.Update(val);
 		has_stats = true;
 	}

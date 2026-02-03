@@ -40,7 +40,8 @@ add_library_unity(
   vector_cache.cpp
   vector_constants.cpp
   geometry.cpp
-  geometry_crs.cpp)
+  geometry_crs.cpp
+  geometry_type.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types>
     PARENT_SCOPE)

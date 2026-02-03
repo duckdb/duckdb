@@ -1081,7 +1081,8 @@ struct TryCastToGeometry {
 };
 
 template <>
-bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters);
+bool TryCastToGeometry::Operation(string_t input, geometry_t &result, Vector &result_vector,
+                                  CastParameters &parameters);
 
 //===--------------------------------------------------------------------===//
 // Pointers

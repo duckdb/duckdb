@@ -90,7 +90,8 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 		const auto &type = types[col_idx];
 		offsets.push_back(row_width);
 		const auto physical_type = type.InternalType();
-		if (TypeIsConstantSize(physical_type) || physical_type == PhysicalType::VARCHAR) {
+		if (TypeIsConstantSize(physical_type) || physical_type == PhysicalType::VARCHAR ||
+		    physical_type == PhysicalType::GEOMETRY) {
 			row_width += GetTypeIdSize(physical_type);
 		} else if (physical_type == PhysicalType::STRUCT) {
 			// Just get the size of the TupleDataLayout of the struct

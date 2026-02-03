@@ -60,6 +60,11 @@ reference<StringBlock> UncompressedStringSegmentState::FindOverflowBlock(block_i
 	return entry->second;
 }
 
+void WriteOverflowStringsToDisk::WriteGeometry(UncompressedStringSegmentState &state, const geometry_t &geom,
+                                               block_id_t &result_block, int32_t &result_offset) {
+	throw NotImplementedException("Overflow blocks are not implemented for geometry type yet.");
+}
+
 void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,
                                              block_id_t &result_block, int32_t &result_offset) {
 	auto &block_manager = partial_block_manager.GetBlockManager();

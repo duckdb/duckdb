@@ -37,6 +37,7 @@ class Value {
 	friend struct ArrayValue;
 	friend struct MapValue;
 	friend struct TypeValue;
+	friend struct GeometryValue;
 
 public:
 	//! Create an empty NULL value of the specified type
@@ -202,8 +203,8 @@ public:
 	DUCKDB_API static Value BIGNUM(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIGNUM(const string &data);
 
-	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len);
-	DUCKDB_API static Value GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs);
+	DUCKDB_API static Value GEOMETRY(const geometry_t &geom);
+	DUCKDB_API static Value GEOMETRY(const geometry_t &geom, const CoordinateReferenceSystem &crs);
 
 	DUCKDB_API static Value TYPE(const LogicalType &type);
 	DUCKDB_API static Value TYPE(const string_t &serialized_type);
@@ -416,6 +417,10 @@ struct DoubleValue {
 
 struct StringValue {
 	DUCKDB_API static const string &Get(const Value &value);
+};
+
+struct GeometryValue {
+	DUCKDB_API static const geometry_t &Get(const Value &value);
 };
 
 struct DateValue {

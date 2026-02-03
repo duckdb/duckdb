@@ -244,14 +244,14 @@ struct GeometryStatsData {
 		flags.Merge(other.flags);
 	}
 
-	void Update(const string_t &geom_blob) {
+	void Update(const geometry_t &geom) {
 		// Parse type
-		const auto type_info = Geometry::GetType(geom_blob);
-		types.Add(type_info.first, type_info.second);
+
+		types.Add(geom.GetPartType(), geom.GetVertType());
 
 		// Update extent
 		bool has_any_empty = false;
-		const auto vert_count = Geometry::GetExtent(geom_blob, extent, has_any_empty);
+		const auto vert_count = Geometry::GetExtent(geom, extent, has_any_empty);
 
 		// Update flags
 		if (has_any_empty) {
@@ -279,7 +279,7 @@ struct GeometryStats {
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 
-	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
+	DUCKDB_API static void Update(BaseStatistics &stats, const geometry_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 

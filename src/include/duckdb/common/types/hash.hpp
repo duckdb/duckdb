@@ -15,6 +15,7 @@
 namespace duckdb {
 
 struct string_t;
+struct geometry_t;
 struct interval_t; // NOLINT
 
 //! Combine two hashes by XORing them
@@ -73,6 +74,8 @@ template <>
 DUCKDB_API hash_t Hash(char *val);
 template <>
 DUCKDB_API hash_t Hash(string_t val);
+template <>
+DUCKDB_API hash_t Hash(geometry_t val);
 template <>
 DUCKDB_API hash_t Hash(interval_t val);
 template <>

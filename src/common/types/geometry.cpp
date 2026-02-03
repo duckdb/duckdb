@@ -76,6 +76,18 @@ public:
 		return static_cast<idx_t>(pos - beg);
 	}
 
+	char *GetPointer() {
+		return pos;
+	}
+
+	void Skip(size_t size) {
+		pos += size;
+	}
+
+	bool IsAtEnd() const {
+		return pos >= end;
+	}
+
 private:
 	const char *beg;
 	char *pos;
@@ -931,88 +943,12 @@ void ConvertWKB(BlobReader &reader, FixedSizeBlobWriter &writer) {
 namespace duckdb {
 constexpr const idx_t Geometry::MAX_RECURSION_DEPTH;
 
-bool Geometry::FromBinary(const string_t &wkb, string_t &result, Vector &result_vector, bool strict) {
-	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
-
-	const auto analysis = AnalyzeWKB(reader);
-	if (analysis.any_unknown) {
-		if (strict) {
-			throw InvalidInputException("Unsupported geometry type in WKB");
-		}
-		return false;
+static geometry_t ReadWKB(BlobReader &reader, Allocator &allocator, idx_t depth = 0) {
+	if (depth > Geometry::MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("Geometry exceeds maximum recursion depth of %d", Geometry::MAX_RECURSION_DEPTH);
 	}
 
-	if (analysis.any_be || analysis.any_ewkb) {
-		reader.Reset();
-		// Make a new WKB with all LE
-		auto blob = StringVector::EmptyString(result_vector, analysis.size);
-		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob.GetSize()));
-		ConvertWKB(reader, writer);
-		blob.Finalize();
-		result = blob;
-		return true;
-	}
-
-	// Copy the WKB as-is
-	result = StringVector::AddStringOrBlob(result_vector, wkb.GetData(), wkb.GetSize());
-	return true;
-}
-
-bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
-	if (strict) {
-		UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) {
-			string_t geom;
-			FromBinary(wkb, geom, result, true);
-			return geom;
-		});
-		return true;
-	}
-
-	auto all_ok = true;
-	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(source, result, count,
-	                                                    [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
-		                                                    string_t geom;
-		                                                    if (!FromBinary(wkb, geom, result, false)) {
-			                                                    all_ok = false;
-			                                                    mask.SetInvalid(idx);
-			                                                    return string_t();
-		                                                    }
-		                                                    return geom;
-	                                                    });
-	return all_ok;
-}
-
-void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
-	// We are currently using WKB internally, so just copy as-is!
-	result.Reinterpret(source);
-}
-
-bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
-	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
-	BlobWriter writer;
-
-	FromStringRecursive(reader, writer, 0, false, false);
-
-	const auto &buffer = writer.GetBuffer();
-	result = StringVector::AddStringOrBlob(result_vector, buffer.data(), buffer.size());
-	return true;
-}
-
-string_t Geometry::ToString(Vector &result, const string_t &geom) {
-	BlobReader reader(geom.GetData(), static_cast<uint32_t>(geom.GetSize()));
-	TextWriter writer;
-
-	ToStringRecursive(reader, writer, 0, false, false);
-
-	// Convert the buffer to string_t
-	const auto &buffer = writer.GetBuffer();
-	return StringVector::AddString(result, buffer.data(), buffer.size());
-}
-
-pair<GeometryType, VertexType> Geometry::GetType(const string_t &wkb) {
-	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
-
-	// Read the byte order (should always be 1 for little-endian)
+	// TODO: Support big endian byte order
 	const auto byte_order = reader.Read<uint8_t>();
 	if (byte_order != 1) {
 		throw InvalidInputException("Unsupported byte order %d in WKB", byte_order);
@@ -1021,18 +957,441 @@ pair<GeometryType, VertexType> Geometry::GetType(const string_t &wkb) {
 	const auto meta = reader.Read<uint32_t>();
 	const auto type_id = (meta & 0x0000FFFF) % 1000;
 	const auto flag_id = (meta & 0x0000FFFF) / 1000;
+	const auto has_z = (flag_id & 0x01) != 0;
+	const auto has_m = (flag_id & 0x02) != 0;
 
 	if (type_id < 1 || type_id > 7) {
 		throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
 	}
-	if (flag_id > 3) {
-		throw InvalidInputException("Unsupported geometry flag %d in WKB", flag_id);
+
+	const auto type = static_cast<GeometryType>(type_id);
+
+	switch (type) {
+	case GeometryType::POINT: {
+		const auto vert_width = (2 + (has_z ? 1 : 0) + (has_m ? 1 : 0)) * sizeof(double);
+		const auto vert_array = reinterpret_cast<double *>(allocator.AllocateData(vert_width));
+		const auto data_array = reader.Reserve(vert_width);
+		memcpy(vert_array, data_array, vert_width);
+
+		// Check if all dimensions are NaN (empty point)
+		bool all_nan = true;
+		const auto dims_count = (2 + (has_z ? 1 : 0) + (has_m ? 1 : 0));
+		for (size_t dim_idx = 0; dim_idx < dims_count; dim_idx++) {
+			if (!std::isnan(vert_array[dim_idx])) {
+				all_nan = false;
+				break;
+			}
+		}
+
+		if (all_nan) {
+			return geometry_t(type, has_z, has_m);
+		}
+
+		return geometry_t(type, has_z, has_m, vert_array, 1);
+	}
+	case GeometryType::LINESTRING: {
+		const auto vert_count = reader.Read<uint32_t>();
+		if (vert_count == 0) {
+			return geometry_t(type, has_z, has_m);
+		}
+
+		const auto vert_width = (2 + (has_z ? 1 : 0) + (has_m ? 1 : 0)) * sizeof(double);
+		const auto vert_array = reinterpret_cast<double *>(allocator.AllocateData(vert_count * vert_width));
+		const auto data_array = reader.Reserve(vert_count * vert_width);
+		memcpy(vert_array, data_array, vert_count * vert_width);
+
+		return geometry_t(type, has_z, has_m, vert_array, vert_count);
+	}
+	case GeometryType::POLYGON: {
+		const auto ring_count = reader.Read<uint32_t>();
+		if (ring_count == 0) {
+			return geometry_t(type, has_z, has_m);
+		}
+
+		const auto ring_array = reinterpret_cast<geometry_t *>(allocator.AllocateData(ring_count * sizeof(geometry_t)));
+
+		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+			const auto vert_count = reader.Read<uint32_t>();
+
+			if (vert_count == 0) {
+				ring_array[ring_idx] = geometry_t(GeometryType::LINESTRING, has_z, has_m);
+				continue;
+			}
+
+			const auto vert_width = (2 + (has_z ? 1 : 0) + (has_m ? 1 : 0)) * sizeof(double);
+			const auto vert_array = reinterpret_cast<double *>(allocator.AllocateData(vert_count * vert_width));
+			const auto data_array = reader.Reserve(vert_count * vert_width);
+			memcpy(vert_array, data_array, vert_count * vert_width);
+
+			ring_array[ring_idx] = geometry_t(GeometryType::LINESTRING, has_z, has_m, vert_array, vert_count);
+		}
+
+		return geometry_t(type, has_z, has_m, ring_array, ring_count);
+	}
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto part_count = reader.Read<uint32_t>();
+
+		if (part_count == 0) {
+			return geometry_t(type, has_z, has_m);
+		}
+
+		const auto part_array = reinterpret_cast<geometry_t *>(allocator.AllocateData(part_count * sizeof(geometry_t)));
+
+		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+			part_array[part_idx] = ReadWKB(reader, allocator, depth + 1);
+		}
+
+		return geometry_t(type, has_z, has_m, part_array, part_count);
+	}
+	default:
+		throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
+	}
+}
+
+geometry_t Geometry::FromBinary(const string_t &wkb, Vector &result_vector) {
+	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
+	auto result = ReadWKB(reader, GeometryVector::GetArena(result_vector).GetAllocator());
+	result.Verify();
+	return result;
+}
+
+bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
+	if (strict) {
+		UnaryExecutor::Execute<string_t, geometry_t>(source, result, count,
+		                                             [&](const string_t &wkb) { return FromBinary(wkb, result); });
+		return true;
 	}
 
-	const auto geom_type = static_cast<GeometryType>(type_id);
-	const auto vert_type = static_cast<VertexType>(flag_id);
+	auto all_ok = true;
+	UnaryExecutor::ExecuteWithNulls<string_t, geometry_t>(source, result, count,
+	                                                      [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
+		                                                      try {
+			                                                      return FromBinary(wkb, result);
+		                                                      } catch (...) {
+			                                                      all_ok = false;
+			                                                      mask.SetInvalid(idx);
+			                                                      return geometry_t {};
+		                                                      }
+	                                                      });
 
-	return {geom_type, vert_type};
+	return all_ok;
+}
+
+static size_t RequiredSizeWKB(const geometry_t &geom) {
+	size_t size = sizeof(uint8_t) + sizeof(uint32_t); // Byte order + type/meta
+	switch (geom.GetType()) {
+	case GeometryType::POINT: {
+		const auto vert_width = geom.GetWidth();
+		size += vert_width;
+	} break;
+	case GeometryType::LINESTRING: {
+		const auto vert_count = geom.GetCount();
+		const auto vert_width = geom.GetWidth();
+		size += sizeof(uint32_t) + (vert_count * vert_width);
+	} break;
+	case GeometryType::POLYGON: {
+		const auto ring_count = geom.GetCount();
+		const auto ring_array = geom.GetParts();
+
+		size += sizeof(uint32_t);
+		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+			const auto &ring = ring_array[ring_idx];
+			const auto vert_count = ring.GetCount();
+			const auto vert_width = ring.GetWidth();
+			size += sizeof(uint32_t) + (vert_count * vert_width);
+		}
+	} break;
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto part_count = geom.GetCount();
+		const auto part_array = geom.GetParts();
+		size += sizeof(uint32_t);
+		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+			const auto &part = part_array[part_idx];
+			size += RequiredSizeWKB(part);
+		}
+	} break;
+	default:
+		throw InvalidInputException("Unsupported geometry type %d in WKB", static_cast<int>(geom.GetType()));
+	}
+	return size;
+}
+
+static void WriteWKB(FixedSizeBlobWriter &writer, const geometry_t &geom) {
+	const auto geom_type = geom.GetType();
+	const auto vert_type = geom.GetVertType();
+
+	const auto has_z = vert_type == VertexType::XYZ || vert_type == VertexType::XYZM;
+	const auto has_m = vert_type == VertexType::XYM || vert_type == VertexType::XYZM;
+
+	// Always write LE & type header
+	writer.Write<uint8_t>(1);
+	writer.Write<uint32_t>(static_cast<uint32_t>(geom_type) + (1000 * has_z) + (2000 * has_m));
+
+	switch (geom_type) {
+	case GeometryType::POINT: {
+		const auto vert_array = geom.GetVerts();
+		const auto dims_count = geom.GetDims();
+		for (uint32_t dim_idx = 0; dim_idx < dims_count; dim_idx++) {
+			writer.Write<double>(vert_array[dim_idx]);
+		}
+	} break;
+	case GeometryType::LINESTRING: {
+		const auto vert_count = geom.GetCount();
+		const auto vert_array = geom.GetVerts();
+		writer.Write<uint32_t>(vert_count);
+		const auto dims_count = geom.GetDims();
+		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+			for (uint32_t dim_idx = 0; dim_idx < dims_count; dim_idx++) {
+				writer.Write<double>(vert_array[vert_idx * dims_count + dim_idx]);
+			}
+		}
+	} break;
+	case GeometryType::POLYGON: {
+		const auto ring_count = geom.GetCount();
+		const auto ring_array = geom.GetParts();
+		writer.Write<uint32_t>(ring_count);
+		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+			const auto &ring = ring_array[ring_idx];
+			const auto vert_count = ring.GetCount();
+			const auto vert_array = ring.GetVerts();
+			writer.Write<uint32_t>(vert_count);
+			const auto dims_count = ring.GetDims();
+			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+				for (uint32_t dim_idx = 0; dim_idx < dims_count; dim_idx++) {
+					writer.Write<double>(vert_array[vert_idx * dims_count + dim_idx]);
+				}
+			}
+		}
+	} break;
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto part_count = geom.GetCount();
+		const auto part_array = geom.GetParts();
+		writer.Write<uint32_t>(part_count);
+		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+			const auto &part = part_array[part_idx];
+			WriteWKB(writer, part);
+		}
+	} break;
+	default:
+		throw InvalidInputException("Unsupported geometry type %d in WKB", static_cast<int>(geom_type));
+	}
+}
+
+idx_t Geometry::ToBinarySize(const geometry_t &geom) {
+	return RequiredSizeWKB(geom);
+}
+
+string Geometry::ToBinary(const geometry_t &geom) {
+	const auto required_size = RequiredSizeWKB(geom);
+	if (required_size > NumericLimits<uint32_t>::Maximum()) {
+		throw InvalidInputException("Geometry is too large to convert to WKB");
+	}
+
+	const auto size = static_cast<uint32_t>(required_size);
+	string result;
+	result.resize(size);
+
+	// Get mutable pointer to string data
+	auto ptr = &result[0];
+
+	FixedSizeBlobWriter writer(ptr, size);
+	WriteWKB(writer, geom);
+
+	// We should be exactly at the end of the blob now
+	D_ASSERT(writer.IsAtEnd());
+
+	return result;
+}
+
+void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
+	UnaryExecutor::Execute<geometry_t, string_t>(source, result, count, [&](const geometry_t &geom) {
+		const auto required_size = RequiredSizeWKB(geom);
+		if (required_size > NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException("Geometry is too large to convert to WKB");
+		}
+
+		const auto size = static_cast<uint32_t>(required_size);
+		const auto blob = StringVector::EmptyString(result, size);
+
+		FixedSizeBlobWriter writer(blob.GetDataWriteable(), size);
+		WriteWKB(writer, geom);
+
+		// We should be exactly at the end of the blob now
+		D_ASSERT(writer.IsAtEnd());
+
+		return blob;
+	});
+}
+
+static geometry_t ParseInternal(TextReader &reader, ArenaAllocator &allocator) {
+	if (reader.TryMatch("POINT")) {
+		const auto has_z = reader.TryMatch("Z");
+		const auto has_m = reader.TryMatch("M");
+
+		auto geom = geometry_t(GeometryType::POINT, has_z, has_m);
+
+		if (reader.TryMatch("EMPTY")) {
+			return geom;
+		}
+
+		reader.Match('(');
+
+		const auto vertex_width = geom.GetWidth();
+		const auto vertex_dims = geom.GetDims();
+		const auto vertex_array = reinterpret_cast<double *>(allocator.AllocateAligned(vertex_width));
+
+		for (uint32_t d_idx = 0; d_idx < vertex_dims; d_idx++) {
+			vertex_array[d_idx] = reader.MatchNumber();
+		}
+
+		reader.Match(')');
+		geom.SetVerts(vertex_array, 1);
+		return geom;
+	}
+
+	if (reader.TryMatch("LINESTRING")) {
+		const auto has_z = reader.TryMatch("Z");
+		const auto has_m = reader.TryMatch("M");
+
+		auto geom = geometry_t(GeometryType::LINESTRING, has_z, has_m);
+
+		if (reader.TryMatch("EMPTY")) {
+			return geom;
+		}
+
+		reader.Match('(');
+		const auto vertex_width = geom.GetWidth();
+		const auto vertex_dims = geom.GetDims();
+		vector<double> vertices;
+		do {
+			for (uint32_t d_idx = 0; d_idx < vertex_dims; d_idx++) {
+				auto value = reader.MatchNumber();
+				vertices.push_back(value);
+			}
+		} while (reader.TryMatch(','));
+		reader.Match(')');
+		const auto vertex_array =
+		    reinterpret_cast<double *>(allocator.AllocateAligned(vertices.size() * sizeof(double)));
+		memcpy(vertex_array, vertices.data(), vertices.size() * sizeof(double));
+		geom.SetVerts(vertex_array, static_cast<uint32_t>(vertices.size() / vertex_dims));
+		return geom;
+	}
+
+	throw InvalidInputException("Unsupported geometry type at position %zu", reader.GetPosition());
+}
+
+bool Geometry::FromString(const string_t &wkt_text, geometry_t &result, Vector &result_vector, bool strict) {
+	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
+
+	result = ParseInternal(reader, GeometryVector::GetArena(result_vector));
+
+	// const auto &buffer = writer.GetBuffer();
+	// result = StringVector::AddStringOrBlob(result_vector, buffer.data(), buffer.size());
+	return true;
+}
+
+void WriteString(TextWriter &writer, const geometry_t &geom) {
+	switch (geom.GetType()) {
+	case GeometryType::POINT: {
+		const auto vert_count = geom.GetCount();
+		if (vert_count == 0) {
+			writer.Write("POINT EMPTY");
+			;
+			return;
+		}
+		writer.Write("POINT (");
+		const auto vertex_dims = geom.GetDims();
+		const auto vertex_array = geom.GetVerts();
+		for (uint32_t d_idx = 0; d_idx < vertex_dims; d_idx++) {
+			if (d_idx > 0) {
+				writer.Write(' ');
+			}
+			writer.Write(vertex_array[d_idx]);
+		}
+		writer.Write(')');
+	} break;
+	case GeometryType::LINESTRING: {
+		const auto vert_count = geom.GetCount();
+		if (vert_count == 0) {
+			writer.Write("LINESTRING EMPTY");
+			return;
+		}
+		writer.Write("LINESTRING (");
+		const auto vertex_dims = geom.GetDims();
+		const auto vertex_array = geom.GetVerts();
+		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+			if (vert_idx > 0) {
+				writer.Write(", ");
+			}
+			for (uint32_t d_idx = 0; d_idx < vertex_dims; d_idx++) {
+				if (d_idx > 0) {
+					writer.Write(' ');
+				}
+				writer.Write(vertex_array[vert_idx * vertex_dims + d_idx]);
+			}
+		}
+		writer.Write(')');
+	} break;
+	case GeometryType::POLYGON: {
+		const auto ring_count = geom.GetCount();
+		if (ring_count == 0) {
+			writer.Write("POLYGON EMPTY");
+			return;
+		}
+		writer.Write("POLYGON (");
+		const auto ring_array = geom.GetParts();
+		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+			if (ring_idx > 0) {
+				writer.Write(", ");
+			}
+			const auto &ring = ring_array[ring_idx];
+			const auto vert_count = ring.GetCount();
+			if (vert_count == 0) {
+				writer.Write("EMPTY");
+				continue;
+			}
+			writer.Write('(');
+			const auto vert_array = ring.GetVerts();
+			const auto dims_count = ring.GetDims();
+			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+				if (vert_idx > 0) {
+					writer.Write(", ");
+				}
+				for (uint32_t d_idx = 0; d_idx < dims_count; d_idx++) {
+					if (d_idx > 0) {
+						writer.Write(' ');
+					}
+					writer.Write(vert_array[vert_idx * dims_count + d_idx]);
+				}
+			}
+			writer.Write(')');
+		}
+		writer.Write(')');
+	} break;
+	default:
+		writer.Write("UNKNOWN GEOMETRY TYPE");
+		// throw InvalidInputException("Unsupported geometry type %d in WKB", static_cast<int>(geom.GetType()));
+	}
+}
+
+string_t Geometry::ToString(Vector &result, const geometry_t &geom) {
+	TextWriter writer;
+
+	// ToStringRecursive(reader, writer, 0, false, false);
+	WriteString(writer, geom);
+
+	// Convert the buffer to string_t
+	const auto &buffer = writer.GetBuffer();
+	return StringVector::AddString(result, buffer.data(), buffer.size());
 }
 
 template <class VERTEX_TYPE = VertexXY>
@@ -1081,79 +1440,78 @@ static uint32_t ParseVertices(BlobReader &reader, GeometryExtent &extent, uint32
 	}
 }
 
-uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent) {
+uint32_t Geometry::GetExtent(const geometry_t &geometry, GeometryExtent &extent) {
 	bool has_any_empty = false;
-	return GetExtent(wkb, extent, has_any_empty);
+	return GetExtent(geometry, extent, has_any_empty);
 }
 
-uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty) {
-	BlobReader reader(wkb.GetData(), static_cast<uint32_t>(wkb.GetSize()));
+uint32_t Geometry::GetExtent(const geometry_t &geometry, GeometryExtent &extent, bool &has_any_empty) {
+	if (geometry.IsEmpty()) {
+		has_any_empty = true;
+		return 0;
+	}
 
-	uint32_t vertex_count = 0;
+	switch (geometry.GetPartType()) {
+	case GeometryType::POINT:
+	case GeometryType::LINESTRING: {
+		const auto vert_vtype = geometry.GetVertType();
+		const auto vert_count = geometry.GetCount();
 
-	while (!reader.IsAtEnd()) {
-		const auto byte_order = reader.Read<uint8_t>();
-		if (byte_order != 1) {
-			throw InvalidInputException("Unsupported byte order %d in WKB", byte_order);
-		}
-		const auto meta = reader.Read<uint32_t>();
-		const auto type_id = (meta & 0x0000FFFF) % 1000;
-		const auto flag_id = (meta & 0x0000FFFF) / 1000;
-		if (type_id < 1 || type_id > 7) {
-			throw InvalidInputException("Unsupported geometry type %d in WKB", type_id);
-		}
-		if (flag_id > 3) {
-			throw InvalidInputException("Unsupported geometry flag %d in WKB", flag_id);
-		}
-		const auto geom_type = static_cast<GeometryType>(type_id);
-		const auto vert_type = static_cast<VertexType>(flag_id);
-
-		switch (geom_type) {
-		case GeometryType::POINT: {
-			const auto parsed_count = ParseVertices(reader, extent, 1, vert_type, true);
-			if (parsed_count == 0) {
-				has_any_empty = true;
-				continue;
-			}
-			vertex_count += parsed_count;
-		} break;
-		case GeometryType::LINESTRING: {
-			const auto vert_count = reader.Read<uint32_t>();
-			if (vert_count == 0) {
-				has_any_empty = true;
-				continue;
-			}
-			vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false);
-		} break;
-		case GeometryType::POLYGON: {
-			const auto ring_count = reader.Read<uint32_t>();
-			if (ring_count == 0) {
-				has_any_empty = true;
-				continue;
-			}
-			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-				const auto vert_count = reader.Read<uint32_t>();
-				if (vert_count == 0) {
-					has_any_empty = true;
-					continue;
-				}
-				vertex_count += ParseVertices(reader, extent, vert_count, vert_type, false);
+		switch (vert_vtype) {
+		case VertexType::XY: {
+			const auto vert_array = geometry.GetVerts<VertexXY>();
+			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+				const auto &vertex = vert_array[vert_idx];
+				extent.Extend(vertex);
 			}
 		} break;
-		case GeometryType::MULTIPOINT:
-		case GeometryType::MULTILINESTRING:
-		case GeometryType::MULTIPOLYGON:
-		case GeometryType::GEOMETRYCOLLECTION: {
-			const auto part_count = reader.Read<uint32_t>();
-			if (part_count == 0) {
-				has_any_empty = true;
+		case VertexType::XYZ: {
+			const auto vert_array = geometry.GetVerts<VertexXYZ>();
+			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+				const auto &vertex = vert_array[vert_idx];
+				extent.Extend(vertex);
+			}
+		} break;
+		case VertexType::XYM: {
+			const auto vert_array = geometry.GetVerts<VertexXYM>();
+			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+				const auto &vertex = vert_array[vert_idx];
+				extent.Extend(vertex);
+			}
+		} break;
+		case VertexType::XYZM: {
+			const auto vert_array = geometry.GetVerts<VertexXYZM>();
+			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+				const auto &vertex = vert_array[vert_idx];
+				extent.Extend(vertex);
 			}
 		} break;
 		default:
-			throw InvalidInputException("Unsupported geometry type %d in WKB", static_cast<int>(geom_type));
+			break;
 		}
+
+		return vert_count;
 	}
-	return vertex_count;
+	case GeometryType::POLYGON:
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto part_array = geometry.GetParts();
+		const auto part_count = geometry.GetCount();
+
+		uint32_t vert_count = 0;
+
+		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+			const auto &part_geom = part_array[part_idx];
+			vert_count += GetExtent(part_geom, extent, has_any_empty);
+		}
+
+		return vert_count;
+	}
+	default:
+		return 0;
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2191,4 +2549,558 @@ LogicalType Geometry::GetVectorizedType(GeometryType geom_type, VertexType vert_
 	}
 }
 
+/*
+uint32_t GetRequiredSize(const geometry_t &other) {
+    const auto part_type = other.GetPartType();
+    const auto item_size = other.GetCount();
+
+    switch (part_type) {
+    case GeometryType::POINT:
+    case GeometryType::LINESTRING: {
+        return sizeof(geometry_t) + (item_size * other.GetWidth());
+    }
+    case GeometryType::POLYGON:
+    case GeometryType::MULTIPOINT:
+    case GeometryType::MULTILINESTRING:
+    case GeometryType::MULTIPOLYGON:
+    case GeometryType::GEOMETRYCOLLECTION: {
+        uint32_t size = sizeof(geometry_t);
+        const auto part_array = other.GetParts();
+        for (uint32_t i = 0; i < item_size; i++) {
+            size += GetRequiredSize(part_array[i]);
+        }
+    }
+    default:
+        throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(part_type));
+    }
+}*/
+static void CopyInto(const geometry_t &source, geometry_t &target, ArenaAllocator &allocator) {
+	target = source;
+
+	if (target.IsEmpty()) {
+		// No need to copy the body
+		return;
+	}
+
+	const auto part_type = source.GetPartType();
+
+	switch (part_type) {
+	case GeometryType::POINT:
+	case GeometryType::LINESTRING: {
+		const auto source_vertex_width = source.GetWidth();
+		const auto source_vertex_count = source.GetCount();
+		const auto source_vertex_array = source.GetVerts();
+
+		const auto target_buffer = allocator.AllocateAligned(source_vertex_width * source_vertex_count);
+		const auto target_vertex_array = reinterpret_cast<double *>(target_buffer);
+
+		memcpy(target_vertex_array, source_vertex_array, source_vertex_width * source_vertex_count);
+		target.SetVerts(target_vertex_array, source_vertex_count);
+	} break;
+	case GeometryType::POLYGON:
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto source_part_count = source.GetCount();
+		const auto source_part_array = source.GetParts();
+
+		const auto target_buffer = allocator.AllocateAligned(source_part_count * sizeof(geometry_t));
+		const auto target_part_array = reinterpret_cast<geometry_t *>(target_buffer);
+
+		for (uint32_t i = 0; i < source_part_count; i++) {
+			CopyInto(source_part_array[i], target_part_array[i], allocator);
+		}
+
+		target.SetParts(target_part_array, source_part_count);
+	} break;
+	default:
+		throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(part_type));
+	}
+}
+
+geometry_t Geometry::Copy(const geometry_t &geom, ArenaAllocator &allocator) {
+	geometry_t result;
+	CopyInto(geom, result, allocator);
+	result.Verify();
+	return result;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Serialization
+//----------------------------------------------------------------------------------------------------------------------
+// Flatten the geometry by turning the pointers into relative offsets
+
+static size_t GetBinarySize(const geometry_t &geom) {
+	switch (geom.GetPartType()) {
+	case GeometryType::INVALID: {
+		return sizeof(geometry_t);
+	}
+	case GeometryType::POINT:
+	case GeometryType::LINESTRING: {
+		const auto vertex_count = geom.GetCount();
+		const auto vertex_dims = geom.GetDims();
+		return sizeof(geometry_t) + (vertex_count * vertex_dims * sizeof(double));
+	}
+	case GeometryType::POLYGON:
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		size_t size = sizeof(geometry_t);
+		const auto part_count = geom.GetCount();
+		const auto part_array = geom.GetParts();
+		for (uint32_t i = 0; i < part_count; i++) {
+			size += GetBinarySize(part_array[i]);
+		}
+		return size;
+	}
+	default:
+		throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom.GetPartType()));
+	}
+}
+
+static void Write(const geometry_t &geom, FixedSizeBlobWriter &head, FixedSizeBlobWriter &data) {
+	const auto part_type = geom.GetPartType();
+	const auto vert_type = geom.GetVertType();
+	const auto item_count = geom.GetCount();
+
+	head.Write<uint8_t>(static_cast<uint8_t>(part_type));
+	head.Write<uint8_t>(static_cast<uint8_t>(vert_type));
+	head.Write<uint8_t>(0); // Padding
+	head.Write<uint8_t>(0); // Padding
+
+	head.Write<uint32_t>(item_count);
+
+	// Write offset
+	const auto data_offset = data.GetPosition() - head.GetPosition() - sizeof(uint64_t);
+	head.Write<uint64_t>(data_offset);
+
+	switch (part_type) {
+	case GeometryType::INVALID:
+		break;
+	case GeometryType::POINT:
+	case GeometryType::LINESTRING: {
+		const auto vertex_count = item_count;
+		const auto vertex_dims = geom.GetDims();
+		const auto vertex_array = geom.GetVerts();
+
+		for (uint32_t i = 0; i < vertex_count * vertex_dims; i++) {
+			data.Write<double>(vertex_array[i]);
+		}
+	} break;
+	case GeometryType::POLYGON:
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		auto part = data;
+
+		const auto part_array = geom.GetParts();
+		const auto part_count = item_count;
+
+		data.Skip(part_count * sizeof(geometry_t));
+
+		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+			Write(part_array[part_idx], part, data);
+		}
+	} break;
+	default:
+		throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom.GetPartType()));
+	}
+}
+
+string geometry_t::Serialize(const geometry_t &geom) {
+	const auto required_size = GetBinarySize(geom);
+	string result;
+	result.resize(required_size);
+
+	char *ptr = &result[0];
+
+	FixedSizeBlobWriter head_writer(ptr, static_cast<uint32_t>(required_size));
+	FixedSizeBlobWriter data_writer(ptr, static_cast<uint32_t>(required_size));
+	data_writer.Skip(sizeof(geometry_t));
+
+	Write(geom, head_writer, data_writer);
+
+	return result;
+}
+
+// TODO: Maybe we want to make offsets signed (probably)
+static geometry_t Read(BlobReader &reader, Allocator &allocator) {
+	const auto part_type = static_cast<GeometryType>(reader.Read<uint8_t>());
+	const auto vert_type = static_cast<VertexType>(reader.Read<uint8_t>());
+
+	reader.Skip(1); // Padding
+	reader.Skip(1); // Padding
+
+	const auto item_count = reader.Read<uint32_t>();
+	const auto data_offset = reader.Read<uint64_t>();
+
+	geometry_t geom(part_type, vert_type, nullptr, item_count);
+
+	auto data_reader = reader;
+	data_reader.Skip(data_offset);
+
+	switch (part_type) {
+	case GeometryType::INVALID:
+		break;
+	case GeometryType::POINT:
+	case GeometryType::LINESTRING: {
+		const auto vertex_count = item_count;
+
+		if (vertex_count == 0) {
+			geom.SetVerts(nullptr, 0);
+			return geom;
+		}
+
+		const auto vertex_dims = geom.GetDims();
+
+		const auto vertex_buffer = allocator.AllocateData(vertex_count * vertex_dims * sizeof(double));
+		const auto vertex_array = reinterpret_cast<double *>(vertex_buffer);
+
+		for (uint32_t i = 0; i < vertex_count * vertex_dims; i++) {
+			vertex_array[i] = data_reader.Read<double>();
+		}
+
+		geom.SetVerts(vertex_array, vertex_count);
+	} break;
+	case GeometryType::POLYGON:
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto part_count = item_count;
+
+		if (part_count == 0) {
+			geom.SetParts(nullptr, 0);
+			return geom;
+		}
+
+		const auto part_buffer = allocator.AllocateData(part_count * sizeof(geometry_t));
+		const auto part_array = reinterpret_cast<geometry_t *>(part_buffer);
+
+		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+			part_array[part_idx] = Read(data_reader, allocator);
+		}
+
+		geom.SetParts(part_array, part_count);
+	} break;
+	default:
+		throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(part_type));
+	}
+
+	return geom;
+}
+
+geometry_t geometry_t::Deserialize(const string &data, Allocator &allocator) {
+	BlobReader reader(data.c_str(), static_cast<uint32_t>(data.size()));
+	const auto result = Read(reader, allocator);
+	result.Verify();
+	return result;
+}
+
+size_t geometry_t::GetTotalByteSize() const {
+	return GetBinarySize(*this);
+}
+
+void geometry_t::Serialize(char *ptr, uint32_t len) const {
+	FixedSizeBlobWriter head_writer(ptr, len);
+	FixedSizeBlobWriter data_writer(ptr, len);
+	data_writer.Skip(sizeof(geometry_t));
+
+	Write(*this, head_writer, data_writer);
+}
+
+geometry_t geometry_t::Deserialize(Vector &vector, const char *data, uint32_t len) {
+	BlobReader reader(data, len);
+	auto &allocator = GeometryVector::GetArena(vector).GetAllocator();
+	const auto result = Read(reader, allocator);
+	result.Verify();
+	return result;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Swizzling
+//----------------------------------------------------------------------------------------------------------------------
+size_t geometry_t::GetHeapSize(const geometry_t &geom) {
+	if (geom.IsEmpty()) {
+		return 0;
+	}
+
+	switch (geom.GetPartType()) {
+	case GeometryType::POINT:
+	case GeometryType::LINESTRING: {
+		const auto vert_count = geom.GetCount();
+		const auto vert_width = geom.GetWidth();
+		return vert_count * vert_width;
+	} break;
+	case GeometryType::POLYGON:
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto part_count = geom.GetCount();
+		const auto part_array = geom.GetParts();
+
+		size_t size = part_count * sizeof(geometry_t);
+		for (uint32_t i = 0; i < part_count; i++) {
+			size += GetHeapSize(part_array[i]);
+		}
+		return size;
+	}
+	default:
+		throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom.GetPartType()));
+	}
+}
+
+static geometry_t CopyToHeapInternal(const geometry_t &geom, FixedSizeBlobWriter &writer) {
+	geometry_t result = geom;
+
+	switch (geom.GetType()) {
+	case GeometryType::POINT:
+	case GeometryType::LINESTRING: {
+		const auto vert_count = geom.GetCount();
+		const auto vert_array = geom.GetVerts();
+		const auto dims_count = geom.GetDims();
+
+		const auto data_array = reinterpret_cast<double *>(writer.GetPointer());
+		D_ASSERT(reinterpret_cast<uintptr_t>(data_array) % alignof(double) == 0);
+
+		for (uint32_t i = 0; i < vert_count * dims_count; i++) {
+			writer.Write<double>(vert_array[i]);
+		}
+
+		result.SetVerts(data_array, vert_count);
+		return result;
+	}
+	case GeometryType::POLYGON:
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto part_count = geom.GetCount();
+		const auto part_array = geom.GetParts();
+
+		const auto data_array = reinterpret_cast<geometry_t *>(writer.GetPointer());
+		D_ASSERT(reinterpret_cast<uintptr_t>(data_array) % alignof(geometry_t) == 0);
+
+		writer.Skip(part_count * sizeof(geometry_t));
+		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+			data_array[part_idx] = CopyToHeapInternal(part_array[part_idx], writer);
+		}
+
+		result.SetParts(data_array, part_count);
+		return result;
+	}
+	default:
+		throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom.GetPartType()));
+	}
+}
+geometry_t geometry_t::CopyToHeap(const geometry_t &geom, data_ptr_t heap_data, size_t heap_size) {
+	FixedSizeBlobWriter writer(char_ptr_cast(heap_data), static_cast<uint32_t>(heap_size));
+	return CopyToHeapInternal(geom, writer);
+}
+
+void geometry_t::RecomputeHeapPointers(geometry_t &geom, data_ptr_t old_heap_ptr, data_ptr_t new_heap_ptr) {
+	switch (geom.GetType()) {
+	case GeometryType::POINT:
+	case GeometryType::LINESTRING: {
+		const auto vert_count = geom.GetCount();
+
+		const auto old_data = reinterpret_cast<ptrdiff_t>(geom.GetVerts());
+		const auto old_heap = reinterpret_cast<ptrdiff_t>(old_heap_ptr);
+		const auto new_heap = reinterpret_cast<ptrdiff_t>(new_heap_ptr);
+
+		const auto offset = old_data - old_heap;
+		D_ASSERT(offset >= 0);
+
+		const auto new_data = new_heap + offset;
+		D_ASSERT(new_data % alignof(double) == 0);
+
+		geom.SetVerts(reinterpret_cast<double *>(new_data), vert_count);
+
+	} break;
+	case GeometryType::POLYGON:
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		const auto part_count = geom.GetCount();
+
+		const auto old_data = reinterpret_cast<ptrdiff_t>(geom.GetParts());
+		const auto old_heap = reinterpret_cast<ptrdiff_t>(old_heap_ptr);
+		const auto new_heap = reinterpret_cast<ptrdiff_t>(new_heap_ptr);
+
+		const auto offset = old_data - old_heap;
+		D_ASSERT(offset >= 0);
+
+		const auto new_data = new_heap + offset;
+		D_ASSERT(new_data % alignof(geometry_t) == 0);
+
+		geom.SetParts(reinterpret_cast<geometry_t *>(new_data), part_count);
+
+		// Also recompute pointers in parts
+		const auto part_array = geom.GetParts();
+		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+			RecomputeHeapPointers(part_array[part_idx], old_heap_ptr, new_heap_ptr);
+		}
+
+	} break;
+	default:
+		throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom.GetPartType()));
+	}
+}
+
+//-------------------------------------------------------------------------------------
+// Heap Serialization
+//-------------------------------------------------------------------------------------
+/*
+size_t geometry_t::GetHeapSize(const geometry_t &geom) {
+    switch (geom.GetPartType()) {
+        case GeometryType::POINT:
+        case GeometryType::LINESTRING: {
+            const auto vert_count = geom.GetCount();
+            const auto vert_width = geom.GetWidth();
+            return vert_count * vert_width;
+        } break;
+        case GeometryType::POLYGON:
+        case GeometryType::MULTIPOINT:
+        case GeometryType::MULTILINESTRING:
+        case GeometryType::MULTIPOLYGON:
+        case GeometryType::GEOMETRYCOLLECTION: {
+
+            const auto part_count = geom.GetCount();
+            const auto part_array = geom.GetParts();
+
+            size_t size = part_count * sizeof(geometry_t);
+            for (uint32_t i = 0; i < part_count; i++) {
+                size += GetHeapSize(part_array[i]);
+            }
+            return size;
+        }
+        default:
+            throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom.GetPartType()));
+    }
+}
+
+void SerializeToHeapInternal(FixedSizeBlobWriter &writer, const geometry_t &geom) {
+    switch (geom.GetPartType()) {
+        case GeometryType::POINT:
+        case GeometryType::LINESTRING: {
+            const auto vert_count = geom.GetCount();
+            const auto vert_array = geom.GetVerts();
+            const auto dims_count = geom.GetDims();
+
+            for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+                for (uint32_t dim_idx = 0; dim_idx < dims_count; dim_idx++) {
+                    writer.Write<double>(vert_array[vert_idx * dims_count + dim_idx]);
+                }
+            }
+        } break;
+        case GeometryType::POLYGON:
+        case GeometryType::MULTIPOINT:
+        case GeometryType::MULTILINESTRING:
+        case GeometryType::MULTIPOLYGON:
+        case GeometryType::GEOMETRYCOLLECTION: {
+            const auto part_count = geom.GetCount();
+            const auto part_array = geom.GetParts();
+
+            auto nested = writer;
+            writer.Skip(part_count * sizeof(geometry_t));
+
+            for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+                const auto &part = part_array[part_idx];
+
+                // Write head of part
+                nested.Write<uint8_t>(static_cast<uint8_t>(part.GetPartType()));
+                nested.Write<uint8_t>(static_cast<uint8_t>(part.GetVertType()));
+                nested.Write<uint8_t>(0); // Padding
+                nested.Write<uint8_t>(0); // Padding
+                nested.Write<uint32_t>(part.GetCount());
+
+                // Write offset
+                const auto data_offset = nested.GetPosition() - writer.GetPosition() - sizeof(uint64_t);
+                nested.Write<uint64_t>(data_offset);
+
+                SerializeToHeapInternal(writer, part);
+            }
+        } break;
+        default:
+            throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom.GetPartType()));
+    }
+}
+
+void geometry_t::SerializeToHeap(const geometry_t &geom, data_ptr_t heap_data, size_t heap_size) {
+    FixedSizeBlobWriter writer(char_ptr_cast(heap_data), static_cast<uint32_t>(heap_size));
+    SerializeToHeapInternal(writer, geom);
+}
+
+static void DeserializeFromHeapInternal(BlobReader &reader, geometry_t &geom, bool allow_zero_copy, Allocator
+&allocator) {
+
+    switch (geom.GetType()) {
+        case GeometryType::POINT:
+        case GeometryType::LINESTRING: {
+            const auto vert_count = geom.GetCount();
+            const auto vert_width = geom.GetWidth();
+
+            if (vert_count == 0) {
+                geom.SetVerts(nullptr, 0);
+                return;
+            }
+
+            const auto vert_array = reinterpret_cast<double *>(allocator.AllocateData(vert_count * vert_width));
+            const auto data_array = reader.Reserve(vert_count * vert_width);
+            memcpy(vert_array, data_array, vert_count * vert_width);
+            geom.SetVerts(vert_array, vert_count);
+
+        } break;
+        case GeometryType::POLYGON:
+        case GeometryType::MULTIPOINT:
+        case GeometryType::MULTILINESTRING:
+        case GeometryType::MULTIPOLYGON:
+        case GeometryType::GEOMETRYCOLLECTION: {
+
+            const auto part_count = geom.GetCount();
+            if (part_count == 0) {
+                geom.SetParts(nullptr, 0);
+                return;
+            }
+
+            const auto part_array = reinterpret_cast<geometry_t *>(allocator.AllocateData(part_count *
+sizeof(geometry_t)));
+
+            for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+
+                // Read head of part
+                const auto part_type = static_cast<GeometryType>(reader.Read<uint8_t>());
+                const auto vert_type = static_cast<VertexType>(reader.Read<uint8_t>());
+
+                reader.Skip(1); // Padding
+                reader.Skip(1); // Padding
+
+                const auto item_count = reader.Read<uint32_t>();
+                const auto data_offset = reader.Read<uint64_t>();
+
+                part_array[part_idx] = geometry_t(part_type, vert_type, nullptr, item_count);
+
+                auto nested = reader;
+                nested.Skip(data_offset);
+
+                DeserializeFromHeapInternal(nested, part_array[part_idx], allow_zero_copy, allocator);
+            }
+            geom.SetParts(part_array, part_count);
+        } break;
+        default:
+            throw InvalidInputException("Unsupported geometry type %d", static_cast<int>(geom.GetPartType()));
+    }
+}
+
+void geometry_t::DeserializeFromHeap(geometry_t &root, data_ptr_t heap_data, bool allow_zero_copy,
+                                           Allocator &allocator) {
+    BlobReader reader(char_ptr_cast(heap_data), 1<<30); // unknown size
+    DeserializeFromHeapInternal(reader, root, allow_zero_copy, allocator);
+}
+*/
 } // namespace duckdb

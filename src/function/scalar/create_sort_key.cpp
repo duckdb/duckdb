@@ -281,6 +281,182 @@ struct SortKeyBlobOperator {
 	}
 };
 
+struct SortKeyGeometryOperator {
+	using TYPE = geometry_t;
+
+	static idx_t GetEncodeLengthInternal(const geometry_t &geom) {
+		switch (geom.GetType()) {
+		case GeometryType::POINT:
+		case GeometryType::LINESTRING: {
+			const auto vert_count = geom.GetCount();
+			const auto vert_width = geom.GetWidth();
+			return 8 + (vert_count * vert_width);
+		}
+		case GeometryType::POLYGON:
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			const auto part_count = geom.GetCount();
+			const auto part_array = geom.GetParts();
+			idx_t total_size = 8; // 4 bytes for meta + 4 bytes for count
+			for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
+				total_size += GetEncodeLengthInternal(part_array[part_idx]);
+			}
+			return total_size;
+		}
+		default:
+			return 0;
+		}
+	}
+
+	static idx_t GetEncodeLength(TYPE input) {
+		return GetEncodeLengthInternal(input);
+	}
+
+	static idx_t EncodeInternal(data_ptr_t ptr, const geometry_t &geom) {
+		const auto beg = ptr;
+
+		const auto geom_type = static_cast<uint8_t>(geom.GetType());
+		const auto vert_type = static_cast<uint8_t>(geom.GetVertType());
+		const auto item_count = geom.GetCount();
+
+		// geom type
+		Store<uint8_t>(geom_type, ptr);
+		ptr += sizeof(uint8_t);
+
+		// vert type
+		Store<uint8_t>(vert_type, ptr);
+		ptr += sizeof(uint8_t);
+
+		// padding
+		Store<uint16_t>(0, ptr);
+		ptr += sizeof(uint16_t);
+
+		// item count
+		Store<uint32_t>(item_count, ptr);
+		ptr += sizeof(uint32_t);
+
+		if (item_count == 0) {
+			return static_cast<idx_t>(ptr - beg);
+		}
+
+		switch (geom.GetType()) {
+		case GeometryType::POINT:
+		case GeometryType::LINESTRING: {
+			const auto vert_width = geom.GetWidth();
+			const auto vert_array = geom.GetVerts();
+
+			memcpy(ptr, vert_array, item_count * vert_width);
+			ptr += item_count * vert_width;
+
+			return static_cast<idx_t>(ptr - beg);
+		}
+		case GeometryType::POLYGON:
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			const auto part_array = geom.GetParts();
+			for (uint32_t part_idx = 0; part_idx < item_count; part_idx++) {
+				ptr += EncodeInternal(ptr, part_array[part_idx]);
+			}
+			return static_cast<idx_t>(ptr - beg);
+		}
+		default:
+			return static_cast<idx_t>(ptr - beg);
+		}
+	}
+
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		return EncodeInternal(result, input);
+	}
+
+	template <class T>
+	static T Decode(const_data_ptr_t &input, bool flip_bytes) {
+		T result;
+		if (flip_bytes) {
+			data_t flipped_bytes[sizeof(T)];
+			for (idx_t b = 0; b < sizeof(T); b++) {
+				flipped_bytes[b] = ~input[b];
+			}
+			result = Load<T>(flipped_bytes);
+		} else {
+			result = Load<T>(input);
+		}
+		input += sizeof(T);
+		return result;
+	}
+
+	static idx_t DecodeInternal(const_data_ptr_t ptr, ArenaAllocator &alloc, geometry_t &result, bool flip_bytes) {
+		const auto beg = ptr;
+
+		// geom type
+		const auto geom_type = static_cast<GeometryType>(Decode<uint8_t>(ptr, flip_bytes));
+
+		// vert type
+		const auto vert_type = static_cast<VertexType>(Decode<uint8_t>(ptr, flip_bytes));
+
+		// padding
+		ptr += sizeof(uint8_t) * 2;
+
+		// item count
+		const auto item_count = Decode<uint32_t>(ptr, flip_bytes);
+
+		result = geometry_t(geom_type, vert_type, nullptr, 0);
+		if (item_count == 0) {
+			return static_cast<idx_t>(ptr - beg);
+		}
+
+		switch (geom_type) {
+		case GeometryType::POINT:
+		case GeometryType::LINESTRING: {
+			const auto vert_width = result.GetWidth();
+			const auto byte_array = alloc.AllocateAligned(item_count * vert_width);
+			const auto vert_array = reinterpret_cast<double *>(byte_array);
+
+			memcpy(vert_array, ptr, item_count * vert_width);
+
+			if (flip_bytes) {
+				// Flip the byte array
+				for (idx_t i = 0; i < item_count * vert_width; i++) {
+					data_t *byte_ptr = reinterpret_cast<data_t *>(&vert_array[i]);
+					for (idx_t b = 0; b < sizeof(double); b++) {
+						byte_ptr[b] = ~byte_ptr[b];
+					}
+				}
+			}
+
+			ptr += item_count * vert_width;
+
+			result.SetVerts(vert_array, item_count);
+			return static_cast<idx_t>(ptr - beg);
+		}
+		case GeometryType::POLYGON:
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			const auto part_array =
+			    reinterpret_cast<geometry_t *>(alloc.AllocateAligned(item_count * sizeof(geometry_t)));
+
+			for (uint32_t part_idx = 0; part_idx < item_count; part_idx++) {
+				ptr += DecodeInternal(ptr, alloc, part_array[part_idx], flip_bytes);
+			}
+
+			result.SetParts(part_array, item_count);
+			return static_cast<idx_t>(ptr - beg);
+		}
+		default:
+			return static_cast<idx_t>(ptr - beg);
+		}
+	}
+
+	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
+		return DecodeInternal(input, GeometryVector::GetArena(result), result_value, flip_bytes);
+	}
+};
+
 struct SortKeyListEntry {
 	static bool IsArray() {
 		return false;
@@ -439,6 +615,10 @@ void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 			TemplatedGetSortKeyLength<SortKeyBlobOperator>(vector_data, chunk, result);
 		}
 		break;
+	case PhysicalType::GEOMETRY: {
+		TemplatedGetSortKeyLength<SortKeyGeometryOperator>(vector_data, chunk, result);
+		break;
+	}
 	case PhysicalType::STRUCT:
 		GetSortKeyLengthStruct(vector_data, chunk, result);
 		break;
@@ -650,6 +830,9 @@ void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 		} else {
 			TemplatedConstructSortKey<SortKeyBlobOperator>(vector_data, chunk, info);
 		}
+		break;
+	case PhysicalType::GEOMETRY:
+		TemplatedConstructSortKey<SortKeyGeometryOperator>(vector_data, chunk, info);
 		break;
 	case PhysicalType::STRUCT:
 		ConstructSortKeyStruct(vector_data, chunk, info);
@@ -1141,6 +1324,9 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 		} else {
 			TemplatedDecodeSortKey<SortKeyBlobOperator>(decode_data, vector_data, result, result_offset, count);
 		}
+		break;
+	case PhysicalType::GEOMETRY:
+		TemplatedDecodeSortKey<SortKeyGeometryOperator>(decode_data, vector_data, result, result_offset, count);
 		break;
 	case PhysicalType::STRUCT:
 		DecodeSortKeyStruct(decode_data, vector_data, result, result_offset, count);

@@ -114,8 +114,9 @@ struct JSONConverter {
 	}
 
 	static yyjson_mut_val *VisitGeometry(const string_t &str, yyjson_mut_doc *doc) {
-		auto val_str = Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString();
-		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+		throw NotImplementedException("not implemented");
+		// auto val_str = Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize()).ToString();
+		// return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
 	}
 
 	static yyjson_mut_val *VisitBitstring(const string_t &str, yyjson_mut_doc *doc) {

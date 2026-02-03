@@ -166,6 +166,18 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		}
 		break;
 	}
+	case PhysicalType::GEOMETRY: {
+		auto ldata = FlatVector::GetData<geometry_t>(*source);
+		auto tdata = FlatVector::GetData<geometry_t>(target);
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = sel->get_index(source_offset + i);
+			auto target_idx = target_offset + i;
+			if (tmask.RowIsValid(target_idx)) {
+				tdata[target_idx] = Geometry::Copy(ldata[source_idx], GeometryVector::GetArena(target));
+			}
+		}
+		break;
+	}
 	case PhysicalType::STRUCT: {
 		auto &source_children = StructVector::GetEntries(*source);
 		auto &target_children = StructVector::GetEntries(target);

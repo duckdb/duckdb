@@ -148,7 +148,7 @@ string GeometryStats::ToString(const BaseStatistics &stats) {
 	return result;
 }
 
-void GeometryStats::Update(BaseStatistics &stats, const string_t &value) {
+void GeometryStats::Update(BaseStatistics &stats, const geometry_t &value) {
 	auto &data = GetDataUnsafe(stats);
 	data.Update(value);
 }
@@ -214,9 +214,9 @@ static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &da
 	// This has been checked before and needs to be true for the checks below to be valid
 	D_ASSERT(data.extent.HasXY());
 
-	const auto &geom = StringValue::Get(constant);
+	const auto &geom = GeometryValue::Get(constant);
 	auto extent = GeometryExtent::Empty();
-	if (Geometry::GetExtent(string_t(geom), extent) == 0) {
+	if (Geometry::GetExtent(geom, extent) == 0) {
 		// If the geometry is empty, the predicate will never match
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}

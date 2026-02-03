@@ -134,6 +134,7 @@ class Vector {
 	friend struct UnionVector;
 	friend struct SequenceVector;
 	friend struct ArrayVector;
+	friend struct GeometryVector;
 
 	friend class DataChunk;
 	friend class VectorCacheBuffer;
@@ -615,6 +616,12 @@ struct FSSTVector {
 	//! Setting the string count is required to be able to correctly flatten the vector
 	DUCKDB_API static void SetCount(Vector &vector, idx_t count);
 	DUCKDB_API static idx_t GetCount(Vector &vector);
+};
+
+struct GeometryVector {
+	static void AddHandle(Vector &vector, BufferHandle handle);
+	static VectorGeometryBuffer &GetGeometryBuffer(Vector &vector);
+	static ArenaAllocator &GetArena(Vector &vector);
 };
 
 enum class MapInvalidReason : uint8_t { VALID, NULL_KEY, DUPLICATE_KEY, NOT_ALIGNED, INVALID_PARAMS };

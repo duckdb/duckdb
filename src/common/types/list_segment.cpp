@@ -293,6 +293,28 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 	Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
 }
 
+static void WriteDataToGeometrySegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                                       ListSegment *segment, RecursiveUnifiedVectorFormat &input_data,
+                                       idx_t &entry_idx) {
+	auto sel_entry_idx = input_data.unified.sel->get_index(entry_idx);
+
+	// write null validity
+	auto null_mask = GetNullMask(segment);
+	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
+	null_mask[segment->count] = !valid;
+
+	// write value
+	if (valid) {
+		auto segment_data = GetPrimitiveData<geometry_t>(segment);
+		auto input_data_ptr = UnifiedVectorFormat::GetData<geometry_t>(input_data.unified);
+		auto input_geom = input_data_ptr[sel_entry_idx];
+
+		// Copy into the allocator's memory pool
+		auto copied_geom = Geometry::Copy(input_geom, allocator);
+		Store<geometry_t>(copied_geom, data_ptr_cast(segment_data + segment->count));
+	}
+}
+
 static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                    ListSegment *segment, RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 	auto sel_entry_idx = input_data.unified.sel->get_index(entry_idx);
@@ -451,6 +473,30 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 
 		// finalize the str
 		result_str.Finalize();
+	}
+}
+
+static void ReadDataFromGeometrySegment(const ListSegmentFunctions &, const ListSegment *segment, Vector &result,
+                                        idx_t &total_count) {
+	auto &aggr_vector_validity = FlatVector::Validity(result);
+
+	// set NULLs
+	auto null_mask = GetNullMask(segment);
+	for (idx_t i = 0; i < segment->count; i++) {
+		if (null_mask[i]) {
+			aggr_vector_validity.SetInvalid(total_count + i);
+		}
+	}
+
+	auto aggr_vector_data = FlatVector::GetData<geometry_t>(result);
+
+	// load values
+	for (idx_t i = 0; i < segment->count; i++) {
+		if (aggr_vector_validity.RowIsValid(total_count + i)) {
+			auto data = GetPrimitiveData<geometry_t>(segment);
+			auto geom = Load<geometry_t>(const_data_ptr_cast(data + i));
+			aggr_vector_data[total_count + i] = geom;
+		}
 	}
 }
 
@@ -624,6 +670,12 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		child_function.read_data = nullptr;
 		child_function.initial_capacity = 16;
 		functions.child_functions.push_back(child_function);
+		break;
+	}
+	case PhysicalType::GEOMETRY: {
+		functions.create_segment = CreatePrimitiveSegment<geometry_t>;
+		functions.write_data = WriteDataToGeometrySegment;
+		functions.read_data = ReadDataFromGeometrySegment;
 		break;
 	}
 	case PhysicalType::LIST: {

@@ -80,7 +80,8 @@ struct ValueConverter {
 		return Value::BIGNUM(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	static Value VisitGeometry(const string_t &str) {
-		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
+		throw NotImplementedException("not implemented");
+		// return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	static Value VisitBitstring(const string_t &str) {
 		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());

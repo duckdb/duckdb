@@ -1582,8 +1582,9 @@ bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict
 // Cast To Geometry
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
-	return Geometry::FromString(input, result, result_vector, parameters.strict);
+bool TryCastToGeometry::Operation(string_t input, geometry_t &result, Vector &result_vector,
+                                  CastParameters &parameters) {
+	return Geometry::FromString(input.GetString(), result, result_vector, parameters.strict);
 }
 
 //===--------------------------------------------------------------------===//

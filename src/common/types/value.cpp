@@ -41,7 +41,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Extra Value Info
 //===--------------------------------------------------------------------===//
-enum class ExtraValueInfoType : uint8_t { INVALID_TYPE_INFO = 0, STRING_VALUE_INFO = 1, NESTED_VALUE_INFO = 2 };
+enum class ExtraValueInfoType : uint8_t {
+	INVALID_TYPE_INFO = 0,
+	STRING_VALUE_INFO = 1,
+	NESTED_VALUE_INFO = 2,
+	GEOMETRY_VALUE_INFO = 3
+};
 
 struct ExtraValueInfo {
 	explicit ExtraValueInfo(ExtraValueInfoType type) : type(type) {
@@ -97,6 +102,112 @@ protected:
 	}
 
 	string str;
+};
+
+//===--------------------------------------------------------------------===//
+// Geometry Value Info
+//===--------------------------------------------------------------------===//
+struct GeometryValueInfo : public ExtraValueInfo {
+	static constexpr const ExtraValueInfoType TYPE = ExtraValueInfoType::GEOMETRY_VALUE_INFO;
+
+public:
+	explicit GeometryValueInfo(const geometry_t &geom_p)
+	    : ExtraValueInfo(ExtraValueInfoType::GEOMETRY_VALUE_INFO),
+	      geom(CopyGeom(geom_p, Allocator::DefaultAllocator())) {
+	}
+
+	explicit GeometryValueInfo(geometry_t &&geom_p)
+	    : ExtraValueInfo(ExtraValueInfoType::GEOMETRY_VALUE_INFO), geom(geom_p) {
+	}
+
+	~GeometryValueInfo() override {
+		FreeGeom(geom, Allocator::DefaultAllocator());
+	}
+
+	const geometry_t &GetGeometry() const {
+		return geom;
+	}
+
+protected:
+	bool EqualsInternal(ExtraValueInfo *other_p) const override {
+		return other_p->Get<GeometryValueInfo>().geom == geom;
+	}
+
+	geometry_t geom;
+
+private:
+	static geometry_t CopyGeom(const geometry_t &geom, Allocator &alloc) {
+		// Copy properties
+		geometry_t result = geom;
+
+		switch (geom.GetPartType()) {
+		case GeometryType::POINT:
+		case GeometryType::LINESTRING: {
+			const auto count = geom.GetCount();
+			const auto width = geom.GetWidth();
+
+			const auto source = reinterpret_cast<const_data_ptr_t>(geom.GetVerts());
+			const auto target = reinterpret_cast<double *>(alloc.AllocateData(count * width));
+
+			memcpy(target, source, count * width);
+
+			result.SetVerts(target, count);
+			return result;
+		}
+		case GeometryType::POLYGON:
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			const auto count = geom.GetCount();
+			const auto width = sizeof(geometry_t);
+
+			const auto source_parts = geom.GetParts();
+			const auto target_parts = reinterpret_cast<geometry_t *>(alloc.AllocateData(count * width));
+
+			for (uint32_t part_idx = 0; part_idx < count; part_idx++) {
+				target_parts[part_idx] = CopyGeom(source_parts[part_idx], alloc);
+			}
+
+			result.SetParts(target_parts, count);
+			return result;
+		}
+		default:
+			return result;
+		}
+	}
+
+	static void FreeGeom(geometry_t &geom, Allocator &alloc) {
+		switch (geom.GetPartType()) {
+		case GeometryType::POINT:
+		case GeometryType::LINESTRING: {
+			const auto width = geom.GetWidth();
+			const auto count = geom.GetCount();
+
+			const auto array = reinterpret_cast<data_ptr_t>(geom.GetVerts());
+			alloc.FreeData(array, count * width);
+
+		} break;
+		case GeometryType::POLYGON:
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			const auto count = geom.GetCount();
+			const auto width = sizeof(geometry_t);
+
+			const auto parts = geom.GetParts();
+			for (uint32_t part_idx = 0; part_idx < count; part_idx++) {
+				FreeGeom(parts[part_idx], alloc);
+			}
+
+			const auto array = reinterpret_cast<data_ptr_t>(parts);
+			alloc.FreeData(array, count * width);
+		} break;
+		default:
+			break;
+		}
+	}
 };
 
 //===--------------------------------------------------------------------===//
@@ -923,19 +1034,19 @@ Value Value::BIGNUM(const string &data) {
 	return result;
 }
 
-Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs) {
+Value Value::GEOMETRY(const geometry_t &geom, const CoordinateReferenceSystem &crs) {
 	Value result;
 	result.type_ = LogicalType::GEOMETRY(crs); // construct type explicitly so that we get the ExtraTypeInfo
 	result.is_null = false;
-	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	result.value_info_ = make_shared_ptr<GeometryValueInfo>(geom);
 	return result;
 }
 
-Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
+Value Value::GEOMETRY(const geometry_t &geom) {
 	Value result;
 	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the ExtraTypeInfo
 	result.is_null = false;
-	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	result.value_info_ = make_shared_ptr<GeometryValueInfo>(geom);
 	return result;
 }
 
@@ -1228,6 +1339,9 @@ T Value::GetValueInternal() const {
 		default:
 			throw InternalException("Invalid Internal Type for ENUMs");
 		}
+	}
+	case LogicalTypeId::GEOMETRY: {
+		return Cast::Operation<geometry_t, T>(GeometryValue::Get(*this));
 	}
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for GetValue()", type_.ToString());
@@ -1832,6 +1946,15 @@ LogicalType TypeValue::GetType(const Value &value) {
 	return LogicalType::Deserialize(deserializer);
 }
 
+const geometry_t &GeometryValue::Get(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling GeometryValue::Get on a NULL value");
+	}
+	D_ASSERT(value.type().id() == LogicalTypeId::GEOMETRY);
+	D_ASSERT(value.value_info_);
+	return value.value_info_->Get<GeometryValueInfo>().GetGeometry();
+}
+
 date_t DateValue::Get(const Value &value) {
 	return value.GetValueUnsafe<date_t>();
 }
@@ -2194,6 +2317,11 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 			serializer.WriteProperty(102, "value", StringValue::Get(*this));
 		}
 	} break;
+	case PhysicalType::GEOMETRY: {
+		auto &geom = GeometryValue::Get(*this);
+		auto geom_str = geometry_t::Serialize(geom);
+		serializer.WriteProperty(102, "value", geom_str);
+	} break;
 	case PhysicalType::LIST:
 		SerializeChildren(serializer, ListValue::GetChildren(*this), type_);
 		break;
@@ -2283,6 +2411,11 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		} else {
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(str);
 		}
+	} break;
+	case PhysicalType::GEOMETRY: {
+		auto str = deserializer.ReadProperty<string>(102, "value");
+		new_value.value_info_ =
+		    make_shared_ptr<GeometryValueInfo>(geometry_t::Deserialize(str, Allocator::DefaultAllocator()));
 	} break;
 	case PhysicalType::LIST: {
 		deserializer.Set<const LogicalType &>(ListType::GetChildType(type));

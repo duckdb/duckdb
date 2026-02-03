@@ -37,7 +37,7 @@ struct BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
 	}
 
 	template <class SRC, class TGT>
@@ -57,7 +57,7 @@ struct ParquetCastOperator : public BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
 		auto &numeric_stats = stats->Cast<NumericStatisticsState<SRC, TGT, BaseParquetOperator>>();
 		if (LessThan::Operation(target_value, numeric_stats.min)) {
 			numeric_stats.min = target_value;
@@ -80,7 +80,7 @@ struct FloatingPointOperator : public BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
 		auto &numeric_stats = stats->Cast<FloatingPointStatisticsState<SRC, TGT, BaseParquetOperator>>();
 		if (Value::IsNan(target_value)) {
 			numeric_stats.has_nan = true;
@@ -113,36 +113,37 @@ struct ParquetTimestampSOperator : public ParquetCastOperator {
 struct ParquetBaseGeoOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-		return input;
+		return Geometry::ToBinary(input);
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
 		auto &geo_stats = stats->Cast<GeoStatisticsState>();
-		geo_stats.Update(target_value);
+		geo_stats.Update(source_value);
 	}
 
 	template <class SRC, class TGT>
 	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
-		ser.Write<uint32_t>(target_value.GetSize());
-		ser.WriteData(const_data_ptr_cast(target_value.GetData()), target_value.GetSize());
+		ser.Write<uint32_t>(target_value.size());
+		ser.WriteData(const_data_ptr_cast(target_value.data()), target_value.size());
 	}
 
 	template <class SRC, class TGT>
 	static idx_t WriteSize(const TGT &target_value) {
-		return sizeof(uint32_t) + target_value.GetSize();
+		return sizeof(uint32_t) + target_value.size();
 	}
 
 	template <class SRC, class TGT>
 	static uint64_t XXHash64(const TGT &target_value) {
-		return duckdb_zstd::XXH64(target_value.GetData(), target_value.GetSize(), 0);
+		return duckdb_zstd::XXH64(target_value.data(), target_value.size(), 0);
 	}
 
 	template <class SRC, class TGT>
 	static idx_t GetRowSize(const Vector &vector, idx_t index) {
 		// This needs to add the 4 bytes (just like WriteSize) otherwise we underestimate and we have to realloc
 		// This seriously harms performance, mostly by making it very inconsistent (see internal issue #4990)
-		return sizeof(uint32_t) + FlatVector::GetData<string_t>(vector)[index].GetSize();
+		auto &geom = FlatVector::GetData<geometry_t>(vector)[index];
+		return sizeof(uint32_t) + Geometry::ToBinarySize(geom);
 	}
 };
 
@@ -160,7 +161,7 @@ struct ParquetBaseStringOperator : public BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
 		auto &string_stats = stats->Cast<StringStatisticsState>();
 		string_stats.Update(target_value);
 	}
@@ -267,7 +268,7 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats_p, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats_p, SRC source_value, TGT target_value) {
 		auto &stats = stats_p->Cast<UUIDStatisticsState>();
 		if (!stats.has_stats ||
 		    memcmp(target_value.bytes, stats.min.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE) < 0) {
@@ -300,7 +301,7 @@ struct ParquetHugeintOperator : public BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
 	}
 };
 
@@ -316,7 +317,7 @@ struct ParquetUhugeintOperator : public BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	static void HandleStats(ColumnWriterStatistics *stats, SRC source_value, TGT target_value) {
 	}
 };
 

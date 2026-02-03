@@ -34,8 +34,9 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 			continue;
 		}
 
-		TGT target_value = OP::template Operation<SRC, TGT>(ptr[r]);
-		OP::template HandleStats<SRC, TGT>(stats, target_value);
+		SRC source_value = ptr[r];
+		TGT target_value = OP::template Operation<SRC, TGT>(source_value);
+		OP::template HandleStats<SRC, TGT>(stats, source_value, target_value);
 
 		if (COPY_DIRECTLY_FROM_VECTOR) {
 			continue;
@@ -298,7 +299,7 @@ public:
 
 		state.dictionary.IterateValues([&](const SRC &src_value, const TGT &tgt_value) {
 			// update the statistics
-			OP::template HandleStats<SRC, TGT>(stats, tgt_value);
+			OP::template HandleStats<SRC, TGT>(stats, src_value, tgt_value);
 			if (state.bloom_filter) {
 				// update the bloom filter
 				auto hash = OP::template XXHash64<SRC, TGT>(tgt_value);
@@ -369,8 +370,9 @@ private:
 					if (!mask.RowIsValid(r)) {
 						continue;
 					}
-					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-					OP::template HandleStats<SRC, TGT>(stats, target_value);
+					const SRC source_value = data_ptr[r];
+					const TGT target_value = OP::template Operation<SRC, TGT>(source_value);
+					OP::template HandleStats<SRC, TGT>(stats, source_value, target_value);
 					page_state.dbp_encoder.BeginWrite(temp_writer, target_value);
 					page_state.dbp_initialized = true;
 					r++; // skip over
@@ -382,8 +384,9 @@ private:
 				if (!ALL_VALID && !mask.RowIsValid(r)) {
 					continue;
 				}
-				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				const SRC source_value = data_ptr[r];
+				const TGT target_value = OP::template Operation<SRC, TGT>(source_value);
+				OP::template HandleStats<SRC, TGT>(stats, source_value, target_value);
 				page_state.dbp_encoder.WriteValue(temp_writer, target_value);
 			}
 			break;
@@ -396,8 +399,9 @@ private:
 					if (!mask.RowIsValid(r)) {
 						continue;
 					}
-					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-					OP::template HandleStats<SRC, TGT>(stats, target_value);
+					const SRC source_value = data_ptr[r];
+					const TGT target_value = OP::template Operation<SRC, TGT>(source_value);
+					OP::template HandleStats<SRC, TGT>(stats, source_value, target_value);
 					page_state.dlba_encoder.BeginWrite(BufferAllocator::Get(writer.GetContext()), temp_writer,
 					                                   target_value);
 					page_state.dlba_initialized = true;
@@ -410,8 +414,9 @@ private:
 				if (!ALL_VALID && !mask.RowIsValid(r)) {
 					continue;
 				}
-				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				const SRC source_value = data_ptr[r];
+				const TGT target_value = OP::template Operation<SRC, TGT>(source_value);
+				OP::template HandleStats<SRC, TGT>(stats, source_value, target_value);
 				page_state.dlba_encoder.WriteValue(temp_writer, target_value);
 			}
 			break;
@@ -425,8 +430,9 @@ private:
 				if (!ALL_VALID && !mask.RowIsValid(r)) {
 					continue;
 				}
-				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				const SRC source_value = data_ptr[r];
+				const TGT target_value = OP::template Operation<SRC, TGT>(source_value);
+				OP::template HandleStats<SRC, TGT>(stats, source_value, target_value);
 				page_state.bss_encoder.WriteValue(target_value);
 			}
 			break;

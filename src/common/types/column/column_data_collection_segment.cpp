@@ -1,5 +1,6 @@
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 
+#include "duckdb/common/types/geometry_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
@@ -245,6 +246,45 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 				next_index = current_vdata.next_data;
 			}
 		}
+		if (state.properties == ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
+			VectorOperations::Copy(result, result, vcount, 0, 0);
+		}
+	} else if (internal_type == PhysicalType::GEOMETRY) {
+		if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+			// For buffer-managed geometry, we stored serialized blobs that need to be deserialized
+			// The geometry_t entries contain: GeometryType::INVALID as marker, count = blob size, array = blob pointer
+			auto next_index = vector_index;
+			auto &validity = FlatVector::Validity(result);
+			auto geom_data = FlatVector::GetData<geometry_t>(result);
+			idx_t vec_offset = 0;
+
+			while (next_index.IsValid()) {
+				auto &current_vdata = GetVectorData(next_index);
+				for (auto &swizzle_segment : current_vdata.swizzle_data) {
+					auto &heap_segment = GetVectorData(swizzle_segment.child_index);
+
+					auto new_heap_ptr = allocator->GetDataPointer(state, heap_segment.block_id, heap_segment.offset);
+					auto old_heap_ptr = swizzle_segment.ptr;
+
+					// Deserialize each geometry in this swizzle segment
+					const auto start = vec_offset + swizzle_segment.offset;
+					const auto end = start + swizzle_segment.count;
+					for (idx_t i = start; i < end; i++) {
+						if (!validity.RowIsValid(i)) {
+							continue;
+						}
+
+						// Now unswizzle the pointers
+						auto &geom_ref = geom_data[i];
+						geometry_t::RecomputeHeapPointers(geom_ref, old_heap_ptr, new_heap_ptr);
+						geom_ref.Verify();
+					}
+				}
+				vec_offset += current_vdata.count;
+				next_index = current_vdata.next_data;
+			}
+		}
+		// For DISALLOW_ZERO_COPY, we need to copy the geometries to a new arena
 		if (state.properties == ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 			VectorOperations::Copy(result, result, vcount, 0, 0);
 		}

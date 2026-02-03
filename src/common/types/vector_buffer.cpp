@@ -36,6 +36,13 @@ VectorStringBuffer::VectorStringBuffer(VectorBufferType type) : VectorBuffer(typ
 VectorFSSTStringBuffer::VectorFSSTStringBuffer() : VectorStringBuffer(VectorBufferType::FSST_BUFFER) {
 }
 
+VectorGeometryBuffer::VectorGeometryBuffer(Allocator &allocator)
+    : VectorBuffer(VectorBufferType::GEOMETRY_BUFFER), arena(allocator) {
+}
+
+VectorGeometryBuffer::~VectorGeometryBuffer() {
+}
+
 VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 }
 
