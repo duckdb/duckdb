@@ -38,6 +38,8 @@ enum class ARTHandlingResult : uint8_t;
 
 enum class ARTScanHandling : uint8_t;
 
+enum class ARTScanResult : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
@@ -505,6 +507,9 @@ const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
+
+template<>
+const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -1202,6 +1207,9 @@ ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value);
 
 template<>
 ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
+
+template<>
+ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
