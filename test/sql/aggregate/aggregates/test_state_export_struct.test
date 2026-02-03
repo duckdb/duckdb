@@ -14,29 +14,29 @@ create table dummy as select range % 10 g, range d from range(100);
 # ungrouped aggr
 
 query IIIIII nosort res0
-SELECT avg(d)::integer FROM dummy;
+SELECT sum(d), avg(d)::integer FROM dummy;
 ----
 
 query IIIIII nosort res0
-SELECT finalize(avg(d) EXPORT_STATE)::integer FROM dummy;
+SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer FROM dummy;
 ----
 
-# grouped sum
+# grouped aggr
 query IIIIIII nosort res1
-SELECT g, sum(d)::integer FROM dummy GROUP BY g ORDER BY g;
+SELECT g, sum(d), avg(d)::integer FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIII nosort res1
-SELECT g, finalize(sum(d) EXPORT_STATE)::integer FROM dummy GROUP BY g ORDER BY g;
+SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 
 statement ok
-CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state FROM dummy GROUP BY g ORDER BY g;
 
 query IIIIIII nosort res1
-SELECT g, finalize(sum_state)::integer FROM state ORDER BY g;
+SELECT g, finalize(sum_state), finalize(avg_state)::integer FROM state ORDER BY g;
 ----
 
 query II nosort res3
