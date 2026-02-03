@@ -26,6 +26,8 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
+  REDUCE_SYMBOLS: 1
+  PYTHONUNBUFFERED: 1
 
 jobs:
   check-draft:
@@ -44,7 +46,7 @@ jobs:
        GEN: ninja
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -57,6 +59,10 @@ jobs:
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -80,17 +86,19 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - uses: ./.github/actions/cleanup_runner
 
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Build
       shell: bash
@@ -99,7 +107,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
 
   release-assert-osx-storage:
     name: Release Assertions OSX Storage
@@ -113,11 +121,9 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-
-    - uses: ./.github/actions/cleanup_runner
 
     - uses: actions/setup-python@v5
       with:
@@ -128,6 +134,10 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -135,7 +145,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200 --force-storage
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --force-storage --time_execution
 
   smaller-binary:
     name: Smaller Binary
@@ -146,7 +156,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -157,6 +167,10 @@ jobs:
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Build
       shell: bash
@@ -186,7 +200,7 @@ jobs:
       RUN_SLOW_VERIFIERS: 1
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -198,6 +212,10 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
+
     - name: Build
       shell: bash
       run: UNSAFE_NUMERIC_CAST=1 make relassert
@@ -205,7 +223,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
 
   sqllogic:
      name: Sqllogic tests
@@ -213,7 +231,7 @@ jobs:
      needs: linux-memory-leaks
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -224,6 +242,8 @@ jobs:
          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
@@ -244,7 +264,7 @@ jobs:
        GEN: ninja
 
      steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -255,6 +275,10 @@ jobs:
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -274,11 +298,9 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Checkout duckdb-httpfs
         uses: actions/checkout@v4
@@ -301,6 +323,10 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
+      - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
+
       - name: Build
         shell: bash
         run: CORE_EXTENSIONS="tpch" make
@@ -319,37 +345,7 @@ jobs:
       - name: Run Extension Medata Tests
         shell: bash
         run: |
-          ./scripts/run_extension_medata_tests.sh
-
-  force-blocking-sink-source:
-    name: Forcing async Sinks/Sources
-    runs-on: ubuntu-24.04
-    needs: linux-memory-leaks
-    env:
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      FORCE_ASYNC_SINK_SOURCE: 1
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - uses: ./.github/actions/ccache-action
-
-      - name: Build
-        shell: bash
-        run: make relassert
-
-      - name: Test
-        shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600
+          ./scripts/run_extension_medata_tests.sh "${{ github.workspace }}/build/release/src/libduckdb_static.a"
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
@@ -365,14 +361,14 @@ jobs:
 
    steps:
      - name: Checkout
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
      - uses: ./.github/actions/cleanup_runner
 
      - name: Checkout tools repo
-       uses: actions/checkout@v3
+       uses: actions/checkout@v4
        with:
          fetch-depth: 0
          path: unsafe
@@ -387,6 +383,10 @@ jobs:
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash
@@ -439,17 +439,19 @@ jobs:
     needs: linux-memory-leaks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: ./.github/actions/ccache-action
+
+      - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
 
       - name: Build
         id: build
@@ -458,6 +460,7 @@ jobs:
           CORE_EXTENSIONS: "json;parquet"
           GEN: ninja
           STANDARD_VECTOR_SIZE: 512
+          DISABLE_SANITIZER: 1
         run: make relassert
 
       - name: All tests with 512 vector size and default block size
@@ -476,7 +479,7 @@ jobs:
     needs: linux-memory-leaks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -487,6 +490,10 @@ jobs:
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: ./.github/actions/ccache-action
+
+      - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
 
       - name: Build
         id: build
@@ -500,6 +507,44 @@ jobs:
         if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash
         run: ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
+
+  force-blocking-sink-source:
+    name: Forcing async Sinks/Sources
+    runs-on: ubuntu-24.04
+    needs: check-draft
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      FORCE_ASYNC_SINK_SOURCE: 1
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+      - uses: ./.github/actions/cleanup_runner
+
+      - uses: ./.github/actions/swap_space
+
+      - name: Build
+        shell: bash
+        env:
+          DISABLE_SANITIZER: 1
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600 --time_execution
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
@@ -526,7 +571,7 @@ jobs:
         git submodule update
         git rm -r submodules/duckdb
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         path: duckdb-wasm/submodules/duckdb
@@ -538,6 +583,10 @@ jobs:
         make patch_duckdb || echo "done"
 
     - uses: ./.github/actions/ccache-action
+
+    - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/swap_space
 
     - name: Print version
       shell: bash
@@ -581,21 +630,24 @@ jobs:
      GEN: ninja
      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
      HASH_ZERO: 1
+     DISABLE_SANITIZER: 1
      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
      DUCKDB_TEST_DESCRIPTION: 'Compiled with HASH_ZERO=1. Use require no_hash_zero to skip.'
 
    steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
-
-     - uses: ./.github/actions/cleanup_runner
 
      - name: Install
        shell: bash
        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
+
+     - uses: ./.github/actions/cleanup_runner
+
+     - uses: ./.github/actions/swap_space
 
      - name: Build
        shell: bash

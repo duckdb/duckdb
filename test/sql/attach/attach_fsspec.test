@@ -2,11 +2,31 @@
 # description: Test attach using fsspec
 # group: [attach]
 
+# this doesn't work on Windows because this expands to "file:///Users/..." on Mac/Linux, but "file://C:\.." on Windows
+require notwindows
+
 statement error
 ATTACH 'dummy_extension:/hello.world';
 ----
 not found
 
+statement ok
+ATTACH 'file://{WORKING_DIR}/__TEST_DIR__/dummy.csv'
+
 statement error
-ATTACH 'file://dummy.csv'
+ATTACH '__TEST_DIR__/dummy.csv'
+----
+already attached
+
+statement ok
+CREATE TABLE dummy.tbl(i INTEGER);
+
+statement ok
+DETACH dummy
+
+statement ok
+ATTACH '__TEST_DIR__/dummy.csv'
+
+query I
+FROM dummy.tbl
 ----

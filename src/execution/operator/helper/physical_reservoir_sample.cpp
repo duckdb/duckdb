@@ -78,8 +78,8 @@ SinkFinalizeType PhysicalReservoirSample::Finalize(Pipeline &pipeline, Event &ev
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-SourceResultType PhysicalReservoirSample::GetData(ExecutionContext &context, DataChunk &chunk,
-                                                  OperatorSourceInput &input) const {
+SourceResultType PhysicalReservoirSample::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                          OperatorSourceInput &input) const {
 	auto &sink = this->sink_state->Cast<SampleGlobalSinkState>();
 	lock_guard<mutex> glock(sink.lock);
 	if (!sink.sample) {

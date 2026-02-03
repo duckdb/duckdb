@@ -50,6 +50,12 @@ public:
 		key.len = sizeof(value);
 	}
 
+	static inline ARTKey CreateARTKeyFromBytes(ArenaAllocator &allocator, const_data_ptr_t data, idx_t len) {
+		auto new_data = allocator.Allocate(len);
+		memcpy(new_data, data, len);
+		return ARTKey(new_data, len);
+	}
+
 	static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value);
 
 public:
@@ -73,7 +79,6 @@ public:
 	void Concat(ArenaAllocator &allocator, const ARTKey &other);
 	row_t GetRowId() const;
 	idx_t GetMismatchPos(const ARTKey &other, const idx_t start) const;
-	void VerifyKeyLength(const idx_t max_len) const;
 
 private:
 	template <class T>

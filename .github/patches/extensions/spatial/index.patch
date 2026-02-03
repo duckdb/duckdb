@@ -1,0 +1,122 @@
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index ed66c70..a8deb0c 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -192,7 +192,8 @@ public:
+ 		                                            "ST_CoveredBy", "ST_ContainsProperly"};
+ 
+ 		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
+-		table_info.GetIndexes().Scan([&](Index &index) {
++
++		for (auto &index : table_info.GetIndexes().Indexes()) {
+ 			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
+ 				return false;
+ 			}
+@@ -210,7 +211,7 @@ public:
+ 			}
+ 			if (!rewrite_possible) {
+ 				// Could not rewrite!
+-				return false;
++				continue;
+ 			}
+ 
+ 			FunctionExpressionMatcher matcher;
+@@ -223,7 +224,7 @@ public:
+ 
+ 			vector<reference<Expression>> bindings;
+ 			if (!matcher.Match(*filter_expr, bindings)) {
+-				return false;
++				continue;
+ 			}
+ 
+ 			// 		bindings[0] = the expression
+@@ -234,12 +235,12 @@ public:
+ 			auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
+ 			Box2D<float> bbox;
+ 			if (!TryGetBoundingBox(constant_value, bbox)) {
+-				return false;
++				continue;
+ 			}
+ 
+ 			bind_data = make_uniq<RTreeIndexScanBindData>(duck_table, index_entry, bbox);
+-			return true;
+-		});
++			break;
++		};
+ 
+ 		if (!bind_data) {
+ 			// No index found
+diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+index 0ee4925..a0e5397 100644
+--- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
++++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+@@ -77,17 +77,16 @@ static void RTreeIndexInfoExecute(ClientContext &context, TableFunctionInput &da
+ 
+ 		auto &table_info = *storage.GetDataTableInfo();
+ 		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
+-		table_info.GetIndexes().Scan([&](Index &index) {
++		for (auto &index : table_info.GetIndexes().Indexes()) {
+ 			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
+-				return false;
++				continue;
+ 			}
+ 			auto &rtree = index.Cast<RTreeIndex>();
+ 			if (rtree.name == index_entry.name) {
+ 				rtree_index = &rtree;
+-				return true;
++				break;
+ 			}
+-			return false;
+-		});
++		};
+ 
+ 		if (!rtree_index) {
+ 			throw BinderException("Index %s not found", index_entry.name);
+@@ -121,17 +120,16 @@ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string
+ 
+ 	auto &table_info = *storage.GetDataTableInfo();
+ 	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
+-	table_info.GetIndexes().Scan([&](Index &index) {
++	for (auto &index : table_info.GetIndexes().Indexes()) {
+ 		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
+-			return false;
++			continue;
+ 		}
+ 		auto &rtree = index.Cast<RTreeIndex>();
+ 		if (index_entry.name == index_name) {
+ 			rtree_index = &rtree;
+-			return true;
++			break;
+ 		}
+-		return false;
+-	});
++	};
+ 
+ 	return rtree_index;
+ }
+diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
+index 014ecb4..9377c8f 100644
+--- a/src/spatial/index/rtree/rtree_index_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_scan.cpp
+@@ -214,17 +214,16 @@ static unique_ptr<FunctionData> RTreeScanDeserialize(Deserializer &deserializer,
+ 	unique_ptr<RTreeIndexScanBindData> result = nullptr;
+ 
+ 	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
+-	table_info.GetIndexes().Scan([&](Index &index) {
++	for (auto &index : table_info.GetIndexes().Indexes()) {
+ 		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
+-			return false;
++			continue;
+ 		}
+ 		auto &index_entry = index.Cast<RTreeIndex>();
+ 		if (index_entry.GetIndexName() == index_name) {
+ 			result = make_uniq<RTreeIndexScanBindData>(duck_table, index_entry, bbox);
+-			return true;
++			break;
+ 		}
+-		return false;
+-	});
++	};
+ 
+ 	if (!result) {
+ 		throw SerializationException("Could not find index %s on table %s.%s", index_name, schema, table);

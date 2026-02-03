@@ -1,9 +1,7 @@
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -207,7 +205,7 @@ struct ValidityScanState : public SegmentScanState {
 	block_id_t block_id;
 };
 
-unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
@@ -226,10 +224,6 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 	auto input_data = reinterpret_cast<validity_t *>(input);
 
 #ifdef DEBUG
-	// this method relies on all the bits we are going to write to being set to valid
-	for (idx_t i = 0; i < scan_count; i++) {
-		D_ASSERT(result_mask.RowIsValid(result_offset + i));
-	}
 	// save boundary entries to verify we don't corrupt surrounding bits later.
 	idx_t debug_first_entry = result_offset / ValidityMask::BITS_PER_VALUE;
 	idx_t debug_last_entry = (result_offset + scan_count - 1) / ValidityMask::BITS_PER_VALUE;
@@ -399,11 +393,12 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 #endif
 
 #ifdef DEBUG
-	// verify that we actually accomplished the bitwise ops equivalent that we wanted to do
-	ValidityMask input_mask(input_data, input_size);
-	for (idx_t i = 0; i < scan_count; i++) {
-		D_ASSERT(result_mask.RowIsValid(result_offset + i) == input_mask.RowIsValid(input_start + i));
-	}
+	// FIXME: Previously, this function had an assumption that all the bits in the result range we are copying
+	// to were all set to valid. with dict_fsst compression, this is no longer the case, so if we want to have
+	// a debug verification of the result here, we need to check that all the bits that were initially valid
+	// in the result range have the same value as the corresponding bit in the input, and if they are invalid
+	// they remain invalid.
+
 	// verify surrounding bits weren't modified
 	auto debug_final_result_data = (validity_t *)result_mask.GetData();
 	validity_t debug_final_first_entry =
@@ -450,7 +445,7 @@ void ValidityUncompressed::AlignedScan(data_ptr_t input, idx_t input_start, Vect
 
 void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                          idx_t result_offset) {
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
@@ -463,7 +458,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	result.Flatten(scan_count);
 
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
 		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
@@ -488,7 +483,7 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vecto
 	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
 
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 	ValidityMask source_mask(input_data, segment.count);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto source_idx = start + sel.get_index(i);
@@ -564,8 +559,8 @@ idx_t ValidityFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
 	return ((segment.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE) * ValidityMask::STANDARD_MASK_SIZE;
 }
 
-void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
-	idx_t start_bit = start_row - segment.start;
+void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
+	idx_t start_bit = new_count;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);

@@ -1,6 +1,5 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -214,15 +213,37 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto target_binder = Binder::CreateBinder(context, this);
 	string table_alias = stmt.target->alias;
 	auto bound_table = target_binder->Bind(*stmt.target);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("Can only merge into base tables!");
 	}
-	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
-	auto &table = table_binding.table;
+	auto table_ptr = bound_table.plan->Cast<LogicalGet>().GetTable();
+	if (!table_ptr) {
+		throw BinderException("Can only merge into base tables!");
+	}
+	auto &table = *table_ptr;
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		// modification type depends on actions
+		DatabaseModificationType modification;
+		for (auto &action_condition : stmt.actions) {
+			for (auto &action : action_condition.second) {
+				switch (action->action_type) {
+				case MergeActionType::MERGE_UPDATE:
+					modification |= DatabaseModificationType::UPDATE_DATA;
+					break;
+				case MergeActionType::MERGE_DELETE:
+					modification |= DatabaseModificationType::DELETE_DATA;
+					break;
+				case MergeActionType::MERGE_INSERT:
+					modification |= DatabaseModificationType::INSERT_DATA;
+					break;
+				default:
+					break;
+				}
+			}
+		}
+		properties.RegisterDBModify(table.catalog, context, modification);
 	}
 
 	// bind the source
@@ -234,9 +255,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	vector<string> source_names;
 	for (auto &binding_entry : source_binder->bind_context.GetBindingsList()) {
 		auto &binding = *binding_entry;
-		for (idx_t c = 0; c < binding.names.size(); c++) {
-			source_aliases.push_back(binding.alias);
-			source_names.push_back(binding.names[c]);
+		auto &column_names = binding.GetColumnNames();
+		for (idx_t c = 0; c < column_names.size(); c++) {
+			source_aliases.push_back(binding.GetBindingAlias());
+			source_names.push_back(column_names[c]);
 		}
 	}
 
@@ -267,7 +289,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	}
 	auto bound_join_node = Bind(join);
 
-	auto root = CreatePlan(*bound_join_node);
+	auto root = std::move(bound_join_node.plan);
 	auto join_ref = reference<LogicalOperator>(*root);
 	while (join_ref.get().children.size() == 1) {
 		join_ref = *join_ref.get().children[0];
@@ -372,7 +394,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

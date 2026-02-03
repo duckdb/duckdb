@@ -1,0 +1,26 @@
+# name: test/extension/consistent_semicolon_extension_parse.test
+# description: Original issue: https://github.com/duckdb/duckdb/issues/18485
+# group: [extension]
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement error
+quack (foo);
+----
+Parser Error: This is not a quack: (foo);
+
+statement error
+quack 's';
+----
+Parser Error: This is not a quack: 's';
+
+statement error
+unrecognizedkeyword ';';anotherunrecognizedkeyword';';;;;;
+----
+Parser Error: syntax error at or near "unrecognizedkeyword"
+
+statement error
+QUACK string_split('hello-world', ';');QUACK string_split('hello-world', ';')
+----
+string_split('hello-world', ';');

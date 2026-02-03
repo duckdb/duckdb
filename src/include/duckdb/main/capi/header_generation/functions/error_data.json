@@ -1,6 +1,6 @@
 {
   "group": "error_data",
-  "description": "// Functions that can throw DuckDB errors must return duckdb_error_data.\n// Please use this interface for all new functions, as it deprecates all previous error handling approaches. \n\n",
+  "description": "Functions to operate on `duckdb_error_data`, which contains, for example, the error type and message. Please use this interface for all new C API functions, as it supersedes previous error handling approaches.",
   "deprecated": false,
   "entries": [
     {

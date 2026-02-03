@@ -539,9 +539,6 @@ TEST_CASE("Test connection API", "[api]") {
 	con.Query("CREATE TABLE integers(i integer);");
 	auto table_info = con.TableInfo("integers");
 
-	DataChunk chunk;
-	REQUIRE_NOTHROW(con.Append(*table_info, chunk));
-
 	// no transaction active
 	REQUIRE_THROWS(con.Commit());
 	REQUIRE_THROWS(con.Rollback());
@@ -643,7 +640,6 @@ TEST_CASE("Issue #14130: InsertStatement::ToString causes InternalException late
 }
 
 TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.]") {
-
 	DBConfig config;
 	config.options.maximum_threads = 8;
 	DuckDB db(nullptr, &config);
@@ -695,7 +691,7 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 
 TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
 	DBConfig config;
-	config.options.enable_external_access = false;
+	config.SetOptionByName("enable_external_access", false);
 	auto path = TestCreatePath("external_access_test");
 	DuckDB db(path, &config);
 	Connection con(db);
@@ -754,4 +750,57 @@ TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements wit
 	sql = "DELETE FROM test WHERE (id = 1) RETURNING id AS deleted";
 	stmts = con.ExtractStatements(sql);
 	REQUIRE(stmts[0]->ToString() == sql);
+}
+
+TEST_CASE("Test buffer managed query result", "[api]") {
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto con = make_uniq<Connection>(*db);
+
+	// Send query with in-memory result
+	QueryParameters parameters;
+	parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
+	auto result = con->SendQuery("SELECT 42;", parameters);
+
+	// Query result is accessible
+	REQUIRE_NOTHROW(result->ToString());
+
+	// Reset connection AND db
+	con.reset();
+	db.reset();
+
+	// Query result is still accessible after resetting
+	REQUIRE_NOTHROW(result->ToString());
+
+	// Do it again with a buffer-managed query result
+	db = make_uniq<DuckDB>(nullptr);
+	con = make_uniq<Connection>(*db);
+	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
+	result = con->SendQuery("SELECT 42;", parameters);
+
+	// Query result is accessible
+	REQUIRE_NOTHROW(result->ToString());
+
+	// Reset connection AND db
+	con.reset();
+	db.reset();
+
+	// Query result is no longer accessible
+	REQUIRE_THROWS(result->ToString());
+
+	// And again with order preservation disabled
+	db = make_uniq<DuckDB>(nullptr);
+	con = make_uniq<Connection>(*db);
+	result = con->SendQuery("SET preserve_insertion_order=false;");
+	result = con->SendQuery("SELECT 42;", parameters);
+
+	// Query result is accessible
+	REQUIRE_NOTHROW(result->ToString());
+
+	// Reset connection AND db
+	con.reset();
+	db.reset();
+
+	// Query result is no longer accessible
+	REQUIRE_THROWS(result->ToString());
 }

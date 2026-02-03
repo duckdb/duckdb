@@ -140,21 +140,11 @@ unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOper
 	if (nodes.empty()) {
 		return nullptr;
 	}
-	while (nodes.size() > 1) {
-		vector<unique_ptr<LogicalOperator>> new_nodes;
-		for (idx_t i = 0; i < nodes.size(); i += 2) {
-			if (i + 1 == nodes.size()) {
-				new_nodes.push_back(std::move(nodes[i]));
-			} else {
-				auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes[i]),
-				                                                 std::move(nodes[i + 1]),
-				                                                 LogicalOperatorType::LOGICAL_UNION, true, false);
-				new_nodes.push_back(std::move(copy_union));
-			}
-		}
-		nodes = std::move(new_nodes);
+	if (nodes.size() == 1) {
+		return std::move(nodes[0]);
 	}
-	return std::move(nodes[0]);
+	return make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes),
+	                                      LogicalOperatorType::LOGICAL_UNION, true, false);
 }
 
 BoundStatement Binder::Bind(ExportStatement &stmt) {
@@ -312,7 +302,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.plan = std::move(export_node);
 
 	auto &properties = GetStatementProperties();
-	properties.allow_stream_result = false;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

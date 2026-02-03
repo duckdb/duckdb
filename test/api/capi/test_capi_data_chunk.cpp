@@ -403,7 +403,6 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 }
 
 TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
-
 	auto elem_type = duckdb_create_logical_type(duckdb_type::DUCKDB_TYPE_INTEGER);
 	auto array_type = duckdb_create_array_type(elem_type, 3);
 	duckdb_logical_type schema[] = {array_type};
@@ -546,4 +545,305 @@ TEST_CASE("Test DataChunk write BIGNUM", "[capi]") {
 	REQUIRE(string_value[3] == (char)0x2a);
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&type);
+}
+
+TEST_CASE("Test duckdb_valid_utf8_check", "[capi]") {
+	// Valid ASCII.
+	string valid_utf8 = "hello";
+	REQUIRE(duckdb_valid_utf8_check(valid_utf8.c_str(), valid_utf8.length()) == nullptr);
+
+	// Valid multibyte.
+	string valid_utf8_multibyte = "é";
+	REQUIRE(duckdb_valid_utf8_check(valid_utf8_multibyte.c_str(), valid_utf8_multibyte.length()) == nullptr);
+
+	// Empty string is valid.
+	REQUIRE(duckdb_valid_utf8_check("", 0) == nullptr);
+
+	// String with embedded null bytes is valid UTF-8.
+	string with_nulls("a\0b\0c", 5);
+	REQUIRE(duckdb_valid_utf8_check(with_nulls.c_str(), with_nulls.length()) == nullptr);
+
+	// Valid 3-byte UTF-8 (e.g., Euro sign U+20AC: 0xE2 0x82 0xAC).
+	string euro = "\xe2\x82\xac";
+	REQUIRE(duckdb_valid_utf8_check(euro.c_str(), euro.length()) == nullptr);
+
+	// Valid 4-byte UTF-8 (e.g., U+1F600: 0xF0 0x9F 0x98 0x80).
+	string emoji = "\xf0\x9f\x98\x80";
+	REQUIRE(duckdb_valid_utf8_check(emoji.c_str(), emoji.length()) == nullptr);
+
+	// Valid duck emoji.
+	string duck = "🦆";
+	REQUIRE(duckdb_valid_utf8_check(duck.c_str(), duck.length()) == nullptr);
+
+	// Valid ducks with embedded null bytes.
+	string ducks_with_nulls("🦆\0🦆", 9);
+	REQUIRE(duckdb_valid_utf8_check(ducks_with_nulls.c_str(), ducks_with_nulls.length()) == nullptr);
+
+	// Create invalid UTF-8 by removing the first byte of a multi-byte character.
+	idx_t len = strlen(valid_utf8_multibyte.c_str());
+	auto invalid_utf8 = static_cast<char *>(malloc(len));
+	memcpy(invalid_utf8, valid_utf8_multibyte.c_str() + 1, len);
+
+	// Invalid UTF-8 returns error data.
+	auto error = duckdb_valid_utf8_check(invalid_utf8, len - 1);
+	REQUIRE(error != nullptr);
+	REQUIRE(duckdb_error_data_error_type(error) == DUCKDB_ERROR_INVALID_INPUT);
+	REQUIRE(duckdb::StringUtil::Contains(duckdb_error_data_message(error), "invalid Unicode"));
+	duckdb_destroy_error_data(&error);
+	free(invalid_utf8);
+
+	// Valid 2-byte sequence (0xC3 0xA9 = 'é'), then lone continuation byte (missing lead byte).
+	char valid_2byte[] = {(char)0xC3, (char)0xA9};
+	REQUIRE(duckdb_valid_utf8_check(valid_2byte, 2) == nullptr);
+	char lone_continuation[] = {(char)0xA9};
+	error = duckdb_valid_utf8_check(lone_continuation, 1);
+	REQUIRE(error != nullptr);
+	duckdb_destroy_error_data(&error);
+
+	// Valid 2-byte sequence (0xC3 0xA9 = 'é'), then truncated (0xC3 without continuation).
+	REQUIRE(duckdb_valid_utf8_check(valid_2byte, 2) == nullptr);
+	error = duckdb_valid_utf8_check(valid_2byte, 1);
+	REQUIRE(error != nullptr);
+	duckdb_destroy_error_data(&error);
+
+	// Valid 3-byte sequence (0xE2 0x82 0xAC = '€'), then truncated (missing final byte).
+	char valid_3byte[] = {(char)0xE2, (char)0x82, (char)0xAC};
+	REQUIRE(duckdb_valid_utf8_check(valid_3byte, 3) == nullptr);
+	error = duckdb_valid_utf8_check(valid_3byte, 2);
+	REQUIRE(error != nullptr);
+	duckdb_destroy_error_data(&error);
+
+	// Valid encoding of '/' is 0x2F (single byte), overlong encoding (0xC0 0xAF) is invalid.
+	char valid_slash[] = {(char)0x2F};
+	REQUIRE(duckdb_valid_utf8_check(valid_slash, 1) == nullptr);
+	char overlong_slash[] = {(char)0xC0, (char)0xAF};
+	error = duckdb_valid_utf8_check(overlong_slash, 2);
+	REQUIRE(error != nullptr);
+	duckdb_destroy_error_data(&error);
+}
+
+TEST_CASE("Test writing invalid UTF-8 to VARCHAR vector in data chunk", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type types[] = {type};
+
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_destroy_logical_type(&type);
+	duckdb_data_chunk_set_size(chunk, 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	string valid_utf8 = "é";
+	// Create invalid UTF-8 by stripping the lead byte of 'é' (0xC3 0xA9), leaving a lone continuation byte.
+	idx_t len = strlen(valid_utf8.c_str());
+	auto invalid_utf8 = static_cast<char *>(malloc(len));
+	memcpy(invalid_utf8, valid_utf8.c_str() + 1, len);
+
+	// Confirm the input is actually invalid UTF-8.
+	auto error = duckdb_valid_utf8_check(invalid_utf8, len - 1);
+	REQUIRE(error != nullptr);
+	duckdb_destroy_error_data(&error);
+
+	// Write a valid string to initialize the data.
+	duckdb_vector_assign_string_element(vector, 0, valid_utf8.c_str());
+
+	// Write an invalid string via _len - should assign NULL.
+	duckdb_vector_assign_string_element_len(vector, 0, invalid_utf8, len - 1);
+
+	// The row should now be NULL.
+	auto validity = duckdb_vector_get_validity(vector);
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
+
+	// Reset validity to valid, then try invalid via non-len version.
+	duckdb_validity_set_row_valid(validity, 0);
+
+	// Write an invalid null-terminated string via non-len version - should also assign NULL.
+	invalid_utf8[len - 1] = '\0';
+	duckdb_vector_assign_string_element(vector, 0, invalid_utf8);
+	free(invalid_utf8);
+
+	// The row should be NULL.
+	validity = duckdb_vector_get_validity(vector);
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
+
+	duckdb_destroy_data_chunk(&chunk);
+}
+
+TEST_CASE("Test invalid UTF-8 on uninitialized VARCHAR vector assigns NULL", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type types[] = {type};
+
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_destroy_logical_type(&type);
+	duckdb_data_chunk_set_size(chunk, 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// Do not write any valid data first — the vector data at index 0 is uninitialized.
+
+	// Invalid UTF-8: lone continuation byte.
+	char invalid_bytes[] = {(char)0xA9};
+
+	// Confirm the input is actually invalid UTF-8.
+	auto error = duckdb_valid_utf8_check(invalid_bytes, 1);
+	REQUIRE(error != nullptr);
+	duckdb_destroy_error_data(&error);
+
+	// Write invalid UTF-8 via _len on uninitialized row — should assign NULL.
+	duckdb_vector_assign_string_element_len(vector, 0, invalid_bytes, 1);
+
+	auto validity = duckdb_vector_get_validity(vector);
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
+
+	// Same test via non-len version with a null-terminated invalid string.
+	// Reset validity to valid first.
+	duckdb_validity_set_row_valid(validity, 0);
+	REQUIRE(duckdb_validity_row_is_valid(validity, 0));
+
+	char invalid_null_terminated[] = {(char)0xA9, '\0'};
+	duckdb_vector_assign_string_element(vector, 0, invalid_null_terminated);
+
+	validity = duckdb_vector_get_validity(vector);
+	REQUIRE(!duckdb_validity_row_is_valid(validity, 0));
+
+	duckdb_destroy_data_chunk(&chunk);
+}
+
+TEST_CASE("Test writing embedded nulls to VARCHAR vector", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type types[] = {type};
+
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_destroy_logical_type(&type);
+	duckdb_data_chunk_set_size(chunk, 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// String with embedded nulls is valid UTF-8 and should be accepted.
+	string with_nulls("hello\0world", 11);
+	duckdb_vector_assign_string_element_len(vector, 0, with_nulls.c_str(), with_nulls.length());
+
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == 11);
+
+	duckdb_destroy_data_chunk(&chunk);
+}
+
+TEST_CASE("Test vector assign null truncation vs length version", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type types[] = {type};
+
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_destroy_logical_type(&type);
+	duckdb_data_chunk_set_size(chunk, 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// duckdb_vector_assign_string_element uses strlen, truncates at first null byte.
+	duckdb_vector_assign_string_element(vector, 0, "hello\0world");
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == 5);
+
+	// duckdb_vector_assign_string_element_len preserves the full content including embedded nulls.
+	string full("hello\0world", 11);
+	duckdb_vector_assign_string_element_len(vector, 0, full.c_str(), full.length());
+	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == 11);
+
+	// Leading null byte — non-len version sees empty string.
+	duckdb_vector_assign_string_element(vector, 0, "\0trailing");
+	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == 0);
+
+	// Same bytes via _len version preserves all 9 bytes.
+	string leading_null("\0trailing", 9);
+	duckdb_vector_assign_string_element_len(vector, 0, leading_null.c_str(), leading_null.length());
+	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == 9);
+
+	duckdb_destroy_data_chunk(&chunk);
+}
+
+TEST_CASE("Test BLOB vector bypasses UTF-8 validation", "[capi]") {
+	char invalid_bytes[] = {(char)0x80, (char)0xC0, (char)0xFF};
+
+	// First, show that the same bytes are rejected on a VARCHAR vector.
+	duckdb_logical_type varchar_type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type varchar_types[] = {varchar_type};
+
+	auto varchar_chunk = duckdb_create_data_chunk(varchar_types, 1);
+	duckdb_destroy_logical_type(&varchar_type);
+	duckdb_data_chunk_set_size(varchar_chunk, 1);
+	auto varchar_vector = duckdb_data_chunk_get_vector(varchar_chunk, 0);
+
+	// Confirm the bytes are actually invalid UTF-8.
+	auto error = duckdb_valid_utf8_check(invalid_bytes, 3);
+	REQUIRE(error != nullptr);
+	duckdb_destroy_error_data(&error);
+
+	// Write a valid string first to initialize.
+	duckdb_vector_assign_string_element(varchar_vector, 0, "valid");
+
+	// Attempt to write invalid bytes - should assign NULL.
+	duckdb_vector_assign_string_element_len(varchar_vector, 0, invalid_bytes, 3);
+
+	// The row should now be NULL.
+	auto varchar_validity = duckdb_vector_get_validity(varchar_vector);
+	REQUIRE(!duckdb_validity_row_is_valid(varchar_validity, 0));
+
+	duckdb_destroy_data_chunk(&varchar_chunk);
+
+	// Now show that the same bytes are accepted on a BLOB vector.
+	duckdb_logical_type blob_type = duckdb_create_logical_type(DUCKDB_TYPE_BLOB);
+	duckdb_logical_type blob_types[] = {blob_type};
+
+	auto blob_chunk = duckdb_create_data_chunk(blob_types, 1);
+	duckdb_destroy_logical_type(&blob_type);
+	duckdb_data_chunk_set_size(blob_chunk, 1);
+	auto blob_vector = duckdb_data_chunk_get_vector(blob_chunk, 0);
+
+	duckdb_vector_assign_string_element_len(blob_vector, 0, invalid_bytes, 3);
+
+	auto blob_string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(blob_vector));
+	REQUIRE(duckdb_string_t_length(blob_string_data[0]) == 3);
+
+	// Verify content matches.
+	auto data_ptr = duckdb_string_t_data(&blob_string_data[0]);
+	REQUIRE(memcmp(data_ptr, invalid_bytes, 3) == 0);
+
+	duckdb_destroy_data_chunk(&blob_chunk);
+}
+
+TEST_CASE("Test unsafe string assignment to VARCHAR vector", "[capi]") {
+	duckdb_logical_type type = duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR);
+	duckdb_logical_type types[] = {type};
+
+	auto chunk = duckdb_create_data_chunk(types, 1);
+	duckdb_destroy_logical_type(&type);
+	duckdb_data_chunk_set_size(chunk, 1);
+	auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+
+	// Test unsafe assignment with valid ASCII.
+	string valid_utf8 = "hello world";
+	duckdb_unsafe_vector_assign_string_element_len(vector, 0, valid_utf8.c_str(), valid_utf8.length());
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == valid_utf8.length());
+
+	// Verify content.
+	auto data_ptr = duckdb_string_t_data(&string_data[0]);
+	REQUIRE(memcmp(data_ptr, valid_utf8.c_str(), valid_utf8.length()) == 0);
+
+	// Test unsafe assignment with valid multibyte UTF-8.
+	string multibyte = "héllo wörld";
+	duckdb_unsafe_vector_assign_string_element_len(vector, 0, multibyte.c_str(), multibyte.length());
+	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == multibyte.length());
+
+	// Test unsafe assignment with embedded null bytes.
+	string with_nulls("hello\0world", 11);
+	duckdb_unsafe_vector_assign_string_element_len(vector, 0, with_nulls.c_str(), with_nulls.length());
+	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == 11);
+
+	// Test unsafe assignment with empty string.
+	duckdb_unsafe_vector_assign_string_element_len(vector, 0, "", 0);
+	string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	REQUIRE(duckdb_string_t_length(string_data[0]) == 0);
+
+	duckdb_destroy_data_chunk(&chunk);
 }

@@ -22,7 +22,7 @@ enum class LogLevel : uint8_t {
 	LOG_TRACE = 10,
 	LOG_DEBUG = 20,
 	LOG_INFO = 30,
-	LOG_WARN = 40,
+	LOG_WARNING = 40,
 	LOG_ERROR = 50,
 	LOG_FATAL = 60
 };
@@ -40,12 +40,6 @@ struct LogConfig {
 	constexpr static const char *DEFAULT_LOG_STORAGE = IN_MEMORY_STORAGE_NAME;
 
 	LogConfig();
-
-	DUCKDB_API static LogConfig Create(bool enabled, LogLevel level);
-	DUCKDB_API static LogConfig CreateFromEnabled(bool enabled, LogLevel level,
-	                                              unordered_set<string> &enabled_log_types);
-	DUCKDB_API static LogConfig CreateFromDisabled(bool enabled, LogLevel level,
-	                                               unordered_set<string> &disabled_log_types);
 
 	DUCKDB_API bool IsConsistent() const;
 

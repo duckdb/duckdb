@@ -26,8 +26,12 @@
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 
 #include <utility>
 #include <cmath>
@@ -919,6 +923,41 @@ Value Value::BIGNUM(const string &data) {
 	return result;
 }
 
+Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs) {
+	Value result;
+	result.type_ = LogicalType::GEOMETRY(crs); // construct type explicitly so that we get the ExtraTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
+	Value result;
+	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the ExtraTypeInfo
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
+	return result;
+}
+
+Value Value::TYPE(const LogicalType &type) {
+	MemoryStream stream;
+	BinarySerializer::Serialize(type, stream);
+	auto data_ptr = const_char_ptr_cast(stream.GetData());
+	auto data_len = stream.GetPosition();
+
+	Value result(LogicalType::TYPE());
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(string(data_ptr, data_len));
+	return result;
+}
+
+Value Value::TYPE(const string_t &serialized_type) {
+	Value result(LogicalType::TYPE());
+	result.is_null = false;
+	result.value_info_ = make_shared_ptr<StringValueInfo>(serialized_type.GetString());
+	return result;
+}
+
 Value Value::BLOB(const string &data) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
@@ -1611,6 +1650,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -1628,7 +1668,17 @@ string Value::ToSQLString() const {
 		}
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	}
-	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::VARIANT: {
+		string ret = "VARIANT(";
+		Vector tmp(*this);
+		RecursiveUnifiedVectorFormat format;
+		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		UnifiedVariantVectorData vector_data(format);
+		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+		ret += val.ToString();
+		ret += ")";
+		return ret;
+	}
 	case LogicalTypeId::STRUCT: {
 		bool is_unnamed = StructType::IsUnnamed(type_);
 		string ret = is_unnamed ? "(" : "{";
@@ -1767,6 +1817,19 @@ const string &StringValue::Get(const Value &value) {
 	D_ASSERT(value.type().InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<StringValueInfo>().GetString();
+}
+
+LogicalType TypeValue::GetType(const Value &value) {
+	if (value.is_null) {
+		throw InternalException("Calling TypeValue::GetType on a NULL value");
+	}
+	D_ASSERT(value.type().id() == LogicalTypeId::TYPE);
+	D_ASSERT(value.value_info_);
+	auto &type_str = value.value_info_->Get<StringValueInfo>().GetString();
+	auto str = string_t(type_str);
+	MemoryStream stream(data_ptr_cast(str.GetDataWriteable()), str.GetSize());
+	BinaryDeserializer deserializer(stream);
+	return LogicalType::Deserialize(deserializer);
 }
 
 date_t DateValue::Get(const Value &value) {
@@ -2017,7 +2080,7 @@ void Value::Reinterpret(LogicalType new_type) {
 	this->type_ = std::move(new_type);
 }
 
-const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
+static const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
 	switch (parent_type.InternalType()) {
 	case PhysicalType::LIST:
 		return ListType::GetChildType(parent_type);
@@ -2030,7 +2093,7 @@ const LogicalType &GetChildType(const LogicalType &parent_type, idx_t i) {
 	}
 }
 
-bool SerializeTypeMatches(const LogicalType &expected_type, const LogicalType &actual_type) {
+static bool SerializeTypeMatches(const LogicalType &expected_type, const LogicalType &actual_type) {
 	if (expected_type.id() != actual_type.id()) {
 		// type id needs to be the same
 		return false;
@@ -2070,6 +2133,14 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 	if (IsNull()) {
 		return;
 	}
+
+	if (type_.id() == LogicalTypeId::TYPE) {
+		// special case for TYPE values: serialize the type as a nested object
+		auto type_value = TypeValue::GetType(*this);
+		serializer.WriteProperty(102, "value", type_value);
+		return;
+	}
+
 	switch (type_.InternalType()) {
 	case PhysicalType::BIT:
 		throw InternalException("BIT type should not be serialized");
@@ -2153,6 +2224,13 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		return new_value;
 	}
 	new_value.is_null = false;
+
+	if (type.id() == LogicalTypeId::TYPE) {
+		// special case for TYPE values: deserialize the type as a nested object
+		auto type_value = deserializer.ReadProperty<LogicalType>(102, "value");
+		return Value::TYPE(type_value);
+	}
+
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
 		throw InternalException("BIT type should not be deserialized");

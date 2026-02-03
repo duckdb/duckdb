@@ -1,6 +1,9 @@
 # name: test/sql/function/variant/variant_extract.test
 # group: [variant]
 
+statement ok
+pragma enable_verification;
+
 require json
 
 query I
@@ -32,10 +35,11 @@ CREATE MACRO struct_cast_data() AS TABLE (
 	]}::VARIANT
 );
 
-statement error
+query I
 select variant_extract(a, 'a[1].c') from struct_cast_data();
 ----
-Invalid Input Error: VARIANT(OBJECT(a)) is missing key 'a[1].c'
+NULL
+NULL
 
 query I
 select variant_extract(a, 'a').variant_extract(1::UINTEGER).variant_extract('c') from struct_cast_data();
@@ -56,17 +60,28 @@ select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
 test
 
 # When the argument is a string, it's taken as an object field, not an array index
-statement error
+query I
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b']['1'];
 ----
-Invalid Input Error: Can't extract key '1' from a VARIANT(ARRAY)
+NULL
 
-statement error
+query I
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b[2]'];
 ----
-Invalid Input Error: VARIANT(OBJECT(a,b)) is missing key 'b[2]'
+NULL
 
 query I
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
 ----
 test
+
+query I
+SELECT [
+	x.a for x in [
+		{'a': 42, 'b': [1,2,3]}::VARIANT,
+		NULL,
+		84
+	]
+]
+----
+[42, NULL, NULL]

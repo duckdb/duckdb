@@ -8,12 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/access_mode.hpp"
-#include "duckdb/common/enums/on_entry_not_found.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
@@ -28,6 +24,7 @@ class ClientContext;
 class DatabaseInstance;
 class TaskScheduler;
 struct AttachOptions;
+struct AlterInfo;
 
 //! The DatabaseManager is a class that sits at the root of all attached databases
 class DatabaseManager {
@@ -42,6 +39,9 @@ public:
 	static DatabaseManager &Get(ClientContext &db);
 	static DatabaseManager &Get(AttachedDatabase &db);
 
+	DatabaseInstance &GetInstance() {
+		return db;
+	}
 	//! Initializes the system catalog of the attached SYSTEM_DATABASE.
 	void InitializeSystemCatalog();
 	//! Finalize starting up the system
@@ -52,10 +52,10 @@ public:
 	//! Attach a new database
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
-	optional_ptr<AttachedDatabase> FinalizeAttach(ClientContext &context, AttachInfo &info,
-	                                              shared_ptr<AttachedDatabase> database);
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
+	//! Alter operation dispatcher
+	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database
 	shared_ptr<AttachedDatabase> DetachInternal(const string &name);
 	//! Returns a reference to the system catalog
@@ -81,7 +81,7 @@ public:
 	idx_t ApproxDatabaseCount();
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
-	void ResetDatabases(unique_ptr<TaskScheduler> &scheduler);
+	void ResetDatabases();
 
 	transaction_t GetNewQueryNumber() {
 		return current_query_number++;
@@ -107,6 +107,11 @@ public:
 	shared_ptr<AttachedDatabase> GetDatabaseInternal(const lock_guard<mutex> &, const string &name);
 
 private:
+	optional_ptr<AttachedDatabase> FinalizeAttach(ClientContext &context, AttachInfo &info,
+	                                              shared_ptr<AttachedDatabase> database);
+
+private:
+	DatabaseInstance &db;
 	//! The system database is a special database that holds system entries (e.g. functions)
 	shared_ptr<AttachedDatabase> system;
 	//! Lock for databases
@@ -123,6 +128,11 @@ private:
 	string default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
+
+private:
+	//! Rename an existing database
+	void RenameDatabase(ClientContext &context, const string &old_name, const string &new_name,
+	                    OnEntryNotFound if_not_found);
 };
 
 } // namespace duckdb

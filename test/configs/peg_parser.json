@@ -1,0 +1,87 @@
+{
+  "description": "Test PEG Parser + transformer with fallback mode",
+  "skip_compiled": "true",
+  "on_init": "set allow_parser_override_extension=fallback;",
+  "statically_loaded_extensions": ["core_functions", "autocomplete"],
+  "skip_tests": [
+    {
+      "reason": "Quotations",
+      "paths": [
+        "test/sql/pragma/test_show_tables_from.test",
+        "test/sql/attach/attach_dbname_quotes.test",
+        "test/sql/table_function/sqlite_master_quotes.test",
+        "test/sql/keywords/escaped_quotes_expressions.test",
+        "test/sql/catalog/test_quoted_column_name.test",
+        "test/sql/json/issues/large_quoted_string_constant.test",
+        "test/sql/export/export_database.test",
+        "test/sql/cast/string_to_struct_cast.test",
+        "test/sql/export/parquet/export_parquet_enum.test",
+        "test/sql/show_select/show_quote_identifier.test",
+        "test/sql/copy/return_stats.test",
+        "test/sql/copy/csv/multidelimiter/test_abac.test"
+      ]
+    },
+    {
+      "reason": "Error handling",
+      "paths": [
+        "test/sql/error/error_position.test",
+        "test/sql/catalog/table/test_default_values.test",
+        "test/sql/cast/cast_error_location.test",
+        "test/sql/types/nested/array/array_invalid.test"
+      ]
+    },
+    {
+      "reason": "Special strings",
+      "paths": [
+        "test/sql/copy/csv/unquoted_escape/basic.test",
+        "test/sqlserver/sqlserver_cte.test",
+        "test/optimizer/compare_blob.test"
+      ]
+    },
+    {
+      "reason": "Conversion Error",
+      "paths": [
+        "test/sql/storage/types/struct/wal_struct_storage.test",
+        "test/sql/storage/types/struct/struct_storage.test",
+        "test/sql/order/hugeint_order_by_extremes.test",
+        "test/sql/join/inner/equality_join_limits.test",
+        "test/sql/aggregate/group/group_by_limits.test",
+        "test/sql/subquery/scalar/test_issue_7079.test"
+      ]
+    },
+    {
+      "reason": "Case insensitive preservation",
+      "paths": ["test/sql/settings/setting_preserve_identifier_case.test"]
+    },
+    {
+      "reason": "Macro statement with some errors",
+      "paths": [
+        "test/sql/catalog/function/test_complex_macro.test",
+        "test/sql/export/export_macros.test",
+        "test/sql/catalog/function/test_macro_issue_14276.test"
+      ]
+    },
+    {
+      "reason": "Timeout",
+      "paths": [
+        "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",
+        "test/sql/storage/temp_directory/offloading_block_files.test_slow"
+      ]
+    },
+    {
+      "reason": "Setting option to 'fallback' changes behavior of first tests",
+      "paths": [
+        "test/extension/loadable_parser_override.test",
+        "test/sql/collate/test_unsupported_collations.test"
+      ]
+    },
+    {
+      "reason": "Unclassified failures",
+      "paths": [
+        "test/sql/types/enum/test_enum.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+      ]
+    }
+  ]
+}

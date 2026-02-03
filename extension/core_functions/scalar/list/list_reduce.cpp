@@ -1,6 +1,8 @@
 #include "core_functions/scalar/list_functions.hpp"
+
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -41,11 +43,13 @@ struct ReduceExecuteInfo {
 		}
 		left_slice->Slice(left_vector, reduced_row_idx);
 
+		input_types.push_back(left_slice->GetType());
+		input_types.push_back(left_slice->GetType());
+
 		if (info.has_index) {
 			input_types.push_back(LogicalType::BIGINT);
 		}
-		input_types.push_back(left_slice->GetType());
-		input_types.push_back(left_slice->GetType());
+
 		// skip the first entry if there is an initial value
 		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
@@ -133,18 +137,19 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	input_chunk.InitializeEmpty(execute_info.input_types);
 	input_chunk.SetCardinality(reduced_row_idx);
 
-	const idx_t slice_offset = info.has_index ? 1 : 0;
-	if (info.has_index) {
-		input_chunk.data[0].Reference(index_vector);
-	}
+	idx_t vec_offset = 0;
 
 	if (loops == 0 && info.has_initial) {
-		info.column_infos[0].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
-		input_chunk.data[slice_offset + 1].Reference(info.column_infos[0].vector);
+		info.column_infos[vec_offset].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
+		input_chunk.data[vec_offset++].Reference(info.column_infos[0].vector);
 	} else {
-		input_chunk.data[slice_offset + 1].Reference(*execute_info.left_slice);
+		input_chunk.data[vec_offset++].Reference(*execute_info.left_slice);
 	}
-	input_chunk.data[slice_offset].Reference(right_slice);
+	input_chunk.data[vec_offset++].Reference(right_slice);
+
+	if (info.has_index) {
+		input_chunk.data[vec_offset++].Reference(index_vector);
+	}
 
 	// add the other columns
 	// skip the initial value if there is one
@@ -153,12 +158,12 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	for (idx_t i = 0; i < info.column_infos.size() - initial_offset; i++) {
 		if (info.column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// only reference constant vectors
-			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[initial_offset + i].vector);
+			input_chunk.data[vec_offset++].Reference(info.column_infos[initial_offset + i].vector);
 		} else {
 			// slice the other vectors
 			slices.emplace_back(info.column_infos[initial_offset + i].vector, execute_info.active_rows_sel,
 			                    reduced_row_idx);
-			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
+			input_chunk.data[vec_offset++].Reference(slices.back());
 		}
 	}
 
@@ -175,7 +180,6 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 
 unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
                                         vector<unique_ptr<Expression>> &arguments) {
-
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
@@ -223,8 +227,8 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 	if (!cast_lambda_expr) {
 		throw BinderException("Could not cast lambda expression to list child type");
 	}
-	bound_function.return_type = cast_lambda_expr->return_type;
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(cast_lambda_expr), has_index,
+	bound_function.SetReturnType(cast_lambda_expr->return_type);
+	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(cast_lambda_expr), has_index,
 	                                     has_initial);
 }
 
@@ -311,10 +315,10 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::ANY,
 	                   LambdaFunctions::ListReduceFunction, ListReduceBind, nullptr, nullptr);
 
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.serialize = ListLambdaBindData::Serialize;
-	fun.deserialize = ListLambdaBindData::Deserialize;
-	fun.bind_lambda = ListReduceBindLambda;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetSerializeCallback(ListLambdaBindData::Serialize);
+	fun.SetDeserializeCallback(ListLambdaBindData::Deserialize);
+	fun.SetBindLambdaCallback(ListReduceBindLambda);
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);

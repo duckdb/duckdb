@@ -35,6 +35,7 @@ with cte1 as (with b as (Select i as j from a) select j from b), cte2 as (with c
 statement error
 with cte1 as (select 42), cte1 as (select 42) select * FROM cte1;
 ----
+<REGEX>:.*Parser Error: Duplicate CTE name.*
 
 # refer to CTE in subquery tableref
 query I
@@ -60,3 +61,4 @@ with cte as (Select i as j from a) select * from cte where j = (with cte as (sel
 statement error
 with cte as (select * from cte) select * from cte
 ----
+<REGEX>:.*Binder Error.*Circular reference to CTE.*

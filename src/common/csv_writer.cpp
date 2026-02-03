@@ -71,7 +71,6 @@ CSVWriter::CSVWriter(CSVReaderOptions &options_p, FileSystem &fs, const string &
                                                 FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW |
                                                     FileLockType::WRITE_LOCK | compression)),
       write_stream(*file_writer), should_initialize(true), shared(shared) {
-
 	if (!shared) {
 		global_write_state = make_uniq<CSVWriterState>();
 	}

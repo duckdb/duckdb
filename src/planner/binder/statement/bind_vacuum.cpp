@@ -15,12 +15,18 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 	}
 
 	D_ASSERT(vacuum.column_id_map.empty());
+
 	auto bound_table = Bind(*info.ref);
-	if (bound_table->type != TableReferenceType::BASE_TABLE) {
-		throw InvalidInputException("can only vacuum or analyze base tables");
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("Can only vacuum or analyze base tables");
 	}
-	auto ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(std::move(bound_table));
-	auto &table = ref->table;
+	auto table_scan = std::move(bound_table.plan);
+	auto &get = table_scan->Cast<LogicalGet>();
+	auto table_ptr = get.GetTable();
+	if (!table_ptr) {
+		throw BinderException("Can only vacuum or analyze base tables");
+	}
+	auto &table = *table_ptr;
 	vacuum.SetTable(table);
 
 	vector<unique_ptr<Expression>> select_list;
@@ -59,11 +65,6 @@ void Binder::BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> 
 		select_list.push_back(std::move(result.expression));
 	}
 	info.columns = std::move(non_generated_column_names);
-
-	auto table_scan = CreatePlan(*ref);
-	D_ASSERT(table_scan->type == LogicalOperatorType::LOGICAL_GET);
-
-	auto &get = table_scan->Cast<LogicalGet>();
 
 	auto &column_ids = get.GetColumnIds();
 	D_ASSERT(select_list.size() == column_ids.size());

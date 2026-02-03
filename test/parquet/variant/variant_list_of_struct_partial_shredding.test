@@ -1,0 +1,62 @@
+# name: test/parquet/variant/variant_list_of_struct_partial_shredding.test
+# group: [variant]
+
+require parquet
+
+statement ok
+create macro data() AS TABLE (
+	FROM (VALUES
+		(
+			[
+				{a:['foo'::VARIANT,42],  b:true,  c:{a:'nested1'}}::VARIANT, -- element of list in field 'a' is a different type
+				{a: 42, b: true, c:{a:'nested2'}}, -- field 'a' is a different type
+				{b: true, c:{a:'nested3'}}, -- field 'a' is missing
+				{a:[], b:false, c:{a:NULL}},
+				{a: [], c:{a:'nested4'}} -- field 'b' is missing
+			]::VARIANT
+		),
+		(
+			[]
+		),
+		(
+			[
+				{a:NULL,           b:NULL,  c:{a:'inner'}},
+				{a:['baz'],        b:false, c:{a:NULL}}
+			]
+		),
+		(
+			NULL
+		),
+		(
+			[
+				{a:['alpha'], b:true, c:{a:'deep'}}::VARIANT,
+				{a: [[1,2]::VARIANT, 'hello', {a: 42}]}, -- fields 'b' and 'c' are missing, 'a' element is of a wrong type
+				{b: false}, -- fields 'a' and 'c' are missing
+				{a:[], b:NULL, c:{a:'leaf'}}
+			]
+		),
+		(
+			[
+				{a:NULL,           b:false, c:{a:NULL}},
+				{a:['x',NULL,'z'], b:true,  c:{a:'final'}}
+			]
+		)
+	) t(a)
+);
+
+query I nosort expected_res
+select * from data();
+----
+
+statement ok
+COPY (
+	select a from data()
+) TO '__TEST_DIR__/shredded_list_of_structs.parquet' (
+	shredding {
+		a: 'STRUCT(a VARCHAR[], b BOOLEAN, c STRUCT(a VARCHAR))[]'
+	}
+)
+
+query I nosort expected_res
+select * from '__TEST_DIR__/shredded_list_of_structs.parquet';
+----

@@ -1,0 +1,91 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_basic.test
+# description: Test basic usage of read_duckdb
+# group: [read_duckdb]
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_test.db'
+
+statement ok
+CREATE TABLE read_duckdb_test.my_tbl AS SELECT 42 i
+
+# we cannot read a database that is already attached
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db')
+----
+already attached by database
+
+statement ok
+DETACH read_duckdb_test
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db')
+----
+42
+
+query I
+SELECT COUNT(*) FROM duckdb_databases
+----
+1
+
+# globbing
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_test2.db'
+
+statement ok
+CREATE TABLE read_duckdb_test2.other_tbl AS SELECT 100 i
+
+statement ok
+DETACH read_duckdb_test2
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test*.db')
+----
+42
+100
+
+# replacement scan
+query I
+SELECT * FROM '__TEST_DIR__/read_duckdb_test*.db'
+----
+42
+100
+
+# prepared statement
+statement ok
+PREPARE v1 AS FROM read_duckdb('__TEST_DIR__/read_duckdb_test*.db')
+
+query I
+EXECUTE v1
+----
+42
+100
+
+# multi-table
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_test.db'
+
+statement ok
+CREATE TABLE read_duckdb_test.my_tbl2 AS SELECT 84 j
+
+statement ok
+DETACH read_duckdb_test
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db')
+----
+multiple tables
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db', table_name='my_tbl')
+----
+42
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db', table_name='my_tbl2')
+----
+84
+
+statement error
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_test.db', table_name='my_tblx')
+----
+my_tbl2

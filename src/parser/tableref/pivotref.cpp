@@ -1,6 +1,15 @@
 #include "duckdb/parser/tableref/pivotref.hpp"
-
+#include "duckdb/parser/expression_util.hpp"
 #include "duckdb/common/limits.hpp"
+
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
@@ -126,6 +135,169 @@ PivotColumnEntry PivotColumnEntry::Copy() const {
 	result.values = values;
 	result.expr = expr ? expr->Copy() : nullptr;
 	result.alias = alias;
+	return result;
+}
+
+static bool TryFoldConstantForBackwardsCompatability(const ParsedExpression &expr, Value &value) {
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::FUNCTION: {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.function_name == "struct_pack") {
+			unordered_set<string> unique_names;
+			child_list_t<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				if (!unique_names.insert(child->GetAlias()).second) {
+					return false;
+				}
+				Value child_value;
+				if (!TryFoldConstantForBackwardsCompatability(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(child->GetAlias(), std::move(child_value));
+			}
+			value = Value::STRUCT(std::move(values));
+			return true;
+		} else if (function.function_name == "list_value") {
+			vector<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				Value child_value;
+				if (!TryFoldConstantForBackwardsCompatability(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(std::move(child_value));
+			}
+
+			// figure out child type
+			LogicalType child_type(LogicalTypeId::SQLNULL);
+			for (auto &child_value : values) {
+				child_type = LogicalType::ForceMaxLogicalType(child_type, child_value.type());
+			}
+
+			// finally create the list
+			value = Value::LIST(child_type, values);
+			return true;
+		} else if (function.function_name == "map") {
+			Value keys;
+			if (!TryFoldConstantForBackwardsCompatability(*function.children[0], keys)) {
+				return false;
+			}
+
+			Value values;
+			if (!TryFoldConstantForBackwardsCompatability(*function.children[1], values)) {
+				return false;
+			}
+
+			vector<Value> keys_unpacked = ListValue::GetChildren(keys);
+			vector<Value> values_unpacked = ListValue::GetChildren(values);
+
+			value = Value::MAP(ListType::GetChildType(keys.type()), ListType::GetChildType(values.type()),
+			                   keys_unpacked, values_unpacked);
+			return true;
+		} else {
+			return false;
+		}
+	}
+	case ExpressionType::VALUE_CONSTANT: {
+		auto &constant = expr.Cast<ConstantExpression>();
+		value = constant.value;
+		return true;
+	}
+	case ExpressionType::OPERATOR_CAST: {
+		auto &cast = expr.Cast<CastExpression>();
+		Value dummy_value;
+		if (!TryFoldConstantForBackwardsCompatability(*cast.child, dummy_value)) {
+			return false;
+		}
+
+		// Try to default bind cast
+		LogicalType cast_type;
+		try {
+			cast_type = UnboundType::TryDefaultBind(cast.cast_type);
+		} catch (...) {
+			return false;
+		}
+
+		if (cast_type == LogicalType::INVALID || cast_type == LogicalTypeId::UNBOUND) {
+			return false;
+		}
+
+		string error_message;
+		if (!dummy_value.DefaultTryCastAs(cast_type, value, &error_message)) {
+			return false;
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> &expr, vector<Value> &values) {
+	if (!expr) {
+		return true;
+	}
+
+	switch (expr->GetExpressionType()) {
+	case ExpressionType::COLUMN_REF: {
+		auto &colref = expr->Cast<ColumnRefExpression>();
+		if (colref.IsQualified()) {
+			return false;
+		}
+		values.emplace_back(colref.GetColumnName());
+		return true;
+	}
+	case ExpressionType::FUNCTION: {
+		auto &function = expr->Cast<FunctionExpression>();
+		if (function.function_name != "row") {
+			return false;
+		}
+		for (auto &child : function.children) {
+			if (!TryFoldForBackwardsCompatibility(child, values)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default: {
+		Value val;
+		if (!TryFoldConstantForBackwardsCompatability(*expr, val)) {
+			return false;
+		}
+		values.push_back(std::move(val));
+		return true;
+	}
+	}
+}
+
+void PivotColumnEntry::Serialize(Serializer &serializer) const {
+	if (serializer.ShouldSerialize(7) || !expr) {
+		serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
+		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+	} else {
+		// We used to only support constant values in pivot entries, and folded expressions in the
+		// transformer. So we need to seriaize in a backwards compatible way here by trying to fold
+		// the expression back to constant values.
+		vector<Value> dummy_values;
+		if (!TryFoldForBackwardsCompatibility(expr, dummy_values)) {
+			throw SerializationException(
+			    "Cannot serialize arbitrary expression pivot entries when targeting database storage version '%s'",
+			    serializer.GetOptions().serialization_compatibility.duckdb_version);
+			;
+		}
+		serializer.WritePropertyWithDefault<vector<Value>>(100, "values", dummy_values);
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", nullptr);
+		serializer.WritePropertyWithDefault<string>(102, "alias", alias);
+	}
+}
+
+PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
+	PivotColumnEntry result;
+	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
+	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
 	return result;
 }
 

@@ -1,6 +1,7 @@
 {
     "group": "bind_values_to_prepared_statements",
     "deprecated": false,
+    "description": "Functions to bind values to prepared statements. Try to use `duckdb_bind_value` and the `duckdb_create_...` interface for all types.",
     "entries": [
         {
             "name": "duckdb_bind_value",
@@ -20,7 +21,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds a value to the prepared statement at the specified index.\n"
+                "description": "Binds a value to the prepared statement at the specified index.\n\nSupersedes all type-specific bind functions (e.g., `duckdb_bind_varchar`, `duckdb_bind_int64`, etc.).\n"
             }
         },
         {
@@ -461,7 +462,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds a null-terminated varchar value to the prepared statement at the specified index.\n"
+                "description": "Binds a null-terminated varchar value to the prepared statement at the specified index.\n\nSuperseded by `duckdb_bind_value`.\n"
             }
         },
         {
@@ -486,7 +487,7 @@
                 }
             ],
             "comment": {
-                "description": "Binds a varchar value to the prepared statement at the specified index.\n"
+                "description": "Binds a varchar value to the prepared statement at the specified index.\n\nSuperseded by `duckdb_bind_value`.\n"
             }
         },
         {

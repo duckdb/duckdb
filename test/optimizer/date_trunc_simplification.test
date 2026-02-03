@@ -12,7 +12,7 @@ statement ok
 create table test(d TIMESTAMP);
 
 statement ok
-insert into test values ('2025-01-06 03:01:00'), ('2025-01-10 05:10:06');
+insert into test values ('2025-01-06 00:00:00'), ('2025-01-06 03:01:00'), ('2025-01-10 05:10:06');
 
 #
 # check correctness of simple optimizations
@@ -21,11 +21,17 @@ insert into test values ('2025-01-06 03:01:00'), ('2025-01-10 05:10:06');
 query I
 select * from test where date_trunc('day', d) < '2025-01-08';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
+
+query I
+select * from test where date_trunc('day', d) <= '2025-01-05';
+----
 
 query I
 select * from test where date_trunc('day', d) <= '2025-01-06';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
@@ -41,21 +47,25 @@ select * from test where date_trunc('day', d) >= '2025-01-10';
 query I
 select * from test where date_trunc('day', d) = '2025-01-06';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where date_trunc('day', d) != '2025-01-10';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where date_trunc('day', d) is not distinct from '2025-01-06';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where date_trunc('day', d) is distinct from '2025-01-10';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 #
@@ -70,7 +80,7 @@ analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d<'2025.*$
 query II
 explain analyze select * from test where date_trunc('day', d) <= '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d<='2025.*$
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d<'2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) > '2025-01-08';
@@ -109,11 +119,13 @@ analyzed_plan	<REGEX>:.*Filters:[ \t\n│─]*\(\(d >= '2025.*OR.*\(d <[ \t\n│
 query I
 select * from test where '2025-01-08' > date_trunc('day', d);
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where '2025-01-06' >= date_trunc('day', d);
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
@@ -129,21 +141,25 @@ select * from test where '2025-01-10' <= date_trunc('day', d);
 query I
 select * from test where '2025-01-06' = date_trunc('day', d);
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where '2025-01-10' != date_trunc('day', d);
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where '2025-01-06' is not distinct from date_trunc('day', d);
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where '2025-01-10' is distinct from date_trunc('day', d);
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 #
@@ -207,16 +223,19 @@ select * from test where date_trunc('day', d) < '2025-01-06';
 query I
 select * from test where date_trunc('day', d) < '2025-01-07';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where date_trunc('day', d) <= '2025-01-06';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where date_trunc('day', d) <= '2025-01-07';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
@@ -240,20 +259,24 @@ select * from test where date_trunc('day', d) >= '2025-01-11';
 query I
 select * from test where date_trunc('hour', d) < '2025-01-06 03:00:00';
 ----
+2025-01-06 00:00:00
 
 query I
 select * from test where date_trunc('hour', d) < '2025-01-06 04:00:00';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where date_trunc('hour', d) <= '2025-01-06 03:00:00';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
 select * from test where date_trunc('hour', d) <= '2025-01-06 04:00:00';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 
 query I
@@ -326,6 +349,7 @@ select * from test where date_trunc('day', date_add(d, INTERVAL 1 day)) >= '2025
 query I
 select * from test where date_trunc('year', d) >= '2024-01-01';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 2025-01-10 05:10:06
 
@@ -336,24 +360,28 @@ select * from test where date_trunc('month', d) > '2025-01-01';
 query I
 select * from test where date_trunc('day', d) >= '2025-01-06';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 2025-01-10 05:10:06
 
 query I
 select * from test where date_trunc('decade', d) >= '2020-01-01';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 2025-01-10 05:10:06
 
 query I
 select * from test where date_trunc('century', d) >= '2000-01-01';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 2025-01-10 05:10:06
 
 query I
 select * from test where date_trunc('millennium', d) >= '2000-01-01';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 2025-01-10 05:10:06
 
@@ -386,6 +414,7 @@ select * from test where date_trunc('hour', d) >= '2025-01-06 03:00:00';
 query I
 select * from test where date_trunc('week', d) >= '2025-01-01';
 ----
+2025-01-06 00:00:00
 2025-01-06 03:01:00
 2025-01-10 05:10:06
 

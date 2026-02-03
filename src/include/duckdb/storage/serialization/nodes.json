@@ -1,28 +1,5 @@
 [
   {
-    "class": "LogicalType",
-    "includes": [
-      "duckdb/common/types.hpp",
-      "duckdb/common/extra_type_info.hpp"
-    ],
-    "members": [
-      {
-        "id": 100,
-        "name": "id",
-        "type": "LogicalTypeId",
-        "serialize_property": "id_"
-      },
-      {
-        "id": 101,
-        "name": "type_info",
-        "type": "shared_ptr<ExtraTypeInfo>",
-        "serialize_property": "type_info_"
-      }
-    ],
-    "pointer_type": "none",
-    "constructor": ["id", "type_info"]
-  },
-  {
     "class": "CommonTableExpressionInfo",
     "includes": [
       "duckdb/parser/common_table_expression_info.hpp"
@@ -41,7 +18,8 @@
       {
         "id": 102,
         "name": "materialized",
-        "type": "CTEMaterialize"
+        "type": "CTEMaterialize",
+        "serialize_property": "GetMaterializedForSerialization(serializer)"
       },
       {
         "id": 103,
@@ -331,28 +309,6 @@
       {
         "id": 103,
         "name": "pivot_enum",
-        "type": "string"
-      }
-    ],
-    "pointer_type": "none"
-  },
-  {
-    "class": "PivotColumnEntry",
-    "members": [
-      {
-        "id": 100,
-        "name": "values",
-        "type": "vector<Value>"
-      },
-      {
-        "id": 101,
-        "name": "star_expr",
-        "type": "ParsedExpression*",
-        "property": "expr"
-      },
-      {
-        "id": 102,
-        "name": "alias",
         "type": "string"
       }
     ],
@@ -1083,6 +1039,30 @@
         "id": 2,
         "name": "child_indexes",
         "type": "vector<ColumnIndex>"
+      },
+      {
+        "id": 3,
+        "name": "index_type",
+        "type": "ColumnIndexType",
+        "default": "ColumnIndexType::FULL_READ"
+      },
+      {
+        "id": 4,
+        "name": "type",
+        "type": "LogicalType",
+        "default": "LogicalType::INVALID"
+      },
+      {
+        "id": 5,
+        "name": "field",
+        "type": "string",
+        "default": "\"\""
+      },
+      {
+        "id": 6,
+        "name": "has_index",
+        "type": "bool",
+        "default": "true"
       }
     ],
     "pointer_type": "none"

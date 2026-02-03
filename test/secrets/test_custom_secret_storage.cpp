@@ -6,6 +6,7 @@
 #include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/main/extension_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,7 +29,9 @@ struct DemoSecretType {
 	}
 
 	static void RegisterDemoSecret(DatabaseInstance &instance, const string &type_name) {
-		ExtensionLoader loader(instance, "demo_secret_type_" + type_name);
+		ExtensionInfo extension_info {};
+		ExtensionActiveLoad load_info {instance, extension_info, "demo_secret_type_" + type_name};
+		ExtensionLoader loader {load_info};
 		SecretType secret_type;
 		secret_type.name = type_name;
 		secret_type.deserializer = KeyValueSecret::Deserialize<KeyValueSecret>;

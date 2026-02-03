@@ -1,6 +1,7 @@
 #include "duckdb/function/window/window_rank_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -55,6 +56,7 @@ public:
 
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 
+	idx_t row_idx = DConstants::INVALID_INDEX;
 	uint64_t dense_rank = 1;
 	uint64_t rank_equal = 0;
 	uint64_t rank = 1;
@@ -103,7 +105,6 @@ void WindowPeerLocalState::NextRank(idx_t partition_begin, idx_t peer_begin, idx
 //===--------------------------------------------------------------------===//
 WindowPeerExecutor::WindowPeerExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
-
 	for (const auto &order : wexpr.arg_orders) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
@@ -181,48 +182,57 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	auto rdata = FlatVector::GetData<int64_t>(result);
 
 	//	Reset to "previous" row
-	lpeer.rank = (peer_begin[0] - partition_begin[0]) + 1;
-	lpeer.rank_equal = (row_idx - peer_begin[0]);
+	//	Resetting is slow because we have to rescan the mask.
+	//	So check whether we are just picking up where we left off.
+	//	This is common because the main window operator
+	//	evaluates maximally sized runs for each hash group.
+	if (lpeer.row_idx != row_idx) {
+		lpeer.rank = (peer_begin[0] - partition_begin[0]) + 1;
+		lpeer.rank_equal = (row_idx - peer_begin[0]);
 
-	//	The previous dense rank is the number of order mask bits in [partition_begin, row_idx)
-	lpeer.dense_rank = 0;
+		//	The previous dense rank is the number of order mask bits in [partition_begin, row_idx)
+		lpeer.dense_rank = 0;
 
-	auto order_begin = partition_begin[0];
-	idx_t begin_idx;
-	idx_t begin_offset;
-	order_mask.GetEntryIndex(order_begin, begin_idx, begin_offset);
+		auto order_begin = partition_begin[0];
+		idx_t begin_idx;
+		idx_t begin_offset;
+		order_mask.GetEntryIndex(order_begin, begin_idx, begin_offset);
 
-	auto order_end = row_idx;
-	idx_t end_idx;
-	idx_t end_offset;
-	order_mask.GetEntryIndex(order_end, end_idx, end_offset);
+		auto order_end = row_idx;
+		idx_t end_idx;
+		idx_t end_offset;
+		order_mask.GetEntryIndex(order_end, end_idx, end_offset);
 
-	//	If they are in the same entry, just loop
-	if (begin_idx == end_idx) {
-		const auto entry = order_mask.GetValidityEntry(begin_idx);
-		for (; begin_offset < end_offset; ++begin_offset) {
-			lpeer.dense_rank += order_mask.RowIsValid(entry, begin_offset);
-		}
-	} else {
-		// Count the ragged bits at the start of the partition
-		if (begin_offset) {
+		//	If they are in the same entry, just loop
+		if (begin_idx == end_idx) {
 			const auto entry = order_mask.GetValidityEntry(begin_idx);
-			for (; begin_offset < order_mask.BITS_PER_VALUE; ++begin_offset) {
+			for (; begin_offset < end_offset; ++begin_offset) {
 				lpeer.dense_rank += order_mask.RowIsValid(entry, begin_offset);
-				++order_begin;
 			}
-			++begin_idx;
-		}
+		} else {
+			// Count the ragged bits at the start of the partition
+			if (begin_offset) {
+				const auto entry = order_mask.GetValidityEntry(begin_idx);
+				for (; begin_offset < order_mask.BITS_PER_VALUE; ++begin_offset) {
+					lpeer.dense_rank += order_mask.RowIsValid(entry, begin_offset);
+					++order_begin;
+				}
+				++begin_idx;
+			}
 
-		//	Count the the aligned bits.
-		ValidityMask tail_mask(order_mask.GetData() + begin_idx, end_idx - begin_idx);
-		lpeer.dense_rank += tail_mask.CountValid(order_end - order_begin);
+			//	Count the the aligned bits.
+			ValidityMask tail_mask(order_mask.GetData() + begin_idx, end_idx - begin_idx);
+			lpeer.dense_rank += tail_mask.CountValid(order_end - order_begin);
+		}
 	}
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
 		rdata[i] = NumericCast<int64_t>(lpeer.dense_rank);
 	}
+
+	//	Remember where we left off
+	lpeer.row_idx = row_idx;
 }
 
 //===--------------------------------------------------------------------===//

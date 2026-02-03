@@ -9,6 +9,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -19,41 +20,8 @@
 
 namespace duckdb {
 
+constexpr const idx_t BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE > 512 ? STANDARD_VECTOR_SIZE : 2048;
-
-BitpackingMode BitpackingModeFromString(const string &str) {
-	auto mode = StringUtil::Lower(str);
-	if (mode == "auto" || mode == "none") {
-		return BitpackingMode::AUTO;
-	} else if (mode == "constant") {
-		return BitpackingMode::CONSTANT;
-	} else if (mode == "constant_delta") {
-		return BitpackingMode::CONSTANT_DELTA;
-	} else if (mode == "delta_for") {
-		return BitpackingMode::DELTA_FOR;
-	} else if (mode == "for") {
-		return BitpackingMode::FOR;
-	} else {
-		return BitpackingMode::INVALID;
-	}
-}
-
-string BitpackingModeToString(const BitpackingMode &mode) {
-	switch (mode) {
-	case BitpackingMode::AUTO:
-		return "auto";
-	case BitpackingMode::CONSTANT:
-		return "constant";
-	case BitpackingMode::CONSTANT_DELTA:
-		return "constant_delta";
-	case BitpackingMode::DELTA_FOR:
-		return "delta_for";
-	case BitpackingMode::FOR:
-		return "for";
-	default:
-		throw NotImplementedException("Unknown bitpacking mode: " + to_string((uint8_t)mode) + "\n");
-	}
-}
 
 typedef struct {
 	BitpackingMode mode;
@@ -70,7 +38,7 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 }
 static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
 	bitpacking_metadata_t metadata;
-	metadata.mode = Load<BitpackingMode>(data_ptr_cast(metadata_encoded) + 3);
+	metadata.mode = static_cast<BitpackingMode>((*metadata_encoded >> 24) & 0xFF);
 	metadata.offset = *metadata_encoded & 0x00FFFFFF;
 	return metadata;
 }
@@ -124,6 +92,9 @@ public:
 	bool all_valid;
 	bool all_invalid;
 
+	bool has_valid;
+	bool has_invalid;
+
 	bool can_do_delta;
 	bool can_do_for;
 
@@ -139,6 +110,8 @@ public:
 		delta_offset = 0;
 		all_valid = true;
 		all_invalid = true;
+		has_valid = false;
+		has_invalid = false;
 		can_do_delta = false;
 		can_do_for = false;
 		compression_buffer_idx = 0;
@@ -299,6 +272,8 @@ public:
 	template <class OP = EmptyBitpackingWriter>
 	bool Update(T value, bool is_valid) {
 		compression_buffer_validity[compression_buffer_idx] = is_valid;
+		has_valid = has_valid || is_valid;
+		has_invalid = has_invalid || !is_valid;
 		all_valid = all_valid && is_valid;
 		all_invalid = all_invalid && !is_valid;
 
@@ -330,11 +305,9 @@ struct BitpackingAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
-
 	CompressionInfo info(col_data.GetBlockManager());
 	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
-	state->state.mode = config.options.force_bitpacking_mode;
+	state->state.mode = Settings::Get<ForceBitpackingModeSetting>(col_data.GetDatabase());
 
 	return std::move(state);
 }
@@ -382,12 +355,10 @@ public:
 	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
-
-		auto &config = DBConfig::GetConfig(checkpoint_data.GetDatabase());
-		state.mode = config.options.force_bitpacking_mode;
+		state.mode = Settings::Get<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
@@ -481,9 +452,18 @@ public:
 		static void UpdateStats(BitpackingCompressionState<T, WRITE_STATISTICS> *state, idx_t count) {
 			state->current_segment->count += count;
 
-			if (WRITE_STATISTICS && !state->state.all_invalid) {
-				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
-				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+			if (WRITE_STATISTICS) {
+				if (state->state.has_valid) {
+					state->current_segment->stats.statistics.SetHasNoNullFast();
+				}
+				if (state->state.has_invalid) {
+					state->current_segment->stats.statistics.SetHasNullFast();
+				}
+
+				if (!state->state.all_invalid) {
+					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
+					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+				}
 			}
 		}
 	};
@@ -496,12 +476,12 @@ public:
 		       info.GetBlockSize() - BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -523,9 +503,8 @@ public:
 
 	void FlushAndCreateSegmentIfFull(idx_t required_data_bytes, idx_t required_meta_bytes) {
 		if (!CanStore(required_data_bytes, required_meta_bytes)) {
-			idx_t row_start = current_segment->start + current_segment->count;
 			FlushSegment();
-			CreateEmptySegment(row_start);
+			CreateEmptySegment();
 		}
 	}
 
@@ -628,9 +607,9 @@ static T DeltaDecode(T *data, T previous_value, const size_t size) {
 template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
-	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
+	explicit BitpackingScanState(const QueryContext &context, ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		handle = buffer_manager.Pin(segment.block);
+		handle = buffer_manager.Pin(context, segment.block);
 		auto data_ptr = handle.Ptr();
 
 		// load offset to bitpacking widths pointer
@@ -663,7 +642,7 @@ public:
 	//! depending on the bitpacking mode of that group.
 	void LoadNextGroup() {
 		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockManager().GetBlockSize()));
+		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockSize()));
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 
@@ -719,7 +698,6 @@ public:
 		// This skips straight to the correct metadata group
 		idx_t meta_groups_to_skip = (skip_count + current_group_offset) / BITPACKING_METADATA_GROUP_SIZE;
 		if (meta_groups_to_skip) {
-
 			// bitpacking_metadata_ptr points to the next metadata: this means we need to advance the pointer by n-1
 			bitpacking_metadata_ptr -= (meta_groups_to_skip - 1) * sizeof(bitpacking_metadata_encoded_t);
 			LoadNextGroup();
@@ -781,8 +759,8 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
-	auto result = make_uniq<BitpackingScanState<T>>(segment);
+unique_ptr<SegmentScanState> BitpackingInitScan(const QueryContext &context, ColumnSegment &segment) {
+	auto result = make_uniq<BitpackingScanState<T>>(context, segment);
 	return std::move(result);
 }
 
@@ -891,7 +869,7 @@ void BitpackingScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 template <class T>
 void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                         idx_t result_idx) {
-	BitpackingScanState<T> scan_state(segment);
+	BitpackingScanState<T> scan_state(state.context, segment);
 	scan_state.Skip(segment, NumericCast<idx_t>(row_id));
 
 	D_ASSERT(scan_state.current_group_offset < BITPACKING_METADATA_GROUP_SIZE);
@@ -955,10 +933,10 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 // GetSegmentInfo
 //===--------------------------------------------------------------------===//
 template <class T>
-InsertionOrderPreservingMap<string> BitpackingGetSegmentInfo(ColumnSegment &segment) {
+InsertionOrderPreservingMap<string> BitpackingGetSegmentInfo(QueryContext context, ColumnSegment &segment) {
 	map<BitpackingMode, idx_t> counts;
 	auto tuple_count = segment.count.load();
-	BitpackingScanState<T> scan_state(segment);
+	BitpackingScanState<T> scan_state(context, segment);
 	for (idx_t i = 0; i < tuple_count; i += BITPACKING_METADATA_GROUP_SIZE) {
 		if (i) {
 			scan_state.LoadNextGroup();

@@ -9,16 +9,10 @@
 #pragma once
 
 #include "duckdb/common/likely.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
@@ -67,7 +61,7 @@ public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -118,7 +112,9 @@ public:
 				return i;
 			}
 			remaining_space -= sizeof(int32_t);
-			if (!data.validity.RowIsValid(source_idx)) {
+			const bool is_null = !data.validity.RowIsValid(source_idx);
+			if (is_null) {
+				stats.statistics.SetHasNullFast();
 				// null value is stored as a copy of the last value, this is done to be able to efficiently do the
 				// string_length calculation
 				if (target_idx > 0) {
@@ -131,7 +127,7 @@ public:
 			auto end = handle.Ptr() + *dictionary_end;
 
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
+			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 			// Unknown string, continue
 			// non-null value, check if we can fit it within the block
@@ -140,8 +136,7 @@ public:
 			// determine whether or not we have space in the block for this string
 			bool use_overflow_block = false;
 			idx_t required_space = string_length;
-			if (DUCKDB_UNLIKELY(required_space >=
-			                    StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()))) {
+			if (DUCKDB_UNLIKELY(required_space >= StringUncompressed::GetStringBlockLimit(segment.GetBlockSize()))) {
 				// string exceeds block limit, store in overflow block and only write a marker here
 				required_space = BIG_STRING_MARKER_SIZE;
 				use_overflow_block = true;
@@ -172,7 +167,7 @@ public:
 				// note: for overflow strings we write negative value
 
 				// dictionary_size is an uint32_t value, so we can cast up.
-				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockSize());
 				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
@@ -184,13 +179,13 @@ public:
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
 				// dictionary_size is an uint32_t value, so we can cast up.
-				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockSize());
 				// Place the dictionary offset into the set of vectors.
 				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
-			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockManager().GetBlockSize());
+			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockSize());
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
+			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 		}
 		segment.count += count;
@@ -201,7 +196,12 @@ public:
 
 public:
 	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
-		StringStats::Update(stats.statistics, new_value);
+		stats.statistics.SetHasNoNullFast();
+		if (stats.statistics.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
+			GeometryStats::Update(stats.statistics, new_value);
+		} else {
+			StringStats::Update(stats.statistics, new_value);
+		}
 	}
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
@@ -219,7 +219,7 @@ public:
 
 	inline static string_t FetchStringFromDict(ColumnSegment &segment, uint32_t dict_end_offset, Vector &result,
 	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
-		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
+		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockSize()));
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
 			// regular string - fetch from dictionary
 			auto dict_end = base_ptr + dict_end_offset;
@@ -239,6 +239,6 @@ public:
 
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
-	static void CleanupState(ColumnSegment &segment);
+	static void VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor);
 };
 } // namespace duckdb

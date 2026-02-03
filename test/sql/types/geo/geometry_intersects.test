@@ -1,0 +1,23 @@
+# name: test/sql/types/geo/geometry_intersects.test
+# group: [geo]
+
+query I
+select 'POINT(0 1)'::GEOMETRY && 'POINT(0 0)'::GEOMETRY;
+----
+false
+
+query I
+select 'POINT(0 1)'::GEOMETRY && 'POINT(0 1)'::GEOMETRY;
+----
+true
+
+# Z/M axis is ignored
+query I
+select 'POINT Z(0 1 2)'::GEOMETRY && 'POINT Z(0 1 3)'::GEOMETRY;
+----
+true
+
+query I
+select 'POINT(0 1)'::GEOMETRY && 'LINESTRING Z(0 0 1, 0 2 2, 2 2 3)'::GEOMETRY;
+----
+true

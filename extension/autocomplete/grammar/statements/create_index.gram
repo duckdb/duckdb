@@ -1,10 +1,13 @@
-CreateIndexStmt <- Unique? 'INDEX'i IfNotExists? IndexName? 'ON'i BaseTableName IndexType? Parens(List(IndexElement)) WithList?
+CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?
 
-WithList <- 'WITH'i Parens(List(RelOption)) / Oids
-Oids <- ('WITH'i / 'WITHOUT'i) 'OIDS'i
+WithList <- 'WITH' RelOptionOrOids
+RelOptionOrOids <- RelOptionList / Oids
+RelOptionList <- Parens(List(RelOption))
+Oids <- ('WITH' / 'WITHOUT') 'OIDS'
 IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
-Unique <- 'UNIQUE'i
-IndexType <- 'USING'i Identifier
-RelOption <- ColLabel ('.' ColLabel)* ('=' DefArg)?
-DefArg <- FuncType / ReservedKeyword / StringLiteral / NumberLiteral / 'NONE'i
-FuncType <- Type / ('SETOF'i? TypeFuncName '%' 'TYPE'i)
+Unique <- 'UNIQUE'
+IndexType <- 'USING' Identifier
+RelOption <- DottedIdentifier ('=' DefArg)?
+DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral
+ReservedKeywordValue <- ReservedKeyword
+NoneLiteral <- 'NONE'

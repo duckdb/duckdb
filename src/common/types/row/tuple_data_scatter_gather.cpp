@@ -29,7 +29,7 @@ static void TupleDataValueStore(const T &source, data_t *__restrict const &row_l
 template <>
 inline void TupleDataValueStore(const string_t &source, data_t *__restrict const &row_location,
                                 const idx_t &offset_in_row, data_ptr_t &heap_location) {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	source.VerifyCharacters();
 #endif
 	if (source.IsInlined()) {
@@ -54,7 +54,7 @@ static void TupleDataWithinListValueStore(const T &source, const data_ptr_t &loc
 template <>
 inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr_t &location,
                                           data_ptr_t &heap_location) {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	source.VerifyCharacters();
 #endif
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(source.GetSize()), location);
@@ -64,14 +64,14 @@ inline void TupleDataWithinListValueStore(const string_t &source, const data_ptr
 
 template <class T>
 void TupleDataValueVerify(const LogicalType &, const T &) {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	// NOP
 #endif
 }
 
 template <>
 inline void TupleDataValueVerify(const LogicalType &type, const string_t &value) {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		value.Verify();
 	}
@@ -516,7 +516,7 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 	D_ASSERT(source_format.children.size() == 1);
 	auto &child_format = source_format.children[0];
 #ifdef D_ASSERT_IS_ENABLED
-	// In debug mode this should be deleted by ResetCombinedListData
+	// Should be deleted by ResetCombinedListData if assertions are enabled
 	D_ASSERT(!child_format.combined_list_data);
 #endif
 	if (!child_format.combined_list_data) {
@@ -647,7 +647,7 @@ static void InitializeValidityMask(const data_ptr_t row_locations[], const idx_t
 
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	Vector heap_locations_copy(LogicalType::POINTER);
 	if (!layout.AllConstant()) {
 		const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
@@ -686,7 +686,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		}
 	}
 
-#ifdef D_ASSERT_IS_ENABLED
+#ifdef DEBUG
 	// Verify that the size of the data written to the heap is the same as the size we computed it would be
 	if (!layout.AllConstant()) {
 		const auto original_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations_copy);
@@ -1794,7 +1794,6 @@ static void TupleDataCastToArrayStructGather(const TupleDataLayout &layout, Vect
                                              const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
                                              const SelectionVector &target_sel, optional_ptr<Vector> cached_cast_vector,
                                              const vector<TupleDataGatherFunction> &child_functions) {
-
 	if (cached_cast_vector) {
 		// Reuse the cached cast vector
 		TupleDataStructGather(layout, row_locations, col_idx, scan_sel, scan_count, *cached_cast_vector, target_sel,

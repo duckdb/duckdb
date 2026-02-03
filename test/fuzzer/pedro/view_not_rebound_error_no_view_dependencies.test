@@ -22,3 +22,4 @@ CREATE TABLE t1 (c2 INT);
 statement error
 SELECT 1 FROM t2 JOIN t1 ON (SELECT TRUE FROM t0);
 ----
+Binder Error: Referenced column "c1" not found in FROM clause

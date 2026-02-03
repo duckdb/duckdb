@@ -11,16 +11,10 @@
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -149,7 +143,7 @@ public:
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < segment.GetBlockManager().GetBlockSize());
+		D_ASSERT(data_byte_offset < segment.GetBlockSize());
 
 		idx_t vector_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 
@@ -158,7 +152,15 @@ public:
 		// Load the vector data
 		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
-		D_ASSERT(vector_state.exceptions_count <= vector_size);
+
+		const bool uncompressed_mode = vector_state.exceptions_count == AlpRDConstants::UNCOMPRESSED_MODE_SENTINEL;
+		if (uncompressed_mode) {
+			if (!SKIP) {
+				// Read uncompressed values
+				memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
+			}
+			return;
+		}
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
@@ -208,7 +210,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> AlpRDInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> AlpRDInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, AlpRDScanState<T>>(segment);
 	return result;
 }

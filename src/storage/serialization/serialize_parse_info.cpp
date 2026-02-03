@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
+#include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/parser/parsed_data/copy_database_info.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
@@ -92,6 +93,9 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	auto allow_internal = deserializer.ReadPropertyWithDefault<bool>(205, "allow_internal");
 	unique_ptr<AlterInfo> result;
 	switch (type) {
+	case AlterType::ALTER_DATABASE:
+		result = AlterDatabaseInfo::Deserialize(deserializer);
+		break;
 	case AlterType::ALTER_TABLE:
 		result = AlterTableInfo::Deserialize(deserializer);
 		break;
@@ -160,6 +164,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::RENAME_TABLE:
 		result = RenameTableInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::RESET_TABLE_OPTIONS:
+		result = ResetTableOptionsInfo::Deserialize(deserializer);
+		break;
 	case AlterTableType::SET_DEFAULT:
 		result = SetDefaultInfo::Deserialize(deserializer);
 		break;
@@ -171,6 +178,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case AlterTableType::SET_SORTED_BY:
 		result = SetSortedByInfo::Deserialize(deserializer);
+		break;
+	case AlterTableType::SET_TABLE_OPTIONS:
+		result = SetTableOptionsInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterTableInfo!");
@@ -192,6 +202,24 @@ unique_ptr<AlterInfo> AlterViewInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterViewInfo!");
+	}
+	return std::move(result);
+}
+
+void AlterDatabaseInfo::Serialize(Serializer &serializer) const {
+	AlterInfo::Serialize(serializer);
+	serializer.WriteProperty<AlterDatabaseType>(300, "alter_database_type", alter_database_type);
+}
+
+unique_ptr<AlterInfo> AlterDatabaseInfo::Deserialize(Deserializer &deserializer) {
+	auto alter_database_type = deserializer.ReadProperty<AlterDatabaseType>(300, "alter_database_type");
+	unique_ptr<AlterDatabaseInfo> result;
+	switch (alter_database_type) {
+	case AlterDatabaseType::RENAME_DATABASE:
+		result = RenameDatabaseInfo::Deserialize(deserializer);
+		break;
+	default:
+		throw SerializationException("Unsupported type for deserialization of AlterDatabaseInfo!");
 	}
 	return std::move(result);
 }
@@ -482,6 +510,17 @@ unique_ptr<AlterTableInfo> RenameColumnInfo::Deserialize(Deserializer &deseriali
 	return std::move(result);
 }
 
+void RenameDatabaseInfo::Serialize(Serializer &serializer) const {
+	AlterDatabaseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(400, "new_name", new_name);
+}
+
+unique_ptr<AlterDatabaseInfo> RenameDatabaseInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<RenameDatabaseInfo>(new RenameDatabaseInfo());
+	deserializer.ReadPropertyWithDefault<string>(400, "new_name", result->new_name);
+	return std::move(result);
+}
+
 void RenameFieldInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<string>>(400, "column_path", column_path);
@@ -514,6 +553,17 @@ void RenameViewInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterViewInfo> RenameViewInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RenameViewInfo>(new RenameViewInfo());
 	deserializer.ReadPropertyWithDefault<string>(400, "new_view_name", result->new_view_name);
+	return std::move(result);
+}
+
+void ResetTableOptionsInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WriteProperty<case_insensitive_set_t>(400, "table_options", table_options);
+}
+
+unique_ptr<AlterTableInfo> ResetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ResetTableOptionsInfo>(new ResetTableOptionsInfo());
+	deserializer.ReadProperty<case_insensitive_set_t>(400, "table_options", result->table_options);
 	return std::move(result);
 }
 
@@ -588,6 +638,17 @@ void SetSortedByInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> SetSortedByInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetSortedByInfo>(new SetSortedByInfo());
 	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(400, "orders", result->orders);
+	return std::move(result);
+}
+
+void SetTableOptionsInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options", table_options);
+}
+
+unique_ptr<AlterTableInfo> SetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SetTableOptionsInfo>(new SetTableOptionsInfo());
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options", result->table_options);
 	return std::move(result);
 }
 

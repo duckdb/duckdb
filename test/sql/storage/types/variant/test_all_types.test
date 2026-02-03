@@ -1,0 +1,37 @@
+# name: test/sql/storage/types/variant/test_all_types.test
+# group: [variant]
+
+load __TEST_DIR__/variant_test_all_types.db
+
+foreach col <all_types_columns>
+
+# union gets extracted to their individual values
+# We skip this because the comparison breaks when comparing SMALLINT vs VARCHAR
+onlyif col=union
+continue
+
+statement ok
+create table table_${col} as select "${col}"::VARIANT col from test_all_types()
+
+endloop
+
+statement ok
+checkpoint
+
+restart
+
+foreach col <all_types_columns>
+
+onlyif col=union
+continue
+
+loop i 0 2
+
+query I
+select col = (select "${col}"::VARIANT as "${col}" from test_all_types() offset ${i} limit 1) from table_${col} t1 offset ${i} limit 1
+----
+true
+
+endloop
+
+endloop

@@ -1,0 +1,17 @@
+# name: test/sql/peg_parser/parser/dotted_functions.test
+# description: Test dollar quoted strings in peg parser
+# group: [parser]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select trim('a')$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select x.trim().nullif(''); $TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select ['aa'].list_transform(lambda x: x.trim().nullif(''));$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT v.trim()$TEST_PEG_PARSER$);

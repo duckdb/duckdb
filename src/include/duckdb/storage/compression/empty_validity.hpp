@@ -58,11 +58,10 @@ public:
 
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
-		auto row_start = checkpoint_data.GetRowGroup().start;
 
 		auto &info = state.info;
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, info.GetBlockSize(),
+		                                                                info.GetBlockManager());
 		compressed_segment->count = state.count;
 		if (state.non_nulls != state.count) {
 			compressed_segment->stats.statistics.SetHasNullFast();
@@ -77,7 +76,7 @@ public:
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);
 	}
-	static unique_ptr<SegmentScanState> InitScan(ColumnSegment &segment) {
+	static unique_ptr<SegmentScanState> InitScan(const QueryContext &context, ColumnSegment &segment) {
 		return make_uniq<EmptyValiditySegmentScanState>();
 	}
 	static void ScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,

@@ -123,7 +123,7 @@ jobs:
 
     env:
       # NOTE: on PRs we exclude some archs to speed things up
-      BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_mvp;wasm_threads;windows_amd64_mingw;osx_amd64;linux_arm64;linux_amd64_musl;' || '' }}
+      BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_mvp;wasm_threads;windows_amd64_mingw;osx_amd64;osx_arm64;linux_arm64;linux_amd64_musl;' || '' }}
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
       OPT_IN_ARCHS: ${{ inputs.opt_in_archs }}
     steps:
@@ -285,19 +285,12 @@ jobs:
         - create-extension-repository
 
     steps:
-      - name: Free disk space
-        uses: endersonmenezes/free-disk-space@v3
-        continue-on-error: true
-        if: inputs.run_disk_clean_step
-        with:
-          remove_haskell: true
-          remove_tool_cache: true
-          remove_folders: "/usr/local/share/powershell /usr/share/swift"
-          testing: false
 
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: ./.github/actions/cleanup_runner
 
       - uses: actions/download-artifact@v4
         with:
@@ -379,7 +372,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}

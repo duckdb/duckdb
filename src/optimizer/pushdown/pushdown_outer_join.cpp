@@ -71,7 +71,7 @@ static unique_ptr<Expression> ReplaceIn(unique_ptr<Expression> expr, const expre
 		}
 	});
 
-	return std::move(expr);
+	return expr;
 }
 
 //! True if replacing all the `args` expressions occurring in `expr` with a
@@ -174,7 +174,6 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters,
 unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<LogicalOperator> op,
                                                               unordered_set<idx_t> &left_bindings,
                                                               unordered_set<idx_t> &right_bindings) {
-
 	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return FinishPushdown(std::move(op));
 	}

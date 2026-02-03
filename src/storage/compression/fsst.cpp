@@ -5,7 +5,6 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/settings.hpp"
@@ -50,7 +49,7 @@ struct FSSTStorage {
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
 	template <bool ALLOW_FSST_VECTORS = false>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
@@ -219,7 +218,7 @@ public:
 	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
-		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
+		CreateEmptySegment();
 	}
 
 	~FSSTCompressionState() override {
@@ -241,12 +240,12 @@ public:
 		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
 	}
 
-	void CreateEmptySegment(idx_t row_start) {
+	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
 
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
-		                                                                info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment =
+		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
 		Reset();
 	}
@@ -276,7 +275,7 @@ public:
 		current_segment->count++;
 	}
 
-	void AddNull() {
+	void AddEmptyStringInternal() {
 		if (!HasEnoughSpace(0)) {
 			Flush();
 			if (!HasEnoughSpace(0)) {
@@ -287,8 +286,13 @@ public:
 		current_segment->count++;
 	}
 
+	void AddNull() {
+		AddEmptyStringInternal();
+		current_segment->stats.statistics.SetHasNullFast();
+	}
+
 	void AddEmptyString() {
-		AddNull();
+		AddEmptyStringInternal();
 		UncompressedStringStorage::UpdateStringStats(current_segment->stats, "");
 	}
 
@@ -323,14 +327,12 @@ public:
 	}
 
 	void Flush(bool final = false) {
-		auto next_start = current_segment->start + current_segment->count;
-
 		auto segment_size = Finalize();
 		auto &state = checkpoint_data.GetCheckpointState();
 		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
-			CreateEmptySegment(next_start);
+			CreateEmptySegment();
 		}
 	}
 
@@ -450,7 +452,8 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		auto idx = vdata.sel->get_index(i);
 
 		// Note: we treat nulls and empty strings the same
-		if (!vdata.validity.RowIsValid(idx) || data[idx].GetSize() == 0) {
+		const bool is_null = !vdata.validity.RowIsValid(idx);
+		if (is_null || data[idx].GetSize() == 0) {
 			continue;
 		}
 
@@ -569,8 +572,8 @@ struct FSSTScanState : public StringScanState {
 	}
 };
 
-unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
-	auto block_size = segment.GetBlockManager().GetBlockSize();
+unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
+	auto block_size = segment.GetBlockSize();
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -585,8 +588,9 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	}
 	state->duckdb_fsst_decoder_ptr = state->duckdb_fsst_decoder.get();
 
-	if (StringStats::HasMaxStringLength(segment.stats.statistics)) {
-		state->all_values_inlined = StringStats::MaxStringLength(segment.stats.statistics) <= string_t::INLINE_LENGTH;
+	const auto &stats = segment.stats.statistics;
+	if (stats.GetStatsType() == StatisticsType::STRING_STATS && StringStats::HasMaxStringLength(stats)) {
+		state->all_values_inlined = StringStats::MaxStringLength(stats) <= string_t::INLINE_LENGTH;
 	}
 
 	return std::move(state);
@@ -640,13 +644,12 @@ void FSSTStorage::EndScan(FSSTScanState &scan_state, bp_delta_offsets_t &offsets
 template <bool ALLOW_FSST_VECTORS>
 void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
-
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	bool enable_fsst_vectors;
 	if (ALLOW_FSST_VECTORS) {
-		enable_fsst_vectors = DBConfig::GetSetting<EnableFSSTVectorsSetting>(segment.db);
+		enable_fsst_vectors = Settings::Get<EnableFSSTVectorsSetting>(segment.db);
 	} else {
 		enable_fsst_vectors = false;
 	}
@@ -665,7 +668,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
 			result.SetVectorType(VectorType::FSST_VECTOR);
-			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
+			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockSize());
 			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder, string_block_limit);
 			result_data = FSSTVector::GetCompressedData<string_t>(result);
 		} else {
@@ -710,7 +713,7 @@ void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                          const SelectionVector &sel, idx_t sel_count) {
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
-	auto start = segment.GetRelativeIndex(state.row_index);
+	auto start = state.GetPositionInSegment();
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, scan_state.handle);
@@ -734,7 +737,6 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 //===--------------------------------------------------------------------===//
 void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto base_ptr = handle.Ptr() + segment.GetBlockOffset();
@@ -743,7 +745,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 
 	duckdb_fsst_decoder_t decoder;
 	bitpacking_width_t width;
-	auto block_size = segment.GetBlockManager().GetBlockSize();
+	auto block_size = segment.GetBlockSize();
 	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width, block_size);
 
 	auto result_data = FlatVector::GetData<string_t>(result);

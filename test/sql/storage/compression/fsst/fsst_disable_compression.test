@@ -4,6 +4,8 @@
 
 require no_latest_storage
 
+require skip_reload
+
 # load the DB from disk
 load __TEST_DIR__/test_disabled_compression_methods.db readwrite v1.0.0
 

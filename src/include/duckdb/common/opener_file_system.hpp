@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
 
@@ -61,6 +62,9 @@ public:
 	}
 	FileType GetFileType(FileHandle &handle) override {
 		return GetFileSystem().GetFileType(handle);
+	}
+	FileMetadata Stats(FileHandle &handle) override {
+		return GetFileSystem().Stats(handle);
 	}
 
 	void Truncate(FileHandle &handle, int64_t new_size) override {
@@ -132,6 +136,14 @@ public:
 		return GetFileSystem().TryRemoveFile(filename, GetOpener());
 	}
 
+	void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		for (const auto &filename : filenames) {
+			VerifyCanAccessFile(filename);
+		}
+		GetFileSystem().RemoveFiles(filenames, GetOpener());
+	}
+
 	string PathSeparator(const string &path) override {
 		return GetFileSystem().PathSeparator(path);
 	}
@@ -158,12 +170,20 @@ public:
 		GetFileSystem().UnregisterSubSystem(name);
 	}
 
+	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override {
+		return GetFileSystem().ExtractSubSystem(name);
+	}
+
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
 	}
 
 	bool SubSystemIsDisabled(const string &name) override {
 		return GetFileSystem().SubSystemIsDisabled(name);
+	}
+
+	bool IsDisabledForPath(const string &path) override {
+		return GetFileSystem().IsDisabledForPath(path);
 	}
 
 	vector<string> ListSubSystems() override {
@@ -194,6 +214,22 @@ protected:
 
 	bool SupportsListFilesExtended() const override {
 		return true;
+	}
+
+	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                            optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(path);
+		return GetFileSystem().Glob(path, input, GetOpener());
+	}
+
+	bool SupportsGlobExtended() const override {
+		return true;
+	}
+
+	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener = nullptr) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().CanonicalizePath(path_p, GetOpener());
 	}
 
 private:

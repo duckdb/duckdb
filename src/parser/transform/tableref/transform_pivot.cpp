@@ -1,4 +1,5 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -6,39 +7,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
-
-bool Transformer::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry, bool root_entry) {
-	switch (expr->GetExpressionType()) {
-	case ExpressionType::COLUMN_REF: {
-		auto &colref = expr->Cast<ColumnRefExpression>();
-		if (colref.IsQualified()) {
-			throw ParserException(expr->GetQueryLocation(), "PIVOT IN list cannot contain qualified column references");
-		}
-		entry.values.emplace_back(colref.GetColumnName());
-		return true;
-	}
-	case ExpressionType::FUNCTION: {
-		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
-			return false;
-		}
-		for (auto &child : function.children) {
-			if (!TransformPivotInList(child, entry, false)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	default: {
-		Value val;
-		if (!Transformer::ConstructConstantFromExpression(*expr, val)) {
-			return false;
-		}
-		entry.values.push_back(std::move(val));
-		return true;
-	}
-	}
-}
 
 PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot, bool is_pivot) {
 	PivotColumn col;
@@ -64,19 +32,7 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot,
 			auto expr = TransformExpression(n);
 			PivotColumnEntry entry;
 			entry.alias = expr->GetAlias();
-			auto transformed = TransformPivotInList(expr, entry);
-			if (!transformed) {
-				// could not transform into list of constant values
-				if (is_pivot) {
-					// for pivot - throw an exception
-					throw ParserException(expr->GetQueryLocation(),
-					                      "PIVOT IN list must contain columns or lists of columns");
-				} else {
-					// for unpivot - we can forward the expression immediately
-					entry.values.clear();
-					entry.expr = std::move(expr);
-				}
-			}
+			entry.expr = std::move(expr);
 			col.entries.push_back(std::move(entry));
 		}
 	}
@@ -122,20 +78,6 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 				throw ParserException("UNPIVOT requires a single column name for the PIVOT IN clause");
 			}
 			D_ASSERT(pivot.pivot_expressions.empty());
-		} else {
-			// pivot
-			auto expected_size = pivot.pivot_expressions.size();
-			D_ASSERT(pivot.unpivot_names.empty());
-			for (auto &entry : pivot.entries) {
-				if (entry.expr) {
-					throw ParserException("PIVOT IN list must contain columns or lists of columns - expressions are "
-					                      "only supported for UNPIVOT");
-				}
-				if (entry.values.size() != expected_size) {
-					throw ParserException("PIVOT IN list - inconsistent amount of rows - expected %d but got %d",
-					                      expected_size, entry.values.size());
-				}
-			}
 		}
 	}
 	result->include_nulls = root.include_nulls;

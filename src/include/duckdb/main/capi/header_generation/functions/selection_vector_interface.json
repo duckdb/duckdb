@@ -1,6 +1,7 @@
 {
   "group": "selection_vector_interface",
   "deprecated": false,
+  "description": "Functions to interact with `duckdb_selection_vector`. Selection vectors define a selection on top of a vector. Lets say that a filter filters out all `VARCHAR`-rows containing `hello`. Then, instead of creating a full new copy of the filtered-out data, it is possible to use a selection vector only selecting the rows satisfying the filter.",
   "entries": [
     {
       "name": "duckdb_create_selection_vector",

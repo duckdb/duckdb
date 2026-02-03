@@ -122,7 +122,7 @@ public:
 				if (!result->file_options.union_by_name && bound_on_first_file) {
 					file_string = result->file_list->GetFirstFile().path;
 				} else {
-					for (auto &file : result->file_list->GetPaths()) {
+					for (auto &file : result->file_list->GetAllFiles()) {
 						if (!file_string.empty()) {
 							file_string += ",";
 						}
@@ -590,28 +590,77 @@ public:
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
+			data_p.async_result = SourceResultType::FINISHED;
 			return;
 		}
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 
+		if (gstate.finished) {
+			data_p.async_result = SourceResultType::FINISHED;
+			return;
+		}
+
 		do {
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
 
-			data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+			auto res = data.reader->Scan(context, *gstate.global_state, *data.local_state, scan_chunk);
+
+			if (res.GetResultType() == AsyncResultType::BLOCKED) {
+				if (scan_chunk.size() != 0) {
+					throw InternalException("Unexpected behaviour from Scan, no rows should be returned");
+				}
+				switch (data_p.results_execution_mode) {
+				case AsyncResultsExecutionMode::TASK_EXECUTOR:
+					data_p.async_result = std::move(res);
+					return;
+				case AsyncResultsExecutionMode::SYNCHRONOUS:
+					res.ExecuteTasksSynchronously();
+					if (res.GetResultType() != AsyncResultType::HAVE_MORE_OUTPUT) {
+						throw InternalException("Unexpected behaviour from ExecuteTasksSynchronously");
+					}
+					// scan_chunk.size() is 0, see check above, and result is HAVE_MORE_OUTPUT, we need to loop again
+					continue;
+				}
+			}
+
 			output.SetCardinality(scan_chunk.size());
+
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
+			}
+			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
+				// Loop back to the same block
+				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					continue;
+				}
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				return;
 			}
-			scan_chunk.Reset();
+
+			if (res.GetResultType() != AsyncResultType::FINISHED) {
+				throw InternalException("Unexpected result in MultiFileScan, must be FINISHED, is %s",
+				                        EnumUtil::ToChars(res.GetResultType()));
+			}
+
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				return;
+				if (scan_chunk.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					gstate.finished = true;
+					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
+				} else {
+					data_p.async_result = SourceResultType::FINISHED;
+				}
+			} else {
+				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+					continue;
+				}
+				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 			}
+			return;
 		} while (true);
 	}
 
@@ -659,7 +708,22 @@ public:
 	                                const GlobalTableFunctionState *global_state) {
 		auto &gstate = global_state->Cast<MultiFileGlobalState>();
 
-		auto total_count = gstate.file_list.GetTotalFileCount();
+		// get the file count - for >100 files we allow a lower bound to be given instead
+		auto count_info = gstate.file_list.GetFileCount(100);
+		while (count_info.type != FileExpansionType::ALL_FILES_EXPANDED) {
+			// the entire glob has not yet been expanded - we don't know how many files there are exactly
+			// we try to postpone expanding the glob by only expanding it once we have scanned 1% of the files
+			// check if we have reached AT LEAST 1% of progress
+			idx_t one_percent_min = count_info.count / 100;
+			if (gstate.completed_file_index < one_percent_min) {
+				// we have not - just report 0%
+				return 0.0;
+			}
+			// we have reached 1% given the currently known (incomplete) list of files
+			// retrieve more files to scan
+			count_info = gstate.file_list.GetFileCount(count_info.count + 1);
+		}
+		auto total_count = count_info.count;
 		if (total_count == 0) {
 			return 100.0;
 		}
@@ -672,7 +736,8 @@ public:
 				continue;
 			}
 			auto &reader_data = *reader_data_ptr;
-			double progress_in_file;
+			// Initialize progress_in_file with a default value to avoid uninitialized variable usage
+			double progress_in_file = 0.0;
 			if (reader_data.file_state == MultiFileFileState::OPEN) {
 				// file is currently open - get the progress within the file
 				progress_in_file = reader_data.reader->GetProgressInFile(context);
@@ -686,9 +751,6 @@ public:
 					// file is still being read
 					progress_in_file = reader->GetProgressInFile(context);
 				}
-			} else {
-				// file has not been opened yet - progress in this file is zero
-				progress_in_file = 0;
 			}
 			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
 			total_progress += progress_in_file;
@@ -707,7 +769,14 @@ public:
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
-		return data.interface->GetCardinality(data, data.file_list->GetTotalFileCount());
+		// get the file count - for >500 files we allow an estimate
+		auto count_info = data.file_list->GetFileCount(500);
+		idx_t estimated_file_count = count_info.count;
+		if (count_info.type != FileExpansionType::ALL_FILES_EXPANDED) {
+			// not all files have been expanded - it's probably twice as many files
+			estimated_file_count *= 2;
+		}
+		return data.interface->GetCardinality(data, estimated_file_count);
 	}
 
 	static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
@@ -729,7 +798,7 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
-		for (const auto &file : bind_data.file_list->Files()) {
+		for (const auto &file : bind_data.file_list->GetDisplayFileList()) {
 			file_path.emplace_back(file.path);
 		}
 
@@ -761,7 +830,22 @@ public:
 	static InsertionOrderPreservingMap<string> MultiFileDynamicToString(TableFunctionDynamicToStringInput &input) {
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
 		InsertionOrderPreservingMap<string> result;
-		result.insert(make_pair("Total Files Read", std::to_string(gstate.file_index.load())));
+		auto files_loaded = gstate.file_index.load();
+		result.insert(make_pair("Total Files Read", std::to_string(files_loaded)));
+
+		constexpr size_t FILE_NAME_LIST_LIMIT = 5;
+		auto file_paths = gstate.file_list.GetDisplayFileList(FILE_NAME_LIST_LIMIT + 1);
+		if (!file_paths.empty()) {
+			vector<std::string> file_path_names;
+			for (idx_t i = 0; i < MinValue<idx_t>(file_paths.size(), FILE_NAME_LIST_LIMIT); i++) {
+				file_path_names.push_back(file_paths[i].path);
+			}
+			if (files_loaded > FILE_NAME_LIST_LIMIT) {
+				file_path_names.push_back("...");
+			}
+			auto list_of_types = StringUtil::Join(file_path_names, ", ");
+			result.insert(make_pair("Filename(s)", list_of_types));
+		}
 		return result;
 	}
 

@@ -1,6 +1,7 @@
 {
     "group": "value_interface",
     "deprecated": false,
+    "description": "Functions to create a `duckdb_value` for each of DuckDB's supported data types, and to access the contents of a `duckdb_value`. The `duckdb_value` wrapper allows handling of primitive and arbitrarily (nested) types through the same interface.",
     "entries": [
         {
             "name": "duckdb_destroy_value",
@@ -28,7 +29,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a null-terminated string\n\n",
+                "description": "Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8 or other invalid input.\n\nSuperseded by `duckdb_create_varchar_length`.\n\n",
                 "param_comments": {
                     "text": "The null-terminated string"
                 },
@@ -49,7 +50,7 @@
                 }
             ],
             "comment": {
-                "description": "Creates a value from a string\n\n",
+                "description": "Creates a value from a string. Returns nullptr if the string is not valid UTF-8 or other invalid input.\n\n",
                 "param_comments": {
                     "text": "The text",
                     "length": "The length of the text"

@@ -15,7 +15,7 @@ static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
 static constexpr uint8_t SORTED_STRINGS_SHIFT = 4;
 static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_MASK = 0x3;
-static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 5;
+static constexpr uint8_t OFFSET_SIZE_MINUS_ONE_SHIFT = 6;
 
 static constexpr uint8_t BASIC_TYPE_MASK = 0x3;
 static constexpr uint8_t VALUE_HEADER_SHIFT = 2;
@@ -74,8 +74,8 @@ VariantMetadata::VariantMetadata(const string_t &metadata) : metadata(metadata) 
 	const_data_ptr_t ptr = reinterpret_cast<const_data_ptr_t>(metadata_data + sizeof(uint8_t));
 	idx_t dictionary_size = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 
-	offsets = ptr;
-	bytes = offsets + ((dictionary_size + 1) * header.offset_size);
+	auto offsets = ptr;
+	auto bytes = offsets + ((dictionary_size + 1) * header.offset_size);
 	idx_t last_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
 	for (idx_t i = 0; i < dictionary_size; i++) {
 		auto next_offset = ReadVariableLengthLittleEndian(header.offset_size, ptr);
@@ -120,9 +120,12 @@ static T DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
 	data++;
 
 	auto result = Load<T>(data);
-	//! FIXME: The spec says:
-	//! The implied precision of a decimal value is `floor(log_10(val)) + 1`
-	width = DecimalWidth<T>::max;
+	auto abs_val = result;
+	if (abs_val < 0) {
+		abs_val = -abs_val;
+	}
+	uint8_t digits = floor(log10(abs_val)) + 1;
+	width = digits;
 	return result;
 }
 
@@ -140,8 +143,7 @@ hugeint_t DecodeDecimal(const_data_ptr_t data, uint8_t &scale, uint8_t &width) {
 	return result;
 }
 
-VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &metadata,
-                                                       const VariantValueMetadata &value_metadata,
+VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadata &value_metadata,
                                                        const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
@@ -182,24 +184,21 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 		uint8_t width;
 
 		auto value = DecodeDecimal<int32_t>(data, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DECIMAL8: {
 		uint8_t scale;
 		uint8_t width;
 
 		auto value = DecodeDecimal<int64_t>(data, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DECIMAL16: {
 		uint8_t scale;
 		uint8_t width;
 
 		auto value = DecodeDecimal<hugeint_t>(data, scale, width);
-		auto value_str = Decimal::ToString(value, width, scale);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::DECIMAL(value, width, scale));
 	}
 	case VariantPrimitiveType::DATE: {
 		date_t value;
@@ -216,8 +215,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 		micros_ts.value = Load<int64_t>(data);
 
 		auto value = Value::TIMESTAMP(micros_ts);
-		auto value_str = value.ToString();
-		return VariantValue(Value(value_str));
+		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::BINARY: {
 		//! Follow the JSON serialization guide by converting BINARY to Base64:
@@ -253,13 +251,11 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 		nanos_ts.value = Load<int64_t>(data);
 
 		auto value = Value::TIMESTAMPNS(nanos_ts);
-		auto value_str = value.ToString();
-		return VariantValue(Value(value_str));
+		return VariantValue(std::move(value));
 	}
 	case VariantPrimitiveType::UUID: {
 		auto uuid_value = UUIDValueConversion::ReadParquetUUID(data);
-		auto value_str = UUID::ToString(uuid_value);
-		return VariantValue(Value(value_str));
+		return VariantValue(Value::UUID(uuid_value));
 	}
 	default:
 		throw NotImplementedException("Variant PrimitiveTypeDecode not implemented for type (%d)",
@@ -267,8 +263,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantMetadata &me
 	}
 }
 
-VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantMetadata &metadata,
-                                                     const VariantValueMetadata &value_metadata,
+VariantValue VariantBinaryDecoder::ShortStringDecode(const VariantValueMetadata &value_metadata,
                                                      const_data_ptr_t data) {
 	D_ASSERT(value_metadata.string_size < 64);
 	auto string_data = reinterpret_cast<const char *>(data);
@@ -348,10 +343,10 @@ VariantValue VariantBinaryDecoder::Decode(const VariantMetadata &variant_metadat
 	data++;
 	switch (value_metadata.basic_type) {
 	case VariantBasicType::PRIMITIVE: {
-		return PrimitiveTypeDecode(variant_metadata, value_metadata, data);
+		return PrimitiveTypeDecode(value_metadata, data);
 	}
 	case VariantBasicType::SHORT_STRING: {
-		return ShortStringDecode(variant_metadata, value_metadata, data);
+		return ShortStringDecode(value_metadata, data);
 	}
 	case VariantBasicType::OBJECT: {
 		return ObjectDecode(variant_metadata, value_metadata, data);

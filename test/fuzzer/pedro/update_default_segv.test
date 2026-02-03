@@ -18,3 +18,4 @@ CREATE TABLE t1(c4 UUID, c0 REAL AS(0));
 statement error
 ALTER TABLE t1 ALTER c0 SET DEFAULT 0;
 ----
+Binder Error: Cannot SET DEFAULT for generated column "c0"

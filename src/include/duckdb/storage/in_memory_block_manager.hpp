@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block_manager.hpp"
@@ -30,14 +29,17 @@ public:
 	block_id_t GetFreeBlockId() override {
 		throw InternalException("Cannot perform IO in in-memory database - GetFreeBlockId!");
 	}
+	block_id_t GetFreeBlockIdForCheckpoint() override {
+		throw InternalException("Cannot perform IO in in-memory database - GetFreeBlockIdForCheckpoint!");
+	}
 	block_id_t PeekFreeBlockId() override {
 		throw InternalException("Cannot perform IO in in-memory database - PeekFreeBlockId!");
 	}
 	bool IsRootBlock(MetaBlockPointer root) override {
 		throw InternalException("Cannot perform IO in in-memory database - IsRootBlock!");
 	}
-	void MarkBlockAsFree(block_id_t block_id) override {
-		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsFree!");
+	void MarkBlockACheckpointed(block_id_t block_id) override {
+		throw InternalException("Cannot perform IO in in-memory database - MarkBlockACheckpointed!");
 	}
 	void MarkBlockAsUsed(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsUsed!");

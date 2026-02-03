@@ -1,0 +1,28 @@
+# name: test/sql/storage/read_duckdb/read_duckdb_index.test
+# description: Test read_duckdb with an index
+# group: [read_duckdb]
+
+# FIXME: bug in WAL replay with read-only mode attach
+require no_alternative_verify
+
+statement ok
+ATTACH '__TEST_DIR__/read_duckdb_index.db'
+
+statement ok
+CREATE TABLE read_duckdb_index.my_tbl(i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO read_duckdb_index.my_tbl SELECT i + 1 FROM range(1000000) t(i);
+
+statement ok
+DETACH read_duckdb_index
+
+query I
+SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_index.db') WHERE i=42873
+----
+42873
+
+query II
+SELECT *, rowid FROM read_duckdb('__TEST_DIR__/read_duckdb_index.db') WHERE i=42873
+----
+42873	42872

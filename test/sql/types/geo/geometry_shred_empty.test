@@ -1,0 +1,111 @@
+# name: test/sql/types/geo/geometry_shred_empty.test
+# group: [geo]
+
+load __TEST_DIR__/test_shred_empty_types.db
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+SET geometry_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE t1(type VARCHAR, has_z BOOLEAN, has_m BOOLEAN, g GEOMETRY);
+
+statement ok
+insert into t1 values
+	('POINT', 	FALSE, 	FALSE,	'POINT EMPTY'::GEOMETRY),
+	('POINT', 	TRUE, 	FALSE,	'POINT Z EMPTY'::GEOMETRY),
+	('POINT', 	FALSE, 	TRUE,	'POINT M EMPTY'::GEOMETRY),
+	('POINT', 	TRUE,	TRUE,	'POINT ZM EMPTY'::GEOMETRY),
+	('LINESTRING', 	FALSE, 	FALSE,	'LINESTRING EMPTY'::GEOMETRY),
+	('LINESTRING', 	TRUE, 	FALSE,	'LINESTRING Z EMPTY'::GEOMETRY),
+	('LINESTRING', 	FALSE, 	TRUE,	'LINESTRING M EMPTY'::GEOMETRY),
+	('LINESTRING', 	TRUE,	TRUE,	'LINESTRING ZM EMPTY'::GEOMETRY),
+	('POLYGON', 	FALSE, 	FALSE,	'POLYGON EMPTY'::GEOMETRY),
+	('POLYGON', 	TRUE, 	FALSE,	'POLYGON Z EMPTY'::GEOMETRY),
+	('POLYGON', 	FALSE, 	TRUE,	'POLYGON M EMPTY'::GEOMETRY),
+	('POLYGON', 	TRUE,	TRUE,	'POLYGON ZM EMPTY'::GEOMETRY),
+	('MULTIPOINT', 	TRUE, 	FALSE,	'MULTIPOINT Z EMPTY'::GEOMETRY),
+	('MULTIPOINT', 	FALSE, 	TRUE,	'MULTIPOINT M EMPTY'::GEOMETRY),
+	('MULTIPOINT', 	TRUE,	TRUE,	'MULTIPOINT ZM EMPTY'::GEOMETRY),
+	('MULTIPOINT', FALSE, FALSE, 'MULTIPOINT ((1  2), (EMPTY))'::GEOMETRY),
+	('MULTIPOINT', TRUE, FALSE, 'MULTIPOINT Z ((1 2 3), (EMPTY))'::GEOMETRY),
+	('MULTIPOINT', FALSE, TRUE, 'MULTIPOINT M ((1 2 3), (EMPTY))'::GEOMETRY),
+	('MULTIPOINT', TRUE, TRUE, 'MULTIPOINT ZM ((1 2 3 4), (EMPTY))'::GEOMETRY),
+	('MULTILINESTRING', 	FALSE, 	FALSE,	'MULTILINESTRING EMPTY'::GEOMETRY),
+	('MULTILINESTRING', 	TRUE, 	FALSE,	'MULTILINESTRING Z EMPTY'::GEOMETRY),
+	('MULTILINESTRING', 	FALSE, 	TRUE,	'MULTILINESTRING M EMPTY'::GEOMETRY),
+	('MULTILINESTRING', 	TRUE,	TRUE,	'MULTILINESTRING ZM EMPTY'::GEOMETRY),
+	('MULTIPOLYGON', 	FALSE, 	FALSE,	'MULTIPOLYGON EMPTY'::GEOMETRY),
+	('MULTIPOLYGON', 	TRUE, 	FALSE,	'MULTIPOLYGON Z EMPTY'::GEOMETRY),
+	('MULTIPOLYGON', 	FALSE, 	TRUE,	'MULTIPOLYGON M EMPTY'::GEOMETRY),
+	('MULTIPOLYGON', 	TRUE,	TRUE,	'MULTIPOLYGON ZM EMPTY'::GEOMETRY);
+
+
+# For each geometry type, Z and M combination, create a table with only that geometry
+
+foreach type POINT LINESTRING POLYGON MULTIPOINT MULTILINESTRING MULTIPOLYGON
+
+foreach has_z FALSE TRUE
+
+foreach has_m FALSE TRUE
+
+statement ok
+create table t2 as select g from t1 where type='${type}' and has_z=${has_z} and has_m=${has_m};
+
+query I rowsort segment_result
+select segment_type from pragma_storage_info('t2') order by all;
+----
+GEOMETRY
+VALIDITY
+
+# Check stats
+query I rowsort stats_result
+select stats(g) from t2;
+----
+
+# Checkpoint to force shredding
+statement ok
+CHECKPOINT
+
+# Should still containg only GEOMETRY and VALIDITY segments,
+# as these geometries cannot be shredded (they contain empty parts)
+
+# Stats again
+query I rowsort segment_result
+select segment_type from pragma_storage_info('t2') order by all;
+----
+
+# Check stats
+query I rowsort stats_result
+select stats(g) from t2;
+----
+
+# Restart to ensure persistence
+restart
+
+# Stats again
+query I rowsort segment_result
+select segment_type from pragma_storage_info('t2') order by all;
+----
+
+# Check stats
+query I rowsort stats_result
+select stats(g) from t2;
+----
+
+# Clean up for next iteration
+statement ok
+drop table t2;
+
+reset label segment_result
+
+reset label stats_result
+
+endloop
+
+endloop
+
+endloop
+

@@ -9,16 +9,12 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
-#include "duckdb/common/helper.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
@@ -39,6 +35,7 @@ class WriteAheadLogDeserializer;
 struct PersistentCollectionData;
 
 enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE, INITIALIZED };
+enum class WALReplayState { MAIN_WAL, CHECKPOINT_WAL };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
 //! to committing a transaction it writes the changes the transaction made to
@@ -47,18 +44,21 @@ enum class WALInitState { NO_WAL, UNINITIALIZED, UNINITIALIZED_REQUIRES_TRUNCATE
 class WriteAheadLog {
 public:
 	//! Initialize the WAL in the specified directory
-	explicit WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size = 0ULL,
-	                       WALInitState state = WALInitState::NO_WAL);
+	explicit WriteAheadLog(StorageManager &storage_manager, const string &wal_path, idx_t wal_size = 0ULL,
+	                       WALInitState state = WALInitState::NO_WAL,
+	                       optional_idx checkpoint_iteration = optional_idx());
 	virtual ~WriteAheadLog();
 
 public:
-	//! Replay and initialize the WAL
-	static unique_ptr<WriteAheadLog> Replay(FileSystem &fs, AttachedDatabase &database, const string &wal_path);
+	//! Replay and initialize the WAL, QueryContext is passed for metric collection purposes only!!
+	static unique_ptr<WriteAheadLog> Replay(QueryContext context, StorageManager &storage_manager,
+	                                        const string &wal_path);
 
 	AttachedDatabase &GetDatabase();
 
-	//! Gets the total bytes written to the WAL since startup
-	idx_t GetWALSize() const;
+	const string &GetPath() const {
+		return wal_path;
+	}
 	//! Gets the total bytes written to the WAL since startup
 	idx_t GetTotalWritten() const;
 
@@ -114,22 +114,25 @@ public:
 
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
 	void Truncate(idx_t size);
-	//! Delete the WAL file on disk. The WAL should not be used after this point.
-	void Delete();
 	void Flush();
+	//! Increment the WAL entry count (for autocheckpoint threshold)
+	void IncrementWALEntriesCount();
 
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
-	static unique_ptr<WriteAheadLog> ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle);
+	//! Internally replay all WAL entries. QueryContext is passed for metric collection purposes only!!
+	static unique_ptr<WriteAheadLog> ReplayInternal(QueryContext context, StorageManager &storage_manager,
+	                                                unique_ptr<FileHandle> handle,
+	                                                WALReplayState replay_state = WALReplayState::MAIN_WAL);
 
 protected:
-	AttachedDatabase &database;
+	StorageManager &storage_manager;
 	mutex wal_lock;
 	unique_ptr<BufferedFileWriter> writer;
 	string wal_path;
-	atomic<idx_t> wal_size;
 	atomic<WALInitState> init_state;
+	optional_idx checkpoint_iteration;
 };
 
 } // namespace duckdb

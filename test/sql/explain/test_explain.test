@@ -45,3 +45,8 @@ query II
 EXPLAIN (FORMAT YAML) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
 ----
 logical_opt	<REGEX>:.*- name: "CROSS_PRODUCT".*
+
+query II
+EXPLAIN (FORMAT MERMAID) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+logical_opt	<REGEX>:.*node_0_.*\["`\*\*CROSS_PRODUCT\*\*.*

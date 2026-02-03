@@ -55,7 +55,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_o
 	if (array.null_count != 0 && array.n_buffers > 0 && array.buffers[0]) {
 		auto bit_offset = GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
 		mask.EnsureWritable();
-#if STANDARD_VECTOR_SIZE > 64
+#if STANDARD_VECTOR_SIZE > 64 && !DUCKDB_IS_BIG_ENDIAN
 		auto n_bitmask_bytes = (size + 8 - 1) / 8;
 		if (bit_offset % 8 == 0) {
 			//! just memcpy nullmask
@@ -257,7 +257,6 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_offset, ArrowArrayScanState &array_state,
                                idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                const ValidityMask *parent_mask, int64_t parent_offset) {
-
 	auto &array_info = arrow_type.GetTypeInfo<ArrowArrayInfo>();
 	auto array_size = array_info.FixedSize();
 	auto child_count = array_size * size;
@@ -390,12 +389,47 @@ static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	for (idx_t row = 0; row < size; row++) {
-		if (!validity_mask.RowIsValid(row)) {
-			continue;
+	if (validity_mask.AllValid()) {
+		for (idx_t row = 0; row < size; row++) {
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+				throw ConversionException("Could not convert Time to Microsecond");
+			}
 		}
-		if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
-			throw ConversionException("Could not convert Time to Microsecond");
+	} else {
+		for (idx_t row = 0; row < size; row++) {
+			if (!validity_mask.RowIsValid(row)) {
+				continue;
+			}
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+				throw ConversionException("Could not convert Time to Microsecond");
+			}
+		}
+	}
+}
+
+template <class T>
+static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
+                             int64_t parent_offset, idx_t size, int64_t conversion) {
+	auto tgt_ptr = FlatVector::GetData<dtime_ns_t>(vector);
+	auto &validity_mask = FlatVector::Validity(vector);
+	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
+	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
+	if (validity_mask.AllValid()) {
+		for (idx_t row = 0; row < size; row++) {
+			// dtime_ns_t.micros actually holds nanos (!)
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+				throw ConversionException("Could not convert TimeNS to Nanoseconds");
+			}
+		}
+	} else {
+		for (idx_t row = 0; row < size; row++) {
+			if (!validity_mask.RowIsValid(row)) {
+				continue;
+			}
+			// dtime_ns_t.micros actually holds nanos (!)
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+				throw ConversionException("Could not convert TimeNS to Nanoseconds");
+			}
 		}
 	}
 }
@@ -406,14 +440,23 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, idx_t chunk_
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = static_cast<const hugeint_t *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	for (idx_t row = 0; row < size; row++) {
-		if (!validity_mask.RowIsValid(row)) {
-			continue;
+	if (validity_mask.AllValid()) {
+		for (idx_t row = 0; row < size; row++) {
+			tgt_ptr[row].lower = static_cast<uint64_t>(BSwapIfLE(src_ptr[row].upper));
+			// flip Upper MSD
+			tgt_ptr[row].upper = static_cast<int64_t>(static_cast<uint64_t>(BSwapIfLE(src_ptr[row].lower)) ^
+			                                          (static_cast<uint64_t>(1) << 63));
 		}
-		tgt_ptr[row].lower = static_cast<uint64_t>(BSwap(src_ptr[row].upper));
-		// flip Upper MSD
-		tgt_ptr[row].upper =
-		    static_cast<int64_t>(static_cast<uint64_t>(BSwap(src_ptr[row].lower)) ^ (static_cast<uint64_t>(1) << 63));
+	} else {
+		for (idx_t row = 0; row < size; row++) {
+			if (!validity_mask.RowIsValid(row)) {
+				continue;
+			}
+			tgt_ptr[row].lower = static_cast<uint64_t>(BSwapIfLE(src_ptr[row].upper));
+			// flip Upper MSD
+			tgt_ptr[row].upper = static_cast<int64_t>(static_cast<uint64_t>(BSwapIfLE(src_ptr[row].lower)) ^
+			                                          (static_cast<uint64_t>(1) << 63));
+		}
 	}
 }
 
@@ -423,12 +466,20 @@ static void TimestampTZConversion(Vector &vector, ArrowArray &array, idx_t chunk
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr =
 	    ArrowBufferData<int64_t>(array, 1) + GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	for (idx_t row = 0; row < size; row++) {
-		if (!validity_mask.RowIsValid(row)) {
-			continue;
+	if (validity_mask.AllValid()) {
+		for (idx_t row = 0; row < size; row++) {
+			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
+				throw ConversionException("Could not convert TimestampTZ to Microsecond");
+			}
 		}
-		if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
-			throw ConversionException("Could not convert TimestampTZ to Microsecond");
+	} else {
+		for (idx_t row = 0; row < size; row++) {
+			if (!validity_mask.RowIsValid(row)) {
+				continue;
+			}
+			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
+				throw ConversionException("Could not convert TimestampTZ to Microsecond");
+			}
 		}
 	}
 }
@@ -695,7 +746,6 @@ template <class SRC>
 void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, int64_t nested_offset,
                     uint64_t parent_offset, idx_t chunk_offset, ValidityMask &val_mask,
                     DecimalBitWidth arrow_bit_width) {
-
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::INT16: {
 		auto tgt_ptr = FlatVector::GetData<int16_t>(vector);
@@ -945,6 +995,35 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		}
 		break;
 	}
+	case LogicalTypeId::TIME_NS: {
+		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDateTimeInfo>();
+		auto precision = datetime_info.GetDateTimeType();
+		switch (precision) {
+		case ArrowDateTimeType::SECONDS: {
+			TimeNSConversion<int32_t>(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset),
+			                          size, 1000000000);
+			break;
+		}
+		case ArrowDateTimeType::MILLISECONDS: {
+			TimeNSConversion<int32_t>(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset),
+			                          size, 1000000);
+			break;
+		}
+		case ArrowDateTimeType::MICROSECONDS: {
+			TimeNSConversion<int64_t>(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset),
+			                          size, 1000);
+			break;
+		}
+		case ArrowDateTimeType::NANOSECONDS: {
+			TimeNSConversion<int64_t>(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset),
+			                          size, 1);
+			break;
+		}
+		default:
+			throw NotImplementedException("Unsupported precision for TimeNS Type ");
+		}
+		break;
+	}
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDateTimeInfo>();
 		auto precision = datetime_info.GetDateTimeType();
@@ -1184,7 +1263,6 @@ static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, i
 
 template <class T>
 static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
-
 	auto indices = reinterpret_cast<T *>(indices_p);
 	for (idx_t row = 0; row < size; row++) {
 		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
@@ -1370,8 +1448,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
-                                       DataChunk &output, idx_t start, bool arrow_scan_is_projected,
-                                       idx_t rowid_column_index) {
+                                       DataChunk &output, bool arrow_scan_is_projected, idx_t rowid_column_index) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids.empty() ? idx : scan_state.column_ids[idx];
 

@@ -394,7 +394,8 @@
       {
         "id": 204,
         "name": "materialized_cte",
-        "type": "CTEMaterialize"
+        "type": "CTEMaterialize",
+        "status": "deleted"
       },
       {
         "id": 205,
@@ -406,8 +407,7 @@
       "table_index",
       "cte_index",
       "chunk_types",
-      "bound_columns",
-      "materialized_cte"
+      "bound_columns"
     ]
   },
   {

@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tableref.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/common/enums/ordinality_request_type.hpp"
 

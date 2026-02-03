@@ -5,5 +5,12 @@
         "description": "Returns the VectorType of a given column",
         "example": "vector_type(col)",
         "type": "scalar_function"
+    },
+    {
+        "name": "sleep_ms",
+        "parameters": "milliseconds",
+        "description": "Sleeps for the specified number of milliseconds and returns NULL",
+        "example": "sleep_ms(100)",
+        "type": "scalar_function"
     }
 ]

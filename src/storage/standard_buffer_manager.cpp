@@ -2,16 +2,17 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/enums/storage_block_prefetch.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
-#include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -47,7 +48,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 		result = make_uniq<FileBuffer>(*tmp, type, block_header_size);
 	} else {
 		// non re-usable buffer: allocate a new buffer
-		result = make_uniq<FileBuffer>(Allocator::Get(db), type, size, block_header_size);
+		result = make_uniq<FileBuffer>(BlockAllocator::Get(db), type, size, block_header_size);
 	}
 	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
 	return result;
@@ -217,7 +218,7 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 	D_ASSERT(handle_memory_usage == handle->GetBuffer(lock)->AllocSize());
 	D_ASSERT(handle_memory_usage == handle->GetMemoryCharge(lock).size);
 
-	auto req = handle->GetBuffer(lock)->CalculateMemory(block_size, handle->block_manager.GetBlockHeaderSize());
+	auto req = handle->GetBuffer(lock)->CalculateMemory(block_size, handle->GetBlockHeaderSize());
 	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - NumericCast<int64_t>(handle_memory_usage);
 
 	if (memory_delta == 0) {
@@ -244,23 +245,24 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 
 void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
                                       block_id_t first_block, block_id_t last_block) {
-	auto &block_manager = handles[0]->block_manager;
 	idx_t block_count = NumericCast<idx_t>(last_block - first_block + 1);
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
 	if (block_count == 1) {
-		// prefetching with block_count == 1 has no performance impact since we can't batch reads
-		// skip the prefetch in this case
-		// we do it anyway if alternative_verify is on for extra testing
-		return;
+		if (Settings::Get<StorageBlockPrefetchSetting>(db) != StorageBlockPrefetch::DEBUG_FORCE_ALWAYS) {
+			// prefetching with block_count == 1 has no performance impact since we can't batch reads
+			// skip the prefetch in this case
+			// we do it anyway if alternative_verify is on for extra testing
+			return;
+		}
 	}
-#endif
 
-	// allocate a buffer to hold the data of all of the blocks
-	auto total_block_size = block_count * block_manager.GetBlockAllocSize();
+	// Allocate a buffer to hold the data of all blocks.
+	auto block_alloc_size = handles[0]->GetBlockAllocSize();
+	auto total_block_size = block_count * block_alloc_size;
 	auto batch_memory = RegisterMemory(MemoryTag::BASE_TABLE, total_block_size, 0, true);
 	auto intermediate_buffer = Pin(batch_memory);
 
 	// perform a batch read of the blocks into the buffer
+	auto &block_manager = handles[0]->GetBlockManager();
 	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
 
 	// the blocks are read - now we need to assign them to the individual blocks
@@ -287,8 +289,7 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 				reservation.Resize(0);
 				continue;
 			}
-			auto block_ptr =
-			    intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_manager.GetBlockAllocSize();
+			auto block_ptr = intermediate_buffer.GetFileBuffer().InternalBuffer() + block_idx * block_alloc_size;
 			buf = handle->LoadFromBuffer(lock, block_ptr, std::move(reusable_buffer), std::move(reservation));
 		}
 	}
@@ -337,7 +338,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return Pin(QueryContext(), handle);
 }
 
-BufferHandle StandardBufferManager::Pin(QueryContext context, shared_ptr<BlockHandle> &handle) {
+BufferHandle StandardBufferManager::Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) {
 	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
 	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
 	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock
@@ -408,15 +409,16 @@ void StandardBufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) 
 void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockHandle> &handle) {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	unique_ptr<FileBuffer> replacement_buffer;
-	auto &allocator = Allocator::Get(db);
+	auto &block_allocator = BlockAllocator::Get(db);
 	auto &buffer = handle->GetBuffer(lock);
 	auto block_header_size = buffer->GetHeaderSize();
 	auto alloc_size = buffer->AllocSize() - block_header_size;
 	if (handle->GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());
-		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size, block_header_size);
+		replacement_buffer = make_uniq<Block>(block_allocator, block->id, alloc_size, block_header_size);
 	} else {
-		replacement_buffer = make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), alloc_size, block_header_size);
+		replacement_buffer =
+		    make_uniq<FileBuffer>(block_allocator, buffer->GetBufferType(), alloc_size, block_header_size);
 	}
 	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
 	WriteGarbageIntoBuffer(lock, *handle);
@@ -493,8 +495,11 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 	}
 }
 
-void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+bool StandardBufferManager::EncryptTemporaryFiles() {
+	return Settings::Get<TempFileEncryptionSetting>(db);
+}
 
+void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
 
@@ -510,7 +515,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto path = GetTemporaryPath(block_id);
 
 	idx_t header_size = sizeof(idx_t) * 2;
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		header_size += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
@@ -527,7 +532,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 
 	idx_t offset = sizeof(idx_t) * 2;
 
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, buffer.InternalBuffer(), buffer.AllocSize(), encryption_metadata);
 		//! Write the nonce (and tag for GCM).
@@ -565,7 +570,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer));
 
-	if (db.config.options.temp_file_encryption) {
+	if (EncryptTemporaryFiles()) {
 		// encrypted
 		//! Read nonce and tag from file.
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
@@ -588,6 +593,9 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 }
 
 void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
+	if (!block.IsUnloaded()) {
+		return;
+	}
 	auto id = block.BlockId();
 	if (temporary_directory.path.empty()) {
 		// no temporary directory specified: nothing to delete
@@ -641,6 +649,10 @@ bool StandardBufferManager::HasFilesInTemporaryDirectory() const {
 		}
 	});
 	return found;
+}
+
+BlockManager &StandardBufferManager::GetTemporaryBlockManager() {
+	return *temp_block_manager;
 }
 
 vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {

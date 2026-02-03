@@ -15,6 +15,8 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/complex_json.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
+
 #include <cstring>
 
 namespace duckdb {
@@ -169,6 +171,8 @@ public:
 	DUCKDB_API static void SkipBOM(const char *buffer_ptr, const idx_t &buffer_size, idx_t &buffer_pos);
 
 	DUCKDB_API static idx_t ToUnsigned(const string &str);
+	DUCKDB_API static int64_t ToSigned(const string &str);
+	DUCKDB_API static double ToDouble(const string &str);
 
 	template <class T>
 	static string ToString(const vector<T> &input, const string &separator) {
@@ -203,6 +207,10 @@ public:
 	//! Return a string that formats the give number of bytes
 	DUCKDB_API static string BytesToHumanReadableString(idx_t bytes, idx_t multiplier = 1024);
 
+	DUCKDB_API static string TryParseFormattedBytes(const string &arg, idx_t &result);
+
+	DUCKDB_API static idx_t ParseFormattedBytes(const string &arg);
+
 	//! Convert a string to UPPERCASE
 	DUCKDB_API static string Upper(const string &str);
 
@@ -217,6 +225,7 @@ public:
 
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);
+	DUCKDB_API static uint64_t CIHash(const char *str, idx_t size);
 
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
@@ -299,6 +308,17 @@ public:
 		}
 		return strcmp(s1, s2) == 0;
 	}
+	static bool Equals(const string &s1, const char *s2) {
+		return Equals(s1.c_str(), s2);
+	}
+	static bool Equals(const char *s1, const string &s2) {
+		return Equals(s1, s2.c_str());
+	}
+	static bool Equals(const string &s1, const string &s2) {
+		return s1 == s2;
+	}
+	static bool Equals(const string_t &s1, const char *s2);
+	static bool Equals(const char *s1, const string_t &s2);
 
 	//! JSON method that parses a { string: value } JSON blob
 	//! NOTE: this method is not efficient
@@ -337,5 +357,4 @@ public:
 	DUCKDB_API static const uint8_t ASCII_TO_LOWER_MAP[];
 	DUCKDB_API static const uint8_t ASCII_TO_UPPER_MAP[];
 };
-
 } // namespace duckdb

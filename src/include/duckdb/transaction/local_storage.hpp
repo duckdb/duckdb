@@ -40,11 +40,13 @@ public:
 	                  ExpressionExecutor &default_executor);
 	~LocalTableStorage();
 
+	QueryContext context;
+
 	reference<DataTable> table_ref;
 
 	Allocator &allocator;
 	//! The main row group collection.
-	shared_ptr<RowGroupCollection> row_groups;
+	unique_ptr<OptimisticWriteCollection> row_groups;
 	//! The set of unique append indexes.
 	TableIndexList append_indexes;
 	//! The set of delete indexes.
@@ -55,12 +57,10 @@ public:
 	idx_t deleted_rows;
 
 	//! The optimistic row group collections associated with this table.
-	vector<unique_ptr<RowGroupCollection>> optimistic_collections;
+	vector<unique_ptr<OptimisticWriteCollection>> optimistic_collections;
 	//! The main optimistic data writer associated with this table.
 	OptimisticDataWriter optimistic_writer;
 
-	//! Whether or not storage was merged
-	bool merged_storage = false;
 	//! Whether or not the storage was dropped
 	bool is_dropped = false;
 
@@ -72,20 +72,24 @@ public:
 	void Rollback();
 	idx_t EstimatedSize();
 
-	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, bool append_to_table);
+	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
+	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
 	                          const vector<LogicalType> &table_types, row_t &start_row);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
 
 	//! Create an optimistic row group collection for this table.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
-	PhysicalIndex CreateOptimisticCollection(unique_ptr<RowGroupCollection> collection);
+	PhysicalIndex CreateOptimisticCollection(unique_ptr<OptimisticWriteCollection> collection);
 	//! Returns the optimistic row group collection corresponding to the index.
-	RowGroupCollection &GetOptimisticCollection(const PhysicalIndex collection_index);
+	OptimisticWriteCollection &GetOptimisticCollection(const PhysicalIndex collection_index);
 	//! Resets the optimistic row group collection corresponding to the index.
 	void ResetOptimisticCollection(const PhysicalIndex collection_index);
 	//! Returns the optimistic writer.
 	OptimisticDataWriter &GetOptimisticWriter();
+
+	RowGroupCollection &GetCollection();
+	OptimisticWriteCollection &GetPrimaryCollection();
 
 private:
 	mutex collections_lock;
@@ -141,12 +145,12 @@ public:
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
-	void LocalMerge(DataTable &table, RowGroupCollection &collection);
+	void LocalMerge(DataTable &table, OptimisticWriteCollection &collection);
 	//! Create an optimistic row group collection for this table.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
-	PhysicalIndex CreateOptimisticCollection(DataTable &table, unique_ptr<RowGroupCollection> collection);
+	PhysicalIndex CreateOptimisticCollection(DataTable &table, unique_ptr<OptimisticWriteCollection> collection);
 	//! Returns the optimistic row group collection corresponding to the index.
-	RowGroupCollection &GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
+	OptimisticWriteCollection &GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
 	//! Resets the optimistic row group collection corresponding to the index.
 	void ResetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
 	//! Returns the optimistic writer.
@@ -186,6 +190,10 @@ public:
 	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
+
+	ClientContext &GetClientContext() const {
+		return context;
+	}
 
 private:
 	ClientContext &context;

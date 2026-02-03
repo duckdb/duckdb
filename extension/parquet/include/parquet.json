@@ -116,7 +116,7 @@
   {
     "class": "FieldID",
     "includes": [
-      "parquet_writer.hpp"
+      "parquet_field_id.hpp"
     ],
     "members": [
       {
@@ -140,7 +140,7 @@
   {
     "class": "ChildFieldIDs",
     "includes": [
-      "parquet_writer.hpp"
+      "parquet_field_id.hpp"
     ],
     "members": [
       {
@@ -149,6 +149,46 @@
         "type": "case_insensitive_map_t<FieldID>",
         "serialize_property": "ids.operator*()",
         "deserialize_property": "ids.operator*()"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ShreddingType",
+    "includes": [
+      "parquet_shredding.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "set",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 102,
+        "name": "children",
+        "type": "ChildShreddingTypes"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ChildShreddingTypes",
+    "includes": [
+      "parquet_shredding.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "types",
+        "type": "case_insensitive_map_t<ShreddingType>",
+        "serialize_property": "types.operator*()",
+        "deserialize_property": "types.operator*()"
       }
     ],
     "pointer_type": "none"

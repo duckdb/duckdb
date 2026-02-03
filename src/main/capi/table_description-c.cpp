@@ -1,5 +1,5 @@
-#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 
 using duckdb::Connection;
 using duckdb::ErrorData;
@@ -68,14 +68,14 @@ const char *duckdb_table_description_error(duckdb_table_description table) {
 	return wrapper->error.c_str();
 }
 
-duckdb_state GetTableDescription(TableDescriptionWrapper *wrapper, idx_t index) {
+duckdb_state GetTableDescription(TableDescriptionWrapper *wrapper, duckdb::optional_idx index) {
 	if (!wrapper) {
 		return DuckDBError;
 	}
 	auto &table = wrapper->description;
-	if (index >= table->columns.size()) {
-		wrapper->error = duckdb::StringUtil::Format("Column index %d is out of range, table only has %d columns", index,
-		                                            table->columns.size());
+	if (index.IsValid() && index.GetIndex() >= table->columns.size()) {
+		wrapper->error = duckdb::StringUtil::Format("Column index %d is out of range, table only has %d columns",
+		                                            index.GetIndex(), table->columns.size());
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
@@ -97,6 +97,16 @@ duckdb_state duckdb_column_has_default(duckdb_table_description table_descriptio
 	return DuckDBSuccess;
 }
 
+idx_t duckdb_table_description_get_column_count(duckdb_table_description table_description) {
+	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
+	if (GetTableDescription(wrapper, duckdb::optional_idx()) == DuckDBError) {
+		return 0;
+	}
+
+	auto &table = wrapper->description;
+	return table->columns.size();
+}
+
 char *duckdb_table_description_get_column_name(duckdb_table_description table_description, idx_t index) {
 	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
 	if (GetTableDescription(wrapper, index) == DuckDBError) {
@@ -112,4 +122,17 @@ char *duckdb_table_description_get_column_name(duckdb_table_description table_de
 	result[name.size()] = '\0';
 
 	return result;
+}
+
+duckdb_logical_type duckdb_table_description_get_column_type(duckdb_table_description table_description, idx_t index) {
+	auto wrapper = reinterpret_cast<TableDescriptionWrapper *>(table_description);
+	if (GetTableDescription(wrapper, index) == DuckDBError) {
+		return nullptr;
+	}
+
+	auto &table = wrapper->description;
+	auto &column = table->columns[index];
+
+	auto logical_type = new duckdb::LogicalType(column.Type());
+	return reinterpret_cast<duckdb_logical_type>(logical_type);
 }

@@ -412,3 +412,9 @@ select * from read_json_auto('https://github.com/duckdb/duckdb-data/releases/dow
 3	The Firm
 4	Broadcast News
 5	Raising Arizona
+
+# Verify the remote JSON file is in the cache
+query I
+select count(*) from duckdb_external_file_cache() where path like '%example_rn.ndjson%';
+----
+1
