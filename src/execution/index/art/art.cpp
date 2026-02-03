@@ -1288,7 +1288,7 @@ void ART::RemovalMerge(BoundIndex &source_index) {
 // FIXME: We already have a structural tree merge, this only exists right now since the structural merge doesn't
 // handle deprecated leaves. This is being used in merging checkpoint deltas, to avoid a more inefficient table scan.
 // Once the structural merge adds support for deprecated leaves, we can replace the calls of this function with that.
-ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index) {
+ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppendMode append_mode) {
 	auto &source = source_index.Cast<ART>();
 	if (!source.tree.HasMetadata()) {
 		return ErrorData();
@@ -1309,8 +1309,7 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index) {
 		output.Reset();
 		result = it.Scan(empty_key, output, false);
 		if (output.Count() > 0) {
-			auto error =
-			    InsertKeys(arena, keys, row_id_keys, output.Count(), DeleteIndexInfo(), IndexAppendMode::DEFAULT);
+			auto error = InsertKeys(arena, keys, row_id_keys, output.Count(), DeleteIndexInfo(), append_mode);
 			if (error.HasError()) {
 				return error;
 			}
@@ -1320,10 +1319,10 @@ ErrorData ART::InsertMerge(IndexLock &state, BoundIndex &source_index) {
 	return ErrorData();
 }
 
-ErrorData ART::InsertMerge(BoundIndex &source_index) {
+ErrorData ART::InsertMerge(BoundIndex &source_index, IndexAppendMode append_mode) {
 	IndexLock state;
 	InitializeLock(state);
-	return InsertMerge(state, source_index);
+	return InsertMerge(state, source_index, append_mode);
 }
 
 //===--------------------------------------------------------------------===//
