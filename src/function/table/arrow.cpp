@@ -15,6 +15,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -276,10 +277,56 @@ static bool CanPushdown(const ArrowType &type) {
 		return false;
 	}
 }
+static bool HasViewType(const ArrowType &type) {
+	auto duck_type = type.GetDuckType();
+	switch (duck_type.id()) {
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		return type.GetTypeInfo<ArrowStringInfo>().GetSizeType() == ArrowVariableSizeType::VIEW;
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION: {
+		const auto &struct_info = type.GetTypeInfo<ArrowStructInfo>();
+		for (idx_t i = 0; i < struct_info.ChildCount(); i++) {
+			if (HasViewType(struct_info.GetChild(i))) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP: {
+		const auto &list_info = type.GetTypeInfo<ArrowListInfo>();
+		return HasViewType(list_info.GetChild());
+	}
+	case LogicalTypeId::ARRAY: {
+		const auto &array_info = type.GetTypeInfo<ArrowArrayInfo>();
+		return HasViewType(array_info.GetChild());
+	}
+	default:
+		return false;
+	}
+}
+
+static bool TableHasViewTypes(const arrow_column_map_t &column_info) {
+	for (const auto &col : column_info) {
+		if (HasViewType(*col.second)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool ArrowTableFunction::ArrowPushdownType(const FunctionData &bind_data, idx_t col_idx) {
 	auto &arrow_bind_data = bind_data.Cast<ArrowScanFunctionData>();
 	const auto &column_info = arrow_bind_data.arrow_table.GetColumns();
-	auto column_type = column_info.at(col_idx);
+	// PyArrow's array_filter kernel doesn't support string_view/binary_view types.
+	// The filter is applied to ALL columns in a record batch, so if any column has a
+	// view type, we must disable filter pushdown for the entire table.
+	// See https://github.com/duckdb/duckdb-python/issues/227
+	if (TableHasViewTypes(column_info)) {
+		return false;
+	}
+	const auto column_type = column_info.at(col_idx);
 	return CanPushdown(*column_type);
 }
 
