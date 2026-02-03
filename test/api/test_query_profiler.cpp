@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 
 #include <iostream>
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
@@ -56,4 +57,33 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	REQUIRE(output.size() > 0);
 	query_not_found_in_output = output.find(query) == std::string::npos;
 	REQUIRE(query_not_found_in_output);
+}
+
+TEST_CASE("Test latency when interrupting query", "[api]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	con.context->config.emit_profiler_output = false;
+
+	// Test interupting a query and running a new one afterward.
+	// The latency should reflect the new one.
+	thread t([&con]() {
+		string query = "explain analyze select sum(range) from range(1_000_000_000);";
+		con.Query(query);
+	});
+
+	this_thread::sleep_for(chrono::milliseconds(100));
+	con.Interrupt();
+	t.join();
+
+	string query = "explain analyze select sum(range) from range(1_000_000);";
+	REQUIRE_NO_FAIL(con.Query(query));
+
+	auto profiling_info = con.GetProfilingTree()->GetProfilingInfo();
+	auto latency = profiling_info.GetMetricAsString(MetricType::LATENCY);
+	REQUIRE(latency == "0.0");
 }
