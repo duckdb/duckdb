@@ -1512,7 +1512,7 @@ struct WarningsAsErrorsSetting {
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 88;
+	static constexpr idx_t SettingIndex = 89;
 };
 
 struct WriteBufferRowGroupCountSetting {
@@ -1523,7 +1523,7 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = 89;
+	static constexpr idx_t SettingIndex = 90;
 };
 
 struct ZstdMinStringLengthSetting {
@@ -1534,11 +1534,11 @@ struct ZstdMinStringLengthSetting {
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "4096";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = 90;
+	static constexpr idx_t SettingIndex = 91;
 };
 
 struct GeneratedSettingInfo {
-	static constexpr idx_t MaxSettingIndex = 91;
+	static constexpr idx_t MaxSettingIndex = 92;
 };
 
 //===----------------------------------------------------------------------===//
