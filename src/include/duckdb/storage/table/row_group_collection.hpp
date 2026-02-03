@@ -50,6 +50,7 @@ public:
 
 public:
 	idx_t GetTotalRows() const;
+	idx_t GetRowGroupCount() const;
 	Allocator &GetAllocator() const;
 
 	void Initialize(PersistentCollectionData &data);

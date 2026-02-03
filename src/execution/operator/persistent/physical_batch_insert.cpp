@@ -106,9 +106,9 @@ public:
 				data_table.ResetOptimisticCollection(context, collection_indexes[i]);
 			}
 			result_collection.FinalizeAppend(TransactionData(0, 0), append_state);
-			writer.WriteLastRowGroup(optimistic_collection);
+			writer.WriteUnflushedRowGroups(optimistic_collection);
 		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
-			writer.WriteLastRowGroup(optimistic_collection);
+			writer.WriteUnflushedRowGroups(optimistic_collection);
 		}
 
 		collection_indexes.clear();
@@ -380,7 +380,7 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 	auto new_count = collection.GetTotalRows();
 	auto batch_type = new_count < row_group_size ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 	if (batch_type == RowGroupBatchType::FLUSHED && writer) {
-		writer->WriteLastRowGroup(optimistic_collection);
+		writer->WriteUnflushedRowGroups(optimistic_collection);
 	}
 	lock_guard<mutex> l(lock);
 	insert_count += new_count;
