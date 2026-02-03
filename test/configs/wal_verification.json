@@ -29,6 +29,12 @@
       ]
     },
     {
+      "reason": "Test explicitly checks WAL creation",
+      "paths": [
+        "test/sql/storage/wal/wal_lazy_creation.test"
+      ]
+    },
+    {
       "reason": "FIXME: Unexpected (?) binder error.",
       "paths": [
         "test/fuzzer/pedro/index_generated_column.test",
@@ -73,8 +79,7 @@
     {
       "reason": "FIXME: Wrong result in query.",
       "paths": [
-        "test/sql/index/art/storage/test_art_duckdb_versions.test",
-        "test/sql/storage/wal/wal_lazy_creation.test"
+        "test/sql/index/art/storage/test_art_duckdb_versions.test"
       ]
     },
     {
@@ -87,14 +92,7 @@
     {
       "reason": "FIXME: Query unexpectedly succeeded/failed.",
       "paths": [
-        "test/fuzzer/sqlsmith/nullif_map_with_config.test",
-        "test/sql/storage/memory/in_memory_compress.test"
-      ]
-    },
-    {
-      "reason": "FIXME: Attempting to checkpoint read-only database.",
-      "paths": [
-        "test/sql/storage/read_duckdb/read_duckdb_index.test"
+        "test/fuzzer/sqlsmith/nullif_map_with_config.test"
       ]
     }
   ]
