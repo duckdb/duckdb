@@ -73,6 +73,26 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd
 	}
 };
 
+template <class T>
+LogicalType GetSumStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("isset", LogicalType::BOOLEAN);
+
+	LogicalType value_type;
+	if (std::is_same<T, int64_t>::value) {
+		value_type = LogicalType::BIGINT;
+	} else if (std::is_same<T, hugeint_t>::value) {
+		value_type = LogicalType::HUGEINT;
+	} else if (std::is_same<T, double>::value) {
+		value_type = LogicalType::DOUBLE;
+	} else {
+		throw InternalException("Unsupported type for sum aggregate as the state-value");
+	}
+	child_types.emplace_back("value", value_type);
+
+	return LogicalType::STRUCT(std::move(child_types));
+}
+
 unique_ptr<FunctionData> SumNoOverflowBind(ClientContext &context, AggregateFunction &function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	throw BinderException("sum_no_overflow is for internal use only!");
@@ -164,13 +184,13 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, bool, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BOOLEAN, LogicalType::HUGEINT);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		return function;
+		return function.SetStructStateExport(GetSumStateType<int64_t>);
 	}
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::SMALLINT, LogicalType::HUGEINT);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		return function;
+		return function.SetStructStateExport(GetSumStateType<int64_t>);
 	}
 
 	case PhysicalType::INT32: {
@@ -179,7 +199,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		return function;
+		return function.SetStructStateExport(GetSumStateType<hugeint_t>);
 	}
 	case PhysicalType::INT64: {
 		auto function =
@@ -187,14 +207,14 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.SetStatisticsCallback(SumPropagateStats);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		return function;
+		return function.SetStructStateExport(GetSumStateType<hugeint_t>);
 	}
 	case PhysicalType::INT128: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
 		        LogicalType::HUGEINT, LogicalType::HUGEINT);
 		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-		return function;
+		return function.SetStructStateExport(GetSumStateType<hugeint_t>);
 	}
 	default:
 		throw InternalException("Unimplemented sum aggregate");
@@ -283,7 +303,8 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	                    LogicalType::DOUBLE, LogicalType::DOUBLE)
+	                    .SetStructStateExport(GetSumStateType<double>));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM));
 	return sum;
@@ -301,9 +322,18 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	return sum_no_overflow;
 }
 
+LogicalType GetKahanSumStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("isset", LogicalType::BOOLEAN);
+	children.emplace_back("value", LogicalType::DOUBLE);
+	children.emplace_back("err", LogicalType::DOUBLE);
+	return LogicalType::STRUCT(std::move(children));
+}
+
 AggregateFunction KahanSumFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE);
+	                                                                                           LogicalType::DOUBLE)
+	    .SetStructStateExport(GetKahanSumStateType);
 }
 
 } // namespace duckdb
