@@ -36,6 +36,7 @@ void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement
                                const AlterEntryData &table_data,
                                const unique_ptr<ParsedExpression> &original_expression) {
 	auto update_statement = make_uniq<UpdateStatement>();
+	update_statement->prioritize_table_when_binding = true;
 
 	auto table_ref = make_uniq<BaseTableRef>();
 	table_ref->catalog_name = table_data.catalog;
@@ -58,49 +59,27 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
                                                         unique_ptr<ParsedExpression> expression) {
 	auto multi_statement = make_uniq<MultiStatement>();
 	/* Here we do a workaround that consists of the following statements:
-	 *	 1. `SET search_path = <schema_of_table>;`
-	 *	 2. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
-	 *	 3. `UPDATE t SET col = <expression>;`
-	 *	 4. `ALTER TABLE t ALTER col SET DEFAULT <expression>;`
-	 *	 5. `RESET search_path;`
+	 *	 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	 *	 2. `UPDATE t SET col = <expression>;`
+	 *	 3. `ALTER TABLE t ALTER col SET DEFAULT <expression>;`
+
 	 *
 	 * This workaround exists because, when statements like this were executed:
 	 *	`ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>`
 	 * the WAL replay would re-run the default expression, and with expressions such as RANDOM or CURRENT_TIMESTAMP, the
-	 * value would be different from that of the original run. By now doing an UPDATE in statement 3, we force
-	 * materialization of these values for all existing rows, which makes WAL replays consistent. Statement 4 then
-	 * reinstates restores the intended default so that new rows inserted later get the correct default behavior.
+	 * value would be different from that of the original run. By now doing an UPDATE in statement 2, we force
+	 * materialization of these values for all existing rows, which makes WAL replays consistent.
 	 */
 
-	// 1. SET search_path = 'schema_of_table'
-	bool need_custom_search_path = !data.catalog.empty() || !data.schema.empty();
-	if (need_custom_search_path) {
-		string new_search_path;
-		if (!data.catalog.empty()) {
-			new_search_path += KeywordHelper::WriteOptionallyQuoted(data.catalog) + ".";
-		}
-		new_search_path += KeywordHelper::WriteOptionallyQuoted(data.schema);
-		auto set_value_expr = make_uniq<ConstantExpression>(Value(new_search_path));
-		auto set_statement =
-		    make_uniq<SetVariableStatement>("search_path", std::move(set_value_expr), SetScope::SESSION);
-		multi_statement->statements.push_back(std::move(set_statement));
-	}
-
-	// 2. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
 	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
 
-	// 3. `UPDATE t SET u = <expression>;`
+	// 2. `UPDATE t SET u = <expression>;`
 	AddUpdateToMultiStatement(multi_statement, column_name, data, expression);
 
-	// 4. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
 	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
-
-	// 5. RESET search_path
-	if (need_custom_search_path) {
-		auto reset_statement = make_uniq<ResetVariableStatement>("search_path", SetScope::SESSION);
-		multi_statement->statements.push_back(std::move(reset_statement));
-	}
 
 	return multi_statement;
 }
