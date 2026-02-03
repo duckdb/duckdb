@@ -488,6 +488,9 @@ public:
 	//! Whether or not the table function supports sampling pushdown. If not supported a sample will be taken after the
 	//! table function.
 	bool sampling_pushdown;
+	//! Whether or not the table function supports reservoir sampling pushdown. If not supported a reservoir sample will
+	//! be taken after the table function.
+	bool reservoir_sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
 	//! Additional function info, passed to the bind

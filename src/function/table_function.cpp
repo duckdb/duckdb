@@ -26,7 +26,7 @@ TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, 
       supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr), get_partition_info(nullptr),
       get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
       serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
-      sampling_pushdown(false), late_materialization(false) {
+      sampling_pushdown(false), reservoir_sampling_pushdown(false), late_materialization(false) {
 }
 
 TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function_,
@@ -41,7 +41,7 @@ TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, 
       supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr), get_partition_info(nullptr),
       get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
       serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
-      sampling_pushdown(false), late_materialization(false) {
+      sampling_pushdown(false), reservoir_sampling_pushdown(false), late_materialization(false) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function_,
@@ -74,8 +74,9 @@ bool TableFunction::operator==(const TableFunction &rhs) const {
 	       serialize == rhs.serialize && deserialize == rhs.deserialize &&
 	       verify_serialization == rhs.verify_serialization && projection_pushdown == rhs.projection_pushdown &&
 	       filter_pushdown == rhs.filter_pushdown && filter_prune == rhs.filter_prune &&
-	       sampling_pushdown == rhs.sampling_pushdown && late_materialization == rhs.late_materialization &&
-	       global_initialization == rhs.global_initialization;
+	       sampling_pushdown == rhs.sampling_pushdown &&
+	       reservoir_sampling_pushdown == rhs.reservoir_sampling_pushdown &&
+	       late_materialization == rhs.late_materialization && global_initialization == rhs.global_initialization;
 }
 
 bool TableFunction::operator!=(const TableFunction &rhs) const {

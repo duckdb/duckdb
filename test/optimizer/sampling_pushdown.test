@@ -50,3 +50,21 @@ query II
 EXPLAIN SELECT * FROM integers1, integers2 where integers1.i = integers2.i USING SAMPLE SYSTEM(25%)
 ----
 physical_plan	<REGEX>:.*System.*SEQ_SCAN.*
+
+# reservoir sampling with row count: no pushdown by default, but table functions can enable it
+query II
+EXPLAIN SELECT i FROM integers1 USING SAMPLE RESERVOIR(2)
+----
+physical_plan	<REGEX>:.*RESERVOIR_SAMPLE.*SEQ_SCAN.*
+
+# reservoir sampling with row count using ROWS syntax: no pushdown by default, but table functions can enable it
+query II
+EXPLAIN SELECT i FROM integers1 USING SAMPLE 2 ROWS
+----
+physical_plan	<REGEX>:.*RESERVOIR_SAMPLE.*SEQ_SCAN.*
+
+# reservoir sampling with REPEATABLE: no pushdown by default, but table functions can enable it
+query II
+EXPLAIN SELECT i FROM integers1 USING SAMPLE RESERVOIR(2) REPEATABLE(42)
+----
+physical_plan	<REGEX>:.*RESERVOIR_SAMPLE.*SEQ_SCAN.*
