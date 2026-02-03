@@ -49,9 +49,7 @@ def get_inherited_skip_tests(config_path, base_dir, visited=None):
 
         if os.path.exists(full_inherit_path):
             # First, recursively get any tests inherited by the parent
-            inherited_paths.update(
-                get_inherited_skip_tests(full_inherit_path, base_dir, visited)
-            )
+            inherited_paths.update(get_inherited_skip_tests(full_inherit_path, base_dir, visited))
 
             # Then add the parent's own skip tests
             parent_config = load_config(full_inherit_path)
@@ -135,29 +133,21 @@ def find_config_files(directory):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Clean up JSON config files by removing inherited skip_tests.'
-    )
+    parser = argparse.ArgumentParser(description='Clean up JSON config files by removing inherited skip_tests.')
     parser.add_argument(
         'configs',
         nargs='*',
-        help='Config files to clean up. If none specified, processes all JSON files in test/configs/'
+        help='Config files to clean up. If none specified, processes all JSON files in test/configs/',
     )
     parser.add_argument(
         '--base-dir',
         default=None,
-        help='Base directory for resolving inherit_skip_tests paths (default: current directory)'
+        help='Base directory for resolving inherit_skip_tests paths (default: current directory)',
     )
     parser.add_argument(
-        '--dry-run', '-n',
-        action='store_true',
-        help='Show what would be removed without making changes'
+        '--dry-run', '-n', action='store_true', help='Show what would be removed without making changes'
     )
-    parser.add_argument(
-        '--verbose', '-v',
-        action='store_true',
-        help='Show more details'
-    )
+    parser.add_argument('--verbose', '-v', action='store_true', help='Show more details')
 
     args = parser.parse_args()
 
