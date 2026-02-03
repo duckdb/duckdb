@@ -184,6 +184,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
@@ -3394,6 +3395,24 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 34, "OptimizerType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OrderByColumnType::NUMERIC), "NUMERIC" },
+		{ static_cast<uint32_t>(OrderByColumnType::STRING), "STRING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OrderByColumnType>(OrderByColumnType value) {
+	return StringUtil::EnumToString(GetOrderByColumnTypeValues(), 2, "OrderByColumnType", static_cast<uint32_t>(value));
+}
+
+template<>
+OrderByColumnType EnumUtil::FromString<OrderByColumnType>(const char *value) {
+	return static_cast<OrderByColumnType>(StringUtil::StringToEnum(GetOrderByColumnTypeValues(), 2, "OrderByColumnType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(OrderByNullType::INVALID), "INVALID" },
@@ -3415,6 +3434,24 @@ const char* EnumUtil::ToChars<OrderByNullType>(OrderByNullType value) {
 template<>
 OrderByNullType EnumUtil::FromString<OrderByNullType>(const char *value) {
 	return static_cast<OrderByNullType>(StringUtil::StringToEnum(GetOrderByNullTypeValues(), 7, "OrderByNullType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetOrderByStatisticsValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OrderByStatistics::MIN), "MIN" },
+		{ static_cast<uint32_t>(OrderByStatistics::MAX), "MAX" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OrderByStatistics>(OrderByStatistics value) {
+	return StringUtil::EnumToString(GetOrderByStatisticsValues(), 2, "OrderByStatistics", static_cast<uint32_t>(value));
+}
+
+template<>
+OrderByStatistics EnumUtil::FromString<OrderByStatistics>(const char *value) {
+	return static_cast<OrderByStatistics>(StringUtil::StringToEnum(GetOrderByStatisticsValues(), 2, "OrderByStatistics", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderPreservationTypeValues() {

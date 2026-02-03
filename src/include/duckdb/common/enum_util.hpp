@@ -306,7 +306,11 @@ enum class OperatorResultType : uint8_t;
 
 enum class OptimizerType : uint32_t;
 
+enum class OrderByColumnType : uint8_t;
+
 enum class OrderByNullType : uint8_t;
+
+enum class OrderByStatistics : uint8_t;
 
 enum class OrderPreservationType : uint8_t;
 
@@ -905,7 +909,13 @@ template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value);
 
 template<>
+const char* EnumUtil::ToChars<OrderByColumnType>(OrderByColumnType value);
+
+template<>
 const char* EnumUtil::ToChars<OrderByNullType>(OrderByNullType value);
+
+template<>
+const char* EnumUtil::ToChars<OrderByStatistics>(OrderByStatistics value);
 
 template<>
 const char* EnumUtil::ToChars<OrderPreservationType>(OrderPreservationType value);
@@ -1596,7 +1606,13 @@ template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value);
 
 template<>
+OrderByColumnType EnumUtil::FromString<OrderByColumnType>(const char *value);
+
+template<>
 OrderByNullType EnumUtil::FromString<OrderByNullType>(const char *value);
+
+template<>
+OrderByStatistics EnumUtil::FromString<OrderByStatistics>(const char *value);
 
 template<>
 OrderPreservationType EnumUtil::FromString<OrderPreservationType>(const char *value);
