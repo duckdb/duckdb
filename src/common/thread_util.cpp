@@ -11,6 +11,11 @@ void ThreadUtil::SleepMs(idx_t sleep_ms) {
 thread_id ThreadUtil::GetThreadId() {
 	return std::this_thread::get_id();
 }
+
+void ThreadUtil::SleepMicroSeconds(idx_t micros) {
+	std::this_thread::sleep_for(std::chrono::microseconds(micros));
+}
+
 #else
 
 void ThreadUtil::SleepMs(idx_t sleep_ms) {
@@ -19,6 +24,10 @@ void ThreadUtil::SleepMs(idx_t sleep_ms) {
 
 thread_id ThreadUtil::GetThreadId() {
 	return 0;
+}
+
+void ThreadUtil::SleepMicroSeconds(idx_t micros) {
+	throw InvalidInputException("ThreadUtil::SleepMicroSeconds requires DuckDB to be compiled with thread support");
 }
 #endif
 } // namespace duckdb
