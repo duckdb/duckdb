@@ -21,40 +21,44 @@ query IIIIII nosort res0
 SELECT finalize(avg(d) EXPORT_STATE)::integer FROM dummy;
 ----
 
-# grouped aggr
+# grouped sum
 query IIIIIII nosort res1
-SELECT g, avg(d)::integer FROM dummy GROUP BY g ORDER BY g;
+SELECT g, sum(d)::integer FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIII nosort res1
-SELECT g, finalize(avg(d) EXPORT_STATE)::integer FROM dummy GROUP BY g ORDER BY g;
+SELECT g, finalize(sum(d) EXPORT_STATE)::integer FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 
 statement ok
-CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy GROUP BY g ORDER BY g;
 
 query IIIIIII nosort res1
-SELECT g, finalize(avg_state)::integer FROM state ORDER BY g;
+SELECT g, finalize(sum_state)::integer FROM state ORDER BY g;
 ----
 
 query II nosort res3
-SELECT g, avg(d)*2 combined_avg FROM dummy GROUP BY g ORDER BY g;
+SELECT g, sum(d)*2 combined_sum FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res3
+select g, finalize(combine(sum(d) EXPORT_STATE, sum_state)) combined_sum from dummy join state using (g) group by g, sum_state ORDER BY g;
 ----
 
 # combine aggregate state in UNION
 statement ok
-CREATE TABLE state2 AS SELECT g, avg(d) EXPORT_STATE avg_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
+CREATE TABLE state2 AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
 
 query II rowsort res3
-select g, finalize(avg_state) * 2 combined_avg from (select g, avg(d) EXPORT_STATE avg_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
+select g, finalize(sum_state) * 2 combined_sum from (select g, sum(d) EXPORT_STATE sum_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
 ----
 
 # combine aggregate states in JOINs with NULLs
 query II rowsort res3
 with groups as (select distinct g from dummy)
-select g, FINALIZE(COMBINE(avg_state, avg_state2)) * 2 from groups left join state2 using(g) left join (select g, avg(d) EXPORT_STATE avg_state2 from dummy where g >= 5 GROUP BY g) using (g);
+select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join state2 using(g) left join (select g, sum(d) EXPORT_STATE sum_state2 from dummy where g >= 5 GROUP BY g) using (g);
 ----
 
 # empty groups
