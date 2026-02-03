@@ -444,9 +444,11 @@ bool BaseTokenizer::TokenizeInput() {
 		break;
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
-	case TokenizeState::DOLLAR_QUOTED_STRING:
 		PushToken(last_pos, sql.size(), TokenType::COMMENT);
 		// no suggestions in comments or dollar-quoted strings
+		return false;
+	case TokenizeState::DOLLAR_QUOTED_STRING:
+		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL);
 		return false;
 	default:
 		break;
