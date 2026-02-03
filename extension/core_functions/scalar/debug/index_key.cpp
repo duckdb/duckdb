@@ -161,6 +161,10 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 	}
 
 	// Set bound_function.arguments to actual types for proper casting.
+	// Note: In case this is ever a bottleneck for testing purposes -- currently, we retain the first two arguments
+	// for execution even though they are only required for binding. This requires us to create a key_chunk
+	// that only references the key columns during execution. We could erase the first two arguments here, but
+	// that also requires some (de)serialization boilerplate, so for now we don't do it.
 	bound_function.arguments.clear();
 	bound_function.arguments.push_back(arguments[0]->return_type);
 	bound_function.arguments.push_back(arguments[1]->return_type);
