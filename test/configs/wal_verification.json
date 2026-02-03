@@ -78,7 +78,8 @@
     {
       "reason": "FIXME: Internal Exception.",
       "paths": [
-        "test/sql/alter/add_pk/test_add_pk_with_generated_column.test"
+        "test/sql/alter/add_pk/test_add_pk_with_generated_column.test",
+        "test/sql/storage/optimistic_write/optimistic_write_alter_type.test_slow"
       ]
     },
     {

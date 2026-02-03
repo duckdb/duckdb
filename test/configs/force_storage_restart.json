@@ -26,6 +26,12 @@
       "paths": [
         "test/sql/storage/temp_directory/offloading_block_files.test_slow"
       ]
+    },
+    {
+      "reason": "Logging setting doesn't survive restarts",
+      "paths": [
+        "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow"
+      ]
     }
   ]
 }
