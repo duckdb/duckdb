@@ -4,12 +4,13 @@
 #include "result_helper.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
-    : log_lock(command.runner.log_lock), file_name(command.file_name), query_line(command.query_line),
-      sql_query(context.sql_query) {
+    : connection(command.CommandConnection(context)), log_lock(command.runner.log_lock), file_name(command.file_name),
+      query_line(command.query_line), sql_query(context.sql_query) {
 }
 
 SQLLogicTestLogger::~SQLLogicTestLogger() {
@@ -158,7 +159,11 @@ void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, c
 }
 
 void SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {
-	LogFailure(result.ToString());
+	BoxRendererConfig config;
+	config.max_rows = 2000;
+	config.max_width = -1;
+	string result_str = result.ToBox(*connection.context, config);
+	LogFailure(result_str);
 }
 
 void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,

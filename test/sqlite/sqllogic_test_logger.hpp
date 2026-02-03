@@ -60,6 +60,7 @@ public:
 	static void LogFailureAnnotation(const string &log_message);
 
 private:
+	Connection &connection;
 	lock_guard<mutex> log_lock;
 	string file_name;
 	int query_line;
