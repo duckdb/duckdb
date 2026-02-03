@@ -12,7 +12,7 @@ namespace duckdb {
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
     : context(context), table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0),
-      optimistic_writer(context, table), merged_storage(false) {
+      optimistic_writer(context, table) {
 	auto types = table.GetTypes();
 	auto data_table_info = table.GetDataTableInfo();
 	row_groups = optimistic_writer.CreateCollection(table, types, OptimisticWritePartialManagers::GLOBAL);
@@ -46,7 +46,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
                                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
     : context(context), table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)),
       deleted_rows(parent.deleted_rows), optimistic_collections(std::move(parent.optimistic_collections)),
-      optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
+      optimistic_writer(new_data_table, parent.optimistic_writer) {
 	// Alter the column type.
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection =
@@ -62,7 +62,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
                                      const idx_t drop_column_index)
     : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
       optimistic_collections(std::move(parent.optimistic_collections)),
-      optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
+      optimistic_writer(new_data_table, parent.optimistic_writer) {
 	// Remove the column from the previous table storage.
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection = parent_collection.RemoveColumn(drop_column_index);
@@ -77,7 +77,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
                                      ColumnDefinition &new_column, ExpressionExecutor &default_executor)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
       optimistic_collections(std::move(parent.optimistic_collections)),
-      optimistic_writer(new_dt, parent.optimistic_writer), merged_storage(parent.merged_storage) {
+      optimistic_writer(new_dt, parent.optimistic_writer) {
 	auto &parent_collection = *parent.row_groups->collection;
 	auto new_collection = parent_collection.AddColumn(context, new_column, default_executor);
 	row_groups = std::move(parent.row_groups);
@@ -145,8 +145,9 @@ void LocalTableStorage::WriteNewRowGroup() {
 void LocalTableStorage::FlushBlocks() {
 	auto &collection = *row_groups->collection;
 	const idx_t row_group_size = collection.GetRowGroupSize();
-	if (!merged_storage && collection.GetTotalRows() > row_group_size) {
-		optimistic_writer.WriteLastRowGroup(*row_groups);
+	if (collection.GetTotalRows() >= row_group_size) {
+		// write any unflushed row groups
+		optimistic_writer.WriteUnflushedRowGroups(*row_groups);
 	}
 	optimistic_writer.FinalFlush();
 }
@@ -403,6 +404,10 @@ RowGroupCollection &LocalTableStorage::GetCollection() {
 	return *row_groups->collection;
 }
 
+OptimisticWriteCollection &LocalTableStorage::GetPrimaryCollection() {
+	return *row_groups;
+}
+
 bool LocalStorage::NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
                                     CollectionScanState &scan_state) {
 	auto storage = table_manager.GetStorage(table);
@@ -488,8 +493,8 @@ void LocalStorage::LocalMerge(DataTable &table, OptimisticWriteCollection &colle
 			error.Throw();
 		}
 	}
-	storage.GetCollection().MergeStorage(*collection.collection, nullptr, nullptr);
-	storage.merged_storage = true;
+	auto &target = storage.GetPrimaryCollection();
+	target.MergeStorage(collection);
 }
 
 PhysicalIndex LocalStorage::CreateOptimisticCollection(DataTable &table,
