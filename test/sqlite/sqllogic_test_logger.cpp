@@ -159,8 +159,11 @@ void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, c
 }
 
 string SQLLogicTestLogger::ResultToString(MaterializedQueryResult &result) {
+	if (result.RowCount() < 100) {
+		return result.ToString();
+	}
 	BoxRendererConfig config;
-	config.max_rows = 2000;
+	config.max_rows = 100;
 	config.max_width = -1;
 	return result.ToBox(*connection.context, config);
 }
