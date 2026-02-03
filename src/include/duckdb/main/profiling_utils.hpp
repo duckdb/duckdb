@@ -53,6 +53,9 @@ public:
         for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
             active_metrics[i] = 0;
         }
+
+    	latency_timer.reset();
+    	query_name = "";
     }
 
     void Merge(const QueryMetrics &other) {
