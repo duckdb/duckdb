@@ -178,6 +178,9 @@ protected:
 
 private:
 	ShellHighlight shell_highlight;
+
+	// Logs that have already been printed to avoid spamming the shell
+	duckdb::unordered_set<uint64_t> printed_logs;
 };
 
 } // namespace duckdb_shell
