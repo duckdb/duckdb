@@ -25,23 +25,12 @@ void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, 
 	D_ASSERT(set_info.columns.size() == set_info.expressions.size());
 
 	Binder *expr_binder_ptr = this;
-	shared_ptr<Binder> table_centric_binder;
+	shared_ptr<Binder> binder_with_search_path;
 
 	if (prioritize_table_when_binding) {
-		// Create a binder whose catalog search path is anchored to the table's catalog+schema
-		table_centric_binder = Binder::CreateBinder(context, this);
-
-		vector<CatalogSearchEntry> update_search_path;
-		auto &catalog_name = table.ParentCatalog().GetName();
-		auto &schema_name = table.ParentSchema().name;
-
-		update_search_path.emplace_back(catalog_name, schema_name);
-		if (schema_name != DEFAULT_SCHEMA) {
-			update_search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
-		}
-		table_centric_binder->entry_retriever.SetSearchPath(std::move(update_search_path));
-
-		expr_binder_ptr = table_centric_binder.get();
+		binder_with_search_path =
+		    CreateBinderWithSearchPath(table.ParentCatalog().GetName(), table.ParentSchema().name);
+		expr_binder_ptr = binder_with_search_path.get();
 	}
 
 	for (idx_t i = 0; i < set_info.columns.size(); i++) {

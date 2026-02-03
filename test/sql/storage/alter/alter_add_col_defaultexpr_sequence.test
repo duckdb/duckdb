@@ -1,4 +1,4 @@
-# name: test/sql/storage/alter/alter_add_col_sequence.test
+# name: test/sql/storage/alter/alter_add_col_defaultexpr_sequence.test
 # group: [alter]
 
 statement ok
@@ -21,4 +21,3 @@ USE db2;
 
 statement ok
 ALTER TABLE db1.tbl ADD COLUMN m INTEGER DEFAULT nextval('seq');
-

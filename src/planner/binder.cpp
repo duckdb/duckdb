@@ -423,4 +423,18 @@ optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const 
 	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
 }
 
+//! Create a binder whose catalog search path is anchored to the table's catalog+schema
+shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name) {
+	shared_ptr<Binder> new_binder = Binder::CreateBinder(context, this);
+
+	vector<CatalogSearchEntry> search_path;
+
+	search_path.emplace_back(catalog_name, schema_name);
+	if (schema_name != DEFAULT_SCHEMA) {
+		search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
+	}
+	new_binder->entry_retriever.SetSearchPath(std::move(search_path));
+	return std::move(new_binder);
+}
+
 } // namespace duckdb
