@@ -193,8 +193,8 @@ public:
 		const uint32_t total_length = ParquetCrypto::NONCE_BYTES + ciphertext_length + ParquetCrypto::TAG_BYTES;
 
 		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
-		// Write nonce at beginning of encrypted chunk
-		trans.write(nonce, ParquetCrypto::NONCE_BYTES);
+		// Write nonce at the start of encrypted chunk
+		trans.write(nonce.data(), ParquetCrypto::NONCE_BYTES);
 
 		data_t aes_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE];
 		auto current = allocator.GetTail();
@@ -222,7 +222,6 @@ public:
 
 private:
 	void Initialize(const string &key) {
-		EncryptionNonce nonce;
 		// Generate Nonce
 		aes->GenerateRandomData(nonce.data(), nonce.size());
 		// Initialize Encryption
@@ -238,7 +237,7 @@ private:
 	shared_ptr<EncryptionState> aes;
 
 	//! Nonce created by Initialize()
-	data_t nonce[ParquetCrypto::NONCE_BYTES];
+	EncryptionNonce nonce;
 
 	//! Arena Allocator to fully materialize in memory before encrypting
 	ArenaAllocator allocator;
