@@ -267,6 +267,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 			storage_manager.WALFinishCheckpoint(*wal_lock);
 		}
 	} catch (std::exception &ex) {
+		// any exceptions thrown here are fatal
 		ErrorData error(ex);
 		if (error.Type() == ExceptionType::FATAL) {
 			throw;
