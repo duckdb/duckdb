@@ -2,6 +2,9 @@
 # description: Test the AGGREGATE_STATE type name with get_state_type callback
 # group: [aggregates]
 
+# We know that forward compatibility won't be preserved
+require noforcestorage
+
 foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
 
 # avg() has the new get_state_type callback

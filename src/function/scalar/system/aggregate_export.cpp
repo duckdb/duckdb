@@ -515,13 +515,14 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.GetReturnType(),
 	                             child_aggregate->function.arguments);
 
-	child_list_t<LogicalType> struct_child_types = {};
+	LogicalType return_type;
 	if (bound_function.HasGetStateTypeCallback()) {
 		LogicalType state_layout = bound_function.GetStateType();
-		struct_child_types = StructType::GetChildTypes(state_layout);
+		auto struct_child_types = StructType::GetChildTypes(state_layout);
+		return_type = LogicalType::AGGREGATE_STATE(std::move(state_type), std::move(struct_child_types));
+	} else {
+		return_type = LogicalType::LEGACY_AGGREGATE_STATE(std::move(state_type));
 	}
-
-	const auto return_type = LogicalType::AGGREGATE_STATE(std::move(state_type), std::move(struct_child_types));
 
 	auto export_function =
 	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.arguments, return_type,

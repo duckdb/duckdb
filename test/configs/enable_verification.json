@@ -211,7 +211,7 @@
       "reason": "FIXME: Misc. unexpected failures (including internal exception).",
       "paths": [
         "test/fuzzer/duckfuzz/null_arguments.test",
-        "test/sql/aggregate/aggregates/test_state_export.test",
+        "test/sql/aggregate/aggregates/test_state_export_opaque.test",
         "test/sql/copy/parquet/bloom_filters.test",
         "test/sql/copy/parquet/corrupt_stats.test",
         "test/sql/create/create_table_compression.test",
