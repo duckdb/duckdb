@@ -103,7 +103,6 @@ public:
 		}
 		profiler.Start();
 	}
-
 	~ActiveTimer() {
 		if (is_active) {
 			// automatically end in destructor
@@ -127,7 +126,6 @@ public:
 		std::swap(is_active, other.is_active);
 		return *this;
 	}
-
 
 	// Automatically called in the destructor.
 	void EndTimer() {
