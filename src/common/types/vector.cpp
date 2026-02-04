@@ -1375,13 +1375,10 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 				// write the bytes
 				auto byte_data = make_unsafe_uniq_array_uninitialized<data_t>(byte_data_length);
 				// write the non-null strings
-				auto string_write_ptr = reinterpret_cast<data_t *>(byte_data.get()) + sizeof(uint32_t) * count;
+				auto string_write_ptr = byte_data.get();
 				for (idx_t i = 0; i < count; i++) {
 					auto idx = vdata.sel->get_index(i);
-					if (!vdata.validity.RowIsValid(idx)) {
-						continue;
-					}
-					auto this_length = strings[idx].GetSize();
+					auto this_length = vdata.validity.RowIsValid(idx) ?  strings[idx].GetSize() : 0;
 					memcpy(string_write_ptr, strings[idx].GetData(), this_length);
 					string_write_ptr += this_length;
 				}
