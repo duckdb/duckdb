@@ -55,7 +55,7 @@ public:
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override;
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
-
+	void UnregisterSubSystem(const string &name) override;
 	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
 
 	vector<string> ListSubSystems() override;
@@ -67,6 +67,8 @@ public:
 	bool IsDisabledForPath(const string &path) override;
 
 	string PathSeparator(const string &path) override;
+
+	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) override;
 
 protected:
 	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
@@ -97,6 +99,7 @@ private:
 private:
 	mutex registry_lock;
 	shared_ptr<FileSystemRegistry> file_system_registry;
+	vector<unique_ptr<FileSystem>> unregistered_file_systems;
 };
 
 } // namespace duckdb

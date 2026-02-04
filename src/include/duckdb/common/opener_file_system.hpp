@@ -166,6 +166,14 @@ public:
 		GetFileSystem().RegisterSubSystem(compression_type, std::move(fs));
 	}
 
+	void UnregisterSubSystem(const string &name) override {
+		GetFileSystem().UnregisterSubSystem(name);
+	}
+
+	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override {
+		return GetFileSystem().ExtractSubSystem(name);
+	}
+
 	void SetDisabledFileSystems(const vector<string> &names) override {
 		GetFileSystem().SetDisabledFileSystems(names);
 	}
@@ -217,6 +225,11 @@ protected:
 
 	bool SupportsGlobExtended() const override {
 		return true;
+	}
+
+	string CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener = nullptr) override {
+		VerifyNoOpener(opener);
+		return GetFileSystem().CanonicalizePath(path_p, GetOpener());
 	}
 
 private:

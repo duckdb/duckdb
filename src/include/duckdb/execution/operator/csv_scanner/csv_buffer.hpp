@@ -72,7 +72,7 @@ public:
 		return char_ptr_cast(handle.Ptr());
 	}
 	bool IsUnloaded() const {
-		return block->IsUnloaded();
+		return block->GetMemory().IsUnloaded();
 	}
 
 	//! By default, we use CSV_BUFFER_SIZE to allocate each buffer

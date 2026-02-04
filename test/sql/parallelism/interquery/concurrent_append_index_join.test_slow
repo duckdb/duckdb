@@ -1,0 +1,59 @@
+# name: test/sql/parallelism/interquery/concurrent_append_index_join.test_slow
+# description: Test concurrent appends during an index join
+# group: [interquery]
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE integers AS SELECT range AS i FROM range(1000000)
+
+statement ok
+CREATE TABLE integers_2 AS SELECT range AS i FROM range(500000)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+concurrentloop threadid 0 12
+
+loop x 0 2000
+
+onlyif threadid>=2
+statement ok
+INSERT INTO integers VALUES (1)
+
+endloop
+
+onlyif threadid<2
+statement ok
+BEGIN TRANSACTION
+
+onlyif threadid<2
+statement ok
+SET VARIABLE initial_count = (SELECT COUNT(*) FROM integers);
+
+loop x 0 10
+
+onlyif threadid<2
+query I
+SELECT case
+	when count(*)=500000+(getvariable('initial_count') - 1000000)
+	then null
+	else {'initial_count': getvariable('initial_count'), 'count': count(*)}
+	end
+ FROM integers INNER JOIN integers_2 ON (integers.i = integers_2.i)
+----
+NULL
+
+endloop
+
+onlyif threadid<2
+statement ok
+COMMIT
+
+endloop
+
+query I
+SELECT COUNT(*) FROM integers INNER JOIN integers_2 ON (integers.i = integers_2.i)
+----
+520000

@@ -11,7 +11,7 @@ constexpr idx_t Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
-const uint64_t VERSION_NUMBER_UPPER = 67;
+const uint64_t VERSION_NUMBER_UPPER = 68;
 
 static_assert(VERSION_NUMBER_LOWER <= VERSION_NUMBER, "Check on VERSION_NUMBER lower bound");
 static_assert(VERSION_NUMBER <= VERSION_NUMBER_UPPER, "Check on VERSION_NUMBER upper bound");
@@ -91,7 +91,7 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.4.2", 67},
 	{"v1.4.3", 67},
 	{"v1.4.4", 67},
-	{"v1.5.0", 67},
+	{"v1.5.0", 68},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO

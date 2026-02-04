@@ -380,12 +380,14 @@ restart
 statement ok
 set allow_unsigned_extensions=false
 
-# Installing is still fine
-statement ok
+# Installing is not working
+statement error
 FORCE INSTALL '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
+----
+IO Error: Attempting to install an extension file that doesn't have a valid signature
 
 # But loading is not
 statement error
-LOAD json;
+LOAD '${DIRECT_INSTALL_DIR}/json.duckdb_extension';
 ----
  Also, the file was built for the platform 'test_platform', but we can only load extensions built for platform
