@@ -54,8 +54,8 @@ public:
             active_metrics[i] = 0;
         }
 
-    	latency_timer.reset();
-    	query_name = "";
+        latency_timer.reset();
+        query_name = "";
     }
 
     void Merge(const QueryMetrics &other) {

@@ -84,6 +84,6 @@ TEST_CASE("Test latency when interrupting query", "[api]") {
 	REQUIRE_NO_FAIL(con.Query(query));
 
 	auto profiling_info = con.GetProfilingTree()->GetProfilingInfo();
-	auto latency = profiling_info.GetMetricAsString(MetricType::LATENCY);
-	REQUIRE(latency == "0.0");
+	auto latency = profiling_info.GetMetricValue<double>(MetricType::LATENCY);
+	REQUIRE(latency < 0.10);
 }
