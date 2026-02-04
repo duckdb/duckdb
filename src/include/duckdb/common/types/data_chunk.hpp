@@ -163,7 +163,7 @@ public:
 
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	DUCKDB_API void Verify(optional_ptr<ClientContext> context = nullptr, optional_ptr<DBConfig> = nullptr);
+	DUCKDB_API void Verify(optional_ptr<DatabaseInstance> database_instance = nullptr);
 
 private:
 	//! The amount of tuples stored in the data chunk

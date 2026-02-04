@@ -85,7 +85,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 		ExecuteExpression(i, result.data[i]);
 	}
 	result.SetCardinality(input ? input->size() : 1);
-	result.Verify(context);
+	result.Verify(context->db);
 }
 
 void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {

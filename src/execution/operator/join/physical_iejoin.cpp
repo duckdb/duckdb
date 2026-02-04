@@ -1268,7 +1268,7 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 				right_table.found_match[right_base + rsel[sel->get_index(i)]] = true;
 			}
 		}
-		result.Verify(context.client);
+		result.Verify(context.client.db);
 	} while (result.size() == 0);
 }
 
@@ -1538,7 +1538,7 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 
 	op.ProjectResult(chunk, result);
 	result.SetCardinality(count);
-	result.Verify(context.client);
+	result.Verify(context.client.db);
 }
 
 void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk &result) {
@@ -1572,7 +1572,7 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 
 	op.ProjectResult(chunk, result);
 	result.SetCardinality(count);
-	result.Verify(context.client);
+	result.Verify(context.client.db);
 }
 
 //===--------------------------------------------------------------------===//

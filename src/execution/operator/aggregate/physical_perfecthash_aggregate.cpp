@@ -150,8 +150,8 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 
 	aggregate_input_chunk.SetCardinality(chunk.size());
 
-	group_chunk.Verify(context.client);
-	aggregate_input_chunk.Verify(context.client);
+	group_chunk.Verify(context.client.db);
+	aggregate_input_chunk.Verify(context.client.db);
 	D_ASSERT(aggregate_input_chunk.ColumnCount() == 0 || group_chunk.size() == aggregate_input_chunk.size());
 
 	lstate.ht->AddChunk(group_chunk, aggregate_input_chunk);
