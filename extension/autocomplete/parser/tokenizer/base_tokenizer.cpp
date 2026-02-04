@@ -440,8 +440,8 @@ bool BaseTokenizer::TokenizeInput() {
 	// finished processing - check the final state
 	switch (state) {
 	case TokenizeState::STRING_LITERAL:
-		last_pos++;
-		break;
+		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL);
+		return false;
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
 		PushToken(last_pos, sql.size(), TokenType::COMMENT);

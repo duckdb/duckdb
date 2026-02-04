@@ -103,3 +103,18 @@ select start, token_type, word from sql_tokenize($$select 'O''Neil', "My ""Table
 16	OPERATOR	,
 18	IDENTIFIER	"My ""Table"""
 32	TERMINATOR	;
+
+query III
+select start, token_type, word from sql_tokenize($$from ''hello world';$$);
+----
+0	KEYWORD	from
+5	STRING_LITERAL	''
+7	IDENTIFIER	hello
+13	IDENTIFIER	world
+18	STRING_LITERAL	';
+
+query III 
+select start, token_type, word from sql_tokenize('from ''hello world''');
+----
+0	KEYWORD	from
+5	STRING_LITERAL	'hello world'
