@@ -1019,6 +1019,7 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
 }; // END_OF_EXTENSION_FUNCTION_OVERLOADS
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+    {"allow_asterisks_in_http_paths", "httpfs"},
     {"auto_fallback_to_full_download", "httpfs"},
     {"azure_account_name", "azure"},
     {"azure_context_caching", "azure"},
