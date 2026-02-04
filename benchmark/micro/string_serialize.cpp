@@ -21,15 +21,11 @@ static void InitStringVector() {
 	}
 }
 
-DUCKDB_BENCHMARK(StringSerializationNew, "[string_serializer]")
-void Load(DuckDBBenchmarkState *state) override {
-	InitStringVector();
-}
-void RunBenchmark(DuckDBBenchmarkState *state) override {
+static void RunStringSerializationBenchmark(idx_t serialization_version) {
 	for (idx_t i = 0; i < 10000; i++) {
 		MemoryStream stream;
 		SerializationOptions options;
-		options.serialization_compatibility = SerializationCompatibility::FromIndex(8);
+		options.serialization_compatibility = SerializationCompatibility::FromIndex(serialization_version);
 		BinarySerializer serializer(stream, options);
 		serializer.Begin();
 		string_vector.Serialize(serializer, STANDARD_VECTOR_SIZE, true);
@@ -40,6 +36,14 @@ void RunBenchmark(DuckDBBenchmarkState *state) override {
 		Vector result(LogicalType::VARCHAR, STANDARD_VECTOR_SIZE);
 		result.Deserialize(deserializer, STANDARD_VECTOR_SIZE);
 	}
+}
+
+DUCKDB_BENCHMARK(StringSerializationNew, "[string_serializer]")
+void Load(DuckDBBenchmarkState *state) override {
+	InitStringVector();
+}
+void RunBenchmark(DuckDBBenchmarkState *state) override {
+	RunStringSerializationBenchmark(8);
 }
 string VerifyResult(QueryResult *result) override {
 	return string();
@@ -54,20 +58,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	InitStringVector();
 }
 void RunBenchmark(DuckDBBenchmarkState *state) override {
-	for (idx_t i = 0; i < 1000; i++) {
-		MemoryStream stream;
-		SerializationOptions options;
-		options.serialization_compatibility = SerializationCompatibility::FromIndex(7);
-		BinarySerializer serializer(stream, options);
-		serializer.Begin();
-		string_vector.Serialize(serializer, STANDARD_VECTOR_SIZE, true);
-		serializer.End();
-
-		stream.SetPosition(0);
-		BinaryDeserializer deserializer(stream);
-		Vector result(LogicalType::VARCHAR, STANDARD_VECTOR_SIZE);
-		result.Deserialize(deserializer, STANDARD_VECTOR_SIZE);
-	}
+	RunStringSerializationBenchmark(7);
 }
 string VerifyResult(QueryResult *result) override {
 	return string();
