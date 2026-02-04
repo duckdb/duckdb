@@ -2387,7 +2387,7 @@ int32_t Calendar::fieldDifference(UDate targetMs, UCalendarDateFields field, UEr
                 break;
             } else if (max < INT32_MAX) {
                 min = max;
-                max <<= 1;
+                max = ((uint32_t) max) << 1;
                 if (max < 0) {
                     max = INT32_MAX;
                 }
