@@ -249,7 +249,8 @@ void Parser::ParseQuery(const string &query) {
 				if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
 					continue;
 				}
-				auto result = ext.parser_override(ext.parser_info.get(), query);
+
+				auto result = ext.parser_override(ext.parser_info.get(), query, options);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 					statements = std::move(result.statements);
 					return;
@@ -271,7 +272,10 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::TRANSACTION_STATEMENT:
 					case StatementType::VARIABLE_SET_STATEMENT:
 					case StatementType::LOAD_STATEMENT:
+					case StatementType::EXPLAIN_STATEMENT:
+					case StatementType::PREPARE_STATEMENT:
 					case StatementType::ATTACH_STATEMENT:
+					case StatementType::SELECT_STATEMENT:
 					case StatementType::DETACH_STATEMENT:
 					case StatementType::DELETE_STATEMENT:
 					case StatementType::DROP_STATEMENT:
@@ -280,7 +284,9 @@ void Parser::ParseQuery(const string &query) {
 					case StatementType::INSERT_STATEMENT:
 					case StatementType::UPDATE_STATEMENT:
 					case StatementType::COPY_DATABASE_STATEMENT:
-					case StatementType::CREATE_STATEMENT: {
+					case StatementType::CREATE_STATEMENT:
+					case StatementType::COPY_STATEMENT:
+					case StatementType::SET_STATEMENT: {
 						is_supported = true;
 						break;
 					}
