@@ -202,6 +202,7 @@ bool BaseTokenizer::TokenizeInput() {
 	idx_t last_pos = 0;
 	string dollar_quote_marker;
 	idx_t dollar_marker_start = 0;
+	Printer::Print(sql);
 	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
 		switch (state) {
@@ -439,9 +440,6 @@ bool BaseTokenizer::TokenizeInput() {
 
 	// finished processing - check the final state
 	switch (state) {
-	case TokenizeState::STRING_LITERAL:
-		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL);
-		return false;
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
 		PushToken(last_pos, sql.size(), TokenType::COMMENT);
