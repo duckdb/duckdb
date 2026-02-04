@@ -311,7 +311,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 		schema_name = DEFAULT_SCHEMA;
 	}
 
-	auto default_binder = CreateBinderWithSearchPath(catalog_name, schema_p);
+	auto default_binder = CreateBinderWithSearchPath(catalog_name, schema_name);
 
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;

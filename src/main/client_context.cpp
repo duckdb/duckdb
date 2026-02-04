@@ -873,6 +873,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 					Parser parser(GetParserOptions());
 					ErrorData error;
 					parser.ParseQuery(statement->ToString());
+					if (statement->type == StatementType::UPDATE_STATEMENT) {
+						// re-apply `prioritize_table_when_binding` (which is normally set during transform)
+						parser.statements[0]->Cast<UpdateStatement>().prioritize_table_when_binding =
+						    statement->Cast<UpdateStatement>().prioritize_table_when_binding;
+					}
 					statement = std::move(parser.statements[0]);
 				} catch (const NotImplementedException &) {
 					// ToString was not implemented, just use the copied statement
