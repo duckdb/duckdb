@@ -1379,10 +1379,10 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 					memcpy(string_write_ptr, strings[idx].GetData(), this_length);
 					string_write_ptr += this_length;
 				}
-				serializer.WriteProperty(108, "byte_data_length", optional_idx(byte_data_length));
+				serializer.WriteProperty(107, "byte_data_length", optional_idx(byte_data_length));
 				// we do not encode length_data_length because its not required
-				serializer.WriteProperty(109, "length_data", length_data.get(), length_data_length);
-				serializer.WriteProperty(110, "byte_data", byte_data.get(), byte_data_length);
+				serializer.WriteProperty(108, "length_data", length_data.get(), length_data_length);
+				serializer.WriteProperty(109, "byte_data", byte_data.get(), byte_data_length);
 			} else { // old and slow way: list
 				serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
 					auto idx = vdata.sel->get_index(i);
@@ -1505,15 +1505,15 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		case PhysicalType::VARCHAR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
 			auto byte_data_length =
-			    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(108, "byte_data_length", optional_idx());
+			    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(107, "byte_data_length", optional_idx());
 			if (byte_data_length.IsValid()) { // new serialization
 				auto length_data_length = count * sizeof(uint32_t);
 				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
-				deserializer.ReadProperty(109, "length_data", length_data.get(), length_data_length);
+				deserializer.ReadProperty(108, "length_data", length_data.get(), length_data_length);
 
 				auto byte_data_buffer = make_buffer<StringDeserializeBuffer>(byte_data_length.GetIndex());
 				// directly read into a string buffer we can glue to the vector
-				deserializer.ReadProperty(110, "byte_data", byte_data_buffer->data.get(), byte_data_length.GetIndex());
+				deserializer.ReadProperty(109, "byte_data", byte_data_buffer->data.get(), byte_data_length.GetIndex());
 				auto lengths_read_ptr = reinterpret_cast<uint32_t *>(length_data.get());
 				auto byte_read_ptr = reinterpret_cast<const char *>(byte_data_buffer->data.get());
 				StringVector::AddBuffer(*this, byte_data_buffer);
@@ -1525,7 +1525,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 					strings[i] = string_t(byte_read_ptr, lengths_read_ptr[i]);
 					byte_read_ptr += byte_read_ptr[i];
 				}
-			} else { // this is ye olde way of string serialization, it is no longer produced but we can still decode it
+			} else { // this is ye olde way of string serialization
 				deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
 					auto str = list.ReadElement<string>();
 					if (validity.RowIsValid(i)) {
