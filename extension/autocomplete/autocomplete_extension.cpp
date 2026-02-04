@@ -448,6 +448,9 @@ public:
 		if (TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
 		}
+		if (StringUtil::StartsWith(last_word_p, "'")) {
+			last_word_p = last_word_p.substr(1, last_word_p.size() - 1);
+		}
 		last_word = std::move(last_word_p);
 		last_pos = last_pos_p;
 	}

@@ -202,7 +202,6 @@ bool BaseTokenizer::TokenizeInput() {
 	idx_t last_pos = 0;
 	string dollar_quote_marker;
 	idx_t dollar_marker_start = 0;
-	Printer::Print(sql);
 	for (idx_t i = 0; i < sql.size(); i++) {
 		auto c = sql[i];
 		switch (state) {

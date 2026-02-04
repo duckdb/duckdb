@@ -118,3 +118,11 @@ select start, token_type, word from sql_tokenize('from ''hello world''');
 ----
 0	KEYWORD	from
 5	STRING_LITERAL	'hello world'
+
+
+
+query III 
+select start, token_type, word from sql_tokenize('from ''hello world');
+----
+0	KEYWORD	from
+5	STRING_LITERAL	'hello world
