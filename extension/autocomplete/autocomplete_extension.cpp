@@ -822,7 +822,7 @@ public:
 		parser_override = PEGParser;
 	}
 
-	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
+	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
 		vector<MatcherToken> root_tokens;
 		string clean_sql;
 
@@ -830,14 +830,14 @@ public:
 		tokenizer.TokenizeInput();
 		tokenizer.statements.push_back(std::move(root_tokens));
 
-		vector<unique_ptr<SQLStatement>> result;
 		try {
+			vector<unique_ptr<SQLStatement>> result;
 			for (auto &tokenized_statement : tokenizer.statements) {
 				if (tokenized_statement.empty()) {
 					continue;
 				}
 				auto &transformer = PEGTransformerFactory::GetInstance();
-				auto statement = transformer.Transform(tokenized_statement, "Statement");
+				auto statement = transformer.Transform(tokenized_statement, options);
 				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
 					statement->stmt_length =
