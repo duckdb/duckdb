@@ -26,7 +26,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	InitStringVector();
 }
 void RunBenchmark(DuckDBBenchmarkState *state) override {
-	for (idx_t i = 0; i < 1000; i++) {
+	for (idx_t i = 0; i < 10000; i++) {
 		MemoryStream stream;
 		SerializationOptions options;
 		options.serialization_compatibility = SerializationCompatibility::FromIndex(8);
