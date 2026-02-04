@@ -434,6 +434,7 @@ public:
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
+	DUCKDB_API static LogicalType LEGACY_AGGREGATE_STATE(aggregate_state_t state_type); // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type,  // NOLINT
 							      child_list_t<LogicalType> struct_child_types); // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);                 // NOLINT

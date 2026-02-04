@@ -300,7 +300,18 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
-	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, child_types);
+	child_list_t<LogicalType> copied_child_types;
+	for (const auto &child_type : child_types) {
+		copied_child_types.emplace_back(child_type.first, child_type.second.DeepCopy());
+	}
+
+	vector<LogicalType> copied_bound_arguments;
+	for (const auto &arg : state_type.bound_argument_types) {
+		copied_bound_arguments.push_back(arg.DeepCopy());
+	}
+	aggregate_state_t copied_state_type(state_type.function_name, state_type.return_type.DeepCopy(),
+	                                    std::move(copied_bound_arguments));
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(copied_state_type, copied_child_types);
 	result->alias = alias;
 	return std::move(result);
 }
