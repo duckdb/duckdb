@@ -64,6 +64,6 @@ string VerifyResult(QueryResult *result) override {
 	return string();
 }
 string BenchmarkInfo() override {
-	return "Test string serialization performance - new version";
+	return "Test string serialization performance - old version";
 }
 FINISH_BENCHMARK(StringSerializationOld)
