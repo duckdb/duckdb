@@ -595,7 +595,6 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
-	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= row_group_size) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
@@ -615,6 +614,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// append to the indexes and append to the base table
 		storage.AppendToIndexes(transaction, append_state, true);
 	}
+	transaction.PushAppend(table, NumericCast<idx_t>(append_state.row_start), append_count);
 
 #ifdef DEBUG
 	// Verify that our index memory is stable.

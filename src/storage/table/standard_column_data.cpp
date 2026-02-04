@@ -156,11 +156,8 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
                                 Vector &update_vector, row_t *row_ids, idx_t update_count) {
 	ColumnScanState standard_state, validity_state;
 	Vector base_vector(type);
-	auto standard_fetch = FetchUpdateData(standard_state, row_ids, base_vector);
-	auto validity_fetch = validity.FetchUpdateData(validity_state, row_ids, base_vector);
-	if (standard_fetch != validity_fetch) {
-		throw InternalException("Unaligned fetch in validity and main column data for update");
-	}
+	FetchUpdateData(standard_state, row_ids, base_vector);
+	validity.FetchUpdateData(validity_state, row_ids, base_vector);
 
 	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
 	validity.UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector);
