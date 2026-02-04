@@ -233,6 +233,25 @@ transaction_t DuckTransactionManager::GetCommitTimestamp() {
 	return commit_ts;
 }
 
+void DuckTransactionManager::CleanupTransactions() {
+	lock_guard<mutex> c_lock(cleanup_lock);
+	while (true) {
+		unique_ptr<DuckCleanupInfo> top_cleanup_info;
+		{
+			lock_guard<mutex> q_lock(cleanup_queue_lock);
+			if (cleanup_queue.empty()) {
+				// all transactions have been cleaned up - done
+				return;
+			}
+			top_cleanup_info = std::move(cleanup_queue.front());
+			cleanup_queue.pop();
+		}
+		if (top_cleanup_info) {
+			top_cleanup_info->Cleanup();
+		}
+	}
+}
+
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	unique_lock<mutex> t_lock(transaction_lock);
@@ -327,20 +346,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// as they (1) have been removed, or (2) exited old_transactions.
 	t_lock.unlock();
 
-	{
-		lock_guard<mutex> c_lock(cleanup_lock);
-		unique_ptr<DuckCleanupInfo> top_cleanup_info;
-		{
-			lock_guard<mutex> q_lock(cleanup_queue_lock);
-			if (!cleanup_queue.empty()) {
-				top_cleanup_info = std::move(cleanup_queue.front());
-				cleanup_queue.pop();
-			}
-		}
-		if (top_cleanup_info) {
-			top_cleanup_info->Cleanup();
-		}
-	}
+	CleanupTransactions();
 
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
@@ -379,20 +385,7 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 		}
 	}
 
-	{
-		lock_guard<mutex> c_lock(cleanup_lock);
-		unique_ptr<DuckCleanupInfo> top_cleanup_info;
-		{
-			lock_guard<mutex> q_lock(cleanup_queue_lock);
-			if (!cleanup_queue.empty()) {
-				top_cleanup_info = std::move(cleanup_queue.front());
-				cleanup_queue.pop();
-			}
-		}
-		if (top_cleanup_info) {
-			top_cleanup_info->Cleanup();
-		}
-	}
+	CleanupTransactions();
 
 	if (error.HasError()) {
 		throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s", error.Message());
