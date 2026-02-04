@@ -839,10 +839,6 @@ public:
 				auto &transformer = PEGTransformerFactory::GetInstance();
 				auto statement = transformer.Transform(tokenized_statement, options);
 				if (statement) {
-					// Only location seems to be used, offset is determined in the loop below
-					statement->stmt_location = tokenized_statement[0].offset;
-				}
-				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
 					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +
 					                tokenized_statement[tokenized_statement.size() - 1].length;
