@@ -14,7 +14,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPrepareStatement(PEGTra
 	}
 	result->statement = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(4));
 	transformer.ClearParameters();
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
