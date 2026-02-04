@@ -838,6 +838,10 @@ public:
 				}
 				auto &transformer = PEGTransformerFactory::GetInstance();
 				auto statement = transformer.Transform(tokenized_statement, options);
+				if (statement) {
+					// Only location seems to be used, offset is determined in the loop below
+					statement->stmt_location = tokenized_statement[0].offset;
+				}
 				result.push_back(std::move(statement));
 			}
 			if (!result.empty()) {
