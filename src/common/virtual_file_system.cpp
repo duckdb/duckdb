@@ -284,6 +284,13 @@ void VirtualFileSystem::RegisterSubSystem(FileCompressionType compression_type, 
 	file_system_registry.atomic_store(new_registry);
 }
 
+void VirtualFileSystem::UnregisterSubSystem(const string &name) {
+	auto sub_system = ExtractSubSystem(name);
+
+	lock_guard<mutex> guard(registry_lock);
+	unregistered_file_systems.push_back(std::move(sub_system));
+}
+
 void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = file_system_registry->SetDisabledFileSystems(names);

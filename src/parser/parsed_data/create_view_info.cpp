@@ -39,7 +39,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	CopyProperties(*result);
 	result->aliases = aliases;
 	result->types = types;
-	result->column_comments = column_comments;
+	result->column_comments_map = column_comments_map;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	return std::move(result);
 }
@@ -63,10 +63,6 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, un
 	D_ASSERT(!info->query);
 
 	info->query = ParseSelect(info->sql);
-
-	auto binder = Binder::CreateBinder(context);
-	binder->BindCreateViewInfo(*info);
-
 	return info;
 }
 
@@ -97,6 +93,46 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	view_binder->BindCreateViewInfo(*result);
 
 	return result;
+}
+
+vector<Value> CreateViewInfo::GetColumnCommentsList() const {
+	if (column_comments_map.empty()) {
+		return vector<Value>();
+	}
+	if (names.empty()) {
+		throw InternalException(
+		    "Attempting to serialize column comments using the legacy format, but view is not bound");
+	}
+	vector<Value> result;
+	result.resize(names.size());
+	for (auto &entry : column_comments_map) {
+		auto it = std::find(names.begin(), names.end(), entry.first);
+		if (it == names.end()) {
+			throw InternalException(
+			    "While serializing comments for view \"%s\" - did not find column \"%s\" in list of names", view_name,
+			    entry.first);
+		}
+		result[NumericCast<idx_t>(it - names.begin())] = entry.second;
+	}
+	return result;
+}
+
+CreateViewInfo::CreateViewInfo(vector<string> names_p, vector<Value> comments,
+                               unordered_map<string, Value> column_comments_p)
+    : CreateInfo(CatalogType::VIEW_ENTRY, INVALID_SCHEMA), names(std::move(names_p)),
+      column_comments_map(std::move(column_comments_p)) {
+	if (comments.empty()) {
+		return;
+	}
+	if (!column_comments_map.empty()) {
+		throw SerializationException("Either column_comments or column_comments_map should be provided, not both");
+	}
+	for (idx_t i = 0; i < comments.size(); i++) {
+		if (comments[i].IsNull()) {
+			continue;
+		}
+		column_comments_map[names[i]] = std::move(comments[i]);
+	}
 }
 
 } // namespace duckdb

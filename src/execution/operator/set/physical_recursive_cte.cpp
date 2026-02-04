@@ -190,6 +190,20 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 					// Append the result to the recurring table.
 					recurring_table->Append(result);
 				}
+			} else if (ref_recurring && gstate.intermediate_table.Count() != 0) {
+				// we need to populate the recurring table from the intermediate table
+				// careful: we can not just use Combine here, because this destroys the intermediate table
+				// instead we need to scan and append to create a copy
+				// Note: as we are in the "normal" recursion case here, not the USING KEY case,
+				// we can just scan the intermediate table directly, instead of going through the HT
+				ColumnDataScanState scan_state;
+				gstate.intermediate_table.InitializeScan(scan_state);
+				DataChunk result;
+				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+
+				while (gstate.intermediate_table.Scan(scan_state, result)) {
+					recurring_table->Append(result);
+				}
 			}
 
 			working_table->Reset();
