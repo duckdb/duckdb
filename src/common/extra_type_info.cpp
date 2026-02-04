@@ -311,7 +311,7 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
 	}
 	aggregate_state_t copied_state_type(state_type.function_name, state_type.return_type.DeepCopy(),
 	                                    std::move(copied_bound_arguments));
-	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, copied_child_types);
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(copied_state_type, copied_child_types);
 	result->alias = alias;
 	return std::move(result);
 }
