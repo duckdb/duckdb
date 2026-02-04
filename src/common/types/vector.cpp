@@ -1504,7 +1504,8 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
-			auto byte_data_length = deserializer.ReadProperty<optional_idx>(108, "byte_data_length");
+			auto byte_data_length =
+			    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(108, "byte_data_length", optional_idx());
 			if (byte_data_length.IsValid()) { // new serialization
 				auto length_data_length = count * sizeof(uint32_t);
 				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
