@@ -1,5 +1,5 @@
-# name: test/sql/peg_parser/transformer/alter_statement.test
-# description: Test setting the statement length and offset 
+# name: test/sql/peg_parser/transformer/statement_length.test
+# description: Test setting the statement length and offset
 # group: [transformer]
 
 require autocomplete
