@@ -92,6 +92,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugAsofIejoinSetting),
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_SETTING(DebugCheckpointSleepMsSetting),
+    DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
     DUCKDB_LOCAL(DebugForceExternalSetting),
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
     DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
@@ -192,16 +193,18 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(UsernameSetting),
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
     DUCKDB_SETTING(VariantMinimumShreddingSizeSetting),
+    DUCKDB_SETTING(WalAutocheckpointEntriesSetting),
+    DUCKDB_SETTING(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 92),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 38),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 111),
-                                                     DUCKDB_SETTING_ALIAS("user", 126),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 93),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 39),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 112),
+                                                     DUCKDB_SETTING_ALIAS("user", 127),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 125),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 126),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
