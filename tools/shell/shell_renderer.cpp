@@ -1814,7 +1814,7 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 
 void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
                                     const string &log_message, const duckdb::RegisteredLoggingContext &context) {
-	lock.lock();
+	duckdb::lock_guard<duckdb::mutex> l(lock);
 
 	HighlightElementType element_type;
 	switch (level) {
@@ -1841,7 +1841,6 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
 	// check if the log has already been printed
 	auto log_id = duckdb::StringUtil::CIHash(log_message);
 	if (printed_logs.find(log_id) != printed_logs.end()) {
-		lock.unlock();
 		return;
 	}
 	printed_logs.emplace(log_id);
@@ -1849,7 +1848,6 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
 	const auto log_level = duckdb::EnumUtil::ToString(level);
 	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);
 	shell_highlight.PrintText(log_message + "\n\n", PrintOutput::STDOUT, element_type);
-	lock.unlock();
 }
 
 } // namespace duckdb_shell
