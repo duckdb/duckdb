@@ -142,14 +142,27 @@ bool ExpressionContainsColumnRef(const Expression &root_expr) {
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
-	} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	}
+
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
+
+		// TODO: SEMI/ANTI joins with residual predicates are not supported
+		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+			for (auto &cond : join.conditions) {
+				if (!cond.IsComparison()) {
+					return false;
+				}
+			}
+		}
+
 		switch (join.join_type) {
 		case JoinType::INNER:
 		case JoinType::SEMI:
 		case JoinType::ANTI:
 			for (auto &cond : join.conditions) {
-				if (ExpressionContainsColumnRef(*cond.left) && ExpressionContainsColumnRef(*cond.right)) {
+				if (cond.IsComparison() && ExpressionContainsColumnRef(cond.GetLHS()) &&
+				    ExpressionContainsColumnRef(cond.GetRHS())) {
 					return true;
 				}
 			}
@@ -548,6 +561,21 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 	return can_reorder;
 }
 
+//! Flatten a predicate into individual conjuncts
+static inline void FlattenConjunction(Expression &expr, vector<unique_ptr<Expression>> &result) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		auto &conj = expr.Cast<BoundConjunctionExpression>();
+		if (conj.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+			for (auto &child : conj.children) {
+				FlattenConjunction(*child, result);
+			}
+			return;
+		}
+	}
+	// not an AND conjunction - add as is
+	result.push_back(expr.Copy());
+}
+
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
                                                              vector<reference<LogicalOperator>> &filter_operators,
                                                              JoinRelationSetManager &set_manager) {
@@ -573,9 +601,11 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// the relations from the conditions in the conjunction expression, we can prevent invalid
 				// reordering.
 				for (auto &cond : join.conditions) {
-					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-					                                                       std::move(cond.right));
-					conjunction_expression->children.push_back(std::move(comparison));
+					if (cond.IsComparison()) {
+						auto comparison = make_uniq<BoundComparisonExpression>(
+						    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy());
+						conjunction_expression->children.push_back(std::move(comparison));
+					}
 				}
 
 				// create the filter info so all required LHS relations are present when reconstructing the
@@ -621,19 +651,31 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			} else {
 				// can extract every inner join condition individually.
 				for (auto &cond : join.conditions) {
-					auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-					                                                       std::move(cond.right));
-					if (filter_set.find(*comparison) == filter_set.end()) {
-						filter_set.insert(*comparison);
+					unique_ptr<Expression> expr;
+					bool is_residual = false;
+
+					if (cond.IsComparison()) {
+						auto comp_type = cond.GetComparisonType();
+						expr =
+						    make_uniq<BoundComparisonExpression>(comp_type, cond.GetLHS().Copy(), cond.GetRHS().Copy());
+					} else {
+						expr = cond.GetJoinExpression().Copy();
+						is_residual = true;
+					}
+
+					if (filter_set.find(*expr) == filter_set.end()) {
+						filter_set.insert(*expr);
 						unordered_set<idx_t> bindings;
-						ExtractBindings(*comparison, bindings);
+						ExtractBindings(*expr, bindings);
 						auto &set = set_manager.GetJoinRelation(bindings);
-						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set,
-						                                         filters_and_bindings.size(), join.join_type);
+						auto filter_info =
+						    make_uniq<FilterInfo>(std::move(expr), set, filters_and_bindings.size(), join.join_type);
+						filter_info->from_residual_predicate = is_residual;
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 				}
 			}
+
 			join.conditions.clear();
 		} else {
 			vector<unique_ptr<Expression>> leftover_expressions;

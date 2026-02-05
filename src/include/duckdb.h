@@ -1672,6 +1672,16 @@ Get a pointer to the string data of a string_t
 */
 DUCKDB_C_API const char *duckdb_string_t_data(duckdb_string_t *string);
 
+/*!
+Checks if a string is valid UTF-8.
+
+* @param str The string to check
+* @param len The length of the string (in bytes)
+* @return nullptr if the string is valid UTF-8. Otherwise, a duckdb_error_data containing error information. Must be
+destroyed with `duckdb_destroy_error_data`.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_valid_utf8_check(const char *str, idx_t len);
+
 //----------------------------------------------------------------------------------------------------------------------
 // Date Time Timestamp Helpers
 //----------------------------------------------------------------------------------------------------------------------
@@ -2017,6 +2027,8 @@ DUCKDB_C_API duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_s
 
 /*!
 Binds a value to the prepared statement at the specified index.
+
+Supersedes all type-specific bind functions (e.g., `duckdb_bind_varchar`, `duckdb_bind_int64`, etc.).
 */
 DUCKDB_C_API duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_value val);
@@ -2135,12 +2147,16 @@ DUCKDB_C_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepare
 
 /*!
 Binds a null-terminated varchar value to the prepared statement at the specified index.
+
+Superseded by `duckdb_bind_value`.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                               const char *val);
 
 /*!
 Binds a varchar value to the prepared statement at the specified index.
+
+Superseded by `duckdb_bind_value`.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                                      const char *val, idx_t length);
@@ -2380,7 +2396,9 @@ Destroys the value and de-allocates all memory allocated for that type.
 DUCKDB_C_API void duckdb_destroy_value(duckdb_value *value);
 
 /*!
-Creates a value from a null-terminated string
+Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
+
+Superseded by `duckdb_create_varchar_length`.
 
 * @param text The null-terminated string
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2388,7 +2406,7 @@ Creates a value from a null-terminated string
 DUCKDB_C_API duckdb_value duckdb_create_varchar(const char *text);
 
 /*!
-Creates a value from a string
+Creates a value from a string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
 
 * @param text The text
 * @param length The length of the text
@@ -3457,21 +3475,10 @@ This allows NULL values to be written to the vector, regardless of whether a val
 DUCKDB_C_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
 /*!
-Safely assigns a string element in the vector at the specified location. Supersedes
-`duckdb_vector_assign_string_element`. The vector type must be VARCHAR and the input must be valid UTF-8. Otherwise, it
-returns an invalid Unicode error.
+Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8;
+if invalid, a NULL value is assigned at that index.
 
-* @param vector The vector to alter
-* @param index The row position in the vector to assign the string to
-* @param str The null-terminated string
-* @return If valid UTF-8, then `nullptr`, else error information. If not `nullptr`, then the return value must be
-destroyed with `duckdb_destroy_error_data`.
-*/
-DUCKDB_C_API duckdb_error_data duckdb_vector_safe_assign_string_element(duckdb_vector vector, idx_t index,
-                                                                        const char *str);
-
-/*!
-Assigns a string element in the vector at the specified location.
+Superseded by `duckdb_unsafe_vector_assign_string_element_len`, optionally combined with `duckdb_valid_utf8_check`.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -3480,7 +3487,10 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_C_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
+Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8;
+if invalid, a NULL value is assigned at that index. For BLOB vectors, no validation is performed.
+
+Superseded by `duckdb_unsafe_vector_assign_string_element_len`, optionally combined with `duckdb_valid_utf8_check`.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -3489,6 +3499,20 @@ Assigns a string element in the vector at the specified location. You may also u
 */
 DUCKDB_C_API void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
                                                           idx_t str_len);
+
+/*!
+Assigns a string element in the vector at the specified location without UTF-8 validation. The caller is responsible for
+ensuring the input is valid UTF-8. Use `duckdb_valid_utf8_check` to validate strings before calling this function if
+needed. If the input is known to be valid UTF-8, this function can be called directly for better performance, avoiding
+the overhead of redundant validation.
+
+* @param vector The vector to alter
+* @param index The row position in the vector to assign the string to
+* @param str The string
+* @param str_len The length of the string (in bytes)
+*/
+DUCKDB_C_API void duckdb_unsafe_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
+                                                                 idx_t str_len);
 
 /*!
 Retrieves the child vector of a list vector.

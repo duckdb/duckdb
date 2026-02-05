@@ -5,8 +5,6 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -346,22 +344,10 @@ void JoinCondition::Serialize(Serializer &serializer) const {
 }
 
 JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
-	JoinCondition result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "left", result.left);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "right", result.right);
-	deserializer.ReadProperty<ExpressionType>(102, "comparison", result.comparison);
-	return result;
-}
-
-void LogicalType::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty<LogicalTypeId>(100, "id", id_);
-	serializer.WritePropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", type_info_);
-}
-
-LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
-	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
-	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
-	LogicalType result(id, std::move(type_info));
+	auto left = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "left");
+	auto right = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "right");
+	auto comparison = deserializer.ReadProperty<ExpressionType>(102, "comparison");
+	JoinCondition result(std::move(left), std::move(right), comparison);
 	return result;
 }
 
@@ -426,20 +412,6 @@ PivotColumn PivotColumn::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<string>>(101, "unpivot_names", result.unpivot_names);
 	deserializer.ReadPropertyWithDefault<vector<PivotColumnEntry>>(102, "entries", result.entries);
 	deserializer.ReadPropertyWithDefault<string>(103, "pivot_enum", result.pivot_enum);
-	return result;
-}
-
-void PivotColumnEntry::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
-	serializer.WritePropertyWithDefault<string>(102, "alias", alias);
-}
-
-PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &deserializer) {
-	PivotColumnEntry result;
-	deserializer.ReadPropertyWithDefault<vector<Value>>(100, "values", result.values);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", result.expr);
-	deserializer.ReadPropertyWithDefault<string>(102, "alias", result.alias);
 	return result;
 }
 

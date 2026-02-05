@@ -5,6 +5,11 @@ load __TEST_DIR__/variant_test_all_types.db
 
 foreach col <all_types_columns>
 
+# union gets extracted to their individual values
+# We skip this because the comparison breaks when comparing SMALLINT vs VARCHAR
+onlyif col=union
+continue
+
 statement ok
 create table table_${col} as select "${col}"::VARIANT col from test_all_types()
 
@@ -16,6 +21,9 @@ checkpoint
 restart
 
 foreach col <all_types_columns>
+
+onlyif col=union
+continue
 
 loop i 0 2
 

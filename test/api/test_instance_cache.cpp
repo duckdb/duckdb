@@ -60,12 +60,12 @@ TEST_CASE("Test db creation does not block instance cache", "[api][.]") {
 	std::thread t1 {[&instance_cache, &second_creation_was_quick, &stick_around]() {
 		DBConfig db_config;
 
-		db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
+		StorageExtension::Register(db_config, "delay", make_shared_ptr<DelayingStorageExtension>());
 		stick_around = instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
 
 		const auto start_time = steady_clock::now();
 		for (idx_t i = 0; i < 10; i++) {
-			db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
+			StorageExtension::Register(db_config, "delay", make_shared_ptr<DelayingStorageExtension>());
 			instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
 		}
 		const auto end_time = steady_clock::now();

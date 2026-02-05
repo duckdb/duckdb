@@ -7,10 +7,11 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
-#include "duckdb/parser/parsed_data/alter_database_info.hpp"
 
 namespace duckdb {
 
@@ -116,9 +117,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 				// The database ACTUALLY exists, so we return it.
 				return entry->second;
 			}
-			if (context.interrupted) {
-				throw InterruptException();
-			}
+			context.InterruptCheck();
 		}
 	}
 	auto &config = DBConfig::GetConfig(context);
@@ -320,7 +319,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	}
 
 	auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
-	if (config.storage_extensions.find(extension_name) != config.storage_extensions.end()) {
+	if (StorageExtension::Find(config, extension_name)) {
 		// If the database type is already registered, we don't need to load it again.
 		return;
 	}
