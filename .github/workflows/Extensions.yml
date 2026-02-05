@@ -358,6 +358,7 @@ jobs:
       - name: Run Tests
         env:
           LOCAL_EXTENSION_REPO: /tmp/extension-repository
+          DUCKDB_TEST_DESCRIPTION: 'Running with autoloading of extensions. Run unittest --autoloading available to reproduce locally. Add require no_extension_autoloading to skip the test'
         run: |
           ./build/release/test/unittest --autoloading available --skip-compiled
 

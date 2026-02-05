@@ -4,6 +4,8 @@
 
 require icu
 
+require no_extension_autoloading "EXPECTED: Just listing does not trigger autoload"
+
 # Check Norwegian collations are primary, not aliases
 query I
 from pragma_collations() 
