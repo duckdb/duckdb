@@ -1,7 +1,7 @@
-import re
-from pathlib import Path
-import sys
 import argparse
+import re
+import sys
+from pathlib import Path
 
 GRAMMAR_DIR = Path("extension/autocomplete/grammar/statements")
 TRANSFORMER_DIR = Path("extension/autocomplete/transformer")
@@ -63,6 +63,24 @@ EXCLUDED_RULES = {
     "Generated",
     "ColumnConstraint",
     "AlwaysOrByDefault",
+    "Lateral",
+    "ConstraintNameClause",
+    "ReservedSchemaQualification",
+    "UsingSample",
+    "TableSample",
+    "TypeList",
+    "NamedParameterAssignment",
+    "WithOrdinality",
+    "ByName",
+    "CollateOperator",
+    "ExportClause",
+    "ValueOrValues",
+    "PivotKeyword",
+    "UnpivotKeyword",
+    "Unique",
+    "DefArg",
+    "NoneLiteral",
+    "RowOrStruct",
 }
 
 
@@ -111,7 +129,10 @@ def find_transformer_rules(transformer_path):
     transformer_rules = set()
 
     if not transformer_path.is_dir():
-        print(f"Error: Transformer directory not found: {transformer_path}", file=sys.stderr)
+        print(
+            f"Error: Transformer directory not found: {transformer_path}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     cpp_files = sorted(list(transformer_path.glob("*.cpp")))
@@ -350,7 +371,7 @@ def main():
     if orphan_enums:
         print("\n[!] Orphan Enum Rules (No matching grammar rule):")
         for rule in sorted(list(orphan_enums)):
-            print(f"  - RegisterEnum(\"{rule}\")")
+            print(f'  - RegisterEnum("{rule}")')
 
     orphan_registrations = registered_rules - all_grammar_rules_flat - EXCLUDED_RULES
     if orphan_registrations:

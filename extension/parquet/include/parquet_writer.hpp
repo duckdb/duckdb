@@ -123,7 +123,7 @@ public:
 
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
 	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-	                                bool allow_geometry);
+	                                bool allow_geometry, ClientContext &context);
 
 	ClientContext &GetContext() {
 		return context;

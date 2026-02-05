@@ -2,15 +2,15 @@
 # group: [geo]
 
 query I
-select st_crs(st_setcrs('POINT(0 1)', 'EPSG:4326'));
+select st_crs(st_setcrs('POINT(0 1)', 'OGC:CRS84'));
 ----
-EPSG:4326
+OGC:CRS84
 
 statement ok
-create table t1 (g GEOMETRY('EPSG:4326'));
+create table t1 (g GEOMETRY('OGC:CRS84'));
 
 statement ok
-create table t2 (g GEOMETRY('EPSG:3857'));
+create table t2 (g GEOMETRY('OGC:CRS83'));
 
 statement ok
 insert into t2 values ('POINT(0 1)');
@@ -19,7 +19,7 @@ insert into t2 values ('POINT(0 1)');
 statement error
 insert into t1 select * from t2;
 ----
-Binder Error: Cannot cast GEOMETRY with CRS 'EPSG:3857' to GEOMETRY with different CRS 'EPSG:4326'
+Binder Error: Cannot cast GEOMETRY with CRS 'OGC:CRS83' to GEOMETRY with different CRS 'OGC:CRS84'
 
 # But we can insert unknown CRS
 statement ok
@@ -33,7 +33,7 @@ POINT (0 1)
 query I
 select st_crs(g) from t2;
 ----
-EPSG:3857
+OGC:CRS83
 
 # CRS Must be a string
 statement error

@@ -1003,6 +1003,7 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 		{ static_cast<uint32_t>(CatalogType::COLLATION_ENTRY), "COLLATION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TYPE_ENTRY), "TYPE_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::DATABASE_ENTRY), "DATABASE_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::COORDINATE_SYSTEM_ENTRY), "COORDINATE_SYSTEM_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TABLE_FUNCTION_ENTRY), "TABLE_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::SCALAR_FUNCTION_ENTRY), "SCALAR_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::AGGREGATE_FUNCTION_ENTRY), "AGGREGATE_FUNCTION_ENTRY" },
@@ -1022,12 +1023,12 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
-	return StringUtil::EnumToString(GetCatalogTypeValues(), 23, "CatalogType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCatalogTypeValues(), 24, "CatalogType", static_cast<uint32_t>(value));
 }
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
-	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 23, "CatalogType", value));
+	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 24, "CatalogType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCheckpointAbortValues() {
@@ -1260,9 +1261,9 @@ const StringUtil::EnumStringLiteral *GetCoordinateReferenceSystemTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::SRID), "SRID" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::AUTH_CODE), "AUTH_CODE" },
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::PROJJSON), "PROJJSON" },
-		{ static_cast<uint32_t>(CoordinateReferenceSystemType::WKT2_2019), "WKT2_2019" },
-		{ static_cast<uint32_t>(CoordinateReferenceSystemType::AUTH_CODE), "AUTH_CODE" }
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::WKT2_2019), "WKT2_2019" }
 	};
 	return values;
 }

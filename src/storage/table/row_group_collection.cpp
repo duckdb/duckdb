@@ -74,6 +74,11 @@ idx_t RowGroupCollection::GetTotalRows() const {
 	return total_rows.load();
 }
 
+idx_t RowGroupCollection::GetRowGroupCount() const {
+	auto row_groups = GetRowGroups();
+	return row_groups->GetSegmentCount();
+}
+
 const vector<LogicalType> &RowGroupCollection::GetTypes() const {
 	return types;
 }
@@ -674,6 +679,12 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 		for (auto &entry : segments) {
 			auto &row_group = entry->GetNode();
 			if (!row_group.IsPersistent()) {
+				if (optimistically_written_count > 0) {
+#ifdef DEBUG
+					throw InternalException("Partially optimistically written data at position %d (row start %d)",
+					                        entry->GetIndex(), entry->GetRowStart());
+#endif
+				}
 				break;
 			}
 			optimistically_written_count += row_group.count;
