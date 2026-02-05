@@ -840,6 +840,9 @@ public:
 				auto statement = transformer.Transform(tokenized_statement, options);
 				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
+					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +
+					                tokenized_statement[tokenized_statement.size() - 1].length;
+					statement->stmt_length = last_pos - tokenized_statement[0].offset;
 				}
 				statement->query = query;
 				result.push_back(std::move(statement));
