@@ -472,7 +472,7 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	D_ASSERT(chunk.size() > 0);
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
-	chunk.Verify();
+	chunk.Verify(GetDatabase().GetDatabase());
 
 	WriteAheadLogSerializer serializer(*this, WALType::DELETE_TUPLE);
 	serializer.WriteProperty(101, "chunk", chunk);
