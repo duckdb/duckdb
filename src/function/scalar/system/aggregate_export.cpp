@@ -239,12 +239,12 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	const auto aligned_state_size = AlignValue(bind_data.state_size);
 	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 
+	input.data[0].Flatten(input.size());
+
 	UnifiedVectorFormat state_data;
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
 
 	if (layout.is_struct) {
-		input.data[0].Flatten(input.size());
-
 		for (idx_t i = 0; i < input.size(); i++) {
 			state_vec_ptr[i] = local_state.state_buffer.get() + i * aligned_state_size;
 		}
