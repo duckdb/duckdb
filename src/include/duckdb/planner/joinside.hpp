@@ -10,6 +10,7 @@
 
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -31,12 +32,7 @@ public:
 		return comparison != ExpressionType::INVALID;
 	}
 
-	JoinCondition Copy() const {
-		if (IsComparison()) {
-			return JoinCondition(left->Copy(), right->Copy(), comparison);
-		}
-		return JoinCondition(left->Copy());
-	}
+	JoinCondition Copy() const;
 
 	Expression &GetLHS() {
 		if (!IsComparison()) {
@@ -79,6 +75,7 @@ public:
 		}
 		std::swap(left, right);
 		comparison = FlipComparisonExpression(comparison);
+		std::swap(left_stats, right_stats);
 	}
 
 	unique_ptr<Expression> &LeftReference() {
@@ -123,6 +120,48 @@ public:
 		return left;
 	}
 
+	unique_ptr<BaseStatistics> &GetLeftStats() {
+		if (!IsComparison()) {
+			throw InternalException("GetLeftStats used on a JoinCondition that is not a left/right comparison");
+		}
+		return left_stats;
+	}
+
+	const unique_ptr<BaseStatistics> &GetLeftStats() const {
+		if (!IsComparison()) {
+			throw InternalException("GetLeftStats used on a JoinCondition that is not a left/right comparison");
+		}
+		return left_stats;
+	}
+
+	unique_ptr<BaseStatistics> &GetRightStats() {
+		if (!IsComparison()) {
+			throw InternalException("GetRightStats used on a JoinCondition that is not a left/right comparison");
+		}
+		return right_stats;
+	}
+
+	const unique_ptr<BaseStatistics> &GetRightStats() const {
+		if (!IsComparison()) {
+			throw InternalException("GetRightStats used on a JoinCondition that is not a left/right comparison");
+		}
+		return right_stats;
+	}
+
+	unique_ptr<BaseStatistics> &GetExpressionStats() {
+		if (IsComparison()) {
+			throw InternalException("GetExpressionStats used on a JoinCondition that is a comparison");
+		}
+		return left_stats;
+	}
+
+	const unique_ptr<BaseStatistics> &GetExpressionStats() const {
+		if (IsComparison()) {
+			throw InternalException("GetExpressionStats used on a JoinCondition that is a comparison");
+		}
+		return left_stats;
+	}
+
 	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits
 	//! the left/right expressions
 	static unique_ptr<Expression> CreateExpression(JoinCondition cond);
@@ -135,6 +174,10 @@ private:
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
 	ExpressionType comparison;
+
+	//! Optional statistics
+	unique_ptr<BaseStatistics> left_stats;
+	unique_ptr<BaseStatistics> right_stats;
 };
 
 class JoinSide {

@@ -1,7 +1,6 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
@@ -34,8 +33,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			}
 			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.GetComparisonType());
 			// Add stats to logical_join for perfect hash join
-			join.join_stats.push_back(stats_left->ToUnique());
-			join.join_stats.push_back(stats_right->ToUnique());
+			condition.GetLeftStats() = stats_left->ToUnique();
+			condition.GetRightStats() = stats_right->ToUnique();
 			switch (prune_result) {
 			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
@@ -91,8 +90,6 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
 					join.conditions.erase_at(i);
-					// remove the corresponding statistics
-					join.join_stats.clear();
 					i--;
 					continue;
 				} else {
@@ -168,12 +165,10 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				                          *updated_stats_left);
 				CreateFilterFromJoinStats(join.children[1], condition.RightReference(), *stats_right,
 				                          *updated_stats_right);
-			}
 
-			// Update join_stats when is already part of the join
-			if (join.join_stats.size() == 2) {
-				join.join_stats[0] = std::move(updated_stats_left);
-				join.join_stats[1] = std::move(updated_stats_right);
+				// Update join_stats when is already part of the join
+				condition.GetLeftStats() = std::move(updated_stats_left);
+				condition.GetRightStats() = std::move(updated_stats_right);
 			}
 			break;
 		}
