@@ -81,7 +81,7 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 	encryption_version = target_encryption_version;
 }
 
-void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
+void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 	string storage_version_user_provided = "";
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {
@@ -125,12 +125,15 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
 	}
+	// erase encryption settings
+	options.erase("encryption_key");
+	options.erase("encryption_cipher");
 	if (encryption) {
 		SetEncryptionVersion(storage_version_user_provided);
 	}
 }
 
-StorageManager::StorageManager(AttachedDatabase &db, string path_p, const AttachOptions &options)
+StorageManager::StorageManager(AttachedDatabase &db, string path_p, AttachOptions &options)
     : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY), wal_size(0) {
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
@@ -356,7 +359,7 @@ public:
 	}
 };
 
-SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options)
+SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, AttachOptions &options)
     : StorageManager(db, std::move(path), options) {
 }
 

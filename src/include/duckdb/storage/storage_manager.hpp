@@ -49,7 +49,7 @@ public:
 //! StorageManager is responsible for managing the physical storage of a persistent database.
 class StorageManager {
 public:
-	StorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
+	StorageManager(AttachedDatabase &db, string path, AttachOptions &options);
 	virtual ~StorageManager();
 
 public:
@@ -190,7 +190,7 @@ public:
 class SingleFileStorageManager : public StorageManager {
 public:
 	SingleFileStorageManager() = delete;
-	SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
+	SingleFileStorageManager(AttachedDatabase &db, string path, AttachOptions &options);
 
 	//! The BlockManager to read from and write to blocks, both for the metadata and the data itself.
 	unique_ptr<BlockManager> block_manager;
