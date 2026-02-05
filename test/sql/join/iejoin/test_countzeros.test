@@ -2,6 +2,8 @@
 # description: CountZeros boundary cases
 # group: [iejoin]
 
+require no_alternative_verify
+
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
