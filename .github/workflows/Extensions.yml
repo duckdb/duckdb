@@ -189,6 +189,7 @@ jobs:
       exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
       opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
       extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
+      extra_toolchains: 'unixodbc'
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
