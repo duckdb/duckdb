@@ -1,0 +1,22 @@
+# name: test/sql/optimizer/late_materialization_table_filter.test
+# description: Test that table filters are correctly applied to LHS in late materialization
+# group: [optimizer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test as SELECT i, 100 - i AS j FROM range(100) t(i);
+
+statement ok
+SET explain_output='optimized_only'
+
+# Verify late materialization is triggered and filter is pushed to BOTH scans
+# The filter i>=90 must appear twice in the plan (once for each scan)
+# Without the fix, the LHS scan has no filter, causing full table scans
+query II
+EXPLAIN SELECT * FROM test WHERE i >= 90 ORDER BY j DESC LIMIT 3;
+----
+logical_opt	<REGEX>:.*i>=90.*i>=90.*

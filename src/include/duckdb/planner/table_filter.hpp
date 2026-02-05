@@ -113,6 +113,15 @@ public:
 		return left->Equals(*right);
 	}
 
+	void CopyIntoFiltering(TableFilterSet &into,
+	                       const std::function<bool(TableFilterType)> &filter_type_predicate) const {
+		for (auto &it : filters) {
+			if (filter_type_predicate(it.second->filter_type)) {
+				into.filters.emplace(it.first, it.second->Copy());
+			}
+		}
+	}
+
 	unique_ptr<TableFilterSet> Copy() const {
 		auto copy = make_uniq<TableFilterSet>();
 		for (auto &it : filters) {

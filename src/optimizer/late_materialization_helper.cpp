@@ -13,6 +13,10 @@ unique_ptr<LogicalGet> LateMaterializationHelper::CreateLHSGet(const LogicalGet 
 	new_get->named_parameters = rhs.named_parameters;
 	new_get->input_table_types = rhs.input_table_types;
 	new_get->input_table_names = rhs.input_table_names;
+	rhs.table_filters.CopyIntoFiltering(new_get->table_filters, [](TableFilterType filter_type) {
+		// Exclude filters not required for correctness
+		return filter_type != TableFilterType::OPTIONAL_FILTER;
+	});
 	return new_get;
 }
 
