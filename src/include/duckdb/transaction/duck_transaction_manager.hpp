@@ -115,6 +115,7 @@ private:
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
 	                                 const UndoBufferProperties &properties);
 	bool HasOtherTransactions(DuckTransaction &transaction);
+	void CleanupTransactions();
 
 private:
 	//! The current start timestamp used by transactions

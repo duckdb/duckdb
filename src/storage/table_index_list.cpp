@@ -349,7 +349,14 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 			art.RemovalMerge(*entry->removed_data_during_checkpoint);
 		}
 		if (entry->added_data_during_checkpoint) {
-			auto error = art.InsertMerge(*entry->added_data_during_checkpoint);
+			// NOTE: we insert duplicates here (IndexAppendMode::INSERT_DUPLICATES)
+			// this is necessary due to the way that data is inserted into indexes during transaction commit
+			// essentially we always FIRST insert data into the index, THEN remove data
+			// even if the data was logically removed first
+			// i.e. if we have a transaction like: DELETE FROM tbl WHERE i=42; INSERT INTO tbl VALUES (42);
+			// we will FIRST insert 42, THEN delete 42 from the index
+			// We plan to change this in the future - see https://github.com/duckdblabs/duckdb-internal/issues/6886
+			auto error = art.InsertMerge(*entry->added_data_during_checkpoint, IndexAppendMode::INSERT_DUPLICATES);
 			if (error.HasError()) {
 				throw InternalException("Failed to append while merging checkpoint deltas - this "
 				                        "signifies a bug or broken index: %s",

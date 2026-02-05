@@ -1183,7 +1183,9 @@ vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	auto block_size = metadata_manager.GetMetadataBlockSize() - sizeof(idx_t);
 	idx_t allocated_size = 0;
 	while (true) {
-		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
+		auto free_list_count =
+		    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
+		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * free_list_count;
 		auto multi_use_blocks_size =
 		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
 		auto metadata_blocks =
@@ -1212,8 +1214,9 @@ public:
 protected:
 	MetadataHandle NextHandle() override {
 		if (index >= free_list_blocks.size()) {
-			throw InternalException(
-			    "Free List Block Writer ran out of blocks, this means not enough blocks were allocated up front");
+			throw InternalException("Free List Block Writer ran out of blocks, this means not enough blocks were "
+			                        "allocated up front (%d total allocated)",
+			                        free_list_blocks.size());
 		}
 		return std::move(free_list_blocks[index++]);
 	}

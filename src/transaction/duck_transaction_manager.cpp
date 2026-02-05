@@ -279,6 +279,25 @@ transaction_t DuckTransactionManager::GetCommitTimestamp() {
 	return current_start_timestamp++;
 }
 
+void DuckTransactionManager::CleanupTransactions() {
+	lock_guard<mutex> c_lock(cleanup_lock);
+	while (true) {
+		unique_ptr<DuckCleanupInfo> top_cleanup_info;
+		{
+			lock_guard<mutex> q_lock(cleanup_queue_lock);
+			if (cleanup_queue.empty()) {
+				// all transactions have been cleaned up - done
+				return;
+			}
+			top_cleanup_info = std::move(cleanup_queue.front());
+			cleanup_queue.pop();
+		}
+		if (top_cleanup_info) {
+			top_cleanup_info->Cleanup();
+		}
+	}
+}
+
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 	unique_lock<mutex> t_lock(transaction_lock);
@@ -383,25 +402,14 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	t_lock.unlock();
 	held_wal_lock.reset();
 
-	{
-		lock_guard<mutex> c_lock(cleanup_lock);
-		unique_ptr<DuckCleanupInfo> top_cleanup_info;
-		{
-			lock_guard<mutex> q_lock(cleanup_queue_lock);
-			if (!cleanup_queue.empty()) {
-				top_cleanup_info = std::move(cleanup_queue.front());
-				cleanup_queue.pop();
-			}
-		}
-		if (top_cleanup_info) {
-			top_cleanup_info->Cleanup();
-		}
-	}
+	CleanupTransactions();
 
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
 	if (checkpoint_decision.can_checkpoint) {
-		D_ASSERT(lock);
+		if (!lock || lock->GetType() != StorageLockType::EXCLUSIVE) {
+			throw InternalException("Checkpointing requires an exclusive lock to be held");
+		}
 		// we can unlock the transaction lock while checkpointing
 		// checkpoint the database to disk
 		CheckpointOptions options;
@@ -437,20 +445,7 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 		}
 	}
 
-	{
-		lock_guard<mutex> c_lock(cleanup_lock);
-		unique_ptr<DuckCleanupInfo> top_cleanup_info;
-		{
-			lock_guard<mutex> q_lock(cleanup_queue_lock);
-			if (!cleanup_queue.empty()) {
-				top_cleanup_info = std::move(cleanup_queue.front());
-				cleanup_queue.pop();
-			}
-		}
-		if (top_cleanup_info) {
-			top_cleanup_info->Cleanup();
-		}
-	}
+	CleanupTransactions();
 
 	if (error.HasError()) {
 		throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s", error.Message());
