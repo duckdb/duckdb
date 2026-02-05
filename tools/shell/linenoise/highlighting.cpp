@@ -31,6 +31,8 @@ static tokenType convertToken(TokenType token_type) {
 		return tokenType::TOKEN_KEYWORD;
 	case TokenType::COMMENT:
 		return tokenType::TOKEN_COMMENT;
+	case TokenType::ERROR:
+		return tokenType::TOKEN_ERROR;
 	default:
 		throw duckdb::InternalException("Unrecognized token type");
 	}
@@ -76,7 +78,11 @@ static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	result.reserve(tokenizer.tokens.size());
 	for (auto &token : tokenizer.tokens) {
 		highlightToken new_token;
-		new_token.type = convertToken(token.type);
+		if (token.unterminated) {
+			new_token.type = tokenType::TOKEN_ERROR;
+		} else {
+			new_token.type = convertToken(token.type);
+		}
 		new_token.start = token.offset;
 		tokens.push_back(new_token);
 	}

@@ -334,7 +334,7 @@ static void InsertToken(tokenType insert_type, idx_t insert_pos, vector<highligh
 			// now we need to insert the other token ONLY if the other token is not immediately following this one
 			if (i + 1 >= tokens.size() || tokens[i + 1].start > insert_pos + 1) {
 				token.start = insert_pos + 1;
-				token.type = insert_type;
+				token.type = tokens[i].type;
 				new_tokens.push_back(token);
 			}
 			i++;

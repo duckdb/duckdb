@@ -33,7 +33,7 @@ public:
 public:
 	bool TokenizeInput();
 
-	virtual void PushToken(idx_t start, idx_t end, TokenType type);
+	virtual void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false);
 	virtual void OnStatementEnd(idx_t pos);
 	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos);
 
@@ -47,6 +47,7 @@ public:
 	static bool CharacterIsOperator(char c);
 	bool IsValidDollarTagCharacter(char c);
 	TokenType TokenizeStateToType(TokenizeState state);
+	static bool IsUnterminatedState(TokenizeState state);
 
 protected:
 	const string &sql;

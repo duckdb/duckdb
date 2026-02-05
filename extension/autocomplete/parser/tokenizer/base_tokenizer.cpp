@@ -2,7 +2,6 @@
 #include "parser/tokenizer/base_tokenizer.hpp"
 
 #include "keyword_helper.hpp"
-#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -164,7 +163,7 @@ TokenType BaseTokenizer::TokenizeStateToType(TokenizeState state) {
 	}
 }
 
-void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type) {
+void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type, bool unterminated) {
 	if (type == TokenType::COMMENT) {
 		return;
 	}
@@ -172,7 +171,7 @@ void BaseTokenizer::PushToken(idx_t start, idx_t end, TokenType type) {
 		return;
 	}
 	string last_token = sql.substr(start, end - start);
-	tokens.emplace_back(std::move(last_token), start, type);
+	tokens.emplace_back(std::move(last_token), start, type, unterminated);
 }
 
 // Valid characters can be between A-Z, a-z, 0-9, underscore, or \200 - \377
@@ -195,6 +194,17 @@ bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
 		return true;
 	}
 	return false;
+}
+
+bool BaseTokenizer::IsUnterminatedState(TokenizeState state) {
+	switch (state) {
+	case TokenizeState::STRING_LITERAL:
+	case TokenizeState::QUOTED_IDENTIFIER:
+	case TokenizeState::DOLLAR_QUOTED_STRING:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool BaseTokenizer::TokenizeInput() {
@@ -425,7 +435,7 @@ bool BaseTokenizer::TokenizeInput() {
 			size_t full_marker_len = dollar_quote_marker.size() + 2;
 			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
 			quoted = "'" + quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len) + "'";
-			tokens.emplace_back(quoted, dollar_marker_start - 1, TokenType::STRING_LITERAL);
+			tokens.emplace_back(quoted, dollar_marker_start - 1, TokenType::STRING_LITERAL, false);
 			dollar_quote_marker = string();
 			state = TokenizeState::STANDARD;
 			i = end;
@@ -445,7 +455,7 @@ bool BaseTokenizer::TokenizeInput() {
 		// no suggestions in comments or dollar-quoted strings
 		return false;
 	case TokenizeState::DOLLAR_QUOTED_STRING:
-		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL);
+		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL, true);
 		return false;
 	default:
 		break;
@@ -466,7 +476,9 @@ void BaseTokenizer::OnLastToken(TokenizeState state, string last_word, idx_t las
 	if (state == TokenizeState::KEYWORD) {
 		state = keyword_helper.IsKeyword(last_word) ? TokenizeState::KEYWORD : TokenizeState::STANDARD;
 	}
-	tokens.emplace_back(std::move(last_word), last_pos, TokenizeStateToType(state));
+
+	bool is_unterminated = IsUnterminatedState(state);
+	tokens.emplace_back(std::move(last_word), last_pos, TokenizeStateToType(state), is_unterminated);
 }
 
 } // namespace duckdb

@@ -81,7 +81,7 @@ enum class MatchResultType { SUCCESS, FAIL };
 
 enum class SuggestionType { OPTIONAL, MANDATORY };
 
-enum class TokenType { KEYWORD, STRING_LITERAL, NUMBER_LITERAL, OPERATOR, IDENTIFIER, COMMENT, TERMINATOR };
+enum class TokenType { KEYWORD, STRING_LITERAL, NUMBER_LITERAL, OPERATOR, IDENTIFIER, COMMENT, TERMINATOR, ERROR };
 
 inline string TokenTypeToString(TokenType type) {
 	switch (type) {
@@ -99,6 +99,8 @@ inline string TokenTypeToString(TokenType type) {
 		return "COMMENT";
 	case TokenType::TERMINATOR:
 		return "TERMINATOR";
+	case TokenType::ERROR:
+		return "ERROR";
 	default:
 		return "UNKNOWN";
 	}
@@ -106,8 +108,8 @@ inline string TokenTypeToString(TokenType type) {
 
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
-	MatcherToken(string text_p, idx_t offset_p, TokenType type_p)
-	    : type(type_p), text(std::move(text_p)), offset(offset_p) {
+	MatcherToken(string text_p, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
+	    : type(type_p), text(std::move(text_p)), offset(offset_p), unterminated(unterminated_p) {
 		length = text.length();
 	}
 
@@ -115,6 +117,7 @@ struct MatcherToken {
 	string text;
 	idx_t offset = 0;
 	idx_t length = 0;
+	bool unterminated = false;
 };
 
 struct MatcherSuggestion {
