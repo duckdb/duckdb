@@ -124,9 +124,9 @@ typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deseria
 typedef FilterPropagateResult (*row_group_pruner_t)(const FunctionData *bind_data, const BaseStatistics &stats);
 //! The type to prune tuples within a vector.
 typedef idx_t (*vector_pruner_t)(const FunctionData *bind_data, FunctionLocalState &state, Vector &vector,
-                                    SelectionVector &sel, idx_t &approved_tuple_count);
+                                 SelectionVector &sel, idx_t &approved_tuple_count);
 //! The type to prune constant vectors by evaluating their single value.
-typedef bool (*value_pruner_t)(const FunctionData *bind_data, const Value& value);
+typedef bool (*value_pruner_t)(const FunctionData *bind_data, const Value &value);
 
 //! The type to bind lambda-specific parameter types
 typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);

@@ -41,15 +41,17 @@ struct RowIdFilterBindData : public FunctionData {
 
 static unique_ptr<FunctionData> RowIdFilterBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
+	// we do not use this function for extensible filter
 	throw InternalException("rowid_filter bind reached unexpectedly.");
 }
 
 static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	// we do not use this function for extensible filter
 	throw InternalException("rowid_filter execution reached unexpectedly.");
 }
 
 static unique_ptr<FunctionLocalState> RowIdFilterInit(ExpressionState &state, const BoundFunctionExpression &expr,
-													  FunctionData *bind_data_p) {
+                                                      FunctionData *bind_data_p) {
 	auto res = make_uniq<RowIdFilterState>();
 	auto &bind_data = bind_data_p->Cast<RowIdFilterBindData>();
 	res->allowed_ids = bind_data.allowed_ids;
@@ -74,7 +76,7 @@ static FilterPropagateResult RowIdFilterRowGroupPrune(const FunctionData *bind_d
 }
 
 static idx_t RowIdFilterVectorPrune(const FunctionData *bind_data_p, FunctionLocalState &state_p, Vector &vector,
-                                 SelectionVector &sel, idx_t &approved_tuple_count) {
+                                    SelectionVector &sel, idx_t &approved_tuple_count) {
 	auto &state = state_p.Cast<RowIdFilterState>();
 	// The bind data has the master list, state tracks progress
 	auto &bind_data = bind_data_p->Cast<RowIdFilterBindData>();
@@ -122,8 +124,16 @@ static idx_t RowIdFilterVectorPrune(const FunctionData *bind_data_p, FunctionLoc
 	return approved_tuple_count;
 }
 
-static bool RowIdFilterValuePrune(const FunctionData *bind_data_p, const Value& value) {
-	throw InternalException("rowid_filter execution reached unexpectedly.");
+static bool RowIdFilterValuePrune(const FunctionData *bind_data_p, const Value &value) {
+	D_ASSERT(value.type().id() == LogicalTypeId::BIGINT);
+
+	auto &bind_data = bind_data_p->Cast<RowIdFilterBindData>();
+	auto &allowed = bind_data.allowed_ids;
+
+	const auto row_id = value.GetValue<int64_t>();
+
+	auto it = std::lower_bound(allowed.begin(), allowed.end(), row_id);
+	return it != allowed.end() && *it == row_id;
 }
 
 class RowIdOptimizerExtension : public OptimizerExtension {
