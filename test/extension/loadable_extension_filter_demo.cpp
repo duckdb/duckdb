@@ -16,7 +16,7 @@
 using namespace duckdb;
 
 struct RowIdFilterState : public FunctionLocalState {
-	duckdb::vector<int64_t> allowed_ids;
+	vector<int64_t> allowed_ids;
 	idx_t next_allowed_id = 0;
 
 	SelectionVector filter_sel;
@@ -24,9 +24,9 @@ struct RowIdFilterState : public FunctionLocalState {
 };
 
 struct RowIdFilterBindData : public FunctionData {
-	duckdb::vector<int64_t> allowed_ids;
+	vector<int64_t> allowed_ids;
 
-	RowIdFilterBindData(duckdb::vector<int64_t> allowed_ids) : allowed_ids(std::move(allowed_ids)) {
+	explicit RowIdFilterBindData(vector<int64_t> allowed_ids) : allowed_ids(std::move(allowed_ids)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -48,7 +48,15 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	throw InternalException("rowid_filter execution reached unexpectedly.");
 }
 
-static FilterPropagateResult RowIdFilterGroupPrune(const FunctionData *bind_data_p, const BaseStatistics &stats) {
+static unique_ptr<FunctionLocalState> RowIdFilterInit(ExpressionState &state, const BoundFunctionExpression &expr,
+													  FunctionData *bind_data_p) {
+	auto res = make_uniq<RowIdFilterState>();
+	auto &bind_data = bind_data_p->Cast<RowIdFilterBindData>();
+	res->allowed_ids = bind_data.allowed_ids;
+	return std::move(res);
+}
+
+static FilterPropagateResult RowIdFilterRowGroupPrune(const FunctionData *bind_data_p, const BaseStatistics &stats) {
 	auto &bind_data = bind_data_p->Cast<RowIdFilterBindData>();
 	auto &allowed_ids = bind_data.allowed_ids;
 
@@ -65,24 +73,24 @@ static FilterPropagateResult RowIdFilterGroupPrune(const FunctionData *bind_data
 	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
-static idx_t RowIdFilterRowPrune(const FunctionData *bind_data_p, FunctionLocalState &state_p, Vector &vector,
-                                 SelectionVector &sel, idx_t count) {
+static idx_t RowIdFilterVectorPrune(const FunctionData *bind_data_p, FunctionLocalState &state_p, Vector &vector,
+                                 SelectionVector &sel, idx_t &approved_tuple_count) {
 	auto &state = state_p.Cast<RowIdFilterState>();
 	// The bind data has the master list, state tracks progress
 	auto &bind_data = bind_data_p->Cast<RowIdFilterBindData>();
 	auto &allowed = bind_data.allowed_ids;
 
-	if (state.current_capacity < count) {
-		state.filter_sel.Initialize(count);
-		state.current_capacity = count;
+	if (state.current_capacity < approved_tuple_count) {
+		state.filter_sel.Initialize(approved_tuple_count);
+		state.current_capacity = approved_tuple_count;
 	}
 
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
+	vector.ToUnifiedFormat(approved_tuple_count, vdata);
 	auto data = UnifiedVectorFormat::GetData<int64_t>(vdata);
 
 	idx_t found_count = 0;
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < approved_tuple_count; i++) {
 		auto idx = sel.get_index(i);
 		auto row_id = data[vdata.sel->get_index(idx)];
 
@@ -96,8 +104,8 @@ static idx_t RowIdFilterRowPrune(const FunctionData *bind_data_p, FunctionLocalS
 		}
 	}
 
-	if (found_count == count) {
-		return count;
+	if (found_count == approved_tuple_count) {
+		return approved_tuple_count;
 	}
 
 	if (sel.IsSet()) {
@@ -110,15 +118,12 @@ static idx_t RowIdFilterRowPrune(const FunctionData *bind_data_p, FunctionLocalS
 		sel.Initialize(state.filter_sel);
 	}
 
-	return found_count;
+	approved_tuple_count = found_count;
+	return approved_tuple_count;
 }
 
-static unique_ptr<FunctionLocalState> RowIdFilterInit(ExpressionState &state, const BoundFunctionExpression &expr,
-                                                      FunctionData *bind_data_p) {
-	auto res = make_uniq<RowIdFilterState>();
-	auto &bind_data = bind_data_p->Cast<RowIdFilterBindData>();
-	res->allowed_ids = bind_data.allowed_ids;
-	return std::move(res);
+static bool RowIdFilterValuePrune(const FunctionData *bind_data_p, const Value& value) {
+	throw InternalException("rowid_filter execution reached unexpectedly.");
 }
 
 class RowIdOptimizerExtension : public OptimizerExtension {
@@ -133,14 +138,15 @@ public:
 			auto table = get.GetTable();
 			if (table && table->name == "rowid_test_table") {
 				// Inject filter: keep 3, 4, 5, 7, 9
-				duckdb::vector<int64_t> allowed = {3, 4, 5, 7, 9};
+				vector<int64_t> allowed = {3, 4, 5, 7, 9};
 
 				// Create ScalarFunction
 				ScalarFunction rowid_func("rowid_filter", {LogicalType::BIGINT}, LogicalType::BOOLEAN,
 				                          RowIdFilterFunction, RowIdFilterBind);
 				rowid_func.SetInitStateCallback(RowIdFilterInit);
-				rowid_func.SetFilterGroupPruneCallback(RowIdFilterGroupPrune);
-				rowid_func.SetFilterRowPruneCallback(RowIdFilterRowPrune);
+				rowid_func.SetRowGroupPrunerCallback(RowIdFilterRowGroupPrune);
+				rowid_func.SetVectorPrunerCallback(RowIdFilterVectorPrune);
+				rowid_func.SetValuePrunerCallback(RowIdFilterValuePrune);
 
 				// Create BoundFunctionExpression
 				auto bind_data = make_uniq<RowIdFilterBindData>(std::move(allowed));

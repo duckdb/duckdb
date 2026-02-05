@@ -17,6 +17,16 @@ bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value 
 }
 
 bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const {
+	if (expr->type == ExpressionType::BOUND_FUNCTION) {
+		auto &func_expr = expr->Cast<BoundFunctionExpression>();
+		if (func_expr.function.HasFilterPrunerCallbacks()) {
+			// Extensible Filter: we have a filter prune callback
+			value_pruner_t value_prune = func_expr.function.GetValuePruneCallback();
+			const FunctionData *bind_data = func_expr.bind_info.get();
+			return value_prune(bind_data, val);
+		}
+	}
+
 	DataChunk input;
 	input.data.emplace_back(val);
 	input.SetCardinality(1);
@@ -34,8 +44,8 @@ FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) c
 	}
 	if (expr->type == ExpressionType::BOUND_FUNCTION) {
 		auto &func_expr = expr->Cast<BoundFunctionExpression>();
-		if (func_expr.function.HasFilterGroupPruneCallback()) {
-			return func_expr.function.GetFilterGroupPruneCallback()(func_expr.bind_info.get(), stats);
+		if (func_expr.function.HasFilterPrunerCallbacks()) {
+			return func_expr.function.GetRowGroupPruneCallback()(func_expr.bind_info.get(), stats);
 		}
 	}
 

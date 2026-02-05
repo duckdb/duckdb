@@ -564,12 +564,11 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		if (state.executor.expressions[0]->type == ExpressionType::BOUND_FUNCTION) {
 			auto &func_expr = state.executor.expressions[0]->Cast<BoundFunctionExpression>();
-			if (func_expr.function.HasFilterRowPruneCallback()) {
+			if (func_expr.function.HasFilterPrunerCallbacks()) {
 				// Extensible Filter: we have a filter prune callback
-				filter_row_prune_t row_prune = func_expr.function.GetFilterRowPruneCallback();
+				vector_pruner_t row_prune = func_expr.function.GetVectorPruneCallback();
 				const FunctionData *bind_data = func_expr.bind_info.get();
-				approved_tuple_count = row_prune(bind_data, *state.row_prune_state, vector, sel, approved_tuple_count);
-				return approved_tuple_count;
+				return row_prune(bind_data, *state.row_prune_state, vector, sel, approved_tuple_count);
 			}
 		}
 

@@ -13,7 +13,7 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 	executor.AddExpression(expression);
 	if (expression.type == ExpressionType::BOUND_FUNCTION) {
 		auto &func_expr = expression.Cast<BoundFunctionExpression>();
-		if (func_expr.function.HasFilterRowPruneCallback() && func_expr.function.init_local_state) {
+		if (func_expr.function.HasFilterPrunerCallbacks() && func_expr.function.init_local_state) {
 			ExpressionExecutorState exec_state;
 			exec_state.executor = &executor;
 			ExpressionState expr_state(expression, exec_state);
