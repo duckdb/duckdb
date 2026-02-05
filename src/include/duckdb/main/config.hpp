@@ -128,6 +128,8 @@ struct DBConfigOptions {
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
+	//! Enable mbedtls explicitly (overrides OpenSSL if available)
+	bool force_mbedtls = false;
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific schema for VARIANT shredding
@@ -198,7 +200,7 @@ public:
 	shared_ptr<BufferPool> buffer_pool;
 	//! Provide a custom buffer manager implementation (if desired).
 	shared_ptr<BufferManager> buffer_manager;
-	//! Encryption Util for OpenSSL
+	//! Encryption Util for OpenSSL and MbedTLS
 	shared_ptr<EncryptionUtil> encryption_util;
 	//! HTTP Request utility functions
 	shared_ptr<HTTPUtil> http_util;

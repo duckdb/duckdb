@@ -145,8 +145,9 @@ public:
 			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
 
 			//! initialize the decryption
-			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
-			    state_p.db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+			auto encryption_state = database.GetEncryptionUtil(state_p.db.IsReadOnly())
+			                            ->CreateEncryptionState(state_p.db.GetStorageManager().GetCipher(),
+			                                                    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
 			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 

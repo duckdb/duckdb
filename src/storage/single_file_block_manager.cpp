@@ -377,12 +377,16 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHead
 	shared_ptr<EncryptionState> encryption_state;
 	if (main_header.GetEncryptionVersion() > 0) {
 		// From Encryption Version 1+, always encrypt canary with GCM
-		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state = db.GetDatabase()
+		                       .GetEncryptionUtil(db.IsReadOnly())
+		                       ->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	} else {
-		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state =
+		    db.GetDatabase()
+		        .GetEncryptionUtil(db.IsReadOnly())
+		        ->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
+
 	EncryptCanary(main_header, encryption_state, key);
 }
 
@@ -426,11 +430,14 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	shared_ptr<EncryptionState> encryption_state;
 	if (main_header.GetEncryptionVersion() > 0) {
 		// From Encryption Version 1+, always encrypt canary with GCM
-		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state = db.GetDatabase()
+		                       .GetEncryptionUtil(db.IsReadOnly())
+		                       ->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	} else {
-		encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state =
+		    db.GetDatabase()
+		        .GetEncryptionUtil(db.IsReadOnly())
+		        ->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	}
 
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
@@ -455,11 +462,8 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
 	if (encryption_enabled) {
-		if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
-			throw InvalidConfigurationException(
-			    "The database was opened with encryption enabled, but DuckDB currently has a read-only crypto module "
-			    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.");
-		}
+		// Check if we can read/write the encrypted database
+		db.GetDatabase().GetEncryptionUtil(options.read_only);
 	}
 
 	// open the RDBMS handle
@@ -596,13 +600,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
 
-			//! Check if our encryption module can write, if not, we should throw here
-			if (!db.GetDatabase().GetEncryptionUtil()->SupportsEncryption() && !options.read_only) {
-				throw InvalidConfigurationException(
-				    "The database is encrypted, but DuckDB currently has a read-only crypto module loaded. Either "
-				    "re-open the database using `ATTACH '..' (READONLY)`, or ensure httpfs is loaded using `LOAD "
-				    "httpfs`.");
-			}
+			//! Check if our encryption module can write, if not, we throw
+			db.GetDatabase().GetEncryptionUtil(options.read_only);
 
 			//! Check if the given key upon attach is correct
 			// Derive the encryption key and add it to cache

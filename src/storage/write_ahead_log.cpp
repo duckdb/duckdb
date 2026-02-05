@@ -140,8 +140,10 @@ public:
 		auto &db = wal.GetDatabase();
 		auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
 
-		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		auto encryption_state =
+		    db.GetDatabase()
+		        .GetEncryptionUtil(db.IsReadOnly())
+		        ->CreateEncryptionState(db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);

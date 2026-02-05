@@ -10,6 +10,7 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
 
@@ -59,9 +60,8 @@ public:
 	virtual ~EncryptionUtil() {
 	}
 
-	//! Whether the EncryptionUtil supports encryption (some may only support decryption)
-	DUCKDB_API virtual bool SupportsEncryption() {
-		return true;
+	DUCKDB_API virtual void OverrideEncryptionUtil() {
+		throw InvalidInputException("Abstract Method");
 	}
 };
 
