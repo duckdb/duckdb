@@ -239,6 +239,8 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	const auto aligned_state_size = AlignValue(bind_data.state_size);
 	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 
+	input.data[0].Flatten(input.size());
+
 	UnifiedVectorFormat state_data;
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
 
