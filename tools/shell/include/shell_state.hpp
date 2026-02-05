@@ -120,6 +120,7 @@ struct CommandLineOption {
 	metadata_command_t pre_init_callback;
 	metadata_command_t post_init_callback;
 	const char *description;
+	const duckdb::unordered_set<string> aliases;
 };
 
 struct MetadataCommand {

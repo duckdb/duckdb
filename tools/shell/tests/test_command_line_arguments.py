@@ -86,5 +86,19 @@ def test_storage_version_error(shell):
     result = test.run()
     result.check_stderr("XXX")
 
+def test_help_alias(shell):
+    test = (
+        ShellTest(shell)
+        .add_argument("--help")
+    )
+    result = test.run()
+    result.check_stdout("Usage:")
+
+    test = (
+        ShellTest(shell)
+        .add_argument("-h")
+    )
+    result = test.run()
+    result.check_stdout("Usage:")
 
 # fmt: on
