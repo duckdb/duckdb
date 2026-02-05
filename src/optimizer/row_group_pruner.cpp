@@ -79,6 +79,9 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 	const auto &primary_order = logical_order->orders[0];
 	auto options = CreateRowGroupReordererOptions(row_limit, row_offset, primary_order, *logical_get, storage_index,
 	                                              logical_limit);
+	if (!options) {
+		return false;
+	}
 	logical_get->SetScanOrder(std::move(options));
 
 	return true;
