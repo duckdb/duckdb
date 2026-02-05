@@ -1115,5 +1115,83 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "RowGroupOrderOptions",
+    "includes": [
+      "duckdb/storage/table/row_group_reorderer.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "column_idx",
+        "type": "StorageIndex"
+      },
+      {
+        "id": 101,
+        "name": "order_by",
+        "type": "OrderByStatistics"
+      },
+      {
+        "id": 102,
+        "name": "order_type",
+        "type": "OrderType"
+      },
+      {
+        "id": 103,
+        "name": "column_type",
+        "type": "OrderByColumnType"
+      },
+      {
+        "id": 104,
+        "name": "row_limit",
+        "type": "optional_idx"
+      },
+      {
+        "id": 105,
+        "name": "row_group_offset",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["column_idx", "order_by", "order_type", "column_type", "row_limit", "row_group_offset"]
+  },
+  {
+    "class": "StorageIndex",
+    "includes": [
+      "duckdb/storage/storage_index.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "has_index",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "index",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "field",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 104,
+        "name": "index_type",
+        "type": "StorageIndexType"
+      },
+      {
+        "id": 105,
+        "name": "child_indexes",
+        "type": "vector<StorageIndex>"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

@@ -7,6 +7,8 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -423,7 +425,28 @@ LogicalType BindGeometryType(BindLogicalTypeInput &input) {
 	// FIXME: Use extension/ClientContext to expand incomplete/shorthand CRS definitions
 	auto &crs = StringValue::Get(crs_value);
 
-	return LogicalType::GEOMETRY(crs);
+	if (!input.context) {
+		throw BinderException("Cannot create GEOMETRY type with coordinate system without a connection");
+	}
+
+	const auto crs_result = CoordinateReferenceSystem::TryIdentify(*input.context, crs);
+	if (!crs_result) {
+		if (Settings::Get<IgnoreUnknownCrsSetting>(*input.context)) {
+			// Ignored by user configuration - return generic GEOMETRY type
+			return LogicalType::GEOMETRY();
+		}
+
+		throw BinderException(
+		    "Encountered unrecognized coordinate system '%s' when trying to create GEOMETRY type\n"
+		    "The coordinate system definition may be incomplete or invalid. Your options are as follows:\n"
+		    "* Load an extension that can identify this coordinate system\n"
+		    "* Provide a full coordinate system definition in e.g. \"PROJJSON\" or \"WKT2\" format\n"
+		    "* Set the 'ignore_unknown_crs' configuration option to drop the coordinate system from the resulting "
+		    "geometry type and make this error go away",
+		    crs);
+	}
+
+	return LogicalType::GEOMETRY(crs_result->GetDefinition());
 }
 
 //----------------------------------------------------------------------------------------------------------------------

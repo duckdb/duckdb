@@ -657,6 +657,13 @@
         "default_value": "true"
     },
     {
+        "name": "ignore_unknown_crs",
+        "description": "Ignore unknown Coordinate Reference Systems (CRS) when creating geometry types or importing geospatial data.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "immediate_transaction_mode",
         "description": "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called",
         "type": "BOOLEAN",

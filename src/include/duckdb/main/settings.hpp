@@ -970,6 +970,17 @@ struct IeeeFloatingPointOpsSetting {
 	static constexpr idx_t SettingIndex = 55;
 };
 
+struct IgnoreUnknownCrsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "ignore_unknown_crs";
+	static constexpr const char *Description =
+	    "Ignore unknown Coordinate Reference Systems (CRS) when creating geometry types or importing geospatial data.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = 55;
+};
+
 struct ImmediateTransactionModeSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "immediate_transaction_mode";
