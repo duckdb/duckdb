@@ -52,7 +52,7 @@ public:
 	ExpressionFilterState(ClientContext &context, const Expression &expression);
 
 	ExpressionExecutor executor;
-	unique_ptr<FunctionLocalState> row_prune_state;
+	unique_ptr<FunctionLocalState> extension_state;
 };
 
 struct BFTableFilterState final : public TableFilterState {

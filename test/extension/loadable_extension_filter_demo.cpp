@@ -200,6 +200,6 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_filter_demo, loader) {
 	auto &db = loader.GetDatabaseInstance();
 	auto &config = DBConfig::GetConfig(db);
-	config.optimizer_extensions.push_back(RowIdOptimizerExtension());
+	config.GetCallbackManager().Register(RowIdOptimizerExtension());
 }
 }

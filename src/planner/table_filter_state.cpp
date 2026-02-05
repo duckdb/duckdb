@@ -17,7 +17,7 @@ ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expre
 			ExpressionExecutorState exec_state;
 			exec_state.executor = &executor;
 			ExpressionState expr_state(expression, exec_state);
-			row_prune_state = func_expr.function.init_local_state(expr_state, func_expr, func_expr.bind_info.get());
+			extension_state = func_expr.function.init_local_state(expr_state, func_expr, func_expr.bind_info.get());
 		}
 	}
 }

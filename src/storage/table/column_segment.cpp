@@ -562,13 +562,14 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();
-		if (state.executor.expressions[0]->type == ExpressionType::BOUND_FUNCTION) {
+		if (!state.executor.expressions.empty() &&
+		    state.executor.expressions[0]->type == ExpressionType::BOUND_FUNCTION) {
 			auto &func_expr = state.executor.expressions[0]->Cast<BoundFunctionExpression>();
 			if (func_expr.function.HasFilterPrunerCallbacks()) {
 				// Extensible Filter: we have a filter prune callback
 				vector_pruner_t row_prune = func_expr.function.GetVectorPruneCallback();
 				const FunctionData *bind_data = func_expr.bind_info.get();
-				return row_prune(bind_data, *state.row_prune_state, vector, sel, approved_tuple_count);
+				return row_prune(bind_data, *state.extension_state, vector, sel, approved_tuple_count);
 			}
 		}
 
