@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
 
 namespace duckdb {
 
@@ -146,9 +148,38 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 	return true;
 }
 
+static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistics &input, const LogicalType &target) {
+	if (target.IsNested() || target.id() == LogicalTypeId::VARIANT) {
+		// only try this for non-nested
+		return nullptr;
+	}
+	if (!VariantStats::IsShredded(input)) {
+		// not shredded
+		return nullptr;
+	}
+	auto structured_type = VariantStats::GetShreddedStructuredType(input);
+	auto &shredded_stats = VariantStats::GetShreddedStats(input);
+	auto &untyped_stats = StructStats::GetChildStats(shredded_stats, 0);
+	if (untyped_stats.CanHaveNoNull()) {
+		// this field might be partially shredded - skip stats propagation
+		return nullptr;
+	}
+	// do we need to use these?
+	auto &typed_stats = StructStats::GetChildStats(shredded_stats, 1);
+	if (structured_type == target) {
+		// type matches - return stats directly
+		return typed_stats.ToUnique();
+	}
+	// typed stats don't match - try to cast
+	return StatisticsPropagator::TryPropagateCast(typed_stats, structured_type, target);
+}
+
 unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(const BaseStatistics &stats,
                                                                   const LogicalType &source,
                                                                   const LogicalType &target) {
+	if (source.id() == LogicalTypeId::VARIANT) {
+		return StatisticsPropagateVariant(stats, target);
+	}
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;
 	}
