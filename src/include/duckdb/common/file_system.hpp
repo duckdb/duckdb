@@ -263,6 +263,9 @@ public:
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
 	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
 
+	//! Unregister a sub-filesystem by name
+	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
+
 	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
 	// has been disabled.
 	DUCKDB_API virtual unique_ptr<FileSystem> ExtractSubSystem(const string &name);
