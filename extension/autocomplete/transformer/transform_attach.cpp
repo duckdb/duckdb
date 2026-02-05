@@ -1,4 +1,5 @@
 #include "ast/generic_copy_option.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
@@ -111,6 +112,20 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 			copy_option.expression = std::move(expression);
 		} else if (expression->GetExpressionType() == ExpressionType::STAR) {
 			copy_option.children.push_back(Value("*"));
+		} else if (expression->GetExpressionType() == ExpressionType::OPERATOR_CAST) {
+			auto &cast_expr = expression->Cast<CastExpression>();
+			if (cast_expr.child->GetExpressionClass() == ExpressionClass::CONSTANT) {
+				auto &const_expr = cast_expr.child->Cast<ConstantExpression>();
+				if (const_expr.value.GetValue<string>() == "t") {
+					copy_option.children.push_back(Value(true));
+				} else if (const_expr.value.GetValue<string>() == "f") {
+					copy_option.children.push_back(Value(false));
+				} else {
+					throw ParserException("Invalid boolean value for option %s", copy_option.name);
+				}
+			} else {
+				copy_option.expression = std::move(expression);
+			}
 		} else {
 			throw NotImplementedException("Unrecognized expression type %s",
 			                              ExpressionTypeToString(expression->GetExpressionType()));

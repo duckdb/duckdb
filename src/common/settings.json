@@ -240,6 +240,13 @@
         "default_value": "0"
     },
     {
+        "name": "debug_eviction_queue_sleep_micro_seconds",
+        "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
@@ -650,6 +657,13 @@
         "default_value": "true"
     },
     {
+        "name": "ignore_unknown_crs",
+        "description": "Ignore unknown Coordinate Reference Systems (CRS) when creating geometry types or importing geospatial data.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "immediate_transaction_mode",
         "description": "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called",
         "type": "BOOLEAN",
@@ -1031,6 +1045,13 @@
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "0"
+    },
+    {
+        "name": "warnings_as_errors",
+        "description": "Escalate all warnings to errors.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "write_buffer_row_group_count",

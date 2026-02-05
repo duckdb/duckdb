@@ -366,7 +366,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 
 string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block,
                                                        int32_t offset) {
-	auto &buffer_manager = segment.block->GetBufferManager();
+	auto &buffer_manager = segment.block->GetMemory().GetBufferManager();
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 
 	D_ASSERT(block != INVALID_BLOCK);

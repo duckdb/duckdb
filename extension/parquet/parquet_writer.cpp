@@ -151,7 +151,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 }
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-                                        bool allow_geometry) {
+                                        bool allow_geometry, ClientContext &context) {
 	if (duckdb_type.IsJSONType()) {
 		schema_ele.converted_type = ConvertedType::JSON;
 		schema_ele.__isset.converted_type = true;
@@ -269,6 +269,18 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 			schema_ele.logicalType.__isset.GEOMETRY = true;
 			if (GeoType::HasCRS(duckdb_type)) {
 				const auto &crs = GeoType::GetCRS(duckdb_type);
+
+				if (crs.GetType() != CoordinateReferenceSystemType::PROJJSON) {
+					// Try to convert to GeoJSON
+					const auto lookup =
+					    CoordinateReferenceSystem::TryConvert(context, crs, CoordinateReferenceSystemType::PROJJSON);
+					if (lookup) {
+						schema_ele.logicalType.GEOMETRY.__isset.crs = true;
+						schema_ele.logicalType.GEOMETRY.crs = lookup->GetDefinition();
+						break;
+					}
+				}
+
 				schema_ele.logicalType.GEOMETRY.__isset.crs = true;
 				schema_ele.logicalType.GEOMETRY.crs = crs.GetDefinition();
 			}

@@ -217,7 +217,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	}
 	// verify the main WAL is the active WAL currently
 	if (wal->GetPath() != wal_path) {
-		throw InternalException("Current WAL path %s does not match base WAL path %s in WALStartCheckpoint",
+		throw InternalException("Current WAL path \"%s\" does not match base WAL path \"%s\" in WALStartCheckpoint",
 		                        wal->GetPath(), wal_path);
 	}
 	// write to the main WAL that we have initiated a checkpoint
@@ -701,8 +701,9 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		try {
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
+			ActiveTimer profiler;
 			if (client_context) {
-				auto profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
+				profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
 			}
 
 			// Write the checkpoint.

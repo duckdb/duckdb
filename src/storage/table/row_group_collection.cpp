@@ -611,6 +611,10 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 		// we have no segments to revert
 		return;
 	}
+	auto last_segment = row_groups->GetLastSegment(l);
+	if (last_segment->GetRowEnd() <= new_end_idx) {
+		return;
+	}
 	auto reverted_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto rlock = reverted_row_groups->Lock();
 	for (auto &entry : row_groups->SegmentNodes(l)) {

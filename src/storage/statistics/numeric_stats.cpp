@@ -624,4 +624,6 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 	}
 }
 
+template uint32_t NumericStats::GetMinUnsafe(const BaseStatistics &stats);
+template uint32_t NumericStats::GetMaxUnsafe(const BaseStatistics &stats);
 } // namespace duckdb
