@@ -784,6 +784,12 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			auto &struct_child = child_entries[child_idx];
 			children.push_back(struct_child->GetValue(index_p));
 		}
+
+		if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
+			// We could also just call `Value::STRUCT` as it has the same implementation, but this is implementation
+			// details, so for consistency and bullet-proof implementation we keep those constructors separate.
+			return Value::AGGREGATE_STATE(type, std::move(children));
+		}
 		return Value::STRUCT(type, std::move(children));
 	}
 	case LogicalTypeId::LIST: {

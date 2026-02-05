@@ -169,6 +169,7 @@ public:
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
 	DUCKDB_API static Value STRUCT(const LogicalType &type, vector<Value> struct_values);
+	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, vector<Value> underlying_struct_values);
 	//! Create a variant value with given list of internal variant data (keys/children/values/data)
 	DUCKDB_API static Value VARIANT(vector<Value> children);
 	//! Create a list value with the given entries
