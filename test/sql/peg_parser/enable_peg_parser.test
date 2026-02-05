@@ -1,0 +1,59 @@
+# name: test/sql/peg_parser/enable_peg_parser.test
+# description: Test enabling and disabling the PEG Parser
+# group: [peg_parser]
+
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='__TEST_DIR__/autoloading_types'
+
+# No autoloading nor installing: throw error with installation hint
+statement ok
+set autoload_known_extensions=false
+
+statement ok
+set autoinstall_known_extensions=false
+
+statement maybe
+select xvariable a = 1;
+----
+Parser Error: syntax error at or near "="
+
+statement error
+call enable_peg_parser();
+----
+Catalog Error: Table Function with name "enable_peg_parser" is not in the catalog, but it exists in the autocomplete extension.
+
+# With autoloading, install and correct repo
+statement ok
+set autoload_known_extensions=true
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
+
+statement ok 
+call enable_peg_parser(); 
+
+# Here we should get the error from the parser override
+statement ok
+select xvariable a = 1;
+---
+Parser Error: Parser override could not parse this query
+
+# Just check that it works properly
+query I
+SELECT * FROM values(1);
+----
+1
+
+statement ok 
+call disable_peg_parser(); 
+
+# Here we should get the original PostgreSQL error again
+statement maybe
+select xvariable a = 1;
+---
+parser error: syntax error at or near "="
