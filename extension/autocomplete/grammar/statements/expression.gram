@@ -45,10 +45,20 @@ IntervalParameter <- StringLiteral / NumberLiteral / ParensExpression
 IntervalUnit <- ColId
 FrameClause <- Framing FrameExtent WindowExcludeClause?
 Framing <- 'ROWS' / 'RANGE' / 'GROUPS'
-FrameExtent <- ('BETWEEN' FrameBound 'AND' FrameBound) / FrameBound
-FrameBound <- ('UNBOUNDED' 'PRECEDING') / ('UNBOUNDED' 'FOLLOWING') / ('CURRENT' 'ROW') / (Expression 'PRECEDING') / (Expression 'FOLLOWING')
+FrameExtent <- BetweenFrameExtent / SingleFrameExtent
+SingleFrameExtent <- FrameBound
+BetweenFrameExtent <- 'BETWEEN' FrameBound 'AND' FrameBound
+FrameBound <- FrameUnbounded / FrameCurrentRow / FrameExpression
+FrameUnbounded <- 'UNBOUNDED' PrecedingOrFollowing
+FrameExpression <- Expression PrecedingOrFollowing
+FrameCurrentRow <- 'CURRENT' 'ROW'
+PrecedingOrFollowing <- 'PRECEDING' / 'FOLLOWING'
 WindowExcludeClause <- 'EXCLUDE' WindowExcludeElement
-WindowExcludeElement <- ('CURRENT' 'ROW') / 'GROUP' / 'TIES' / ('NO' 'OTHERS')
+WindowExcludeElement <- ExcludeCurrentRow / ExcludeGroup / ExcludeTies / ExcludeNoOthers
+ExcludeCurrentRow <- 'CURRENT' 'ROW'
+ExcludeGroup <- 'GROUP'
+ExcludeTies <- 'TIES'
+ExcludeNoOthers <- 'NO' 'OTHERS'
 OverClause <- 'OVER' WindowFrame
 WindowFrame <- WindowFrameDefinition / Identifier / ParensIdentifier
 ParensIdentifier <- Parens(Identifier)
@@ -198,7 +208,8 @@ BaseExpression <- SingleExpression Indirection*
 
 Indirection <- CastOperator / DotOperator / SliceExpression / PostfixOperator
 CastOperator <- '::' Type
-DotOperator <- '.' (FunctionExpression / ColLabel)
+DotOperator <- '.' (MethodExpression / ColLabel)
+MethodExpression <- ColLabel Parens(DistinctOrAll? List(FunctionArgument)? OrderByClause? IgnoreNulls?)
 SliceExpression <- '[' SliceBound ']'
 SliceBound <- Expression? EndSliceBound? StepSliceBound?
 EndSliceBound <- ':' (Expression / '-')?
@@ -211,12 +222,14 @@ CoalesceExpression <- 'COALESCE' Parens(List(Expression))
 UnpackExpression <- 'UNPACK' Parens(Expression)
 TryExpression <- 'TRY' Parens(Expression)
 ColumnsExpression <- '*'? 'COLUMNS' Parens(Expression)
-ExtractExpression <- 'EXTRACT' Parens(Expression 'FROM' Expression)
+ExtractExpression <- 'EXTRACT' Parens(ExtractArgument 'FROM' Expression)
 LambdaExpression <- 'LAMBDA' List(ColIdOrString) ':' Expression
 NullIfExpression <- 'NULLIF' Parens(Expression ',' Expression)
 PositionExpression <- 'POSITION' Parens(Expression)
 RowExpression <- 'ROW' Parens(List(Expression))
-SubstringExpression <- 'SUBSTRING' Parens(SubstringParameters / List(Expression))
+SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
+SubstringArguments <- SubstringParameters / SubstringExpressionList
+SubstringExpressionList <- List(Expression)
 SubstringParameters <- Expression 'FROM' NumberLiteral 'FOR' NumberLiteral
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
 TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
@@ -224,3 +237,8 @@ TrimBoth <- 'BOTH'
 TrimLeading <- 'LEADING'
 TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'
+
+ExtractArgument <-
+    YearKeyword / MonthKeyword / DayKeyword / HourKeyword / MinuteKeyword / SecondKeyword /
+    MillisecondKeyword / MicrosecondKeyword / WeekKeyword / QuarterKeyword / DecadeKeyword /
+    CenturyKeyword / MillenniumKeyword / Identifier / StringLiteral

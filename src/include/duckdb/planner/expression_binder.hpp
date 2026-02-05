@@ -116,7 +116,8 @@ public:
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
 	//! Returns a qualified column reference from a column name
-	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, ErrorData &error);
+	unique_ptr<ParsedExpression> QualifyColumnName(const ParsedExpression &expr, const string &column_name,
+	                                               ErrorData &error);
 	//! Returns a qualified column reference from a column reference with column_names.size() > 2
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Returns a qualified column reference from a column reference
