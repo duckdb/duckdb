@@ -267,6 +267,8 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 
+	input.data[0].Flatten(input.size());
+
 	UnifiedVectorFormat state_data;
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
 
