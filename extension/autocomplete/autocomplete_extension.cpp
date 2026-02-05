@@ -450,6 +450,7 @@ public:
 		}
 		if (StringUtil::StartsWith(last_word_p, "'")) {
 			last_word_p = last_word_p.substr(1, last_word_p.size() - 1);
+			last_pos_p += 1;
 		}
 		last_word = std::move(last_word_p);
 		last_pos = last_pos_p;
