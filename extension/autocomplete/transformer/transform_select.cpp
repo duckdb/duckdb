@@ -603,7 +603,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableUnpivotClause(PEGTrans
 	transformer.TransformOptional<TableAlias>(list_pr, 3, pivot_alias);
 	result->alias = pivot_alias.name;
 	result->column_name_alias = pivot_alias.column_name_alias;
-	return result;
+	return std::move(result);
 }
 
 PivotColumn PEGTransformerFactory::TransformUnpivotValueList(PEGTransformer &transformer,
@@ -702,7 +702,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTablePivotClause(PEGTransfo
 	transformer.TransformOptional<TableAlias>(list_pr, 2, table_alias);
 	result->alias = table_alias.name;
 	result->column_name_alias = table_alias.column_name_alias;
-	return result;
+	return std::move(result);
 }
 
 vector<string> PEGTransformerFactory::TransformPivotGroupByList(PEGTransformer &transformer,
