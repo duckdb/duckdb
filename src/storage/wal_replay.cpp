@@ -36,7 +36,8 @@ namespace duckdb {
 
 class ReplayState {
 public:
-	ReplayState(AttachedDatabase &db, ClientContext &context) : db(db), context(context), catalog(db.GetCatalog()) {
+	ReplayState(AttachedDatabase &db, ClientContext &context, WALReplayState replay_state_p)
+	    : db(db), context(context), catalog(db.GetCatalog()), replay_state(replay_state_p) {
 	}
 
 	AttachedDatabase &db;
@@ -48,6 +49,7 @@ public:
 	optional_idx current_position;
 	optional_idx checkpoint_position;
 	optional_idx expected_checkpoint_id;
+	WALReplayState replay_state;
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const string &table_schema,
@@ -309,7 +311,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
-	ReplayState checkpoint_state(database, *con.context);
+	ReplayState checkpoint_state(database, *con.context, replay_state);
 	try {
 		idx_t replay_entry_count = 0;
 		while (true) {
@@ -405,7 +407,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 					BufferedFileReader checkpoint_reader(FileSystem::Get(database), std::move(checkpoint_handle));
 
 					// skip over the version entry
-					ReplayState checkpoint_replay_state(database, *con.context);
+					ReplayState checkpoint_replay_state(database, *con.context, WALReplayState::CHECKPOINT_WAL);
 					auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_replay_state,
 					                                                                    checkpoint_reader, true);
 					deserializer.ReplayEntry();
@@ -454,7 +456,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	ReplayState state(database, *con.context);
+	ReplayState state(database, *con.context, replay_state);
 
 	// reset the reader - we are going to read the WAL from the beginning again
 	reader.Reset();
@@ -637,6 +639,12 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 			// this can happen if we aborted AFTER checkpointing the file, but BEFORE truncating the WAL
 			// expect this situation to occur - we will throw an error if it does not later on
 			state.expected_checkpoint_id = expected_checkpoint_iteration;
+			return;
+		}
+		if (state.replay_state == WALReplayState::CHECKPOINT_WAL &&
+		    wal_checkpoint_iteration == expected_checkpoint_iteration + 1) {
+			// if we are recovering from a checkpoint WAL, the checkpoint iteration is possibly one higher
+			// (depending on when the crash happened)
 			return;
 		}
 		ThrowVersionError(wal_checkpoint_iteration, expected_checkpoint_iteration);
