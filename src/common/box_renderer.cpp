@@ -2216,7 +2216,8 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 			ss.Render(ResultRenderType::FOOTER, extra_render_str);
 		}
 		// can we add the hidden rows hint to this line?
-		if (!config.hidden_rows_hint.empty() && padding >= config.hidden_rows_hint.size() + 10) {
+		if ((has_hidden_columns || has_hidden_rows) && !config.hidden_rows_hint.empty() &&
+		    padding >= config.hidden_rows_hint.size() + 10) {
 			// we can
 			padding -= config.hidden_rows_hint.size();
 			auto lpadding = padding / 2;
