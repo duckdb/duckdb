@@ -2,7 +2,7 @@
   "description": "Test PEG Parser + transformer in strict mode",
   "skip_compiled": "true",
   "on_init": "set allow_parser_override_extension=strict_when_supported;",
-  "statically_loaded_extensions": ["core_functions", "autocomplete"],
+  "statically_loaded_extensions": ["core_functions", "autocomplete", "httpfs"],
   "skip_tests": [
     {
       "reason": "Error handling",
@@ -174,7 +174,7 @@
         "test/sql/binder/test_string_alias.test",
         "test/sql/function/string/test_string_slice.test",
         "test/sql/alter/alter_table_set_table_options.test",
-	"test/sql/create/create_as_partition_sorted_options.test",
+        "test/sql/create/create_as_partition_sorted_options.test",
         "test/sql/pragma/test_pragma_sanitized_inputs.test",
         "test/sql/pragma/test_query_log.test",
         "test/optimizer/joins/lateral_cross_join.test"
