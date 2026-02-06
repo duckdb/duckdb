@@ -182,8 +182,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 			}
 		}
 		if (!index_entry) {
-			// We bound all indexes.
-			D_ASSERT(unbound_count == 0);
+			// We bound all indexes. (of this type)
 			break;
 		}
 		if (index_entry->bind_state == IndexBindState::BINDING) {
