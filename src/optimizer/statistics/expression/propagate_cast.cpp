@@ -159,12 +159,11 @@ static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistic
 	}
 	auto structured_type = VariantStats::GetShreddedStructuredType(input);
 	auto &shredded_stats = VariantStats::GetShreddedStats(input);
-	auto &untyped_stats = StructStats::GetChildStats(shredded_stats, 0);
-	if (untyped_stats.CanHaveNoNull()) {
+	if (!VariantShreddedStats::IsFullyShredded(shredded_stats)) {
 		// this field might be partially shredded - skip stats propagation
 		return nullptr;
 	}
-	// do we need to use these?
+	// extract the typed stats
 	auto &typed_stats = StructStats::GetChildStats(shredded_stats, 1);
 	if (structured_type == target) {
 		// type matches - return stats directly
