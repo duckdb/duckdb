@@ -76,9 +76,9 @@ private:
             // (Rather than buffer.getCapacity().)
             if(length < INITIAL_CAPACITY || ensureAppendCapacity(1, errorCode)) {
                 ++length;
-                return TRUE;
+                return true;
             } else {
-                return FALSE;
+                return false;
             }
         }
 
@@ -92,8 +92,8 @@ private:
         int32_t length;
 
     private:
-        CEBuffer(const CEBuffer &);
-        void operator=(const CEBuffer &);
+        CEBuffer(const CEBuffer &) = delete;
+        void operator=(const CEBuffer &) = delete;
 
         MaybeStackArray<int64_t, INITIAL_CAPACITY> buffer;
     };
@@ -251,9 +251,9 @@ protected:
     virtual UBool foundNULTerminator();
 
     /**
-     * @return FALSE if surrogate code points U+D800..U+DFFF
+     * @return false if surrogate code points U+D800..U+DFFF
      *         map to their own implicit primary weights (for UTF-16),
-     *         or TRUE if they map to CE(U+FFFD) (for UTF-8)
+     *         or true if they map to CE(U+FFFD) (for UTF-8)
      */
     virtual UBool forbidSurrogateCodePoints() const;
 

@@ -36,9 +36,7 @@ U_NAMESPACE_BEGIN
 // TODO memory debugging provided inside uniset.cpp
 // could be made available here but probably obsolete with use of modern
 // memory leak checker tools
-#ifndef _dbgct
 #define _dbgct(me)
-#endif
 
 //----------------------------------------------------------------
 // Constructors &c
@@ -76,7 +74,7 @@ UnicodeSet& UnicodeSet::applyPattern(const UnicodeString& pattern,
 
     if (options & USET_IGNORE_SPACE) {
         // Skip over trailing whitespace
-        ICU_Utility::skipWhitespace(pattern, i, TRUE);
+        ICU_Utility::skipWhitespace(pattern, i, true);
     }
 
     if (i != pattern.length()) {
@@ -143,7 +141,7 @@ addCaseMapping(UnicodeSet &set, int32_t result, const UChar *full, UnicodeString
             set.add(result);
         } else {
             // add a string case mapping from full with length result
-            str.setTo((UBool)FALSE, full, result);
+            str.setTo((UBool)false, full, result);
             set.add(str);
         }
     }

@@ -31,11 +31,17 @@ class U_I18N_API CurrencySymbols : public UMemory {
 
     UnicodeString getNarrowCurrencySymbol(UErrorCode& status) const;
 
+    UnicodeString getFormalCurrencySymbol(UErrorCode& status) const;
+
+    UnicodeString getVariantCurrencySymbol(UErrorCode& status) const;
+
     UnicodeString getCurrencySymbol(UErrorCode& status) const;
 
     UnicodeString getIntlCurrencySymbol(UErrorCode& status) const;
 
     UnicodeString getPluralName(StandardPlural::Form plural, UErrorCode& status) const;
+
+    bool hasEmptyCurrencySymbol() const;
 
   protected:
     // Required fields:

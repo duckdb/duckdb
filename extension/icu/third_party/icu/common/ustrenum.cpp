@@ -10,7 +10,7 @@
 * Since: ICU 2.4
 **********************************************************************
 */
-#include "utypeinfo.h"  // for 'typeid' to work
+#include "utypeinfo.h"  // for 'typeid' to work 
 
 #include "unicode/ustring.h"
 #include "unicode/strenum.h"
@@ -122,7 +122,7 @@ StringEnumeration::setChars(const char *s, int32_t length, UErrorCode &status) {
 }
 bool
 StringEnumeration::operator==(const StringEnumeration& that)const {
-    return typeid(*this) == typeid(that);
+    return typeid(*this) == typeid(that); 
 }
 
 bool
@@ -183,7 +183,7 @@ U_NAMESPACE_END
 
 // C wrapper --------------------------------------------------------------- ***
 
-#define ustrenum_THIS(en) ((icu::StringEnumeration*)(en->context))
+#define THIS(en) ((icu::StringEnumeration*)(en->context))
 
 U_CDECL_BEGIN
 
@@ -192,7 +192,7 @@ U_CDECL_BEGIN
  */
 static void U_CALLCONV
 ustrenum_close(UEnumeration* en) {
-    delete ustrenum_THIS(en);
+    delete THIS(en);
     uprv_free(en);
 }
 
@@ -203,7 +203,7 @@ static int32_t U_CALLCONV
 ustrenum_count(UEnumeration* en,
                UErrorCode* ec)
 {
-    return ustrenum_THIS(en)->count(*ec);
+    return THIS(en)->count(*ec);
 }
 
 /**
@@ -214,7 +214,7 @@ ustrenum_unext(UEnumeration* en,
                int32_t* resultLength,
                UErrorCode* ec)
 {
-    return ustrenum_THIS(en)->unext(resultLength, *ec);
+    return THIS(en)->unext(resultLength, *ec);
 }
 
 /**
@@ -225,7 +225,7 @@ ustrenum_next(UEnumeration* en,
               int32_t* resultLength,
               UErrorCode* ec)
 {
-    return ustrenum_THIS(en)->next(resultLength, *ec);
+    return THIS(en)->next(resultLength, *ec);
 }
 
 /**
@@ -235,7 +235,7 @@ static void U_CALLCONV
 ustrenum_reset(UEnumeration* en,
                UErrorCode* ec)
 {
-    ustrenum_THIS(en)->reset(*ec);
+    THIS(en)->reset(*ec);
 }
 
 /**
@@ -260,7 +260,7 @@ U_CDECL_END
  * delete it (regardless of error status).
  */
 U_CAPI UEnumeration* U_EXPORT2
-uenum_openFromStringEnumeration(icu::StringEnumeration* adopted, UErrorCode* ec) {
+uenum_openFromStringEnumeration(icu::StringEnumeration* adopted, UErrorCode* ec) { 
     UEnumeration* result = NULL;
     if (U_SUCCESS(*ec) && adopted != NULL) {
         result = (UEnumeration*) uprv_malloc(sizeof(UEnumeration));

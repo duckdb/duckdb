@@ -109,7 +109,7 @@
  * Where such a distinction is useful, there are two versions of the macros, "unsafe" and "safe"
  * ones with ..._UNSAFE and ..._SAFE suffixes. The unsafe macros are fast but may cause
  * program failures if the strings are not well-formed. The safe macros have an additional, boolean
- * parameter "strict". If strict is FALSE, then only illegal sequences are detected.
+ * parameter "strict". If strict is false, then only illegal sequences are detected.
  * Otherwise, irregular sequences and non-characters are detected as well (like single surrogates).
  * Safe macros return special error code points for illegal/irregular sequences:
  * Typically, U+ffff, or values that would result in a code unit sequence of the same length
@@ -181,7 +181,7 @@ typedef int32_t UTextOffset;
 
 /**
  * The default choice for general Unicode string macros is to use the ..._SAFE macro implementations
- * with strict=FALSE.
+ * with strict=false.
  *
  * @deprecated ICU 2.4. Obsolete, see utf_old.h.
  */
@@ -293,10 +293,10 @@ typedef int32_t UTextOffset;
 #ifdef U_UTF8_IMPL
 // No forward declaration if compiling utf_impl.cpp, which defines utf8_countTrailBytes.
 #elif defined(U_STATIC_IMPLEMENTATION) || defined(U_COMMON_IMPLEMENTATION)
-U_CFUNC const uint8_t utf8_countTrailBytes[];
+U_CAPI const uint8_t utf8_countTrailBytes[];
 #else
-U_CFUNC U_IMPORT const uint8_t utf8_countTrailBytes[];    /* U_IMPORT2? */ /*U_IMPORT*/
-#endif
+U_CFUNC U_IMPORT const uint8_t utf8_countTrailBytes[];
+#endif 
 
 /**
  * Count the trail bytes for a UTF-8 lead byte.

@@ -16,7 +16,7 @@
 
 U_NAMESPACE_BEGIN
 
-static const int32_t CECAL_LIMITS[UCAL_FIELD_COUNT][4] = {
+static const int32_t LIMITS[UCAL_FIELD_COUNT][4] = {
     // Minimum  Greatest    Least  Maximum
     //           Minimum  Maximum
     {        0,        0,        1,        1}, // ERA
@@ -49,12 +49,12 @@ static const int32_t CECAL_LIMITS[UCAL_FIELD_COUNT][4] = {
 //-------------------------------------------------------------------------
 
 CECalendar::CECalendar(const Locale& aLocale, UErrorCode& success)
-:   Calendar(TimeZone::createDefault(), aLocale, success)
+:   Calendar(TimeZone::forLocaleOrDefault(aLocale), aLocale, success)
 {
     setTimeInMillis(getNow(), success);
 }
 
-CECalendar::CECalendar (const CECalendar& other)
+CECalendar::CECalendar (const CECalendar& other) 
 :   Calendar(other)
 {
 }
@@ -83,26 +83,26 @@ CECalendar::handleComputeMonthStart(int32_t eyear,int32_t emonth, UBool /*useMon
 int32_t
 CECalendar::handleGetLimit(UCalendarDateFields field, ELimitType limitType) const
 {
-    return CECAL_LIMITS[field][limitType];
+    return LIMITS[field][limitType];
 }
 
 UBool
 CECalendar::inDaylightTime(UErrorCode& status) const
 {
     if (U_FAILURE(status) || !getTimeZone().useDaylightTime()) {
-        return FALSE;
+        return false;
     }
 
     // Force an update of the state of the Calendar.
     ((CECalendar*)this)->complete(status); // cast away const
 
-    return (UBool)(U_SUCCESS(status) ? (internalGet(UCAL_DST_OFFSET) != 0) : FALSE);
+    return (UBool)(U_SUCCESS(status) ? (internalGet(UCAL_DST_OFFSET) != 0) : false);
 }
 
 UBool
 CECalendar::haveDefaultCentury() const
 {
-    return TRUE;
+    return true;
 }
 
 //-------------------------------------------------------------------------
@@ -135,7 +135,7 @@ CECalendar::jdToCE(int32_t julianDay, int32_t jdEpochOffset, int32_t& year, int3
     int32_t c4; // number of 4 year cycle (1461 days)
     int32_t r4; // remainder of 4 year cycle, always positive
 
-    c4 = ClockMath::floorDivide(julianDay - jdEpochOffset, 1461, r4);
+    c4 = ClockMath::floorDivide(julianDay - jdEpochOffset, 1461, &r4);
 
     year = 4 * c4 + (r4/365 - r4/1460); // 4 * <number of 4year cycle> + <years within the last cycle>
 

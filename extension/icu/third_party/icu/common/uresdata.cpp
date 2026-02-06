@@ -64,7 +64,7 @@ static const struct {
     int32_t length;
     UChar nul;
     UChar pad;
-} uresdata_gEmptyString={ 0, 0, 0 };
+} gEmptyString={ 0, 0, 0 };
 
 /*
  * All the type-access functions assume that
@@ -136,7 +136,7 @@ _res_findTable32Item(const ResourceData *pResData, const int32_t *keyOffsets, in
 /* helper for res_load() ---------------------------------------------------- */
 
 static UBool U_CALLCONV
-uresdata_isAcceptable(void *context,
+isAcceptable(void *context,
              const char * /*type*/, const char * /*name*/,
              const UDataInfo *pInfo) {
     uprv_memcpy(context, pInfo->formatVersion, 4);
@@ -234,7 +234,7 @@ res_init(ResourceData *pResData,
          * formatVersion 1: compare key strings in native-charset order
          * formatVersion 2 and up: compare key strings in ASCII order
          */
-        pResData->useNativeStrcmp=TRUE;
+        pResData->useNativeStrcmp=true;
     }
 }
 
@@ -248,7 +248,7 @@ res_read(ResourceData *pResData,
     if(U_FAILURE(*errorCode)) {
         return;
     }
-    if(!uresdata_isAcceptable(formatVersion, NULL, NULL, pInfo)) {
+    if(!isAcceptable(formatVersion, NULL, NULL, pInfo)) {
         *errorCode=U_INVALID_FORMAT_ERROR;
         return;
     }
@@ -263,7 +263,7 @@ res_load(ResourceData *pResData,
     uprv_memset(pResData, 0, sizeof(ResourceData));
 
     /* load the ResourceBundle file */
-    pResData->data=udata_openChoice(path, "res", name, uresdata_isAcceptable, formatVersion, errorCode);
+    pResData->data=udata_openChoice(path, "res", name, isAcceptable, formatVersion, errorCode);
     if(U_FAILURE(*errorCode)) {
         return;
     }
@@ -333,7 +333,7 @@ res_getStringNoTrace(const ResourceData *pResData, Resource res, int32_t *pLengt
             p+=3;
         }
     } else if(res==offset) /* RES_GET_TYPE(res)==URES_STRING */ {
-        const int32_t *p32= res==0 ? &uresdata_gEmptyString.length : pResData->pRoot+res;
+        const int32_t *p32= res==0 ? &gEmptyString.length : pResData->pRoot+res;
         length=*p32++;
         p=(const UChar *)p32;
     } else {
@@ -377,10 +377,10 @@ UBool isNoInheritanceMarker(const ResourceData *pResData, Resource res) {
             return p[1] == 0x2205 && p[2] == 0x2205 && p[3] == 0x2205;
         } else {
             // Assume that the string has not been stored with more length units than necessary.
-            return FALSE;
+            return false;
         }
     }
-    return FALSE;
+    return false;
 }
 
 int32_t getStringArray(const ResourceData *pResData, const icu::ResourceArray &array,
@@ -409,7 +409,7 @@ int32_t getStringArray(const ResourceData *pResData, const icu::ResourceArray &a
             errorCode = U_RESOURCE_TYPE_MISMATCH;
             return 0;
         }
-        dest[i].setTo(TRUE, s, sLength);
+        dest[i].setTo(true, s, sLength);
     }
     return length;
 }
@@ -422,7 +422,7 @@ res_getAlias(const ResourceData *pResData, Resource res, int32_t *pLength) {
     uint32_t offset=RES_GET_OFFSET(res);
     int32_t length;
     if(RES_GET_TYPE(res)==URES_ALIAS) {
-        const int32_t *p32= offset==0 ? &uresdata_gEmptyString.length : pResData->pRoot+offset;
+        const int32_t *p32= offset==0 ? &gEmptyString.length : pResData->pRoot+offset;
         length=*p32++;
         p=(const UChar *)p32;
     } else {
@@ -660,7 +660,7 @@ int32_t ResourceDataValue::getStringArrayOrStringAsArray(UnicodeString *dest, in
     int32_t sLength;
     const UChar *s = res_getString(fTraceInfo, &getData(), res, &sLength);
     if(s != NULL) {
-        dest[0].setTo(TRUE, s, sLength);
+        dest[0].setTo(true, s, sLength);
         return 1;
     }
     errorCode = U_RESOURCE_TYPE_MISMATCH;
@@ -675,7 +675,7 @@ UnicodeString ResourceDataValue::getStringOrFirstOfArray(UErrorCode &errorCode) 
     int32_t sLength;
     const UChar *s = res_getString(fTraceInfo, &getData(), res, &sLength);
     if(s != NULL) {
-        us.setTo(TRUE, s, sLength);
+        us.setTo(true, s, sLength);
         return us;
     }
     ResourceArray array = getArray(errorCode);
@@ -686,7 +686,7 @@ UnicodeString ResourceDataValue::getStringOrFirstOfArray(UErrorCode &errorCode) 
         // Tracing is already performed above (unimportant for trace that this is an array)
         s = res_getStringNoTrace(&getData(), array.internalGetResource(&getData(), 0), &sLength);
         if(s != NULL) {
-            us.setTo(TRUE, s, sLength);
+            us.setTo(true, s, sLength);
             return us;
         }
     }
@@ -837,9 +837,9 @@ UBool icu::ResourceTable::getKeyAndValue(int32_t i,
         // alive for the duration that fields are being read from it
         // (including nested fields).
         rdValue.setResource(res, ResourceTracer(fTraceInfo, key));
-        return TRUE;
+        return true;
     }
-    return FALSE;
+    return false;
 }
 
 UBool icu::ResourceTable::findValue(const char *key, ResourceValue &value) const {
@@ -860,9 +860,9 @@ UBool icu::ResourceTable::findValue(const char *key, ResourceValue &value) const
         }
         // Same note about lifetime as in getKeyAndValue().
         rdValue.setResource(res, ResourceTracer(fTraceInfo, key));
-        return TRUE;
+        return true;
     }
-    return FALSE;
+    return false;
 }
 
 U_CAPI Resource U_EXPORT2
@@ -912,9 +912,9 @@ UBool icu::ResourceArray::getValue(int32_t i, icu::ResourceValue &value) const {
         rdValue.setResource(
             internalGetResource(&rdValue.getData(), i),
             ResourceTracer(fTraceInfo, i));
-        return TRUE;
+        return true;
     }
-    return FALSE;
+    return false;
 }
 
 U_CFUNC Resource
@@ -935,13 +935,13 @@ res_findResource(const ResourceData *pResData, Resource r, char** path, const ch
   if(!URES_IS_CONTAINER(type)) {
       return RES_BOGUS;
   }
-
+  
   while(nextSepP && *pathP && t1 != RES_BOGUS && URES_IS_CONTAINER(type)) {
     /* Iteration stops if: the path has been consumed, we found a non-existing
      * resource (t1 == RES_BOGUS) or we found a scalar resource (including alias)
      */
     nextSepP = uprv_strchr(pathP, RES_PATH_SEPARATOR);
-    /* if there are more separators, terminate string
+    /* if there are more separators, terminate string 
      * and set path to the remaining part of the string
      */
     if(nextSepP != NULL) {
@@ -960,14 +960,6 @@ res_findResource(const ResourceData *pResData, Resource r, char** path, const ch
     if(URES_IS_TABLE(type)) {
       *key = pathP;
       t2 = res_getTableItemByKey(pResData, t1, &indexR, key);
-      if(t2 == RES_BOGUS) {
-        /* if we fail to get the resource by key, maybe we got an index */
-        indexR = uprv_strtol(pathP, &closeIndex, 10);
-        if(indexR >= 0 && *closeIndex == 0) {
-          /* if we indeed have an index, try to get the item by index */
-          t2 = res_getTableItemByIndex(pResData, t1, indexR, key);
-        } // else t2 is already RES_BOGUS
-      }
     } else if(URES_IS_ARRAY(type)) {
       indexR = uprv_strtol(pathP, &closeIndex, 10);
       if(indexR >= 0 && *closeIndex == 0) {
@@ -1230,7 +1222,7 @@ ures_swapResource(const UDataSwapper *ds,
             }
             uprv_sortArray(pTempTable->rows, count, sizeof(Row),
                            ures_compareRows, pTempTable->keyChars,
-                           FALSE, pErrorCode);
+                           false, pErrorCode);
             if(U_FAILURE(*pErrorCode)) {
                 udata_printError(ds, "ures_swapResource(table res=%08x).uprv_sortArray(%d items) failed\n",
                                  res, count);

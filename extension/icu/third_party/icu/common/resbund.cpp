@@ -135,7 +135,7 @@ U_NAMESPACE_BEGIN
  * so forth, until the chain is exhausted or the tag is found.
  *
  * Thread-safety is implemented around caches, both the cache that
- * stores all the resouce data, and the cache that stores flags
+ * stores all the resource data, and the cache that stores flags
  * indicating whether or not a file has been visited.  These caches
  * delete their storage at static cleanup time, when the process
  * quits.
@@ -206,7 +206,7 @@ ResourceBundle::ResourceBundle(UResourceBundle *res, UErrorCode& err)
     }
 }
 
-ResourceBundle::ResourceBundle(const char* path, const Locale& locale, UErrorCode& err)
+ResourceBundle::ResourceBundle(const char* path, const Locale& locale, UErrorCode& err) 
                                :UObject(), fLocale(NULL)
 {
     fResource = ures_open(path, locale.getName(), &err);
@@ -254,7 +254,7 @@ ResourceBundle::clone() const {
 UnicodeString ResourceBundle::getString(UErrorCode& status) const {
     int32_t len = 0;
     const UChar *r = ures_getString(fResource, &len, &status);
-    return UnicodeString(TRUE, r, len);
+    return UnicodeString(true, r, len);
 }
 
 const uint8_t *ResourceBundle::getBinary(int32_t& len, UErrorCode& status) const {
@@ -312,13 +312,13 @@ ResourceBundle ResourceBundle::getNext(UErrorCode& status) {
 UnicodeString ResourceBundle::getNextString(UErrorCode& status) {
     int32_t len = 0;
     const UChar* r = ures_getNextString(fResource, &len, 0, &status);
-    return UnicodeString(TRUE, r, len);
+    return UnicodeString(true, r, len);
 }
 
 UnicodeString ResourceBundle::getNextString(const char ** key, UErrorCode& status) {
     int32_t len = 0;
     const UChar* r = ures_getNextString(fResource, &len, key, &status);
-    return UnicodeString(TRUE, r, len);
+    return UnicodeString(true, r, len);
 }
 
 ResourceBundle ResourceBundle::get(int32_t indexR, UErrorCode& status) const {
@@ -336,7 +336,7 @@ ResourceBundle ResourceBundle::get(int32_t indexR, UErrorCode& status) const {
 UnicodeString ResourceBundle::getStringEx(int32_t indexS, UErrorCode& status) const {
     int32_t len = 0;
     const UChar* r = ures_getStringByIndex(fResource, indexS, &len, &status);
-    return UnicodeString(TRUE, r, len);
+    return UnicodeString(true, r, len);
 }
 
 ResourceBundle ResourceBundle::get(const char* key, UErrorCode& status) const {
@@ -364,7 +364,7 @@ ResourceBundle ResourceBundle::getWithFallback(const char* key, UErrorCode& stat
 UnicodeString ResourceBundle::getStringEx(const char* key, UErrorCode& status) const {
     int32_t len = 0;
     const UChar* r = ures_getStringByKey(fResource, key, &len, &status);
-    return UnicodeString(TRUE, r, len);
+    return UnicodeString(true, r, len);
 }
 
 const char*

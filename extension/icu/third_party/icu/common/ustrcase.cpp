@@ -36,6 +36,12 @@
 #include "ustr_imp.h"
 #include "uassert.h"
 
+/**
+ * Code point for COMBINING ACUTE ACCENT
+ * @internal
+ */
+#define ACUTE u'\u0301'
+
 U_NAMESPACE_BEGIN
 
 namespace {
@@ -101,7 +107,7 @@ appendResult(UChar *dest, int32_t destIndex, int32_t destCapacity,
         /* append the result */
         if(c>=0) {
             /* code point */
-            UBool isError=FALSE;
+            UBool isError=false;
             U16_APPEND(dest, destIndex, destCapacity, c, isError);
             if(isError) {
                 /* overflow, nothing written */
@@ -396,6 +402,94 @@ U_NAMESPACE_USE
 
 #if !UCONFIG_NO_BREAK_ITERATION
 
+namespace {
+
+/**
+ * Input: c is a letter I with or without acute accent.
+ * start is the index in src after c, and is less than segmentLimit.
+ * If a plain i/I is followed by a plain j/J,
+ * or an i/I with acute (precomposed or decomposed) is followed by a j/J with acute,
+ * then we output accordingly.
+ *
+ * @return the src index after the titlecased sequence, or the start index if no Dutch IJ
+ */
+int32_t maybeTitleDutchIJ(const UChar *src, UChar32 c, int32_t start, int32_t segmentLimit,
+                          UChar *dest, int32_t &destIndex, int32_t destCapacity, uint32_t options,
+                          icu::Edits *edits) {
+    U_ASSERT(start < segmentLimit);
+
+    int32_t index = start;
+    bool withAcute = false;
+
+    // If the conditions are met, then the following variables tell us what to output.
+    int32_t unchanged1 = 0;  // code units before the j, or the whole sequence (0..3)
+    bool doTitleJ = false;  // true if the j needs to be titlecased
+    int32_t unchanged2 = 0;  // after the j (0 or 1)
+
+    // next character after the first letter
+    UChar c2 = src[index++];
+
+    // Is the first letter an i/I with accent?
+    if (c == u'I') {
+        if (c2 == ACUTE) {
+            withAcute = true;
+            unchanged1 = 1;
+            if (index == segmentLimit) { return start; }
+            c2 = src[index++];
+        }
+    } else {  // Í
+        withAcute = true;
+    }
+
+    // Is the next character a j/J?
+    if (c2 == u'j') {
+        doTitleJ = true;
+    } else if (c2 == u'J') {
+        ++unchanged1;
+    } else {
+        return start;
+    }
+
+    // A plain i/I must be followed by a plain j/J.
+    // An i/I with acute must be followed by a j/J with acute.
+    if (withAcute) {
+        if (index == segmentLimit || src[index++] != ACUTE) { return start; }
+        if (doTitleJ) {
+            unchanged2 = 1;
+        } else {
+            ++unchanged1;
+        }
+    }
+
+    // There must not be another combining mark.
+    if (index < segmentLimit) {
+        int32_t cp;
+        int32_t i = index;
+        U16_NEXT(src, i, segmentLimit, cp);
+        uint32_t typeMask = U_GET_GC_MASK(cp);
+        if ((typeMask & U_GC_M_MASK) != 0) {
+            return start;
+        }
+    }
+
+    // Output the rest of the Dutch IJ.
+    destIndex = appendUnchanged(dest, destIndex, destCapacity, src + start, unchanged1, options, edits);
+    start += unchanged1;
+    if (doTitleJ) {
+        destIndex = appendUChar(dest, destIndex, destCapacity, u'J');
+        if (edits != nullptr) {
+            edits->addReplace(1, 1);
+        }
+        ++start;
+    }
+    destIndex = appendUnchanged(dest, destIndex, destCapacity, src + start, unchanged2, options, edits);
+
+    U_ASSERT(start + unchanged2 == index);
+    return index;
+}
+
+}  // namespace
+
 U_CFUNC int32_t U_CALLCONV
 ustrcase_internalToTitle(int32_t caseLocale, uint32_t options, BreakIterator *iter,
                          UChar *dest, int32_t destCapacity,
@@ -412,14 +506,14 @@ ustrcase_internalToTitle(int32_t caseLocale, uint32_t options, BreakIterator *it
     csc.limit=srcLength;
     int32_t destIndex=0;
     int32_t prev=0;
-    UBool isFirstIndex=TRUE;
+    bool isFirstIndex=true;
 
     /* titlecasing loop */
     while(prev<srcLength) {
         /* find next index where to titlecase */
         int32_t index;
         if(isFirstIndex) {
-            isFirstIndex=FALSE;
+            isFirstIndex=false;
             index=iter->first();
         } else {
             index=iter->next();
@@ -446,7 +540,7 @@ ustrcase_internalToTitle(int32_t caseLocale, uint32_t options, BreakIterator *it
                 // Stop with titleStart<titleLimit<=index
                 // if there is a character to be titlecased,
                 // or else stop with titleStart==titleLimit==index.
-                UBool toCased = (options&U_TITLECASE_ADJUST_TO_CASED) != 0;
+                bool toCased = (options&U_TITLECASE_ADJUST_TO_CASED) != 0;
                 while (toCased ? UCASE_NONE==ucase_getType(c) : !ustrcase_isLNS(c)) {
                     titleStart=titleLimit;
                     if(titleLimit==index) {
@@ -479,27 +573,15 @@ ustrcase_internalToTitle(int32_t caseLocale, uint32_t options, BreakIterator *it
 
                 /* Special case Dutch IJ titlecasing */
                 if (titleStart+1 < index &&
-                        caseLocale == UCASE_LOC_DUTCH &&
-                        (src[titleStart] == 0x0049 || src[titleStart] == 0x0069)) {
-                    if (src[titleStart+1] == 0x006A) {
-                        destIndex=appendUChar(dest, destIndex, destCapacity, 0x004A);
-                        if(destIndex<0) {
-                            errorCode=U_INDEX_OUTOFBOUNDS_ERROR;
-                            return 0;
-                        }
-                        if(edits!=NULL) {
-                            edits->addReplace(1, 1);
-                        }
-                        titleLimit++;
-                    } else if (src[titleStart+1] == 0x004A) {
-                        // Keep the capital J from getting lowercased.
-                        destIndex=appendUnchanged(dest, destIndex, destCapacity,
-                                                  src+titleStart+1, 1, options, edits);
-                        if(destIndex<0) {
-                            errorCode=U_INDEX_OUTOFBOUNDS_ERROR;
-                            return 0;
-                        }
-                        titleLimit++;
+                        caseLocale == UCASE_LOC_DUTCH) {
+                    if (c < 0) {
+                        c = ~c;
+                    }
+
+                    if (c == u'I' || c == u'Í') {
+                        titleLimit = maybeTitleDutchIJ(src, c, titleStart + 1, index, 
+                                                       dest, destIndex, destCapacity, options, 
+                                                       edits);
                     }
                 }
 
@@ -544,7 +626,7 @@ U_NAMESPACE_BEGIN
 namespace GreekUpper {
 
 // Data generated by prototype code, see
-// http://site.icu-project.org/design/case/greek-upper
+// https://icu.unicode.org/design/case/greek-upper
 // TODO: Move this data into ucase.icu.
 static const uint16_t data0370[] = {
     // U+0370..03FF
@@ -1005,12 +1087,12 @@ UBool isFollowedByCasedLetter(const UChar *s, int32_t i, int32_t length) {
         if ((type & UCASE_IGNORABLE) != 0) {
             // Case-ignorable, continue with the loop.
         } else if (type != UCASE_NONE) {
-            return TRUE;  // Followed by cased letter.
+            return true;  // Followed by cased letter.
         } else {
-            return FALSE;  // Uncased and not case-ignorable.
+            return false;  // Uncased and not case-ignorable.
         }
     }
-    return FALSE;  // Not followed by cased letter.
+    return false;  // Not followed by cased letter.
 }
 
 /**
@@ -1073,7 +1155,7 @@ int32_t toUpper(uint32_t options,
                 nextState |= AFTER_VOWEL_WITH_ACCENT;
             }
             // Map according to Greek rules.
-            UBool addTonos = FALSE;
+            UBool addTonos = false;
             if (upper == 0x397 &&
                     (data & HAS_ACCENT) != 0 &&
                     numYpogegrammeni == 0 &&
@@ -1084,7 +1166,7 @@ int32_t toUpper(uint32_t options,
                 if (i == nextIndex) {
                     upper = 0x389;  // Preserve the precomposed form.
                 } else {
-                    addTonos = TRUE;
+                    addTonos = true;
                 }
             } else if ((data & HAS_DIALYTIKA) != 0) {
                 // Preserve a vowel with dialytika in precomposed form if it exists.
@@ -1099,7 +1181,7 @@ int32_t toUpper(uint32_t options,
 
             UBool change;
             if (edits == nullptr && (options & U_OMIT_UNCHANGED_TEXT) == 0) {
-                change = TRUE;  // common, simple usage
+                change = true;  // common, simple usage
             } else {
                 // Find out first whether we are changing the text.
                 change = src[i] != upper || numYpogegrammeni > 0;
@@ -1372,10 +1454,10 @@ U_NAMESPACE_END
  */
 
 /* stack element for previous-level source/decomposition pointers */
-struct ustrcase_CmpEquivLevel {
+struct CmpEquivLevel {
     const UChar *start, *s, *limit;
 };
-typedef struct ustrcase_CmpEquivLevel ustrcase_CmpEquivLevel;
+typedef struct CmpEquivLevel CmpEquivLevel;
 
 /**
  * Internal implementation code comparing string with case fold.
@@ -1413,7 +1495,7 @@ static int32_t _cmpFold(
     int32_t length;
 
     /* stacks of previous-level start/current/limit */
-    ustrcase_CmpEquivLevel stack1[2], stack2[2];
+    CmpEquivLevel stack1[2], stack2[2];
 
     /* case folding buffers, only use current-level start/limit */
     UChar fold1[UCASE_MAX_STRING_LENGTH+1], fold2[UCASE_MAX_STRING_LENGTH+1];

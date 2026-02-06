@@ -170,16 +170,16 @@ public:
     /**
      * ICU "poor man's RTTI", returns a UClassID for the actual class.
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
 private:
     void _init(int32_t initialCapacity, UErrorCode &status);
 
     // Disallow
-    UVector64(const UVector64&);
+    UVector64(const UVector64&) = delete;
 
     // Disallow
-    UVector64& operator=(const UVector64&);
+    UVector64& operator=(const UVector64&) = delete;
 
 
     //  API Functions for Stack operations.
@@ -203,7 +203,7 @@ public:
 
 inline UBool UVector64::ensureCapacity(int32_t minimumCapacity, UErrorCode &status) {
     if ((minimumCapacity >= 0) && (capacity >= minimumCapacity)) {
-        return TRUE;
+        return true;
     } else {
         return expandCapacity(minimumCapacity, status);
     }
@@ -222,7 +222,7 @@ inline void UVector64::addElement(int64_t elem, UErrorCode &status) {
 }
 
 inline int64_t *UVector64::reserveBlock(int32_t size, UErrorCode &status) {
-    if (ensureCapacity(count+size, status) == FALSE) {
+    if (ensureCapacity(count+size, status) == false) {
         return NULL;
     }
     int64_t  *rp = elements+count;

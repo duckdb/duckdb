@@ -52,7 +52,7 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(Win32NumberFormat)
 #define NEW_ARRAY(type,count) (type *) uprv_malloc((count) * sizeof(type))
 #define DELETE_ARRAY(array) uprv_free((void *) (array))
 
-#define winnmfmt_STACK_BUFFER_SIZE 32
+#define STACK_BUFFER_SIZE 32
 
 /*
  * Turns a string of the form "3;2;0" into the grouping UINT
@@ -141,13 +141,13 @@ static void freeCurrencyFormat(CURRENCYFMTW *fmt)
 
 // TODO: This is copied in both winnmfmt.cpp and windtfmt.cpp, but really should
 // be factored out into a common helper for both.
-static UErrorCode winnmfmt_GetEquivalentWindowsLocaleName(const Locale& locale, UnicodeString** buffer)
+static UErrorCode GetEquivalentWindowsLocaleName(const Locale& locale, UnicodeString** buffer)
 {
     UErrorCode status = U_ZERO_ERROR;
     char asciiBCP47Tag[LOCALE_NAME_MAX_LENGTH] = {};
 
     // Convert from names like "en_CA" and "de_DE@collation=phonebook" to "en-CA" and "de-DE-u-co-phonebk".
-    (void) uloc_toLanguageTag(locale.getName(), asciiBCP47Tag, UPRV_LENGTHOF(asciiBCP47Tag), FALSE, &status);
+    (void) uloc_toLanguageTag(locale.getName(), asciiBCP47Tag, UPRV_LENGTHOF(asciiBCP47Tag), false, &status);
 
     if (U_SUCCESS(status))
     {
@@ -204,16 +204,16 @@ static UErrorCode winnmfmt_GetEquivalentWindowsLocaleName(const Locale& locale, 
 }
 
 Win32NumberFormat::Win32NumberFormat(const Locale &locale, UBool currency, UErrorCode &status)
-  : NumberFormat(), fCurrency(currency), fFormatInfo(NULL), fFractionDigitsSet(FALSE), fWindowsLocaleName(nullptr)
+  : NumberFormat(), fCurrency(currency), fFormatInfo(NULL), fFractionDigitsSet(false), fWindowsLocaleName(nullptr)
 {
     if (!U_FAILURE(status)) {
         fLCID = locale.getLCID();
 
-        winnmfmt_GetEquivalentWindowsLocaleName(locale, &fWindowsLocaleName);
+        GetEquivalentWindowsLocaleName(locale, &fWindowsLocaleName);
         // Note: In the previous code, it would look up the LCID for the locale, and if
         // the locale was not recognized then it would get an LCID of 0, which is a
         // synonym for LOCALE_USER_DEFAULT on Windows.
-        // If the above method fails, then fWindowsLocaleName will remain as nullptr, and
+        // If the above method fails, then fWindowsLocaleName will remain as nullptr, and 
         // then we will pass nullptr to API GetLocaleInfoEx, which is the same as passing
         // LOCALE_USER_DEFAULT.
 
@@ -268,6 +268,7 @@ Win32NumberFormat::~Win32NumberFormat()
 
 Win32NumberFormat &Win32NumberFormat::operator=(const Win32NumberFormat &other)
 {
+    if (this == &other) { return *this; }  // self-assignment: no-op
     NumberFormat::operator=(other);
 
     this->fCurrency          = other.fCurrency;
@@ -275,7 +276,7 @@ Win32NumberFormat &Win32NumberFormat::operator=(const Win32NumberFormat &other)
     this->fLCID              = other.fLCID;
     this->fFractionDigitsSet = other.fFractionDigitsSet;
     this->fWindowsLocaleName = other.fWindowsLocaleName == NULL ? NULL : new UnicodeString(*other.fWindowsLocaleName);
-
+    
     const wchar_t *localeName = nullptr;
 
     if (fWindowsLocaleName != nullptr)
@@ -324,19 +325,19 @@ void Win32NumberFormat::parse(const UnicodeString& text, Formattable& result, Pa
 }
 void Win32NumberFormat::setMaximumFractionDigits(int32_t newValue)
 {
-    fFractionDigitsSet = TRUE;
+    fFractionDigitsSet = true;
     NumberFormat::setMaximumFractionDigits(newValue);
 }
 
 void Win32NumberFormat::setMinimumFractionDigits(int32_t newValue)
 {
-    fFractionDigitsSet = TRUE;
+    fFractionDigitsSet = true;
     NumberFormat::setMinimumFractionDigits(newValue);
 }
 
 UnicodeString &Win32NumberFormat::format(int32_t numDigits, UnicodeString &appendTo, const wchar_t *fmt, ...) const
 {
-    wchar_t nStackBuffer[winnmfmt_STACK_BUFFER_SIZE];
+    wchar_t nStackBuffer[STACK_BUFFER_SIZE];
     wchar_t *nBuffer = nStackBuffer;
     va_list args;
     int result;
@@ -346,7 +347,7 @@ UnicodeString &Win32NumberFormat::format(int32_t numDigits, UnicodeString &appen
     /* Due to the arguments causing a result to be <= 23 characters (+2 for NULL and minus),
     we don't need to reallocate the buffer. */
     va_start(args, fmt);
-    result = _vsnwprintf(nBuffer, winnmfmt_STACK_BUFFER_SIZE, fmt, args);
+    result = _vsnwprintf(nBuffer, STACK_BUFFER_SIZE, fmt, args);
     va_end(args);
 
     /* Just to make sure of the above statement, we add this assert */
@@ -382,7 +383,7 @@ UnicodeString &Win32NumberFormat::format(int32_t numDigits, UnicodeString &appen
         }
     }
 
-    wchar_t stackBuffer[winnmfmt_STACK_BUFFER_SIZE];
+    wchar_t stackBuffer[STACK_BUFFER_SIZE];
     wchar_t *buffer = stackBuffer;
     FormatInfo formatInfo;
 
@@ -405,7 +406,7 @@ UnicodeString &Win32NumberFormat::format(int32_t numDigits, UnicodeString &appen
             formatInfo.currency.Grouping = 0;
         }
 
-        result = GetCurrencyFormatEx(localeName, 0, nBuffer, &formatInfo.currency, buffer, winnmfmt_STACK_BUFFER_SIZE);
+        result = GetCurrencyFormatEx(localeName, 0, nBuffer, &formatInfo.currency, buffer, STACK_BUFFER_SIZE);
 
         if (result == 0) {
             DWORD lastError = GetLastError();
@@ -427,7 +428,7 @@ UnicodeString &Win32NumberFormat::format(int32_t numDigits, UnicodeString &appen
             formatInfo.number.Grouping = 0;
         }
 
-        result = GetNumberFormatEx(localeName, 0, nBuffer, &formatInfo.number, buffer, winnmfmt_STACK_BUFFER_SIZE);
+        result = GetNumberFormatEx(localeName, 0, nBuffer, &formatInfo.number, buffer, STACK_BUFFER_SIZE);
 
         if (result == 0) {
             if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {

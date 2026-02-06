@@ -66,7 +66,7 @@ ulocdata_open(const char *localeID, UErrorCode *status)
 
    uld->langBundle = NULL;
 
-   uld->noSubstitute = FALSE;
+   uld->noSubstitute = false;
    uld->bundle = ures_open(NULL, localeID, status);
    uld->langBundle = ures_open(U_ICUDATA_LANG, localeID, status);
 
@@ -172,7 +172,7 @@ ulocdata_getDelimiter(ULocaleData *uld, ULocaleDataDelimiterType type,
         return 0;
     }
 
-    delimiter = ures_getStringByKey(delimiterBundle, delimiterKeys[type], &len, &localStatus);
+    delimiter = ures_getStringByKeyWithFallback(delimiterBundle, delimiterKeys[type], &len, &localStatus);
     ures_close(delimiterBundle);
 
     if ( (localStatus == U_USING_DEFAULT_WARNING) && uld->noSubstitute ) {
@@ -196,7 +196,7 @@ static UResourceBundle * measurementTypeBundleForLocale(const char *localeID, co
     UResourceBundle *rb;
     UResourceBundle *measTypeBundle = NULL;
     
-    ulocimp_getRegionForSupplementalData(localeID, TRUE, region, ULOC_COUNTRY_CAPACITY, status);
+    ulocimp_getRegionForSupplementalData(localeID, true, region, ULOC_COUNTRY_CAPACITY, status);
     
     rb = ures_openDirect(NULL, "supplementalData", status);
     ures_getByKey(rb, "measurementData", rb, status);
@@ -230,7 +230,10 @@ ulocdata_getMeasurementSystem(const char *localeID, UErrorCode *status){
     }
 
     measurement = measurementTypeBundleForLocale(localeID, MEASUREMENT_SYSTEM, status);
-    system = (UMeasurementSystem) ures_getInt(measurement, status);
+    int32_t result = ures_getInt(measurement, status);
+    if (U_SUCCESS(*status)) {
+         system = static_cast<UMeasurementSystem>(result);
+    }
 
     ures_close(measurement);
 

@@ -11,8 +11,8 @@
 ********************************************************************************
 */
 
-#ifndef __WINNMFMT_H
-#define __WINNMFMT_H
+#ifndef __WINNMFMT
+#define __WINNMFMT
 
 #include "unicode/utypes.h"
 
@@ -27,7 +27,7 @@
 #if !UCONFIG_NO_FORMATTING
 
 /**
- * \file
+ * \file 
  * \brief C++ API: Format numbers using Windows API.
  */
 
