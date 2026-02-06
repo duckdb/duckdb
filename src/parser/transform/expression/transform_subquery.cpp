@@ -21,6 +21,13 @@ void RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) 
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink &root) {
 	auto subquery_expr = make_uniq<SubqueryExpression>();
 
+	if (root.subLinkType == duckdb_libpgquery::PG_ANY_SUBLINK ||
+	    root.subLinkType == duckdb_libpgquery::PG_ALL_SUBLINK) {
+		// comparison with ANY() or ALL()
+		subquery_expr->subquery_type = SubqueryType::ANY;
+		subquery_expr->child = TransformExpression(root.testexpr);
+	}
+
 	subquery_expr->subquery = TransformSelectStmt(*root.subselect);
 	SetQueryLocation(*subquery_expr, root.location);
 	D_ASSERT(subquery_expr->subquery);
@@ -33,8 +40,6 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	case duckdb_libpgquery::PG_ANY_SUBLINK:
 	case duckdb_libpgquery::PG_ALL_SUBLINK: {
 		// comparison with ANY() or ALL()
-		subquery_expr->subquery_type = SubqueryType::ANY;
-		subquery_expr->child = TransformExpression(root.testexpr);
 		// get the operator name
 		if (!root.operName) {
 			// simple IN
