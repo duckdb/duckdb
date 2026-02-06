@@ -271,6 +271,7 @@ string Bit::BitToBlob(bitstring_t bit) {
 
 // **** scalar functions ****
 void Bit::BitString(const string_t &input, idx_t bit_length, bitstring_t &result) {
+	ValidateInputBitString(input, nullptr);
 	char *res_buf = result.GetDataWriteable();
 	const char *buf = input.GetData();
 
@@ -306,6 +307,26 @@ void Bit::ExtendBitString(const bitstring_t &input, idx_t bit_length, bitstring_
 		}
 	}
 	Bit::Finalize(result);
+}
+
+bool Bit::ValidateInputBitString(const string_t &input, string *error_message) {
+	const char *data = input.GetData();
+	auto len = input.GetSize();
+
+	if (len == 0) {
+		string error = "Cannot cast empty string to BIT";
+		HandleCastError::AssignError(error, error_message);
+		return false;
+	}
+
+	for (idx_t i = 0; i < len; i++) {
+		if (data[i] != '0' && data[i] != '1') {
+			AssignInvalidCharacterError(data[i], error_message);
+			return false;
+		}
+	}
+
+	return true;
 }
 
 idx_t Bit::BitLength(bitstring_t bits) {

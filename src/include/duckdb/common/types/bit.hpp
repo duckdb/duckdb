@@ -74,6 +74,7 @@ public:
 	DUCKDB_API static void SetEmptyBitString(bitstring_t &target, string_t &input);
 	DUCKDB_API static void SetEmptyBitString(bitstring_t &target, idx_t len);
 	DUCKDB_API static idx_t ComputeBitstringLen(idx_t len);
+	DUCKDB_API static bool ValidateInputBitString(const string_t &input, string *error_message);
 
 	DUCKDB_API static void RightShift(const bitstring_t &bit_string, idx_t shift, bitstring_t &result);
 	DUCKDB_API static void LeftShift(const bitstring_t &bit_string, idx_t shift, bitstring_t &result);
