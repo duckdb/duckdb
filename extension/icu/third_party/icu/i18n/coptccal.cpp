@@ -31,7 +31,7 @@ CopticCalendar::CopticCalendar(const Locale& aLocale, UErrorCode& success)
 {
 }
 
-CopticCalendar::CopticCalendar (const CopticCalendar& other)
+CopticCalendar::CopticCalendar (const CopticCalendar& other) 
 : CECalendar(other)
 {
 }
@@ -98,15 +98,15 @@ CopticCalendar::handleComputeFields(int32_t julianDay, UErrorCode &/*status*/)
 
 /**
  * The system maintains a static default century start date and Year.  They are
- * initialized the first time they are used.  Once the system default century date
+ * initialized the first time they are used.  Once the system default century date 
  * and year are set, they do not change.
  */
 static UDate           gSystemDefaultCenturyStart       = DBL_MIN;
 static int32_t         gSystemDefaultCenturyStartYear   = -1;
-static icu::UInitOnce  gSystemDefaultCenturyInit        = U_INITONCE_INITIALIZER;
+static icu::UInitOnce  gSystemDefaultCenturyInit        {};
 
 
-static void U_CALLCONV coptccal_initializeSystemDefaultCentury() {
+static void U_CALLCONV initializeSystemDefaultCentury() {
     UErrorCode status = U_ZERO_ERROR;
     CopticCalendar calendar(Locale("@calendar=coptic"), status);
     if (U_SUCCESS(status)) {
@@ -123,7 +123,7 @@ UDate
 CopticCalendar::defaultCenturyStart() const
 {
     // lazy-evaluate systemDefaultCenturyStart
-    umtx_initOnce(gSystemDefaultCenturyInit, &coptccal_initializeSystemDefaultCentury);
+    umtx_initOnce(gSystemDefaultCenturyInit, &initializeSystemDefaultCentury);
     return gSystemDefaultCenturyStart;
 }
 
@@ -131,7 +131,7 @@ int32_t
 CopticCalendar::defaultCenturyStartYear() const
 {
     // lazy-evaluate systemDefaultCenturyStart
-    umtx_initOnce(gSystemDefaultCenturyInit, &coptccal_initializeSystemDefaultCentury);
+    umtx_initOnce(gSystemDefaultCenturyInit, &initializeSystemDefaultCentury);
     return gSystemDefaultCenturyStartYear;
 }
 

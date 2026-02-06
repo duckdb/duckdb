@@ -127,10 +127,10 @@ U_NAMESPACE_USE
  */
 
 /* stack element for previous-level source/decomposition pointers */
-struct unormcmp_CmpEquivLevel {
+struct CmpEquivLevel {
     const UChar *start, *s, *limit;
 };
-typedef struct unormcmp_CmpEquivLevel unormcmp_CmpEquivLevel;
+typedef struct CmpEquivLevel CmpEquivLevel;
 
 /**
  * Internal option for unorm_cmpEquivFold() for decomposing.
@@ -154,7 +154,7 @@ unorm_cmpEquivFold(const UChar *s1, int32_t length1,
     int32_t length;
 
     /* stacks of previous-level start/current/limit */
-    unormcmp_CmpEquivLevel stack1[2], stack2[2];
+    CmpEquivLevel stack1[2], stack2[2];
 
     /* buffers for algorithmic decompositions */
     UChar decomp1[4], decomp2[4];
@@ -536,7 +536,7 @@ UBool _normalize(const Normalizer2 *n2, const UChar *s, int32_t length,
     // check if s fulfill the conditions
     int32_t spanQCYes=n2->spanQuickCheckYes(str, *pErrorCode);
     if (U_FAILURE(*pErrorCode)) {
-        return FALSE;
+        return false;
     }
     /*
      * ICU 2.4 had a further optimization:
@@ -548,13 +548,13 @@ UBool _normalize(const Normalizer2 *n2, const UChar *s, int32_t length,
      */
     if(spanQCYes<str.length()) {
         UnicodeString unnormalized=str.tempSubString(spanQCYes);
-        normalized.setTo(FALSE, str.getBuffer(), spanQCYes);
+        normalized.setTo(false, str.getBuffer(), spanQCYes);
         n2->normalizeSecondAndAppend(normalized, unnormalized, *pErrorCode);
         if (U_SUCCESS(*pErrorCode)) {
-            return TRUE;
+            return true;
         }
     }
-    return FALSE;
+    return false;
 }
 
 U_CAPI int32_t U_EXPORT2

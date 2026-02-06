@@ -66,8 +66,8 @@ public:
     virtual ~FixedSortKeyByteSink();
 
 private:
-    virtual void AppendBeyondCapacity(const char *bytes, int32_t n, int32_t length);
-    virtual UBool Resize(int32_t appendCapacity, int32_t length);
+    virtual void AppendBeyondCapacity(const char *bytes, int32_t n, int32_t length) override;
+    virtual UBool Resize(int32_t appendCapacity, int32_t length) override;
 };
 
 FixedSortKeyByteSink::~FixedSortKeyByteSink() {}
@@ -84,7 +84,7 @@ FixedSortKeyByteSink::AppendBeyondCapacity(const char *bytes, int32_t /*n*/, int
 
 UBool
 FixedSortKeyByteSink::Resize(int32_t /*appendCapacity*/, int32_t /*length*/) {
-    return FALSE;
+    return false;
 }
 
 }  // namespace
@@ -98,8 +98,8 @@ public:
     virtual ~CollationKeyByteSink();
 
 private:
-    virtual void AppendBeyondCapacity(const char *bytes, int32_t n, int32_t length);
-    virtual UBool Resize(int32_t appendCapacity, int32_t length);
+    virtual void AppendBeyondCapacity(const char *bytes, int32_t n, int32_t length) override;
+    virtual UBool Resize(int32_t appendCapacity, int32_t length) override;
 
     CollationKey &key_;
 };
@@ -117,7 +117,7 @@ CollationKeyByteSink::AppendBeyondCapacity(const char *bytes, int32_t n, int32_t
 UBool
 CollationKeyByteSink::Resize(int32_t appendCapacity, int32_t length) {
     if (buffer_ == NULL) {
-        return FALSE;  // allocation failed before already
+        return false;  // allocation failed before already
     }
     int32_t newCapacity = 2 * capacity_;
     int32_t altCapacity = length + 2 * appendCapacity;
@@ -130,11 +130,11 @@ CollationKeyByteSink::Resize(int32_t appendCapacity, int32_t length) {
     uint8_t *newBuffer = key_.reallocate(newCapacity, length);
     if (newBuffer == NULL) {
         SetNotOk();
-        return FALSE;
+        return false;
     }
     buffer_ = reinterpret_cast<char *>(newBuffer);
     capacity_ = newCapacity;
-    return TRUE;
+    return true;
 }
 
 RuleBasedCollator::RuleBasedCollator(const RuleBasedCollator &other)
@@ -158,7 +158,7 @@ RuleBasedCollator::RuleBasedCollator(const uint8_t *bin, int32_t length,
           cacheEntry(NULL),
           validLocale(""),
           explicitlySetAttributes(0),
-          actualLocaleIsSameAsValid(FALSE) {
+          actualLocaleIsSameAsValid(false) {
     if(U_FAILURE(errorCode)) { return; }
     if(bin == NULL || length == 0 || base == NULL) {
         errorCode = U_ILLEGAL_ARGUMENT_ERROR;
@@ -188,7 +188,7 @@ RuleBasedCollator::RuleBasedCollator(const CollationCacheEntry *entry)
           cacheEntry(entry),
           validLocale(entry->validLocale),
           explicitlySetAttributes(0),
-          actualLocaleIsSameAsValid(FALSE) {
+          actualLocaleIsSameAsValid(false) {
     settings->addRef();
     cacheEntry->addRef();
 }
@@ -217,7 +217,7 @@ RuleBasedCollator::adoptTailoring(CollationTailoring *t, UErrorCode &errorCode) 
     tailoring = t;
     cacheEntry->addRef();
     validLocale = t->actualLocale;
-    actualLocaleIsSameAsValid = FALSE;
+    actualLocaleIsSameAsValid = false;
 }
 
 RuleBasedCollator *
@@ -241,19 +241,19 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(RuleBasedCollator)
 
 bool
 RuleBasedCollator::operator==(const Collator& other) const {
-    if(this == &other) { return TRUE; }
-    if(!Collator::operator==(other)) { return FALSE; }
+    if(this == &other) { return true; }
+    if(!Collator::operator==(other)) { return false; }
     const RuleBasedCollator &o = static_cast<const RuleBasedCollator &>(other);
-    if(*settings != *o.settings) { return FALSE; }
-    if(data == o.data) { return TRUE; }
+    if(*settings != *o.settings) { return false; }
+    if(data == o.data) { return true; }
     UBool thisIsRoot = data->base == NULL;
     UBool otherIsRoot = o.data->base == NULL;
     U_ASSERT(!thisIsRoot || !otherIsRoot);  // otherwise their data pointers should be ==
-    if(thisIsRoot != otherIsRoot) { return FALSE; }
+    if(thisIsRoot != otherIsRoot) { return false; }
     if((thisIsRoot || !tailoring->rules.isEmpty()) &&
             (otherIsRoot || !o.tailoring->rules.isEmpty())) {
         // Shortcut: If both collators have valid rule strings, then compare those.
-        if(tailoring->rules == o.tailoring->rules) { return TRUE; }
+        if(tailoring->rules == o.tailoring->rules) { return true; }
     }
     // Different rule strings can result in the same or equivalent tailoring.
     // The rule strings are optional in ICU resource bundles, although included by default.
@@ -261,14 +261,14 @@ RuleBasedCollator::operator==(const Collator& other) const {
     UErrorCode errorCode = U_ZERO_ERROR;
     LocalPointer<UnicodeSet> thisTailored(getTailoredSet(errorCode));
     LocalPointer<UnicodeSet> otherTailored(o.getTailoredSet(errorCode));
-    if(U_FAILURE(errorCode)) { return FALSE; }
-    if(*thisTailored != *otherTailored) { return FALSE; }
+    if(U_FAILURE(errorCode)) { return false; }
+    if(*thisTailored != *otherTailored) { return false; }
     // For completeness, we should compare all of the mappings;
     // or we should create a list of strings, sort it with one collator,
     // and check if both collators compare adjacent strings the same
     // (order & strength, down to quaternary); or similar.
     // Testing equality of collators seems unusual.
-    return TRUE;
+    return true;
 }
 
 int32_t
@@ -290,10 +290,10 @@ void
 RuleBasedCollator::setLocales(const Locale &requested, const Locale &valid,
                               const Locale &actual) {
     if(actual == tailoring->actualLocale) {
-        actualLocaleIsSameAsValid = FALSE;
+        actualLocaleIsSameAsValid = false;
     } else {
         U_ASSERT(actual == valid);
-        actualLocaleIsSameAsValid = TRUE;
+        actualLocaleIsSameAsValid = true;
     }
     // Do not modify tailoring.actualLocale:
     // We cannot be sure that that would be thread-safe.
@@ -399,7 +399,7 @@ RuleBasedCollator::internalGetContractionsAndExpansions(
 void
 RuleBasedCollator::internalAddContractions(UChar32 c, UnicodeSet &set, UErrorCode &errorCode) const {
     if(U_FAILURE(errorCode)) { return; }
-    ContractionsAndExpansions(&set, NULL, NULL, FALSE).forCodePoint(data, c, errorCode);
+    ContractionsAndExpansions(&set, NULL, NULL, false).forCodePoint(data, c, errorCode);
 }
 
 const CollationSettings &
@@ -538,7 +538,8 @@ RuleBasedCollator::setMaxVariable(UColReorderCode group, UErrorCode &errorCode) 
     }
 
     if(group == UCOL_REORDER_CODE_DEFAULT) {
-        group = (UColReorderCode)(UCOL_REORDER_CODE_FIRST + defaultSettings.getMaxVariable());
+        group = (UColReorderCode)(
+            UCOL_REORDER_CODE_FIRST + int32_t{defaultSettings.getMaxVariable()});
     }
     uint32_t varTop = data->getLastPrimaryForGroup(group);
     U_ASSERT(varTop != 0);
@@ -556,7 +557,7 @@ RuleBasedCollator::setMaxVariable(UColReorderCode group, UErrorCode &errorCode) 
 
 UColReorderCode
 RuleBasedCollator::getMaxVariable() const {
-    return (UColReorderCode)(UCOL_REORDER_CODE_FIRST + settings->getMaxVariable());
+    return (UColReorderCode)(UCOL_REORDER_CODE_FIRST + int32_t{settings->getMaxVariable()});
 }
 
 uint32_t
@@ -830,7 +831,7 @@ class UTF16NFDIterator : public NFDIterator {
 public:
     UTF16NFDIterator(const UChar *text, const UChar *textLimit) : s(text), limit(textLimit) {}
 protected:
-    virtual UChar32 nextRawCodePoint() {
+    virtual UChar32 nextRawCodePoint() override {
         if(s == limit) { return U_SENTINEL; }
         UChar32 c = *s++;
         if(limit == NULL && c == 0) {
@@ -882,7 +883,7 @@ public:
     UTF8NFDIterator(const uint8_t *text, int32_t textLength)
         : s(text), pos(0), length(textLength) {}
 protected:
-    virtual UChar32 nextRawCodePoint() {
+    virtual UChar32 nextRawCodePoint() override {
         if(pos == length || (s[pos] == 0 && length < 0)) { return U_SENTINEL; }
         UChar32 c;
         U8_NEXT_OR_FFFD(s, pos, length, c);
@@ -897,9 +898,9 @@ protected:
 class FCDUTF8NFDIterator : public NFDIterator {
 public:
     FCDUTF8NFDIterator(const CollationData *data, const uint8_t *text, int32_t textLength)
-            : u8ci(data, FALSE, text, 0, textLength) {}
+            : u8ci(data, false, text, 0, textLength) {}
 protected:
-    virtual UChar32 nextRawCodePoint() {
+    virtual UChar32 nextRawCodePoint() override {
         UErrorCode errorCode = U_ZERO_ERROR;
         return u8ci.nextCodePoint(errorCode);
     }
@@ -911,7 +912,7 @@ class UIterNFDIterator : public NFDIterator {
 public:
     UIterNFDIterator(UCharIterator &it) : iter(it) {}
 protected:
-    virtual UChar32 nextRawCodePoint() {
+    virtual UChar32 nextRawCodePoint() override {
         return uiter_next32(&iter);
     }
 private:
@@ -921,9 +922,9 @@ private:
 class FCDUIterNFDIterator : public NFDIterator {
 public:
     FCDUIterNFDIterator(const CollationData *data, UCharIterator &it, int32_t startIndex)
-            : uici(data, FALSE, it, startIndex) {}
+            : uici(data, false, it, startIndex) {}
 protected:
-    virtual UChar32 nextRawCodePoint() {
+    virtual UChar32 nextRawCodePoint() override {
         UErrorCode errorCode = U_ZERO_ERROR;
         return uici.nextCodePoint(errorCode);
     }
@@ -1121,7 +1122,7 @@ RuleBasedCollator::doCompare(const uint8_t *left, int32_t leftLength,
 
     UBool numeric = settings->isNumeric();
     if(equalPrefixLength > 0) {
-        UBool unsafe = FALSE;
+        UBool unsafe = false;
         if(equalPrefixLength != leftLength) {
             int32_t i = equalPrefixLength;
             UChar32 c;
@@ -1339,12 +1340,12 @@ RuleBasedCollator::writeSortKey(const UChar *s, int32_t length,
         UTF16CollationIterator iter(data, numeric, s, s, limit);
         CollationKeys::writeSortKeyUpToQuaternary(iter, data->compressibleBytes, *settings,
                                                   sink, Collation::PRIMARY_LEVEL,
-                                                  callback, TRUE, errorCode);
+                                                  callback, true, errorCode);
     } else {
         FCDUTF16CollationIterator iter(data, numeric, s, s, limit);
         CollationKeys::writeSortKeyUpToQuaternary(iter, data->compressibleBytes, *settings,
                                                   sink, Collation::PRIMARY_LEVEL,
-                                                  callback, TRUE, errorCode);
+                                                  callback, true, errorCode);
     }
     if(settings->getStrength() == UCOL_IDENTICAL) {
         writeIdenticalLevel(s, limit, sink, errorCode);
@@ -1398,14 +1399,14 @@ public:
         levelCapacity = sink.GetRemainingCapacity();
     }
     virtual ~PartLevelCallback() {}
-    virtual UBool needToWrite(Collation::Level l) {
+    virtual UBool needToWrite(Collation::Level l) override {
         if(!sink.Overflowed()) {
             // Remember a level that will be at least partially written.
             level = l;
             levelCapacity = sink.GetRemainingCapacity();
-            return TRUE;
+            return true;
         } else {
-            return FALSE;
+            return false;
         }
     }
     Collation::Level getLevel() const { return level; }
@@ -1440,11 +1441,11 @@ RuleBasedCollator::internalNextSortKeyPart(UCharIterator *iter, uint32_t state[2
         if(settings->dontCheckFCD()) {
             UIterCollationIterator ci(data, numeric, *iter);
             CollationKeys::writeSortKeyUpToQuaternary(ci, data->compressibleBytes, *settings,
-                                                      sink, level, callback, FALSE, errorCode);
+                                                      sink, level, callback, false, errorCode);
         } else {
             FCDUIterCollationIterator ci(data, numeric, *iter, 0);
             CollationKeys::writeSortKeyUpToQuaternary(ci, data->compressibleBytes, *settings,
-                                                      sink, level, callback, FALSE, errorCode);
+                                                      sink, level, callback, false, errorCode);
         }
         if(U_FAILURE(errorCode)) { return 0; }
         if(sink.NumberOfBytesAppended() > count) {
@@ -1600,10 +1601,7 @@ RuleBasedCollator::internalGetShortDefinitionString(const char *locale,
     appendSubtag(result, 'Z', subtag, length, errorCode);
 
     if(U_FAILURE(errorCode)) { return 0; }
-    if(result.length() <= capacity) {
-        uprv_memcpy(buffer, result.data(), result.length());
-    }
-    return u_terminateChars(buffer, capacity, result.length(), &errorCode);
+    return result.extract(buffer, capacity, errorCode);
 }
 
 UBool

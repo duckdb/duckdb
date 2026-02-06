@@ -119,7 +119,7 @@ UnicodeString CanonicalIterator::getSource() {
  * Resets the iterator so that one can start again from the beginning.
  */
 void CanonicalIterator::reset() {
-    done = FALSE;
+    done = false;
     for (int i = 0; i < current_length; ++i) {
         current[i] = 0;
     }
@@ -151,7 +151,7 @@ UnicodeString CanonicalIterator::next() {
 
     for (i = current_length - 1; ; --i) {
         if (i < 0) {
-            done = TRUE;
+            done = true;
             break;
         }
         current[i]++;
@@ -176,7 +176,7 @@ void CanonicalIterator::setSource(const UnicodeString &newSource, UErrorCode &st
     if(U_FAILURE(status)) {
       return;
     }
-    done = FALSE;
+    done = false;
 
     cleanPieces();
 
@@ -208,10 +208,10 @@ void CanonicalIterator::setSource(const UnicodeString &newSource, UErrorCode &st
         goto CleanPartialInitialization;
     }
 
-    // i should initialy be the number of code units at the 
+    // i should initially be the number of code units at the 
     // start of the string
     i = U16_LENGTH(source.char32At(0));
-    //int32_t i = 1;
+    // int32_t i = 1;
     // find the segments
     // This code iterates through the source string and 
     // extracts segments that end up on a codepoint that
@@ -494,7 +494,7 @@ Hashtable *CanonicalIterator::getEquivalents2(Hashtable *fillinResult, const UCh
 
 /**
  * See if the decomposition of cp2 is at segment starting at segmentPos 
- * (with canonical rearrangment!)
+ * (with canonical rearrangement!)
  * If so, take the remainder, and return the equivalents 
  */
 Hashtable *CanonicalIterator::extract(Hashtable *fillinResult, UChar32 comp, const UChar *segment, int32_t segLen, int32_t segmentPos, UErrorCode &status) {
@@ -521,7 +521,7 @@ Hashtable *CanonicalIterator::extract(Hashtable *fillinResult, UChar32 comp, con
     int32_t decompLen=decompString.length();
 
     // See if it matches the start of segment (at segmentPos)
-    UBool ok = FALSE;
+    UBool ok = false;
     UChar32 cp;
     int32_t decompPos = 0;
     UChar32 decompCp;
@@ -537,7 +537,7 @@ Hashtable *CanonicalIterator::extract(Hashtable *fillinResult, UChar32 comp, con
 
             if (decompPos == decompLen) { // done, have all decomp characters!
                 temp.append(segment+i, segLen-i);
-                ok = TRUE;
+                ok = true;
                 break;
             }
             U16_NEXT(decomp, decompPos, decompLen, decompCp);

@@ -133,8 +133,10 @@ static const float RESIZE_POLICY_RATIO_TABLE[6] = {
  * or a pointer.  If a hint bit is zero, then the associated
  * token is assumed to be an integer.
  */
+#define HINT_BOTH_INTEGERS (0)
 #define HINT_KEY_POINTER   (1)
 #define HINT_VALUE_POINTER (2)
+#define HINT_ALLOW_ZERO    (4)
 
 /********************************************************************
  * PRIVATE Implementation
@@ -263,7 +265,7 @@ _uhash_init(UHashtable *result,
     result->valueComparator = valueComp;
     result->keyDeleter      = NULL;
     result->valueDeleter    = NULL;
-    result->allocated       = FALSE;
+    result->allocated       = false;
     _uhash_internalSetResizePolicy(result, U_GROW);
 
     _uhash_allocate(result, primeIndex, status);
@@ -292,7 +294,7 @@ _uhash_create(UHashFunction *keyHash,
     }
 
     _uhash_init(result, keyHash, keyComp, valueComp, primeIndex, status);
-    result->allocated       = TRUE;
+    result->allocated       = true;
 
     if (U_FAILURE(*status)) {
         uprv_free(result);
@@ -318,7 +320,7 @@ _uhash_create(UHashFunction *keyHash,
  * Stop if it is identical or empty, otherwise continue by adding a
  * "jump" value (moduloing by the length again to keep it within
  * range) and retesting.  For efficiency, there need enough empty
- * values so that the searchs stop within a reasonable amount of time.
+ * values so that the searches stop within a reasonable amount of time.
  * This can be changed by changing the high/low water marks.
  *
  * In theory, this function can return NULL, if it is full (no empty
@@ -377,7 +379,7 @@ _uhash_find(const UHashtable *hash, UHashTok key,
          * WILL NEVER HAPPEN as long as uhash_put() makes sure that
          * count is always < length.
          */
-        UPRV_UNREACHABLE;
+        UPRV_UNREACHABLE_EXIT;
     }
     return &(elements[theIndex]);
 }
@@ -479,8 +481,9 @@ _uhash_put(UHashtable *hash,
         goto err;
     }
     U_ASSERT(hash != NULL);
-    /* Cannot always check pointer here or iSeries sees NULL every time. */
-    if ((hint & HINT_VALUE_POINTER) && value.pointer == NULL) {
+    if ((hint & HINT_VALUE_POINTER) ?
+            value.pointer == NULL :
+            value.integer == 0 && (hint & HINT_ALLOW_ZERO) == 0) {
         /* Disallow storage of NULL values, since NULL is returned by
          * get() to indicate an absent key.  Storing NULL == removing.
          */
@@ -687,6 +690,28 @@ uhash_igeti(const UHashtable *hash,
     return _uhash_find(hash, keyholder, hash->keyHasher(keyholder))->value.integer;
 }
 
+U_CAPI int32_t U_EXPORT2
+uhash_getiAndFound(const UHashtable *hash,
+                   const void *key,
+                   UBool *found) {
+    UHashTok keyholder;
+    keyholder.pointer = (void *)key;
+    const UHashElement *e = _uhash_find(hash, keyholder, hash->keyHasher(keyholder));
+    *found = !IS_EMPTY_OR_DELETED(e->hashcode);
+    return e->value.integer;
+}
+
+U_CAPI int32_t U_EXPORT2
+uhash_igetiAndFound(const UHashtable *hash,
+                    int32_t key,
+                    UBool *found) {
+    UHashTok keyholder;
+    keyholder.integer = key;
+    const UHashElement *e = _uhash_find(hash, keyholder, hash->keyHasher(keyholder));
+    *found = !IS_EMPTY_OR_DELETED(e->hashcode);
+    return e->value.integer;
+}
+
 U_CAPI void* U_EXPORT2
 uhash_put(UHashtable *hash,
           void* key,
@@ -736,7 +761,34 @@ uhash_iputi(UHashtable *hash,
     keyholder.integer = key;
     valueholder.integer = value;
     return _uhash_put(hash, keyholder, valueholder,
-                      0, /* neither is a ptr */
+                      HINT_BOTH_INTEGERS,
+                      status).integer;
+}
+
+U_CAPI int32_t U_EXPORT2
+uhash_putiAllowZero(UHashtable *hash,
+                    void *key,
+                    int32_t value,
+                    UErrorCode *status) {
+    UHashTok keyholder, valueholder;
+    keyholder.pointer = key;
+    valueholder.integer = value;
+    return _uhash_put(hash, keyholder, valueholder,
+                      HINT_KEY_POINTER | HINT_ALLOW_ZERO,
+                      status).integer;
+}
+
+
+U_CAPI int32_t U_EXPORT2
+uhash_iputiAllowZero(UHashtable *hash,
+                     int32_t key,
+                     int32_t value,
+                     UErrorCode *status) {
+    UHashTok keyholder, valueholder;
+    keyholder.integer = key;
+    valueholder.integer = value;
+    return _uhash_put(hash, keyholder, valueholder,
+                      HINT_BOTH_INTEGERS | HINT_ALLOW_ZERO,
                       status).integer;
 }
 
@@ -783,6 +835,29 @@ uhash_removeAll(UHashtable *hash) {
         }
     }
     U_ASSERT(hash->count == 0);
+}
+
+U_CAPI UBool U_EXPORT2
+uhash_containsKey(const UHashtable *hash, const void *key) {
+    UHashTok keyholder;
+    keyholder.pointer = (void *)key;
+    const UHashElement *e = _uhash_find(hash, keyholder, hash->keyHasher(keyholder));
+    return !IS_EMPTY_OR_DELETED(e->hashcode);
+}
+
+/**
+ * Returns true if the UHashtable contains an item with this integer key.
+ *
+ * @param hash The target UHashtable.
+ * @param key An integer key stored in a hashtable
+ * @return true if the key is found.
+ */
+U_CAPI UBool U_EXPORT2
+uhash_icontainsKey(const UHashtable *hash, int32_t key) {
+    UHashTok keyholder;
+    keyholder.integer = key;
+    const UHashElement *e = _uhash_find(hash, keyholder, hash->keyHasher(keyholder));
+    return !IS_EMPTY_OR_DELETED(e->hashcode);
 }
 
 U_CAPI const UHashElement* U_EXPORT2
@@ -874,7 +949,7 @@ uhash_equals(const UHashtable* hash1, const UHashtable* hash2){
     int32_t count1, count2, pos, i;
 
     if(hash1==hash2){
-        return TRUE;
+        return true;
     }
 
     /*
@@ -892,15 +967,15 @@ uhash_equals(const UHashtable* hash1, const UHashtable* hash2){
     {
         /*
         Normally we would return an error here about incompatible hash tables,
-        but we return FALSE instead.
+        but we return false instead.
         */
-        return FALSE;
+        return false;
     }
 
     count1 = uhash_count(hash1);
     count2 = uhash_count(hash2);
     if(count1!=count2){
-        return FALSE;
+        return false;
     }
 
     pos=UHASH_FIRST;
@@ -914,11 +989,11 @@ uhash_equals(const UHashtable* hash1, const UHashtable* hash2){
          */
         const UHashElement* elem2 = _uhash_find(hash2, key1, hash2->keyHasher(key1));
         const UHashTok val2 = elem2->value;
-        if(hash1->valueComparator(val1, val2)==FALSE){
-            return FALSE;
+        if(hash1->valueComparator(val1, val2)==false){
+            return false;
         }
     }
-    return TRUE;
+    return true;
 }
 
 /********************************************************************
@@ -930,10 +1005,10 @@ uhash_compareUChars(const UHashTok key1, const UHashTok key2) {
     const UChar *p1 = (const UChar*) key1.pointer;
     const UChar *p2 = (const UChar*) key2.pointer;
     if (p1 == p2) {
-        return TRUE;
+        return true;
     }
     if (p1 == NULL || p2 == NULL) {
-        return FALSE;
+        return false;
     }
     while (*p1 != 0 && *p1 == *p2) {
         ++p1;
@@ -947,10 +1022,10 @@ uhash_compareChars(const UHashTok key1, const UHashTok key2) {
     const char *p1 = (const char*) key1.pointer;
     const char *p2 = (const char*) key2.pointer;
     if (p1 == p2) {
-        return TRUE;
+        return true;
     }
     if (p1 == NULL || p2 == NULL) {
-        return FALSE;
+        return false;
     }
     while (*p1 != 0 && *p1 == *p2) {
         ++p1;
@@ -964,10 +1039,10 @@ uhash_compareIChars(const UHashTok key1, const UHashTok key2) {
     const char *p1 = (const char*) key1.pointer;
     const char *p2 = (const char*) key2.pointer;
     if (p1 == p2) {
-        return TRUE;
+        return true;
     }
     if (p1 == NULL || p2 == NULL) {
-        return FALSE;
+        return false;
     }
     while (*p1 != 0 && uprv_tolower(*p1) == uprv_tolower(*p2)) {
         ++p1;

@@ -50,13 +50,13 @@ CollationSettings::~CollationSettings() {
 
 bool
 CollationSettings::operator==(const CollationSettings &other) const {
-    if(options != other.options) { return FALSE; }
-    if((options & ALTERNATE_MASK) != 0 && variableTop != other.variableTop) { return FALSE; }
-    if(reorderCodesLength != other.reorderCodesLength) { return FALSE; }
+    if(options != other.options) { return false; }
+    if((options & ALTERNATE_MASK) != 0 && variableTop != other.variableTop) { return false; }
+    if(reorderCodesLength != other.reorderCodesLength) { return false; }
     for(int32_t i = 0; i < reorderCodesLength; ++i) {
-        if(reorderCodes[i] != other.reorderCodes[i]) { return FALSE; }
+        if(reorderCodes[i] != other.reorderCodes[i]) { return false; }
     }
-    return TRUE;
+    return true;
 }
 
 int32_t
@@ -248,10 +248,10 @@ CollationSettings::reorderTableHasSplitBytes(const uint8_t table[256]) {
     U_ASSERT(table[0] == 0);
     for(int32_t i = 1; i < 256; ++i) {
         if(table[i] == 0) {
-            return TRUE;
+            return true;
         }
     }
-    return FALSE;
+    return false;
 }
 
 uint32_t
