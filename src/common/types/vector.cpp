@@ -1454,7 +1454,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 
 class StringDeserializeBuffer : public VectorBuffer {
 public:
-	StringDeserializeBuffer(idx_t size) : VectorBuffer(VectorBufferType::OPAQUE_BUFFER) {
+	explicit StringDeserializeBuffer(idx_t size) : VectorBuffer(VectorBufferType::OPAQUE_BUFFER) {
 		data = unique_ptr<data_t[]>(new data_t[size]);
 	}
 	unique_ptr<data_t[]> data;
