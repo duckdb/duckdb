@@ -266,15 +266,18 @@ static uint32_t GetValidMinMaxSubstring(const_data_ptr_t data) {
 	return StringStatsData::MAX_STRING_MINMAX_SIZE;
 }
 
-string StringStats::ToString(const BaseStatistics &stats) {
+child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
+	child_list_t<Value> result;
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	uint32_t min_len = GetValidMinMaxSubstring(string_data.min);
-	uint32_t max_len = GetValidMinMaxSubstring(string_data.max);
-	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]",
-	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.min), min_len)),
-	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.max), max_len)),
-	                          string_data.has_unicode ? "true" : "false",
-	                          string_data.has_max_string_length ? to_string(string_data.max_string_length) : "?");
+	auto min_len = GetValidMinMaxSubstring(string_data.min);
+	auto max_len = GetValidMinMaxSubstring(string_data.max);
+	result.emplace_back("min", Blob::ToString(string_t(const_char_ptr_cast(string_data.min), min_len)));
+	result.emplace_back("max", Blob::ToString(string_t(const_char_ptr_cast(string_data.max), max_len)));
+	result.emplace_back("has_unicode", Value::BOOLEAN(string_data.has_unicode));
+	if (string_data.has_max_string_length) {
+		result.emplace_back("max_string_length", Value::UBIGINT(string_data.max_string_length));
+	}
+	return result;
 }
 
 void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {

@@ -60,7 +60,7 @@ struct StringStats {
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
 	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &base);
 
-	DUCKDB_API static string ToString(const BaseStatistics &stats);
+	DUCKDB_API static child_list_t<Value> ToStruct(const BaseStatistics &stats);
 
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
 	                                                     array_ptr<const Value> constants);

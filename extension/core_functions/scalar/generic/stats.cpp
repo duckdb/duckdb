@@ -5,10 +5,10 @@ namespace duckdb {
 
 namespace {
 struct StatsBindData : public FunctionData {
-	explicit StatsBindData(string stats_p = string()) : stats(std::move(stats_p)) {
+	explicit StatsBindData(Value stats_p = Value()) : stats(std::move(stats_p)) {
 	}
 
-	string stats;
+	Value stats;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
@@ -17,18 +17,14 @@ public:
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<StatsBindData>();
-		return stats == other.stats;
+		return Value::NotDistinctFrom(stats, other.stats);
 	}
 };
 
 void StatsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<StatsBindData>();
-	if (info.stats.empty()) {
-		info.stats = "No statistics";
-	}
-	Value v(info.stats);
-	result.Reference(v);
+	result.Reference(info.stats);
 }
 
 unique_ptr<FunctionData> StatsBind(ClientContext &context, ScalarFunction &bound_function,
@@ -40,14 +36,14 @@ unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, FunctionS
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
 	auto &info = bind_data->Cast<StatsBindData>();
-	info.stats = child_stats[0].ToString();
+	info.stats = child_stats[0].ToStruct().CastAs(context, LogicalType::VARIANT());
 	return nullptr;
 }
 
 } // namespace
 
 ScalarFunction StatsFun::GetFunction() {
-	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
+	ScalarFunction stats({LogicalType::ANY}, LogicalType::VARIANT(), StatsFunction, StatsBind, nullptr,
 	                     StatsPropagateStats);
 	stats.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	stats.SetStability(FunctionStability::VOLATILE);
