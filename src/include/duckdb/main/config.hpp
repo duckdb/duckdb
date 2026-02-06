@@ -9,12 +9,11 @@
 #pragma once
 
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
-
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
@@ -153,7 +152,7 @@ struct DBConfigOptions {
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
 	//! The default block header size for new duckdb database files.
-	idx_t default_block_header_size = DUCKDB_BLOCK_HEADER_STORAGE_SIZE;
+	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 	//! Paths that are explicitly allowed, even if enable_external_access is false

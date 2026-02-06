@@ -57,18 +57,20 @@ void SerializeEncryptionMetadata(WriteStream &ser, data_ptr_t metadata_p, const 
 }
 
 void SerializeIV(WriteStream &ser, data_ptr_t metadata_p, const bool encrypted) {
+	// Used for Canary encryption
 	// Zero-initialize.
-	data_t iv[MainHeader::AES_IV_LEN];
-	memset(iv, 0, MainHeader::AES_IV_LEN);
+	data_t iv[MainHeader::AES_NONCE_LEN];
+	memset(iv, 0, MainHeader::AES_NONCE_LEN);
 
 	// Write metadata, if encrypted.
 	if (encrypted) {
-		memcpy(iv, metadata_p, MainHeader::AES_IV_LEN);
+		memcpy(iv, metadata_p, MainHeader::AES_NONCE_LEN);
 	}
-	ser.WriteData(iv, MainHeader::AES_IV_LEN);
+	ser.WriteData(iv, MainHeader::AES_NONCE_LEN);
 }
 
 void SerializeTag(WriteStream &ser, data_ptr_t metadata_p, const bool encrypted) {
+	// Used for Canary encryption
 	// Zero-initialize.
 	data_t tag[MainHeader::AES_TAG_LEN];
 	memset(tag, 0, MainHeader::AES_TAG_LEN);
@@ -98,72 +100,63 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
-	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
+	EncryptionCanary canary;
+	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, encryption_state->metadata->GetVersion());
+	memset(nonce.data(), 0, nonce.size());
+	EncryptionTag tag;
 
-	uint8_t iv[MainHeader::AES_IV_LEN];
-
-	switch (main_header.GetEncryptionVersion()) {
-	case 0:
-		memset(iv, 0, MainHeader::AES_IV_LEN);
-		encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
-		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
-		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+	switch (encryption_state->metadata->GetVersion()) {
+	case EncryptionTypes::V0_0:
+		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
+		encryption_state->InitializeEncryption(nonce, derived_key);
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), canary.size(), canary.data(),
+		                          canary.size());
 		break;
-
-	case 1:
-		uint8_t tag[MainHeader::AES_TAG_LEN];
-		encryption_state->GenerateRandomData(iv, MainHeader::AES_IV_LEN);
-		main_header.SetCanaryIV(iv);
-		encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
-		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
-		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
-		encryption_state->Finalize(canary_buffer, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
-		main_header.SetCanaryTag(tag);
+	case EncryptionTypes::V0_1:
+		// for GCM, total nonce size should be always equal to 12 bytes
+		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN);
+		encryption_state->GenerateRandomData(nonce.data(), nonce.size());
+		main_header.SetCanaryIV(nonce.data());
+		encryption_state->InitializeEncryption(nonce, derived_key);
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), canary.size(), canary.data(),
+		                          canary.size());
+		encryption_state->Finalize(canary.data(), canary.size(), tag.data(), MainHeader::AES_TAG_LEN);
+		main_header.SetCanaryTag(tag.data());
 		break;
-
 	default:
 		throw InvalidInputException("No valid encryption version found!");
 	}
 
-	main_header.SetEncryptedCanary(canary_buffer);
+	main_header.SetEncryptedCanary(canary.data());
 }
 
 bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    data_ptr_t derived_key) {
-	// just zero-out the iv
-	uint8_t iv[MainHeader::AES_IV_LEN];
-	memset(iv, 0, MainHeader::AES_IV_LEN);
+	auto encryption_version = encryption_state->metadata->GetVersion();
+	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, encryption_version);
+	EncryptionTag tag;
+	EncryptionCanary decrypted_canary;
 
-	//! allocate a buffer for the decrypted canary
-	data_t decrypted_canary[MainHeader::CANARY_BYTE_SIZE];
-	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
-
-	switch (main_header.GetEncryptionVersion()) {
-	case 0:
-		// zero-out the IV
-		memset(iv, 0, MainHeader::AES_IV_LEN);
-		//! Decrypt the canary
-		encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
-		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
-		                          MainHeader::CANARY_BYTE_SIZE);
+	switch (encryption_version) {
+	case EncryptionTypes::V0_0:
+		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN_DEPRECATED);
+		//! Decrypt the canary, Nonce is zeroed out
+		encryption_state->InitializeDecryption(nonce, derived_key);
+		encryption_state->Process(main_header.GetEncryptedCanary(), decrypted_canary.size(), decrypted_canary.data(),
+		                          decrypted_canary.size());
 		break;
-	case 1:
-		uint8_t tag[MainHeader::AES_TAG_LEN];
+	case EncryptionTypes::V0_1:
+		D_ASSERT(nonce.total_size() == MainHeader::AES_NONCE_LEN);
 		// get the IV and the Tag
-		memcpy(iv, main_header.GetIV(), MainHeader::AES_IV_LEN);
-		memcpy(tag, main_header.GetTag(), MainHeader::AES_TAG_LEN);
+		memcpy(nonce.data(), main_header.GetIV(), nonce.total_size());
+		memcpy(tag.data(), main_header.GetTag(), tag.size());
 
 		//! Decrypt the canary
-		encryption_state->InitializeDecryption(iv, MainHeader::AES_IV_LEN, derived_key,
-		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-		encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
-		                          MainHeader::CANARY_BYTE_SIZE);
+		encryption_state->InitializeDecryption(nonce, derived_key);
+		encryption_state->Process(main_header.GetEncryptedCanary(), decrypted_canary.size(), decrypted_canary.data(),
+		                          decrypted_canary.size());
 		try {
-			encryption_state->Finalize(decrypted_canary, MainHeader::CANARY_BYTE_SIZE, tag, MainHeader::AES_TAG_LEN);
+			encryption_state->Finalize(decrypted_canary.data(), decrypted_canary.size(), tag.data(), tag.size());
 		} catch (const std::exception &e) {
 			throw InvalidInputException("Wrong encryption key used to open the database file");
 		}
@@ -172,8 +165,8 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 		throw InvalidInputException("No valid encryption version found!");
 	}
 
-	//! compare if the decrypted canary is correct
-	if (memcmp(decrypted_canary, MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE) != 0) {
+	//! compare to check whether the decrypted canary is correct
+	if (memcmp(decrypted_canary.data(), MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE) != 0) {
 		return false;
 	}
 
@@ -254,7 +247,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	DeserializeEncryptionData(source, header.encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
 	DeserializeEncryptionData(source, header.db_identifier, MainHeader::DB_IDENTIFIER_LEN);
 	DeserializeEncryptionData(source, header.encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
-	DeserializeEncryptionData(source, header.canary_iv, MainHeader::AES_IV_LEN);
+	DeserializeEncryptionData(source, header.canary_iv, MainHeader::AES_NONCE_LEN);
 	DeserializeEncryptionData(source, header.canary_tag, MainHeader::AES_TAG_LEN);
 
 	return header;
@@ -375,16 +368,19 @@ void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHead
 	const_data_ptr_t key = EncryptionEngine::GetKeyFromCache(db.GetDatabase(), key_id);
 	// Encrypt canary with the derived key
 	shared_ptr<EncryptionState> encryption_state;
-	if (main_header.GetEncryptionVersion() > 0) {
+	auto encryption_version = static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion());
+	if (encryption_version > EncryptionTypes::V0_0 && encryption_version != EncryptionTypes::NONE) {
 		// From Encryption Version 1+, always encrypt canary with GCM
-		encryption_state = db.GetDatabase()
-		                       .GetEncryptionUtil(db.IsReadOnly())
-		                       ->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	} else {
+		auto metadata = make_uniq<EncryptionStateMetadata>(
+		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
 		encryption_state =
-		    db.GetDatabase()
-		        .GetEncryptionUtil(db.IsReadOnly())
-		        ->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
+	} else {
+		auto metadata = make_uniq<EncryptionStateMetadata>(
+		    static_cast<EncryptionTypes::CipherType>(main_header.GetEncryptionCipher()),
+		    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
+		encryption_state =
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	}
 
 	EncryptCanary(main_header, encryption_state, key);
@@ -428,16 +424,19 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	EncryptionKeyManager::DeriveKey(user_key, db_identifier, derived_key);
 
 	shared_ptr<EncryptionState> encryption_state;
-	if (main_header.GetEncryptionVersion() > 0) {
+	auto encryption_version = static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion());
+	if (encryption_version > EncryptionTypes::V0_0 && encryption_version != EncryptionTypes::NONE) {
 		// From Encryption Version 1+, always encrypt canary with GCM
-		encryption_state = db.GetDatabase()
-		                       .GetEncryptionUtil(db.IsReadOnly())
-		                       ->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	} else {
+		auto metadata = make_uniq<EncryptionStateMetadata>(
+		    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
 		encryption_state =
-		    db.GetDatabase()
-		        .GetEncryptionUtil(db.IsReadOnly())
-		        ->CreateEncryptionState(main_header.GetEncryptionCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
+	} else {
+		auto metadata = make_uniq<EncryptionStateMetadata>(
+		    static_cast<EncryptionTypes::CipherType>(main_header.GetEncryptionCipher()),
+		    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, encryption_version);
+		encryption_state =
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 	}
 
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
@@ -588,17 +587,18 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	memcpy(options.db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
 
-	// encryption version can be overridden by the real encryption version
-	options.encryption_options.encryption_version = main_header.GetEncryptionVersion();
-
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
 		// database is not encrypted, but is tried to be opened with a key
 	}
 
 	if (main_header.IsEncrypted()) {
+		auto &storage_manager = db.GetStorageManager();
 		if (options.encryption_options.encryption_enabled) {
 			//! Encryption is set
+			D_ASSERT(db.GetStorageManager().IsEncrypted());
+			options.encryption_options.encryption_version =
+			    static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion());
 
 			//! Check if our encryption module can write, if not, we throw
 			db.GetDatabase().GetEncryptionUtil(options.read_only);
@@ -614,8 +614,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		}
 
 		// if a cipher was provided, check if it is the same as in the config
-		auto stored_cipher = main_header.GetEncryptionCipher();
-		auto config_cipher = db.GetStorageManager().GetCipher();
+		auto stored_cipher = static_cast<EncryptionTypes::CipherType>(main_header.GetEncryptionCipher());
+		auto config_cipher = storage_manager.GetCipher();
 		if (config_cipher != EncryptionTypes::INVALID && config_cipher != stored_cipher) {
 			throw CatalogException("Cannot open encrypted database \"%s\" with a different cipher (%s) than the one "
 			                       "used to create it (%s)",
@@ -623,7 +623,8 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 			                       EncryptionTypes::CipherToString(stored_cipher));
 		}
 
-		// This avoids the cipher from being downgrades by an attacker FIXME: we likely want to have a propervalidation
+		// This avoids the cipher from being downgrades by an attacker
+		// FIXME: we likely want to have a proper validation
 		// of the cipher used instead of this trick to avoid downgrades
 		if (stored_cipher != EncryptionTypes::GCM) {
 			if (config_cipher == EncryptionTypes::INVALID) {
@@ -636,7 +637,10 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		}
 
 		// this is ugly, but the storage manager does not know the cipher type before
-		db.GetStorageManager().SetCipher(stored_cipher);
+		storage_manager.SetCipher(stored_cipher);
+		// encryption version can be overridden by the serialized encryption version
+		storage_manager.SetEncryptionVersion(
+		    static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion()));
 	}
 
 	options.version_number = main_header.version_number;

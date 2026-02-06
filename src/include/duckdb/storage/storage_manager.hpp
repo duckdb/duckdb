@@ -132,10 +132,16 @@ public:
 		}
 		storage_options.encryption_cipher = cipher_p;
 	}
+
+	void SetEncryptionVersion(EncryptionTypes::EncryptionVersion version) {
+		storage_options.encryption_version = version;
+	}
+
 	bool IsEncrypted() const {
 		return storage_options.encryption;
 	}
-	uint8_t GetEncryptionVersion() const {
+
+	EncryptionTypes::EncryptionVersion GetEncryptionVersion() const {
 		return storage_options.encryption_version;
 	}
 

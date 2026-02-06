@@ -1,35 +1,13 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
-
-EncryptionTag::EncryptionTag() : tag(new data_t[MainHeader::AES_TAG_LEN]) {
-}
-
-data_ptr_t EncryptionTag::data() {
-	return tag.get();
-}
-
-idx_t EncryptionTag::size() const {
-	return MainHeader::AES_TAG_LEN;
-}
-
-EncryptionNonce::EncryptionNonce() : nonce(new data_t[MainHeader::AES_NONCE_LEN]) {
-}
-
-data_ptr_t EncryptionNonce::data() {
-	return nonce.get();
-}
-
-idx_t EncryptionNonce::size() const {
-	return MainHeader::AES_NONCE_LEN;
-}
 
 constexpr uint32_t AdditionalAuthenticatedData::INITIAL_AAD_CAPACITY;
 
@@ -93,8 +71,8 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 	data_t temp_key[length];
 
 	// we cannot generate temporary keys with read-only enabled
-	auto encryption_state = db.GetEncryptionUtil(false)->CreateEncryptionState(
-	    /* only for random generator */ EncryptionTypes::GCM, length);
+	auto metadata = make_uniq<EncryptionStateMetadata>(EncryptionTypes::GCM, length, EncryptionTypes::V0_1);
+	auto encryption_state = db.GetEncryptionUtil(false)->CreateEncryptionState(std::move(metadata));
 	encryption_state->GenerateRandomData(temp_key, length);
 
 	string key_id = "temp_key";
@@ -106,18 +84,18 @@ void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string 
 	auto &db = attached_db.GetDatabase();
 	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
 	auto encrypt_key = GetKeyFromCache(db, key_id);
-	auto encryption_state = db.GetEncryptionUtil(attached_db.IsReadOnly())
-	                            ->CreateEncryptionState(attached_db.GetStorageManager().GetCipher(),
-	                                                    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto version = attached_db.GetStorageManager().GetEncryptionVersion();
+	auto cipher = attached_db.GetStorageManager().GetCipher();
+	auto metadata = make_uniq<EncryptionStateMetadata>(cipher, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, version);
+	auto encryption_state = db.GetEncryptionUtil(attached_db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 
 	EncryptionTag tag;
-	EncryptionNonce nonce;
+	EncryptionNonce nonce(cipher, version);
 	encryption_state->GenerateRandomData(nonce.data(), nonce.size());
 
 	//! store the nonce at the start of the block
 	memcpy(block_offset_internal, nonce.data(), nonce.size());
-	encryption_state->InitializeEncryption(nonce.data(), nonce.size(), encrypt_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	encryption_state->InitializeEncryption(nonce, encrypt_key);
 
 	auto checksum_offset = block.InternalBuffer() + delta;
 	auto encryption_checksum_offset = block_offset_internal + delta;
@@ -141,21 +119,20 @@ void EncryptionEngine::DecryptBlock(AttachedDatabase &attached_db, const string 
                                     uint64_t block_size, uint64_t delta) {
 	//! initialize encryption state
 	auto &db = attached_db.GetDatabase();
-
+	auto version = attached_db.GetStorageManager().GetEncryptionVersion();
+	auto cipher = attached_db.GetStorageManager().GetCipher();
+	auto metadata = make_uniq<EncryptionStateMetadata>(cipher, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, version);
 	auto decrypt_key = GetKeyFromCache(db, key_id);
-	auto encryption_state = db.GetEncryptionUtil(attached_db.IsReadOnly())
-	                            ->CreateEncryptionState(attached_db.GetStorageManager().GetCipher(),
-	                                                    MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto encryption_state = db.GetEncryptionUtil(attached_db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 
 	//! load the stored nonce and tag
 	EncryptionTag tag;
-	EncryptionNonce nonce;
+	EncryptionNonce nonce(cipher, version);
 	memcpy(nonce.data(), internal_buffer, nonce.size());
 	memcpy(tag.data(), internal_buffer + nonce.size(), tag.size());
 
 	//! Initialize the decryption
-	encryption_state->InitializeDecryption(nonce.data(), nonce.size(), decrypt_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	encryption_state->InitializeDecryption(nonce, decrypt_key);
 
 	auto checksum_offset = internal_buffer + delta;
 	auto size = block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -181,22 +158,21 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	// we cannot encrypt temp buffers in read-only mode
 	auto encryption_util = db.GetEncryptionUtil(false);
 	// we hard-code GCM here for now, it's the safest and we don't know what is configured here
-	auto encryption_state =
-	    encryption_util->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto state_metadata = make_uniq<EncryptionStateMetadata>(
+	    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, EncryptionTypes::V0_1);
+	auto encryption_state = encryption_util->CreateEncryptionState(std::move(state_metadata));
 
 	// zero-out the metadata buffer
 	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 
 	EncryptionTag tag;
-	EncryptionNonce nonce;
+	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, EncryptionTypes::V0_1);
 
 	encryption_state->GenerateRandomData(nonce.data(), nonce.size());
 
 	//! store the nonce at the start of metadata buffer
 	memcpy(metadata, nonce.data(), nonce.size());
-
-	encryption_state->InitializeEncryption(nonce.data(), nonce.size(), temp_key,
-	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	encryption_state->InitializeEncryption(nonce, temp_key);
 
 	auto aes_res = encryption_state->Process(buffer, buffer_size, buffer, buffer_size);
 
@@ -219,13 +195,12 @@ static void DecryptBuffer(EncryptionState &encryption_state, const_data_ptr_t te
                           idx_t buffer_size, data_ptr_t metadata) {
 	//! load the stored nonce and tag
 	EncryptionTag tag;
-	EncryptionNonce nonce;
+	EncryptionNonce nonce(encryption_state.metadata->GetCipher(), encryption_state.metadata->GetVersion());
 	memcpy(nonce.data(), metadata, nonce.size());
 	memcpy(tag.data(), metadata + nonce.size(), tag.size());
 
 	//! Initialize the decryption
-	encryption_state.InitializeDecryption(nonce.data(), nonce.size(), temp_key,
-	                                      MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	encryption_state.InitializeDecryption(nonce, temp_key);
 
 	auto aes_res = encryption_state.Process(buffer, buffer_size, buffer, buffer_size);
 
@@ -242,8 +217,9 @@ void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, data_ptr_t b
 	//! initialize encryption state
 	auto encryption_util = db.GetEncryptionUtil(false);
 	auto temp_key = GetKeyFromCache(db, "temp_key");
-	auto encryption_state =
-	    encryption_util->CreateEncryptionState(EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	auto state_metadata = make_uniq<EncryptionStateMetadata>(
+	    EncryptionTypes::GCM, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH, EncryptionTypes::EncryptionVersion::V0_1);
+	auto encryption_state = encryption_util->CreateEncryptionState(std::move(state_metadata));
 
 	DecryptBuffer(*encryption_state, temp_key, buffer, buffer_size, metadata);
 }

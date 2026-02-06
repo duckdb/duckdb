@@ -139,17 +139,17 @@ public:
 
 		auto &db = wal.GetDatabase();
 		auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
-
+		auto metadata = make_uniq<EncryptionStateMetadata>(db.GetStorageManager().GetCipher(),
+		                                                   MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH,
+		                                                   EncryptionTypes::EncryptionVersion::V0_1);
 		auto encryption_state =
-		    db.GetDatabase()
-		        .GetEncryptionUtil(db.IsReadOnly())
-		        ->CreateEncryptionState(db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		    db.GetDatabase().GetEncryptionUtil(db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);
 		std::unique_ptr<uint8_t[]> temp_buf(new uint8_t[ciphertext_size]);
 
-		EncryptionNonce nonce;
+		EncryptionNonce nonce(db.GetStorageManager().GetCipher(), db.GetStorageManager().GetEncryptionVersion());
 		EncryptionTag tag;
 
 		// generate nonce
@@ -164,8 +164,7 @@ public:
 		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
 
 		//! encrypt the temp buf
-		encryption_state->InitializeEncryption(nonce.data(), nonce.size(), keys.GetKey(encryption_key_id),
-		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+		encryption_state->InitializeEncryption(nonce, keys.GetKey(encryption_key_id));
 		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
 
 		//! calculate the tag (for GCM)
