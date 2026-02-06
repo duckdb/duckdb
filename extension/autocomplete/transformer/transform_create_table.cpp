@@ -34,6 +34,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateStatement(PEGTran
 	if (result->info->type == CatalogType::SECRET_ENTRY) {
 		auto &secret_info = result->info->Cast<CreateSecretInfo>();
 		secret_info.persist_type = persistent_type;
+		if (secret_info.on_conflict == OnCreateConflict::ERROR_ON_CONFLICT) {
+			secret_info.on_conflict = conflict_policy;
+		}
 	}
 	result->info->temporary = persistent_type == SecretPersistType::TEMPORARY;
 	return std::move(result);

@@ -3,6 +3,16 @@
 
 namespace duckdb {
 
+Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpression> &expr) {
+	if (expr->type == ExpressionType::VALUE_CONSTANT) {
+		return expr->Cast<ConstantExpression>().value;
+	}
+	if (expr->type == ExpressionType::COLUMN_REF) {
+		return expr->Cast<ColumnRefExpression>().GetName();
+	}
+	return Value();
+}
+
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -23,13 +33,29 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEG
 		auto lower_name = StringUtil::Lower(option.name);
 		if (lower_name == "scope") {
 			info->scope = option.GetFirstChildOrExpression();
-		} else if (lower_name == "type") {
-			info->type = option.GetFirstChildOrExpression();
-		} else if (lower_name == "provider") {
-			info->provider = option.GetFirstChildOrExpression();
-		} else {
-			info->options.insert({lower_name, option.GetFirstChildOrExpression()});
+			continue;
 		}
+		if (lower_name == "type") {
+			info->type = option.GetFirstChildOrExpression();
+			continue;
+		}
+		if (lower_name == "provider") {
+			info->provider = option.GetFirstChildOrExpression();
+			continue;
+		}
+		if (info->options.find(lower_name) != info->options.end()) {
+			throw BinderException("Duplicate query param found while parsing create secret: '%s'", lower_name);
+		}
+		info->options.insert({lower_name, option.GetFirstChildOrExpression()});
+	}
+	if (info->name.empty()) {
+		auto value = GetConstantExpressionValue(info->type);
+		if (value.IsNull()) {
+			throw InvalidInputException(
+			    "Can not combine a non-constant expression for the secret type with a default-named secret. Either "
+			    "provide an explicit secret name or use a constant expression for the secret type.");
+		}
+		info->name = "__default_" + StringUtil::Lower(value.ToString());
 	}
 	result->info = std::move(info);
 	return result;
