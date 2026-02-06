@@ -37,12 +37,10 @@ public:
 	DUCKDB_API static string ToString(bitstring_t bits);
 	//! Returns the bit size of a string -> bit conversion
 	DUCKDB_API static bool TryGetBitStringSize(string_t str, idx_t &result_size, string *error_message);
-	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT
-	//! perform data validation.
-	DUCKDB_API static void ToBit(string_t str, bitstring_t &output);
-	//! Convert a hexadecimal string, e.g., 'x2F', to a bit string. This function should ONLY be called after calling
-	//! GetBitSize, since it does NOT perform data validation.
-	DUCKDB_API static void HexToBit(string_t str, bitstring_t &output);
+	//! Convert a string to a bit
+	DUCKDB_API static bool ToBit(string_t str, bitstring_t &output, string *error_message);
+	//! Convert a hexadecimal string, e.g., 'x2F', to a bit string
+	DUCKDB_API static bool HexToBit(string_t str, bitstring_t &output, string *error_message);
 
 	DUCKDB_API static string ToBit(string_t str);
 

@@ -1,6 +1,7 @@
 #include "duckdb/common/string_util.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/stack.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -27,6 +28,24 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
+namespace {
+
+static constexpr uint8_t hex_lookup[255] = {
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   255, 255, 255, 255, 255, 255, 255, 10,
+    11,  12,  13,  14,  15,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 10,  11,  12,  13,  14,  15,  255, 255, 10,  11,  12,  13,  14,
+    15,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255};
+
+}
+
 string StringUtil::GenerateRandomName(idx_t length) {
 	RandomEngine engine;
 	duckdb::stringstream ss;
@@ -34,6 +53,18 @@ string StringUtil::GenerateRandomName(idx_t length) {
 		ss << "0123456789abcdef"[engine.NextRandomInteger(0, 15)];
 	}
 	return ss.str();
+}
+
+uint8_t StringUtil::GetHexValue(char c) {
+	auto value = hex_lookup[UnsafeNumericCast<uint8_t>(c)];
+	if (value == 255) {
+		throw InvalidInputException("Invalid input for hex digit: %s", string(1, c));
+	}
+	return value;
+}
+
+bool StringUtil::CharacterIsHex(char c) {
+	return hex_lookup[UnsafeNumericCast<uint8_t>(c)] != 255;
 }
 
 bool StringUtil::Equals(const string_t &s1, const char *s2) {
