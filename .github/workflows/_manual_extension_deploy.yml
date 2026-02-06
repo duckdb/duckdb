@@ -20,7 +20,7 @@ on:
         description: 'The extension-template version to use (empty for vx.y-codename)'
         type: string
         required: false
-        default: 'v1.4-andium'
+        default: 'main'
       extra_exclude_archs:
         description: 'Inject more architectures to skip (optional)'
         type: string
