@@ -8,11 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/value_operations/value_operations.hpp"
-#include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
 class JoinHashTable;
@@ -66,9 +63,6 @@ public:
 
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-
-	//! Join Keys statistics (optional)
-	vector<unique_ptr<BaseStatistics>> join_stats;
 
 	unique_ptr<ResidualPredicateInfo> residual_info;
 	//! For probe phase (includes predicate columns)

@@ -12,10 +12,10 @@ JoinCondition JoinCondition::Copy() const {
 	if (IsComparison()) {
 		JoinCondition copy(left->Copy(), right->Copy(), comparison);
 		if (left_stats) {
-			copy.GetLeftStats() = left_stats->ToUnique();
+			copy.SetLeftStats(left_stats->ToUnique());
 		}
 		if (right_stats) {
-			copy.GetRightStats() = right_stats->ToUnique();
+			copy.SetRightStats(right_stats->ToUnique());
 		}
 		return copy;
 	}
@@ -23,7 +23,7 @@ JoinCondition JoinCondition::Copy() const {
 	JoinCondition copy(left->Copy());
 	const auto &expr_stats = GetExpressionStats();
 	if (expr_stats) {
-		copy.GetExpressionStats() = expr_stats->ToUnique();
+		copy.SetExpressionStats(expr_stats->ToUnique());
 	}
 	return copy;
 }

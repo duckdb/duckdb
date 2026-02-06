@@ -33,8 +33,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			}
 			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.GetComparisonType());
 			// Add stats to logical_join for perfect hash join
-			condition.GetLeftStats() = stats_left->ToUnique();
-			condition.GetRightStats() = stats_right->ToUnique();
+			condition.SetLeftStats(stats_left->ToUnique());
+			condition.SetRightStats(stats_right->ToUnique());
 			switch (prune_result) {
 			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
@@ -167,8 +167,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				                          *updated_stats_right);
 
 				// Update join_stats when is already part of the join
-				condition.GetLeftStats() = std::move(updated_stats_left);
-				condition.GetRightStats() = std::move(updated_stats_right);
+				condition.SetLeftStats(std::move(updated_stats_left));
+				condition.SetRightStats(std::move(updated_stats_right));
 			}
 			break;
 		}

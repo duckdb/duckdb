@@ -120,13 +120,6 @@ public:
 		return left;
 	}
 
-	unique_ptr<BaseStatistics> &GetLeftStats() {
-		if (!IsComparison()) {
-			throw InternalException("GetLeftStats used on a JoinCondition that is not a left/right comparison");
-		}
-		return left_stats;
-	}
-
 	const unique_ptr<BaseStatistics> &GetLeftStats() const {
 		if (!IsComparison()) {
 			throw InternalException("GetLeftStats used on a JoinCondition that is not a left/right comparison");
@@ -134,11 +127,11 @@ public:
 		return left_stats;
 	}
 
-	unique_ptr<BaseStatistics> &GetRightStats() {
+	void SetLeftStats(unique_ptr<BaseStatistics> &&new_stats) {
 		if (!IsComparison()) {
-			throw InternalException("GetRightStats used on a JoinCondition that is not a left/right comparison");
+			throw InternalException("SetLeftStats used on a JoinCondition that is not a left/right comparison");
 		}
-		return right_stats;
+		left_stats = std::move(new_stats);
 	}
 
 	const unique_ptr<BaseStatistics> &GetRightStats() const {
@@ -148,11 +141,11 @@ public:
 		return right_stats;
 	}
 
-	unique_ptr<BaseStatistics> &GetExpressionStats() {
-		if (IsComparison()) {
-			throw InternalException("GetExpressionStats used on a JoinCondition that is a comparison");
+	void SetRightStats(unique_ptr<BaseStatistics> &&new_stats) {
+		if (!IsComparison()) {
+			throw InternalException("SetRightStats used on a JoinCondition that is not a left/right comparison");
 		}
-		return left_stats;
+		right_stats = std::move(new_stats);
 	}
 
 	const unique_ptr<BaseStatistics> &GetExpressionStats() const {
@@ -160,6 +153,13 @@ public:
 			throw InternalException("GetExpressionStats used on a JoinCondition that is a comparison");
 		}
 		return left_stats;
+	}
+
+	void SetExpressionStats(unique_ptr<BaseStatistics> &&new_stats) {
+		if (!IsComparison()) {
+			throw InternalException("SetExpressionStats used on a JoinCondition that is a comparison");
+		}
+		left_stats = std::move(new_stats);
 	}
 
 	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits

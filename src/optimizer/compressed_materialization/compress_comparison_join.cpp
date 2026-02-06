@@ -158,10 +158,10 @@ void CompressedMaterialization::UpdateComparisonJoinStats(unique_ptr<LogicalOper
 		auto lhs_it = statistics_map.find(lhs_colref.binding);
 		auto rhs_it = statistics_map.find(rhs_colref.binding);
 		if (lhs_it != statistics_map.end() && lhs_it->second) {
-			condition.GetLeftStats() = lhs_it->second->ToUnique();
+			condition.SetLeftStats(lhs_it->second->ToUnique());
 		}
 		if (rhs_it != statistics_map.end() && rhs_it->second) {
-			condition.GetRightStats() = rhs_it->second->ToUnique();
+			condition.SetRightStats(rhs_it->second->ToUnique());
 		}
 	}
 }
