@@ -549,8 +549,10 @@ void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &resul
 
 child_list_t<Value> NumericStats::ToStruct(const BaseStatistics &stats) {
 	child_list_t<Value> result;
-	result.emplace_back("min", NumericStats::MinOrNull(stats));
-	result.emplace_back("max", NumericStats::MaxOrNull(stats));
+	if (NumericStats::HasMinMax(stats)) {
+		result.emplace_back("min", NumericStats::MinOrNull(stats));
+		result.emplace_back("max", NumericStats::MaxOrNull(stats));
+	}
 	return result;
 }
 

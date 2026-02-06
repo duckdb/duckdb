@@ -139,10 +139,14 @@ child_list_t<Value> GeometryStats::ToStruct(const BaseStatistics &stats) {
 	extent.emplace_back("x_max", Value::DOUBLE(data.extent.x_max));
 	extent.emplace_back("y_min", Value::DOUBLE(data.extent.y_min));
 	extent.emplace_back("y_max", Value::DOUBLE(data.extent.y_max));
-	extent.emplace_back("z_min", Value::DOUBLE(data.extent.z_min));
-	extent.emplace_back("z_max", Value::DOUBLE(data.extent.z_max));
-	extent.emplace_back("m_min", Value::DOUBLE(data.extent.m_min));
-	extent.emplace_back("m_max", Value::DOUBLE(data.extent.m_max));
+	if (Value::IsFinite(data.extent.z_min) || Value::IsFinite(data.extent.z_max)) {
+		extent.emplace_back("z_min", Value::DOUBLE(data.extent.z_min));
+		extent.emplace_back("z_max", Value::DOUBLE(data.extent.z_max));
+	}
+	if (Value::IsFinite(data.extent.m_min) || Value::IsFinite(data.extent.m_max)) {
+		extent.emplace_back("m_min", Value::DOUBLE(data.extent.m_min));
+		extent.emplace_back("m_max", Value::DOUBLE(data.extent.m_max));
+	}
 
 	result.emplace_back("extent", Value::STRUCT(std::move(extent)));
 
