@@ -64,6 +64,18 @@ def test_warning_as_error(shell):
     assert result.status_code == 1
 
 
+# Make sure that the same warning is not printed multiple times
+def test_multiple_warnings(shell):
+    test = ShellTest(shell).statement(
+        "select list_filter([1,2,3], x -> x > 2) l1, list_filter([1,2,3], x -> x > 2) l2, list_filter([1,2,3], x -> x > 2) l3;"
+    )
+
+    result = test.run()
+    assert result.stdout.count("WARNING:") == 1
+    result.check_stdout("Deprecated lambda arrow (->) detected.")
+    result.check_stdout("│ [3]     │ [3]     │ [3]     │")
+
+
 def test_changing_logging_settings(shell, tmp_path):
     test = ShellTest(shell).statement("CALL enable_logging(storage = 'file', storage_config = {'path': 'hello'});")
 

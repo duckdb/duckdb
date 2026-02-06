@@ -592,6 +592,13 @@
         ]
     },
     {
+        "name": "force_mbedtls_unsafe",
+        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "force_variant_shredding",
         "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
         "type": "VARCHAR",
