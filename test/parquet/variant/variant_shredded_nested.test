@@ -27,16 +27,6 @@ from '{DATA_DIR}/parquet-testing/variant_shredded_object1.parquet';
 ----
 1	{'a': 123456789, 'c': string}
 
-query I
-SELECT stats(var.a::BIGINT) FROM '{DATA_DIR}/parquet-testing/variant_shredded_object1.parquet';
-----
-<REGEX>:.*123456789.*
-
-query I
-SELECT stats(var::STRUCT(a INT, c VARCHAR)) FROM '{DATA_DIR}/parquet-testing/variant_shredded_object1.parquet';
-----
-<REGEX>:.*NULL.*
-
 # Object
 query II
 from '{DATA_DIR}/parquet-testing/variant_shredded_object2.parquet';

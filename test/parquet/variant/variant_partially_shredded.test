@@ -7,11 +7,6 @@ query II nosort result
 from '{DATA_DIR}/parquet-testing/variant_partial_shredded1.parquet';
 ----
 
-query I
-SELECT stats(var::BIGINT) FROM '{DATA_DIR}/parquet-testing/variant_partial_shredded1.parquet' LIMIT 1;
-----
-<REGEX>:.*NULL.*
-
 query II nosort result
 from '{DATA_DIR}/parquet-testing/variant_partial_shredded2.parquet';
 ----

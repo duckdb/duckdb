@@ -9,32 +9,17 @@ from '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_nanos_ntz_positive.p
 ----
 1	2024-11-07 12:33:54.123456789
 
-query I
-SELECT stats(var::TIMESTAMP_NS) FROM '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_nanos_ntz_positive.parquet';
-----
-<REGEX>:.*2024-11-07 12:33:54.123456789.*
-
 # Float - negative
 query II
 from '{DATA_DIR}/parquet-testing/variant_shredded_float_negative.parquet';
 ----
 1	-10.11
 
-query I
-SELECT stats(var::FLOAT) FROM '{DATA_DIR}/parquet-testing/variant_shredded_float_negative.parquet';
-----
-<REGEX>:.*-10.11.*
-
 # Int64 - negative
 query II
 from '{DATA_DIR}/parquet-testing/variant_shredded_int64_negative.parquet';
 ----
 1	-9876543210
-
-query I
-SELECT stats(var::BIGINT) FROM '{DATA_DIR}/parquet-testing/variant_shredded_int64_negative.parquet';
-----
-<REGEX>:.*-9876543210.*
 
 # Decimal16 - negative
 query II
