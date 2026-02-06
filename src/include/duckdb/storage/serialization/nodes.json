@@ -25,6 +25,11 @@
         "id": 103,
         "name": "key_targets",
         "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 104,
+        "name": "payload_aggregates",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },
