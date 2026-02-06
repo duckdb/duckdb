@@ -1631,6 +1631,7 @@ ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(stat
 	config.decimal_separator = state.decimal_separator;
 	config.thousand_separator = state.thousand_separator;
 	config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
+	config.hidden_rows_hint = "use .last to show entire result";
 }
 
 void ModeDuckBoxRenderer::RemoveRenderLimits() {
