@@ -18,6 +18,7 @@ namespace duckdb {
 class BaseStatistics;
 struct SelectionVector;
 class Vector;
+class Value;
 
 struct StringStatsData {
 	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;

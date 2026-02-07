@@ -6,6 +6,7 @@
 
 namespace duckdb {
 class BaseStatistics;
+class Value;
 
 enum class VariantStatsShreddingState : uint8_t {
 	//! Uninitialized, not unshredded/shredded

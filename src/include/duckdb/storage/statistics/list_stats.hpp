@@ -15,6 +15,7 @@ namespace duckdb {
 class BaseStatistics;
 struct SelectionVector;
 class Vector;
+class Value;
 
 struct ListStats {
 	DUCKDB_API static void Construct(BaseStatistics &stats);

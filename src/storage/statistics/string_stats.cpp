@@ -271,10 +271,15 @@ child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	auto min_len = GetValidMinMaxSubstring(string_data.min);
 	auto max_len = GetValidMinMaxSubstring(string_data.max);
-	result.emplace_back("min", Blob::ToString(string_t(const_char_ptr_cast(string_data.min), min_len)));
-	result.emplace_back("max", Blob::ToString(string_t(const_char_ptr_cast(string_data.max), max_len)));
+	string_t min_str(const_char_ptr_cast(string_data.min), min_len);
+	string_t max_str(const_char_ptr_cast(string_data.max), max_len);
+	// if min > max the stats are empty and min/max is not yet initialized - so don't emit
+	if (min_str <= max_str) {
+		result.emplace_back("min", Blob::ToString(min_str));
+		result.emplace_back("max", Blob::ToString(max_str));
+	}
 	result.emplace_back("has_unicode", Value::BOOLEAN(string_data.has_unicode));
-	if (string_data.has_max_string_length) {
+	if (StringStats::HasMaxStringLength(stats)) {
 		result.emplace_back("max_string_length", Value::UBIGINT(string_data.max_string_length));
 	}
 	return result;

@@ -17,6 +17,7 @@ struct SelectionVector;
 class Vector;
 class Serializer;
 class Deserializer;
+class Value;
 
 struct ArrayStats {
 	DUCKDB_API static void Construct(BaseStatistics &stats);

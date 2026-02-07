@@ -19,6 +19,7 @@ namespace duckdb {
 class BaseStatistics;
 struct SelectionVector;
 class Vector;
+class Value;
 
 struct NumericStatsData {
 	//! Whether or not the value has a max value
