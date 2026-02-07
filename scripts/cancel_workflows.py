@@ -60,4 +60,4 @@ if len(result) == 0:
     )
     exit(1)
 for databaseId in [x[0] for x in result]:
-    os.system(f'gh run -R {args.repo} cancel {databaseId}')
+    subprocess.run(['gh', 'run', '-R', args.repo, 'cancel', str(databaseId)])
