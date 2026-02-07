@@ -146,31 +146,22 @@ void CompressedMaterialization::UpdateComparisonJoinStats(unique_ptr<LogicalOper
 
 	// Update join stats if compressed
 	auto &compressed_join = op->children[0]->Cast<LogicalComparisonJoin>();
-	if (compressed_join.join_stats.empty()) {
-		return; // Nothing to update
-	}
-
 	for (idx_t condition_idx = 0; condition_idx < compressed_join.conditions.size(); condition_idx++) {
 		auto &condition = compressed_join.conditions[condition_idx];
 		if (!condition.IsComparison() || condition.GetLHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
 		    condition.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue; // We definitely didn't compress these, nothing changed
 		}
-		if (condition_idx * 2 >= compressed_join.join_stats.size()) {
-			break;
-		}
 
 		auto &lhs_colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
 		auto &rhs_colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
-		auto &lhs_join_stats = compressed_join.join_stats[condition_idx * 2];
-		auto &rhs_join_stats = compressed_join.join_stats[condition_idx * 2 + 1];
 		auto lhs_it = statistics_map.find(lhs_colref.binding);
 		auto rhs_it = statistics_map.find(rhs_colref.binding);
 		if (lhs_it != statistics_map.end() && lhs_it->second) {
-			lhs_join_stats = lhs_it->second->ToUnique();
+			condition.SetLeftStats(lhs_it->second->ToUnique());
 		}
 		if (rhs_it != statistics_map.end() && rhs_it->second) {
-			rhs_join_stats = rhs_it->second->ToUnique();
+			condition.SetRightStats(rhs_it->second->ToUnique());
 		}
 	}
 }
