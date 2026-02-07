@@ -5,7 +5,7 @@ namespace duckdb {
 
 namespace {
 struct StatsBindData : public FunctionData {
-	explicit StatsBindData(Value stats_p = Value()) : stats(std::move(stats_p)) {
+	explicit StatsBindData(Value stats_p = Value(LogicalType::VARIANT())) : stats(std::move(stats_p)) {
 	}
 
 	Value stats;
