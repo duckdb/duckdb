@@ -75,12 +75,12 @@ jobs:
     runs-on: ${{ matrix.config.runner }}
 
     steps:
-    - uses: ./.github/actions/cleanup_runner
-
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Install pytest
       run: |
@@ -174,12 +174,12 @@ jobs:
     runs-on: ${{ matrix.config.runner }}
 
     steps:
-    - uses: ./.github/actions/cleanup_runner
-
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
