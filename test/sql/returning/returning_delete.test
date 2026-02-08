@@ -551,3 +551,93 @@ DROP TABLE merge_rowid_target;
 
 statement ok
 DROP TABLE merge_rowid_source;
+
+# ============================================================
+# DELETE RETURNING with indexed table - verify index is updated
+# ============================================================
+
+statement ok
+CREATE TABLE indexed_returning (id INT PRIMARY KEY, val VARCHAR, amount INT);
+
+statement ok
+CREATE INDEX idx_amount ON indexed_returning(amount);
+
+statement ok
+INSERT INTO indexed_returning VALUES (1, 'a', 100), (2, 'b', 200), (3, 'c', 300);
+
+# DELETE with RETURNING should update the index
+query I
+DELETE FROM indexed_returning WHERE amount >= 200 RETURNING val;
+----
+b
+c
+
+# Verify only row 1 remains
+query III
+SELECT * FROM indexed_returning ORDER BY id;
+----
+1	a	100
+
+# Verify index lookup works
+query III
+SELECT * FROM indexed_returning WHERE amount = 100;
+----
+1	a	100
+
+# Verify deleted keys are no longer in index
+query I
+SELECT COUNT(*) FROM indexed_returning WHERE amount = 200;
+----
+0
+
+# Insert new rows with previously deleted primary keys
+statement ok
+INSERT INTO indexed_returning VALUES (2, 'new_b', 250), (3, 'new_c', 350);
+
+# Verify index lookup for new values
+query III
+SELECT * FROM indexed_returning WHERE amount = 250;
+----
+2	new_b	250
+
+query III
+SELECT * FROM indexed_returning WHERE amount = 350;
+----
+3	new_c	350
+
+# DELETE RETURNING with primary key index in same transaction
+statement ok
+BEGIN TRANSACTION;
+
+query III
+DELETE FROM indexed_returning WHERE id = 2 RETURNING *;
+----
+2	new_b	250
+
+# Can insert with same primary key within transaction
+statement ok
+INSERT INTO indexed_returning VALUES (2, 'tx_b', 225);
+
+# Verify index lookup during transaction
+query III
+SELECT * FROM indexed_returning WHERE amount = 225;
+----
+2	tx_b	225
+
+statement ok
+COMMIT;
+
+# Verify after commit
+query III
+SELECT * FROM indexed_returning WHERE amount = 225;
+----
+2	tx_b	225
+
+# Verify primary key lookup
+query III
+SELECT * FROM indexed_returning WHERE id = 2;
+----
+2	tx_b	225
+
+statement ok
+DROP TABLE indexed_returning;

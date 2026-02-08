@@ -4,6 +4,7 @@
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
+#include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -25,7 +26,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 
 namespace duckdb {
@@ -295,10 +295,12 @@ public:
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
 		bool use_perfect_hash = false;
-		if (op.conditions.size() == 1 && !op.join_stats.empty() && op.join_stats[1] &&
-		    TypeIsIntegral(op.join_stats[1]->GetType().InternalType()) && NumericStats::HasMinMax(*op.join_stats[1])) {
-			use_perfect_hash = perfect_join_executor->CanDoPerfectHashJoin(op, NumericStats::Min(*op.join_stats[1]),
-			                                                               NumericStats::Max(*op.join_stats[1]));
+		if (op.conditions.size() == 1 && op.conditions[0].GetRightStats()) {
+			const auto &right_stats = *op.conditions[0].GetRightStats();
+			if (TypeIsIntegral(right_stats.GetType().InternalType()) && NumericStats::HasMinMax(right_stats)) {
+				use_perfect_hash = perfect_join_executor->CanDoPerfectHashJoin(op, NumericStats::Min(right_stats),
+				                                                               NumericStats::Max(right_stats));
+			}
 		}
 		// For external hash join
 		external = ClientConfig::GetConfig(context).force_external;

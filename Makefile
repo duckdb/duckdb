@@ -534,10 +534,16 @@ bundle-setup:
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
-	cp extension/lib*_extension_loader.a bundle/. && \
+	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
 	mkdir -p vcpkg_installed && \
 	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
+	mkdir -p _deps && \
+	if [ -f linked_libs.txt ]; then \
+		while IFS= read -r libline || [ -n "$$libline" ]; do \
+			find _deps -path "*/$$libline" -exec cp {} bundle/. \; 2>/dev/null || true; \
+		done < linked_libs.txt; \
+	fi && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
 	find . -name '*.a' -execdir ${AR} -x {} \;
@@ -559,5 +565,5 @@ gather-libs: release
 	mkdir -p libs && \
 	cp src/libduckdb_static.a libs/. && \
 	cp third_party/*/libduckdb_*.a libs/. && \
-	cp extension/lib*_extension_loader.a libs/. && \
+	cp extension/libduckdb_generated_extension_loader.a libs/. && \
 	cp extension/*/lib*_extension.a libs/.

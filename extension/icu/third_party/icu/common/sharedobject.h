@@ -38,8 +38,8 @@ public:
 
     virtual ~UnifiedCacheBase();
 private:
-    UnifiedCacheBase(const UnifiedCacheBase &);
-    UnifiedCacheBase &operator=(const UnifiedCacheBase &);
+    UnifiedCacheBase(const UnifiedCacheBase &) = delete;
+    UnifiedCacheBase &operator=(const UnifiedCacheBase &) = delete;
 };
 
 /**
@@ -90,13 +90,13 @@ public:
     int32_t getRefCount() const;
 
     /**
-     * If noHardReferences() == TRUE then this object has no hard references.
+     * If noHardReferences() == true then this object has no hard references.
      * Must be called only from within the internals of UnifiedCache.
      */
     inline UBool noHardReferences() const { return getRefCount() == 0; }
 
     /**
-     * If hasHardReferences() == TRUE then this object has hard references.
+     * If hasHardReferences() == true then this object has hard references.
      * Must be called only from within the internals of UnifiedCache.
      */
     inline UBool hasHardReferences() const { return getRefCount() != 0; }

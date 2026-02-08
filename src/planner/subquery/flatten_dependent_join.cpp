@@ -269,8 +269,20 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 					return true;
 				}
 				// Found a materialized CTE, subtree correlation depends on the CTE node
-				has_correlated_expressions[op] = has_correlated_expressions[*cte_node];
-				return has_correlated_expressions[*cte_node];
+				bool handled_by_dependent_join = false;
+				idx_t join_depth = lateral_depth + 1;
+				for (auto &ctx_col : correlated_columns) {
+					if (ctx_col.depth == join_depth) {
+						// Check if the current dependent join will handle the correlation
+						handled_by_dependent_join = true;
+						break;
+					}
+				}
+
+				auto &setop = cte_node->Cast<LogicalCTE>();
+				has_correlated_expressions[op] = (!handled_by_dependent_join && !setop.correlated_columns.empty()) ||
+				                                 has_correlated_expressions[*cte_node];
+				return has_correlated_expressions[op];
 			}
 			// No CTE found: subtree is correlated
 			return true;
@@ -617,19 +629,21 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		// both sides have correlation
 		// turn into an inner join
+		// correctly use left child's delim_offset so execute left child as the last one
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-		plan->children[0] =
-		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
-		auto left_binding = this->base_binding;
 		plan->children[1] =
 		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
+		auto right_binding = this->base_binding;
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond(
 			    make_uniq<BoundColumnRefExpression>(
-			        correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i)),
-			    make_uniq<BoundColumnRefExpression>(
 			        correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i)),
+			    make_uniq<BoundColumnRefExpression>(
+			        correlated_columns[i].type,
+			        ColumnBinding(right_binding.table_index, right_binding.column_index + i)),
 			    ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 			join->conditions.push_back(std::move(cond));
 		}
@@ -1055,14 +1069,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			auto &setop = plan->Cast<LogicalRecursiveCTE>();
 
-			if (!setop.key_targets.empty()) {
-				for (idx_t i = 0; i < correlated_columns.size(); i++) {
+			for (idx_t i = 0; i < correlated_columns.size(); i++) {
+				if (!setop.key_targets.empty()) {
 					auto corr = correlated_columns[i];
 					auto colref = make_uniq<BoundColumnRefExpression>(
 					    correlated_columns[i].type,
 					    ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 					setop.key_targets.push_back(std::move(colref));
 				}
+				setop.internal_types.push_back(correlated_columns[i].type);
 			}
 		}
 

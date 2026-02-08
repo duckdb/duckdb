@@ -384,10 +384,10 @@ PluralFormat::operator=(const PluralFormat& other) {
 bool
 PluralFormat::operator==(const Format& other) const {
     if (this == &other) {
-        return TRUE;
+        return true;
     }
     if (!Format::operator==(other)) {
-        return FALSE;
+        return false;
     }
     const PluralFormat& o = (const PluralFormat&)other;
     return
@@ -434,11 +434,11 @@ int32_t PluralFormat::findSubMessage(const MessagePattern& pattern, int32_t part
     // (In other words, we never call the selector if we match against an explicit value,
     // or if the only non-explicit keyword is "other".)
     UnicodeString keyword;
-    UnicodeString other(FALSE, OTHER_STRING, 5);
+    UnicodeString other(false, OTHER_STRING, 5);
     // When we find a match, we set msgStart>0 and also set this boolean to true
     // to avoid matching the keyword again (duplicates are allowed)
     // while we continue to look for an explicit-value match.
-    UBool haveKeywordMatch=FALSE;
+    UBool haveKeywordMatch=false;
     // msgStart is 0 until we find any appropriate sub-message.
     // We remember the first "other" sub-message if we have not seen any
     // appropriate sub-message before.
@@ -477,7 +477,7 @@ int32_t PluralFormat::findSubMessage(const MessagePattern& pattern, int32_t part
                         // This is the first "other" sub-message,
                         // and the selected keyword is also "other".
                         // Do not match "other" again.
-                        haveKeywordMatch=TRUE;
+                        haveKeywordMatch=true;
                     }
                 }
             } else {
@@ -486,7 +486,7 @@ int32_t PluralFormat::findSubMessage(const MessagePattern& pattern, int32_t part
                     if(msgStart!=0 && (0 == keyword.compare(other))) {
                         // We have already seen an "other" sub-message.
                         // Do not match "other" again.
-                        haveKeywordMatch=TRUE;
+                        haveKeywordMatch=true;
                         // Skip keyword matching but do getLimitPartIndex().
                     }
                 }
@@ -494,7 +494,7 @@ int32_t PluralFormat::findSubMessage(const MessagePattern& pattern, int32_t part
                     // keyword matches
                     msgStart=partIndex;
                     // Do not match this keyword again.
-                    haveKeywordMatch=TRUE;
+                    haveKeywordMatch=true;
                 }
             }
         }
@@ -549,9 +549,15 @@ void PluralFormat::parseType(const UnicodeString& source, const NFRule *rbnfLeni
 
         UnicodeString currArg = pattern.tempSubString(partStart->getLimit(), partLimit->getIndex() - partStart->getLimit());
         if (rbnfLenientScanner != NULL) {
-            // If lenient parsing is turned ON, we've got some time consuming parsing ahead of us.
-            int32_t length = -1;
-            currMatchIndex = rbnfLenientScanner->findTextLenient(source, currArg, startingAt, &length);
+            // Check if non-lenient rule finds the text before call lenient parsing
+            int32_t tempIndex = source.indexOf(currArg, startingAt);
+            if (tempIndex >= 0) {
+                currMatchIndex = tempIndex;
+            } else {
+                // If lenient parsing is turned ON, we've got some time consuming parsing ahead of us.
+                int32_t length = -1;
+                currMatchIndex = rbnfLenientScanner->findTextLenient(source, currArg, startingAt, &length);
+            }
         }
         else {
             currMatchIndex = source.indexOf(currArg, startingAt);

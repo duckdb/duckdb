@@ -33,18 +33,29 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
+	    : executor(context), intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()),
+	      new_groups(STANDARD_VECTOR_SIZE) {
+		vector<LogicalType> aggr_input_types;
 		vector<BoundAggregateExpression *> payload_aggregates_ptr;
 		for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
-			auto &dat = op.payload_aggregates[i];
-			payload_aggregates_ptr.push_back(dat.get());
+			D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			auto &bound_aggr_expr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
+			for (auto &child_expr : bound_aggr_expr.children) {
+				executor.AddExpression(*child_expr);
+				aggr_input_types.push_back(child_expr->return_type);
+			}
+			payload_aggregates_ptr.push_back(&bound_aggr_expr);
 		}
+
+		payload_rows.Initialize(Allocator::Get(context), aggr_input_types);
 
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
 		                                          op.payload_types, payload_aggregates_ptr);
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
+	ExpressionExecutor executor;
+	DataChunk payload_rows;
 
 	mutex intermediate_table_lock;
 	ColumnDataCollection intermediate_table;
@@ -104,15 +115,18 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 		DataChunk distinct_rows;
 		distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
 		PopulateChunk(distinct_rows, chunk, distinct_idx, true);
-		DataChunk payload_rows;
-		if (!payload_types.empty()) {
-			payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
-		}
-		PopulateChunk(payload_rows, chunk, payload_idx, true);
 
-		// Add the chunk to the hash table and append it to the intermediate table
-		gstate.ht->AddChunk(distinct_rows, payload_rows, AggregateType::NON_DISTINCT);
+		// Add result of recursive anchor to intermediate table
 		gstate.intermediate_table.Append(chunk);
+
+		// Execute aggregate expressions on chunk if any
+		if (!gstate.executor.expressions.empty()) {
+			gstate.payload_rows.Reset();
+			gstate.executor.Execute(chunk, gstate.payload_rows);
+		}
+
+		// Add the result of the executed expressions to the hash table
+		gstate.ht->AddChunk(distinct_rows, gstate.payload_rows, AggregateType::NON_DISTINCT);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -174,6 +188,20 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 					PopulateChunk(result, distinct_rows, distinct_idx, false);
 					PopulateChunk(result, payload_rows, payload_idx, false);
 					// Append the result to the recurring table.
+					recurring_table->Append(result);
+				}
+			} else if (ref_recurring && gstate.intermediate_table.Count() != 0) {
+				// we need to populate the recurring table from the intermediate table
+				// careful: we can not just use Combine here, because this destroys the intermediate table
+				// instead we need to scan and append to create a copy
+				// Note: as we are in the "normal" recursion case here, not the USING KEY case,
+				// we can just scan the intermediate table directly, instead of going through the HT
+				ColumnDataScanState scan_state;
+				gstate.intermediate_table.InitializeScan(scan_state);
+				DataChunk result;
+				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+
+				while (gstate.intermediate_table.Scan(scan_state, result)) {
 					recurring_table->Append(result);
 				}
 			}
