@@ -21,6 +21,18 @@ SELECT COUNT(*) FROM test_table USING SAMPLE 500 ROWS (system);
 ----
 500
 
+# Verify sampling actually happens at the scan level
+query II
+EXPLAIN SELECT * FROM test_table USING SAMPLE 100 ROWS (system);
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 100 rows.*
+
+# Verify with repeatable seed
+query II
+EXPLAIN SELECT * FROM test_table USING SAMPLE 500 ROWS (system, 42);
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 500 rows.*
+
 # System sampling should not exceed table size
 query I
 SELECT COUNT(*) FROM test_table USING SAMPLE 15000 ROWS (system);

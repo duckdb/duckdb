@@ -8,18 +8,6 @@ PRAGMA enable_verification;
 statement ok
 CREATE TABLE pushdown_test AS SELECT i FROM range(1000000) tbl(i);
 
-# Verify pushdown happens in explain plan (no STREAMING_SAMPLE operator)
-query II
-EXPLAIN SELECT * FROM pushdown_test USING SAMPLE 100 ROWS (system);
-----
-physical_plan	<REGEX>:.*SEQ_SCAN.*System: 100 rows.*
-
-# Verify with repeatable seed
-query II
-EXPLAIN SELECT * FROM pushdown_test USING SAMPLE 500 ROWS (system, 42);
-----
-physical_plan	<REGEX>:.*SEQ_SCAN.*System: 500 rows.*
-
 # Test with filter - pushdown still happens at scan level
 query I
 SELECT COUNT(*) >= 40 AND COUNT(*) <= 60 FROM (
@@ -33,6 +21,18 @@ query I
 SELECT COUNT(*) FROM (SELECT i FROM pushdown_test) USING SAMPLE 200 ROWS (system);
 ----
 200
+
+# Verify that STREAMING_SAMPLE actually samples
+query II
+EXPLAIN SELECT COUNT(*) FROM (SELECT i FROM range(10000) tbl(i)) USING SAMPLE 100 ROWS (system)
+----
+physical_plan	<REGEX>:.*STREAMING_SAMPLE.*100 rows.*
+
+query II
+EXPLAIN SELECT COUNT(*) FROM (SELECT i FROM pushdown_test) USING SAMPLE 100 ROWS (system)
+----
+physical_plan	<REGEX>:.*STREAMING_SAMPLE.*100 rows.*
+
 
 # Multiple system samples in same query
 query I
