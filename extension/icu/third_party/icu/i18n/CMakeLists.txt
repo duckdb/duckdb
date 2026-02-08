@@ -73,6 +73,7 @@ add_library(
   hebrwcal.cpp
   indiancal.cpp
   islamcal.cpp
+  iso8601cal.cpp
   listformatter.cpp
   measfmt.cpp
   measunit.cpp
