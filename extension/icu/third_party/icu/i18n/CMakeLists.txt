@@ -105,6 +105,7 @@ add_library(
   number_patternstring.cpp
   number_rounding.cpp
   number_scientific.cpp
+  number_simple.cpp
   number_skeletons.cpp
   number_symbolswrapper.cpp
   number_usageprefs.cpp
