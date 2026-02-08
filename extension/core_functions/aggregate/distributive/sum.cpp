@@ -74,20 +74,18 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd
 };
 
 template <class T>
+static LogicalType GetValueLogicalType();
+
+template <> LogicalType GetValueLogicalType<int64_t>() { return LogicalType::BIGINT; }
+template <> LogicalType GetValueLogicalType<hugeint_t>() { return LogicalType::HUGEINT; }
+template <> LogicalType GetValueLogicalType<double>() { return LogicalType::DOUBLE; }
+
+template <class T>
 LogicalType GetSumStateType(const AggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("isset", LogicalType::BOOLEAN);
 
-	LogicalType value_type;
-	if (std::is_same<T, int64_t>::value) {
-		value_type = LogicalType::BIGINT;
-	} else if (std::is_same<T, hugeint_t>::value) {
-		value_type = LogicalType::HUGEINT;
-	} else if (std::is_same<T, double>::value) {
-		value_type = LogicalType::DOUBLE;
-	} else {
-		throw InternalException("Unsupported type for sum aggregate as the state-value");
-	}
+	LogicalType value_type = GetValueLogicalType<T>();
 	child_types.emplace_back("value", value_type);
 
 	return LogicalType::STRUCT(std::move(child_types));
