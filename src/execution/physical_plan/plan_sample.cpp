@@ -12,6 +12,15 @@ namespace duckdb {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 	D_ASSERT(op.children.size() == 1);
 
+	// For SYSTEM_SAMPLE with row count, we need to get the child's estimated cardinality
+	// BEFORE calling CreatePlan (which consumes the child).
+	idx_t child_cardinality = 0;
+	if (op.sample_options->method == SampleMethod::SYSTEM_SAMPLE && !op.sample_options->is_percentage) {
+		auto &first_child = *op.children[0];
+		child_cardinality = first_child.has_estimated_cardinality ? first_child.estimated_cardinality
+		                                                          : first_child.EstimateCardinality(context);
+	}
+
 	auto &plan = CreatePlan(*op.children[0]);
 	if (!op.sample_options->seed.IsValid()) {
 		auto &random_engine = RandomEngine::Get(context);
@@ -40,25 +49,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 		if (!is_percentage) {
 			rows = op.sample_options->sample_size.GetValue<int64_t>();
 			// To ensure consistency between optimized and unoptimized paths,
-			// we calculate the rate based on the estimated cardinality of the first child with an estimated
-			// cardinality.
-			idx_t base_cardinality = 0;
-			LogicalOperator *current = &op;
-			while (current) {
-				if (current->has_estimated_cardinality && current->estimated_cardinality > 0) {
-					base_cardinality = current->estimated_cardinality;
-					break;
-				}
-
-				if (!current->children.empty()) {
-					current = current->children[0].get();
-				} else {
-					break;
-				}
-			}
-
-			if (base_cardinality > 0) {
-				op.sample_options->sample_rate = static_cast<double>(rows) / static_cast<double>(base_cardinality);
+			// we calculate the rate based on the estimated cardinality of the child.
+			if (child_cardinality > 0) {
+				op.sample_options->sample_rate = static_cast<double>(rows) / static_cast<double>(child_cardinality);
 			} else {
 				op.sample_options->sample_rate = 1.0;
 			}
