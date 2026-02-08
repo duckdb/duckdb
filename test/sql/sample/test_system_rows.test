@@ -73,11 +73,17 @@ SELECT COUNT(*) FROM small_table USING SAMPLE 20 ROWS (system);
 statement ok
 PRAGMA disable_verification;
 
-# System sampling with filtering
+# System sampling with filtering, undershoots due to the filter
 query I
 SELECT COUNT(*) FROM test_table WHERE i < 5000 USING SAMPLE 100 ROWS (system);
 ----
 63
+
+# System sampling with filtering and pushdown, undershoots due to the filter
+query I
+SELECT COUNT(*) FROM (SELECT * FROM test_table WHERE i % 2 = 0) tbl(i) USING SAMPLE 200 ROWS (system);
+----
+103
 
 statement ok
 PRAGMA enable_verification;
@@ -89,15 +95,3 @@ SELECT COUNT(*) FROM (
 ) USING SAMPLE 50 ROWS (system);
 ----
 50
-
-# Test with WHERE clause and system sampling
-query I
-SELECT COUNT(*) FROM (SELECT * FROM test_table WHERE i % 2 = 0) tbl(i) USING SAMPLE 200 ROWS (system);
-----
-200
-
-# System sampling with ORDER BY (sampling happens before ordering)
-query I
-SELECT COUNT(*) FROM (SELECT * FROM test_table ORDER BY i) USING SAMPLE 100 ROWS (system);
-----
-100

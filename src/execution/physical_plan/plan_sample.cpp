@@ -40,16 +40,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 		if (!is_percentage) {
 			rows = op.sample_options->sample_size.GetValue<int64_t>();
 			// To ensure consistency between optimized and unoptimized paths,
-			// we calculate the rate based on the base table cardinality if possible.
-			idx_t base_cardinality = op.estimated_cardinality;
+			// we calculate the rate based on the estimated cardinality of the first child with an estimated
+			// cardinality.
+			idx_t base_cardinality = 0;
 			LogicalOperator *current = &op;
-			while (!current->children.empty()) {
-				current = current->children[0].get();
-				if (current->type == LogicalOperatorType::LOGICAL_GET) {
+			while (current) {
+				if (current->has_estimated_cardinality && current->estimated_cardinality > 0) {
 					base_cardinality = current->estimated_cardinality;
 					break;
 				}
+
+				if (!current->children.empty()) {
+					current = current->children[0].get();
+				} else {
+					break;
+				}
 			}
+
 			if (base_cardinality > 0) {
 				op.sample_options->sample_rate = static_cast<double>(rows) / static_cast<double>(base_cardinality);
 			} else {
@@ -63,6 +70,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 		if (!is_percentage) {
 			// As the sampling operator uses a distributed chunk-based approach it may
 			// oversample, so we wrap it with a LIMIT to ensure we stop as soon as the target is reached
+			// This also happens when no estimated cardinality is available.
 			auto &limit = Make<PhysicalLimit>(op.types, BoundLimitNode::ConstantValue(rows), BoundLimitNode(),
 			                                  op.estimated_cardinality);
 			limit.children.push_back(sample);

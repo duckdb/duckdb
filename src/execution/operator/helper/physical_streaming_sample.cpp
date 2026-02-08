@@ -61,7 +61,7 @@ void PhysicalStreamingSample::SystemSampleRows(DataChunk &input, DataChunk &resu
 
 	// We take rows from the beginning of the chunk rather than randomly
 	// selecting positions to keep sampling fast and consistent.
-	idx_t rows_to_take = static_cast<idx_t>(std::ceil(rate * STANDARD_VECTOR_SIZE));
+	idx_t rows_to_take = static_cast<idx_t>(std::ceil(rate * static_cast<double>(input.size())));
 	if (rows_to_take < 1) {
 		rows_to_take = 1;
 	}
