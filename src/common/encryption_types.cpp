@@ -80,14 +80,14 @@ idx_t EncryptionTag::size() const {
 }
 
 bool EncryptionTag::IsAllZeros() const {
-	const data_t *ptr = tag.get();
+	auto tag_ptr = tag.get();
 	idx_t len = size();
 
-	data_t acc = 0;
+	data_t is_only_zero = 0;
 	for (idx_t i = 0; i < len; ++i) {
-		acc |= ptr[i];
+		is_only_zero |= tag_ptr[i];
 	}
-	return acc == 0;
+	return is_only_zero == 0;
 }
 
 void EncryptionTag::SetSize(idx_t size) {
