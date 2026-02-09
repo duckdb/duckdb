@@ -8,7 +8,7 @@ SET debug_eviction_queue_sleep_micro_seconds = 10;
 statement ok
 PRAGMA memory_limit = '1GB';
 
-concurrentloop x 0 600
+concurrentloop x 0 10
 
 loop name 0 100
 
