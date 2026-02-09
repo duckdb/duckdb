@@ -76,9 +76,18 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd
 template <class T>
 static LogicalType GetValueLogicalType();
 
-template <> LogicalType GetValueLogicalType<int64_t>() { return LogicalType::BIGINT; }
-template <> LogicalType GetValueLogicalType<hugeint_t>() { return LogicalType::HUGEINT; }
-template <> LogicalType GetValueLogicalType<double>() { return LogicalType::DOUBLE; }
+template <>
+LogicalType GetValueLogicalType<int64_t>() {
+	return LogicalType::BIGINT;
+}
+template <>
+LogicalType GetValueLogicalType<hugeint_t>() {
+	return LogicalType::HUGEINT;
+}
+template <>
+LogicalType GetValueLogicalType<double>() {
+	return LogicalType::DOUBLE;
+}
 
 template <class T>
 LogicalType GetSumStateType(const AggregateFunction &function) {
