@@ -14,7 +14,8 @@ BlockManager::BlockManager(BufferManager &buffer_manager, const optional_idx blo
       block_alloc_size(block_alloc_size_p), block_header_size(block_header_size_p) {
 }
 
-bool BlockManager::BlockIsRegistered(lock_guard<mutex> &lock, block_id_t block_id) {
+bool BlockManager::BlockIsRegistered(block_id_t block_id) {
+	lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {
@@ -24,8 +25,8 @@ bool BlockManager::BlockIsRegistered(lock_guard<mutex> &lock, block_id_t block_i
 	return !entry->second.expired();
 }
 
-shared_ptr<BlockHandle> BlockManager::TryGetBlock(unique_lock<mutex> &lock, block_id_t block_id) {
-	D_ASSERT(lock.owns_lock());
+shared_ptr<BlockHandle> BlockManager::TryGetBlock(block_id_t block_id) {
+	lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {

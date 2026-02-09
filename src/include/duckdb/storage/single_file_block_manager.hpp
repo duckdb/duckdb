@@ -214,6 +214,6 @@ private:
 	//! The storage manager options
 	StorageManagerOptions options;
 	//! Lock for performing various operations in the single file block manager
-	mutex block_lock;
+	mutex single_file_block_lock;
 };
 } // namespace duckdb

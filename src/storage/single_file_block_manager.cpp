@@ -827,7 +827,7 @@ bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
 }
 
 block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	block_id_t block_id;
 	if (!free_list.empty()) {
 		// The free list is not empty, so we take its first element.
@@ -841,7 +841,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockIdInternal(FreeBlockType type) {
 	if (type == FreeBlockType::NEWLY_USED_BLOCK) {
 		newly_used_blocks.insert(block_id);
 	}
-	if (BlockIsRegistered(lock, block_id)) {
+	if (BlockIsRegistered(block_id)) {
 		throw InternalException("Free block %d is already registered", block_id);
 	}
 	return block_id;
@@ -856,7 +856,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockIdForCheckpoint() {
 }
 
 block_id_t SingleFileBlockManager::PeekFreeBlockId() {
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	if (!free_list.empty()) {
 		return *free_list.begin();
 	} else {
@@ -865,13 +865,13 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 }
 
 void SingleFileBlockManager::MarkBlockACheckpointed(block_id_t block_id) {
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	newly_used_blocks.erase(block_id);
 }
 
 void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	if (max_block <= block_id) {
 		// the block is past the current max_block
@@ -893,7 +893,7 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 }
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
-	unique_lock<mutex> lock(block_lock);
+	unique_lock<mutex> lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	D_ASSERT(block_id < max_block);
 
@@ -943,7 +943,7 @@ void SingleFileBlockManager::IncreaseBlockReferenceCountInternal(block_id_t bloc
 
 void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	// probably don't need this?
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	// all blocks should be accounted for - either in the block_usage_count, or in the free list
 	set<block_id_t> referenced_blocks;
 	for (auto &block : block_usage_count) {
@@ -1032,7 +1032,7 @@ void SingleFileBlockManager::VerifyBlocks(const unordered_map<block_id_t, idx_t>
 }
 
 void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	IncreaseBlockReferenceCountInternal(block_id);
 }
 
@@ -1041,12 +1041,12 @@ idx_t SingleFileBlockManager::GetMetaBlock() {
 }
 
 idx_t SingleFileBlockManager::TotalBlocks() {
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	return NumericCast<idx_t>(max_block);
 }
 
 idx_t SingleFileBlockManager::FreeBlocks() {
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	return free_list.size();
 }
 
@@ -1152,7 +1152,7 @@ void SingleFileBlockManager::Write(QueryContext context, FileBuffer &buffer, blo
 void SingleFileBlockManager::Truncate() {
 	BlockManager::Truncate();
 
-	lock_guard<mutex> guard(block_lock);
+	lock_guard<mutex> guard(single_file_block_lock);
 	idx_t blocks_to_truncate = 0;
 	// reverse iterate over the free-list
 	for (auto entry = free_list.rbegin(); entry != free_list.rend(); entry++) {
@@ -1224,7 +1224,7 @@ bool SingleFileBlockManager::AddFreeBlock(unique_lock<mutex> &lock, block_id_t b
 	if (!lock.owns_lock()) {
 		throw InternalException("AddFreeBlock must be called while holding the lock");
 	}
-	shared_ptr<BlockHandle> block = TryGetBlock(lock, block_id);
+	shared_ptr<BlockHandle> block = TryGetBlock(block_id);
 	if (!block) {
 		// the block does not exist
 		// regular free block
@@ -1248,7 +1248,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// add all modified blocks to the free list: they can now be written to again
 	metadata_manager.MarkBlocksAsModified();
 
-	unique_lock<mutex> lock(block_lock);
+	unique_lock<mutex> lock(single_file_block_lock);
 	// set the iteration count
 	header.iteration = ++iteration_count;
 
@@ -1346,7 +1346,7 @@ void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
 	// perform the actual unregistration
 	BlockManager::UnregisterBlock(id);
 	// check if it is part of the newly free list
-	lock_guard<mutex> lock(block_lock);
+	lock_guard<mutex> lock(single_file_block_lock);
 	auto entry = free_blocks_in_use.find(id);
 	if (entry != free_blocks_in_use.end()) {
 		// it is! move it to the regular free list so the block can be re-used
