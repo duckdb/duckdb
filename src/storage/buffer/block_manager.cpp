@@ -22,12 +22,7 @@ bool BlockManager::BlockIsRegistered(block_id_t block_id) {
 		return false;
 	}
 	// already exists: check if it hasn't expired yet
-	auto existing_ptr = entry->second.lock();
-	if (existing_ptr) {
-		//! it hasn't! return it
-		return true;
-	}
-	return false;
+	return !entry->second.expired();
 }
 
 shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {
