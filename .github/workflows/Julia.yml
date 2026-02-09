@@ -38,7 +38,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
+  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
 
 jobs:
   check-draft:
@@ -46,9 +46,9 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
-      - name: Preliminary checks on CI 
+      - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
-      
+
   format_check:
     name: Julia Format Check
     needs: check-draft

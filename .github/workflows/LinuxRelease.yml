@@ -80,6 +80,8 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Install pytest
       run: |
         python3 -m pip install pytest
@@ -176,6 +178,8 @@ jobs:
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
