@@ -1103,7 +1103,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 		column_info.compression_type = CompressionTypeToString(segment.GetCompressionFunction().type);
 		{
 			lock_guard<mutex> l(stats_lock);
-			column_info.segment_stats = segment.stats.statistics.ToString();
+			column_info.segment_stats = segment.stats.statistics.ToStruct();
 		}
 		column_info.has_updates = ColumnData::HasUpdates();
 		// persistent

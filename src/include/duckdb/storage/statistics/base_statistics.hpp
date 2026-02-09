@@ -121,6 +121,7 @@ public:
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
 	void Verify(Vector &vector, idx_t count) const;
 
+	Value ToStruct() const;
 	string ToString() const;
 
 	idx_t GetDistinctCount();
