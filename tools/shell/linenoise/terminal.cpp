@@ -355,17 +355,18 @@ TerminalSize Terminal::TryMeasureTerminalSize() {
 bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
 	/* Parse it. */
 	// expected format is: \x1b]11;rgb:1e1e/1e1e/1e1e
-	idx_t offset = 0;
-	// find "rgb:"
-	for (; offset + 9 < buflen; offset++) {
-		if (memcmp(buf + offset, (const void *)"\x1b]11;rgb:", 9) == 0) {
+	static const char rgb_format[] = "\x1b]11;rgb:";
+	idx_t rgb_length = sizeof(rgb_format) - 1;
+	idx_t offset;
+	for (offset = 0; offset + rgb_length < buflen; offset++) {
+		if (memcmp(buf + offset, rgb_format, rgb_length) == 0) {
 			break;
 		}
 		// not part of the rgb code - buffer the keypress
 		BufferedKeyPresses::BufferKeyPress((KEY_ACTION)buf[offset]);
 	}
 	// now parse the actual r/g/b values
-	offset += 4;
+	offset += rgb_length;
 	if (offset >= buflen) {
 		return false;
 	}
