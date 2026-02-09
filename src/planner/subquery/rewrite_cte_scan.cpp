@@ -14,10 +14,25 @@
 
 namespace duckdb {
 
+static bool ContainsCTERef(LogicalOperator &op, idx_t table_index) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cteref = op.Cast<LogicalCTERef>();
+		if (cteref.cte_index == table_index) {
+			return true;
+		}
+	}
+	for (auto &child : op.children) {
+		if (ContainsCTERef(*child, table_index)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns,
-                               bool rewrite_dependent_joins)
+                               bool rewrite_dependent_joins, bool recursive_cte)
     : table_index(table_index), correlated_columns(correlated_columns),
-      rewrite_dependent_joins(rewrite_dependent_joins) {
+      rewrite_dependent_joins(rewrite_dependent_joins), recursive_cte(recursive_cte) {
 }
 
 void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
@@ -36,6 +51,19 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 		// We have to add the correlated columns of the recursive CTE to the
 		// set of columns of this operator.
 		auto &join = op.Cast<LogicalDependentJoin>();
+		if (!recursive_cte) {
+			bool has_cte_ref = false;
+			for (auto &child : join.children) {
+				if (ContainsCTERef(*child, table_index)) {
+					has_cte_ref = true;
+					break;
+				}
+			}
+			if (!has_cte_ref) {
+				VisitOperatorChildren(op);
+				return;
+			}
+		}
 
 		for (auto &c : correlated_columns) {
 			bool contains_binding = false;
@@ -48,10 +76,15 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 			// We only add new columns
 			if (!contains_binding) {
 				CorrelatedColumnInfo corr = c;
-				// The correlated columns must be placed at the beginning of the
-				// correlated_columns list. Otherwise, further column accesses
-				// and rewrites will fail.
-				join.correlated_columns.AddColumn(std::move(corr));
+				// NOTE: correlated_map uses positional indices from correlated_columns.
+				// For recursive CTEs we must prepend to preserve the expected ordering
+				// during recursive rewrites. For non-recursive CTEs we append to keep
+				// existing indices stable.
+				if (recursive_cte) {
+					join.correlated_columns.AddColumn(std::move(corr));
+				} else {
+					join.correlated_columns.AddColumnToBack(std::move(corr));
+				}
 			}
 		}
 	}
