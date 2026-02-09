@@ -735,9 +735,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
-	case LogicalTypeId::AGGREGATE_STATE: {
+	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
-		return Value::AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
+		return Value::LEGACY_AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::BIT: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -775,6 +775,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		children.emplace_back(VariantVector::GetData(*vector).GetValue(index_p));
 		return Value::VARIANT(children);
 	}
+	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
 		auto &child_entries = StructVector::GetEntries(*vector);
@@ -782,6 +783,12 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 			auto &struct_child = child_entries[child_idx];
 			children.push_back(struct_child->GetValue(index_p));
+		}
+
+		if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
+			// We could also just call `Value::STRUCT` as it has the same implementation, but this is implementation
+			// details, so for consistency and bullet-proof implementation we keep those constructors separate.
+			return Value::AGGREGATE_STATE(type, std::move(children));
 		}
 		return Value::STRUCT(type, std::move(children));
 	}
@@ -819,7 +826,8 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	if (v_p.GetType().HasAlias()) {
 		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
 	}
-	if (v_p.GetType().id() != LogicalTypeId::AGGREGATE_STATE && value.type().id() != LogicalTypeId::AGGREGATE_STATE) {
+	if (v_p.GetType().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE &&
+	    value.type().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE) {
 		D_ASSERT(v_p.GetType() == value.type());
 	}
 	return value;
@@ -2482,7 +2490,8 @@ void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
 //===--------------------------------------------------------------------===//
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
-	         vector.GetType().id() == LogicalTypeId::VARIANT);
+	         vector.GetType().id() == LogicalTypeId::VARIANT ||
+	         vector.GetType().id() == LogicalTypeId::AGGREGATE_STATE);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);

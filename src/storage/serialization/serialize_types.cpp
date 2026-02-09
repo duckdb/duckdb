@@ -50,6 +50,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 		break;
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
 		return nullptr;
+	case ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO:
+		result = LegacyAggregateStateTypeInfo::Deserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::LIST_TYPE_INFO:
 		result = ListTypeInfo::Deserialize(deserializer);
 		break;
@@ -72,25 +75,27 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &deserializer)
 	result->extension_info = std::move(extension_info);
 	return result;
 }
+// NOLINTBEGIN(bugprone-parent-virtual-call)
+// reasons: Multi-level inheritance is not supported in the generation tool
 
 void AggregateStateTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
-	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
-	if (serializer.ShouldSerialize(7)) {
-		serializer.WritePropertyWithDefault<LogicalType>(203, "state_type", state_type.state_type, LogicalTypeId::INVALID);
-	}
+	serializer.WritePropertyWithDefault<string>(300, "function_name", state_type.function_name);
+	serializer.WriteProperty<LogicalType>(301, "return_type", state_type.return_type);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(302, "bound_argument_types", state_type.bound_argument_types);
+	serializer.WritePropertyWithDefault<child_list_t<LogicalType>>(303, "child_types", child_types);
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
-	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
-	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
-	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(203, "state_type", result->state_type.state_type, LogicalTypeId::INVALID);
+	deserializer.ReadPropertyWithDefault<string>(300, "function_name", result->state_type.function_name);
+	deserializer.ReadProperty<LogicalType>(301, "return_type", result->state_type.return_type);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(302, "bound_argument_types", result->state_type.bound_argument_types);
+	deserializer.ReadPropertyWithDefault<child_list_t<LogicalType>>(303, "child_types", result->child_types);
 	return std::move(result);
 }
+
+// NOLINTEND(bugprone-parent-virtual-call)
 
 void AnyTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
@@ -162,6 +167,21 @@ void IntegerLiteralTypeInfo::Serialize(Serializer &serializer) const {
 shared_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<IntegerLiteralTypeInfo>(new IntegerLiteralTypeInfo());
 	deserializer.ReadProperty<Value>(200, "constant_value", result->constant_value);
+	return std::move(result);
+}
+
+void LegacyAggregateStateTypeInfo::Serialize(Serializer &serializer) const {
+	ExtraTypeInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "function_name", state_type.function_name);
+	serializer.WriteProperty<LogicalType>(201, "return_type", state_type.return_type);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", state_type.bound_argument_types);
+}
+
+shared_ptr<ExtraTypeInfo> LegacyAggregateStateTypeInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::shared_ptr<LegacyAggregateStateTypeInfo>(new LegacyAggregateStateTypeInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->state_type.function_name);
+	deserializer.ReadProperty<LogicalType>(201, "return_type", result->state_type.return_type);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(202, "bound_argument_types", result->state_type.bound_argument_types);
 	return std::move(result);
 }
 
