@@ -56,17 +56,15 @@
 #ifdef __APPLE__
 #include <sys/sysctl.h>
 
-// code straight from Apple's example
+// code adapted from Apple's example
 // https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment#Determine-Whether-Your-App-Is-Running-as-a-Translated-Binary
-static int OsxRosettaIsActive() {
+static bool OsxRosettaIsActive() {
 	int ret = 0;
 	size_t size = sizeof(ret);
-	if (sysctlbyname("sysctl.proc_translated", &ret, &size, NULL, 0) == -1) {
-		if (errno == ENOENT)
-			return 0;
-		return -1;
+	if (sysctlbyname("sysctl.proc_translated", &ret, &size, NULL, 0)) {
+		return false;
 	}
-	return ret;
+	return ret == 1;
 }
 
 #endif
