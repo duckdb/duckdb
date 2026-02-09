@@ -47,8 +47,11 @@ public:
 class DeleteLocalState : public LocalSinkState {
 public:
 	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-		const auto &types = table.GetTypes();
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                 const vector<LogicalType> &return_types, bool return_chunk) {
+		// For RETURNING: use operator's return types (may include virtual columns)
+		// For non-RETURNING with indexes: use table types for index updates
+		auto types = return_chunk ? return_types : table.GetTypes();
 		auto initialize = vector<bool>(types.size(), false);
 		delete_chunk.Initialize(Allocator::Get(context), types, initialize);
 
@@ -90,6 +93,10 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			// Column not in scan (sparse mapping for index-only case) - use NULL placeholder
 			l_state.delete_chunk.data[i].Reference(Value(types[i]));
 		}
+	}
+	// Add virtual columns (e.g., rowid) after table columns
+	for (idx_t i = table.ColumnCount(); i < l_state.delete_chunk.ColumnCount(); i++) {
+		l_state.delete_chunk.data[i].Reference(row_ids);
 	}
 	l_state.delete_chunk.SetCardinality(chunk.size());
 
@@ -154,7 +161,7 @@ unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints);
+	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints, GetTypes(), return_chunk);
 }
 
 //===--------------------------------------------------------------------===//

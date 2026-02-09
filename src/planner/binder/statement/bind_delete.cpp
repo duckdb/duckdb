@@ -91,8 +91,10 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		del->table_index = update_table_index;
 
 		unique_ptr<LogicalOperator> del_as_logicaloperator = std::move(del);
+		// Include virtual columns (like rowid) so they can be referenced in RETURNING
+		auto virtual_columns = table.GetVirtualColumns();
 		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
-		                     std::move(del_as_logicaloperator));
+		                     std::move(del_as_logicaloperator), std::move(virtual_columns));
 	}
 	BoundStatement result;
 	result.plan = std::move(del);
