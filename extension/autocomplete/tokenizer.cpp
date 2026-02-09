@@ -74,6 +74,19 @@ bool BaseTokenizer::CharacterIsInitialNumber(char c) {
 	return c == '.';
 }
 
+bool BaseTokenizer::CharacterIsSpecialStringCharacter(char c) {
+	if (c == 'N') {
+		return true;
+	}
+	if (c == 'X') {
+		return true;
+	}
+	if (c == 'E') {
+		return true;
+	}
+	return false;
+}
+
 bool BaseTokenizer::CharacterIsNumber(char c) {
 	if (CharacterIsInitialNumber(c)) {
 		return true;
@@ -264,6 +277,15 @@ bool BaseTokenizer::TokenizeInput() {
 				state = TokenizeState::NUMERIC;
 				last_pos = i;
 				break;
+			}
+			if (CharacterIsSpecialStringCharacter(c)) {
+				// Look ahead to see if a quote follows
+				if (i + 1 < sql.size() && sql[i + 1] == '\'') {
+					state = TokenizeState::STRING_LITERAL;
+					last_pos = i;
+					i++;
+					break;
+				}
 			}
 			if (StringUtil::CharacterIsOperator(c)) {
 				state = TokenizeState::OPERATOR;

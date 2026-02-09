@@ -4,6 +4,8 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
@@ -25,6 +27,8 @@ enum class ParseResultType : uint8_t {
 	STRING,
 	INVALID
 };
+
+enum class SpecialStringCharacter { STANDARD = 0, NATIONAL_STRING, HEXADECIMAL_STRING, ESCAPE_STRING };
 
 inline const char *ParseResultToString(ParseResultType type) {
 	switch (type) {
@@ -128,7 +132,7 @@ struct ListParseResult : ParseResult {
 public:
 	explicit ListParseResult(vector<optional_ptr<ParseResult>> results_p, string name_p)
 	    : ParseResult(TYPE), children(std::move(results_p)) {
-		name = name_p;
+		name = std::move(name_p);
 	}
 
 	vector<optional_ptr<ParseResult>> GetChildren() const {
@@ -296,14 +300,75 @@ class StringLiteralParseResult : public ParseResult {
 public:
 	static constexpr ParseResultType TYPE = ParseResultType::STRING;
 
-	explicit StringLiteralParseResult(string string_p) : ParseResult(TYPE), result(std::move(string_p)) {
+	explicit StringLiteralParseResult(string string_p, SpecialStringCharacter string_type_p)
+	    : ParseResult(TYPE), result(std::move(string_p)), string_type(string_type_p) {
 	}
+
+	string GetRawString() const {
+		return result;
+	}
+
+	unique_ptr<ParsedExpression> ToExpression() {
+		switch (string_type) {
+		case SpecialStringCharacter::STANDARD:
+			return make_uniq<ConstantExpression>(Value(result));
+		case SpecialStringCharacter::NATIONAL_STRING:
+			return make_uniq<CastExpression>(LogicalType::VARCHAR, make_uniq<ConstantExpression>(Value(result)));
+		case SpecialStringCharacter::HEXADECIMAL_STRING: {
+			string hex_string = "x" + result;
+			return make_uniq<ConstantExpression>(Value(hex_string));
+		}
+		case SpecialStringCharacter::ESCAPE_STRING:
+			string escaped_result;
+			escaped_result.reserve(result.size());
+
+			for (size_t i = 0; i < result.size(); ++i) {
+				if (result[i] == '\\' && i + 1 < result.size()) {
+					i++;
+					switch (result[i]) {
+					case 'n':
+						escaped_result += '\n';
+						break;
+					case 't':
+						escaped_result += '\t';
+						break;
+					case 'r':
+						escaped_result += '\r';
+						break;
+					case '\\':
+						escaped_result += '\\';
+						break; // This handles your '\\' case
+					case '\'':
+						escaped_result += '\'';
+						break;
+					default:
+						escaped_result += result[i];
+						break;
+					}
+				} else {
+					escaped_result += result[i];
+				}
+			}
+			return make_uniq<ConstantExpression>(Value(escaped_result));
+		}
+	}
+
 	string result;
+
+	SpecialStringCharacter string_type;
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                      const std::string &indent, bool is_last) const override {
 		ParseResult::ToStringInternal(ss, visited, indent, is_last);
-		ss << ": \"" << result << "\"\n";
+		if (string_type == SpecialStringCharacter::STANDARD) {
+			ss << ": \"" << result << "\"\n";
+		} else if (string_type == SpecialStringCharacter::ESCAPE_STRING) {
+			ss << ": E\"" << result << "\"\n";
+		} else if (string_type == SpecialStringCharacter::NATIONAL_STRING) {
+			ss << ": N\"" << result << "\"\n";
+		} else if (string_type == SpecialStringCharacter::HEXADECIMAL_STRING) {
+			ss << ": X\"" << result << "\"\n";
+		}
 	}
 };
 

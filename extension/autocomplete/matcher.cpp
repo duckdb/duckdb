@@ -599,13 +599,23 @@ public:
 		if (state.token_index >= state.tokens.size()) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
+
+		auto &token = state.tokens[state.token_index];
+		auto &token_text = token.text;
+
+		auto special_type = SpecialStringCharacter(token_text.front());
+
 		if (!MatchStringLiteral(state)) {
 			return nullptr;
 		}
-		string stripped_string = token_text.substr(1, token_text.length() - 2);
 
-		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string));
+		idx_t prefix_len = (special_type == SpecialStringCharacter::STANDARD) ? 1 : 2;
+		idx_t suffix_len = 1;
+
+		string stripped_string = token_text.substr(prefix_len, token_text.length() - (prefix_len + suffix_len));
+
+		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, special_type));
+
 		result->name = name;
 		return result;
 	}
@@ -619,9 +629,33 @@ public:
 	}
 
 private:
+	static SpecialStringCharacter SpecialStringCharacter(char c) {
+		if (c == 'N') {
+			return SpecialStringCharacter::NATIONAL_STRING;
+		}
+		if (c == 'X') {
+			return SpecialStringCharacter::HEXADECIMAL_STRING;
+		}
+		if (c == 'E') {
+			return SpecialStringCharacter::ESCAPE_STRING;
+		}
+		return SpecialStringCharacter::STANDARD;
+	}
+
 	static bool MatchStringLiteral(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
-		if (token_text.size() >= 2 && token_text.front() == '\'' && token_text.back() == '\'') {
+		if (token_text.empty()) {
+			return false;
+		}
+
+		auto special_type = SpecialStringCharacter(token_text.front());
+		idx_t open_quote_idx = (special_type == SpecialStringCharacter::STANDARD) ? 0 : 1;
+		idx_t min_len = open_quote_idx + 2;
+
+		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
 			state.token_index++;
 			return true;
 		}
