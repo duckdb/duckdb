@@ -354,13 +354,15 @@ TerminalSize Terminal::TryMeasureTerminalSize() {
 
 bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
 	/* Parse it. */
-	// expected format is: rgb:1e1e/1e1e/1e1e
+	// expected format is: \x1b]11;rgb:1e1e/1e1e/1e1e
 	idx_t offset = 0;
 	// find "rgb:"
-	for (; offset + 4 < buflen; offset++) {
-		if (memcmp(buf + offset, (const void *)"rgb:", 4) == 0) {
+	for (; offset + 9 < buflen; offset++) {
+		if (memcmp(buf + offset, (const void *)"\x1b]11;rgb:", 9) == 0) {
 			break;
 		}
+		// not part of the rgb code - buffer the keypress
+		BufferedKeyPresses::BufferKeyPress((KEY_ACTION)buf[offset]);
 	}
 	// now parse the actual r/g/b values
 	offset += 4;
@@ -444,7 +446,7 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	bool success = false;
 	if (write(ofd, "\x1b]11;?\007", 7) == 7) {
 		// Read the response: until \a or until we fill up our buffer
-		char buf[64];
+		char buf[1000];
 		idx_t i = 0;
 		while (i < sizeof(buf) - 1) {
 			// check if we have data to read
