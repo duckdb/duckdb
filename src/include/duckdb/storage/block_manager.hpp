@@ -167,7 +167,8 @@ public:
 	}
 
 protected:
-	bool BlockIsRegistered(block_id_t block_id);
+	bool BlockIsRegistered(lock_guard<mutex> &lock, block_id_t block_id);
+	shared_ptr<BlockHandle> TryGetBlock(unique_lock<mutex> &lock, block_id_t block_id);
 
 public:
 	template <class TARGET>
