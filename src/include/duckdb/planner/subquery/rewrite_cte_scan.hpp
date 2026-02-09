@@ -18,7 +18,7 @@ namespace duckdb {
 class RewriteCTEScan : public LogicalOperatorVisitor {
 public:
 	RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns,
-	               bool rewrite_dependent_joins = false);
+	               bool rewrite_dependent_joins = false, bool recursive_cte = false);
 
 	void VisitOperator(LogicalOperator &op) override;
 
@@ -26,6 +26,7 @@ private:
 	idx_t table_index;
 	const CorrelatedColumns &correlated_columns;
 	bool rewrite_dependent_joins = false;
+	bool recursive_cte = false;
 };
 
 } // namespace duckdb
