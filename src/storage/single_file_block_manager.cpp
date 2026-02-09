@@ -1235,7 +1235,7 @@ bool SingleFileBlockManager::AddFreeBlock(unique_lock<mutex> &lock, block_id_t b
 	free_blocks_in_use.insert(block_id);
 
 	// release the lock while destroying the block since the block destructor can call UnregisterBlock
-	lock.release();
+	lock.unlock();
 	block.reset();
 	lock.lock();
 	return false;
