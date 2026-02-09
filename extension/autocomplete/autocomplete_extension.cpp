@@ -868,19 +868,13 @@ public:
 };
 
 static void EnablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto new_conn = make_shared_ptr<Connection>(*context.db);
-	auto result = new_conn->Query("SET allow_parser_override_extension=strict");
-	if (result->HasError()) {
-		result->ThrowError();
-	}
+	auto &db_config = DBConfig::GetConfig(context);
+	db_config.SetOptionByName("allow_parser_override_extension", Value("strict"));
 }
 
 static void DisablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto new_conn = make_shared_ptr<Connection>(*context.db);
-	auto result = new_conn->Query("SET allow_parser_override_extension=default");
-	if (result->HasError()) {
-		result->ThrowError();
-	}
+	auto &db_config = DBConfig::GetConfig(context);
+	db_config.SetOptionByName("allow_parser_override_extension", Value("default"));
 }
 
 static duckdb::unique_ptr<FunctionData> EnablePEGParserBind(ClientContext &context, TableFunctionBindInput &input,
