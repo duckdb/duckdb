@@ -257,7 +257,6 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DatabaseInstance
 	} else {
 		versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
 	}
-	string default_endpoint = ExtensionRepository::DEFAULT_REPOSITORY_URL;
 #ifdef WASM_LOADABLE_EXTENSIONS
 	versioned_path = versioned_path + ".wasm";
 #else
