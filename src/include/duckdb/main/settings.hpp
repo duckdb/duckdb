@@ -18,7 +18,7 @@ struct Settings {
 	static typename std::enable_if<std::is_enum<typename OP::RETURN_TYPE>::value, typename OP::RETURN_TYPE>::type
 	Get(const SOURCE &source) {
 		Value result;
-		if (TryGetSettingInternal(source, OP::SettingIndex, result)) {
+		if (TryGetSettingInternal(source, OP::SettingIndex, result) && !result.IsNull()) {
 			return EnumUtil::FromString<typename OP::RETURN_TYPE>(StringValue::Get(result));
 		}
 		return EnumUtil::FromString<typename OP::RETURN_TYPE>(OP::DefaultValue);
@@ -28,7 +28,7 @@ struct Settings {
 	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, string>::value, string>::type
 	Get(const SOURCE &source) {
 		Value result;
-		if (TryGetSettingInternal(source, OP::SettingIndex, result)) {
+		if (TryGetSettingInternal(source, OP::SettingIndex, result) && !result.IsNull()) {
 			return StringValue::Get(result);
 		}
 		return OP::DefaultValue;
@@ -38,7 +38,7 @@ struct Settings {
 	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, bool>::value, bool>::type
 	Get(const SOURCE &source) {
 		Value result;
-		if (TryGetSettingInternal(source, OP::SettingIndex, result)) {
+		if (TryGetSettingInternal(source, OP::SettingIndex, result) && !result.IsNull()) {
 			return BooleanValue::Get(result);
 		}
 		return StringUtil::Equals(OP::DefaultValue, "true");
@@ -48,7 +48,7 @@ struct Settings {
 	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, idx_t>::value, idx_t>::type
 	Get(const SOURCE &source) {
 		Value result;
-		if (TryGetSettingInternal(source, OP::SettingIndex, result)) {
+		if (TryGetSettingInternal(source, OP::SettingIndex, result) && !result.IsNull()) {
 			return UBigIntValue::Get(result);
 		}
 		return StringUtil::ToUnsigned(OP::DefaultValue);
@@ -58,7 +58,7 @@ struct Settings {
 	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, int64_t>::value, int64_t>::type
 	Get(const SOURCE &source) {
 		Value result;
-		if (TryGetSettingInternal(source, OP::SettingIndex, result)) {
+		if (TryGetSettingInternal(source, OP::SettingIndex, result) && !result.IsNull()) {
 			return BigIntValue::Get(result);
 		}
 		return StringUtil::ToSigned(OP::DefaultValue);
@@ -68,7 +68,7 @@ struct Settings {
 	static typename std::enable_if<std::is_same<typename OP::RETURN_TYPE, double>::value, double>::type
 	Get(const SOURCE &source) {
 		Value result;
-		if (TryGetSettingInternal(source, OP::SettingIndex, result)) {
+		if (TryGetSettingInternal(source, OP::SettingIndex, result) && !result.IsNull()) {
 			return DoubleValue::Get(result);
 		}
 		return StringUtil::ToDouble(OP::DefaultValue);
