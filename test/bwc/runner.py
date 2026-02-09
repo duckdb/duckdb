@@ -225,7 +225,7 @@ if __name__ == "__main__":
 
     with open(skip_file_path, 'a') as skip_file:
       test_pattern = sys.argv[1] if len(sys.argv) > 1 else None
-      res = load_test_files(bwc_tests_base_dir, old_duckdb_version, skip_file_path, test_pattern)
+      res = load_test_files(duckdb_root_dir, bwc_tests_base_dir, old_duckdb_version, skip_file_path, test_pattern)
       tests = res['tests']
 
       extensions = res['needed_extensions']

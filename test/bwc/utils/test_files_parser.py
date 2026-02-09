@@ -1,4 +1,5 @@
-from typing import List
+from typing import Any, Generator, List
+import json
 import os
 import time
 from zipfile import Path
@@ -7,7 +8,6 @@ import shutil
 
 import duckdb
 
-from typing import Any, Generator
 from duckdb_sqllogictest import SQLLogicParser
 from duckdb_sqllogictest.result import (
     ExecuteResult,
@@ -504,18 +504,27 @@ class SQLLogicTestSerializer(SQLLogicRunner):
       self.current_test.write_test_queries()
 
 
-def list_skipped_tests(skip_file_path: str) -> set:
+def load_skipped_tests_from_file(json_file: str) -> set[str]:
+    if not os.path.exists(json_file):
+        return set()
+
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+
     skipped_tests = set()
-    if os.path.exists(skip_file_path):
-      with open(skip_file_path, 'r', ) as skip_file:
-          for line in skip_file:
-              line = line.strip()
-              if line and not line.startswith("#"):
-                if '#' in line:
-                  line = line.split('#')[0].strip()
-                skipped_tests.add(line)
+    for entry in data.get('skip_tests', []):
+        skipped_tests.update(entry.get('paths', []))
 
     return skipped_tests
+
+
+def list_skipped_tests(duckdb_test_config_dir: str, duckdb_version: str) -> set[str]:
+  base_skip_file_path = f"{duckdb_test_config_dir}/test/configs/serialization_bwc_base.json"
+  version_skip_file_path = f"{duckdb_test_config_dir}/test/configs/serialization_bwc_{duckdb_version}.json"
+  skipped_tests = load_skipped_tests_from_file(base_skip_file_path)
+  skipped_tests.update(load_skipped_tests_from_file(version_skip_file_path))
+  return skipped_tests
+
 
 class LoadingStats:
   def __init__(self):
@@ -563,7 +572,7 @@ class LoadingStats:
       logger.info(f"    {count} ({(count/self.skipped_count*100) if self.skipped_count > 0 else 0:.2f}%): {reason}")
 
 
-def load_test_files(duckdb_bwc_base_dir: str, duckdb_version: str, skip_file_path: str, test_pattern: str = None) -> List:
+def load_test_files(duckdb_root_dir: str, duckdb_bwc_base_dir: str, duckdb_version: str, skip_file_path: str, test_pattern: str = None) -> List:
   loading_stats = LoadingStats()
 
   spec_files_dir = f"{duckdb_bwc_base_dir}/specs/{duckdb_version}"
@@ -573,7 +582,7 @@ def load_test_files(duckdb_bwc_base_dir: str, duckdb_version: str, skip_file_pat
   logger.info(f"Found {len(files)} test files")
 
   loaded_tests = []
-  skipped_tests = list_skipped_tests(skip_file_path) if test_pattern is None else set()
+  skipped_tests = list_skipped_tests(duckdb_root_dir, duckdb_version) if test_pattern is None else set()
   logger.debug(f"Found {len(skipped_tests)} tests to skip in '{skip_file_path}'")
   len_spec_files_dir = len(spec_files_dir) + 1
   needed_extensions = set()
