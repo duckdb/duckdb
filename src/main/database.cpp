@@ -41,24 +41,6 @@
 #include "duckdb/common/thread.hpp"
 #endif
 
-#ifdef __APPLE__
-#include <sys/sysctl.h>
-
-// code straight from Apple's example
-// https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment#Determine-Whether-Your-App-Is-Running-as-a-Translated-Binary
-static int OsxRosettaIsActive() {
-	int ret = 0;
-	size_t size = sizeof(ret);
-	if (sysctlbyname("sysctl.proc_translated", &ret, &size, NULL, 0) == -1) {
-		if (errno == ENOENT)
-			return 0;
-		return -1;
-	}
-	return ret;
-}
-
-#endif
-
 namespace duckdb {
 
 DBConfig::DBConfig() {
@@ -348,12 +330,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	scheduler->RelaunchThreads();
-
-#ifdef __APPLE__
-	if (!OsxRosettaIsActive()) {
-		DUCKDB_LOG_WARNING(*this, "EEEK");
-	}
-#endif
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared_ptr<DatabaseInstance>()) {

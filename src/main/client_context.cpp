@@ -53,6 +53,26 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 
+
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+
+// code straight from Apple's example
+// https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment#Determine-Whether-Your-App-Is-Running-as-a-Translated-Binary
+static int OsxRosettaIsActive() {
+	int ret = 0;
+	size_t size = sizeof(ret);
+	if (sysctlbyname("sysctl.proc_translated", &ret, &size, NULL, 0) == -1) {
+		if (errno == ENOENT)
+			return 0;
+		return -1;
+	}
+	return ret;
+}
+
+#endif
+
+
 namespace duckdb {
 
 struct ActiveQueryContext {
@@ -155,6 +175,12 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 	LoggingContext context(LogContextScope::CONNECTION);
 	logger = db->GetLogManager().CreateLogger(context, true);
 	client_data = make_uniq<ClientData>(*this);
+
+#ifdef __APPLE__
+	if (!OsxRosettaIsActive()) {
+		DUCKDB_LOG_WARNING(*this, "EEEK");
+	}
+#endif
 }
 
 ClientContext::~ClientContext() {
