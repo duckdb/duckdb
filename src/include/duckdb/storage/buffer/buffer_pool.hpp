@@ -95,6 +95,10 @@ protected:
 	//! Evict object cache entries if needed.
 	EvictionResult EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit);
 
+	//! Purge all blocks that haven't been pinned within the last N seconds
+	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
+	idx_t PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit);
+
 	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue(const BlockHandle &handle);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
