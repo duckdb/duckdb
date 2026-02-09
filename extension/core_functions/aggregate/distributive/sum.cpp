@@ -95,6 +95,10 @@ LogicalType GetSumStateType(const AggregateFunction &function) {
 	child_types.emplace_back("isset", LogicalType::BOOLEAN);
 
 	LogicalType value_type = GetValueLogicalType<T>();
+	// Use the return type when its physical representation matches the state type
+	if (function.return_type.InternalType() == value_type.InternalType()) {
+		value_type = function.return_type;
+	}
 	child_types.emplace_back("value", value_type);
 
 	return LogicalType::STRUCT(std::move(child_types));
