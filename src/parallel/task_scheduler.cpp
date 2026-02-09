@@ -525,15 +525,16 @@ static vector<int> GetProcessCPUMask() {
 
 static void SetThreadAffinity(thread &thread, const vector<int> &available_cpus, idx_t thread_idx) {
 #if defined(__GLIBC__)
-	D_ASSERT(thread_idx < available_cpus.size());
-	const auto cpu_id = available_cpus[thread_idx];
-	cpu_set_t cpuset;
-	CPU_ZERO(&cpuset);
-	CPU_SET(cpu_id, &cpuset);
+	if (thread_idx < available_cpus.size()) {
+		const auto cpu_id = available_cpus[thread_idx];
+		cpu_set_t cpuset;
+		CPU_ZERO(&cpuset);
+		CPU_SET(cpu_id, &cpuset);
 
-	// note that we don't care about the return value here
-	// if we did not manage to set affinity, the thread just does not have affinity, which is OK
-	pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t), &cpuset);
+		// note that we don't care about the return value here
+		// if we did not manage to set affinity, the thread just does not have affinity, which is OK
+		pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t), &cpuset);
+	}
 #endif
 }
 #endif
