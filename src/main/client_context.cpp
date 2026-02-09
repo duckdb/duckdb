@@ -53,7 +53,6 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 
-
 #ifdef __APPLE__
 #include <sys/sysctl.h>
 
@@ -71,7 +70,6 @@ static int OsxRosettaIsActive() {
 }
 
 #endif
-
 
 namespace duckdb {
 
@@ -177,8 +175,10 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 	client_data = make_uniq<ClientData>(*this);
 
 #ifdef __APPLE__
-	if (!OsxRosettaIsActive()) {
-		DUCKDB_LOG_WARNING(*this, "EEEK");
+	if (OsxRosettaIsActive()) {
+		DUCKDB_LOG_WARNING(*this, "OSX binary translation ('Rosetta') detected. Running DuckDB through Rosetta will "
+		                          "cause a significant performance degradation. DuckDB is available natively on Apple "
+		                          "silicon, please download an appropriate binary here: https://duckdb.org/install/");
 	}
 #endif
 }

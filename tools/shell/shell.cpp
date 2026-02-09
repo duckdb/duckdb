@@ -1157,7 +1157,7 @@ unique_ptr<duckdb::ProgressBarDisplay> CreateProgressBar() {
 	return make_uniq<ShellProgressBarDisplay>();
 }
 
-static void RegisterShellLogger(duckdb::DuckDB& db, duckdb::shared_ptr<duckdb::LogStorage> storage_ptr) {
+static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::LogStorage> storage_ptr) {
 	auto *db_instance = db.instance.get();
 	auto &log_manager = db_instance->GetLogManager();
 	log_manager.RegisterLogStorage("shell_log_storage", storage_ptr);
