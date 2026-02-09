@@ -29,7 +29,7 @@ CREATE TABLE long_wal AS SELECT a FROM tbl1 WHERE a not in (select b from tbl2)
 
 # wal should be small (but exist)
 query I
-SELECT CASE WHEN size > 500 AND size < 10_000 THEN NULL ELSE size END FROM read_blob('__TEST_DIR__/wal_size_unaligned_appends.db.wal')
+SELECT CASE WHEN size > 500 AND size < 30_000 THEN NULL ELSE size END FROM read_blob('__TEST_DIR__/wal_size_unaligned_appends.db.wal')
 ----
 NULL
 

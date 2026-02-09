@@ -577,7 +577,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 	subquery_expr->subquery = std::move(new_subquery);
 
 	subquery_expr->subquery_type = SubqueryType::SCALAR;
-	return subquery_expr;
+	return std::move(subquery_expr);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PEGTransformer &transformer,
@@ -929,7 +929,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 		result->subquery_type = SubqueryType::ANY;
 		result->comparison_type = ExpressionType::COMPARE_EQUAL;
 		result->subquery = std::move(subquery_expr.subquery);
-		return result;
+		return std::move(result);
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
 	return std::move(result);

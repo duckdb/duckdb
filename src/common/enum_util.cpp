@@ -185,6 +185,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
@@ -1003,6 +1004,7 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 		{ static_cast<uint32_t>(CatalogType::COLLATION_ENTRY), "COLLATION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TYPE_ENTRY), "TYPE_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::DATABASE_ENTRY), "DATABASE_ENTRY" },
+		{ static_cast<uint32_t>(CatalogType::COORDINATE_SYSTEM_ENTRY), "COORDINATE_SYSTEM_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::TABLE_FUNCTION_ENTRY), "TABLE_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::SCALAR_FUNCTION_ENTRY), "SCALAR_FUNCTION_ENTRY" },
 		{ static_cast<uint32_t>(CatalogType::AGGREGATE_FUNCTION_ENTRY), "AGGREGATE_FUNCTION_ENTRY" },
@@ -1022,12 +1024,12 @@ const StringUtil::EnumStringLiteral *GetCatalogTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value) {
-	return StringUtil::EnumToString(GetCatalogTypeValues(), 23, "CatalogType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCatalogTypeValues(), 24, "CatalogType", static_cast<uint32_t>(value));
 }
 
 template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value) {
-	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 23, "CatalogType", value));
+	return static_cast<CatalogType>(StringUtil::StringToEnum(GetCatalogTypeValues(), 24, "CatalogType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCheckpointAbortValues() {
@@ -1260,9 +1262,9 @@ const StringUtil::EnumStringLiteral *GetCoordinateReferenceSystemTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::SRID), "SRID" },
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::AUTH_CODE), "AUTH_CODE" },
 		{ static_cast<uint32_t>(CoordinateReferenceSystemType::PROJJSON), "PROJJSON" },
-		{ static_cast<uint32_t>(CoordinateReferenceSystemType::WKT2_2019), "WKT2_2019" },
-		{ static_cast<uint32_t>(CoordinateReferenceSystemType::AUTH_CODE), "AUTH_CODE" }
+		{ static_cast<uint32_t>(CoordinateReferenceSystemType::WKT2_2019), "WKT2_2019" }
 	};
 	return values;
 }
@@ -3413,6 +3415,24 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 34, "OptimizerType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OrderByColumnType::NUMERIC), "NUMERIC" },
+		{ static_cast<uint32_t>(OrderByColumnType::STRING), "STRING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OrderByColumnType>(OrderByColumnType value) {
+	return StringUtil::EnumToString(GetOrderByColumnTypeValues(), 2, "OrderByColumnType", static_cast<uint32_t>(value));
+}
+
+template<>
+OrderByColumnType EnumUtil::FromString<OrderByColumnType>(const char *value) {
+	return static_cast<OrderByColumnType>(StringUtil::StringToEnum(GetOrderByColumnTypeValues(), 2, "OrderByColumnType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(OrderByNullType::INVALID), "INVALID" },
@@ -3434,6 +3454,24 @@ const char* EnumUtil::ToChars<OrderByNullType>(OrderByNullType value) {
 template<>
 OrderByNullType EnumUtil::FromString<OrderByNullType>(const char *value) {
 	return static_cast<OrderByNullType>(StringUtil::StringToEnum(GetOrderByNullTypeValues(), 7, "OrderByNullType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetOrderByStatisticsValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OrderByStatistics::MIN), "MIN" },
+		{ static_cast<uint32_t>(OrderByStatistics::MAX), "MAX" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OrderByStatistics>(OrderByStatistics value) {
+	return StringUtil::EnumToString(GetOrderByStatisticsValues(), 2, "OrderByStatistics", static_cast<uint32_t>(value));
+}
+
+template<>
+OrderByStatistics EnumUtil::FromString<OrderByStatistics>(const char *value) {
+	return static_cast<OrderByStatistics>(StringUtil::StringToEnum(GetOrderByStatisticsValues(), 2, "OrderByStatistics", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderPreservationTypeValues() {

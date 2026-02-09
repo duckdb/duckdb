@@ -585,6 +585,13 @@
         ]
     },
     {
+        "name": "force_mbedtls_unsafe",
+        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "force_variant_shredding",
         "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
         "type": "VARCHAR",
@@ -648,6 +655,13 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
+    },
+    {
+        "name": "ignore_unknown_crs",
+        "description": "Ignore unknown Coordinate Reference Systems (CRS) when creating geometry types or importing geospatial data.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "immediate_transaction_mode",

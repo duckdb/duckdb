@@ -104,14 +104,13 @@ void InsertAllRowGroups(It it, End end, vector<reference<SegmentNode<RowGroup>>>
 }
 
 void SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, const optional_idx row_limit,
-                       const idx_t row_group_offset, const RowGroupOrderType order_type,
-                       const OrderByColumnType column_type,
+                       const idx_t row_group_offset, const OrderType order_type, const OrderByColumnType column_type,
                        vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
-	const auto stat_type = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+	const auto stat_type = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 	ordered_row_groups.reserve(row_group_map.size());
 
 	Value previous_key;
-	if (order_type == RowGroupOrderType::ASC) {
+	if (order_type == OrderType::ASCENDING) {
 		auto it = SkipOffsetPrunedRowGroups(row_group_map.begin(), row_group_offset);
 		auto end = row_group_map.end();
 		if (row_limit.IsValid()) {
@@ -158,7 +157,7 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 			if (!current_stats->CanHaveNull()) {
 				// This row group has exactly row_group.count valid values. We can exclude those
 				pruned_row_group_count++;
-				new_row_offset -= tuple_count;
+				new_row_offset -= last_unresolved_entry->second.count;
 			}
 
 			++last_unresolved_entry;
@@ -190,18 +189,35 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetNextRowGroup(SegmentNo
 
 Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatistics order_by,
                                       OrderByColumnType column_type) {
-	switch (order_by) {
-	case OrderByStatistics::MIN:
-		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Min(stats) : StringStats::Min(stats);
-	case OrderByStatistics::MAX:
-		return column_type == OrderByColumnType::NUMERIC ? NumericStats::Max(stats) : StringStats::Max(stats);
+	if (column_type == OrderByColumnType::NUMERIC) {
+		if (!NumericStats::HasMinMax(stats)) {
+			return Value();
+		}
+		switch (order_by) {
+		case OrderByStatistics::MIN:
+			return NumericStats::Min(stats);
+		case OrderByStatistics::MAX:
+			return NumericStats::Max(stats);
+		default:
+			throw InternalException("Unsupported OrderByStatistics for numeric");
+		}
 	}
-	return Value();
+	if (column_type == OrderByColumnType::STRING) {
+		switch (order_by) {
+		case OrderByStatistics::MIN:
+			return StringStats::Min(stats);
+		case OrderByStatistics::MAX:
+			return StringStats::Max(stats);
+		default:
+			throw InternalException("Unsupported OrderByStatistics for numeric");
+		}
+	}
+	throw InternalException("Unsupported OrderByColumnType");
 }
 
 OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatistics order_by,
                                                              const OrderByColumnType column_type,
-                                                             const RowGroupOrderType order_type,
+                                                             const OrderType order_type,
                                                              const StorageIndex &storage_index, const idx_t row_offset,
                                                              vector<PartitionStatistics> &stats) {
 	multimap<Value, RowGroupOffsetEntry> ordered_row_groups;
@@ -213,16 +229,23 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 
 		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(storage_index);
 		Value comparison_value = RetrieveStat(*column_stats, order_by, column_type);
+		if (comparison_value.IsNull()) {
+			return {row_offset, 0};
+		}
 		auto entry = RowGroupOffsetEntry {partition_stats.count, std::move(column_stats)};
 		ordered_row_groups.emplace(comparison_value, std::move(entry));
 	}
 
-	if (order_type == RowGroupOrderType::ASC) {
+	switch (order_type) {
+	case OrderType::ASCENDING:
 		return FindOffsetPrunableChunks(ordered_row_groups.begin(), ordered_row_groups.end(), order_by, column_type,
 		                                row_offset);
+	case OrderType::DESCENDING:
+		return FindOffsetPrunableChunks(ordered_row_groups.rbegin(), ordered_row_groups.rend(), order_by, column_type,
+		                                row_offset);
+	default:
+		throw InternalException("Unsupported order type in GetOffsetAfterPruning");
 	}
-	return FindOffsetPrunableChunks(ordered_row_groups.rbegin(), ordered_row_groups.rend(), order_by, column_type,
-	                                row_offset);
 }
 
 optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSegmentTree &row_groups) {
@@ -235,10 +258,16 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 
 	initialized = true;
 
+	vector<reference<SegmentNode<RowGroup>>> remaining_row_groups;
 	multimap<Value, RowGroupSegmentNodeEntry> row_group_map;
 	for (auto &row_group : row_groups.SegmentNodes()) {
 		auto stats = row_group.GetNode().GetStatistics(options.column_idx);
 		Value comparison_value = RetrieveStat(*stats, options.order_by, options.column_type);
+		if (comparison_value.IsNull()) {
+			// no stats for this row group - push to remaining
+			remaining_row_groups.push_back(row_group);
+			continue;
+		}
 		auto entry = RowGroupSegmentNodeEntry {row_group, std::move(stats)};
 		row_group_map.emplace(comparison_value, std::move(entry));
 	}
@@ -250,6 +279,10 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 	D_ASSERT(row_group_map.size() > options.row_group_offset);
 	SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
 	                  options.column_type, ordered_row_groups);
+	// push any remaining row groups
+	for (auto &remaining_row_group : remaining_row_groups) {
+		ordered_row_groups.push_back(remaining_row_group);
+	}
 
 	return ordered_row_groups[0].get();
 }
