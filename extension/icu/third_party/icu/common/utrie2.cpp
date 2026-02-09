@@ -140,7 +140,7 @@ utrie2_openFromSerialized(UTrie2ValueBits valueBits,
         return 0;
     }
 
-    if( length<=0 || (U_POINTER_MASK_LSB(data, 3)!=0) ||
+    if( length<=0 || /*(U_POINTER_MASK_LSB(data, 3)!=0) ||*/
         valueBits<0 || UTRIE2_COUNT_VALUE_BITS<=valueBits
     ) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
