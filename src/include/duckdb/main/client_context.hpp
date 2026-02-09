@@ -54,11 +54,15 @@ struct ClientData;
 class ClientContextState;
 class RegisteredStateManager;
 
+enum class PreparationType { PREPARED_STATEMENT, PENDING_STATEMENT };
+
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
 	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
 	//! Whether a stream/buffer-managed result should be allowed
 	QueryParameters query_parameters;
+	//! Whether or not we are binding a statement for a (cached) prepare, or for execution
+	PreparationType prepare_type = PreparationType::PENDING_STATEMENT;
 };
 
 //! The ClientContext holds information relevant to the current client session
