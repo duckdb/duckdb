@@ -47,4 +47,12 @@
 #undef interface
 #endif
 
+#ifdef OPTIONAL
+#undef OPTIONAL
+#endif
+
+#ifdef LIST
+#undef LIST
+#endif
+
 #endif

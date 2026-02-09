@@ -1,13 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// tokenizer.hpp
+// include/parser/tokenizer/tokenizer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "keyword_helper.hpp"
 #include "matcher.hpp"
 
 namespace duckdb {
@@ -30,12 +31,11 @@ public:
 	virtual ~BaseTokenizer() = default;
 
 public:
-	void PushToken(idx_t start, idx_t end);
-
 	bool TokenizeInput();
 
+	virtual void PushToken(idx_t start, idx_t end, TokenType type, bool unterminated = false);
 	virtual void OnStatementEnd(idx_t pos);
-	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos) = 0;
+	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos);
 
 	bool IsSpecialOperator(idx_t pos, idx_t &op_len) const;
 	static bool IsSingleByteOperator(char c);
@@ -46,10 +46,13 @@ public:
 	static bool CharacterIsKeyword(char c);
 	static bool CharacterIsOperator(char c);
 	bool IsValidDollarTagCharacter(char c);
+	TokenType TokenizeStateToType(TokenizeState state);
+	static bool IsUnterminatedState(TokenizeState state);
 
 protected:
 	const string &sql;
 	vector<MatcherToken> &tokens;
+	PEGKeywordHelper keyword_helper;
 };
 
 } // namespace duckdb
