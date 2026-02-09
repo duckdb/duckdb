@@ -284,11 +284,13 @@ public:
 
 	unique_ptr<LogicalOperator> BindUpdateSet(LogicalOperator &op, unique_ptr<LogicalOperator> root,
 	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
-	                                          vector<PhysicalIndex> &columns);
+	                                          vector<PhysicalIndex> &columns,
+	                                          bool prioritize_table_when_binding = false);
 	void BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
 	                   vector<unique_ptr<Expression>> &update_expressions,
-	                   vector<unique_ptr<Expression>> &projection_expressions);
+	                   vector<unique_ptr<Expression>> &projection_expressions,
+	                   bool prioritize_table_when_binding = false);
 
 	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
@@ -544,6 +546,8 @@ private:
 
 	BoundCTEData PrepareCTE(const string &ctename, CommonTableExpressionInfo &statement);
 	BoundStatement FinishCTE(BoundCTEData &bound_cte, BoundStatement child_data);
+
+	shared_ptr<Binder> CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name);
 
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);

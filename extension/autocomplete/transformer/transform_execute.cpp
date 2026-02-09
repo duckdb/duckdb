@@ -34,6 +34,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExecuteStatement(PEGTra
 			result->named_values[param_name] = std::move(expr);
 		}
 	}
-	return result;
+	return std::move(result);
 }
 } // namespace duckdb
