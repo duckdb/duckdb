@@ -1,0 +1,36 @@
+# name: test/sql/constraints/foreignkey/test_fk_self_reference_export.test
+# description: Test export database with self-referencing foreign key constraint
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE self_ref(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES self_ref(id))
+
+statement ok
+INSERT INTO self_ref VALUES (1, NULL)
+
+statement ok
+INSERT INTO self_ref VALUES (2, 1)
+
+statement ok
+INSERT INTO self_ref VALUES (3, 1)
+
+# now export the db
+statement ok
+EXPORT DATABASE 'test_data'
+
+statement ok
+DROP TABLE self_ref;
+
+statement ok
+IMPORT DATABASE 'test_data'
+
+# check that self-referencing foreign key constraint is preserved
+statement error
+INSERT INTO self_ref VALUES (4, 999)
+----
+
+statement ok
+INSERT INTO self_ref VALUES (4, 1)
+
+statement ok
+DROP TABLE self_ref;
