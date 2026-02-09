@@ -115,8 +115,8 @@ public:
 	idx_t GetBlockSize() const override {
 		return buffer_manager.GetBlockSize();
 	}
-	idx_t GetQueryMaxMemory() const override {
-		idx_t global_budget = buffer_manager.GetQueryMaxMemory();
+	idx_t GetOperatorMemoryLimit() const override {
+		idx_t global_budget = buffer_manager.GetOperatorMemoryLimit();
 		const auto &config = ClientConfig::GetConfig(context);
 		if (!config.operator_memory_limit.IsValid()) {
 			return global_budget;
