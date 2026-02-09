@@ -187,6 +187,10 @@
     {
       "reason": "DESCRIBE with CTE not supported",
       "paths": ["test/sql/cte/cte_describe.test"]
+    },
+    {
+      "reason": "FIXME: CREATE SECRET not properly supported",
+      "paths": ["test/sql/secrets/create_secret_expression.test"]
     }
   ]
 }
