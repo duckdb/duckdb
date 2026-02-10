@@ -1202,7 +1202,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"avro",           "aws
                                                           "httpfs",         "iceberg",
                                                           "inet",           "icu",
                                                           "json",           "motherduck",
-                                                          "mysql_scanner",  "odbc_scanner",
+                                                          "mysql_scanner", /* "odbc_scanner", */
                                                           "parquet",        "sqlite_scanner",
                                                           "sqlsmith",       "postgres_scanner",
                                                           "tpcds",          "tpch",
