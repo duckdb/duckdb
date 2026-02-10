@@ -237,8 +237,6 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
     : PhysicalComparisonJoin(physical_plan, op, type, std::move(cond), join_type, estimated_cardinality) {
 	filter_pushdown = std::move(pushdown_info);
 	// Reorder the conditions so that ranges are at the front.
-	// TODO: use stats to improve the choice?
-	// TODO: Prefer fixed length types?
 	if (conditions.size() > 1) {
 		unordered_map<idx_t, idx_t> cond_idx;
 		vector<JoinCondition> conditions_p(conditions.size());

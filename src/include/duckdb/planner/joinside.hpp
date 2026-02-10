@@ -170,6 +170,9 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static JoinCondition Deserialize(Deserializer &deserializer);
 
+	//	Compare conditions for priority in joins based on comparison type and selectivity
+	static bool Compare(const JoinCondition &a, const JoinCondition &b);
+
 private:
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
