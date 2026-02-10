@@ -7,7 +7,7 @@ statement ok
 SET variant_minimum_shredding_size = 0;
 
 statement ok
-create table tbl (id INT, col VARIANT)
+create table tbl (id INT PRIMARY KEY, col VARIANT)
 
 statement ok
 insert into tbl select i id, {'i': i, 'j': i * 100} FROm range(5) t(i);
@@ -25,6 +25,29 @@ SELECT col FROM tbl
 {'i': 4, 'j': 400}
 
 query I
+SELECT col.j FROM tbl
+----
+0
+100
+200
+300
+400
+
+query I
+SELECT col.j::INT FROM tbl
+----
+0
+100
+200
+300
+400
+
+query I
 SELECT col FROM tbl WHERE id=3
+----
+{'i': 3, 'j': 300}
+
+query I
+SELECT col FROM tbl WHERE col.i=3
 ----
 {'i': 3, 'j': 300}

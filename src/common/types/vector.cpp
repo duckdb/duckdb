@@ -1366,7 +1366,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			serializer.WriteProperty(92, "seq_increment", data[1]);
 			return; // for sequence vectors we do not serialize anything else
 		} else {
-			// TODO: other compressed vector types (FSST)
+			// TODO: other compressed vector types (SHREDDED, FSST)
 		}
 	}
 	ToUnifiedFormat(count, vdata);
