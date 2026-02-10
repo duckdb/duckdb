@@ -134,13 +134,6 @@ public:
 			                      state_p.db.GetStorageManager().GetEncryptionVersion());
 			EncryptionTag tag;
 
-			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
-				throw SerializationException(
-				    "Corrupt Encrypted WAL file: entry size exceeded remaining data in file at byte position %llu "
-				    "(found entry with size %llu bytes, file size %llu bytes)",
-				    offset, size, file_size);
-			}
-
 			stream.ReadData(nonce.data(), nonce.size());
 
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
@@ -154,6 +147,17 @@ public:
 			    database.GetEncryptionUtil(state_p.db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
 			encryption_state->InitializeDecryption(nonce, derived_key);
 
+			if (encryption_state->GetCipher() == EncryptionTypes::CipherType::CTR) {
+				tag.SetSize(0);
+			}
+
+			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
+				throw SerializationException(
+				    "Corrupt Encrypted WAL file: entry size exceeded remaining data in file at byte position %llu "
+				    "(found entry with size %llu bytes, file size %llu bytes)",
+				    offset, size, file_size);
+			}
+
 			//! Allocate a decryption buffer
 			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);
 			auto out_buffer = unique_ptr<data_t[]>(new data_t[size]);
@@ -161,10 +165,14 @@ public:
 			stream.ReadData(buffer.get(), ciphertext_size);
 			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
 
-			//! read and verify the stored tag
-			stream.ReadData(tag.data(), tag.size());
-
-			encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
+			if (encryption_state->GetCipher() == EncryptionTypes::CipherType::GCM) {
+				//! read and verify the stored tag
+				stream.ReadData(tag.data(), tag.size());
+				D_ASSERT(!tag.IsAllZeros());
+				encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
+			} else {
+				encryption_state->Finalize(buffer.get(), ciphertext_size, nullptr, 0);
+			}
 
 			//! read the stored checksum
 			auto stored_checksum = Load<uint64_t>(buffer.get());
