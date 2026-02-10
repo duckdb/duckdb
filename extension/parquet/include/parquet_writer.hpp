@@ -152,7 +152,7 @@ public:
 	idx_t StringDictionaryPageSizeLimit() const {
 		return string_dictionary_page_size_limit;
 	}
-	double EnableBloomFilters() const {
+	bool EnableBloomFilters() const {
 		return enable_bloom_filters;
 	}
 	double BloomFilterFalsePositiveRatio() const {
