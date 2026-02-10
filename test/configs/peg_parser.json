@@ -136,7 +136,9 @@
         "test/sql/pragma/test_query_log.test",
         "test/sql/function/string/test_subscript.test",
         "test/sql/copy/csv/glob/copy_csv_glob.test",
-        "test/sql/select/test_select_locking.test"
+        "test/sql/select/test_select_locking.test",
+        "test/sql/window/test_ignore_nulls.test",
+        "test/sql/function/tokenize/simple_tokenize.test"
       ]
     },
     {

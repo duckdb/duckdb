@@ -177,7 +177,12 @@
 	"test/sql/create/create_as_partition_sorted_options.test",
         "test/sql/pragma/test_pragma_sanitized_inputs.test",
         "test/sql/pragma/test_query_log.test",
-        "test/optimizer/joins/lateral_cross_join.test"
+        "test/optimizer/joins/lateral_cross_join.test",
+        "test/sql/cte/recursive_cte_key_aggregation.test",
+        "test/sql/window/test_ignore_nulls.test",
+        "test/sql/function/tokenize/simple_tokenize.test",
+        "test/sql/join/iejoin/test_iejoin_predicate.test",
+        "test/sql/join/test_merge_join_predicate.test"
       ]
     },
     {
