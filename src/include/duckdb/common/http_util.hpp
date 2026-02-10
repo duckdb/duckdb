@@ -263,6 +263,8 @@ public:
 	static void DecomposeURL(const string &url, string &path_out, string &proto_host_port_out);
 	static HTTPStatusCode ToStatusCode(int32_t status_code);
 	static string GetStatusMessage(HTTPStatusCode status);
+	static bool IsHTTPProtocol(const string &url);
+	static void BumpToSecureProtocol(string &url);
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>
