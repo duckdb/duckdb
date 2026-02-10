@@ -163,13 +163,12 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		auto &rec = op.Cast<LogicalRecursiveCTE>();
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
+
+		types.clear();
+		VisitOperatorExpressions(op);
 		types = op.types;
-		for (auto &expr : rec.key_targets) {
-			VisitExpression(&expr);
-		}
 		return;
 	}
 	default:

@@ -42,18 +42,9 @@ class StringUtil {
 public:
 	static string GenerateRandomName(idx_t length = 16);
 
-	static uint8_t GetHexValue(char c) {
-		if (c >= '0' && c <= '9') {
-			return UnsafeNumericCast<uint8_t>(c - '0');
-		}
-		if (c >= 'a' && c <= 'f') {
-			return UnsafeNumericCast<uint8_t>(c - 'a' + 10);
-		}
-		if (c >= 'A' && c <= 'F') {
-			return UnsafeNumericCast<uint8_t>(c - 'A' + 10);
-		}
-		throw InvalidInputException("Invalid input for hex digit: %s", string(1, c));
-	}
+	static uint8_t GetHexValue(char c);
+	static bool CharacterIsHex(char c);
+
 	static uint8_t GetBinaryValue(char c) {
 		if (c >= '0' && c <= '1') {
 			return UnsafeNumericCast<uint8_t>(c - '0');
@@ -69,9 +60,6 @@ public:
 	}
 	static bool CharacterIsDigit(char c) {
 		return c >= '0' && c <= '9';
-	}
-	static bool CharacterIsHex(char c) {
-		return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 	}
 	static char CharacterToUpper(char c) {
 		if (c >= 'a' && c <= 'z') {
