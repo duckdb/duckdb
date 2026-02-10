@@ -14,7 +14,8 @@ ForeignKeyConstraint::ForeignKeyConstraint(vector<string> pk_columns, vector<str
 }
 
 string ForeignKeyConstraint::ToString() const {
-	if (info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+	if (info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
+	    info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 		string base = "FOREIGN KEY (";
 
 		for (idx_t i = 0; i < fk_columns.size(); i++) {
