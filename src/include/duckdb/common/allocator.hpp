@@ -31,6 +31,9 @@ struct PrivateAllocatorData {
 	virtual ~PrivateAllocatorData();
 
 	AllocatorFreeType free_type = AllocatorFreeType::REQUIRES_FREE;
+	//! Debug info for tracking allocations. Only initialized when the Allocator is constructed in a DEBUG build.
+	//! Code accessing this must check for nullptr because e.g. statically-linked extensions may have a different
+	//! DEBUG/release configuration than the host binary.
 	unique_ptr<AllocatorDebugInfo> debug_info;
 
 	template <class TARGET>
