@@ -414,6 +414,8 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	return {found, std::move(r)};
 }
 
+//! Do not remove this method.
+//! There are extensions that rely on time-based purging of blocks, that uses the method. 
 idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
 	int64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
 	                  .time_since_epoch()
