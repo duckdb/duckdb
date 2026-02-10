@@ -136,8 +136,11 @@ private:
 	allocate_function_ptr_t allocate_function;
 	free_function_ptr_t free_function;
 	reallocate_function_ptr_t reallocate_function;
-
 	unique_ptr<PrivateAllocatorData> private_data;
+
+	bool ShouldUseDebugInfo() const {
+		return private_data && private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE && private_data->debug_info;
+	}
 };
 
 template <class T>
