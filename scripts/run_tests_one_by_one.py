@@ -164,11 +164,16 @@ def parse_assertions(stdout):
         if line == 'assertions: - none -':
             return "0 assertions"
 
-        # Parse assertions in format
-        pos = line.find("assertion")
-        if pos != -1:
-            space_before_num = line.rfind(' ', 0, pos - 2)
-            return line[space_before_num + 2 : pos + 10]
+        # Example format: "assertions: 123" or similar
+        if 'assertions:' in line.lower():
+            match = re.search(r'assertions?:\s*(\d+)', line, re.IGNORECASE)
+            if match:
+                return f"{match.group(1)} assertions"
+        # Example format: "123 assertions" or similar
+        elif re.search(r'\d+\s+assertions?', line, re.IGNORECASE):
+            match = re.search(r'(\d+)\s+assertions?', line, re.IGNORECASE)
+            if match:
+                return f"{match.group(1)} assertions"
 
     return "ERROR"
 
