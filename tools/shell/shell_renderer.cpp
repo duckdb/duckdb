@@ -571,6 +571,11 @@ public:
 	const char *GetRowStart() override {
 		return "| ";
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// mode markdown never uses the pager
+		return false;
+	}
 };
 
 /*
@@ -721,6 +726,11 @@ public:
 	}
 	const char *GetRowSeparator() override {
 		return " \\\\\n";
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// mode latex never uses the pager
+		return false;
 	}
 };
 
@@ -990,6 +1000,11 @@ public:
 		}
 		out.Print(escaped);
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// mode html never uses the pager
+		return false;
+	}
 };
 
 class ModeTclRenderer : public RowRenderer {
@@ -1093,6 +1108,11 @@ public:
 		auto result = StringUtil::Format("%s", SQLIdentifier(string(str, str_len)));
 		out.Print(result);
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// mode csv never uses the pager
+		return false;
+	}
 };
 
 class ModeAsciiRenderer : public RowRenderer {
@@ -1125,6 +1145,11 @@ public:
 			out.Print(data[i]);
 		}
 		out.Print(row_sep);
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// mode ascii never uses the pager
+		return false;
 	}
 };
 
@@ -1310,6 +1335,11 @@ public:
 		return "null";
 	}
 
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// mode json never uses the pager
+		return false;
+	}
+
 	bool json_array;
 };
 
@@ -1399,6 +1429,11 @@ public:
 			res += ")";
 		}
 		return res;
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// mode insert never uses the pager
+		return false;
 	}
 };
 
