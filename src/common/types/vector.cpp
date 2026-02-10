@@ -850,6 +850,8 @@ string VectorTypeToString(VectorType type) {
 		return "DICTIONARY";
 	case VectorType::CONSTANT_VECTOR:
 		return "CONSTANT";
+	case VectorType::SHREDDED_VECTOR:
+		return "SHREDDED";
 	default:
 		return "UNKNOWN";
 	}
@@ -877,6 +879,9 @@ string Vector::ToString(idx_t count) const {
 	} break;
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
+		break;
+	case VectorType::SHREDDED_VECTOR:
+		// FIXME: print shredded info
 		break;
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
@@ -1205,7 +1210,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			max_entry = MaxValue<idx_t>(sel.get_index(i), max_entry);
 		}
-		FlattenConstant(max_entry);
+		FlattenConstant(max_entry + 1);
 		break;
 	}
 	case VectorType::SHREDDED_VECTOR: {
