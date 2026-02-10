@@ -374,3 +374,36 @@ index 616a9d0..21c4848 100644
  }
  
  } // namespace duckdb
+diff --git a/src/spatial/operators/spatial_join_logical.hpp b/src/spatial/operators/spatial_join_logical.hpp
+index 3714311..00090e8 100644
+--- a/src/spatial/operators/spatial_join_logical.hpp
++++ b/src/spatial/operators/spatial_join_logical.hpp
+@@ -25,8 +25,6 @@ public:
+ 	vector<idx_t> left_projection_map;
+ 	//! The columns of the RHS that are output by the join
+ 	vector<idx_t> right_projection_map;
+-	//! Join Keys statistics (optional)
+-	vector<unique_ptr<BaseStatistics>> join_stats;
+ 
+ 	bool has_const_distance = false;
+ 	double const_distance = 0.0;
+diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
+index a6b5d0e..6b67631 100644
+--- a/src/spatial/operators/spatial_join_optimizer.cpp
++++ b/src/spatial/operators/spatial_join_optimizer.cpp
+@@ -164,7 +164,6 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+ 	spatial_join->types = std::move(cmp_join.types);
+ 	spatial_join->left_projection_map = std::move(cmp_join.left_projection_map);
+ 	spatial_join->right_projection_map = std::move(cmp_join.right_projection_map);
+-	spatial_join->join_stats = std::move(cmp_join.join_stats);
+ 	spatial_join->mark_index = cmp_join.mark_index;
+ 	spatial_join->has_estimated_cardinality = cmp_join.has_estimated_cardinality;
+ 	spatial_join->estimated_cardinality = cmp_join.estimated_cardinality;
+@@ -282,7 +281,6 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+ 	spatial_join->types = std::move(any_join.types);
+ 	spatial_join->left_projection_map = std::move(any_join.left_projection_map);
+ 	spatial_join->right_projection_map = std::move(any_join.right_projection_map);
+-	spatial_join->join_stats = std::move(any_join.join_stats);
+ 	spatial_join->mark_index = any_join.mark_index;
+ 	spatial_join->has_estimated_cardinality = any_join.has_estimated_cardinality;
+ 	spatial_join->estimated_cardinality = any_join.estimated_cardinality;
