@@ -394,9 +394,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 #ifdef DEBUG
 	logical_plan->Verify(*this);
 #endif
-	if (parameters.prepare_type == PreparationType::PREPARED_STATEMENT) {
+	if (result->properties.parameter_count > 0 && !parameters.parameters) {
 		// if this is a prepared statement we can choose not to fully plan
-		// check if we want to cache the plan
+		// if we have parameters, we might want to re-bind when they are available as we can then do more optimizations
+		// in this situation we check if we want to cache the plan at all
 		if (!PreparedStatement::CanCachePlan(*logical_plan)) {
 			// we don't - early-out
 			result->properties.always_require_rebind = true;
@@ -722,7 +723,6 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
 	PendingQueryParameters parameters;
-	parameters.prepare_type = PreparationType::PREPARED_STATEMENT;
 	RunFunctionInTransactionInternal(
 	    lock,
 	    [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), parameters); },
