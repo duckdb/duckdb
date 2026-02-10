@@ -573,8 +573,8 @@ public:
 	}
 
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		// mode markdown never uses the pager
-		return false;
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -729,8 +729,8 @@ public:
 	}
 
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		// mode latex never uses the pager
-		return false;
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1002,8 +1002,8 @@ public:
 	}
 
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		// mode html never uses the pager
-		return false;
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1110,8 +1110,8 @@ public:
 	}
 
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		// mode csv never uses the pager
-		return false;
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1148,8 +1148,8 @@ public:
 	}
 
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		// mode ascii never uses the pager
-		return false;
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1336,8 +1336,8 @@ public:
 	}
 
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		// mode json never uses the pager
-		return false;
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 
 	bool json_array;
@@ -1432,8 +1432,8 @@ public:
 	}
 
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
-		// mode insert never uses the pager
-		return false;
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
