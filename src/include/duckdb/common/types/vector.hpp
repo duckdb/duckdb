@@ -299,6 +299,9 @@ private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValueInternal(const Vector &v, idx_t index);
 
+	//! Flatten a constant vector
+	void FlattenConstant(idx_t count);
+
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
 	//! constant, if it is compressed)
@@ -697,6 +700,10 @@ struct ShreddedVector {
 	DUCKDB_API static const Vector &GetShreddedVector(const Vector &vec);
 	//! Get the underlying vector holding the shredded data
 	DUCKDB_API static Vector &GetShreddedVector(Vector &vec);
+
+	//! Unshred a shredded vector
+	DUCKDB_API static void Unshred(Vector &vec, idx_t count);
+	DUCKDB_API static void Unshred(Vector &vec, const SelectionVector &sel, idx_t count);
 };
 
 enum class UnionInvalidReason : uint8_t {

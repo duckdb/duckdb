@@ -970,6 +970,150 @@ static void TemplatedFlattenConstantVector(data_ptr_t data, data_ptr_t old_data,
 	}
 }
 
+void Vector::FlattenConstant(idx_t count) {
+	bool is_null = ConstantVector::IsNull(*this);
+	// allocate a new buffer for the vector
+	auto old_buffer = std::move(buffer);
+	auto old_data = data;
+	buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
+	if (old_buffer) {
+		D_ASSERT(buffer->GetAuxiliaryData() == nullptr);
+		// The old buffer might be relying on the auxiliary data, keep it alive
+		buffer->MoveAuxiliaryData(*old_buffer);
+	}
+	data = buffer->GetData();
+	vector_type = VectorType::FLAT_VECTOR;
+	if (is_null && GetType().InternalType() != PhysicalType::ARRAY) {
+		// constant NULL, set nullmask
+		validity.EnsureWritable();
+		validity.SetAllInvalid(count);
+		if (GetType().InternalType() != PhysicalType::STRUCT) {
+			// for structs we still need to flatten the child vectors as well
+			return;
+		}
+	}
+	// non-null constant: have to repeat the constant
+	switch (GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		TemplatedFlattenConstantVector<bool>(data, old_data, count);
+		break;
+	case PhysicalType::INT8:
+		TemplatedFlattenConstantVector<int8_t>(data, old_data, count);
+		break;
+	case PhysicalType::INT16:
+		TemplatedFlattenConstantVector<int16_t>(data, old_data, count);
+		break;
+	case PhysicalType::INT32:
+		TemplatedFlattenConstantVector<int32_t>(data, old_data, count);
+		break;
+	case PhysicalType::INT64:
+		TemplatedFlattenConstantVector<int64_t>(data, old_data, count);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedFlattenConstantVector<uint8_t>(data, old_data, count);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedFlattenConstantVector<uint16_t>(data, old_data, count);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedFlattenConstantVector<uint32_t>(data, old_data, count);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedFlattenConstantVector<uint64_t>(data, old_data, count);
+		break;
+	case PhysicalType::INT128:
+		TemplatedFlattenConstantVector<hugeint_t>(data, old_data, count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedFlattenConstantVector<uhugeint_t>(data, old_data, count);
+		break;
+	case PhysicalType::FLOAT:
+		TemplatedFlattenConstantVector<float>(data, old_data, count);
+		break;
+	case PhysicalType::DOUBLE:
+		TemplatedFlattenConstantVector<double>(data, old_data, count);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedFlattenConstantVector<interval_t>(data, old_data, count);
+		break;
+	case PhysicalType::VARCHAR:
+		TemplatedFlattenConstantVector<string_t>(data, old_data, count);
+		break;
+	case PhysicalType::LIST: {
+		TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
+		break;
+	}
+	case PhysicalType::ARRAY: {
+		auto &original_child = ArrayVector::GetEntry(*this);
+		auto array_size = ArrayType::GetSize(GetType());
+		auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
+		auto &new_child = flattened_buffer->GetChild();
+
+		// Fast path: The array is a constant null
+		if (is_null) {
+			// Invalidate the parent array
+			validity.SetAllInvalid(count);
+			// Also invalidate the new child array
+			new_child.validity.SetAllInvalid(count * array_size);
+			// Recurse
+			new_child.Flatten(count * array_size);
+			// TODO: the fast path should exit here, but the part below it is somehow required for correctness
+			// Attach the flattened buffer and return
+			// auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+			// return;
+		}
+
+		// Now we need to "unpack" the child vector.
+		// Basically, do this:
+		//
+		// | a1 | | 1 |      | a1 | | 1 |
+		//        | 2 |      | a2 | | 2 |
+		//	             =>    ..   | 1 |
+		//                          | 2 |
+		// 							 ...
+
+		auto child_vec = make_uniq<Vector>(original_child);
+		child_vec->Flatten(count * array_size);
+
+		// Create a selection vector
+		SelectionVector sel(count * array_size);
+		for (idx_t array_idx = 0; array_idx < count; array_idx++) {
+			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+				auto position = array_idx * array_size + elem_idx;
+				// Broadcast the validity
+				if (FlatVector::IsNull(*child_vec, elem_idx)) {
+					FlatVector::SetNull(new_child, position, true);
+				}
+				sel.set_index(position, elem_idx);
+			}
+		}
+
+		// Copy over the data to the new buffer
+		VectorOperations::Copy(*child_vec, new_child, sel, count * array_size, 0, 0);
+		auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+
+		break;
+	}
+	case PhysicalType::STRUCT: {
+		auto normalified_buffer = make_uniq<VectorStructBuffer>();
+
+		auto &new_children = normalified_buffer->GetChildren();
+
+		auto &child_entries = StructVector::GetEntries(*this);
+		for (auto &child : child_entries) {
+			D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
+			auto vector = make_uniq<Vector>(*child);
+			vector->Flatten(count);
+			new_children.push_back(std::move(vector));
+		}
+		auxiliary = shared_ptr<VectorBuffer>(normalified_buffer.release());
+		break;
+	}
+	default:
+		throw InternalException("Unimplemented type for VectorOperations::Flatten");
+	}
+}
+
 void Vector::Flatten(idx_t count) {
 	switch (GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
@@ -998,10 +1142,8 @@ void Vector::Flatten(idx_t count) {
 		break;
 	case VectorType::SHREDDED_VECTOR: {
 		// unshred the vector
-		Vector unshredded_vector(LogicalType::VARIANT());
-		auto &shredded_buffer = buffer->Cast<ShreddedVectorBuffer>();
-		VariantUtils::UnshredVariantData(shredded_buffer.GetChild(), unshredded_vector, count);
-		Reference(unshredded_vector);
+		ShreddedVector::Unshred(*this, count);
+		Flatten(count);
 		break;
 	}
 	case VectorType::FSST_VECTOR: {
@@ -1026,147 +1168,7 @@ void Vector::Flatten(idx_t count) {
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR: {
-		bool is_null = ConstantVector::IsNull(*this);
-		// allocate a new buffer for the vector
-		auto old_buffer = std::move(buffer);
-		auto old_data = data;
-		buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
-		if (old_buffer) {
-			D_ASSERT(buffer->GetAuxiliaryData() == nullptr);
-			// The old buffer might be relying on the auxiliary data, keep it alive
-			buffer->MoveAuxiliaryData(*old_buffer);
-		}
-		data = buffer->GetData();
-		vector_type = VectorType::FLAT_VECTOR;
-		if (is_null && GetType().InternalType() != PhysicalType::ARRAY) {
-			// constant NULL, set nullmask
-			validity.EnsureWritable();
-			validity.SetAllInvalid(count);
-			if (GetType().InternalType() != PhysicalType::STRUCT) {
-				// for structs we still need to flatten the child vectors as well
-				return;
-			}
-		}
-		// non-null constant: have to repeat the constant
-		switch (GetType().InternalType()) {
-		case PhysicalType::BOOL:
-			TemplatedFlattenConstantVector<bool>(data, old_data, count);
-			break;
-		case PhysicalType::INT8:
-			TemplatedFlattenConstantVector<int8_t>(data, old_data, count);
-			break;
-		case PhysicalType::INT16:
-			TemplatedFlattenConstantVector<int16_t>(data, old_data, count);
-			break;
-		case PhysicalType::INT32:
-			TemplatedFlattenConstantVector<int32_t>(data, old_data, count);
-			break;
-		case PhysicalType::INT64:
-			TemplatedFlattenConstantVector<int64_t>(data, old_data, count);
-			break;
-		case PhysicalType::UINT8:
-			TemplatedFlattenConstantVector<uint8_t>(data, old_data, count);
-			break;
-		case PhysicalType::UINT16:
-			TemplatedFlattenConstantVector<uint16_t>(data, old_data, count);
-			break;
-		case PhysicalType::UINT32:
-			TemplatedFlattenConstantVector<uint32_t>(data, old_data, count);
-			break;
-		case PhysicalType::UINT64:
-			TemplatedFlattenConstantVector<uint64_t>(data, old_data, count);
-			break;
-		case PhysicalType::INT128:
-			TemplatedFlattenConstantVector<hugeint_t>(data, old_data, count);
-			break;
-		case PhysicalType::UINT128:
-			TemplatedFlattenConstantVector<uhugeint_t>(data, old_data, count);
-			break;
-		case PhysicalType::FLOAT:
-			TemplatedFlattenConstantVector<float>(data, old_data, count);
-			break;
-		case PhysicalType::DOUBLE:
-			TemplatedFlattenConstantVector<double>(data, old_data, count);
-			break;
-		case PhysicalType::INTERVAL:
-			TemplatedFlattenConstantVector<interval_t>(data, old_data, count);
-			break;
-		case PhysicalType::VARCHAR:
-			TemplatedFlattenConstantVector<string_t>(data, old_data, count);
-			break;
-		case PhysicalType::LIST: {
-			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
-			break;
-		}
-		case PhysicalType::ARRAY: {
-			auto &original_child = ArrayVector::GetEntry(*this);
-			auto array_size = ArrayType::GetSize(GetType());
-			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
-			auto &new_child = flattened_buffer->GetChild();
-
-			// Fast path: The array is a constant null
-			if (is_null) {
-				// Invalidate the parent array
-				validity.SetAllInvalid(count);
-				// Also invalidate the new child array
-				new_child.validity.SetAllInvalid(count * array_size);
-				// Recurse
-				new_child.Flatten(count * array_size);
-				// TODO: the fast path should exit here, but the part below it is somehow required for correctness
-				// Attach the flattened buffer and return
-				// auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
-				// return;
-			}
-
-			// Now we need to "unpack" the child vector.
-			// Basically, do this:
-			//
-			// | a1 | | 1 |      | a1 | | 1 |
-			//        | 2 |      | a2 | | 2 |
-			//	             =>    ..   | 1 |
-			//                          | 2 |
-			// 							 ...
-
-			auto child_vec = make_uniq<Vector>(original_child);
-			child_vec->Flatten(count * array_size);
-
-			// Create a selection vector
-			SelectionVector sel(count * array_size);
-			for (idx_t array_idx = 0; array_idx < count; array_idx++) {
-				for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
-					auto position = array_idx * array_size + elem_idx;
-					// Broadcast the validity
-					if (FlatVector::IsNull(*child_vec, elem_idx)) {
-						FlatVector::SetNull(new_child, position, true);
-					}
-					sel.set_index(position, elem_idx);
-				}
-			}
-
-			// Copy over the data to the new buffer
-			VectorOperations::Copy(*child_vec, new_child, sel, count * array_size, 0, 0);
-			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
-
-			break;
-		}
-		case PhysicalType::STRUCT: {
-			auto normalified_buffer = make_uniq<VectorStructBuffer>();
-
-			auto &new_children = normalified_buffer->GetChildren();
-
-			auto &child_entries = StructVector::GetEntries(*this);
-			for (auto &child : child_entries) {
-				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
-				auto vector = make_uniq<Vector>(*child);
-				vector->Flatten(count);
-				new_children.push_back(std::move(vector));
-			}
-			auxiliary = shared_ptr<VectorBuffer>(normalified_buffer.release());
-			break;
-		}
-		default:
-			throw InternalException("Unimplemented type for VectorOperations::Flatten");
-		}
+		FlattenConstant(count);
 		break;
 	}
 	case VectorType::SEQUENCE_VECTOR: {
@@ -1198,14 +1200,18 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		this->Reference(other);
 		break;
 	}
+	case VectorType::CONSTANT_VECTOR: {
+		idx_t max_entry = 0;
+		for (idx_t i = 0; i < count; i++) {
+			max_entry = MaxValue<idx_t>(sel.get_index(i), max_entry);
+		}
+		FlattenConstant(max_entry);
+		break;
+	}
 	case VectorType::SHREDDED_VECTOR: {
-		// slice the underlying shredded buffer
-		auto &shredded_buffer = buffer->Cast<ShreddedVectorBuffer>();
-		Vector sliced_shredded_buffer(shredded_buffer.GetChild(), sel, count);
-		// unshred the vector
-		Vector unshredded_vector(LogicalType::VARIANT());
-		VariantUtils::UnshredVariantData(sliced_shredded_buffer, unshredded_vector, count);
-		Reference(unshredded_vector);
+		// unshred the shredded vector
+		ShreddedVector::Unshred(*this, sel, count);
+		Flatten(sel, count);
 		break;
 	}
 	case VectorType::SEQUENCE_VECTOR: {
@@ -1250,6 +1256,11 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
 		format.data = ConstantVector::GetData(*this);
 		format.validity = ConstantVector::Validity(*this);
+		break;
+	case VectorType::SHREDDED_VECTOR:
+		// unshred and call ToUnifiedFormat recursively
+		ShreddedVector::Unshred(*this, count);
+		ToUnifiedFormat(count, format);
 		break;
 	default:
 		Flatten(count);
@@ -3076,6 +3087,23 @@ const Vector &ShreddedVector::GetShreddedVector(const Vector &vec) {
 Vector &ShreddedVector::GetShreddedVector(Vector &vec) {
 	VerifyShreddedVector(vec);
 	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
+}
+
+void ShreddedVector::Unshred(Vector &vec, idx_t count) {
+	Vector unshredded_vector(LogicalType::VARIANT());
+	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
+	VariantUtils::UnshredVariantData(shredded_buffer.GetChild(), unshredded_vector, count);
+	vec.Reference(unshredded_vector);
+}
+
+void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t count) {
+	// slice the underlying shredded buffer
+	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
+	Vector sliced_shredded_buffer(shredded_buffer.GetChild(), sel, count);
+	// unshred the vector
+	Vector unshredded_vector(LogicalType::VARIANT());
+	VariantUtils::UnshredVariantData(sliced_shredded_buffer, unshredded_vector, count);
+	vec.Reference(unshredded_vector);
 }
 
 } // namespace duckdb

@@ -118,44 +118,56 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 
 static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant, Vector &typed_value, idx_t count,
                                               optional_ptr<SelectionVector> row_sel) {
-	auto child_size = ListVector::GetListSize(typed_value);
 	auto &child_vector = ListVector::GetEntry(typed_value);
 
 	D_ASSERT(typed_value.GetType().id() == LogicalTypeId::LIST);
-	auto list_data = FlatVector::GetData<list_entry_t>(typed_value);
 
 	UnifiedVectorFormat vector_format;
 	typed_value.ToUnifiedFormat(count, vector_format);
+	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_format);
 	auto &typed_value_validity = vector_format.validity;
 
+	idx_t child_size = 0;
+	for (uint32_t i = 0; i < count; i++) {
+		auto list_idx = vector_format.sel->get_index(i);
+		if (!typed_value_validity.RowIsValid(list_idx)) {
+			continue;
+		}
+		auto &list_entry = list_data[list_idx];
+		child_size += list_entry.length;
+	}
+	idx_t current_offset = 0;
 	SelectionVector child_sel(child_size);
 	for (uint32_t i = 0; i < count; i++) {
-		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
+		auto list_idx = vector_format.sel->get_index(i);
+		if (!typed_value_validity.RowIsValid(list_idx)) {
 			continue;
 		}
 		auto row = row_sel ? static_cast<uint32_t>(row_sel->get_index(i)) : i;
-		auto &list_entry = list_data[i];
+		auto &list_entry = list_data[list_idx];
 		for (idx_t j = 0; j < list_entry.length; j++) {
-			child_sel[list_entry.offset + j] = row;
+			child_sel[current_offset++] = row;
 		}
 	}
 	auto child_values = Unshred(variant, child_vector, child_size, child_sel);
 
 	vector<VariantValue> res(count);
+	current_offset = 0;
 	for (idx_t i = 0; i < count; i++) {
-		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
+		auto list_idx = vector_format.sel->get_index(i);
+		if (!typed_value_validity.RowIsValid(list_idx)) {
 			continue;
 		}
-		auto &list_entry = list_data[i];
+		auto &list_entry = list_data[list_idx];
 
 		auto &list_val = res[i];
 		list_val = VariantValue(VariantValueType::ARRAY);
 		list_val.array_items.reserve(list_entry.length);
 		list_val.array_items.insert(
 		    list_val.array_items.end(),
-		    std::make_move_iterator(child_values.begin() + static_cast<int64_t>(list_entry.offset)),
-		    std::make_move_iterator(child_values.begin() +
-		                            static_cast<int64_t>(list_entry.offset + list_entry.length)));
+		    std::make_move_iterator(child_values.begin() + static_cast<int64_t>(current_offset)),
+		    std::make_move_iterator(child_values.begin() + static_cast<int64_t>(current_offset + list_entry.length)));
+		current_offset += list_entry.length;
 	}
 	return res;
 }
