@@ -9,11 +9,11 @@ require json
 statement ok
 COPY (SELECT '{}') TO '__TEST_DIR__/empty_object.json' (FORMAT CSV, HEADER FALSE)
 
-# for empty JSON objects we default to MAP(VARCHAR, JSON) as this is generic enough to fit any object
+# for empty JSON objects we default to MAP(VARCHAR, NULL) as the value type is unknown
 query I
 SELECT typeof(json) FROM '__TEST_DIR__/empty_object.json'
 ----
-MAP(VARCHAR, JSON)
+MAP(VARCHAR, "NULL")
 
 # we can disable it with the map_inference_threshold parameter
 query I

@@ -9,10 +9,11 @@ statement ok
 copy (select null i) to '__TEST_DIR__/all_null.parquet'
 
 # "Has No Null" is "false", meaning there are no non-NULL values
+# Note: since all values are NULL, the column is written as UNKNOWN/NullType (no min/max stats)
 query I
 select stats(i) from '__TEST_DIR__/all_null.parquet'
 ----
-[Min: NULL, Max: NULL][Has Null: true, Has No Null: false]
+[Has Null: true, Has No Null: false]
 
 # create 0-9 with no NULL
 statement ok

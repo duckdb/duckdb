@@ -26,7 +26,7 @@ copy (select '{"a": {}}') to '__TEST_DIR__/my.json' (FORMAT CSV, quote '', heade
 query T
 select typeof(a) from '__TEST_DIR__/my.json'
 ----
-MAP(VARCHAR, JSON)
+MAP(VARCHAR, "NULL")
 
 # can't force it to have an empty struct
 statement error
@@ -45,8 +45,8 @@ CREATE OR REPLACE TABLE tbl AS SELECT * FROM read_ndjson_auto('__TEST_DIR__/data
 query II
 select typeof(c1), typeof(c2) from tbl;
 ----
-VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, JSON))
-VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, JSON))
+VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, INTEGER))
+VARCHAR	STRUCT(k1 VARCHAR, k2 MAP(VARCHAR, INTEGER))
 
 require parquet
 

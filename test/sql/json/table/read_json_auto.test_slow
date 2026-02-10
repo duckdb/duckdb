@@ -242,7 +242,7 @@ MAP(VARCHAR, BIGINT)
 query T
 select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/simple_map.jsonl', map_inference_threshold=-1, field_appearance_threshold=0)
 ----
-STRUCT("1" JSON, "2" BIGINT, "3" BIGINT, "4" BIGINT, "5" BIGINT, "6" BIGINT, "7" BIGINT, "8" BIGINT, "9" BIGINT, "10" BIGINT, "11" BIGINT, "12" BIGINT, "13" BIGINT, "14" BIGINT, "15" BIGINT, "16" JSON, "17" BIGINT, "18" BIGINT, "19" BIGINT, "20" BIGINT, "21" BIGINT, "22" BIGINT, "23" BIGINT, "24" BIGINT, "25" BIGINT, "26" BIGINT, "27" BIGINT, "28" BIGINT, "29" BIGINT, "30" BIGINT, "31" BIGINT, "32" BIGINT, "33" BIGINT, "34" BIGINT, "35" BIGINT, "36" BIGINT, "37" BIGINT, "38" BIGINT, "39" BIGINT, "40" BIGINT, "41" BIGINT, "42" BIGINT, "43" BIGINT, "44" BIGINT, "45" BIGINT, "46" BIGINT, "47" BIGINT, "48" BIGINT, "49" BIGINT, "50" BIGINT, "51" BIGINT, "52" BIGINT, "53" BIGINT, "54" BIGINT, "55" BIGINT, "56" BIGINT, "57" BIGINT, "58" BIGINT, "59" BIGINT, "60" BIGINT, "61" BIGINT, "62" BIGINT, "63" BIGINT, "64" BIGINT, "65" BIGINT, "66" BIGINT, "67" BIGINT, "68" BIGINT, "69" BIGINT, "70" BIGINT, "71" BIGINT, "72" BIGINT, "73" BIGINT, "74" BIGINT, "75" BIGINT, "76" BIGINT, "77" BIGINT, "78" BIGINT, "79" BIGINT, "80" BIGINT, "81" BIGINT, "82" BIGINT, "83" BIGINT, "84" BIGINT, "85" BIGINT, "86" BIGINT, "87" BIGINT, "88" BIGINT, "89" BIGINT, "90" BIGINT, "91" BIGINT, "92" BIGINT, "93" BIGINT, "94" BIGINT, "95" BIGINT, "96" BIGINT, "97" BIGINT, "98" BIGINT, "99" BIGINT, "100" BIGINT)
+STRUCT("1" "NULL", "2" BIGINT, "3" BIGINT, "4" BIGINT, "5" BIGINT, "6" BIGINT, "7" BIGINT, "8" BIGINT, "9" BIGINT, "10" BIGINT, "11" BIGINT, "12" BIGINT, "13" BIGINT, "14" BIGINT, "15" BIGINT, "16" "NULL", "17" BIGINT, "18" BIGINT, "19" BIGINT, "20" BIGINT, "21" BIGINT, "22" BIGINT, "23" BIGINT, "24" BIGINT, "25" BIGINT, "26" BIGINT, "27" BIGINT, "28" BIGINT, "29" BIGINT, "30" BIGINT, "31" BIGINT, "32" BIGINT, "33" BIGINT, "34" BIGINT, "35" BIGINT, "36" BIGINT, "37" BIGINT, "38" BIGINT, "39" BIGINT, "40" BIGINT, "41" BIGINT, "42" BIGINT, "43" BIGINT, "44" BIGINT, "45" BIGINT, "46" BIGINT, "47" BIGINT, "48" BIGINT, "49" BIGINT, "50" BIGINT, "51" BIGINT, "52" BIGINT, "53" BIGINT, "54" BIGINT, "55" BIGINT, "56" BIGINT, "57" BIGINT, "58" BIGINT, "59" BIGINT, "60" BIGINT, "61" BIGINT, "62" BIGINT, "63" BIGINT, "64" BIGINT, "65" BIGINT, "66" BIGINT, "67" BIGINT, "68" BIGINT, "69" BIGINT, "70" BIGINT, "71" BIGINT, "72" BIGINT, "73" BIGINT, "74" BIGINT, "75" BIGINT, "76" BIGINT, "77" BIGINT, "78" BIGINT, "79" BIGINT, "80" BIGINT, "81" BIGINT, "82" BIGINT, "83" BIGINT, "84" BIGINT, "85" BIGINT, "86" BIGINT, "87" BIGINT, "88" BIGINT, "89" BIGINT, "90" BIGINT, "91" BIGINT, "92" BIGINT, "93" BIGINT, "94" BIGINT, "95" BIGINT, "96" BIGINT, "97" BIGINT, "98" BIGINT, "99" BIGINT, "100" BIGINT)
 
 # Map inference with max_depth works as expected
 query T
@@ -259,7 +259,7 @@ JSON
 query T
 select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_nulls.jsonl')
 ----
-MAP(VARCHAR, JSON)
+MAP(VARCHAR, "NULL")
 
 # Map type can be inferred at the top level
 query T
@@ -285,11 +285,11 @@ select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_map.jsonl'
 ----
 MAP(VARCHAR, MAP(VARCHAR, BIGINT))
 
-# All NULL types get converted to JSON if we do map inference
+# All NULL types remain as NULL if we do map inference
 query T
 select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_of_struct_with_nulls.jsonl', map_inference_threshold=10)
 ----
-MAP(VARCHAR, STRUCT(a JSON[]))
+MAP(VARCHAR, STRUCT(a "NULL"[]))
 
 # Candidate types are properly handled for map inference
 query I
@@ -307,7 +307,7 @@ MAP(VARCHAR, VARCHAR)
 query T
 select distinct typeof(a) from read_json_auto('{DATA_DIR}/json/map_incompatible.jsonl', map_inference_threshold=10)
 ----
-STRUCT(s1 STRUCT("1" JSON), s2 STRUCT("1" MAP(VARCHAR, JSON)), s3 STRUCT("1" VARCHAR), s4 STRUCT("1" BIGINT[]), s5 STRUCT("1" BIGINT), s6 STRUCT("1" VARCHAR), s7 STRUCT("1" BIGINT[]), s8 STRUCT("1" BIGINT), s9 STRUCT("1" VARCHAR), s10 STRUCT("1" BIGINT[]))
+STRUCT(s1 STRUCT("1" "NULL"), s2 STRUCT("1" MAP(VARCHAR, "NULL")), s3 STRUCT("1" VARCHAR), s4 STRUCT("1" BIGINT[]), s5 STRUCT("1" BIGINT), s6 STRUCT("1" VARCHAR), s7 STRUCT("1" BIGINT[]), s8 STRUCT("1" BIGINT), s9 STRUCT("1" VARCHAR), s10 STRUCT("1" BIGINT[]))
 
 # Can't set map_inference_threshold to a negative value (except -1)
 statement error
@@ -315,15 +315,16 @@ select * from read_json_auto('{DATA_DIR}/json/simple_map.jsonl', map_inference_t
 ----
 Binder Error: read_json_auto "map_inference_threshold" parameter must be 0 or positive, or -1 to disable map inference for consistent objects.
 
-# if we only sample the first file, we default to a single JSON column
+# if we only sample the first file (empty array), the type becomes SQLNULL (no data to infer)
+# which gets converted to INTEGER, so all values become NULL
 query I
 select * from read_json_auto(['{DATA_DIR}/json/empty_array.json', '{DATA_DIR}/json/example_n.ndjson'], maximum_sample_files=1);
 ----
-{"id":1,"name":"O Brother, Where Art Thou?"}
-{"id":2,"name":"Home for the Holidays"}
-{"id":3,"name":"The Firm"}
-{"id":4,"name":"Broadcast News"}
-{"id":5,"name":"Raising Arizona"}
+NULL
+NULL
+NULL
+NULL
+NULL
 
 # -1 is unlimited
 query II

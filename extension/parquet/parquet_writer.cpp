@@ -116,6 +116,9 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 	case LogicalTypeId::UUID:
 		parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
 		break;
+	case LogicalTypeId::SQLNULL:
+		parquet_type = Type::INT32;
+		break;
 	case LogicalTypeId::DECIMAL:
 		switch (duckdb_type.InternalType()) {
 		case PhysicalType::INT16:
@@ -273,6 +276,11 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 				schema_ele.logicalType.GEOMETRY.crs = crs.GetDefinition();
 			}
 		}
+		break;
+	case LogicalTypeId::SQLNULL:
+		schema_ele.__isset.logicalType = true;
+		schema_ele.logicalType.__set_UNKNOWN(duckdb_parquet::NullType());
+		break;
 	default:
 		break;
 	}
