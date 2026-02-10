@@ -31,9 +31,12 @@ struct EncryptionTag {
 	EncryptionTag();
 	data_ptr_t data();
 	idx_t size() const;
+	bool IsAllZeros() const;
+	void SetSize(idx_t size);
 
 private:
 	unique_ptr<data_t[]> tag;
+	idx_t tag_len;
 };
 
 struct EncryptionCanary {

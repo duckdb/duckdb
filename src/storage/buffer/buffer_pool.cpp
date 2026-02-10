@@ -414,6 +414,34 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 	return {found, std::move(r)};
 }
 
+idx_t BufferPool::PurgeAgedBlocks(uint32_t max_age_sec) {
+	int64_t now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())
+	                  .time_since_epoch()
+	                  .count();
+	int64_t limit = now - (static_cast<int64_t>(max_age_sec) * 1000);
+	idx_t purged_bytes = 0;
+	for (auto &queue : queues) {
+		purged_bytes += PurgeAgedBlocksInternal(*queue, max_age_sec, now, limit);
+	}
+	return purged_bytes;
+}
+
+idx_t BufferPool::PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit) {
+	idx_t purged_bytes = 0;
+	queue.IterateUnloadableBlocks(
+	    [&](BufferEvictionNode &node, const shared_ptr<BlockMemory> &handle, BlockLock &lock) {
+		    // We will unload this block regardless. But stop the iteration immediately afterward if this
+		    // block is younger than the age threshold.
+		    auto lru_timestamp_msec = handle->GetLRUTimestamp();
+		    bool is_fresh = lru_timestamp_msec >= limit && lru_timestamp_msec <= now;
+		    purged_bytes += handle->GetMemoryUsage();
+		    handle->Unload(lock);
+		    // Return false to stop iterating if the current block is_fresh
+		    return !is_fresh;
+	    });
+	return purged_bytes;
+}
+
 template <typename FN>
 void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 	auto debug_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
