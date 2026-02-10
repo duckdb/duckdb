@@ -68,7 +68,7 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			continue;
 		}
-		auto compression_method = config.GetCompressionFunction(compression_type, physical_type);
+		auto compression_method = config.TryGetCompressionFunction(compression_type, physical_type);
 		if (!compression_method) {
 			throw BinderException(
 			    "Can't compress column \"%s\" with type '%s' (physical: %s) using compression type '%s'", col.Name(),
