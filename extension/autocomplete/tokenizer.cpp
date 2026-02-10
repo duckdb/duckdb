@@ -75,13 +75,13 @@ bool BaseTokenizer::CharacterIsInitialNumber(char c) {
 }
 
 bool BaseTokenizer::CharacterIsSpecialStringCharacter(char c) {
-	if (c == 'N') {
+	if (c == 'N' || c == 'n') {
 		return true;
 	}
-	if (c == 'X') {
+	if (c == 'X' || c == 'x') {
 		return true;
 	}
-	if (c == 'E') {
+	if (c == 'E' || c == 'e') {
 		return true;
 	}
 	return false;

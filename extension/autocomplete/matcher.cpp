@@ -630,13 +630,17 @@ public:
 
 private:
 	static SpecialStringCharacter SpecialStringCharacter(char c) {
-		if (c == 'N') {
+		if (c == '\'') {
+			// Most likely case
+			return SpecialStringCharacter::STANDARD;
+		}
+		if (c == 'N' || c == 'n') {
 			return SpecialStringCharacter::NATIONAL_STRING;
 		}
-		if (c == 'X') {
+		if (c == 'X' || c == 'x') {
 			return SpecialStringCharacter::HEXADECIMAL_STRING;
 		}
-		if (c == 'E') {
+		if (c == 'E' || c == 'e') {
 			return SpecialStringCharacter::ESCAPE_STRING;
 		}
 		return SpecialStringCharacter::STANDARD;
