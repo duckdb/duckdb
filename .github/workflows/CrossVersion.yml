@@ -67,7 +67,7 @@ jobs:
       - name: Unit Test
         shell: bash
         run: |
-          ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
+          python3 scripts/run_tests_one_by_one.py build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
           rm -rf my_local_folder/hive
 
       - uses: actions/upload-artifact@v4
@@ -224,7 +224,7 @@ jobs:
       - name: Unit Test
         shell: bash
         run: |
-          ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
+          python3 scripts/run_tests_one_by_one.py build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
           rm -rf my_local_folder/hive
 
       - uses: actions/upload-artifact@v4

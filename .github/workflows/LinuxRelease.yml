@@ -148,7 +148,7 @@ jobs:
     - name: Release specific tests
       shell: bash
       run: |
-        ./build/release/test/unittest --select-tag release
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest --select-tag release
 
     - name: Tools Tests
       shell: bash

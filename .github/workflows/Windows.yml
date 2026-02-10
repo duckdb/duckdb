@@ -106,7 +106,7 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        test/Release/unittest.exe
+        python3 scripts/run_tests_one_by_one.py test/Release/unittest.exe
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
@@ -115,7 +115,7 @@ jobs:
         choco install wget -y --no-progress
         wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
         ls ./test/Release
-        ./test/Release/unittest.exe
+        python3 scripts/run_tests_one_by_one.py test/Release/unittest.exe
         rm ./test/Release/msvcp140.dll
 
     - name: Tools Test
@@ -195,7 +195,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: python3 scripts/run_tests_one_by_one.py test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
@@ -303,7 +303,7 @@ jobs:
          shell: msys2 {0}
          run: |
            cp src/libduckdb.dll .
-           test/unittest.exe
+           python3 scripts/run_tests_one_by_one.py test/unittest.exe
 
  win-packaged-upload:
    runs-on: windows-latest
