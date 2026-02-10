@@ -25,7 +25,9 @@ OptimisticDataWriter::~OptimisticDataWriter() {
 
 bool OptimisticDataWriter::PrepareWrite() {
 	// check if we should pre-emptively write the table to disk
-	if (table.IsTemporary() || StorageManager::Get(table.GetAttached()).InMemory()) {
+	auto &attached = table.GetAttached();
+	auto &storage_manager = StorageManager::Get(attached);
+	if (table.IsTemporary() || storage_manager.InMemory() || attached.IsReadOnly()) {
 		return false;
 	}
 	// we should! write the second-to-last row group to disk

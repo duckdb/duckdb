@@ -331,9 +331,7 @@ public:
 			}
 
 			// Before looping back, check if we are interrupted
-			if (context.interrupted) {
-				throw InterruptException();
-			}
+			context.InterruptCheck();
 		} while (true);
 	}
 

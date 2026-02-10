@@ -1,0 +1,116 @@
+# name: test/sql/aggregate/aggregates/test_aggregate_state_type.test
+# description: Test the AGGREGATE_STATE type name with get_state_type callback
+# group: [aggregates]
+
+# We know that forward compatibility won't be preserved
+require noforcestorage
+
+foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
+
+# avg() has the new get_state_type callback
+query T
+SELECT typeof(avg(1.0::${type}) EXPORT_STATE) = 'AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>';
+----
+true
+
+# Works in a table
+# (Forward compatability tests are covered because of this statement) 
+statement ok
+CREATE TABLE t1_${type} AS SELECT avg(range::${type}) EXPORT_STATE as state FROM range(10);
+
+# Test reading from the table
+# We cannot run in force storage mode, as this configuration still uses the old serialization version
+query T
+SELECT column_type='AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>' FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
+----
+true
+
+# Test combine and finalize
+query R
+SELECT finalize(combine(state, state)) FROM t1_${type};
+----
+4.500000
+
+# Test that state typing is independent of input expressions
+statement ok
+INSERT INTO t1_${type} SELECT avg((range::${type} + 10.0)::${type}) EXPORT_STATE FROM range(10);
+
+query R
+SELECT finalize(state) FROM t1_${type} ORDER BY 1;
+----
+4.500000
+14.500000
+
+# Test combine with multiple states
+query R
+SELECT finalize(combine(state, state)) FROM t1_${type} ORDER BY 1;
+----
+4.500000
+14.500000
+
+endloop
+
+# sum(INT) does NOT have the new get_state_type callback yet, so it should show the return type
+query T
+SELECT typeof(sum(1) EXPORT_STATE);
+----
+LEGACY_AGGREGATE_STATE<sum(INTEGER)::HUGEINT>
+
+# sum(INT) (as not opted-in) is still serialized correctly (backward & forward compatibiltiy will be run in CI)
+statement ok
+CREATE TABLE t2_sum_int AS SELECT sum(range::INT) EXPORT_STATE as state FROM range(10);
+
+# other aggregate functions (with multiple arguments) that are not opted-in are not broken
+query T
+SELECT typeof(corr(1.0::DOUBLE, 2.0::DOUBLE) EXPORT_STATE);
+----
+LEGACY_AGGREGATE_STATE<corr(DOUBLE, DOUBLE)::DOUBLE>
+
+# Test with interval type
+query T
+SELECT typeof(avg(INTERVAL '1 day' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(INTERVAL)::INTERVAL, STRUCT(count UBIGINT, "value" INTERVAL)>';
+----
+true
+
+# Test with TIMESTAMP type
+query T
+SELECT typeof(avg(TIMESTAMP '2020-01-01 00:00:00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIMESTAMP)::TIMESTAMP, STRUCT(count UBIGINT, "value" TIMESTAMP)>';
+----
+true
+
+# Test with TIMESTAMP WITH TIME ZONE type
+query T
+SELECT typeof(avg(TIMESTAMPTZ '2020-01-01 00:00:00+00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIMESTAMP WITH TIME ZONE)::TIMESTAMP WITH TIME ZONE, STRUCT(count UBIGINT, "value" TIMESTAMP WITH TIME ZONE)>';
+----
+true
+
+# Test with TIME type
+query T
+SELECT typeof(avg(TIME '12:00:00' ) EXPORT_STATE) = 'AGGREGATE_STATE<avg(TIME)::TIME, STRUCT(count UBIGINT, "value" TIME)>';
+----
+true
+
+# Test with TIME WITH TIME ZONE type
+query T
+SELECT typeof(avg(TIMETZ '12:00:00+00' ) EXPORT_STATE)
+ = 'AGGREGATE_STATE<avg(TIME WITH TIME ZONE)::TIME WITH TIME ZONE, STRUCT(count UBIGINT, "value" TIME WITH TIME ZONE)>';
+----
+true
+
+# Test with DECIMAL type
+query T
+SELECT typeof(avg(1.2) EXPORT_STATE) = 'AGGREGATE_STATE<avg(DECIMAL(2,1))::DOUBLE, STRUCT(count UBIGINT, "value" DECIMAL(2,1))>';
+----
+true
+
+# Casting to struct should work
+query T
+SELECT (avg(42) export_state)::struct(count ubigint, "value" integer);
+----
+{'count': 1, 'value': 42}
+
+# Casting to struct that should be casted to a different struct should also work
+query T
+SELECT (avg(42) export_state)::struct(count ubigint, "value" double);
+----
+{'count': 1, 'value': 42.0}

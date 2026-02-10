@@ -703,8 +703,8 @@ void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input)
 		for (auto &path : attached_paths) {
 			config.AddAllowedPath(path);
 			config.AddAllowedPath(path + ".wal");
-			config.AddAllowedPath(path + ".checkpoint.wal");
-			config.AddAllowedPath(path + ".recovery.wal");
+			config.AddAllowedPath(path + ".wal.checkpoint");
+			config.AddAllowedPath(path + ".wal.recovery");
 		}
 	}
 	if (config.options.use_temporary_directory && !config.options.temporary_directory.empty()) {
@@ -750,7 +750,12 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 		                            value.type().ToString());
 	}
 
-	auto logical_type = TransformStringToLogicalType(value.GetValue<string>());
+	auto logical_type = UnboundType::TryParseAndDefaultBind(value.GetValue<string>());
+	if (logical_type.id() == LogicalTypeId::INVALID) {
+		throw InvalidInputException("Could not parse the argument '%s' to 'force_variant_shredding' as a built in type",
+		                            value.GetValue<string>());
+	}
+
 	TypeVisitor::Contains(logical_type, [](const LogicalType &type) {
 		if (type.IsNested()) {
 			if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::LIST) {
@@ -1260,6 +1265,31 @@ Value MaxTempDirectorySizeSetting::GetSetting(const ClientContext &context) {
 		// The temp directory has not been used yet
 		return Value("90% of available disk space");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Operator Memory Limit
+//===----------------------------------------------------------------------===//
+void OperatorMemoryLimitSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (input.IsNull()) {
+		config.operator_memory_limit.SetInvalid();
+	} else {
+		config.operator_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	}
+}
+
+void OperatorMemoryLimitSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.operator_memory_limit.SetInvalid();
+}
+
+Value OperatorMemoryLimitSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.operator_memory_limit.IsValid()) {
+		return Value();
+	}
+	return Value(StringUtil::BytesToHumanReadableString(config.operator_memory_limit.GetIndex()));
 }
 
 //===----------------------------------------------------------------------===//

@@ -14,9 +14,6 @@ statement ok
 SET temp_file_encryption=true;
 
 statement ok
-USE enc;
-
-statement ok
 PRAGMA memory_limit='400M'
 
 statement ok

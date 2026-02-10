@@ -373,7 +373,7 @@ UChar32 MutableCodePointTrie::getRange(
 }
 
 void
-umutablecptrie_writeBlock(uint32_t *block, uint32_t value) {
+writeBlock(uint32_t *block, uint32_t value) {
     uint32_t *limit = block + UCPTRIE_SMALL_DATA_BLOCK_LENGTH;
     while (block < limit) {
         *block++ = value;
@@ -448,7 +448,7 @@ int32_t MutableCodePointTrie::getDataBlock(int32_t i) {
         int32_t iLimit = iStart + SMALL_DATA_BLOCKS_PER_BMP_BLOCK;
         do {
             U_ASSERT(flags[iStart] == ALL_SAME);
-            umutablecptrie_writeBlock(data + newBlock, index[iStart]);
+            writeBlock(data + newBlock, index[iStart]);
             flags[iStart] = MIXED;
             index[iStart++] = newBlock;
             newBlock += UCPTRIE_SMALL_DATA_BLOCK_LENGTH;
@@ -457,7 +457,7 @@ int32_t MutableCodePointTrie::getDataBlock(int32_t i) {
     } else {
         int32_t newBlock = allocDataBlock(UCPTRIE_SMALL_DATA_BLOCK_LENGTH);
         if (newBlock < 0) { return newBlock; }
-        umutablecptrie_writeBlock(data + newBlock, index[i]);
+        writeBlock(data + newBlock, index[i]);
         flags[i] = MIXED;
         index[i] = newBlock;
         return newBlock;
@@ -1801,7 +1801,7 @@ umutablecptrie_get(const UMutableCPTrie *trie, UChar32 c) {
 
 namespace {
 
-UChar32 umutablecptrie_internal_getRange(const void *trie, UChar32 start,
+UChar32 getRange(const void *trie, UChar32 start,
                  UCPMapValueFilter *filter, const void *context, uint32_t *pValue) {
     return reinterpret_cast<const MutableCodePointTrie *>(trie)->
         getRange(start, filter, context, pValue);
@@ -1813,7 +1813,7 @@ U_CAPI UChar32 U_EXPORT2
 umutablecptrie_getRange(const UMutableCPTrie *trie, UChar32 start,
                         UCPMapRangeOption option, uint32_t surrogateValue,
                         UCPMapValueFilter *filter, const void *context, uint32_t *pValue) {
-    return ucptrie_internalGetRange(umutablecptrie_internal_getRange, trie, start,
+    return ucptrie_internalGetRange(getRange, trie, start,
                                     option, surrogateValue,
                                     filter, context, pValue);
 }

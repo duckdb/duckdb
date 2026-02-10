@@ -8,10 +8,33 @@
 
 namespace duckdb {
 
+JoinCondition JoinCondition::Copy() const {
+	if (IsComparison()) {
+		JoinCondition copy(left->Copy(), right->Copy(), comparison);
+		if (left_stats) {
+			copy.SetLeftStats(left_stats->ToUnique());
+		}
+		if (right_stats) {
+			copy.SetRightStats(right_stats->ToUnique());
+		}
+		return copy;
+	}
+
+	JoinCondition copy(left->Copy());
+	const auto &expr_stats = GetExpressionStats();
+	if (expr_stats) {
+		copy.SetExpressionStats(expr_stats->ToUnique());
+	}
+	return copy;
+}
+
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
-	auto bound_comparison =
-	    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
-	return std::move(bound_comparison);
+	if (cond.IsComparison()) {
+		auto bound_comparison = make_uniq<BoundComparisonExpression>(
+		    cond.GetComparisonType(), std::move(cond.LeftReference()), std::move(cond.RightReference()));
+		return std::move(bound_comparison);
+	}
+	return std::move(cond.JoinExpressionReference());
 }
 
 unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> conditions) {

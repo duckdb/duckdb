@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+class ParsedExpression;
+
 //! Extra Type Info Type
 enum class ExtraTypeInfoType : uint8_t {
 	INVALID_TYPE_INFO = 0,
@@ -24,13 +26,14 @@ enum class ExtraTypeInfoType : uint8_t {
 	LIST_TYPE_INFO = 4,
 	STRUCT_TYPE_INFO = 5,
 	ENUM_TYPE_INFO = 6,
-	USER_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8,
+	UNBOUND_TYPE_INFO = 7,
+	LEGACY_AGGREGATE_STATE_TYPE_INFO = 8,
 	ARRAY_TYPE_INFO = 9,
 	ANY_TYPE_INFO = 10,
 	INTEGER_LITERAL_TYPE_INFO = 11,
 	TEMPLATE_TYPE_INFO = 12,
-	GEO_TYPE_INFO = 13
+	GEO_TYPE_INFO = 13,
+	AGGREGATE_STATE_TYPE_INFO = 14
 };
 
 struct ExtraTypeInfo {
@@ -125,6 +128,7 @@ private:
 
 struct StructTypeInfo : public ExtraTypeInfo {
 	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p);
+	explicit StructTypeInfo(ExtraTypeInfoType type, child_list_t<LogicalType> child_types_p);
 
 	child_list_t<LogicalType> child_types;
 
@@ -141,8 +145,8 @@ private:
 	StructTypeInfo();
 };
 
-struct AggregateStateTypeInfo : public ExtraTypeInfo {
-	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p);
+struct LegacyAggregateStateTypeInfo : public ExtraTypeInfo {
+	explicit LegacyAggregateStateTypeInfo(aggregate_state_t state_type_p);
 
 	aggregate_state_t state_type;
 
@@ -155,29 +159,25 @@ protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
 
 private:
-	AggregateStateTypeInfo();
+	LegacyAggregateStateTypeInfo();
 };
 
-struct UserTypeInfo : public ExtraTypeInfo {
-	explicit UserTypeInfo(string name_p);
-	UserTypeInfo(string name_p, vector<Value> modifiers_p);
-	UserTypeInfo(string catalog_p, string schema_p, string name_p, vector<Value> modifiers_p);
+struct AggregateStateTypeInfo : public StructTypeInfo {
+	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p);
 
-	string catalog;
-	string schema;
-	string user_type_name;
-	vector<Value> user_type_modifiers;
+	aggregate_state_t state_type;
 
 public:
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 	shared_ptr<ExtraTypeInfo> Copy() const override;
+	shared_ptr<ExtraTypeInfo> DeepCopy() const override;
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
 
 private:
-	UserTypeInfo();
+	AggregateStateTypeInfo();
 };
 
 // If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
@@ -292,6 +292,22 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+};
+
+struct UnboundTypeInfo : public ExtraTypeInfo {
+	explicit UnboundTypeInfo(unique_ptr<ParsedExpression> expr_p);
+
+	unique_ptr<ParsedExpression> expr;
+
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	shared_ptr<ExtraTypeInfo> Copy() const override;
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	UnboundTypeInfo();
 };
 
 } // namespace duckdb

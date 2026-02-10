@@ -172,7 +172,12 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	ListVector::Reserve(result_values, values_list_size);
 	ListVector::SetListSize(result_values, values_list_size);
 	auto result_values_data = FlatVector::GetData<list_entry_t>(result_values);
+	auto &result_values_validity = FlatVector::Validity(result_values);
 	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
+			result_values_validity.SetInvalid(i);
+			continue;
+		}
 		result_values_data[i] = values_data[values.sel->get_index(i)];
 	}
 

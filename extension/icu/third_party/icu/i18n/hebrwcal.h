@@ -88,7 +88,7 @@ public:
    * Useful constants for HebrewCalendar.
    * @internal
    */
-  enum EEras {
+  enum Month {
     /** 
      * Constant for Tishri, the 1st month of the Hebrew year. 
      */
@@ -181,18 +181,11 @@ public:
     HebrewCalendar(const HebrewCalendar& source);
 
     /**
-     * Default assignment operator
-     * @param right    the object to be copied.
-     * @internal
-     */
-    HebrewCalendar& operator=(const HebrewCalendar& right);
-
-    /**
      * Create and return a polymorphic copy of this calendar.
      * @return    return a polymorphic copy of this calendar.
      * @internal
      */
-    virtual HebrewCalendar* clone() const;
+    virtual HebrewCalendar* clone() const override;
     
 public:
     /**
@@ -205,7 +198,7 @@ public:
      *           same class ID. Objects of other classes have different class IDs.
      * @internal
      */
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID() const override;
 
     /**
      * Return the class ID for this class. This is useful only for comparing to a return
@@ -218,7 +211,7 @@ public:
      * @return   The class ID for all objects of this class.
      * @internal
      */
-    static UClassID U_EXPORT2 getStaticClassID(void);
+    static UClassID U_EXPORT2 getStaticClassID();
 
     /**
      * return the calendar type, "hebrew".
@@ -226,7 +219,7 @@ public:
      * @return calendar type
      * @internal
      */
-    virtual const char * getType() const;
+    virtual const char * getType() const override;
 
 
     // Calendar API
@@ -242,11 +235,11 @@ public:
      *                previously set in the time field is invalid, this will be set to
      *                an error status.
      */
-    virtual void add(UCalendarDateFields field, int32_t amount, UErrorCode& status);
+    virtual void add(UCalendarDateFields field, int32_t amount, UErrorCode& status) override;
     /**
      * @deprecated ICU 2.6 use UCalendarDateFields instead of EDateFields
      */
-    virtual void add(EDateFields field, int32_t amount, UErrorCode& status);
+    virtual void add(EDateFields field, int32_t amount, UErrorCode& status) override;
 
 
     /**
@@ -260,7 +253,7 @@ public:
      *                an error status.
      * @internal
      */
-    virtual void roll(UCalendarDateFields field, int32_t amount, UErrorCode& status);
+    virtual void roll(UCalendarDateFields field, int32_t amount, UErrorCode& status) override;
 
     /**
      * (Overrides Calendar) Rolls up or down by the given amount in the specified field.
@@ -273,12 +266,26 @@ public:
      *                an error status.
      * @deprecated ICU 2.6. Use roll(UCalendarDateFields field, int32_t amount, UErrorCode& status) instead.
 `     */
-    virtual void roll(EDateFields field, int32_t amount, UErrorCode& status);
+    virtual void roll(EDateFields field, int32_t amount, UErrorCode& status) override;
 
     /**
      * @internal 
      */
     static UBool isLeapYear(int32_t year) ;
+
+    /**
+     * @return      The related Gregorian year; will be obtained by modifying the value
+     *              obtained by get from UCAL_EXTENDED_YEAR field
+     * @internal
+     */
+    virtual int32_t getRelatedYear(UErrorCode &status) const override;
+
+    /**
+     * @param year  The related Gregorian year to set; will be modified as necessary then
+     *              set in UCAL_EXTENDED_YEAR field
+     * @internal
+     */
+    virtual void setRelatedYear(int32_t year) override;
 
  protected:
 
@@ -303,7 +310,7 @@ public:
      * <code>LEAST_MAXIMUM</code>, or <code>MAXIMUM</code>
      * @internal
      */
-    virtual int32_t handleGetLimit(UCalendarDateFields field, ELimitType limitType) const;
+    virtual int32_t handleGetLimit(UCalendarDateFields field, ELimitType limitType) const override;
 
     /**
      * Return the number of days in the given month of the given extended
@@ -312,7 +319,7 @@ public:
      * implementation than the default implementation in Calendar.
      * @internal
      */
-    virtual int32_t handleGetMonthLength(int32_t extendedYear, int32_t month) const;
+    virtual int32_t handleGetMonthLength(int32_t extendedYear, int32_t month) const override;
 
     /**
      * Return the number of days in the given extended year of this
@@ -321,7 +328,7 @@ public:
      * default implementation in Calendar.
      * @stable ICU 2.0
      */
-    virtual int32_t handleGetYearLength(int32_t eyear) const;
+    virtual int32_t handleGetYearLength(int32_t eyear) const override;
     /**
      * Subclasses may override this method to compute several fields
      * specific to each calendar system.  These are:
@@ -337,7 +344,7 @@ public:
      * a calendar with the specified Julian/Gregorian cutover date.
      * @internal
      */
-    virtual void handleComputeFields(int32_t julianDay, UErrorCode &status);
+    virtual void handleComputeFields(int32_t julianDay, UErrorCode &status) override;
     /**
      * Return the extended year defined by the current fields.  This will
      * use the UCAL_EXTENDED_YEAR field or the UCAL_YEAR and supra-year fields (such
@@ -346,7 +353,7 @@ public:
      * @return the extended year
      * @internal
      */
-    virtual int32_t handleGetExtendedYear();
+    virtual int32_t handleGetExtendedYear() override;
     /**
      * Return the Julian day number of day before the first day of the
      * given month in the given extended year.  Subclasses should override
@@ -361,7 +368,7 @@ public:
      * @internal
      */
     virtual int32_t handleComputeMonthStart(int32_t eyear, int32_t month,
-                                                   UBool useMonth) const;
+                                                   UBool useMonth) const override;
 
 
     /**
@@ -370,39 +377,72 @@ public:
      * special handling for month validation for Hebrew calendar.
      * @internal
      */
-    virtual void validateField(UCalendarDateFields field, UErrorCode &status);
+    virtual void validateField(UCalendarDateFields field, UErrorCode &status) override;
 
  protected:
-
   /**
-   * (Overrides Calendar) Return true if the current date for this Calendar is in
-   * Daylight Savings Time. Recognizes DST_OFFSET, if it is set.
-   *
-   * @param status Fill-in parameter which receives the status of this operation.
-   * @return   True if the current date for this Calendar is in Daylight Savings Time,
-   *           false, otherwise.
+   * Returns true because the Hebrew Calendar does have a default century
    * @internal
    */
-  virtual UBool inDaylightTime(UErrorCode& status) const;
+  virtual UBool haveDefaultCentury() const override;
 
-    /**
-     * Returns TRUE because the Hebrew Calendar does have a default century
-     * @internal
-     */
-    virtual UBool haveDefaultCentury() const;
+  /**
+   * Returns the date of the start of the default century
+   * @return start of century - in milliseconds since epoch, 1970
+   * @internal
+   */
+  virtual UDate defaultCenturyStart() const override;
 
-    /**
-     * Returns the date of the start of the default century
-     * @return start of century - in milliseconds since epoch, 1970
-     * @internal
-     */
-    virtual UDate defaultCenturyStart() const;
+  /**
+   * Returns the year in which the default century begins
+   * @internal
+   */
+  virtual int32_t defaultCenturyStartYear() const override;
 
-    /**
-     * Returns the year in which the default century begins
-     * @internal
-     */
-    virtual int32_t defaultCenturyStartYear() const;
+ public:
+  /**
+   * Returns true if the date is in a leap year.
+   *
+   * @param status        ICU Error Code
+   * @return       True if the date in the fields is in a Temporal proposal
+   *               defined leap year. False otherwise.
+   */
+  virtual bool inTemporalLeapYear(UErrorCode& status) const override;
+
+  /**
+   * Gets The Temporal monthCode value corresponding to the month for the date.
+   * The value is a string identifier that starts with the literal grapheme
+   * "M" followed by two graphemes representing the zero-padded month number
+   * of the current month in a normal (non-leap) year and suffixed by an
+   * optional literal grapheme "L" if this is a leap month in a lunisolar
+   * calendar. For the Hebrew calendar, the values are "M01" .. "M12" for
+   * non-leap year, and "M01" .. "M05", "M05L", "M06" .. "M12" for leap year.
+   *
+   * @param status        ICU Error Code
+   * @return       One of 13 possible strings in {"M01".. "M05", "M05L",
+   * "M06" .. "M12"}.
+   * @draft ICU 73
+   */
+  virtual const char* getTemporalMonthCode(UErrorCode& status) const override;
+
+  /**
+   * Sets The Temporal monthCode which is a string identifier that starts
+   * with the literal grapheme "M" followed by two graphemes representing
+   * the zero-padded month number of the current month in a normal
+   * (non-leap) year and suffixed by an optional literal grapheme "L" if this
+   * is a leap month in a lunisolar calendar. For Hebrew calendar, the values
+   * are "M01" .. "M12" for non-leap years, and "M01" .. "M05", "M05L", "M06"
+   * .. "M12" for leap year.
+   *
+   * @param temporalMonth  The value to be set for temporal monthCode.
+   * @param status        ICU Error Code
+   *
+   * @draft ICU 73
+   */
+  virtual void setTemporalMonthCode(const char* code, UErrorCode& status ) override;
+
+ protected:
+   virtual int32_t internalGetMonth() const override;
 
  private: // Calendar-specific implementation
     /**

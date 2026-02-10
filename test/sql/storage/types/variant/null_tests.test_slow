@@ -1,0 +1,38 @@
+# name: test/sql/storage/types/variant/null_tests.test_slow
+# group: [variant]
+
+load __TEST_DIR__/variant_nulls.db
+
+statement ok
+create table tbl(col VARIANT)
+
+statement ok
+insert into tbl
+	select
+		CASE
+		WHEN (i % 5 == 0)
+			THEN NULL::VARIANT
+		WHEN (i % 5 > 3)
+			THEN {'a': i, 'b': i % 2 == 0}::VARIANT
+		else
+			i::VARIANT
+		END
+from range(150_000) t(i)
+
+statement ok
+checkpoint
+
+query I
+select count() from tbl WHERE col IS NOT NULL AND variant_typeof(col) != 'VARIANT_NULL'
+----
+120000
+
+query I
+select count() from tbl WHERE variant_typeof(col).starts_with('OBJECT')
+----
+30000
+
+query I
+select count() from tbl WHERE variant_typeof(col) == 'INT64'
+----
+90000

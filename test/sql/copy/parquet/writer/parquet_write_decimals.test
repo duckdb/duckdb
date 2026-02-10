@@ -81,7 +81,7 @@ endloop
 statement ok
 PRAGMA disable_verification
 
-query IIII
-SELECT stats(dec4), stats(dec9), stats(dec18), stats(dec38) FROM '__TEST_DIR__/decimals.parquet' LIMIT 1
+query IIIIIIII
+SELECT sdec4.min, sdec4.max, sdec9.min, sdec9.max, sdec18.min, sdec18.max, sdec38.min, sdec38.max FROM (SELECT stats(dec4) sdec4, stats(dec9) sdec9, stats(dec18) sdec18, stats(dec38) sdec38 FROM '__TEST_DIR__/decimals.parquet' LIMIT 1)
 ----
-[Min: -42.0, Max: 42.0][Has Null: true, Has No Null: true]	[Min: -42.00, Max: 42.00][Has Null: true, Has No Null: true]	[Min: -42.000, Max: 42.000][Has Null: true, Has No Null: true]	[Min: -42.0000, Max: 42.0000][Has Null: true, Has No Null: true]
+-42.0	42.0	-42.00	42.00	-42.000	42.000	-42.0000	42.0000

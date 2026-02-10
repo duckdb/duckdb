@@ -280,7 +280,7 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 	case ExpressionType::WINDOW_LAG:
 		return make_uniq<WindowLeadLagExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_FILL:
-		return make_uniq<WindowFillExecutor>(wexpr, shared);
+		return make_uniq<WindowFillExecutor>(wexpr, client, shared);
 	case ExpressionType::WINDOW_FIRST_VALUE:
 		return make_uniq<WindowFirstValueExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_LAST_VALUE:
@@ -1026,7 +1026,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 		executor.Evaluate(context, position, eval_chunk, result, sink);
 	}
 	output_chunk.SetCardinality(input_chunk);
-	output_chunk.Verify();
+	output_chunk.Verify(context.client.db);
 
 	idx_t out_idx = 0;
 	result.SetCardinality(input_chunk);
@@ -1040,7 +1040,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	// Move to the next chunk
 	++task->begin_idx;
 
-	result.Verify();
+	result.Verify(context.client.db);
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,

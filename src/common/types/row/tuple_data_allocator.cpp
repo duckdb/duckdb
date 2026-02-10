@@ -471,7 +471,7 @@ static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTyp
                                  const idx_t col_offset, const idx_t offset, const idx_t count) {
 #ifdef D_ASSERT_IS_ENABLED
 	if (type_id != LogicalTypeId::VARCHAR) {
-		// Make sure we don't verify BLOB / AGGREGATE_STATE
+		// Make sure we don't verify BLOB / LEGACY_AGGREGATE_STATE
 		return;
 	}
 	idx_t entry_idx;

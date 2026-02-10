@@ -20,6 +20,8 @@ struct CommonTableExpressionInfo {
 
 	vector<string> aliases;
 	vector<unique_ptr<ParsedExpression>> key_targets;
+	vector<unique_ptr<ParsedExpression>> payload_aggregates;
+
 	unique_ptr<SelectStatement> query;
 	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 

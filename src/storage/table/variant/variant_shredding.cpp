@@ -376,7 +376,7 @@ static LogicalType SetShreddedType(const LogicalType &typed_value) {
 
 bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type) const {
 	idx_t max_count = 0;
-	uint8_t type_index;
+	uint8_t type_index = 0;
 	if (column.type_counts[0] == column.total_count) {
 		//! All NULL, emit INT32
 		out_type = SetShreddedType(LogicalTypeId::INTEGER);

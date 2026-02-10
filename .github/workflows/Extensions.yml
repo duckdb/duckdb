@@ -123,7 +123,7 @@ jobs:
 
     env:
       # NOTE: on PRs we exclude some archs to speed things up
-      BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_mvp;wasm_threads;windows_amd64_mingw;osx_amd64;linux_arm64;linux_amd64_musl;' || '' }}
+      BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_mvp;wasm_threads;windows_amd64_mingw;osx_amd64;osx_arm64;linux_arm64;linux_amd64_musl;' || '' }}
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
       OPT_IN_ARCHS: ${{ inputs.opt_in_archs }}
     steps:
@@ -191,7 +191,7 @@ jobs:
       extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests && true || false }}
+      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
 
   # Build the extensions from .github/config/rust_based_extensions.cmake
@@ -208,7 +208,7 @@ jobs:
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests && true || false }}
+      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
 
   # Build the extensions from .github/config/external_extensions.cmake
@@ -225,7 +225,7 @@ jobs:
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests && true || false }}
+      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
 
   # Merge all extensions into a single, versioned repository
@@ -316,7 +316,7 @@ jobs:
 
   autoload-tests:
     name: Extension Autoloading Tests
-    if: ${{ !inputs.skip_tests}}
+    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-latest
     needs: create-extension-repository
 
@@ -331,11 +331,7 @@ jobs:
           sudo apt-get update -y -qq
           sudo apt-get install -y -qq ninja-build ccache
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - uses: actions/download-artifact@v4
         with:
@@ -362,12 +358,13 @@ jobs:
       - name: Run Tests
         env:
           LOCAL_EXTENSION_REPO: /tmp/extension-repository
+          DUCKDB_TEST_DESCRIPTION: 'Running with autoloading of extensions. Run unittest --autoloading available to reproduce locally. Add require no_extension_autoloading to skip the test'
         run: |
           ./build/release/test/unittest --autoloading available --skip-compiled
 
   check-load-install-extensions:
     name: Checks extension entries
-    if: ${{ !inputs.skip_tests}}
+    if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-22.04
     needs: create-extension-repository
     env:
@@ -389,11 +386,7 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash

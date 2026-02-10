@@ -5,6 +5,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
 
