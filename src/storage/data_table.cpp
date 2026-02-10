@@ -29,6 +29,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -878,7 +879,7 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 		                           "a different transaction",
 		                           GetTableName(), TableModification());
 	}
-	chunk.Verify();
+	chunk.Verify(context.db);
 
 	// Insert any row ids into the DELETE ART and verify constraints afterward.
 	// This happens only for the global indexes.
@@ -1115,7 +1116,7 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 			}
 			SelectionVector sel(start_in_chunk, chunk_count);
 			chunk.Slice(sel, chunk_count);
-			chunk.Verify();
+			chunk.Verify(GetAttached().GetDatabase());
 		}
 		function(chunk);
 		chunk.Reset();
@@ -1574,7 +1575,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
                        const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(column_ids.size() == updates.ColumnCount());
-	updates.Verify();
+	updates.Verify(context.db);
 
 	auto count = updates.size();
 	if (count == 0) {
@@ -1628,7 +1629,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
                              const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(updates.ColumnCount() == 1);
-	updates.Verify();
+	updates.Verify(context.db);
 	if (updates.size() == 0) {
 		return;
 	}
