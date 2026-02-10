@@ -320,10 +320,15 @@ idx_t VariantColumnData::Scan(TransactionData transaction, idx_t vector_index, C
 }
 
 idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
-	return ScanWithCallback(state, result, count,
-	                        [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
-		                        return col.ScanCount(child_state, target_vector, count, result_offset);
-	                        });
+	if (result_offset > 0) {
+		throw InternalException("VariantColumnData::ScanCount not supported with result_offset > 0");
+	}
+	auto result_count = ScanWithCallback(
+	    state, result, count, [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
+		    return col.ScanCount(child_state, target_vector, count, result_offset);
+	    });
+	result.Flatten(result_count);
+	return result_count;
 }
 
 void VariantColumnData::Skip(ColumnScanState &state, idx_t count) {

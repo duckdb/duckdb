@@ -3090,7 +3090,7 @@ Vector &ShreddedVector::GetShreddedVector(Vector &vec) {
 }
 
 void ShreddedVector::Unshred(Vector &vec, idx_t count) {
-	Vector unshredded_vector(LogicalType::VARIANT());
+	Vector unshredded_vector(LogicalType::VARIANT(), MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
 	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
 	VariantUtils::UnshredVariantData(shredded_buffer.GetChild(), unshredded_vector, count);
 	vec.Reference(unshredded_vector);
