@@ -53,13 +53,13 @@ static void debug_tz_msg(const char *pat, ...)
 
 static UBool arrayEqual(const void *a1, const void *a2, int32_t size) {
     if (a1 == NULL && a2 == NULL) {
-        return TRUE;
+        return true;
     }
     if ((a1 != NULL && a2 == NULL) || (a1 == NULL && a2 != NULL)) {
-        return FALSE;
+        return false;
     }
     if (a1 == a2) {
-        return TRUE;
+        return true;
     }
 
     return (uprv_memcmp(a1, a2, size) == 0);
@@ -87,7 +87,7 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(OlsonTimeZone)
  * Default constructor.  Creates a time zone with an empty ID and
  * a fixed GMT offset of zero.
  */
-/*OlsonTimeZone::OlsonTimeZone() : finalYear(INT32_MAX), finalMillis(DBL_MAX), finalZone(0), transitionRulesInitialized(FALSE) {
+/*OlsonTimeZone::OlsonTimeZone() : finalYear(INT32_MAX), finalMillis(DBL_MAX), finalZone(0), transitionRulesInitialized(false) {
     clearTransitionRules();
     constructEmpty();
 }*/
@@ -197,58 +197,60 @@ OlsonTimeZone::OlsonTimeZone(const UResourceBundle* top,
         }
 
         // Process final rule and data, if any
-        const UChar *ruleIdUStr = ures_getStringByKey(res, kFINALRULE, &len, &ec);
-        ures_getByKey(res, kFINALRAW, r.getAlias(), &ec);
-        int32_t ruleRaw = ures_getInt(r.getAlias(), &ec);
-        ures_getByKey(res, kFINALYEAR, r.getAlias(), &ec);
-        int32_t ruleYear = ures_getInt(r.getAlias(), &ec);
         if (U_SUCCESS(ec)) {
-            UnicodeString ruleID(TRUE, ruleIdUStr, len);
-            UResourceBundle *rule = TimeZone::loadRule(top, ruleID, NULL, ec);
-            const int32_t *ruleData = ures_getIntVector(rule, &len, &ec); 
-            if (U_SUCCESS(ec) && len == 11) {
-                UnicodeString emptyStr;
-                finalZone = new SimpleTimeZone(
-                    ruleRaw * U_MILLIS_PER_SECOND,
-                    emptyStr,
-                    (int8_t)ruleData[0], (int8_t)ruleData[1], (int8_t)ruleData[2],
-                    ruleData[3] * U_MILLIS_PER_SECOND,
-                    (SimpleTimeZone::TimeMode) ruleData[4],
-                    (int8_t)ruleData[5], (int8_t)ruleData[6], (int8_t)ruleData[7],
-                    ruleData[8] * U_MILLIS_PER_SECOND,
-                    (SimpleTimeZone::TimeMode) ruleData[9],
-                    ruleData[10] * U_MILLIS_PER_SECOND, ec);
-                if (finalZone == NULL) {
-                    ec = U_MEMORY_ALLOCATION_ERROR;
+            const UChar *ruleIdUStr = ures_getStringByKey(res, kFINALRULE, &len, &ec);
+            ures_getByKey(res, kFINALRAW, r.getAlias(), &ec);
+            int32_t ruleRaw = ures_getInt(r.getAlias(), &ec);
+            ures_getByKey(res, kFINALYEAR, r.getAlias(), &ec);
+            int32_t ruleYear = ures_getInt(r.getAlias(), &ec);
+            if (U_SUCCESS(ec)) {
+                UnicodeString ruleID(true, ruleIdUStr, len);
+                UResourceBundle *rule = TimeZone::loadRule(top, ruleID, NULL, ec);
+                const int32_t *ruleData = ures_getIntVector(rule, &len, &ec); 
+                if (U_SUCCESS(ec) && len == 11) {
+                    UnicodeString emptyStr;
+                    finalZone = new SimpleTimeZone(
+                        ruleRaw * U_MILLIS_PER_SECOND,
+                        emptyStr,
+                        (int8_t)ruleData[0], (int8_t)ruleData[1], (int8_t)ruleData[2],
+                        ruleData[3] * U_MILLIS_PER_SECOND,
+                        (SimpleTimeZone::TimeMode) ruleData[4],
+                        (int8_t)ruleData[5], (int8_t)ruleData[6], (int8_t)ruleData[7],
+                        ruleData[8] * U_MILLIS_PER_SECOND,
+                        (SimpleTimeZone::TimeMode) ruleData[9],
+                        ruleData[10] * U_MILLIS_PER_SECOND, ec);
+                    if (finalZone == NULL) {
+                        ec = U_MEMORY_ALLOCATION_ERROR;
+                    } else {
+                        finalStartYear = ruleYear;
+
+                        // Note: Setting finalStartYear to the finalZone is problematic.  When a date is around
+                        // year boundary, SimpleTimeZone may return false result when DST is observed at the 
+                        // beginning of year.  We could apply safe margin (day or two), but when one of recurrent
+                        // rules falls around year boundary, it could return false result.  Without setting the
+                        // start year, finalZone works fine around the year boundary of the start year.
+
+                        // finalZone->setStartYear(finalStartYear);
+
+
+                        // Compute the millis for Jan 1, 0:00 GMT of the finalYear
+
+                        // Note: finalStartMillis is used for detecting either if
+                        // historic transition data or finalZone to be used.  In an
+                        // extreme edge case - for example, two transitions fall into
+                        // small windows of time around the year boundary, this may
+                        // result incorrect offset computation.  But I think it will
+                        // never happen practically.  Yoshito - Feb 20, 2010
+                        finalStartMillis = Grego::fieldsToDay(finalStartYear, 0, 1) * U_MILLIS_PER_DAY;
+                    }
                 } else {
-                    finalStartYear = ruleYear;
-
-                    // Note: Setting finalStartYear to the finalZone is problematic.  When a date is around
-                    // year boundary, SimpleTimeZone may return false result when DST is observed at the 
-                    // beginning of year.  We could apply safe margin (day or two), but when one of recurrent
-                    // rules falls around year boundary, it could return false result.  Without setting the
-                    // start year, finalZone works fine around the year boundary of the start year.
-
-                    // finalZone->setStartYear(finalStartYear);
-
-
-                    // Compute the millis for Jan 1, 0:00 GMT of the finalYear
-
-                    // Note: finalStartMillis is used for detecting either if
-                    // historic transition data or finalZone to be used.  In an
-                    // extreme edge case - for example, two transitions fall into
-                    // small windows of time around the year boundary, this may
-                    // result incorrect offset computation.  But I think it will
-                    // never happen practically.  Yoshito - Feb 20, 2010
-                    finalStartMillis = Grego::fieldsToDay(finalStartYear, 0, 1) * U_MILLIS_PER_DAY;
+                    ec = U_INVALID_FORMAT_ERROR;
                 }
-            } else {
-                ec = U_INVALID_FORMAT_ERROR;
+                ures_close(rule);
+            } else if (ec == U_MISSING_RESOURCE_ERROR) {
+                // No final zone
+                ec = U_ZERO_ERROR;
             }
-            ures_close(rule);
-        } else if (ec == U_MISSING_RESOURCE_ERROR) {
-            // No final zone
-            ec = U_ZERO_ERROR;
         }
 
         // initialize canonical ID
@@ -272,6 +274,7 @@ OlsonTimeZone::OlsonTimeZone(const OlsonTimeZone& other) :
  * Assignment operator
  */
 OlsonTimeZone& OlsonTimeZone::operator=(const OlsonTimeZone& other) {
+    if (this == &other) { return *this; }  // self-assignment: no-op
     canonicalID = other.canonicalID;
 
     transitionTimesPre32 = other.transitionTimesPre32;
@@ -378,7 +381,7 @@ int32_t OlsonTimeZone::getOffset(uint8_t era, int32_t year, int32_t month,
     // Compute local epoch millis from input fields
     UDate date = (UDate)(Grego::fieldsToDay(year, month, dom) * U_MILLIS_PER_DAY + millis);
     int32_t rawoff, dstoff;
-    getHistoricalOffset(date, TRUE, kDaylight, kStandard, rawoff, dstoff);
+    getHistoricalOffset(date, true, kDaylight, kStandard, rawoff, dstoff);
     return rawoff + dstoff;
 }
 
@@ -397,16 +400,16 @@ void OlsonTimeZone::getOffset(UDate date, UBool local, int32_t& rawoff,
     }
 }
 
-void
-OlsonTimeZone::getOffsetFromLocal(UDate date, int32_t nonExistingTimeOpt, int32_t duplicatedTimeOpt,
-                                  int32_t& rawoff, int32_t& dstoff, UErrorCode& ec) const {
+void OlsonTimeZone::getOffsetFromLocal(UDate date, UTimeZoneLocalOption nonExistingTimeOpt,
+                                       UTimeZoneLocalOption duplicatedTimeOpt,
+                                       int32_t& rawoff, int32_t& dstoff, UErrorCode& ec) const {
     if (U_FAILURE(ec)) {
         return;
     }
     if (finalZone != NULL && date >= finalStartMillis) {
         finalZone->getOffsetFromLocal(date, nonExistingTimeOpt, duplicatedTimeOpt, rawoff, dstoff, ec);
     } else {
-        getHistoricalOffset(date, TRUE, nonExistingTimeOpt, duplicatedTimeOpt, rawoff, dstoff);
+        getHistoricalOffset(date, true, nonExistingTimeOpt, duplicatedTimeOpt, rawoff, dstoff);
     }
 }
 
@@ -427,8 +430,7 @@ void OlsonTimeZone::setRawOffset(int32_t /*offsetMillis*/) {
 int32_t OlsonTimeZone::getRawOffset() const {
     UErrorCode ec = U_ZERO_ERROR;
     int32_t raw, dst;
-    getOffset((double) uprv_getUTCtime() * U_MILLIS_PER_SECOND,
-              FALSE, raw, dst, ec);
+    getOffset(uprv_getUTCtime(), false, raw, dst, ec);
     return raw;
 }
 
@@ -557,9 +559,9 @@ OlsonTimeZone::getHistoricalOffset(UDate date, UBool local,
 UBool OlsonTimeZone::useDaylightTime() const {
     // If DST was observed in 1942 (for example) but has never been
     // observed from 1943 to the present, most clients will expect
-    // this method to return FALSE.  This method determines whether
+    // this method to return false.  This method determines whether
     // DST is in use in the current year (at any point in the year)
-    // and returns TRUE if so.
+    // and returns true if so.
 
     UDate current = uprv_getUTCtime();
     if (finalZone != NULL && current >= finalStartMillis) {
@@ -573,7 +575,7 @@ UBool OlsonTimeZone::useDaylightTime() const {
     double start = Grego::fieldsToDay(year, 0, 1) * SECONDS_PER_DAY;
     double limit = Grego::fieldsToDay(year+1, 0, 1) * SECONDS_PER_DAY;
 
-    // Return TRUE if DST is observed at any time during the current
+    // Return true if DST is observed at any time during the current
     // year.
     for (int16_t i = 0; i < transitionCount(); ++i) {
         double transition = (double)transitionTimeInSeconds(i);
@@ -582,10 +584,10 @@ UBool OlsonTimeZone::useDaylightTime() const {
         }
         if ((transition >= start && dstOffsetAt(i) != 0)
                 || (transition > start && dstOffsetAt(i - 1) != 0)) {
-            return TRUE;
+            return true;
         }
     }
-    return FALSE;
+    return false;
 }
 int32_t 
 OlsonTimeZone::getDSTSavings() const{
@@ -599,25 +601,25 @@ OlsonTimeZone::getDSTSavings() const{
  */
 UBool OlsonTimeZone::inDaylightTime(UDate date, UErrorCode& ec) const {
     int32_t raw, dst;
-    getOffset(date, FALSE, raw, dst, ec);
+    getOffset(date, false, raw, dst, ec);
     return dst != 0;
 }
 
 UBool
 OlsonTimeZone::hasSameRules(const TimeZone &other) const {
     if (this == &other) {
-        return TRUE;
+        return true;
     }
     const OlsonTimeZone* z = dynamic_cast<const OlsonTimeZone*>(&other);
     if (z == NULL) {
-        return FALSE;
+        return false;
     }
 
     // [sic] pointer comparison: typeMapData points into
     // memory-mapped or DLL space, so if two zones have the same
     // pointer, they are equal.
     if (typeMapData == z->typeMapData) {
-        return TRUE;
+        return true;
     }
     
     // If the pointers are not equal, the zones may still
@@ -625,19 +627,19 @@ OlsonTimeZone::hasSameRules(const TimeZone &other) const {
     if ((finalZone == NULL && z->finalZone != NULL)
         || (finalZone != NULL && z->finalZone == NULL)
         || (finalZone != NULL && z->finalZone != NULL && *finalZone != *z->finalZone)) {
-        return FALSE;
+        return false;
     }
 
     if (finalZone != NULL) {
         if (finalStartYear != z->finalStartYear || finalStartMillis != z->finalStartMillis) {
-            return FALSE;
+            return false;
         }
     }
     if (typeCount != z->typeCount
         || transitionCountPre32 != z->transitionCountPre32
         || transitionCount32 != z->transitionCount32
         || transitionCountPost32 != z->transitionCountPost32) {
-        return FALSE;
+        return false;
     }
 
     return
@@ -803,14 +805,14 @@ OlsonTimeZone::initTransitionRules(UErrorCode& status) {
         }
     }
     if (finalZone != NULL) {
-        // Get the first occurence of final rule starts
+        // Get the first occurrence of final rule starts
         UDate startTime = (UDate)finalStartMillis;
         TimeZoneRule *firstFinalRule = NULL;
 
         if (finalZone->useDaylightTime()) {
             /*
              * Note: When an OlsonTimeZone is constructed, we should set the final year
-             * as the start year of finalZone.  However, the bounday condition used for
+             * as the start year of finalZone.  However, the boundary condition used for
              * getting offset from finalZone has some problems.
              * For now, we do not set the valid start year when the construction time
              * and create a clone and set the start year when extracting rules.
@@ -879,20 +881,20 @@ OlsonTimeZone::getNextTransition(UDate base, UBool inclusive, TimeZoneTransition
     UErrorCode status = U_ZERO_ERROR;
     checkTransitionRules(status);
     if (U_FAILURE(status)) {
-        return FALSE;
+        return false;
     }
 
     if (finalZone != NULL) {
         if (inclusive && base == firstFinalTZTransition->getTime()) {
             result = *firstFinalTZTransition;
-            return TRUE;
+            return true;
         } else if (base >= firstFinalTZTransition->getTime()) {
             if (finalZone->useDaylightTime()) {
                 //return finalZone->getNextTransition(base, inclusive, result);
                 return finalZoneWithStartYear->getNextTransition(base, inclusive, result);
             } else {
                 // No more transitions
-                return FALSE;
+                return false;
             }
         }
     }
@@ -909,13 +911,13 @@ OlsonTimeZone::getNextTransition(UDate base, UBool inclusive, TimeZoneTransition
         if (ttidx == transCount - 1)  {
             if (firstFinalTZTransition != NULL) {
                 result = *firstFinalTZTransition;
-                return TRUE;
+                return true;
             } else {
-                return FALSE;
+                return false;
             }
         } else if (ttidx < firstTZTransitionIdx) {
             result = *firstTZTransition;
-            return TRUE;
+            return true;
         } else {
             // Create a TimeZoneTransition
             TimeZoneRule *to = historicRules[typeMapData[ttidx + 1]];
@@ -933,10 +935,10 @@ OlsonTimeZone::getNextTransition(UDate base, UBool inclusive, TimeZoneTransition
             result.setTime(startTime);
             result.adoptFrom(from->clone());
             result.adoptTo(to->clone());
-            return TRUE;
+            return true;
         }
     }
-    return FALSE;
+    return false;
 }
 
 UBool
@@ -944,20 +946,20 @@ OlsonTimeZone::getPreviousTransition(UDate base, UBool inclusive, TimeZoneTransi
     UErrorCode status = U_ZERO_ERROR;
     checkTransitionRules(status);
     if (U_FAILURE(status)) {
-        return FALSE;
+        return false;
     }
 
     if (finalZone != NULL) {
         if (inclusive && base == firstFinalTZTransition->getTime()) {
             result = *firstFinalTZTransition;
-            return TRUE;
+            return true;
         } else if (base > firstFinalTZTransition->getTime()) {
             if (finalZone->useDaylightTime()) {
                 //return finalZone->getPreviousTransition(base, inclusive, result);
                 return finalZoneWithStartYear->getPreviousTransition(base, inclusive, result);
             } else {
                 result = *firstFinalTZTransition;
-                return TRUE;
+                return true;
             }
         }
     }
@@ -973,10 +975,10 @@ OlsonTimeZone::getPreviousTransition(UDate base, UBool inclusive, TimeZoneTransi
         }
         if (ttidx < firstTZTransitionIdx) {
             // No more transitions
-            return FALSE;
+            return false;
         } else if (ttidx == firstTZTransitionIdx) {
             result = *firstTZTransition;
-            return TRUE;
+            return true;
         } else {
             // Create a TimeZoneTransition
             TimeZoneRule *to = historicRules[typeMapData[ttidx]];
@@ -994,10 +996,10 @@ OlsonTimeZone::getPreviousTransition(UDate base, UBool inclusive, TimeZoneTransi
             result.setTime(startTime);
             result.adoptFrom(from->clone());
             result.adoptTo(to->clone());
-            return TRUE;
+            return true;
         }
     }
-    return FALSE;
+    return false;
 }
 
 int32_t

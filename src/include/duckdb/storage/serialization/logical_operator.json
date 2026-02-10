@@ -595,6 +595,16 @@
         "id": 205,
         "name": "ref_recurring",
         "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "payload_aggregates",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "internal_types",
+        "type": "vector<LogicalType>"
       }
     ]
   },

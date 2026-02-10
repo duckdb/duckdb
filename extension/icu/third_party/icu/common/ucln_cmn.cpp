@@ -52,7 +52,7 @@ u_cleanup(void)
 /*#endif*/
 }
 
-U_CAPI void U_EXPORT2 ucln_cleanupOne(ECleanupLibraryType libType)
+U_CAPI void U_EXPORT2 ucln_cleanupOne(ECleanupLibraryType libType) 
 {
     if (gLibCleanupFunctions[libType])
     {
@@ -120,5 +120,5 @@ U_CFUNC UBool ucln_lib_cleanup(void) {
 #if !UCLN_NO_AUTO_CLEANUP && (defined(UCLN_AUTO_ATEXIT) || defined(UCLN_AUTO_LOCAL))
     ucln_unRegisterAutomaticCleanup();
 #endif
-    return TRUE;
+    return true;
 }

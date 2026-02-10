@@ -66,14 +66,14 @@ U_NAMESPACE_BEGIN
 
 /**
  * A class representing a collection of resource information pertaining to a given
- * locale. A resource bundle provides a way of accessing locale- specfic information in
+ * locale. A resource bundle provides a way of accessing locale- specific information in
  * a data file. You create a resource bundle that manages the resources for a given
  * locale and then ask it for individual resources.
  * <P>
  * Resource bundles in ICU4C are currently defined using text files which conform to the following
- * <a href="http://source.icu-project.org/repos/icu/icuhtml/trunk/design/bnf_rb.txt">BNF definition</a>.
+ * <a href="https://github.com/unicode-org/icu-docs/blob/main/design/bnf_rb.txt">BNF definition</a>.
  * More on resource bundle concepts and syntax can be found in the
- * <a href="http://icu-project.org/userguide/ResourceManagement.html">Users Guide</a>.
+ * <a href="https://unicode-org.github.io/icu/userguide/locale/resources">Users Guide</a>.
  * <P>
  *
  * The ResourceBundle class is not suitable for subclassing.
@@ -286,7 +286,7 @@ public:
     /**
      * Checks whether the resource has another element to iterate over.
      *
-     * @return TRUE if there are more elements, FALSE if there is no more elements
+     * @return true if there are more elements, false if there is no more elements
      * @stable ICU 2.0
      */
     UBool
@@ -474,7 +474,7 @@ public:
      *
      * @stable ICU 2.2
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
     /**
      * ICU "poor man's RTTI", returns a UClassID for this class.
@@ -484,7 +484,7 @@ public:
     static UClassID U_EXPORT2 getStaticClassID();
 
 private:
-    ResourceBundle(); // default constructor not implemented
+    ResourceBundle() = delete; // default constructor not implemented
 
     UResourceBundle *fResource;
     void constructForLocale(const UnicodeString& path, const Locale& locale, UErrorCode& error);

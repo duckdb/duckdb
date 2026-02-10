@@ -66,7 +66,7 @@ EthiopicCalendar::setAmeteAlemEra(UBool onOff)
 {
     eraType = onOff ? AMETE_ALEM_ERA : AMETE_MIHRET_ERA;
 }
-
+    
 UBool
 EthiopicCalendar::isAmeteAlemEra() const
 {
@@ -138,14 +138,14 @@ EthiopicCalendar::handleGetLimit(UCalendarDateFields field, ELimitType limitType
 
 /**
  * The system maintains a static default century start date and Year.  They are
- * initialized the first time they are used.  Once the system default century date
+ * initialized the first time they are used.  Once the system default century date 
  * and year are set, they do not change.
  */
-static UDate           gethpccal_gSystemDefaultCenturyStart       = DBL_MIN;
-static int32_t         gethpccal_gSystemDefaultCenturyStartYear   = -1;
-static icu::UInitOnce  gethpccal_gSystemDefaultCenturyInit        = U_INITONCE_INITIALIZER;
+static UDate           gSystemDefaultCenturyStart       = DBL_MIN;
+static int32_t         gSystemDefaultCenturyStartYear   = -1;
+static icu::UInitOnce  gSystemDefaultCenturyInit        {};
 
-static void U_CALLCONV ethpccal_initializeSystemDefaultCentury()
+static void U_CALLCONV initializeSystemDefaultCentury()
 {
     UErrorCode status = U_ZERO_ERROR;
     EthiopicCalendar calendar(Locale("@calendar=ethiopic"), status);
@@ -153,8 +153,8 @@ static void U_CALLCONV ethpccal_initializeSystemDefaultCentury()
         calendar.setTime(Calendar::getNow(), status);
         calendar.add(UCAL_YEAR, -80, status);
 
-        gethpccal_gSystemDefaultCenturyStart = calendar.getTime(status);
-        gethpccal_gSystemDefaultCenturyStartYear = calendar.get(UCAL_YEAR, status);
+        gSystemDefaultCenturyStart = calendar.getTime(status);
+        gSystemDefaultCenturyStartYear = calendar.get(UCAL_YEAR, status);
     }
     // We have no recourse upon failure unless we want to propagate the failure
     // out.
@@ -164,19 +164,19 @@ UDate
 EthiopicCalendar::defaultCenturyStart() const
 {
     // lazy-evaluate systemDefaultCenturyStart
-    umtx_initOnce(gethpccal_gSystemDefaultCenturyInit, &ethpccal_initializeSystemDefaultCentury);
-    return gethpccal_gSystemDefaultCenturyStart;
+    umtx_initOnce(gSystemDefaultCenturyInit, &initializeSystemDefaultCentury);
+    return gSystemDefaultCenturyStart;
 }
 
 int32_t
 EthiopicCalendar::defaultCenturyStartYear() const
 {
     // lazy-evaluate systemDefaultCenturyStartYear
-    umtx_initOnce(gethpccal_gSystemDefaultCenturyInit, &ethpccal_initializeSystemDefaultCentury);
+    umtx_initOnce(gSystemDefaultCenturyInit, &initializeSystemDefaultCentury);
     if (isAmeteAlemEra()) {
-        return gethpccal_gSystemDefaultCenturyStartYear + AMETE_MIHRET_DELTA;
+        return gSystemDefaultCenturyStartYear + AMETE_MIHRET_DELTA;
     }
-    return gethpccal_gSystemDefaultCenturyStartYear;
+    return gSystemDefaultCenturyStartYear;
 }
 
 

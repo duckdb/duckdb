@@ -28,8 +28,11 @@
  */
 
 #include "locmap.h"
+#include "bytesinkutil.h"
+#include "charstr.h"
 #include "cstring.h"
 #include "cmemory.h"
+#include "ulocimp.h"
 #include "unicode/uloc.h"
 
 #if U_PLATFORM_HAS_WIN32_API && UCONFIG_USE_WINDOWS_LCID_MAPPING_API
@@ -1050,7 +1053,7 @@ uprv_convertToPosix(uint32_t hostid, char *posixID, int32_t posixIDCapacity, UEr
 {
     uint16_t langID;
     uint32_t localeIndex;
-    UBool bLookup = TRUE;
+    UBool bLookup = true;
     const char *pPosixID = NULL;
 
 #if U_PLATFORM_HAS_WIN32_API && UCONFIG_USE_WINDOWS_LCID_MAPPING_API
@@ -1071,7 +1074,7 @@ uprv_convertToPosix(uint32_t hostid, char *posixID, int32_t posixIDCapacity, UEr
         if (tmpLen > 1) {
             int32_t i = 0;
             // Only need to look up in table if have _, eg for de-de_phoneb type alternate sort.
-            bLookup = FALSE;
+            bLookup = false;
             for (i = 0; i < UPRV_LENGTHOF(locName); i++)
             {
                 locName[i] = (char)(windowsLocaleName[i]);
@@ -1085,7 +1088,7 @@ uprv_convertToPosix(uint32_t hostid, char *posixID, int32_t posixIDCapacity, UEr
                     // TODO: Should these be mapped from _phoneb to @collation=phonebook, etc.?
                     locName[i] = '\0';
                     tmpLen = i;
-                    bLookup = TRUE;
+                    bLookup = true;
                     break;
                 }
                 else if (windowsLocaleName[i] == L'-')
@@ -1167,15 +1170,18 @@ uprv_convertToLCIDPlatform(const char* localeID, UErrorCode* status)
     // conversion functionality when available.
 #if U_PLATFORM_HAS_WIN32_API && UCONFIG_USE_WINDOWS_LCID_MAPPING_API
     int32_t len;
-    char collVal[ULOC_KEYWORDS_CAPACITY] = {};
     char baseName[ULOC_FULLNAME_CAPACITY] = {};
     const char * mylocaleID = localeID;
 
     // Check any for keywords.
     if (uprv_strchr(localeID, '@'))
     {
-        len = uloc_getKeywordValue(localeID, "collation", collVal, UPRV_LENGTHOF(collVal) - 1, status);
-        if (U_SUCCESS(*status) && len > 0)
+        icu::CharString collVal;
+        {
+            icu::CharStringByteSink sink(&collVal);
+            ulocimp_getKeywordValue(localeID, "collation", sink, status);
+        }
+        if (U_SUCCESS(*status) && !collVal.isEmpty())
         {
             // If it contains the keyword collation, return 0 so that the LCID lookup table will be used.
             return 0;
@@ -1195,7 +1201,7 @@ uprv_convertToLCIDPlatform(const char* localeID, UErrorCode* status)
 
     char asciiBCP47Tag[LOCALE_NAME_MAX_LENGTH] = {};
     // this will change it from de_DE@collation=phonebook to de-DE-u-co-phonebk form
-    (void)uloc_toLanguageTag(mylocaleID, asciiBCP47Tag, UPRV_LENGTHOF(asciiBCP47Tag), FALSE, status);
+    (void)uloc_toLanguageTag(mylocaleID, asciiBCP47Tag, UPRV_LENGTHOF(asciiBCP47Tag), false, status);
 
     if (U_SUCCESS(*status))
     {

@@ -156,7 +156,7 @@ public:
      * call returns.
      * @param rules      rules, separated by ';'
      * @param direction  either FORWARD or REVERSE.
-     * @param pe         Struct to recieve information on position 
+     * @param pe         Struct to receive information on position 
      *                   of error if an error is encountered
      * @param ec         Output param set to success/failure code.
      */
@@ -210,7 +210,7 @@ private:
 
     /**
      * Assert that the given character is NOT within the variable range.
-     * If it is, return FALSE.  This is neccesary to ensure that the
+     * If it is, return false.  This is necessary to ensure that the
      * variable range does not overlap characters used in a rule.
      * @param ch     the given character.
      * @return       True, if the given character is NOT within the variable range.

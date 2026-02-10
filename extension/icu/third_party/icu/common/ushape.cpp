@@ -49,33 +49,33 @@
 
 /* definitions for Arabic letter shaping ------------------------------------ */
 
-#define USHAPE_IRRELEVANT 4
-#define USHAPE_LAMTYPE    16
-#define USHAPE_ALEFTYPE   32
-#define USHAPE_LINKR      1
-#define USHAPE_LINKL      2
-#define USHAPE_APRESENT   8
-#define USHAPE_SHADDA     64
-#define USHAPE_CSHADDA    128
-#define USHAPE_COMBINE    (USHAPE_SHADDA+USHAPE_CSHADDA)
+#define IRRELEVANT 4
+#define LAMTYPE    16
+#define ALEFTYPE   32
+#define LINKR      1
+#define LINKL      2
+#define APRESENT   8
+#define SHADDA     64
+#define CSHADDA    128
+#define COMBINE    (SHADDA+CSHADDA)
 
-#define USHAPE_HAMZAFE_CHAR       0xfe80
-#define USHAPE_HAMZA06_CHAR       0x0621
-#define USHAPE_YEH_HAMZA_CHAR     0x0626
-#define USHAPE_YEH_HAMZAFE_CHAR   0xFE89
-#define USHAPE_LAMALEF_SPACE_SUB  0xFFFF
-#define USHAPE_TASHKEEL_SPACE_SUB 0xFFFE
-#define USHAPE_NEW_TAIL_CHAR      0xFE73
-#define USHAPE_OLD_TAIL_CHAR      0x200B
-#define USHAPE_LAM_CHAR           0x0644
-#define USHAPE_SPACE_CHAR         0x0020
-#define USHAPE_SHADDA_CHAR        0xFE7C
-#define USHAPE_TATWEEL_CHAR       0x0640
-#define USHAPE_SHADDA_USHAPE_TATWEEL_CHAR  0xFE7D
-#define USHAPE_SHADDA06_CHAR      0x0651
+#define HAMZAFE_CHAR       0xfe80
+#define HAMZA06_CHAR       0x0621
+#define YEH_HAMZA_CHAR     0x0626
+#define YEH_HAMZAFE_CHAR   0xFE89
+#define LAMALEF_SPACE_SUB  0xFFFF
+#define TASHKEEL_SPACE_SUB 0xFFFE
+#define NEW_TAIL_CHAR      0xFE73
+#define OLD_TAIL_CHAR      0x200B
+#define LAM_CHAR           0x0644
+#define SPACE_CHAR         0x0020
+#define SHADDA_CHAR        0xFE7C
+#define TATWEEL_CHAR       0x0640
+#define SHADDA_TATWEEL_CHAR  0xFE7D
+#define SHADDA06_CHAR      0x0651
 
-#define USHAPE_SHAPE_MODE   0
-#define USHAPE_DESHAPE_MODE 1
+#define SHAPE_MODE   0
+#define DESHAPE_MODE 1
 
 struct uShapeVariables {
      UChar tailChar;
@@ -354,10 +354,10 @@ _shapeToArabicDigitsWithContext(UChar *s, int32_t length,
             switch(ubidi_getClass(c)) {
             case U_LEFT_TO_RIGHT: /* L */
             case U_RIGHT_TO_LEFT: /* R */
-                lastStrongWasAL=FALSE;
+                lastStrongWasAL=false;
                 break;
             case U_RIGHT_TO_LEFT_ARABIC: /* AL */
-                lastStrongWasAL=TRUE;
+                lastStrongWasAL=true;
                 break;
             case U_EUROPEAN_NUMBER: /* EN */
                 if(lastStrongWasAL && (uint32_t)(c-0x30)<10) {
@@ -374,10 +374,10 @@ _shapeToArabicDigitsWithContext(UChar *s, int32_t length,
             switch(ubidi_getClass(c)) {
             case U_LEFT_TO_RIGHT: /* L */
             case U_RIGHT_TO_LEFT: /* R */
-                lastStrongWasAL=FALSE;
+                lastStrongWasAL=false;
                 break;
             case U_RIGHT_TO_LEFT_ARABIC: /* AL */
-                lastStrongWasAL=TRUE;
+                lastStrongWasAL=true;
                 break;
             case U_EUROPEAN_NUMBER: /* EN */
                 if(lastStrongWasAL && (uint32_t)(c-0x30)<10) {
@@ -463,12 +463,12 @@ static void
 countSpaces(UChar *dest, int32_t size, uint32_t /*options*/, int32_t *spacesCountl, int32_t *spacesCountr) {
     int32_t i = 0;
     int32_t countl = 0,countr = 0;
-    while((dest[i] == USHAPE_SPACE_CHAR) && (countl < size)) {
+    while((dest[i] == SPACE_CHAR) && (countl < size)) {
        countl++;
        i++;
     }
     if (countl < size) {  /* the entire buffer is not all space */
-        while(dest[size-1] == USHAPE_SPACE_CHAR) {
+        while(dest[size-1] == SPACE_CHAR) {
             countr++;
             size--;
         }
@@ -520,7 +520,7 @@ isLamAlefChar(UChar ch) {
 
 static inline int32_t
 isTailChar(UChar ch) {
-    if(ch == USHAPE_OLD_TAIL_CHAR || ch == USHAPE_NEW_TAIL_CHAR){
+    if(ch == OLD_TAIL_CHAR || ch == NEW_TAIL_CHAR){
             return 1;
     }else{
             return 0;
@@ -590,10 +590,10 @@ isYehHamzaChar(UChar ch) {
  */
 static inline int32_t
 isTashkeelOnTatweelChar(UChar ch){
-    if(ch >= 0xfe70 && ch <= 0xfe7f && ch != USHAPE_NEW_TAIL_CHAR && ch != 0xFE75 && ch != USHAPE_SHADDA_USHAPE_TATWEEL_CHAR)
+    if(ch >= 0xfe70 && ch <= 0xfe7f && ch != NEW_TAIL_CHAR && ch != 0xFE75 && ch != SHADDA_TATWEEL_CHAR)
     {
         return tashkeelMedial [ch - 0xFE70];
-    }else if( (ch >= 0xfcf2 && ch <= 0xfcf4) || (ch == USHAPE_SHADDA_USHAPE_TATWEEL_CHAR)) {
+    }else if( (ch >= 0xfcf2 && ch <= 0xfcf4) || (ch == SHADDA_TATWEEL_CHAR)) {
         return 2;
     }else{
         return 0;
@@ -609,7 +609,7 @@ isTashkeelOnTatweelChar(UChar ch){
  */
 static inline int32_t
 isIsolatedTashkeelChar(UChar ch){
-    if(ch >= 0xfe70 && ch <= 0xfe7f && ch != USHAPE_NEW_TAIL_CHAR && ch != 0xFE75){
+    if(ch >= 0xfe70 && ch <= 0xfe7f && ch != NEW_TAIL_CHAR && ch != 0xFE75){
         return (1 - tashkeelMedial [ch - 0xFE70]);
     }else if(ch >= 0xfc5e && ch <= 0xfc63){
         return 1;
@@ -652,13 +652,13 @@ int32_t destSize,uint32_t options) {
     if(lamAlefOption || tashkeelOption){
         if((options&U_SHAPE_TEXT_DIRECTION_MASK)==U_SHAPE_TEXT_DIRECTION_VISUAL_LTR) {
             for(i=0;i<sourceLength;i++) {
-                if( ((isAlefChar(source[i]))&& (i<(sourceLength-1)) &&(source[i+1] == USHAPE_LAM_CHAR)) || (isTashkeelCharFE(source[i])) ) {
+                if( ((isAlefChar(source[i]))&& (i<(sourceLength-1)) &&(source[i+1] == LAM_CHAR)) || (isTashkeelCharFE(source[i])) ) {
                         destSize--;
                     }
                 }
             }else if((options&U_SHAPE_TEXT_DIRECTION_MASK)==U_SHAPE_TEXT_DIRECTION_LOGICAL) {
                 for(i=0;i<sourceLength;i++) {
-                    if( ( (source[i] == USHAPE_LAM_CHAR) && (i<(sourceLength-1)) && (isAlefChar(source[i+1]))) || (isTashkeelCharFE(source[i])) ) {
+                    if( ( (source[i] == LAM_CHAR) && (i<(sourceLength-1)) && (isAlefChar(source[i+1]))) || (isTashkeelCharFE(source[i])) ) {
                         destSize--;
                     }
                 }
@@ -693,11 +693,11 @@ handleTashkeelWithTatweel(UChar *dest, int32_t sourceLength,
                  int i;
                  for(i = 0; i < sourceLength; i++){
                      if((isTashkeelOnTatweelChar(dest[i]) == 1)){
-                         dest[i] = USHAPE_TATWEEL_CHAR;
+                         dest[i] = TATWEEL_CHAR;
                     }else if((isTashkeelOnTatweelChar(dest[i]) == 2)){
-                         dest[i] = USHAPE_SHADDA_USHAPE_TATWEEL_CHAR;
-                    }else if(isIsolatedTashkeelChar(dest[i]) && dest[i] != USHAPE_SHADDA_CHAR){
-                         dest[i] = USHAPE_SPACE_CHAR;
+                         dest[i] = SHADDA_TATWEEL_CHAR;
+                    }else if(isIsolatedTashkeelChar(dest[i]) && dest[i] != SHADDA_CHAR){
+                         dest[i] = SPACE_CHAR;
                     }
                  }
                  return sourceLength;
@@ -736,7 +736,7 @@ handleGeneratedSpaces(UChar *dest, int32_t sourceLength,
 
     int lamAlefOption = 0;
     int tashkeelOption = 0;
-    int shapingMode = USHAPE_SHAPE_MODE;
+    int shapingMode = SHAPE_MODE;
 
     if (shapingMode == 0){
         if ( (options&U_SHAPE_LAMALEF_MASK) == U_SHAPE_LAMALEF_RESIZE ){
@@ -760,8 +760,8 @@ handleGeneratedSpaces(UChar *dest, int32_t sourceLength,
 
         i = j = 0; count = 0;
         while(i < sourceLength) {
-            if ( (lamAlefOption && dest[i] == USHAPE_LAMALEF_SPACE_SUB) ||
-               (tashkeelOption && dest[i] == USHAPE_TASHKEEL_SPACE_SUB) ){
+            if ( (lamAlefOption && dest[i] == LAMALEF_SPACE_SUB) ||
+               (tashkeelOption && dest[i] == TASHKEEL_SPACE_SUB) ){
                 j--;
                 count++;
             } else {
@@ -793,8 +793,8 @@ handleGeneratedSpaces(UChar *dest, int32_t sourceLength,
         /* Lam+Alef is already shaped into LamAlef + FFFF */
         i = 0;
         while(i < sourceLength) {
-            if(lamAlefOption&&dest[i] == USHAPE_LAMALEF_SPACE_SUB){
-                dest[i] = USHAPE_SPACE_CHAR;
+            if(lamAlefOption&&dest[i] == LAMALEF_SPACE_SUB){
+                dest[i] = SPACE_CHAR;
             }
             i++;
         }
@@ -816,12 +816,12 @@ handleGeneratedSpaces(UChar *dest, int32_t sourceLength,
 
     if(lamAlefOption || tashkeelOption){
         uprv_memset(tempbuffer, 0, (sourceLength+1)*U_SIZEOF_UCHAR);
-
+        
         i = j = sourceLength; count = 0;
-
+        
         while(i >= 0) {
-            if ( (lamAlefOption && dest[i] == USHAPE_LAMALEF_SPACE_SUB) ||
-                 (tashkeelOption && dest[i] == USHAPE_TASHKEEL_SPACE_SUB) ){
+            if ( (lamAlefOption && dest[i] == LAMALEF_SPACE_SUB) ||
+                 (tashkeelOption && dest[i] == TASHKEEL_SPACE_SUB) ){
                 j++;
                 count++;
             }else {
@@ -832,7 +832,7 @@ handleGeneratedSpaces(UChar *dest, int32_t sourceLength,
         }
 
         for(i=0 ;i < count; i++){
-                tempbuffer[i] = USHAPE_SPACE_CHAR;
+                tempbuffer[i] = SPACE_CHAR;
         }
 
         u_memcpy(dest, tempbuffer, sourceLength);
@@ -860,8 +860,8 @@ handleGeneratedSpaces(UChar *dest, int32_t sourceLength,
 
         i = j = 0; count = 0;
         while(i < sourceLength) {
-            if ( (lamAlefOption && dest[i] == USHAPE_LAMALEF_SPACE_SUB) ||
-                 (tashkeelOption && dest[i] == USHAPE_TASHKEEL_SPACE_SUB) ){
+            if ( (lamAlefOption && dest[i] == LAMALEF_SPACE_SUB) ||
+                 (tashkeelOption && dest[i] == TASHKEEL_SPACE_SUB) ){
                 j--;
                 count++;
             }else {
@@ -872,7 +872,7 @@ handleGeneratedSpaces(UChar *dest, int32_t sourceLength,
         }
 
         while(count >= 0) {
-            tempbuffer[i] = USHAPE_SPACE_CHAR;
+            tempbuffer[i] = SPACE_CHAR;
             i--;
             count--;
         }
@@ -916,7 +916,7 @@ expandCompositCharAtBegin(UChar *dest, int32_t sourceLength, int32_t destSize,UE
         uprv_memset(tempbuffer, 0, (sourceLength+1)*U_SIZEOF_UCHAR);
 
         i = 0;
-        while(dest[i] == USHAPE_SPACE_CHAR) {
+        while(dest[i] == SPACE_CHAR) {
             countl++;
             i++;
         }
@@ -925,7 +925,7 @@ expandCompositCharAtBegin(UChar *dest, int32_t sourceLength, int32_t destSize,UE
 
         while(i >= 0 && j >= 0) {
             if( countl>0 && isLamAlefChar(dest[i])) {
-                tempbuffer[j] = USHAPE_LAM_CHAR;
+                tempbuffer[j] = LAM_CHAR;
                 /* to ensure the array index is within the range */
                 U_ASSERT(dest[i] >= 0xFEF5u
                     && dest[i]-0xFEF5u < UPRV_LENGTHOF(convertLamAlef));
@@ -977,7 +977,7 @@ expandCompositCharAtEnd(UChar *dest, int32_t sourceLength, int32_t destSize,UErr
 
     uprv_memset(tempbuffer, 0, (sourceLength+1)*U_SIZEOF_UCHAR);
 
-    while(dest[inpsize-1] == USHAPE_SPACE_CHAR) {
+    while(dest[inpsize-1] == SPACE_CHAR) {
         countr++;
         inpsize--;
     }
@@ -987,7 +987,7 @@ expandCompositCharAtEnd(UChar *dest, int32_t sourceLength, int32_t destSize,UErr
 
     while(i >= 0 && j >= 0) {
         if( countr>0 && isLamAlefChar(dest[i]) ) {
-            tempbuffer[j] = USHAPE_LAM_CHAR;
+            tempbuffer[j] = LAM_CHAR;
             tempbuffer[j-1] = convertLamAlef[ dest[i] - 0xFEF5 ];
             j--;
             countr--;
@@ -1005,7 +1005,7 @@ expandCompositCharAtEnd(UChar *dest, int32_t sourceLength, int32_t destSize,UErr
         u_memmove(tempbuffer, tempbuffer+countr, sourceLength);
         if(u_strlen(tempbuffer) < sourceLength) {
             for(i=sourceLength-1;i>=sourceLength-countr;i--) {
-                tempbuffer[i] = USHAPE_SPACE_CHAR;
+                tempbuffer[i] = SPACE_CHAR;
             }
         }
     }
@@ -1036,24 +1036,24 @@ expandCompositCharAtNear(UChar *dest, int32_t sourceLength, int32_t destSize,UEr
 
     for(i = 0 ;i<=sourceLength-1;i++) {
             if (seenTailOption && isSeenTailFamilyChar(dest[i])) {
-                if ((i>0) && (dest[i-1] == USHAPE_SPACE_CHAR) ) {
+                if ((i>0) && (dest[i-1] == SPACE_CHAR) ) {
                     dest[i-1] = shapeVars.tailChar;
                 }else {
                     *pErrorCode=U_NO_SPACE_AVAILABLE;
                 }
             }else if(yehHamzaOption && (isYehHamzaChar(dest[i])) ) {
-                if ((i>0) && (dest[i-1] == USHAPE_SPACE_CHAR) ) {
+                if ((i>0) && (dest[i-1] == SPACE_CHAR) ) {
                     yehhamzaChar = dest[i];
-                    dest[i] = yehHamzaToYeh[yehhamzaChar - USHAPE_YEH_HAMZAFE_CHAR];
-                    dest[i-1] = USHAPE_HAMZAFE_CHAR;
+                    dest[i] = yehHamzaToYeh[yehhamzaChar - YEH_HAMZAFE_CHAR];
+                    dest[i-1] = HAMZAFE_CHAR;
                 }else {
 
                     *pErrorCode=U_NO_SPACE_AVAILABLE;
                 }
             }else if(lamAlefOption && isLamAlefChar(dest[i+1])) {
-                if(dest[i] == USHAPE_SPACE_CHAR){
+                if(dest[i] == SPACE_CHAR){
                     lamalefChar = dest[i+1];
-                    dest[i+1] = USHAPE_LAM_CHAR;
+                    dest[i+1] = LAM_CHAR;
                     dest[i] = convertLamAlef[ lamalefChar - 0xFEF5 ];
                 }else {
                     *pErrorCode=U_NO_SPACE_AVAILABLE;
@@ -1168,7 +1168,7 @@ expandCompositChar(UChar *dest, int32_t sourceLength,
             while(i < destSize && j < destSize) {
                 if(isLamAlefChar(dest[i]) ) {
                     tempbuffer[j] = convertLamAlef[ dest[i] - 0xFEF5 ];
-                    tempbuffer[j+1] = USHAPE_LAM_CHAR;
+                    tempbuffer[j+1] = LAM_CHAR;
                     j++;
                 }else {
                     tempbuffer[j] = dest[i];
@@ -1246,7 +1246,7 @@ shapeUnicode(UChar *dest, int32_t sourceLength,
 
     while (i != iend) {
         /* If high byte of currLink > 0 then more than one shape */
-        if ((currLink & 0xFF00) > 0 || (getLink(dest[i]) & USHAPE_IRRELEVANT) != 0) {
+        if ((currLink & 0xFF00) > 0 || (getLink(dest[i]) & IRRELEVANT) != 0) {
             Nw = i + step;
             while (Nx < 0) {         /* we need to know about next char */
                 if(Nw == iend) {
@@ -1254,7 +1254,7 @@ shapeUnicode(UChar *dest, int32_t sourceLength,
                     Nx = 3000;
                 } else {
                     nextLink = getLink(dest[Nw]);
-                    if((nextLink & USHAPE_IRRELEVANT) == 0) {
+                    if((nextLink & IRRELEVANT) == 0) {
                         Nx = Nw;
                     } else {
                         Nw = Nw + step;
@@ -1262,29 +1262,29 @@ shapeUnicode(UChar *dest, int32_t sourceLength,
                 }
             }
 
-            if ( ((currLink & USHAPE_ALEFTYPE) > 0)  &&  ((lastLink & USHAPE_LAMTYPE) > 0) ) {
+            if ( ((currLink & ALEFTYPE) > 0)  &&  ((lastLink & LAMTYPE) > 0) ) {
                 lamalef_found = 1;
                 wLamalef = changeLamAlef(dest[i]); /*get from 0x065C-0x065f */
                 if ( wLamalef != 0) {
-                    dest[i] = USHAPE_LAMALEF_SPACE_SUB;            /* The default case is to drop the Alef and replace */
-                    dest[lastPos] =wLamalef;     /* it by USHAPE_LAMALEF_SPACE_SUB which is the last character in the  */
+                    dest[i] = LAMALEF_SPACE_SUB;            /* The default case is to drop the Alef and replace */
+                    dest[lastPos] =wLamalef;     /* it by LAMALEF_SPACE_SUB which is the last character in the  */
                     i=lastPos;                   /* unicode private use area, this is done to make   */
                 }                                /* sure that removeLamAlefSpaces() handles only the */
                 lastLink = prevLink;             /* spaces generated during lamalef generation.      */
-                currLink = getLink(wLamalef);    /* USHAPE_LAMALEF_SPACE_SUB is added here and is replaced by spaces   */
+                currLink = getLink(wLamalef);    /* LAMALEF_SPACE_SUB is added here and is replaced by spaces   */
             }                                    /* in removeLamAlefSpaces()                         */
 
-            if ((i > 0) && (dest[i-1] == USHAPE_SPACE_CHAR)){
+            if ((i > 0) && (dest[i-1] == SPACE_CHAR)){
                 if ( isSeenFamilyChar(dest[i])) {
                     seenfamFound = 1;
-                } else if (dest[i] == USHAPE_YEH_HAMZA_CHAR) {
+                } else if (dest[i] == YEH_HAMZA_CHAR) {
                     yehhamzaFound = 1;
                 }
             }
             else if(i==0){
                 if ( isSeenFamilyChar(dest[i])){
                     seenfamFound = 1;
-                } else if (dest[i] == USHAPE_YEH_HAMZA_CHAR) {
+                } else if (dest[i] == YEH_HAMZA_CHAR) {
                     yehhamzaFound = 1;
                 }
             }
@@ -1294,21 +1294,21 @@ shapeUnicode(UChar *dest, int32_t sourceLength,
              * and of character; depends on the order of the shapes
              * (isolated, initial, middle, final) in the compatibility area
              */
-            Shape = shapeTable[nextLink & (USHAPE_LINKR + USHAPE_LINKL)]
-                              [lastLink & (USHAPE_LINKR + USHAPE_LINKL)]
-                              [currLink & (USHAPE_LINKR + USHAPE_LINKL)];
+            Shape = shapeTable[nextLink & (LINKR + LINKL)]
+                              [lastLink & (LINKR + LINKL)]
+                              [currLink & (LINKR + LINKL)];
 
-            if ((currLink & (USHAPE_LINKR+USHAPE_LINKL)) == 1) {
+            if ((currLink & (LINKR+LINKL)) == 1) {
                 Shape &= 1;
             } else if(isTashkeelChar(dest[i])) {
-                if( (lastLink & USHAPE_LINKL) && (nextLink & USHAPE_LINKR) && (tashkeelFlag == 1) &&
+                if( (lastLink & LINKL) && (nextLink & LINKR) && (tashkeelFlag == 1) &&
                      dest[i] != 0x064C && dest[i] != 0x064D )
                 {
                     Shape = 1;
-                    if( (nextLink&USHAPE_ALEFTYPE) == USHAPE_ALEFTYPE && (lastLink&USHAPE_LAMTYPE) == USHAPE_LAMTYPE ) {
+                    if( (nextLink&ALEFTYPE) == ALEFTYPE && (lastLink&LAMTYPE) == LAMTYPE ) {
                         Shape = 0;
                     }
-                } else if(tashkeelFlag == 2 && dest[i] == USHAPE_SHADDA06_CHAR){
+                } else if(tashkeelFlag == 2 && dest[i] == SHADDA06_CHAR){
                     Shape = 1;
                 } else {
                     Shape = 0;
@@ -1316,8 +1316,8 @@ shapeUnicode(UChar *dest, int32_t sourceLength,
             }
             if ((dest[i] ^ 0x0600) < 0x100) {
                 if ( isTashkeelChar(dest[i]) ){
-                    if (tashkeelFlag == 2  && dest[i] != USHAPE_SHADDA06_CHAR){
-                        dest[i] = USHAPE_TASHKEEL_SPACE_SUB;
+                    if (tashkeelFlag == 2  && dest[i] != SHADDA06_CHAR){
+                        dest[i] = TASHKEEL_SPACE_SUB;
                         tashkeelFound  = 1;
                     } else {
                         /* to ensure the array index is within the range */
@@ -1325,16 +1325,16 @@ shapeUnicode(UChar *dest, int32_t sourceLength,
                             && dest[i]-0x064Bu < UPRV_LENGTHOF(IrrelevantPos));
                         dest[i] =  0xFE70 + IrrelevantPos[(dest[i] - 0x064B)] + static_cast<UChar>(Shape);
                     }
-                }else if ((currLink & USHAPE_APRESENT) > 0) {
+                }else if ((currLink & APRESENT) > 0) {
                     dest[i] = (UChar)(0xFB50 + (currLink >> 8) + Shape);
-                }else if ((currLink >> 8) > 0 && (currLink & USHAPE_IRRELEVANT) == 0) {
+                }else if ((currLink >> 8) > 0 && (currLink & IRRELEVANT) == 0) {
                     dest[i] = (UChar)(0xFE70 + (currLink >> 8) + Shape);
                 }
             }
         }
 
         /* move one notch forward */
-        if ((currLink & USHAPE_IRRELEVANT) == 0) {
+        if ((currLink & IRRELEVANT) == 0) {
             prevLink = lastLink;
             lastLink = currLink;
             lastPos = i;
@@ -1354,7 +1354,7 @@ shapeUnicode(UChar *dest, int32_t sourceLength,
     }
 
     if ( (seenfamFound != 0) || (yehhamzaFound != 0) ) {
-        destSize = expandCompositChar(dest, sourceLength,destSize,options,pErrorCode, USHAPE_SHAPE_MODE,shapeVars);
+        destSize = expandCompositChar(dest, sourceLength,destSize,options,pErrorCode, SHAPE_MODE,shapeVars);
     }
     return destSize;
 }
@@ -1387,13 +1387,13 @@ deShapeUnicode(UChar *dest, int32_t sourceLength,
             UChar c = convertFBto06 [ (inputChar - 0xFB50) ];
             if (c != 0)
                 dest[i] = c;
-        } else if( (yehHamzaComposeEnabled == 1) && ((inputChar == USHAPE_HAMZA06_CHAR) || (inputChar == USHAPE_HAMZAFE_CHAR))
+        } else if( (yehHamzaComposeEnabled == 1) && ((inputChar == HAMZA06_CHAR) || (inputChar == HAMZAFE_CHAR))
                 && (i < (sourceLength - 1)) && isAlefMaksouraChar(dest[i+1] )) {
-                 dest[i] = USHAPE_SPACE_CHAR;
-                 dest[i+1] = USHAPE_YEH_HAMZA_CHAR;
+                 dest[i] = SPACE_CHAR;
+                 dest[i+1] = YEH_HAMZA_CHAR;
         } else if ( (seenComposeEnabled == 1) && (isTailChar(inputChar)) && (i< (sourceLength - 1))
                         && (isSeenTailFamilyChar(dest[i+1])) ) {
-                dest[i] = USHAPE_SPACE_CHAR;
+                dest[i] = SPACE_CHAR;
         } else if (( inputChar >= 0xFE70) && (inputChar <= 0xFEF4 )) { /* FExx Arabic range */
                 dest[i] = convertFEto06 [ (inputChar - 0xFE70) ];
         } else {
@@ -1406,7 +1406,7 @@ deShapeUnicode(UChar *dest, int32_t sourceLength,
 
    destSize = sourceLength;
    if (lamalef_found != 0){
-          destSize = expandCompositChar(dest,sourceLength,destSize,options,pErrorCode,USHAPE_DESHAPE_MODE, shapeVars);
+          destSize = expandCompositChar(dest,sourceLength,destSize,options,pErrorCode,DESHAPE_MODE, shapeVars);
    }
    return destSize;
 }
@@ -1424,7 +1424,7 @@ u_shapeArabic(const UChar *source, int32_t sourceLength,
               UErrorCode *pErrorCode) {
 
     int32_t destLength;
-    struct  uShapeVariables shapeVars = { USHAPE_OLD_TAIL_CHAR,U_SHAPE_LAMALEF_BEGIN,U_SHAPE_LAMALEF_END,U_SHAPE_TASHKEEL_BEGIN,U_SHAPE_TASHKEEL_END,0};
+    struct  uShapeVariables shapeVars = { OLD_TAIL_CHAR,U_SHAPE_LAMALEF_BEGIN,U_SHAPE_LAMALEF_END,U_SHAPE_TASHKEEL_BEGIN,U_SHAPE_TASHKEEL_END,0};
 
     /* usual error checking */
     if(pErrorCode==NULL || U_FAILURE(*pErrorCode)) {
@@ -1487,9 +1487,9 @@ u_shapeArabic(const UChar *source, int32_t sourceLength,
 
     /* Does Options contain the new Seen Tail Unicode code point option */
     if ( (options&U_SHAPE_TAIL_TYPE_MASK) == U_SHAPE_TAIL_NEW_UNICODE){
-        shapeVars.tailChar = USHAPE_NEW_TAIL_CHAR;
+        shapeVars.tailChar = NEW_TAIL_CHAR;
     }else {
-        shapeVars.tailChar = USHAPE_OLD_TAIL_CHAR;
+        shapeVars.tailChar = OLD_TAIL_CHAR;
     }
 
     if((options&U_SHAPE_LETTERS_MASK)!=U_SHAPE_LETTERS_NOOP) {
@@ -1519,7 +1519,7 @@ u_shapeArabic(const UChar *source, int32_t sourceLength,
             while ((i+=step) != end) {
                 prevLink = currLink;
                 currLink = getLink(source[i]);
-                if (aggregate_tashkeel && ((prevLink|currLink)&USHAPE_COMBINE) == USHAPE_COMBINE && aggregation_possible) {
+                if (aggregate_tashkeel && ((prevLink|currLink)&COMBINE) == COMBINE && aggregation_possible) {
                     aggregation_possible = 0;
                     tempsource[j] = (prev<source[i]?prev:source[i])-0x064C+0xFC5E;
                     currLink = getLink(tempsource[j]);
@@ -1710,13 +1710,13 @@ u_shapeArabic(const UChar *source, int32_t sourceLength,
             _shapeToArabicDigitsWithContext(dest, destLength,
                                             digitBase,
                                             (UBool)((options&U_SHAPE_TEXT_DIRECTION_MASK)==U_SHAPE_TEXT_DIRECTION_LOGICAL),
-                                            FALSE);
+                                            false);
             break;
         case U_SHAPE_DIGITS_ALEN2AN_INIT_AL:
             _shapeToArabicDigitsWithContext(dest, destLength,
                                             digitBase,
                                             (UBool)((options&U_SHAPE_TEXT_DIRECTION_MASK)==U_SHAPE_TEXT_DIRECTION_LOGICAL),
-                                            TRUE);
+                                            true);
             break;
         default:
             /* will never occur because of validity checks above */

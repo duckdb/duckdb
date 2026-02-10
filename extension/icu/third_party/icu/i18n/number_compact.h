@@ -17,7 +17,7 @@
 U_NAMESPACE_BEGIN namespace number {
 namespace impl {
 
-static const int32_t COMPACT_MAX_DIGITS = 15;
+static const int32_t COMPACT_MAX_DIGITS = 20;
 
 class CompactData : public MultiplierProducer {
   public:
@@ -28,7 +28,10 @@ class CompactData : public MultiplierProducer {
 
     int32_t getMultiplier(int32_t magnitude) const U_OVERRIDE;
 
-    const UChar *getPattern(int32_t magnitude, StandardPlural::Form plural) const;
+    const UChar *getPattern(
+        int32_t magnitude,
+        const PluralRules *rules,
+        const DecimalQuantity &dq) const;
 
     void getUniquePatterns(UVector &output, UErrorCode &status) const;
 
@@ -56,10 +59,16 @@ struct CompactModInfo {
 
 class CompactHandler : public MicroPropsGenerator, public UMemory {
   public:
-    CompactHandler(CompactStyle compactStyle, const Locale &locale, const char *nsName,
-                   CompactType compactType, const PluralRules *rules,
-                   MutablePatternModifier *buildReference, const MicroPropsGenerator *parent,
-                   UErrorCode &status);
+    CompactHandler(
+            CompactStyle compactStyle,
+            const Locale &locale,
+            const char *nsName,
+            CompactType compactType,
+            const PluralRules *rules,
+            MutablePatternModifier *buildReference,
+            bool safe,
+            const MicroPropsGenerator *parent,
+            UErrorCode &status);
 
     ~CompactHandler() U_OVERRIDE;
 
@@ -74,6 +83,7 @@ class CompactHandler : public MicroPropsGenerator, public UMemory {
     int32_t precomputedModsLength = 0;
     CompactData data;
     ParsedPatternInfo unsafePatternInfo;
+    MutablePatternModifier* unsafePatternModifier;
     UBool safe;
 
     /** Used by the safe code path */

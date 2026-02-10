@@ -1069,14 +1069,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 			auto &setop = plan->Cast<LogicalRecursiveCTE>();
 
-			if (!setop.key_targets.empty()) {
-				for (idx_t i = 0; i < correlated_columns.size(); i++) {
+			for (idx_t i = 0; i < correlated_columns.size(); i++) {
+				if (!setop.key_targets.empty()) {
 					auto corr = correlated_columns[i];
 					auto colref = make_uniq<BoundColumnRefExpression>(
 					    correlated_columns[i].type,
 					    ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 					setop.key_targets.push_back(std::move(colref));
 				}
+				setop.internal_types.push_back(correlated_columns[i].type);
 			}
 		}
 

@@ -197,7 +197,7 @@ UnicodeString::UnicodeString(UChar ch) {
 UnicodeString::UnicodeString(UChar32 ch) {
   fUnion.fFields.fLengthAndFlags = kShortString;
   int32_t i = 0;
-  UBool isError = FALSE;
+  UBool isError = false;
   U16_APPEND(fUnion.fStackFields.fBuffer, i, US_STACKBUF_SIZE, ch, isError);
   // We test isError so that the compiler does not complain that we don't.
   // If isError then i==0 which is what we want anyway.
@@ -270,7 +270,7 @@ UnicodeString::UnicodeString(const char *src, int32_t length, EInvariant) {
     if(length<0) {
       length=(int32_t)uprv_strlen(src);
     }
-    if(cloneArrayIfNeeded(length, length, FALSE)) {
+    if(cloneArrayIfNeeded(length, length, false)) {
       u_charsToUChars(src, getArrayStart(), length);
       setLength(length);
     } else {
@@ -309,7 +309,7 @@ UnicodeString::UnicodeString(const UnicodeString& that) {
 }
 
 UnicodeString::UnicodeString(UnicodeString &&src) U_NOEXCEPT {
-  copyFieldsFrom(src, TRUE);
+  copyFieldsFrom(src, true);
 }
 
 UnicodeString::UnicodeString(const UnicodeString& that,
@@ -334,7 +334,8 @@ Replaceable::clone() const {
 // UnicodeString overrides clone() with a real implementation
 UnicodeString *
 UnicodeString::clone() const {
-  return new UnicodeString(*this);
+  LocalPointer<UnicodeString> clonedString(new UnicodeString(*this));
+  return clonedString.isValid() && !clonedString->isBogus() ? clonedString.orphan() : nullptr;
 }
 
 //========================================
@@ -369,7 +370,7 @@ UBool
 UnicodeString::allocate(int32_t capacity) {
   if(capacity <= US_STACKBUF_SIZE) {
     fUnion.fFields.fLengthAndFlags = kShortString;
-    return TRUE;
+    return true;
   }
   if(capacity <= kMaxCapacity) {
     ++capacity;  // for the NUL
@@ -388,13 +389,13 @@ UnicodeString::allocate(int32_t capacity) {
       fUnion.fFields.fArray = (UChar *)array;
       fUnion.fFields.fCapacity = (int32_t)(numBytes / U_SIZEOF_UCHAR);
       fUnion.fFields.fLengthAndFlags = kLongString;
-      return TRUE;
+      return true;
     }
   }
   fUnion.fFields.fLengthAndFlags = kIsBogus;
   fUnion.fFields.fArray = 0;
   fUnion.fFields.fCapacity = 0;
-  return FALSE;
+  return false;
 }
 
 //========================================
@@ -475,7 +476,7 @@ UnicodeString UnicodeString::fromUTF32(const UChar32 *utf32, int32_t length) {
       result.setToBogus();
     }
     break;
-  } while(TRUE);
+  } while(true);
   return result;
 }
 
@@ -490,7 +491,7 @@ UnicodeString::operator=(const UnicodeString &src) {
 
 UnicodeString &
 UnicodeString::fastCopyFrom(const UnicodeString &src) {
-  return copyFrom(src, TRUE);
+  return copyFrom(src, true);
 }
 
 UnicodeString &
@@ -575,7 +576,7 @@ UnicodeString &UnicodeString::operator=(UnicodeString &&src) U_NOEXCEPT {
   // No explicit check for self move assignment, consistent with standard library.
   // Self move assignment causes no crash nor leak but might make the object bogus.
   releaseArray();
-  copyFieldsFrom(src, TRUE);
+  copyFieldsFrom(src, true);
   return *this;
 }
 
@@ -609,9 +610,9 @@ void UnicodeString::copyFieldsFrom(UnicodeString &src, UBool setSrcToBogus) U_NO
 void UnicodeString::swap(UnicodeString &other) U_NOEXCEPT {
   UnicodeString temp;  // Empty short string: Known not to need releaseArray().
   // Copy fields without resetting source values in between.
-  temp.copyFieldsFrom(*this, FALSE);
-  this->copyFieldsFrom(other, FALSE);
-  other.copyFieldsFrom(temp, FALSE);
+  temp.copyFieldsFrom(*this, false);
+  this->copyFieldsFrom(other, false);
+  other.copyFieldsFrom(temp, false);
   // Set temp to an empty string so that other's memory is not released twice.
   temp.fUnion.fFields.fLengthAndFlags = kShortString;
 }
@@ -672,7 +673,7 @@ UnicodeString::doCompare( int32_t start,
   if(isBogus()) {
     return -1;
   }
-
+  
   // pin indices to legal values
   pinIndices(start, length);
 
@@ -720,7 +721,7 @@ UnicodeString::doCompare( int32_t start,
   if(minLength > 0 && chars != srcChars) {
     int32_t result;
 
-#   if U_IS_BIG_ENDIAN
+#   if U_IS_BIG_ENDIAN 
       // big-endian: byte comparison works
       result = uprv_memcmp(chars, srcChars, minLength * sizeof(UChar));
       if(result != 0) {
@@ -760,7 +761,7 @@ UnicodeString::doCompareCodePointOrder(int32_t start,
     srcStart = srcLength = 0;
   }
 
-  int32_t diff = uprv_strCompare(getArrayStart() + start, length, (srcChars!=NULL)?(srcChars + srcStart):NULL, srcLength, FALSE, TRUE);
+  int32_t diff = uprv_strCompare(getArrayStart() + start, length, (srcChars!=NULL)?(srcChars + srcStart):NULL, srcLength, false, true);
   /* translate the 32-bit result into an 8-bit one */
   if(diff!=0) {
     return (int8_t)(diff >> 15 | 1);
@@ -920,7 +921,7 @@ UnicodeString::tempSubString(int32_t start, int32_t len) const {
     array=fUnion.fStackFields.fBuffer;  // anything not NULL because that would make an empty string
     len=-2;  // bogus result string
   }
-  return UnicodeString(FALSE, array + start, len);
+  return UnicodeString(false, array + start, len);
 }
 
 int32_t
@@ -952,7 +953,7 @@ UnicodeString::extract(int32_t start, int32_t len,
 // else see unistr_cnv.cpp
 #endif
 
-void
+void 
 UnicodeString::extractBetween(int32_t start,
                   int32_t limit,
                   UnicodeString& target) const {
@@ -971,7 +972,7 @@ UnicodeString::toUTF8(ByteSink &sink) const {
   if(length16 != 0) {
     char stackBuffer[1024];
     int32_t capacity = (int32_t)sizeof(stackBuffer);
-    UBool utf8IsOwned = FALSE;
+    UBool utf8IsOwned = false;
     char *utf8 = sink.GetAppendBuffer(length16 < capacity ? length16 : capacity,
                                       3*length16,
                                       stackBuffer, capacity,
@@ -986,7 +987,7 @@ UnicodeString::toUTF8(ByteSink &sink) const {
     if(errorCode == U_BUFFER_OVERFLOW_ERROR) {
       utf8 = (char *)uprv_malloc(length8);
       if(utf8 != NULL) {
-        utf8IsOwned = TRUE;
+        utf8IsOwned = true;
         errorCode = U_ZERO_ERROR;
         u_strToUTF8WithSub(utf8, length8, &length8,
                            getBuffer(), length16,
@@ -1021,7 +1022,7 @@ UnicodeString::toUTF32(UChar32 *utf32, int32_t capacity, UErrorCode &errorCode) 
   return length32;
 }
 
-int32_t
+int32_t 
 UnicodeString::indexOf(const UChar *srcChars,
                int32_t srcStart,
                int32_t srcLength,
@@ -1085,7 +1086,7 @@ UnicodeString::doIndexOf(UChar32 c,
   }
 }
 
-int32_t
+int32_t 
 UnicodeString::lastIndexOf(const UChar *srcChars,
                int32_t srcStart,
                int32_t srcLength,
@@ -1157,7 +1158,7 @@ UnicodeString::doLastIndexOf(UChar32 c,
 // Write implementation
 //========================================
 
-UnicodeString&
+UnicodeString& 
 UnicodeString::findAndReplace(int32_t start,
                   int32_t length,
                   const UnicodeString& oldText,
@@ -1224,7 +1225,7 @@ UnicodeString::getTerminatedBuffer() {
   if(len < getCapacity()) {
     if(fUnion.fFields.fLengthAndFlags & kBufferIsReadonly) {
       // If len<capacity on a read-only alias, then array[len] is
-      // either the original NUL (if constructed with (TRUE, s, length))
+      // either the original NUL (if constructed with (true, s, length))
       // or one of the original string contents characters (if later truncated),
       // therefore we can assume that array[len] is initialized memory.
       if(array[len] == 0) {
@@ -1374,7 +1375,7 @@ UnicodeString::replace(int32_t start,
                UChar32 srcChar) {
   UChar buffer[U16_MAX_LENGTH];
   int32_t count = 0;
-  UBool isError = FALSE;
+  UBool isError = false;
   U16_APPEND(buffer, count, U16_MAX_LENGTH, srcChar, isError);
   // We test isError so that the compiler does not complain that we don't.
   // If isError (srcChar is not a valid code point) then count==0 which means
@@ -1386,7 +1387,7 @@ UnicodeString&
 UnicodeString::append(UChar32 srcChar) {
   UChar buffer[U16_MAX_LENGTH];
   int32_t _length = 0;
-  UBool isError = FALSE;
+  UBool isError = false;
   U16_APPEND(buffer, _length, U16_MAX_LENGTH, srcChar, isError);
   // We test isError so that the compiler does not complain that we don't.
   // If isError then _length==0 which turns the doAppend() into a no-op anyway.
@@ -1483,7 +1484,7 @@ UnicodeString::doReplace(int32_t start,
     return doReplace(start, length, copy.getArrayStart(), 0, srcLength);
   }
 
-  // cloneArrayIfNeeded(doCopyArray=FALSE) may change fArray but will not copy the current contents;
+  // cloneArrayIfNeeded(doCopyArray=false) may change fArray but will not copy the current contents;
   // therefore we need to keep the current fArray
   UChar oldStackBuffer[US_STACKBUF_SIZE];
   if((fUnion.fFields.fLengthAndFlags&kUsingStackBuffer) && (newLength > US_STACKBUF_SIZE)) {
@@ -1496,7 +1497,7 @@ UnicodeString::doReplace(int32_t start,
   // clone our array and allocate a bigger array if needed
   int32_t *bufferToDelete = 0;
   if(!cloneArrayIfNeeded(newLength, getGrowCapacity(newLength),
-                         FALSE, &bufferToDelete)
+                         false, &bufferToDelete)
   ) {
     return *this;
   }
@@ -1615,7 +1616,7 @@ UnicodeString::handleReplaceBetween(int32_t start,
 /**
  * Replaceable API
  */
-void
+void 
 UnicodeString::copy(int32_t start, int32_t limit, int32_t dest) {
     if (limit <= start) {
         return; // Nothing to do; avoid bogus malloc call
@@ -1624,7 +1625,7 @@ UnicodeString::copy(int32_t start, int32_t limit, int32_t dest) {
     // Check to make sure text is not null.
     if (text != NULL) {
 	    extractBetween(start, limit, text, 0);
-	    insert(dest, text, 0, limit - start);
+	    insert(dest, text, 0, limit - start);    
 	    uprv_free(text);
     }
 }
@@ -1636,14 +1637,14 @@ UnicodeString::copy(int32_t start, int32_t limit, int32_t dest) {
  * so we implement this function here.
  */
 UBool Replaceable::hasMetaData() const {
-    return TRUE;
+    return true;
 }
 
 /**
  * Replaceable API
  */
 UBool UnicodeString::hasMetaData() const {
-    return FALSE;
+    return false;
 }
 
 UnicodeString&
@@ -1661,7 +1662,7 @@ UnicodeString::doReverse(int32_t start, int32_t length) {
   UChar *left = getArrayStart() + start;
   UChar *right = left + length - 1;  // -1 for inclusive boundary (length>=2)
   UChar swap;
-  UBool hasSupplementary = FALSE;
+  UBool hasSupplementary = false;
 
   // Before the loop we know left<right because length>=2.
   do {
@@ -1692,13 +1693,13 @@ UnicodeString::doReverse(int32_t start, int32_t length) {
   return *this;
 }
 
-UBool
+UBool 
 UnicodeString::padLeading(int32_t targetLength,
                           UChar padChar)
 {
   int32_t oldLength = length();
   if(oldLength >= targetLength || !cloneArrayIfNeeded(targetLength)) {
-    return FALSE;
+    return false;
   } else {
     // move contents up by padding width
     UChar *array = getArrayStart();
@@ -1710,17 +1711,17 @@ UnicodeString::padLeading(int32_t targetLength,
       array[start] = padChar;
     }
     setLength(targetLength);
-    return TRUE;
+    return true;
   }
 }
 
-UBool
+UBool 
 UnicodeString::padTrailing(int32_t targetLength,
                            UChar padChar)
 {
   int32_t oldLength = length();
   if(oldLength >= targetLength || !cloneArrayIfNeeded(targetLength)) {
-    return FALSE;
+    return false;
   } else {
     // fill in padding character
     UChar *array = getArrayStart();
@@ -1729,7 +1730,7 @@ UnicodeString::padTrailing(int32_t targetLength,
       array[length] = padChar;
     }
     setLength(targetLength);
-    return TRUE;
+    return true;
   }
 }
 
@@ -1799,10 +1800,10 @@ UnicodeString::cloneArrayIfNeeded(int32_t newCapacity,
   }
 
   // while a getBuffer(minCapacity) is "open",
-  // prevent any modifications of the string by returning FALSE here
+  // prevent any modifications of the string by returning false here
   // if the string is bogus, then only an assignment or similar can revive it
   if(!isWritable()) {
-    return FALSE;
+    return false;
   }
 
   /*
@@ -1810,7 +1811,7 @@ UnicodeString::cloneArrayIfNeeded(int32_t newCapacity,
    * the buffer is read-only, or
    * the buffer is refCounted (shared), and refCount>1, or
    * the buffer is too small.
-   * Return FALSE if memory could not be allocated.
+   * Return false if memory could not be allocated.
    */
   if(forceClone ||
      fUnion.fFields.fLengthAndFlags & kBufferIsReadonly ||
@@ -1889,10 +1890,10 @@ UnicodeString::cloneArrayIfNeeded(int32_t newCapacity,
       }
       fUnion.fFields.fLengthAndFlags = flags;
       setToBogus();
-      return FALSE;
+      return false;
     }
   }
-  return TRUE;
+  return true;
 }
 
 // UnicodeStringAppendable ------------------------------------------------- ***
@@ -1908,7 +1909,7 @@ UBool
 UnicodeStringAppendable::appendCodePoint(UChar32 c) {
   UChar buffer[U16_MAX_LENGTH];
   int32_t cLength = 0;
-  UBool isError = FALSE;
+  UBool isError = false;
   U16_APPEND(buffer, cLength, U16_MAX_LENGTH, c, isError);
   return !isError && str.doAppend(buffer, 0, cLength).isWritable();
 }
@@ -1960,23 +1961,28 @@ uhash_compareUnicodeString(const UElement key1, const UElement key2) {
     const UnicodeString *str1 = (const UnicodeString*) key1.pointer;
     const UnicodeString *str2 = (const UnicodeString*) key2.pointer;
     if (str1 == str2) {
-        return TRUE;
+        return true;
     }
     if (str1 == NULL || str2 == NULL) {
-        return FALSE;
+        return false;
     }
     return *str1 == *str2;
 }
-//
-// #ifdef U_STATIC_IMPLEMENTATION
-// /*
-// This should never be called. It is defined here to make sure that the
-// virtual vector deleting destructor is defined within unistr.cpp.
-// The vector deleting destructor is already a part of UObject,
-// but defining it here makes sure that it is included with this object file.
-// This makes sure that static library dependencies are kept to a minimum.
-// */
-// static void uprv_UnicodeStringDummy(void) {
-//     delete [] (new UnicodeString[2]);
-// }
-// #endif
+
+#ifdef U_STATIC_IMPLEMENTATION
+/*
+This should never be called. It is defined here to make sure that the
+virtual vector deleting destructor is defined within unistr.cpp.
+The vector deleting destructor is already a part of UObject,
+but defining it here makes sure that it is included with this object file.
+This makes sure that static library dependencies are kept to a minimum.
+*/
+#if defined(__clang__) || U_GCC_MAJOR_MINOR >= 1100
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+static void uprv_UnicodeStringDummy(void) {
+    delete [] (new UnicodeString[2]);
+}
+#pragma GCC diagnostic pop
+#endif
+#endif

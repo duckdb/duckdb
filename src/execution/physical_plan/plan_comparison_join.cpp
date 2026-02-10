@@ -58,7 +58,6 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
 		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
-		join.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
 		return join;
 	}
 
