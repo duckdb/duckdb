@@ -53,6 +53,22 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+
+// code adapted from Apple's example
+// https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment#Determine-Whether-Your-App-Is-Running-as-a-Translated-Binary
+static bool OsxRosettaIsActive() {
+	int ret = 0;
+	size_t size = sizeof(ret);
+	if (sysctlbyname("sysctl.proc_translated", &ret, &size, NULL, 0)) {
+		return false;
+	}
+	return ret == 1;
+}
+
+#endif
+
 namespace duckdb {
 
 struct ActiveQueryContext {
@@ -155,6 +171,14 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 	LoggingContext context(LogContextScope::CONNECTION);
 	logger = db->GetLogManager().CreateLogger(context, true);
 	client_data = make_uniq<ClientData>(*this);
+
+#ifdef __APPLE__
+	if (OsxRosettaIsActive()) {
+		DUCKDB_LOG_WARNING(*this, "OSX binary translation ('Rosetta') detected. Running DuckDB through Rosetta will "
+		                          "cause a significant performance degradation. DuckDB is available natively on Apple "
+		                          "silicon, please download an appropriate binary here: https://duckdb.org/install/");
+	}
+#endif
 }
 
 ClientContext::~ClientContext() {
@@ -875,6 +899,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 					Parser parser(GetParserOptions());
 					ErrorData error;
 					parser.ParseQuery(statement->ToString());
+					if (statement->type == StatementType::UPDATE_STATEMENT) {
+						// re-apply `prioritize_table_when_binding` (which is normally set during transform)
+						parser.statements[0]->Cast<UpdateStatement>().prioritize_table_when_binding =
+						    statement->Cast<UpdateStatement>().prioritize_table_when_binding;
+					}
 					statement = std::move(parser.statements[0]);
 				} catch (const NotImplementedException &) {
 					// ToString was not implemented, just use the copied statement

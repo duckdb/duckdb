@@ -318,14 +318,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 		schema_name = DEFAULT_SCHEMA;
 	}
 
-	vector<CatalogSearchEntry> defaults_search_path;
-	defaults_search_path.emplace_back(catalog_name, schema_name);
-	if (schema_name != DEFAULT_SCHEMA) {
-		defaults_search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
-	}
-
-	auto default_binder = Binder::CreateBinder(context, *this);
-	default_binder->entry_retriever.SetSearchPath(std::move(defaults_search_path));
+	auto default_binder = CreateBinderWithSearchPath(catalog_name, schema_name);
 
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;

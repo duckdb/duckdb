@@ -92,6 +92,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugAsofIejoinSetting),
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
     DUCKDB_SETTING(DebugCheckpointSleepMsSetting),
+    DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
     DUCKDB_LOCAL(DebugForceExternalSetting),
     DUCKDB_SETTING(DebugForceNoCrossProductSetting),
     DUCKDB_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
@@ -134,6 +135,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(FileSearchPathSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
     DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
+    DUCKDB_GLOBAL(ForceMbedtlsUnsafeSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
@@ -142,6 +144,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
     DUCKDB_SETTING(HTTPProxyUsernameSetting),
     DUCKDB_SETTING(IeeeFloatingPointOpsSetting),
+    DUCKDB_SETTING(IgnoreUnknownCrsSetting),
     DUCKDB_SETTING(ImmediateTransactionModeSetting),
     DUCKDB_SETTING(IndexScanMaxCountSetting),
     DUCKDB_SETTING_CALLBACK(IndexScanPercentageSetting),
@@ -192,16 +195,17 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
     DUCKDB_SETTING(VariantMinimumShreddingSizeSetting),
     DUCKDB_SETTING(WalAutocheckpointEntriesSetting),
+    DUCKDB_SETTING(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 91),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 38),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 110),
-                                                     DUCKDB_SETTING_ALIAS("user", 125),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 94),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 39),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 113),
+                                                     DUCKDB_SETTING_ALIAS("user", 128),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 22),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 124),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 127),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

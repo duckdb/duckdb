@@ -36,9 +36,9 @@ class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
-enum class OrderByColumnType;
-enum class RowGroupOrderType;
-enum class OrderByStatistics;
+enum class OrderByColumnType : uint8_t;
+enum class OrderType : uint8_t;
+enum class OrderByStatistics : uint8_t;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
