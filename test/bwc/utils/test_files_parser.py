@@ -32,6 +32,7 @@ from utils.query_exclusions import format_exclusion_tags
 from utils.logger import make_logger
 
 BWC_TAG_PREFIX = '-- bwc_tag:'
+BWC_OUTPUT_DIR_NAME = 'output'
 
 logger = make_logger(__name__)
 
@@ -71,7 +72,9 @@ def list_test_files(root_dir: str, test_pattern: str = None) -> List[str]:
     test_dir = os.path.join(root_dir, 'test', 'sql')
     files = find_tests_recursive(test_dir)
     files.sort()
-    return files if test_pattern is None else [x for x in files if test_pattern in x]
+    files = files if test_pattern is None else [x for x in files if test_pattern in x]
+    len_root_dir = len(root_dir) + 1
+    return [f[len_root_dir:] for f in files]
 
 
 class SerializedTest:
@@ -80,19 +83,29 @@ class SerializedTest:
       self.step_type = step_type
       self.step_data = step_data
 
-  def __init__(self, duckdb_bwc_base_dir: str, duckdb_version: str, test_spec_relative_path: str, test_idx: int):
+  def __init__(self, duckdb_bwc_base_dir: str, duckdb_version: str, test_filename: str, test_idx: int):
     # Provided metadata
     self.duckdb_bwc_base_dir = duckdb_bwc_base_dir
     self.duckdb_version = duckdb_version
-    self.test_spec_relative_path = test_spec_relative_path
+    self.test_spec_relative_path = test_filename
     self.test_idx = test_idx
 
     # Computed paths
-    test_basename = basename(test_spec_relative_path) # eg. attach_encryption_fallback_readonly.test
-    self.test_absolute_filename = f"{duckdb_bwc_base_dir}/specs/{duckdb_version}/{test_spec_relative_path}"
+    test_basename = basename(test_filename) # eg. attach_encryption_fallback_readonly.test
+    if len(test_basename) == 0:
+      raise ValueError(f"Test spec relative path '{test_filename}' is not valid (basename is empty)")
+
     self.test_specs_base_dir = f"{duckdb_bwc_base_dir}/specs/{duckdb_version}"
-    self.test_runtime_directory = f"{duckdb_bwc_base_dir}/runtime/{duckdb_version}/{dirname(test_spec_relative_path)}/{test_basename.replace('.test', '')}"
-    self.test_output_directory = f"{self.test_runtime_directory}/output"
+
+    is_spec_file = test_filename.startswith('test/sql/')
+    if is_spec_file:
+      self.test_absolute_filename = f"{duckdb_bwc_base_dir}/specs/{duckdb_version}/{test_filename}"
+      self.test_runtime_directory = f"{duckdb_bwc_base_dir}/runtime/{duckdb_version}/{dirname(test_filename)}/{test_basename.replace('.test', '')}"
+    else:
+      self.test_absolute_filename = os.path.join(os.getcwd(), test_filename)
+      self.test_runtime_directory = f"{duckdb_bwc_base_dir}/runtime/{duckdb_version}/{test_basename.replace('.test', '')}"
+
+    self.test_output_directory = f"{self.test_runtime_directory}/{BWC_OUTPUT_DIR_NAME}"
     self.queries_file_name = f"{test_basename}.sql"
 
     self.serialized_plans_file_name = f"{test_basename}.plan.bin"
@@ -152,9 +165,6 @@ class SerializedTest:
       So we before each run we copy all reference output directory.
     """
     output_files = self.list_output_directory(True)
-    if len(output_files) == 0:
-      return # Nothing to do
-
     files_to_move = set()
     for output_file in output_files:
       if output_file in self.fixtures:
@@ -163,6 +173,9 @@ class SerializedTest:
       # Only move the top level folder
       f = output_file.split('/')[0] if '/' in output_file else output_file
       files_to_move.add(f)
+
+    # Ensure output directory exists
+    os.makedirs(self.test_output_directory, exist_ok=True)
 
     # Restore fixtures
     for fixture in self.fixtures:
@@ -243,6 +256,7 @@ class SerializedTest:
       return
 
     gen_files = self.list_output_directory()
+    self.fixtures.update(gen_files)
 
     if len(gen_files) > 0:
       os.mkdir(f"{self.test_runtime_directory}/fixtures")
@@ -445,14 +459,14 @@ class SerializerSQLLogicContext(SQLLogicContext):
 
 
 class SQLLogicTestSerializer(SQLLogicRunner):
-    def __init__(self, duckdb_bwc_base_dir: str, duckdb_version: str, test_relative_path: str, test_idx: int):
+    def __init__(self, duckdb_bwc_base_dir: str, duckdb_version: str, test_filename: str, test_idx: int):
         super().__init__(None)
-        self.current_test = SerializedTest(duckdb_bwc_base_dir, duckdb_version, test_relative_path, test_idx)
+        self.current_test = SerializedTest(duckdb_bwc_base_dir, duckdb_version, test_filename, test_idx)
 
 
     def execute_test(self) -> None:
       if self.current_test.reload_from_disk():
-         return
+        return
 
       self.current_test.create_runtime_directories()
 
@@ -467,9 +481,13 @@ class SQLLogicTestSerializer(SQLLogicRunner):
         if test is None:
           raise ValueError(f"Failed to parse test file (unknown reason)")
       except Exception as e:
+        # Throw if exception is file not found
+        if not os.path.exists(test_absolute_filename):
+          raise e
+
         self.current_test.skip_reasons.append("parsing_error")
         self.current_test.write_test_queries()
-        logger.error(f"Exception while parsing test file: {test_absolute_filename}: {e}")
+        logger.error(f"Exception while parsing test file '{test_absolute_filename}': {e}")
         return
 
       self.test = test
@@ -478,11 +496,11 @@ class SQLLogicTestSerializer(SQLLogicRunner):
 
       # Top level keywords
       keywords = {
-        '__TEST_DIR__': 'output',
+        '__TEST_DIR__': BWC_OUTPUT_DIR_NAME,
         '__WORKING_DIRECTORY__': '.',
         '{DATA_DIR}': 'data',
-        '{TEMP_DIR}': 'output',
-        '{TEST_DIR}': 'output'
+        '{TEMP_DIR}': BWC_OUTPUT_DIR_NAME,
+        '{TEST_DIR}': BWC_OUTPUT_DIR_NAME
       }
 
       def update_value(_: SQLLogicContext) -> Generator[Any, Any, Any]:
@@ -523,6 +541,7 @@ def list_skipped_tests(duckdb_test_config_dir: str, duckdb_version: str) -> set[
   version_skip_file_path = f"{duckdb_test_config_dir}/test/configs/serialization_bwc_{duckdb_version}.json"
   skipped_tests = load_skipped_tests_from_file(base_skip_file_path)
   skipped_tests.update(load_skipped_tests_from_file(version_skip_file_path))
+  logger.debug(f"Found {len(skipped_tests)} tests to skip in version {duckdb_version} (base skip file: {base_skip_file_path}, version skip file: {version_skip_file_path})")
   return skipped_tests
 
 
@@ -572,31 +591,28 @@ class LoadingStats:
       logger.info(f"    {count} ({(count/self.skipped_count*100) if self.skipped_count > 0 else 0:.2f}%): {reason}")
 
 
-def load_test_files(duckdb_root_dir: str, duckdb_bwc_base_dir: str, duckdb_version: str, skip_file_path: str, test_pattern: str = None) -> List:
+def load_test_files(duckdb_root_dir: str, duckdb_bwc_base_dir: str, duckdb_version: str, test_pattern: str = None, single_test_file: str = None) -> List:
   loading_stats = LoadingStats()
 
   spec_files_dir = f"{duckdb_bwc_base_dir}/specs/{duckdb_version}"
   logger.info(f"Using Python DuckDB version {duckdb.__version__} to load test files from {spec_files_dir}")
 
-  files = list_test_files(spec_files_dir, test_pattern)
+  # Normalize (remove trailing ./ etc)
+  single_test_file = os.path.normpath(single_test_file) if single_test_file is not None else None
+
+  files = [single_test_file] if single_test_file is not None else list_test_files(spec_files_dir, test_pattern)
   logger.info(f"Found {len(files)} test files")
 
   loaded_tests = []
-  skipped_tests = list_skipped_tests(duckdb_root_dir, duckdb_version) if test_pattern is None else set()
-  logger.debug(f"Found {len(skipped_tests)} tests to skip in '{skip_file_path}'")
-  len_spec_files_dir = len(spec_files_dir) + 1
+  skipped_tests = list_skipped_tests(duckdb_root_dir, duckdb_version) if test_pattern is None and single_test_file is None else set()
   needed_extensions = set()
   for test_filename in files:
-    rel_test_filename = test_filename[len_spec_files_dir:]
-    if not rel_test_filename.startswith('test/sql/'):
-      raise ValueError(f"Test file '{test_filename}' does not start with 'test/sql/'")
-
-    if rel_test_filename in skipped_tests:
-      loading_stats.update_skipped([f"in skipped file '{skip_file_path}'"])
-      continue
+    if test_filename in skipped_tests:
+        loading_stats.update_skipped([f"in skipped file"])
+        continue
 
     try:
-      serializer = SQLLogicTestSerializer(duckdb_bwc_base_dir, duckdb_version, rel_test_filename, len(loaded_tests) + 1)
+      serializer = SQLLogicTestSerializer(duckdb_bwc_base_dir, duckdb_version, test_filename, len(loaded_tests) + 1)
       serializer.execute_test()
       test = serializer.current_test
 

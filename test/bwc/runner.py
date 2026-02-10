@@ -1,4 +1,5 @@
 import shutil
+import argparse
 from utils.duckdb_cli import DuckDBCLI
 from utils.duckdb_installer import install_assets, install_extensions, make_cli_path
 from utils.test_files_parser import load_test_files
@@ -14,6 +15,84 @@ import duckdb
 
 logger = make_logger(__name__)
 cancel_event = Event()
+has_checked_versions = False
+
+parser = argparse.ArgumentParser(description='Runs the serialization BWC tests')
+
+parser.add_argument(
+    '--cleanup_bwc_directory',
+    dest='cleanup_bwc_directory',
+    action='store',
+    help='When set, the script will clean up the BWC runtime directory. Use with `dry_run=False` argument to actually delete the files.',
+    default=False,
+)
+
+parser.add_argument(
+    '--dry_run',
+    dest='dry_run',
+    action='store',
+    help='When set, the cleanup of the BWC runtime directory will actually delete the files instead of just logging them.',
+    default=True,
+)
+
+parser.add_argument(
+    '--test_pattern',
+    dest='test_pattern',
+    action='store',
+    help='When set, only tests whose relative path contains the given pattern will be run. Example: `--test_pattern=window` will only run tests that have "window" in their path.',
+    default=None,
+)
+
+parser.add_argument(
+    '--stop_on_failure',
+    dest='stop_on_failure',
+    action='store',
+    help='When set, the test runner will stop executing further tests after the first failure. This can be useful when debugging a specific test or when you want to quickly identify if there are any issues without running the entire suite.',
+    default=False,
+)
+
+parser.add_argument(
+    '--run_sequentially',
+    dest='run_sequentially',
+    action='store',
+    help='When set, the test runner will execute tests sequentially instead of in parallel. This can be useful for debugging or when running a subset of tests to get more detailed logs.',
+    default=False,
+)
+
+parser.add_argument(
+    '--old_duckdb_version',
+    dest='old_duckdb_version',
+    action='store',
+    help='The old DuckDB version to test against. If not set, tests will be run for all supported versions.',
+    default=None,
+)
+
+parser.add_argument(
+    '--max_workers',
+    dest='max_workers',
+    action='store',
+    help='The maximum number of worker threads to use when running tests in parallel. Default is 24.',
+    type=int,
+    default=24,
+)
+
+parser.add_argument(
+    '--new_cli_path',
+    dest='new_cli_path',
+    action='store',
+    help='Path to the new DuckDB CLI to test. If not set, it will default to "build/release/duckdb" in the repo.',
+    default=None,
+)
+
+parser.add_argument(
+    '--test_file',
+    dest='test_file',
+    action='store',
+    help='Path to a test file to run',
+    default=None,
+)
+
+args = parser.parse_args()
 
 def run_multi_clis(clis, c):
   results = []
@@ -76,6 +155,7 @@ def get_extensions_versions(clis):
 
 
 def do_run_test(old_cli_path, new_cli_path, nb_tests, test_spec):
+  global has_checked_versions
   logger.info(f"Running test {test_spec.test_idx}/{nb_tests}: {test_spec.test_spec_relative_path}")
   report = TestReport(test_spec)
   sanity_checks = False
@@ -88,12 +168,14 @@ def do_run_test(old_cli_path, new_cli_path, nb_tests, test_spec):
         run_multi_clis([old_cli, new_cli], "pragma version;")
         run_multi_clis([old_cli, new_cli], "SELECT extension_name, loaded, extension_version FROM duckdb_extensions() WHERE extension_name='test_utils';")
 
-      versions = get_extensions_versions([old_cli, new_cli])
-      if versions[0] != versions[1]:
-        # make release EXTENSION_CONFIGS=.github/config/extensions/test-utils.cmake to compile in this repo
-        raise RuntimeError(f"test-utils extension version mismatch: {old_cli.version} is @ {versions[0]} and {new_cli.version} is @ {versions[1]}")
+      if not has_checked_versions:
+        versions = get_extensions_versions([old_cli, new_cli])
+        if versions[0] != versions[1]:
+          # make release EXTENSION_CONFIGS=.github/config/extensions/test-utils.cmake to compile in this repo
+          raise RuntimeError(f"test-utils extension version mismatch: {old_cli.version} is @ {versions[0]} and {new_cli.version} is @ {versions[1]}")
+        has_checked_versions = True
 
-      # Cleanup ouptput directory in case previous runs left files there
+      # Cleanup output directory in case previous runs left files there
       test_spec.reset_output_directory()
 
       # First serialize the queries & run them in the first version
@@ -124,23 +206,23 @@ def do_run_test(old_cli_path, new_cli_path, nb_tests, test_spec):
       report.load_comparison_results()
       return report
 
-def write_skip_file(report_lock, skip_file, to_write):
+def write_summary_file(report_lock, summary_file, to_write):
   with report_lock:
-    skip_file.write(to_write)
-    skip_file.flush()
+    summary_file.write(to_write)
+    summary_file.flush()
 
-def run_one_test_and_log(old_cli_path, new_cli_path, nb_tests, test, skip_file, report_con, report_lock):
+def run_one_test_and_log(old_cli_path, new_cli_path, nb_tests, test, summary_file, report_con, report_lock):
   if cancel_event.is_set():
     return None
 
   try:
     report = do_run_test(old_cli_path, new_cli_path, nb_tests, test)
     if report.is_successful():
-      write_skip_file(report_lock, skip_file, f"{test.test_spec_relative_path}\n")
+      write_summary_file(report_lock, summary_file, f"{test.test_spec_relative_path}\n")
       logger.info(f"Test {test.test_idx}/{nb_tests}: {test.test_spec_relative_path} - SUCCESS")
     else:
       em = report.find_exception_message()
-      write_skip_file(report_lock, skip_file, f"{test.test_spec_relative_path} # FAILED: {em}\n")
+      write_summary_file(report_lock, summary_file, f"{test.test_spec_relative_path} # FAILED: {em}\n")
       logger.error(f"Test {test.test_idx}/{nb_tests}: {test.test_spec_relative_path} - ❌ FAILED: {em}")
 
     with report_lock:
@@ -152,7 +234,7 @@ def run_one_test_and_log(old_cli_path, new_cli_path, nb_tests, test, skip_file, 
     cancel_event.set()
     raise
 
-def cleanup_runtime_dir(bwc_tests_base_dir):
+def cleanup_runtime_dir(bwc_tests_base_dir, dry_run=True):
   runtime_dir = f"{bwc_tests_base_dir}/runtime"
   logger.info(f"Cleaning up BWC directory '{runtime_dir}'")
   delete_list = []
@@ -167,9 +249,8 @@ def cleanup_runtime_dir(bwc_tests_base_dir):
       if dir.startswith("output") or (os.path.islink(dir_path) and (dir == "data" or dir == "test")):
         delete_list.append(dir_path)
 
-  dry_run = len(sys.argv) < 3 or sys.argv[2] != "no_dry_run"
   if dry_run:
-    logger.info(f"{len(delete_list)} files would be deleted - re-run with `no_dry_run` argument to actually delete them")
+    logger.info(f"{len(delete_list)} files would be deleted - re-run with `--dry_run=False` argument to actually delete them")
     for file_path in delete_list:
       logger.debug(f"  {file_path}")
   else:
@@ -187,14 +268,19 @@ def cleanup_runtime_dir(bwc_tests_base_dir):
     logger.info(f"Cleanup completed, deleted {removed}/{len(delete_list)} files/directories")
 
 if __name__ == "__main__":
-  supported_duckdb_versions = ["v1.4.4"] # ["v1.1.0", "v1.1.2", "v1.1.1", "v1.2.0", "v1.1.3", "v1.2.2", "v1.2.1", "v1.3.0", "v1.3.1", "v1.3.2", "1.4.0", "1.4.1", "1.4.2", "1.4.3"]
+  supported_duckdb_versions = [args.old_duckdb_version] if args.old_duckdb_version else [
+    "v1.1.0", "v1.1.2", "v1.1.1",
+    "v1.2.0", "v1.1.3", "v1.2.2", "v1.2.1",
+    "v1.3.0", "v1.3.1", "v1.3.2",
+    "v1.4.0", "v1.4.1", "v1.4.2", "v1.4.3", "v1.4.4"
+  ]
 
   duckdb_root_dir = dirname(dirname(dirname(abspath(__file__))))
   logger.info(f"DuckDB root dir: '{duckdb_root_dir}'")
   bwc_tests_base_dir = f"{duckdb_root_dir}/duckdb_unittest_tempdir/bwc"
 
-  if len(sys.argv) > 1 and sys.argv[1] == "cleanup_bwc_directory":
-    cleanup_runtime_dir(bwc_tests_base_dir)
+  if args.cleanup_bwc_directory:
+    cleanup_runtime_dir(bwc_tests_base_dir, dry_run=args.dry_run)
     sys.exit(0)
 
   # Create the report database
@@ -217,15 +303,20 @@ if __name__ == "__main__":
     logger.info(f"Running tests for DuckDB version '{old_duckdb_version}'")
 
     old_cli_p = make_cli_path(old_duckdb_version)
-    new_cli_p = f"{duckdb_root_dir}/build/release/duckdb"
+    new_cli_p = f"{duckdb_root_dir}/build/release/duckdb" if args.new_cli_path is None else args.new_cli_path
 
-    # open skipfile
-    skip_file_path = f"{bwc_tests_base_dir}/skip_tests_{old_duckdb_version}.txt"
+    logger.info(f"Old CLI path: {old_cli_p}")
+    logger.info(f"New CLI path: {new_cli_p}")
+
+    summary_file_path = f"{bwc_tests_base_dir}/tests_summary_{old_duckdb_version}.txt"
     lock = Lock()
 
-    with open(skip_file_path, 'a') as skip_file:
-      test_pattern = sys.argv[1] if len(sys.argv) > 1 else None
-      res = load_test_files(duckdb_root_dir, bwc_tests_base_dir, old_duckdb_version, skip_file_path, test_pattern)
+    with open(summary_file_path, 'a') as summary_file:
+      summary_file.write(f"\n## --- Starting run at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+      summary_file.flush()
+      test_pattern = args.test_pattern
+      single_test_file = args.test_file
+      res = load_test_files(duckdb_root_dir, bwc_tests_base_dir, old_duckdb_version, test_pattern, single_test_file)
       tests = res['tests']
 
       extensions = res['needed_extensions']
@@ -233,13 +324,13 @@ if __name__ == "__main__":
       install_extensions(old_cli_p, extensions)
       install_extensions(new_cli_p, extensions)
 
-      run_sequentially = test_pattern is not None
-      stop_on_failure = False
+      run_sequentially = args.run_sequentially or test_pattern is not None
+      stop_on_failure = args.stop_on_failure
       start_time = time.time()
       nb_tests_run = 0
       if run_sequentially:
         for test in tests:
-          report = run_one_test_and_log(old_cli_p, new_cli_p, len(tests), test, skip_file, con, lock)
+          report = run_one_test_and_log(old_cli_p, new_cli_p, len(tests), test, summary_file, con, lock)
           nb_tests_run += 1
 
           if report.is_successful():
@@ -251,8 +342,8 @@ if __name__ == "__main__":
               report.log_errors()
               report.log_steps_queries()
       else:
-        with ThreadPoolExecutor(max_workers=25) as executor:
-          reports = executor.map(lambda test: run_one_test_and_log(old_cli_p, new_cli_p, len(tests), test, skip_file, con, lock), tests)
+        with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+          reports = executor.map(lambda test: run_one_test_and_log(old_cli_p, new_cli_p, len(tests), test, summary_file, con, lock), tests)
 
         reports_list = list(reports)
         nb_tests_run = len(reports_list)
