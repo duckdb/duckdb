@@ -256,7 +256,7 @@ idx_t VariantColumnData::ScanWithCallback(
 			callback(*sub_columns[1], state.child_states[2], *child_vectors[1], target_count);
 			scan_count = callback(*validity, state.child_states[0], unshredding_intermediate, target_count);
 
-			VariantColumnData::UnshredVariantData(unshredding_intermediate, intermediate, target_count);
+			result.Shred(intermediate);
 		} else {
 			scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
 			callback(*sub_columns[0], state.child_states[1], intermediate, target_count);
@@ -302,7 +302,7 @@ idx_t VariantColumnData::ScanWithCallback(
 			callback(*sub_columns[1], state.child_states[2], *child_vectors[1], target_count);
 			auto scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
 
-			VariantColumnData::UnshredVariantData(intermediate, result, target_count);
+			result.Shred(intermediate);
 			return scan_count;
 		}
 		auto scan_count = callback(*validity, state.child_states[0], result, target_count);
@@ -479,7 +479,7 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 
 		//! FIXME: adjust UnshredVariantData so we can write the value in place directly.
 		Vector unshredded(variant_vec.GetType(), 1);
-		VariantColumnData::UnshredVariantData(intermediate, unshredded, 1);
+		VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
 		variant_vec.SetValue(0, unshredded.GetValue(0));
 	} else {
 		sub_columns[0]->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);

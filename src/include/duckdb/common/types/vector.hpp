@@ -134,6 +134,7 @@ class Vector {
 	friend struct UnionVector;
 	friend struct SequenceVector;
 	friend struct ArrayVector;
+	friend struct ShreddedVector;
 
 	friend class DataChunk;
 	friend class VectorCacheBuffer;
@@ -226,6 +227,9 @@ public:
 
 	//! Turn the vector into a sequence vector
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
+
+	//! Turn the vector into a shredded variant vector
+	DUCKDB_API void Shred(Vector &shredded_data);
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
@@ -673,6 +677,26 @@ struct VariantVector {
 	//! Gets a reference to the binary blob 'value', which encodes the data of the row
 	DUCKDB_API static Vector &GetData(Vector &vec);
 	DUCKDB_API static Vector &GetData(const Vector &vec);
+};
+
+struct ShreddedVector {
+	static void VerifyShreddedVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::SHREDDED_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+			throw InternalException("Operation requires a shredded vector but a non-shredded vector was encountered");
+		}
+#endif
+	}
+	//! Get the underlying vector holding the unshredded data
+	DUCKDB_API static const Vector &GetUnshreddedVector(const Vector &vec);
+	//! Get the underlying vector holding the unshredded data
+	DUCKDB_API static Vector &GetUnshreddedVector(Vector &vec);
+	//! Get the underlying vector holding the shredded data
+	DUCKDB_API static const Vector &GetShreddedVector(const Vector &vec);
+	//! Get the underlying vector holding the shredded data
+	DUCKDB_API static Vector &GetShreddedVector(Vector &vec);
 };
 
 enum class UnionInvalidReason : uint8_t {

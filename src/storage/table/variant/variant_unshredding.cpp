@@ -212,7 +212,7 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 	return res;
 }
 
-void VariantColumnData::UnshredVariantData(Vector &input, Vector &output, idx_t count) {
+void VariantUtils::UnshredVariantData(Vector &input, Vector &output, idx_t count) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::STRUCT);
 	auto &child_vectors = StructVector::GetEntries(input);
 	D_ASSERT(child_vectors.size() == 2);

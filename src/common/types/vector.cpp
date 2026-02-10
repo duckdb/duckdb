@@ -257,7 +257,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		return;
 	}
 
-	if (GetVectorType() == VectorType::FSST_VECTOR) {
+	if (GetVectorType() == VectorType::FSST_VECTOR || GetVectorType() == VectorType::SHREDDED_VECTOR) {
 		Flatten(sel, count);
 		return;
 	}
@@ -996,6 +996,14 @@ void Vector::Flatten(idx_t count) {
 			break;
 		}
 		break;
+	case VectorType::SHREDDED_VECTOR: {
+		// unshred the vector
+		Vector unshredded_vector(LogicalType::VARIANT());
+		auto &shredded_buffer = buffer->Cast<ShreddedVectorBuffer>();
+		VariantUtils::UnshredVariantData(shredded_buffer.GetChild(), unshredded_vector, count);
+		Reference(unshredded_vector);
+		break;
+	}
 	case VectorType::FSST_VECTOR: {
 		// Even though count may only be a part of the vector, we need to flatten the whole thing due to the way
 		// ToUnifiedFormat uses flatten
@@ -1172,7 +1180,7 @@ void Vector::Flatten(idx_t count) {
 		break;
 	}
 	default:
-		throw InternalException("Unimplemented type for normalify");
+		throw InternalException("Unimplemented type for flatten");
 	}
 }
 
@@ -1190,6 +1198,16 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		this->Reference(other);
 		break;
 	}
+	case VectorType::SHREDDED_VECTOR: {
+		// slice the underlying shredded buffer
+		auto &shredded_buffer = buffer->Cast<ShreddedVectorBuffer>();
+		Vector sliced_shredded_buffer(shredded_buffer.GetChild(), sel, count);
+		// unshred the vector
+		Vector unshredded_vector(LogicalType::VARIANT());
+		VariantUtils::UnshredVariantData(sliced_shredded_buffer, unshredded_vector, count);
+		Reference(unshredded_vector);
+		break;
+	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
@@ -1200,7 +1218,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		break;
 	}
 	default:
-		throw InternalException("Unimplemented type for normalify with selection vector");
+		throw InternalException("Unimplemented type for flatten with selection vector");
 	}
 }
 
@@ -1277,6 +1295,20 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	data[0] = start;
 	data[1] = increment;
 	data[2] = int64_t(count);
+	validity.Reset();
+	auxiliary.reset();
+}
+
+void Vector::Shred(Vector &shredded_data) {
+	if (GetType().id() != LogicalTypeId::VARIANT) {
+		throw InternalException("Vector::Shred can only be used on variant vectors");
+	}
+	auto &shredded_type = shredded_data.GetType();
+	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
+		throw InternalException("Vector::Shred parameter must be a struct with two children");
+	}
+	this->vector_type = VectorType::SHREDDED_VECTOR;
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
 	validity.Reset();
 	auxiliary.reset();
 }
@@ -1678,6 +1710,13 @@ void Vector::VerifyVariant(Vector &vector_p, const SelectionVector &sel_p, idx_t
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
+		return;
+	}
+	if (vector_p.GetVectorType() == VectorType::SHREDDED_VECTOR) {
+		auto &shredded = ShreddedVector::GetShreddedVector(vector_p);
+		auto &unshredded = ShreddedVector::GetShreddedVector(vector_p);
+		Verify(shredded, sel_p, count);
+		Verify(unshredded, sel_p, count);
 		return;
 	}
 	Vector *vector = &vector_p;
@@ -3017,6 +3056,26 @@ const UnifiedVectorFormat &UnifiedVariantVector::GetValuesByteOffset(const Recur
 
 const UnifiedVectorFormat &UnifiedVariantVector::GetData(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[3].unified;
+}
+
+const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
+	VerifyShreddedVector(vec);
+	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];
+}
+
+Vector &ShreddedVector::GetUnshreddedVector(Vector &vec) {
+	VerifyShreddedVector(vec);
+	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];
+}
+
+const Vector &ShreddedVector::GetShreddedVector(const Vector &vec) {
+	VerifyShreddedVector(vec);
+	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
+}
+
+Vector &ShreddedVector::GetShreddedVector(Vector &vec) {
+	VerifyShreddedVector(vec);
+	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
 }
 
 } // namespace duckdb
