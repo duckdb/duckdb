@@ -447,30 +447,30 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	bool success = false;
 	if (write(ofd, "\x1b]11;?\007", 7) == 7) {
 		// Read the response: until \a or until we fill up our buffer
-		char buf[1000];
-		idx_t i = 0;
-		while (i < sizeof(buf) - 1) {
+		string buf;
+		char read_buf[1];
+		while (true) {
 			// check if we have data to read
 			// wait up till 1s
 			if (!HasMoreData(ifd, 1000000)) {
 				// no more data available - done
 				break;
 			}
-			if (read(ifd, buf + i, 1) != 1) {
+			if (read(ifd, read_buf, 1) != 1) {
 				break;
 			}
-			if (buf[i] == '\a') {
+			char c = read_buf[0];
+			if (c == '\a') {
 				break;
 			}
-			if (i > 2 && buf[i - 1] == '\x1b' && buf[i] == '\\') {
-				i--;
+			if (!buf.empty() && buf.back() == '\x1b' && c == '\\') {
+				buf.pop_back();
 				break;
 			}
-			i++;
+			buf += c;
 		}
-		buf[i] = '\0';
 
-		success = ParseTerminalColor(color, buf, i);
+		success = ParseTerminalColor(color, buf.c_str(), buf.size());
 	}
 	Terminal::DisableRawMode();
 	return success;
