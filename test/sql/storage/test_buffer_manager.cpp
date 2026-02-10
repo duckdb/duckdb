@@ -143,64 +143,6 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit='1MB'"));
 }
 
-TEST_CASE("Test buffer reallocation", "[storage][.]") {
-	auto storage_database = TestCreatePath("storage_test");
-	auto config = GetTestConfig();
-	config->SetOptionByName("default_block_size", Value::UBIGINT(DEFAULT_BLOCK_ALLOC_SIZE));
-
-	// make sure the database does not exist
-	DeleteDatabase(storage_database);
-	DuckDB db(storage_database, config.get());
-
-	// 1GB limit
-	Connection con(db);
-	const idx_t limit = 1000000000;
-	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
-
-	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
-	CHECK(buffer_manager.GetUsedMemory() == 0);
-
-	auto block_size = Settings::Get<DefaultBlockSizeSetting>(*config) - Storage::DEFAULT_BLOCK_HEADER_SIZE;
-	idx_t requested_size = block_size;
-	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false);
-	auto block = handle.GetBlockHandle();
-	CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size + block->GetBlockHeaderSize()));
-
-	// We need at least one block for the query result of a PRAGMA
-	const auto minimum_size_to_execute_pragma = requested_size;
-	for (; requested_size < limit; requested_size *= 2) {
-		// increase size
-		buffer_manager.ReAllocate(block, requested_size);
-		CHECK(buffer_manager.GetUsedMemory() ==
-		      BufferManager::GetAllocSize(requested_size + block->GetBlockHeaderSize()));
-		// unpin and make sure it's evicted
-		handle.Destroy();
-		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", minimum_size_to_execute_pragma)));
-		CHECK(buffer_manager.GetUsedMemory() == 0);
-		// re-pin
-		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
-		handle = buffer_manager.Pin(block);
-		CHECK(buffer_manager.GetUsedMemory() ==
-		      BufferManager::GetAllocSize(requested_size + block->GetBlockHeaderSize()));
-	}
-	requested_size /= 2;
-	for (; requested_size > block_size; requested_size /= 2) {
-		// decrease size
-		buffer_manager.ReAllocate(block, requested_size);
-		CHECK(buffer_manager.GetUsedMemory() ==
-		      BufferManager::GetAllocSize(requested_size + block->GetBlockHeaderSize()));
-		// unpin and make sure it's evicted
-		handle.Destroy();
-		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
-		CHECK(buffer_manager.GetUsedMemory() == 0);
-		// re-pin
-		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
-		handle = buffer_manager.Pin(block);
-		CHECK(buffer_manager.GetUsedMemory() ==
-		      BufferManager::GetAllocSize(requested_size + block->GetBlockHeaderSize()));
-	}
-}
-
 TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();

@@ -360,8 +360,7 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 		return true;
 	}
 	if (key == "debug_use_openssl") {
-		options.debug_use_openssl = GetBooleanArgument(key, values);
-		return true;
+		return true; // deprecated
 	}
 	if (key == "encryption_config") {
 		if (values.size() != 1) {
@@ -402,8 +401,7 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 		return true;
 	}
 	if (key == "debug_use_openssl") {
-		options.debug_use_openssl = BooleanValue::Get(val);
-		return true;
+		return true; // deprecated
 	}
 	if (key == "can_have_nan") {
 		options.can_have_nan = BooleanValue::Get(val);
@@ -455,7 +453,6 @@ void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, Bin
 	info.type = ScanType::PARQUET;
 	info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_options.binary_as_string));
 	info.InsertOption("file_row_number", Value::BOOLEAN(parquet_options.file_row_number));
-	info.InsertOption("debug_use_openssl", Value::BOOLEAN(parquet_options.debug_use_openssl));
 }
 
 optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,

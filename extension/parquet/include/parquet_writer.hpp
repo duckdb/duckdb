@@ -110,8 +110,8 @@ public:
 	              ShreddingType shredding_types, const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, optional_idx dictionary_size_limit,
 	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
-	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl,
-	              ParquetVersion parquet_version, GeoParquetVersion geoparquet_version);
+	              double bloom_filter_false_positive_ratio, int64_t compression_level, ParquetVersion parquet_version,
+	              GeoParquetVersion geoparquet_version);
 	~ParquetWriter();
 
 public:
@@ -123,7 +123,7 @@ public:
 
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
 	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-	                                bool allow_geometry);
+	                                bool allow_geometry, ClientContext &context);
 
 	ClientContext &GetContext() {
 		return context;
@@ -207,7 +207,6 @@ private:
 	bool enable_bloom_filters;
 	double bloom_filter_false_positive_ratio;
 	int64_t compression_level;
-	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
 	ParquetVersion parquet_version;
 	GeoParquetVersion geoparquet_version;

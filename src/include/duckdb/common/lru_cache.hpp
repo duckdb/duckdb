@@ -21,9 +21,16 @@
 
 namespace duckdb {
 
+struct DefaultPayload {
+	idx_t GetWeight() const {
+		return 1;
+	}
+};
+
 // A LRU cache implementation, whose value could be accessed in a shared manner with shared pointer.
 // Notice, it's not thread-safe.
-template <typename Key, typename Val, typename KeyHash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>>
+template <typename Key, typename Val, typename Payload = DefaultPayload, typename KeyHash = std::hash<Key>,
+          typename KeyEqual = std::equal_to<Key>>
 class SharedLruCache {
 public:
 	using key_type = Key;
@@ -31,8 +38,8 @@ public:
 	using hasher = KeyHash;
 	using key_equal = KeyEqual;
 
-	// @param max_memory_p: Maximum total memory (in bytes) of entries. 0 means unlimited.
-	explicit SharedLruCache(idx_t max_memory_p) : max_memory(max_memory_p), current_memory(0) {
+	// @param max_total_weight_p: Maximum total weight (in relevant unit) of entries. 0 means unlimited.
+	explicit SharedLruCache(idx_t max_total_weight_p) : max_total_weight(max_total_weight_p), current_total_weight(0) {
 	}
 
 	// Disable copy and move
@@ -42,21 +49,20 @@ public:
 	~SharedLruCache() = default;
 
 	// Insert `value` with key `key` and explicit memory size. This will replace any previous entry with the same key.
-	void Put(Key key, shared_ptr<Val> value, unique_ptr<BufferPoolReservation> reservation) {
-		if (reservation == nullptr) {
-			throw InvalidInputException("Reservation cannot be null when emplace into LRU!");
-		}
-
+	template <typename... Types>
+	void Put(Key key, shared_ptr<Val> value, Types... constructor_args) {
 		// Remove existing entry if present
-		const idx_t memory_size = reservation->size;
 		auto existing_it = entry_map.find(key);
 		if (existing_it != entry_map.end()) {
 			DeleteImpl(existing_it);
 		}
 
+		auto payload = make_uniq<Payload>(std::forward<Types>(constructor_args)...);
+		auto payload_weight = payload->GetWeight();
+
 		// Evict entries if needed to make room
-		if (max_memory > 0 && memory_size > 0) {
-			EvictIfNeeded(memory_size);
+		if (max_total_weight > 0 && payload_weight > 0) {
+			EvictIfNeeded(payload_weight);
 		}
 
 		// Add new entry
@@ -64,10 +70,11 @@ public:
 		Entry new_entry;
 		new_entry.value = std::move(value);
 		new_entry.lru_iterator = lru_list.begin();
-		new_entry.reservation = std::move(reservation);
+		new_entry.payload = std::move(payload);
+		new_entry.payload_weight = payload_weight;
 
 		entry_map[std::move(key)] = std::move(new_entry);
-		current_memory += memory_size;
+		current_total_weight += payload_weight;
 	}
 
 	// Delete the entry with key `key`.
@@ -95,34 +102,30 @@ public:
 
 	// Clear the whole cache.
 	void Clear() {
-		for (auto &entry : entry_map) {
-			D_ASSERT(entry.second.reservation != nullptr);
-			entry.second.reservation->Resize(0);
-		}
 		entry_map.clear();
 		lru_list.clear();
-		current_memory = 0;
+		current_total_weight = 0;
 	}
 
 	// Evict entries based on their access, until we've freed at least the target number of bytes or there's no entries
 	// in the cache. Return number of bytes freed.
-	idx_t EvictToReduceMemory(idx_t target_bytes) {
+	idx_t EvictToReduceAtLeast(idx_t target_weight) {
 		idx_t freed = 0;
-		while (!lru_list.empty() && freed < target_bytes) {
+		while (!lru_list.empty() && freed < target_weight) {
 			const auto &stale_key = lru_list.back();
 			auto stale_it = entry_map.find(stale_key);
 			D_ASSERT(stale_it != entry_map.end());
-			freed += stale_it->second.reservation->size;
+			freed += stale_it->second.payload_weight;
 			DeleteImpl(stale_it);
 		}
 		return freed;
 	}
 
-	idx_t MaxMemory() const {
-		return max_memory;
+	idx_t Capacity() const {
+		return max_total_weight;
 	}
-	idx_t CurrentMemory() const {
-		return current_memory;
+	idx_t CurrentTotalWeight() const {
+		return current_total_weight;
 	}
 	size_t Size() const {
 		return entry_map.size();
@@ -136,27 +139,27 @@ private:
 		shared_ptr<Val> value;
 		idx_t memory;
 		typename list<Key>::iterator lru_iterator;
-		// Record memory reservation in the buffer pool, which is used for global memory control.
-		unique_ptr<BufferPoolReservation> reservation;
+		// Record payload weight, which is used for global weight control.
+		unique_ptr<Payload> payload;
+		idx_t payload_weight;
 	};
 
 	using EntryMap = unordered_map<Key, Entry, KeyHash, KeyEqual>;
 
 	void DeleteImpl(typename EntryMap::iterator iter) {
-		current_memory -= iter->second.reservation->size;
-		D_ASSERT(current_memory >= 0);
-		iter->second.reservation->Resize(0);
+		current_total_weight -= iter->second.payload_weight;
+		D_ASSERT(current_total_weight >= 0);
 		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
 	}
 
-	void EvictIfNeeded(idx_t required_memory) {
-		if (max_memory == 0) {
+	void EvictIfNeeded(idx_t required_weight) {
+		if (max_total_weight == 0) {
 			return;
 		}
 
 		// Evict LRU entries until we have enough space
-		while (!lru_list.empty() && (current_memory + required_memory > max_memory)) {
+		while (!lru_list.empty() && (current_total_weight + required_weight > max_total_weight)) {
 			const auto &stale_key = lru_list.back();
 			auto stale_it = entry_map.find(stale_key);
 			if (stale_it != entry_map.end()) {
@@ -168,8 +171,8 @@ private:
 		}
 	}
 
-	const idx_t max_memory;
-	idx_t current_memory;
+	const idx_t max_total_weight;
+	idx_t current_total_weight;
 	EntryMap entry_map;
 	list<Key> lru_list;
 };

@@ -148,6 +148,12 @@ void ExtensionLoader::RegisterCollation(CreateCollationInfo &info) {
 	system_catalog.CreateFunction(data, finfo);
 }
 
+void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info) {
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	system_catalog.CreateCoordinateSystem(data, info);
+}
+
 void ExtensionLoader::AddFunctionOverload(ScalarFunction function) {
 	auto &scalar_function = GetFunction(function.name);
 	scalar_function.functions.AddFunction(std::move(function));

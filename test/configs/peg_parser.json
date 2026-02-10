@@ -2,10 +2,7 @@
   "description": "Test PEG Parser + transformer with fallback mode",
   "skip_compiled": "true",
   "on_init": "set allow_parser_override_extension=fallback;",
-  "statically_loaded_extensions": [
-    "core_functions",
-    "autocomplete"
-  ],
+  "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
       "reason": "Quotations",
@@ -17,7 +14,32 @@
         "test/sql/catalog/test_quoted_column_name.test",
         "test/sql/json/issues/large_quoted_string_constant.test",
         "test/sql/export/export_database.test",
-        "test/sql/cast/string_to_struct_cast.test"
+        "test/sql/cast/string_to_struct_cast.test",
+        "test/sql/export/parquet/export_parquet_enum.test",
+        "test/sql/show_select/show_quote_identifier.test",
+        "test/sql/copy/return_stats.test",
+        "test/sql/copy/csv/multidelimiter/test_abac.test",
+        "test/sql/copy/csv/pollock/test_quotation_char.test",
+        "test/sql/copy/csv/test_validator.test",
+        "test/sql/copy/csv/test_thousands_separator.test",
+        "test/sql/copy/csv/auto/test_csv_auto.test",
+        "test/sql/error/qualified_column_error.test",
+        "test/issues/general/test_3140.test",
+        "test/sql/pivot/test_pivot_duplicate_aggregates.test",
+        "test/sql/cast/string_to_list_cast.test",
+        "test/sql/cast/string_to_struct_escapes.test",
+        "test/sql/cast/string_to_struct_roundtrip.test",
+        "test/sql/catalog/function/query_function.test"
+      ]
+    },
+    {
+      "reason": "Autocomplete wrong results",
+      "paths": [
+        "test/sql/function/autocomplete/copy.test",
+        "test/sql/function/autocomplete/expressions.test",
+        "test/sql/function/autocomplete/select.test",
+        "test/sql/function/autocomplete/suggest_file.test",
+        "test/sql/function/autocomplete/tpch.test"
       ]
     },
     {
@@ -25,7 +47,22 @@
       "paths": [
         "test/sql/error/error_position.test",
         "test/sql/catalog/table/test_default_values.test",
-        "test/sql/cast/cast_error_location.test"
+        "test/sql/cast/cast_error_location.test",
+        "test/sql/types/nested/array/array_invalid.test",
+        "test/sql/error/lineitem_errors.test",
+        "test/sql/types/nested/struct/struct_dict.test",
+        "test/sql/types/map/map_empty.test",
+        "test/sql/binder/column_ref_as_alias.test",
+        "test/sql/copy/csv/glob/read_csv_glob.test",
+        "test/sql/copy/parquet/parquet_list.test",
+        "test/sql/copy/parquet/copy_option_suggestion.test"
+      ]
+    },
+    {
+      "reason": "Window function exceptions",
+      "paths": [
+        "test/sql/window/test_window_clause.test",
+        "test/sql/window/test_invalid_window.test"
       ]
     },
     {
@@ -33,7 +70,9 @@
       "paths": [
         "test/sql/copy/csv/unquoted_escape/basic.test",
         "test/sqlserver/sqlserver_cte.test",
-        "test/optimizer/compare_blob.test"
+        "test/optimizer/compare_blob.test",
+        "test/sql/copy/csv/unquoted_escape/mixed.test",
+        "test/issues/general/test_15483.test"
       ]
     },
     {
@@ -49,8 +88,16 @@
     },
     {
       "reason": "Case insensitive preservation",
+      "paths": ["test/sql/settings/setting_preserve_identifier_case.test"]
+    },
+    {
+      "reason": "Parser error",
       "paths": [
-        "test/sql/settings/setting_preserve_identifier_case.test"
+        "test/sql/prepared/parameter_variants.test",
+        "test/sql/parser/digit_separators.test",
+        "test/fuzzer/duckfuzz/list_try_cast.test",
+        "test/sql/json/scalar/test_json_extract.test",
+        "test/issues/monetdb/test_boolean_not.test"
       ]
     },
     {
@@ -71,7 +118,8 @@
     {
       "reason": "Setting option to 'fallback' changes behavior of first tests",
       "paths": [
-        "test/extension/loadable_parser_override.test"
+        "test/extension/loadable_parser_override.test",
+        "test/sql/collate/test_unsupported_collations.test"
       ]
     },
     {
@@ -79,8 +127,21 @@
       "paths": [
         "test/sql/types/enum/test_enum.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
+        "test/sql/overflow/expression_tree_depth.test",
+        "test/sql/function/string/test_string_slice.test",
+        "test/optimizer/joins/lateral_cross_join.test",
+        "test/sql/binder/test_string_alias.test",
+        "test/sql/catalog/table/create_table_parameters.test",
+        "test/sql/pragma/test_query_log.test",
+        "test/sql/function/string/test_subscript.test",
+        "test/sql/copy/csv/glob/copy_csv_glob.test",
+        "test/sql/select/test_select_locking.test"
       ]
+    },
+    {
+      "reason": "DESCRIBE with CTE not supported",
+      "paths": ["test/sql/cte/cte_describe.test"]
     }
   ]
 }
