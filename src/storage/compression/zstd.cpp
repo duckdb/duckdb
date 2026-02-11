@@ -240,13 +240,13 @@ public:
 	//		block_id = INVALID_BLOCK;
 	//	}
 	// public:
-	//	page_id_t GetCurrentId() const {
-	//		if (IsOnSegmentBuffer()) {
-	//			D_ASSERT(block_id == INVALID_BLOCK);
-	//			return block_id;
-	//		}
-	//		return block_id;
-	//	}
+	page_id_t GetCurrentId() const {
+		if (IsOnSegmentBuffer()) {
+			D_ASSERT(block_id == INVALID_BLOCK);
+			return block_id;
+		}
+		return block_id;
+	}
 	//	void SetBlockId(page_id_t new_id) {
 	//		D_ASSERT((IsOnSegmentBuffer() && new_id == INVALID_BLOCK) || new_id != INVALID_BLOCK);
 	//		block_id = new_id;
@@ -264,9 +264,9 @@ public:
 	//		D_ASSERT(res <= GetWritableSpace(info));
 	//		return res;
 	//	}
-	//	bool IsOnSegmentBuffer() const {
-	//		return current_buffer.get() == &segment_handle;
-	//	}
+	bool IsOnSegmentBuffer() const {
+		return current_buffer.get() == &segment_handle;
+	}
 	//	BufferHandle &GetSegmentBuffer() {
 	//		return segment_handle;
 	//	}
@@ -301,7 +301,7 @@ public:
 	//		return offset;
 	//	}
 	//	void WriteVectorMetadata(page_id_t page_id, page_offset_t page_offset, uncompressed_size_t uncompressed_size,
-	//compressed_size_t compressed_size) { 		page_ids[vector_in_segment_count] = page_id;
+	// compressed_size_t compressed_size) { 		page_ids[vector_in_segment_count] = page_id;
 	//		page_offsets[vector_in_segment_count] = page_offset;
 	//		compressed_sizes[vector_in_segment_count] = compressed_size;
 	//		uncompressed_sizes[vector_in_segment_count] = uncompressed_size;
@@ -439,8 +439,7 @@ public:
 		vector_state.tuple_count = 0;
 
 		idx_t offset = NewSegment();
-		SetCurrentBuffer(segment_state.segment_handle);
-		segment_state.current_buffer_ptr = segment_state.segment_handle.Ptr() + offset;
+		SetCurrentBuffer(segment_state.segment_handle, offset);
 		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 	}
 
@@ -454,9 +453,9 @@ public:
 		out_buffer.size = remaining_space;
 	}
 
-	void SetCurrentBuffer(BufferHandle &handle) {
+	void SetCurrentBuffer(BufferHandle &handle, idx_t offset = 0) {
 		segment_state.current_buffer = &handle;
-		segment_state.current_buffer_ptr = handle.Ptr();
+		segment_state.current_buffer_ptr = handle.Ptr() + offset;
 	}
 
 	BufferHandle &GetExtraPageBuffer(block_id_t current_block_id) {
@@ -565,7 +564,7 @@ public:
 		}
 		current_offset = GetCurrentOffset();
 		vector_state.starting_offset = current_offset;
-		vector_state.starting_page = GetCurrentId();
+		vector_state.starting_page = segment_state.GetCurrentId();
 
 		vector_state.vector_lengths_buffer = segment_state.current_buffer;
 		vector_state.string_lengths =
@@ -641,7 +640,7 @@ public:
 
 	void NewPage(bool additional_data_page = false) {
 		block_id_t new_id = FinalizePage();
-		block_id_t current_block_id = segment_state.block_id;
+		block_id_t current_block_id = segment_state.GetCurrentId();
 		auto &buffer = GetExtraPageBuffer(current_block_id);
 		segment_state.block_id = new_id;
 		SetCurrentBuffer(buffer);
@@ -701,13 +700,6 @@ public:
 		}
 	}
 
-	page_id_t GetCurrentId() {
-		if (&segment_state.segment_handle == segment_state.current_buffer.get()) {
-			return INVALID_BLOCK;
-		}
-		return segment_state.block_id;
-	}
-
 	page_offset_t GetCurrentOffset() {
 		auto &handle = *segment_state.current_buffer;
 		auto start_of_buffer = handle.Ptr();
@@ -735,7 +727,8 @@ public:
 		auto &state = checkpoint_data.GetCheckpointState();
 		idx_t segment_block_size;
 
-		if (segment_state.current_buffer.get() == &segment_state.segment_handle) {
+		if (segment_state.IsOnSegmentBuffer()) {
+			//! We haven't left the segment buffer, so data all fits on the segment
 			segment_block_size = GetCurrentOffset();
 		} else {
 			// Block is fully used
