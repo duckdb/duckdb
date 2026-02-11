@@ -255,8 +255,11 @@ public:
 	//! Returns the list of possible compression functions for the physical type.
 	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const PhysicalType physical_type);
 	//! Returns the compression function matching the compression and physical type.
-	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
-	                                                                    const PhysicalType physical_type);
+	//! Throws an error if the function does not exist.
+	DUCKDB_API reference<CompressionFunction> GetCompressionFunction(CompressionType type,
+	                                                                 const PhysicalType physical_type);
+	DUCKDB_API optional_ptr<CompressionFunction> TryGetCompressionFunction(CompressionType type,
+	                                                                       const PhysicalType physical_type);
 	//! Sets the disabled compression methods
 	DUCKDB_API void SetDisabledCompressionMethods(const vector<CompressionType> &disabled_compression_methods);
 	//! Returns a list of disabled compression methods

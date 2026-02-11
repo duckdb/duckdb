@@ -125,9 +125,11 @@ shared_ptr<CachedGlobalSettings> GlobalUserSettings::GetSettings(shared_ptr<Cach
 	}
 	lock_guard<mutex> guard(lock);
 	// check if another thread updated the cache while we were waiting for the lock
-	if (cache && current_version == cache->version) {
+	auto updated_cache = cache.atomic_load(std::memory_order_relaxed);
+	auto updated_version = settings_version.load(std::memory_order_relaxed);
+	if (updated_cache && updated_version == updated_cache->version) {
 		// already written - load
-		return cache;
+		return updated_cache;
 	}
 	auto new_cache = make_shared_ptr<CachedGlobalSettings>(settings_version, settings_map);
 	cache.atomic_store(new_cache);
