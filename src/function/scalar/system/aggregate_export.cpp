@@ -38,7 +38,7 @@ struct ExportAggregateBindData : public FunctionData {
 };
 
 template <class OP, class... ARGS>
-static void TemplateDispatch(PhysicalType type, ARGS &&... args) {
+static void TemplateDispatch(PhysicalType type, ARGS &&...args) {
 	switch (type) {
 	case PhysicalType::BOOL:
 		OP::template Operation<bool>(std::forward<ARGS>(args)...);
@@ -222,8 +222,7 @@ struct CombineState : public FunctionLocalState {
 	    : state_size(state_size_p),
 	      state_buffer0(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
 	      state_buffer1(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
-	      addresses0(LogicalType::POINTER), addresses1(LogicalType::POINTER),
-	      allocator(Allocator::DefaultAllocator()) {
+	      addresses0(LogicalType::POINTER), addresses1(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
 	}
 };
 
@@ -350,37 +349,76 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	input.data[0].ToUnifiedFormat(input.size(), state0_data);
 	input.data[1].ToUnifiedFormat(input.size(), state1_data);
 
+	// Partition rows by NULL using SelectionVector
+	SelectionVector both_null_sel(STANDARD_VECTOR_SIZE);
+	// input1 is null
+	SelectionVector copy_from_0_sel(STANDARD_VECTOR_SIZE);
+	// input0 is null
+	SelectionVector copy_from_1_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector both_valid_sel(STANDARD_VECTOR_SIZE);
+
+	idx_t both_null_count = 0, copy_from_0_count = 0, copy_from_1_count = 0, both_valid_count = 0;
+
 	for (idx_t i = 0; i < input.size(); i++) {
 		const bool is_null0 = !state0_data.validity.RowIsValid(state0_data.sel->get_index(i));
 		const bool is_null1 = !state1_data.validity.RowIsValid(state1_data.sel->get_index(i));
 
 		if (is_null0 && is_null1) {
-			FlatVector::SetNull(result, i, true);
-			continue;
+			both_null_sel.set_index(both_null_count++, i);
+		} else if (is_null0) {
+			copy_from_1_sel.set_index(copy_from_1_count++, i);
+		} else if (is_null1) {
+			copy_from_0_sel.set_index(copy_from_0_count++, i);
+		} else {
+			both_valid_sel.set_index(both_valid_count++, i);
 		}
+	}
 
-		if (is_null0 || is_null1) {
-			auto &non_null_vec = is_null0 ? input.data[1] : input.data[0];
-			auto &non_null_state_data = is_null0 ? state1_data : state0_data;
+	D_ASSERT(both_null_count + copy_from_0_count + copy_from_1_count + both_valid_count == input.size());
 
-			layout.Load(non_null_vec, non_null_state_data, i, local_state.state_buffer1.get());
-			layout.Store(result, i, local_state.state_buffer1.get());
-			continue;
+	// Handle both-null rows
+	for (idx_t i = 0; i < both_null_count; i++) {
+		FlatVector::SetNull(result, both_null_sel.get_index(i), true);
+	}
+
+	// Handle one-null rows - copy non-null input directly to result
+	// copy_from_0: input1 is null, copy input0
+	if (copy_from_0_count > 0) {
+		for (idx_t i = 0; i < copy_from_0_count; i++) {
+			idx_t row = copy_from_0_sel.get_index(i);
+			layout.Load(input.data[0], state0_data, row, local_state.state_buffer0.get());
+			layout.Store(result, row, local_state.state_buffer0.get());
 		}
+	}
+	// copy_from_1: input0 is null, copy input1
+	if (copy_from_1_count > 0) {
+		for (idx_t i = 0; i < copy_from_1_count; i++) {
+			idx_t row = copy_from_1_sel.get_index(i);
+			layout.Load(input.data[1], state1_data, row, local_state.state_buffer1.get());
+			layout.Store(result, row, local_state.state_buffer1.get());
+		}
+	}
 
-		// Both are non-NULL, combine them
-		layout.Load(input.data[0], state0_data, i, local_state.state_buffer0.get());
-		layout.Load(input.data[1], state1_data, i, local_state.state_buffer1.get());
-
+	// Handle both-valid rows - load, combine, store
+	if (both_valid_count > 0) {
 		auto state0_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses0);
 		auto state1_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses1);
-		state0_ptr[0] = local_state.state_buffer0.get();
-		state1_ptr[0] = local_state.state_buffer1.get();
 
-		AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
-		bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data, 1);
+		for (idx_t i = 0; i < both_valid_count; i++) {
+			idx_t row = both_valid_sel.get_index(i);
 
-		layout.Store(result, i, local_state.state_buffer1.get());
+			layout.Load(input.data[0], state0_data, row, local_state.state_buffer0.get());
+			layout.Load(input.data[1], state1_data, row, local_state.state_buffer1.get());
+
+			state0_ptr[0] = local_state.state_buffer0.get();
+			state1_ptr[0] = local_state.state_buffer1.get();
+
+			AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+			bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data,
+			                                         1);
+
+			layout.Store(result, row, local_state.state_buffer1.get());
+		}
 	}
 }
 
