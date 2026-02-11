@@ -328,9 +328,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		held_wal_lock = storage_manager.GetWALLock();
 
 		// Commit the changes to the WAL.
-		if (db.GetRecoveryMode() == RecoveryMode::DEFAULT) {
-			error = transaction.WriteToWAL(context, db, commit_state);
-		}
+		error = transaction.WriteToWAL(context, db, commit_state);
 
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();
@@ -381,7 +379,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	OnCommitCheckpointDecision(checkpoint_decision, transaction);
 
 	if (!checkpoint_decision.can_checkpoint && lock) {
-		// we won't checkpoint after all: unlock the checkpoint lock again
+		// we won't checkpoint after all due to an error during commit: unlock the checkpoint lock again
 		lock.reset();
 	}
 
