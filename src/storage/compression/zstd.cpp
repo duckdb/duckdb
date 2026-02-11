@@ -284,21 +284,21 @@ public:
 	//	data_ptr_t GetCurrentBufferPtr() {
 	//		return current_buffer_ptr;
 	//	}
-	idx_t InitializeSegment(idx_t vectors_in_segment) {
+	page_offset_t InitializeSegment(idx_t vectors_in_segment) {
 		auto base = segment_handle.Ptr();
-		idx_t offset = 0;
+		page_offset_t offset = 0;
 		page_ids = reinterpret_cast<page_id_t *>(base + offset);
 		offset += (sizeof(page_id_t) * vectors_in_segment);
 
-		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
+		offset = AlignValue<page_offset_t, sizeof(page_offset_t)>(offset);
 		page_offsets = reinterpret_cast<page_offset_t *>(base + offset);
 		offset += (sizeof(page_offset_t) * vectors_in_segment);
 
-		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
+		offset = AlignValue<page_offset_t, sizeof(uncompressed_size_t)>(offset);
 		uncompressed_sizes = reinterpret_cast<uncompressed_size_t *>(base + offset);
 		offset += (sizeof(uncompressed_size_t) * vectors_in_segment);
 
-		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
+		offset = AlignValue<page_offset_t, sizeof(compressed_size_t)>(offset);
 		compressed_sizes = reinterpret_cast<compressed_size_t *>(base + offset);
 		offset += (sizeof(compressed_size_t) * vectors_in_segment);
 
@@ -322,7 +322,7 @@ public:
 
 	// Current block state
 	optional_ptr<BufferHandle> current_buffer;
-	idx_t buffer_offset = 0;
+	page_offset_t buffer_offset = 0;
 
 	page_id_t *page_ids = nullptr;
 	page_offset_t *page_offsets = nullptr;
@@ -439,14 +439,14 @@ public:
 		segment_state.vector_in_segment_count = 0;
 		vector_state.tuple_count = 0;
 
-		idx_t offset = NewSegment();
+		auto offset = NewSegment();
 		SetCurrentBuffer(segment_state.segment_handle, offset);
-		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
+		D_ASSERT(segment_state.buffer_offset <= GetWritableSpace(info));
 	}
 
 public:
 	void ResetOutBuffer() {
-		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
+		D_ASSERT(segment_state.buffer_offset <= GetWritableSpace(info));
 		out_buffer.dst = segment_state.GetCurrentBufferPtr();
 		out_buffer.pos = 0;
 
@@ -454,7 +454,7 @@ public:
 		out_buffer.size = remaining_space;
 	}
 
-	void SetCurrentBuffer(BufferHandle &handle, idx_t offset = 0) {
+	void SetCurrentBuffer(BufferHandle &handle, page_offset_t offset = 0) {
 		segment_state.current_buffer = &handle;
 		segment_state.buffer_offset = offset;
 	}
@@ -498,7 +498,7 @@ public:
 		return *to_use;
 	}
 
-	idx_t NewSegment() {
+	page_offset_t NewSegment() {
 		if (segment_state.current_buffer == &segment_state.segment_handle) {
 			// This should never happen, the string lengths + vector metadata size should always exceed a page size,
 			// even if the strings are all empty
@@ -531,7 +531,7 @@ public:
 			expected_tuple_count = ZSTD_VECTOR_SIZE;
 		}
 		segment_state.AlignCurrentOffset();
-		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
+		D_ASSERT(segment_state.buffer_offset <= GetWritableSpace(info));
 		vector_state.compressed_size = 0;
 		vector_state.uncompressed_size = 0;
 
@@ -586,7 +586,7 @@ public:
 				throw InvalidInputException("ZSTD Compression failed: %s",
 				                            duckdb_zstd::ZSTD_getErrorName(compress_result));
 			}
-			D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
+			D_ASSERT(segment_state.buffer_offset <= GetWritableSpace(info));
 			if (compress_result == 0) {
 				// Finished
 				break;
@@ -629,7 +629,7 @@ public:
 		auto &state = segment_state.segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
 
-		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
+		D_ASSERT(segment_state.buffer_offset <= GetWritableSpace(info));
 
 		// Write the new id at the end of the last page
 		segment_state.WriteBlockIdPointer(new_id);
