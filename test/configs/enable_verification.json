@@ -121,7 +121,8 @@
         "test/sql/types/geo/geometry_shred_empty.test",
         "test/sql/types/geo/geometry_shred_limit.test",
         "test/sql/types/geo/geometry_shred_checkpoint.test",
-        "test/sql/window/test_window_constant_allocator.test"
+        "test/sql/window/test_window_constant_allocator.test",
+        "test/parquet/variant/variant_stats_propagation.test"
       ]
     },
     {

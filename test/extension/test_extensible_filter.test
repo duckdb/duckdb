@@ -8,6 +8,8 @@ require skip_reload
 
 require allow_unsigned_extensions
 
+require vector_size 2
+
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
