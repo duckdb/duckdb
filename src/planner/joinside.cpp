@@ -54,10 +54,10 @@ unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> con
 
 bool JoinCondition::Compare(const JoinCondition &a, const JoinCondition &b) {
 	//	Comparisons come before non-comparisons
-	if (!a.IsComparison()) {
-		return !b.IsComparison();
-	} else if (!b.IsComparison()) {
-		return true;
+	if (!b.IsComparison()) {
+		return a.IsComparison();
+	} else if (!a.IsComparison()) {
+		return false;
 	}
 
 	//	Both are comparisons, so use distinct counts to compare selectivities
@@ -83,10 +83,10 @@ bool JoinCondition::Compare(const JoinCondition &a, const JoinCondition &b) {
 				return a_right > b_right;
 			}
 			//	Prefer narrower types for faster comparisons
-			if (!TypeIsConstantSize(a_type)) {
-				return !TypeIsConstantSize(b_type);
-			} else if (!TypeIsConstantSize(b_type)) {
-				return true;
+			if (!TypeIsConstantSize(b_type)) {
+				return TypeIsConstantSize(a_type);
+			} else if (!TypeIsConstantSize(a_type)) {
+				return false;
 			}
 			return GetTypeIdSize(a_type) < GetTypeIdSize(b_type);
 		default:
@@ -105,10 +105,10 @@ bool JoinCondition::Compare(const JoinCondition &a, const JoinCondition &b) {
 				return a_min > b_min;
 			}
 			//	Prefer narrower types for faster comparisons
-			if (!TypeIsConstantSize(a_type)) {
-				return !TypeIsConstantSize(b_type);
-			} else if (!TypeIsConstantSize(b_type)) {
-				return true;
+			if (!TypeIsConstantSize(b_type)) {
+				return TypeIsConstantSize(a_type);
+			} else if (!TypeIsConstantSize(a_type)) {
+				return false;
 			}
 			return GetTypeIdSize(a_type) < GetTypeIdSize(b_type);
 		}
