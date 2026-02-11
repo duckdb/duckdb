@@ -94,10 +94,6 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(DuckTransactionManager &manager
     : manager(manager), is_cleared(false) {
 }
 
-ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
-	Clear();
-}
-
 void ActiveCheckpointWrapper::Clear() {
 	if (is_cleared) {
 		return;
