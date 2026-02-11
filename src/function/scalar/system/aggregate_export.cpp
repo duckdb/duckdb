@@ -210,6 +210,24 @@ struct StoreFieldOp {
 	}
 };
 
+struct CopyFromInputFieldOp {
+	template <class T>
+	static void Operation(Vector &input_vec, Vector &result_vec, idx_t field_idx, const SelectionVector &sel,
+	                      idx_t count, const UnifiedVectorFormat &input_data) {
+		auto &input_child = *StructVector::GetEntries(input_vec)[field_idx];
+		auto input_child_data = FlatVector::GetData<T>(input_child);
+
+		auto &result_child = *StructVector::GetEntries(result_vec)[field_idx];
+		auto result_child_data = FlatVector::GetData<T>(result_child);
+
+		for (idx_t i = 0; i < count; i++) {
+			idx_t row = sel.get_index(i);
+			auto src_idx = input_data.sel->get_index(row);
+			result_child_data[row] = input_child_data[src_idx];
+		}
+	}
+};
+
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
@@ -384,18 +402,46 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	// Handle one-null rows - copy non-null input directly to result
 	// copy_from_0: input1 is null, copy input0
 	if (copy_from_0_count > 0) {
-		for (idx_t i = 0; i < copy_from_0_count; i++) {
-			idx_t row = copy_from_0_sel.get_index(i);
-			layout.Load(input.data[0], state0_data, row, local_state.state_buffer0.get());
-			layout.Store(result, row, local_state.state_buffer0.get());
+		if (layout.is_struct) {
+			idx_t offset_in_state = 0;
+			for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
+				auto &field_type = layout.child_types->at(field_idx).second;
+				auto physical = field_type.InternalType();
+				idx_t field_size = GetTypeIdSize(physical);
+				idx_t alignment = MinValue<idx_t>(field_size, 8);
+				offset_in_state = AlignValue(offset_in_state, alignment);
+				TemplateDispatch<CopyFromInputFieldOp>(physical, input.data[0], result, field_idx,
+				                                      copy_from_0_sel, copy_from_0_count, state0_data);
+				offset_in_state += field_size;
+			}
+		} else {
+			for (idx_t i = 0; i < copy_from_0_count; i++) {
+				idx_t row = copy_from_0_sel.get_index(i);
+				layout.Load(input.data[0], state0_data, row, local_state.state_buffer0.get());
+				layout.Store(result, row, local_state.state_buffer0.get());
+			}
 		}
 	}
 	// copy_from_1: input0 is null, copy input1
 	if (copy_from_1_count > 0) {
-		for (idx_t i = 0; i < copy_from_1_count; i++) {
-			idx_t row = copy_from_1_sel.get_index(i);
-			layout.Load(input.data[1], state1_data, row, local_state.state_buffer1.get());
-			layout.Store(result, row, local_state.state_buffer1.get());
+		if (layout.is_struct) {
+			idx_t offset_in_state = 0;
+			for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
+				auto &field_type = layout.child_types->at(field_idx).second;
+				auto physical = field_type.InternalType();
+				idx_t field_size = GetTypeIdSize(physical);
+				idx_t alignment = MinValue<idx_t>(field_size, 8);
+				offset_in_state = AlignValue(offset_in_state, alignment);
+				TemplateDispatch<CopyFromInputFieldOp>(physical, input.data[1], result, field_idx,
+				                                      copy_from_1_sel, copy_from_1_count, state1_data);
+				offset_in_state += field_size;
+			}
+		} else {
+			for (idx_t i = 0; i < copy_from_1_count; i++) {
+				idx_t row = copy_from_1_sel.get_index(i);
+				layout.Load(input.data[1], state1_data, row, local_state.state_buffer1.get());
+				layout.Store(result, row, local_state.state_buffer1.get());
+			}
 		}
 	}
 
