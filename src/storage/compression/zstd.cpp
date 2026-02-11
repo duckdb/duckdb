@@ -252,17 +252,21 @@ public:
 	//		block_id = new_id;
 	//	}
 	void WriteBlockIdPointer(page_id_t block_id) {
-		Store<block_id_t>(block_id, current_buffer_ptr);
-		current_buffer_ptr += sizeof(block_id_t);
+		auto ptr = current_buffer->Ptr() + buffer_offset;
+		Store<block_id_t>(block_id, ptr);
+		buffer_offset += sizeof(block_id_t);
 	}
 
 	page_offset_t GetCurrentOffset(const CompressionInfo &info) {
-		auto &handle = *current_buffer;
-		auto start_of_buffer = handle.Ptr();
-		D_ASSERT(current_buffer_ptr >= start_of_buffer);
-		auto res = (page_offset_t)(current_buffer_ptr - start_of_buffer);
-		D_ASSERT(res <= GetWritableSpace(info));
-		return res;
+		D_ASSERT(buffer_offset < GetWritableSpace(info));
+		return buffer_offset;
+	}
+	void AlignCurrentOffset() {
+		buffer_offset = UnsafeNumericCast<page_offset_t>(
+		    AlignValue<idx_t, sizeof(string_length_t)>(UnsafeNumericCast<idx_t>(buffer_offset)));
+	}
+	data_ptr_t GetCurrentBufferPtr() {
+		return current_buffer->Ptr() + buffer_offset;
 	}
 	bool IsOnSegmentBuffer() const {
 		return current_buffer.get() == &segment_handle;
@@ -318,7 +322,7 @@ public:
 
 	// Current block state
 	optional_ptr<BufferHandle> current_buffer;
-	data_ptr_t current_buffer_ptr;
+	idx_t buffer_offset = 0;
 
 	page_id_t *page_ids = nullptr;
 	page_offset_t *page_offsets = nullptr;
@@ -397,8 +401,7 @@ public:
 		string_lengths = reinterpret_cast<string_length_t *>(segment_state.current_buffer->Ptr() + current_offset);
 
 		//! Finally forward the current_buffer_ptr to point *after* all string lengths we'll write
-		segment_state.current_buffer_ptr = reinterpret_cast<data_ptr_t>(string_lengths);
-		segment_state.current_buffer_ptr += expected_tuple_count * sizeof(string_length_t);
+		segment_state.buffer_offset += expected_tuple_count * sizeof(string_length_t);
 	}
 
 public:
@@ -444,16 +447,16 @@ public:
 public:
 	void ResetOutBuffer() {
 		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
-		out_buffer.dst = segment_state.current_buffer_ptr;
+		out_buffer.dst = segment_state.GetCurrentBufferPtr();
 		out_buffer.pos = 0;
 
-		auto remaining_space = info.GetBlockSize() - GetCurrentOffset() - sizeof(block_id_t);
+		auto remaining_space = info.GetBlockSize() - segment_state.buffer_offset - sizeof(block_id_t);
 		out_buffer.size = remaining_space;
 	}
 
 	void SetCurrentBuffer(BufferHandle &handle, idx_t offset = 0) {
 		segment_state.current_buffer = &handle;
-		segment_state.current_buffer_ptr = handle.Ptr() + offset;
+		segment_state.buffer_offset = offset;
 	}
 
 	BufferHandle &GetExtraPageBuffer(block_id_t current_block_id) {
@@ -527,10 +530,7 @@ public:
 		} else {
 			expected_tuple_count = ZSTD_VECTOR_SIZE;
 		}
-		auto current_offset = GetCurrentOffset();
-		current_offset = UnsafeNumericCast<page_offset_t>(
-		    AlignValue<idx_t, sizeof(string_length_t)>(UnsafeNumericCast<idx_t>(current_offset)));
-		segment_state.current_buffer_ptr = segment_state.current_buffer->Ptr() + current_offset;
+		segment_state.AlignCurrentOffset();
 		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 		vector_state.compressed_size = 0;
 		vector_state.uncompressed_size = 0;
@@ -542,7 +542,7 @@ public:
 			SetCurrentBuffer(segment_state.segment_handle, offset);
 		}
 
-		if (current_offset + (expected_tuple_count * sizeof(string_length_t)) >= GetWritableSpace(info)) {
+		if (segment_state.buffer_offset + (expected_tuple_count * sizeof(string_length_t)) >= GetWritableSpace(info)) {
 			// Check if there is room on the current page for the vector data
 			NewPage();
 		}
@@ -580,7 +580,7 @@ public:
 			D_ASSERT(out_buffer.pos >= old_pos);
 			auto diff = out_buffer.pos - old_pos;
 			vector_state.compressed_size += diff;
-			segment_state.current_buffer_ptr += diff;
+			segment_state.buffer_offset += diff;
 
 			if (duckdb_zstd::ZSTD_isError(compress_result)) {
 				throw InvalidInputException("ZSTD Compression failed: %s",
@@ -674,15 +674,6 @@ public:
 		}
 	}
 
-	page_offset_t GetCurrentOffset() {
-		auto &handle = *segment_state.current_buffer;
-		auto start_of_buffer = handle.Ptr();
-		D_ASSERT(segment_state.current_buffer_ptr >= start_of_buffer);
-		auto res = (page_offset_t)(segment_state.current_buffer_ptr - start_of_buffer);
-		D_ASSERT(res <= GetWritableSpace(info));
-		return res;
-	}
-
 	void CreateEmptySegment() {
 		auto &db = checkpoint_data.GetDatabase();
 		auto &type = checkpoint_data.GetType();
@@ -703,7 +694,7 @@ public:
 
 		if (segment_state.IsOnSegmentBuffer()) {
 			//! We haven't left the segment buffer, so data all fits on the segment
-			segment_block_size = GetCurrentOffset();
+			segment_block_size = segment_state.buffer_offset;
 		} else {
 			// Block is fully used
 			segment_block_size = info.GetBlockSize();
