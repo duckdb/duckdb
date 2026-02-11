@@ -55,6 +55,11 @@ StreamExecutionResult SimpleBufferedData::ExecuteTaskInternal(StreamQueryResult 
 	if (!cc->IsActiveResult(context_lock, result)) {
 		return StreamExecutionResult::EXECUTION_CANCELLED;
 	}
+	// Check for interrupt even if the buffer is full.
+	// Without this check, cancel requests would not be detected until the buffer is drained.
+	if (cc->interrupted.load(std::memory_order_relaxed)) {
+		throw InterruptException();
+	}
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
 		return StreamExecutionResult::CHUNK_READY;
