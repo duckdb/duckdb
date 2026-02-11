@@ -784,6 +784,12 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			auto &struct_child = child_entries[child_idx];
 			children.push_back(struct_child->GetValue(index_p));
 		}
+
+		if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
+			// We could also just call `Value::STRUCT` as it has the same implementation, but this is implementation
+			// details, so for consistency and bullet-proof implementation we keep those constructors separate.
+			return Value::AGGREGATE_STATE(type, std::move(children));
+		}
 		return Value::STRUCT(type, std::move(children));
 	}
 	case LogicalTypeId::LIST: {
@@ -1355,13 +1361,44 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
+			// new way to serialize strings, two blobs, first lengths, then string bytes
+			if (serializer.ShouldSerialize(8)) {
+				// we write all the lengths whether the string is null or not. lets not pull a parquet.
+				auto length_data_length = sizeof(uint32_t) * count;
+				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
+				idx_t byte_data_length = 0;
 
-			// Serialize data as a list
-			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
-				auto idx = vdata.sel->get_index(i);
-				auto str = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
-				list.WriteElement(str);
-			});
+				// write all the lengths
+				auto lenghs_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
+				for (idx_t i = 0; i < count; i++) {
+					auto idx = vdata.sel->get_index(i);
+					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
+					lenghs_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
+					byte_data_length += this_length;
+				}
+
+				// write the bytes
+				auto byte_data = make_unsafe_uniq_array_uninitialized<data_t>(byte_data_length);
+				// write the non-null strings
+				auto string_write_ptr = byte_data.get();
+				for (idx_t i = 0; i < count; i++) {
+					auto idx = vdata.sel->get_index(i);
+					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
+					memcpy(string_write_ptr, strings[idx].GetData(), this_length);
+					string_write_ptr += this_length;
+				}
+				serializer.WriteProperty(107, "byte_data_length", optional_idx(byte_data_length));
+				// we do not encode length_data_length because its not required
+				serializer.WriteProperty(108, "length_data", length_data.get(), length_data_length);
+				serializer.WriteProperty(109, "byte_data", byte_data.get(), byte_data_length);
+			} else { // old and slow way: list
+				serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
+					auto idx = vdata.sel->get_index(i);
+					auto str = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
+					list.WriteElement(str);
+				});
+			}
+
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -1423,6 +1460,14 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 	}
 }
 
+class StringDeserializeBuffer : public VectorBuffer {
+public:
+	explicit StringDeserializeBuffer(idx_t size) : VectorBuffer(VectorBufferType::OPAQUE_BUFFER) {
+		data = unique_ptr<data_t[]>(new data_t[size]);
+	}
+	unique_ptr<data_t[]> data;
+};
+
 void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
 	const auto vtype = // older versions that only supported flat vectors did not serialize vector_type,
@@ -1467,12 +1512,35 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
-			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
-				auto str = list.ReadElement<string>();
-				if (validity.RowIsValid(i)) {
-					strings[i] = StringVector::AddStringOrBlob(*this, str);
+			auto byte_data_length =
+			    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(107, "byte_data_length", optional_idx());
+			if (byte_data_length.IsValid()) { // new serialization
+				auto length_data_length = count * sizeof(uint32_t);
+				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
+				deserializer.ReadProperty(108, "length_data", length_data.get(), length_data_length);
+
+				auto byte_data_buffer = make_buffer<StringDeserializeBuffer>(byte_data_length.GetIndex());
+				// directly read into a string buffer we can glue to the vector
+				deserializer.ReadProperty(109, "byte_data", byte_data_buffer->data.get(), byte_data_length.GetIndex());
+				auto lengths_read_ptr = reinterpret_cast<uint32_t *>(length_data.get());
+				auto byte_read_ptr = reinterpret_cast<const char *>(byte_data_buffer->data.get());
+				StringVector::AddBuffer(*this, byte_data_buffer);
+
+				for (idx_t i = 0; i < count; ++i) {
+					if (!validity.RowIsValid(i)) {
+						continue;
+					}
+					strings[i] = string_t(byte_read_ptr, lengths_read_ptr[i]);
+					byte_read_ptr += lengths_read_ptr[i];
 				}
-			});
+			} else { // this is ye olde way of string serialization
+				deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
+					auto str = list.ReadElement<string>();
+					if (validity.RowIsValid(i)) {
+						strings[i] = StringVector::AddStringOrBlob(*this, str);
+					}
+				});
+			}
 			break;
 		}
 		case PhysicalType::STRUCT: {

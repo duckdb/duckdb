@@ -68,13 +68,11 @@ public:
 			SkipAligned(src, aligned_count, width);
 			count = remainder;
 		}
-		// FIXME: we should be able to just do this in one go instead of having this loop
+		// Optimized version: calculate the number of bytes to skip directly
 		for (idx_t i = 0; i < count; i++) {
 			bitpack_pos += width;
-			while (bitpack_pos > BITPACK_DLEN) {
-				src.unsafe_inc(1);
-				bitpack_pos -= BITPACK_DLEN;
-			}
+			src.unsafe_inc((bitpack_pos - 1) / BITPACK_DLEN);
+			bitpack_pos = (bitpack_pos - 1) % BITPACK_DLEN + 1;
 		}
 	}
 

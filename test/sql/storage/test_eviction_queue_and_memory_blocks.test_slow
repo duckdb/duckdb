@@ -1,0 +1,29 @@
+# name: test/sql/storage/test_eviction_queue_and_memory_blocks.test_slow
+# description: Test a scenario where the eviction queue becomes the last owner/reference holder of the block memory.
+# group: [storage]
+
+statement ok
+SET debug_eviction_queue_sleep_micro_seconds = 10;
+
+statement ok
+PRAGMA memory_limit = '1GB';
+
+concurrentloop x 0 10
+
+loop name 0 100
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_eviction_${name}_${x}.db' AS n_${name}_${x};
+
+statement ok
+CREATE TABLE n_${name}_${x}.tbl AS SELECT range::VARCHAR AS i FROM range(10_000);
+
+statement ok
+SELECT i FROM n_${name}_${x}.tbl;
+
+statement ok
+DETACH n_${name}_${x};
+
+endloop
+
+endloop

@@ -18,9 +18,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEG
 	if (secret_storage_specifier_pr.HasResult()) {
 		info->storage_type = transformer.Transform<string>(secret_storage_specifier_pr.optional_result);
 	}
-	auto options_pr = list_pr.Child<ListParseResult>(4);
-	auto generic_options_list = ExtractResultFromParens(options_pr);
-	auto option_list = transformer.Transform<vector<GenericCopyOption>>(generic_options_list);
+	auto option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr.Child<ListParseResult>(4));
 	for (auto option : option_list) {
 		auto lower_name = StringUtil::Lower(option.name);
 		if (lower_name == "scope") {

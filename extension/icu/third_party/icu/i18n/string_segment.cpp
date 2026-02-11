@@ -7,9 +7,7 @@
 
 // Allow implicit conversion from char16_t* to UnicodeString for this file:
 // Helpful in toString methods and elsewhere.
-#ifndef UNISTR_FROM_STRING_EXPLICIT
 #define UNISTR_FROM_STRING_EXPLICIT
-#endif
 
 #include "numparse_types.h"
 #include "string_segment.h"
@@ -66,7 +64,7 @@ UnicodeString StringSegment::toUnicodeString() const {
 
 const UnicodeString StringSegment::toTempUnicodeString() const {
     // Use the readonly-aliasing constructor for efficiency.
-    return UnicodeString(FALSE, fStr.getBuffer() + fStart, fEnd - fStart);
+    return UnicodeString(false, fStr.getBuffer() + fStart, fEnd - fStart);
 }
 
 UChar32 StringSegment::getCodePoint() const {
@@ -133,8 +131,8 @@ bool StringSegment::codePointsEqual(UChar32 cp1, UChar32 cp2, bool foldCase) {
     if (!foldCase) {
         return false;
     }
-    cp1 = u_foldCase(cp1, TRUE);
-    cp2 = u_foldCase(cp2, TRUE);
+    cp1 = u_foldCase(cp1, true);
+    cp2 = u_foldCase(cp2, true);
     return cp1 == cp2;
 }
 

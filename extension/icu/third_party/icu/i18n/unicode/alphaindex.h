@@ -44,7 +44,7 @@ typedef enum UAlphabeticIndexLabelType {
     U_ALPHAINDEX_NORMAL    = 0,
 
     /**
-     * Undeflow Label.  The bucket with this label contains names
+     * Underflow Label.  The bucket with this label contains names
      * in scripts that sort before any of the bucket labels in this index.
      * @stable ICU 4.8
      */
@@ -61,7 +61,7 @@ typedef enum UAlphabeticIndexLabelType {
     U_ALPHAINDEX_INFLOW    = 2,
 
     /**
-     * Overflow Label. Te bucket with this label contains names in scripts
+     * Overflow Label. The bucket with this label contains names in scripts
      * that sort after all of the bucket labels in this index.
      * @stable ICU 4.8
      */
@@ -277,7 +277,7 @@ public:
         int32_t getBucketIndex(const UnicodeString &name, UErrorCode &errorCode) const;
 
         /**
-         * Returns the index-th bucket. Returns NULL if the index is out of range.
+         * Returns the index-th bucket. Returns nullptr if the index is out of range.
          *
          * @param index bucket number
          * @return the index-th bucket
@@ -549,14 +549,14 @@ public:
 
 
     /**
-     *   Advance the iteration over the Buckets of this index.  Return FALSE if
+     *   Advance the iteration over the Buckets of this index.  Return false if
      *   there are no more Buckets.
      *
      *   @param status  Error code, will be set with the reason if the operation fails.
      *   U_ENUM_OUT_OF_SYNC_ERROR will be reported if the index is modified while
      *   an enumeration of its contents are in process.
      *
-     *   @return TRUE if success, FALSE if at end of iteration
+     *   @return true if success, false if at end of iteration
      *   @stable ICU 4.8
      */
     virtual UBool nextBucket(UErrorCode &status);
@@ -609,7 +609,7 @@ public:
      *   @param status  Error code, will be set with the reason if the operation fails.
      *   U_ENUM_OUT_OF_SYNC_ERROR will be reported if the index is modified while
      *   an enumeration of its contents are in process.
-     *   @return TRUE if successful, FALSE when the iteration advances past the last item.
+     *   @return true if successful, false when the iteration advances past the last item.
      *   @stable ICU 4.8
      */
     virtual UBool nextRecord(UErrorCode &status);
@@ -627,7 +627,7 @@ public:
 
     /**
      * Return the data pointer of the Record currently being iterated over.
-     * Return NULL if the current iteration position before the first item in this Bucket,
+     * Return nullptr if the current iteration position before the first item in this Bucket,
      * or after the last.
      *
      *  @return The current Record's data pointer.
@@ -647,9 +647,9 @@ public:
 private:
      /**
       * No Copy constructor.
-      * @internal
+      * @internal (private)
       */
-     AlphabeticIndex(const AlphabeticIndex &other);
+     AlphabeticIndex(const AlphabeticIndex &other) = delete;
 
      /**
       *   No assignment.
@@ -658,13 +658,13 @@ private:
 
     /**
      * No Equality operators.
-     * @internal
+     * @internal (private)
      */
      virtual bool operator==(const AlphabeticIndex& other) const;
 
     /**
      * Inequality operator.
-     * @internal
+     * @internal (private)
      */
      virtual bool operator!=(const AlphabeticIndex& other) const;
 
@@ -723,7 +723,7 @@ private:
     /**
      * Holds all user records before they are distributed into buckets.
      * Type of contents is (Record *)
-     * @internal
+     * @internal (private)
      */
     UVector  *inputList_;
 
@@ -731,7 +731,7 @@ private:
     int32_t  itemsIterIndex_;
     Bucket   *currentBucket_;         // While an iteration of the index in underway,
                                       //   point to the bucket for the current label.
-                                      // NULL when no iteration underway.
+                                      // nullptr when no iteration underway.
 
     int32_t    maxLabelCount_;        // Limit on # of labels permitted in the index.
 

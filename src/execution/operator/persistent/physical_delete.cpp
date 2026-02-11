@@ -47,8 +47,11 @@ public:
 class DeleteLocalState : public LocalSinkState {
 public:
 	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-		const auto &types = table.GetTypes();
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                 const vector<LogicalType> &return_types, bool return_chunk) {
+		// For RETURNING: use operator's return types (may include virtual columns)
+		// For non-RETURNING with indexes: use table types for index updates
+		auto types = return_chunk ? return_types : table.GetTypes();
 		auto initialize = vector<bool>(types.size(), false);
 		delete_chunk.Initialize(Allocator::Get(context), types, initialize);
 
@@ -91,6 +94,10 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			l_state.delete_chunk.data[i].Reference(Value(types[i]));
 		}
 	}
+	// Add virtual columns (e.g., rowid) after table columns
+	for (idx_t i = table.ColumnCount(); i < l_state.delete_chunk.ColumnCount(); i++) {
+		l_state.delete_chunk.data[i].Reference(row_ids);
+	}
 	l_state.delete_chunk.SetCardinality(chunk.size());
 
 	// Append the deleted row IDs to the delete indexes.
@@ -99,17 +106,16 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		storage->delete_indexes.Scan([&](Index &index) {
+		for (auto &index : storage->delete_indexes.Indexes()) {
 			if (!index.IsBound() || !index.IsUnique()) {
-				return false;
+				continue;
 			}
 			auto &bound_index = index.Cast<BoundIndex>();
 			auto error = bound_index.Append(l_state.delete_chunk, row_ids, index_append_info);
 			if (error.HasError()) {
 				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
 			}
-			return false;
-		});
+		}
 	}
 
 	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
@@ -154,7 +160,7 @@ unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints);
+	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints, GetTypes(), return_chunk);
 }
 
 //===--------------------------------------------------------------------===//
