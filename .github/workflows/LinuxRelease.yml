@@ -80,6 +80,8 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
+    - uses: ./.github/actions/cleanup_runner
+
     - name: Install pytest
       run: |
         python3 -m pip install pytest
@@ -90,17 +92,24 @@ jobs:
         export PWD=`pwd`
         docker run                                                             \
         -v$PWD:$PWD                                                            \
-        -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
+        -e GEN=ninja                                                           \
+        -e CC='ccache gcc'                                                     \
+        -e CXX='ccache g++'                                                    \
+        -e CCACHE_DIR=$PWD/.ccache                                             \
         -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
-        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                  \
+        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
         bash -c "
           set -e
-          yum install -y perl-IPC-Cmd
+          cat /etc/os-release
+          dnf install -y \
+            ccache       \
+            ninja-build  \
+            perl-IPC-Cmd
           git config --global --add safe.directory $PWD
           make -C $PWD
         "
@@ -151,6 +160,104 @@ jobs:
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
+
+ linux-musl-release-cli:
+    needs:
+      - check-draft
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [ { runner: ubuntu-latest, arch: amd64}, {runner: ubuntu-24.04-arm, arch: arm64}]
+
+    name: Linux CLI (${{ matrix.config.arch }}-musl)
+    runs-on: ${{ matrix.config.runner }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - uses: ./.github/actions/cleanup_runner
+
+    - name: Build
+      shell: bash
+      run: |
+        export PWD=`pwd`
+        docker run                                                          \
+        -v$PWD:$PWD                                                         \
+        -e GEN=ninja                                                        \
+        -e CC='ccache gcc'                                                  \
+        -e CXX='ccache g++'                                                 \
+        -e CCACHE_DIR=$PWD/.ccache                                          \
+        -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                     \
+        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake" \
+        -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
+        -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
+        -e BUILD_BENCHMARK=1                                                \
+        -e FORCE_WARN_UNUSED=1                                              \
+        alpine:3.22                                                         \
+        sh -c "
+          set -e
+          cat /etc/os-release
+          apk add   \
+            ccache  \
+            cmake   \
+            g++     \
+            git     \
+            make    \
+            samurai
+          git config --global --add safe.directory $PWD
+          make -C $PWD
+        "
+
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        python3 scripts/amalgamation.py
+        zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
+        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: duckdb-binaries-linux-${{ matrix.config.arch }}-musl
+        path: |
+          libduckdb-linux-${{ matrix.config.arch }}-musl.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
+
+    - name: Test
+      shell: bash
+      if: ${{ inputs.skip_tests != 'true' }}
+      run: |
+        export PWD=`pwd`
+        docker run   \
+        -v$PWD:$PWD  \
+        alpine:3.22                                                         \
+        sh -c "
+          set -e
+          cat /etc/os-release
+          apk add      \
+            python3    \
+            py3-pytest
+          cd $PWD
+          echo Tests
+          python3 scripts/run_tests_one_by_one.py build/release/test/unittest \"*\" --time_execution
+          echo Release specific tests
+          ./build/release/test/unittest --select-tag release
+          echo Tools Tests
+          python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+          echo Examples
+          build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+          build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
+        "
 
  upload-libduckdb-src:
     name: Upload libduckdb-src.zip
@@ -205,3 +312,7 @@ jobs:
     - name: Symbol Leakage Test
       shell: bash
       run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+    - name: Banned Symbol Check
+      shell: bash
+      run: python3 scripts/banned_symbols_check.py --directory build/release/src

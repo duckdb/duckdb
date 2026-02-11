@@ -1,6 +1,15 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/encryption_functions.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/encryption_types.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
@@ -8,24 +17,6 @@ namespace duckdb {
 class DatabaseInstance;
 class AttachedDatabase;
 class FileBuffer;
-
-struct EncryptionTag {
-	EncryptionTag();
-	data_ptr_t data();
-	idx_t size() const;
-
-private:
-	unique_ptr<data_t[]> tag;
-};
-
-struct EncryptionNonce {
-	EncryptionNonce();
-	data_ptr_t data();
-	idx_t size() const;
-
-private:
-	unique_ptr<data_t[]> nonce;
-};
 
 class AdditionalAuthenticatedData {
 public:

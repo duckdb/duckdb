@@ -9,6 +9,8 @@
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/statement/set_statement.hpp"
 
 namespace duckdb {
 
@@ -31,12 +33,15 @@ void AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, uniq
 }
 
 void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, const string &column_name,
-                               const string &table_name, const unique_ptr<ParsedExpression> &original_expression) {
+                               const AlterEntryData &table_data,
+                               const unique_ptr<ParsedExpression> &original_expression) {
 	auto update_statement = make_uniq<UpdateStatement>();
+	update_statement->prioritize_table_when_binding = true;
 
 	auto table_ref = make_uniq<BaseTableRef>();
-
-	table_ref->table_name = table_name;
+	table_ref->catalog_name = table_data.catalog;
+	table_ref->schema_name = table_data.schema;
+	table_ref->table_name = table_data.name;
 	update_statement->table = std::move(table_ref);
 
 	auto set_info = make_uniq<UpdateSetInfo>();
@@ -55,25 +60,27 @@ unique_ptr<MultiStatement> TransformAndMaterializeAlter(const duckdb_libpgquery:
 	auto multi_statement = make_uniq<MultiStatement>();
 	/* Here we do a workaround that consists of the following statements:
 	 *	 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
-	 *	 2. `UPDATE t SET u = <expression>;`
-	 *	 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	 *	 2. `UPDATE t SET col = <expression>;`
+	 *	 3. `ALTER TABLE t ALTER col SET DEFAULT <expression>;`
+
 	 *
 	 * This workaround exists because, when statements like this were executed:
 	 *	`ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>`
 	 * the WAL replay would re-run the default expression, and with expressions such as RANDOM or CURRENT_TIMESTAMP, the
-	 * value would be different from that of the original run. By now doing an UPDATE, we force materialization of these
-	 * values, which makes WAL replays consistent.
+	 * value would be different from that of the original run. By now doing an UPDATE in statement 2, we force
+	 * materialization of these values for all existing rows, which makes WAL replays consistent.
 	 */
 
 	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
 	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
 
 	// 2. `UPDATE t SET u = <expression>;`
-	AddUpdateToMultiStatement(multi_statement, column_name, stmt.relation->relname, expression);
+	AddUpdateToMultiStatement(multi_statement, column_name, data, expression);
 
 	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
 	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
+
 	return multi_statement;
 }
 

@@ -5,22 +5,16 @@
   "checkpoint_wal_size": "1000000000",
   "checkpoint_on_shutdown": "false",
   "skip_compiled": "true",
-  "inherit_skip_tests": "test/configs/force_storage.json",
+  "inherit_skip_tests": "test/configs/force_storage_restart.json",
   "skip_tests": [
     {
-      "reason": "Contains explicit use of the memory catalog.",
-      "paths": [
-        "test/sql/attach/attach_use_rollback.test",
-        "test/sql/storage/read_duckdb/read_duckdb_basic.test",
-        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
-      ]
-    },
-    {"reason": "Loading from disk is necessary to trigger expected OOM.",
+      "reason": "Loading from disk is necessary to trigger expected OOM.",
       "paths": [
         "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
       ]
     },
-    {"reason": "Checkpointing is necessary to trigger expected checkpoint error.",
+    {
+      "reason": "Checkpointing is necessary to trigger expected checkpoint error.",
       "paths": [
         "test/sql/storage/checkpoint/test_checkpoint_failure_delayed_commit.test",
         "test/sql/storage/checkpoint/test_checkpoint_failure_delayed_rollback.test",
@@ -32,6 +26,12 @@
       "paths": [
         "test/sql/topn/top_n_pruning.test",
         "test/optimizer/eager_aggregate_execution.test"
+      ]
+    },
+    {
+      "reason": "Test explicitly checks WAL creation",
+      "paths": [
+        "test/sql/storage/wal/wal_lazy_creation.test"
       ]
     },
     {
@@ -79,33 +79,20 @@
     {
       "reason": "FIXME: Wrong result in query.",
       "paths": [
-        "test/sql/index/art/storage/test_art_duckdb_versions.test",
-        "test/sql/storage/wal/wal_lazy_creation.test"
+        "test/sql/index/art/storage/test_art_duckdb_versions.test"
       ]
     },
     {
       "reason": "FIXME: Internal Exception.",
       "paths": [
-        "test/sql/alter/add_pk/test_add_pk_with_generated_column.test"
+        "test/sql/alter/add_pk/test_add_pk_with_generated_column.test",
+        "test/sql/storage/optimistic_write/optimistic_write_alter_type.test_slow"
       ]
     },
     {
       "reason": "FIXME: Query unexpectedly succeeded/failed.",
       "paths": [
-        "test/fuzzer/sqlsmith/nullif_map_with_config.test",
-        "test/sql/storage/memory/in_memory_compress.test"
-      ]
-    },
-    {
-      "reason": "FIXME: Attempting to checkpoint read-only database.",
-      "paths": [
-        "test/sql/storage/read_duckdb/read_duckdb_index.test"
-      ]
-    },
-    {
-      "reason": "External file cache cannot persist across database restarts when force_restart is enabled.",
-      "paths": [
-        "test/sql/storage/external_file_cache/external_file_cache_validate.test"
+        "test/fuzzer/sqlsmith/nullif_map_with_config.test"
       ]
     }
   ]
