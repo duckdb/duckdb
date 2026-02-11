@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-struct FunctionLocalState;
-
 //! Thread-local state for executing a table filter
 struct TableFilterState {
 public:

@@ -4,8 +4,6 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/execution/expression_executor_state.hpp"
 
 namespace duckdb {
 

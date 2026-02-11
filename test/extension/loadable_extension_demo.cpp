@@ -723,17 +723,16 @@ public:
 		}
 
 		// Build the scalar function with all three callbacks
-		ScalarFunction func("rowid_filter", {LogicalType::BIGINT}, LogicalType::BOOLEAN,
-		                    RowIdFilterFunction, RowIdFilterBind);
+		ScalarFunction func("rowid_filter", {LogicalType::BIGINT}, LogicalType::BOOLEAN, RowIdFilterFunction,
+		                    RowIdFilterBind);
 		func.SetInitStateCallback(RowIdFilterInit);
 		func.SetFilterPruneCallback(RowIdFilterPropagate);
 
 		// Construct the bound expression (column index 0: the filter chunk contains only the filtered column)
 		vector<unique_ptr<Expression>> children;
 		children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0));
-		auto expr = make_uniq<BoundFunctionExpression>(
-		    LogicalType::BOOLEAN, func, std::move(children),
-		    make_uniq<RowIdFilterBindData>(vector<int64_t> {3, 4, 5, 7, 9}));
+		auto expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, func, std::move(children),
+		                                               make_uniq<RowIdFilterBindData>(vector<int64_t> {3, 4, 5, 7, 9}));
 
 		// Push the filter on the ROW_ID column
 		get.table_filters.PushFilter(ColumnIndex(COLUMN_IDENTIFIER_ROW_ID),
