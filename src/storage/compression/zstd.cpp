@@ -285,6 +285,7 @@ public:
 	//		return current_buffer_ptr;
 	//	}
 	page_offset_t InitializeSegment(idx_t vectors_in_segment) {
+		total_vectors_in_segment = vectors_in_segment;
 		auto base = segment_handle.Ptr();
 		page_offset_t offset = 0;
 		page_ids = reinterpret_cast<page_id_t *>(base + offset);
@@ -313,6 +314,8 @@ public:
 	//	}
 
 public:
+	//! Amount of vectors in this segment, determined during analyze
+	idx_t total_vectors_in_segment;
 	//! The amount of vectors we've seen in the current segment
 	idx_t vector_in_segment_count = 0;
 
@@ -535,9 +538,8 @@ public:
 		vector_state.compressed_size = 0;
 		vector_state.uncompressed_size = 0;
 
-		if (GetVectorMetadataSize(segment_state.vector_in_segment_count + 1) > GetWritableSpace(info)) {
-			D_ASSERT(segment_state.vector_in_segment_count <= vectors_per_segment);
-			// Can't fit this vector on this segment anymore, have to flush and grab a new one
+		if (segment_state.vector_in_segment_count + 1 > segment_state.total_vectors_in_segment) {
+			//! Last vector in the segment
 			(void)NewSegment();
 		}
 
@@ -688,9 +690,8 @@ public:
 		if (!segment_state.segment) {
 			return;
 		}
-		auto &state = checkpoint_data.GetCheckpointState();
-		idx_t segment_block_size;
 
+		idx_t segment_block_size;
 		if (segment_state.IsOnSegmentBuffer()) {
 			//! We haven't left the segment buffer, so data all fits on the segment
 			segment_block_size = segment_state.buffer_offset;
@@ -699,6 +700,7 @@ public:
 			segment_block_size = info.GetBlockSize();
 		}
 
+		auto &state = checkpoint_data.GetCheckpointState();
 		state.FlushSegment(std::move(segment_state.segment), std::move(segment_state.segment_handle),
 		                   segment_block_size);
 		segment_count++;
