@@ -900,13 +900,14 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "json",
     "motherduck",
     "mysql_scanner",
+    "odbc_scanner",
     "parquet",
     "sqlite_scanner",
     "sqlsmith",
     "postgres_scanner",
     "tpcds",
     "tpch",
-    "uc_catalog",
+    "unity_catalog",
     "ui"
 }; // END_OF_AUTOLOADABLE_EXTENSIONS
 

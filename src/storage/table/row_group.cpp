@@ -192,7 +192,7 @@ void ColumnScanState::PushDownCast(const LogicalType &original_type, const Logic
 	D_ASSERT(!expression_state);
 	auto &client_context = *context.GetClientContext();
 
-	auto input = make_uniq<BoundReferenceExpression>(original_type, 0);
+	auto input = make_uniq<BoundReferenceExpression>(original_type, 0ULL);
 	auto cast_expression = BoundCastExpression::AddCastToType(client_context, std::move(input), cast_type);
 	expression_state = make_uniq<PushedDownExpressionState>(client_context);
 	expression_state->target.Initialize(client_context, {cast_type});

@@ -38,6 +38,8 @@ struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
 class DataTable;
+class RowGroupIterationHelper;
+class TableScanState;
 
 class RowGroupCollection {
 public:
@@ -48,6 +50,7 @@ public:
 
 public:
 	idx_t GetTotalRows() const;
+	idx_t GetRowGroupCount() const;
 	Allocator &GetAllocator() const;
 
 	void Initialize(PersistentCollectionData &data);
@@ -76,9 +79,8 @@ public:
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
-	bool Scan(DuckTransaction &transaction, const vector<StorageIndex> &column_ids,
-	          const std::function<bool(DataChunk &chunk)> &fun);
-	bool Scan(DuckTransaction &transaction, const std::function<bool(DataChunk &chunk)> &fun);
+	RowGroupIterationHelper Chunks(DuckTransaction &transaction);
+	RowGroupIterationHelper Chunks(DuckTransaction &transaction, const vector<StorageIndex> &column_ids);
 
 	void Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state);
@@ -191,6 +193,41 @@ private:
 	vector<MetaBlockPointer> metadata_pointers;
 	//! Whether or not we need to append a new row group prior to appending
 	bool requires_new_row_group;
+};
+
+class RowGroupIterationHelper {
+public:
+	RowGroupIterationHelper(RowGroupCollection &collection, DuckTransaction &transaction,
+	                        vector<StorageIndex> column_ids);
+
+private:
+	RowGroupCollection &collection;
+	DuckTransaction &transaction;
+	vector<StorageIndex> column_ids;
+
+private:
+	class RowGroupIterator {
+	public:
+		RowGroupIterator(optional_ptr<RowGroupCollection> collection, optional_ptr<DuckTransaction> transaction,
+		                 const vector<StorageIndex> &column_ids);
+		~RowGroupIterator();
+		//! enable move constructor
+		RowGroupIterator(RowGroupIterator &&other) noexcept;
+
+		optional_ptr<RowGroupCollection> collection;
+		optional_ptr<DuckTransaction> transaction;
+		unique_ptr<DataChunk> chunk;
+		unique_ptr<TableScanState> state;
+
+	public:
+		RowGroupIterator &operator++();
+		bool operator!=(const RowGroupIterator &other) const;
+		DataChunk &operator*() const;
+	};
+
+public:
+	RowGroupIterator begin(); // NOLINT: match stl API
+	RowGroupIterator end();   // NOLINT: match stl API
 };
 
 } // namespace duckdb

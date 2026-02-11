@@ -10,31 +10,35 @@
 
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
 class TemporaryMemoryManager;
+class ObjectCache;
 struct EvictionQueue;
 
 struct BufferEvictionNode {
 	BufferEvictionNode() {
 	}
-	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num);
+	BufferEvictionNode(weak_ptr<BlockMemory> block_memory_p, idx_t eviction_seq_num);
 
-	weak_ptr<BlockHandle> handle;
+	weak_ptr<BlockMemory> memory_p;
 	idx_t handle_sequence_number;
 
-	bool CanUnload(BlockHandle &handle_p);
-	shared_ptr<BlockHandle> TryGetBlockHandle();
+	bool CanUnload(BlockMemory &memory);
+	shared_ptr<BlockMemory> TryGetBlockMemory();
 };
 
 //! The BufferPool is in charge of handling memory management for one or more databases. It defines memory limits
 //! and implements priority eviction among all users of the pool.
 class BufferPool {
+	friend class BlockMemory;
 	friend class BlockHandle;
 	friend class BlockManager;
 	friend class BufferManager;
@@ -63,6 +67,15 @@ public:
 
 	TemporaryMemoryManager &GetTemporaryMemoryManager();
 
+	//! Take per-database ObjectCache under buffer pool's memory management.
+	//! Notice, object cache should be registered for at most once, otherwise InvalidInput exception is thrown.
+	void SetObjectCache(ObjectCache *object_cache_p) {
+		if (object_cache != nullptr) {
+			throw InvalidInputException("Object cache has already been registered in buffer pool, cannot re-register!");
+		}
+		object_cache = object_cache_p;
+	}
+
 protected:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
@@ -79,18 +92,22 @@ protected:
 	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
 	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
 
+	//! Evict object cache entries if needed.
+	EvictionResult EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit);
+
 	//! Purge all blocks that haven't been pinned within the last N seconds
 	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
 	idx_t PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit);
+
 	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue(const BlockHandle &handle);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
 	//! ready to be purged, and false otherwise.
 	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 	//! Gets the eviction queue for the specified type
-	EvictionQueue &GetEvictionQueueForBlockHandle(const BlockHandle &handle);
+	EvictionQueue &GetEvictionQueueForBlockMemory(const BlockMemory &memory);
 	//! Increments the dead nodes for the queue with specified type
-	void IncrementDeadNodes(const BlockHandle &handle);
+	void IncrementDeadNodes(const BlockMemory &memory);
 
 	//! How many eviction queue types we have (BLOCK and EXTERNAL_FILE go into same queue)
 	static constexpr idx_t EVICTION_QUEUE_TYPES = FILE_BUFFER_TYPE_COUNT - 1;
@@ -163,6 +180,8 @@ protected:
 	mutable MemoryUsage memory_usage;
 	//! The block allocator
 	BlockAllocator &block_allocator;
+	//! Per-database singleton object cache managed by buffer pool.
+	optional_ptr<ObjectCache> object_cache = nullptr;
 };
 
 } // namespace duckdb

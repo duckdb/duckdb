@@ -1,7 +1,9 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 
 namespace duckdb {
 
