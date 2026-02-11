@@ -537,8 +537,9 @@ public:
 
 		if (GetVectorMetadataSize(segment_state.vector_in_segment_count + 1) > GetWritableSpace(info)) {
 			D_ASSERT(segment_state.vector_in_segment_count <= vectors_per_segment);
-			// Can't fit this vector on this segment anymore, have to flush and a grab new one
-			NewSegment();
+			// Can't fit this vector on this segment anymore, have to flush and grab a new one
+			auto offset = NewSegment();
+			SetCurrentBuffer(segment_state.segment_handle, offset);
 		}
 
 		if (current_offset + (expected_tuple_count * sizeof(string_length_t)) >= GetWritableSpace(info)) {
