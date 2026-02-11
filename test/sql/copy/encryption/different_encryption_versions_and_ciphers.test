@@ -1,0 +1,45 @@
+# name: test/sql/copy/encryption/different_encryption_versions_and_ciphers.test
+# group: [encryption]
+
+statement ok
+PRAGMA enable_verification
+
+# We need httpfs to do encrypted writes
+require httpfs
+
+foreach version v0 v1
+
+foreach cipher GCM CTR
+
+statement error
+ATTACH '__TEST_DIR__/encrypted_${cipher}_${version}.duckdb' AS encrypted_${cipher}_${version} (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}',  debug_encryption_version 'v9');
+----
+No encryption version higher then v1 is supported yet in this DuckDB version
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_${cipher}_${version}.duckdb' AS encrypted_${cipher}_${version} (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}',  debug_encryption_version '${version}');
+
+statement ok
+CREATE TABLE encrypted_${cipher}_${version}.tbl (i INTEGER);
+
+statement ok
+INSERT INTO encrypted_${cipher}_${version}.tbl VALUES (42);
+
+query I
+select encrypted from duckdb_databases() where database_name = 'encrypted_${cipher}_${version}' and cipher='${cipher}';
+----
+true
+
+restart
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted_${cipher}_${version}.duckdb' AS encrypted_${cipher}_${version} (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}',  debug_encryption_version '${version}');
+
+statement ok
+SELECT * FROM encrypted_${cipher}_${version}.tbl;
+
+restart
+
+endloop
+
+endloop

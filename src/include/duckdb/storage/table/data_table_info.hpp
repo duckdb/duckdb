@@ -39,9 +39,8 @@ public:
 	TableIndexList &GetIndexes() {
 		return indexes;
 	}
-	const vector<IndexStorageInfo> &GetIndexStorageInfo() const {
-		return index_storage_infos;
-	}
+	//! Find and move out an IndexStorageInfo by name from the stored collection.
+	IndexStorageInfo ExtractIndexStorageInfo(const string &name);
 	unique_ptr<StorageLockKey> GetSharedLock() {
 		return checkpoint_lock.GetSharedLock();
 	}

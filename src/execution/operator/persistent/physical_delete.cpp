@@ -106,17 +106,16 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		storage->delete_indexes.Scan([&](Index &index) {
+		for (auto &index : storage->delete_indexes.Indexes()) {
 			if (!index.IsBound() || !index.IsUnique()) {
-				return false;
+				continue;
 			}
 			auto &bound_index = index.Cast<BoundIndex>();
 			auto error = bound_index.Append(l_state.delete_chunk, row_ids, index_append_info);
 			if (error.HasError()) {
 				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
 			}
-			return false;
-		});
+		}
 	}
 
 	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());

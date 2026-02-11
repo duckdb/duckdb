@@ -8,11 +8,12 @@ namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCallStatement(PEGTransformer &transformer,
                                                                        optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto table_function_name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	auto table_function_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
 	auto function_children =
 	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
 	auto result = make_uniq<CallStatement>();
-	auto function_expression = make_uniq<FunctionExpression>(table_function_name, std::move(function_children));
+	auto function_expression = make_uniq<FunctionExpression>(table_function_name.catalog, table_function_name.schema,
+	                                                         table_function_name.name, std::move(function_children));
 	result->function = std::move(function_expression);
 	return std::move(result);
 }
