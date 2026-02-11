@@ -1,0 +1,55 @@
+# name: test/sql/types/struct/create_type_struct.test
+# description: Test create qualified types with array 
+# group: [struct]
+
+# Original issue: https://github.com/duckdb/duckdb/issues/20142
+
+statement ok 
+create type u as struct (i int, j int);
+
+statement error
+select cast (null as huh.what.u array);
+----
+Binder Error: Catalog "huh" does not exist!
+
+statement error
+select cast (null as what.u array);
+----
+Catalog Error: Type with name u does not exist!
+Did you mean "memory.u"?
+
+query I
+select cast (null as u array);
+----
+NULL
+
+query I
+select cast (null as u array[1]);
+----
+NULL
+
+query I 
+select cast (null as u []);
+----
+NULL
+
+statement ok 
+CREATE SCHEMA schema2; 
+
+statement ok 
+use schema2; 
+
+statement ok 
+create type u2 as struct(i int, j int);
+
+statement ok 
+select cast (null as u2 []);
+
+statement ok 
+use main;
+
+statement error
+select cast (null as u2 []);
+----
+Catalog Error: Type with name u2 does not exist!
+Did you mean "schema2.u2"?
