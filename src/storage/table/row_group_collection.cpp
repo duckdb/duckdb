@@ -868,11 +868,6 @@ void GetIndexRemovalTargets(IndexEntry &entry, IndexRemovalType removal_type, In
 	// not all indexes require delta indexes - this is tracked through BoundIndex::RequiresTransactionality
 	// if an index does not require this we skip creating to and appending to "deleted_rows_in_use"
 	bool supports_delta_indexes = main_index.SupportsDeltaIndexes();
-	if (entry.added_data_during_checkpoint || entry.removed_data_during_checkpoint) {
-		if (!active_checkpoint.IsValid()) {
-			throw InternalException("Checkpoint data but no active checkpoint");
-		}
-	}
 	if (removal_type != IndexRemovalType::DELETED_ROWS_IN_USE && active_checkpoint.IsValid() &&
 	    supports_delta_indexes) {
 		// there's an ongoing checkpoint - check if we need to use delta indexes or if we can write to the main index
