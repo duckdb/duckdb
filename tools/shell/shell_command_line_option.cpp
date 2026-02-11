@@ -160,7 +160,7 @@ static const CommandLineOption command_line_options[] = {
     {"f", 1, "FILENAME", EnableBatch, ProcessFile, "read/process named file and exit"},
     {"init", 1, "FILENAME", SetInitFile, nullptr, "read/process named file"},
     {"header", 0, "", nullptr, ToggleHeader<true>, "turn headers on"},
-    {"help", 0, "", EnableBatch, PrintHelpAndExit, "show this message"},
+    {"help", 0, "", EnableBatch, PrintHelpAndExit, "show this message", {"h"}},
     {"html", 0, "", nullptr, ToggleOutputMode<RenderMode::HTML>, "set output mode to HTML"},
     {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
     {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
@@ -189,6 +189,13 @@ optional_idx FindOption(const char *name) {
 	for (idx_t c = 0; command_line_options[c].option; c++) {
 		auto &option = command_line_options[c];
 		if (!StringUtil::Equals(name, option.option)) {
+			// check aliases
+			for (auto &alias : option.aliases) {
+				if (StringUtil::Equals(name, alias)) {
+					return c;
+				}
+			}
+
 			// not this one
 			continue;
 		}
