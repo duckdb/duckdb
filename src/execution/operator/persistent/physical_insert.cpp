@@ -634,8 +634,19 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 		if (return_chunk) {
 			gstate.return_collection.Append(insert_chunk);
 		}
-		// We can use `unsafe` when the action type is throw, since we already verify the constraints through `OnConflictHandling`
-		storage.LocalAppend(table, context.client, insert_chunk, bound_constraints, action_type==OnConflictAction::THROW);
+		// OnConflictHandling already verified constraints for the THROW, so we can pass "unsafe=true"
+		// we verify this in DEBUG by rechecking constraints
+#ifdef DEBUG
+		if (action_type == OnConflictAction::THROW) {
+			auto &constraint_state = lstate.GetConstraintState(data_table, table);
+			auto local_storage_ptr = LocalStorage::Get(context.client, data_table.db).GetStorage(data_table);
+			// This should not throw
+			data_table.VerifyAppendConstraints(constraint_state, context.client, insert_chunk, local_storage_ptr,
+			                                   nullptr);
+		}
+#endif
+		storage.LocalAppend(table, context.client, insert_chunk, bound_constraints,
+		                    action_type == OnConflictAction::THROW);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
 			(void)HandleInsertConflicts<true>(table, context, lstate, gstate, lstate.update_chunk, *this);
 			(void)HandleInsertConflicts<false>(table, context, lstate, gstate, lstate.update_chunk, *this);
