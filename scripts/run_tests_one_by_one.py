@@ -320,7 +320,10 @@ def run_tests_parallel(num_workers, batch_size=1):
         batch_size: Number of tests per invocation (1 = single test mode, >1 = batch mode)
     """
     if batch_size > 1:
-        print(f"Running {test_count} tests with {num_workers} parallel workers, {batch_size} tests per batch...", flush=True)
+        print(
+            f"Running {test_count} tests with {num_workers} parallel workers, {batch_size} tests per batch...",
+            flush=True,
+        )
     else:
         print(f"Running {test_count} tests with {num_workers} parallel worker processes...", flush=True)
 
@@ -566,6 +569,17 @@ if __name__ == '__main__':
         )
         for i, error in enumerate(error_list, start=1):
             print(f"\n{i}:", error["test"], "\n")
+            print(
+                """--------------------
+STDOUT
+--------------------"""
+            )
+            print(error.get("stdout", ""))
+            print(
+                """--------------------
+STDERR
+--------------------"""
+            )
             print(error["stderr"])
 
     exit(1)
