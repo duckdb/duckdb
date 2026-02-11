@@ -625,10 +625,17 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 //   3. RowIdFilterInit      — per-thread state initialization
 //===--------------------------------------------------------------------===//
 
+// The bind callback is unused for most extensible table filters
+static unique_ptr<FunctionData> RowIdFilterBind(ClientContext &, ScalarFunction &, vector<unique_ptr<Expression>> &) {
+	throw InternalException("rowid_filter: bind should never be called");
+}
+
 struct RowIdFilterBindData : public FunctionData {
 	vector<int64_t> allowed_ids;
+	unordered_set<int64_t> allowed_set;
 
 	explicit RowIdFilterBindData(vector<int64_t> ids) : allowed_ids(std::move(ids)) {
+		allowed_set.insert(allowed_ids.begin(), allowed_ids.end());
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -639,26 +646,20 @@ struct RowIdFilterBindData : public FunctionData {
 	}
 };
 
-struct RowIdFilterState : public FunctionLocalState {
-	idx_t cursor = 0;
-};
-
-// The bind callback is unused for most extensible table filters
-static unique_ptr<FunctionData> RowIdFilterBind(ClientContext &, ScalarFunction &, vector<unique_ptr<Expression>> &) {
-	throw InternalException("rowid_filter: bind should never be called");
-}
+// Per-thread local state for the filter function.
+// In this demo we use a simple hash-set lookup, so no per-thread state is needed.
+// In practice, if row IDs arrive in non-decreasing order (e.g. sequential scan),
+// a cursor-based linear scan over a sorted allowed list would be more efficient — O(n) total.
+struct RowIdFilterState : public FunctionLocalState {};
 
 static unique_ptr<FunctionLocalState> RowIdFilterInit(ExpressionState &, const BoundFunctionExpression &,
                                                       FunctionData *) {
 	return make_uniq<RowIdFilterState>();
 }
 
-// Row IDs arrive in non-decreasing order during a sequential table scan,
-// so we maintain a cursor and advance linearly — O(n) total, not O(n·log k).
 static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &filter_state = state.Cast<ExecuteFunctionState>().local_state->Cast<RowIdFilterState>();
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<RowIdFilterBindData>();
-	auto &allowed = bind_data.allowed_ids;
+	auto &allowed = bind_data.allowed_set;
 
 	auto &input_vec = args.data[0];
 	idx_t count = args.size();
@@ -670,20 +671,14 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto out = FlatVector::GetData<bool>(result);
 
-	idx_t cur = filter_state.cursor;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!vdata.validity.RowIsValid(idx)) {
 			out[i] = false;
 			continue;
 		}
-		auto rid = row_ids[idx];
-		while (cur < allowed.size() && allowed[cur] < rid) {
-			cur++;
-		}
-		out[i] = (cur < allowed.size() && allowed[cur] == rid);
+		out[i] = allowed.count(row_ids[idx]) > 0;
 	}
-	filter_state.cursor = cur;
 }
 
 static FilterPropagateResult RowIdFilterPropagate(const FunctionStatisticsPruneInput &input) {
@@ -722,7 +717,7 @@ public:
 			return;
 		}
 
-		// Build the scalar function with all three callbacks
+		// Build the scalar function
 		ScalarFunction func("rowid_filter", {LogicalType::BIGINT}, LogicalType::BOOLEAN, RowIdFilterFunction,
 		                    RowIdFilterBind);
 		func.SetInitStateCallback(RowIdFilterInit);
