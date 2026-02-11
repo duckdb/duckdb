@@ -327,6 +327,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// any failure during checkpoint will cause this transactions' changes to be lost,
 		// while later concurrent commits will not be
 		// this can cause undefined / "weird" state, as those commits were made assuming this one was already committed
+		skip_wal_write_due_to_checkpoint = true;
 
 		// FIXME: make this depend on transaction WAL size
 	}
@@ -396,6 +397,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	if (!checkpoint_decision.can_checkpoint && lock) {
 		// we won't checkpoint after all due to an error during commit: unlock the checkpoint lock again
+		skip_wal_write_due_to_checkpoint = false;
 		lock.reset();
 	}
 
@@ -433,6 +435,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		CheckpointOptions options;
 		options.action = CheckpointAction::ALWAYS_CHECKPOINT;
 		options.type = checkpoint_decision.type;
+		options.wal_lock = held_wal_lock.get();
 		auto &storage_manager = db.GetStorageManager();
 		try {
 			storage_manager.CreateCheckpoint(context, options);

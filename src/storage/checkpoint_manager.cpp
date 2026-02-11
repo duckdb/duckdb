@@ -267,7 +267,16 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 		// truncate the WAL
 		if (has_wal) {
-			auto wal_lock = storage_manager.GetWALLock();
+			unique_ptr<lock_guard<mutex>> owned_wal_lock;
+			optional_ptr<lock_guard<mutex>> wal_lock;
+			if (!options.wal_lock) {
+				// not holding the WAL lock yet - grab it
+				owned_wal_lock = storage_manager.GetWALLock();
+				wal_lock = *owned_wal_lock;
+			} else {
+				// we already have the WAL lock - just refer to it
+				wal_lock = options.wal_lock;
+			}
 			storage_manager.WALFinishCheckpoint(*wal_lock);
 		}
 	} catch (std::exception &ex) {
