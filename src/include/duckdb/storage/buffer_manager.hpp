@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 
