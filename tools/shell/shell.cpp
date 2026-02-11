@@ -2873,7 +2873,8 @@ static string GetHomeDirectory() {
 }
 
 string ShellState::GetDefaultDuckDBRC() {
-	return GetHomeDirectory() + "/.duckdbrc";
+	duckdb::LocalFileSystem lfs;
+	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
 }
 
 /*
