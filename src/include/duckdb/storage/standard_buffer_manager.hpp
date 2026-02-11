@@ -66,10 +66,7 @@ public:
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) final;
 
-	//! Reallocate an in-memory buffer that is pinned.
-	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
-
 	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
 
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
@@ -96,6 +93,9 @@ public:
 
 	DUCKDB_API Allocator &GetBufferAllocator() final;
 
+	const DatabaseInstance &GetDatabase() const override {
+		return db;
+	}
 	DatabaseInstance &GetDatabase() override {
 		return db;
 	}
@@ -143,7 +143,7 @@ protected:
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
-	void DeleteTemporaryFile(BlockHandle &block) final;
+	void DeleteTemporaryFile(BlockMemory &memory) final;
 
 	void RequireTemporaryDirectory();
 

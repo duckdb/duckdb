@@ -29,6 +29,9 @@ SELECT SUM(i) FROM integers;
 statement ok
 DELETE FROM integers;
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT SUM(i) FROM integers;
 ----
@@ -37,7 +40,7 @@ NULL
 # ensure that the expected total storage size is the same as in the first iteration of the loop
 
 query I nosort expected_blocks_delete_table
-SELECT total_blocks FROM pragma_database_size();
+SELECT case when total_blocks < 5 then null else database_size end FROM pragma_database_size() database_size;
 
 endloop
 
@@ -92,6 +95,9 @@ SELECT SUM(i) FROM integers;
 
 statement ok
 DELETE FROM integers;
+
+statement ok
+CHECKPOINT
 
 query I
 SELECT SUM(i) FROM integers;

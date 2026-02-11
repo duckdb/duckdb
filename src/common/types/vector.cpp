@@ -1531,7 +1531,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 						continue;
 					}
 					strings[i] = string_t(byte_read_ptr, lengths_read_ptr[i]);
-					byte_read_ptr += byte_read_ptr[i];
+					byte_read_ptr += lengths_read_ptr[i];
 				}
 			} else { // this is ye olde way of string serialization
 				deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {

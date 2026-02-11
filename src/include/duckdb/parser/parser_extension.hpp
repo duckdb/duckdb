@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -95,7 +96,8 @@ struct ParserOverrideResult {
 	ErrorData error;
 };
 
-typedef ParserOverrideResult (*parser_override_function_t)(ParserExtensionInfo *info, const string &query);
+typedef ParserOverrideResult (*parser_override_function_t)(ParserExtensionInfo *info, const string &query,
+                                                           ParserOptions &options);
 
 //===--------------------------------------------------------------------===//
 // ParserExtension

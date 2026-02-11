@@ -57,10 +57,10 @@ statement ok
 CREATE INDEX idx ON t(i);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) < 4 * base.usage
+SELECT CASE WHEN mem_to_bytes(current.memory_usage) < 4 * base.usage THEN NULL ELSE {'current': mem_to_bytes(current.memory_usage), 'expected': 4 * base.usage} END
 FROM base, pragma_database_size() current;
 ----
-1
+NULL
 
 # insert 250K values into every fourth leaf, partially deserializing the ART
 # the size of the database also increases more significantly, as we now have duplicates in leaves,

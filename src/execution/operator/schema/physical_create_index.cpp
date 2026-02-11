@@ -160,12 +160,11 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
 		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		indexes.Scan([&](Index &index) {
+		for (auto &index : indexes.Indexes()) {
 			if (index.GetIndexName() == info->index_name) {
 				throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
 			}
-			return false;
-		});
+		}
 
 		auto &catalog = Catalog::GetCatalog(context, info->catalog);
 		catalog.Alter(context, *alter_table_info);

@@ -33,7 +33,8 @@ unique_ptr<UpdateSetInfo> UpdateSetInfo::Copy() const {
 	return unique_ptr<UpdateSetInfo>(new UpdateSetInfo(*this));
 }
 
-UpdateStatement::UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMENT) {
+UpdateStatement::UpdateStatement()
+    : SQLStatement(StatementType::UPDATE_STATEMENT), prioritize_table_when_binding(false) {
 }
 
 UpdateStatement::UpdateStatement(const UpdateStatement &other)
@@ -45,6 +46,7 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 		returning_list.emplace_back(expr->Copy());
 	}
 	cte_map = other.cte_map.Copy();
+	prioritize_table_when_binding = other.prioritize_table_when_binding;
 }
 
 string UpdateStatement::ToString() const {

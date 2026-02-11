@@ -2215,7 +2215,20 @@ void BoxRendererImplementation::RenderFooter(BaseResultRenderer &ss, idx_t row_c
 		if (!extra_render_str.empty()) {
 			ss.Render(ResultRenderType::FOOTER, extra_render_str);
 		}
-		ss << string(padding, ' ');
+		// can we add the hidden rows hint to this line?
+		if ((has_hidden_columns || has_hidden_rows) && !config.hidden_rows_hint.empty() &&
+		    padding >= config.hidden_rows_hint.size() + 10) {
+			// we can
+			padding -= config.hidden_rows_hint.size();
+			auto lpadding = padding / 2;
+			auto rpadding = padding - lpadding;
+			ss << string(lpadding, ' ');
+			ss.Render(ResultRenderType::FOOTER, config.hidden_rows_hint);
+			ss << string(rpadding, ' ');
+		} else {
+			// we can't - don't render it
+			ss << string(padding, ' ');
+		}
 		ss.Render(ResultRenderType::FOOTER, column_count_str);
 	} else if (render_rows) {
 		idx_t lpadding = padding / 2;

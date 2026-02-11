@@ -74,8 +74,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			continue;
 		}
 		auto &expr = *filters[i]->filter;
-		if (expr.IsVolatile() || expr.CanThrow()) {
-			// we cannot push down volatile or throwing expressions
+		if (expr.IsVolatile()) {
+			continue;
+		}
+		// Allow pushing down filters that can throw only if there is a single expression
+		// For now, do not push down single expressions with IN either. Later we can change InClauseRewriter to handle
+		// this case
+		if (expr.CanThrow() && (expr.type == ExpressionType::COMPARE_IN || filters.size() > 1)) {
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);

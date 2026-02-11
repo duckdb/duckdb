@@ -240,9 +240,10 @@ bool BaseTokenizer::TokenizeInput() {
 				}
 				if (sql[i + 1] >= '0' && sql[i + 1] <= '9') {
 					// $[numeric] is a parameter, not a dollar-quoted string
+					tokens.emplace_back(string(1, c), i, TokenType::OPERATOR);
 					break;
 				}
-				// Dollar-quoted string
+				// Dollar-quoted string or collabel parameter ($collabel)
 				last_pos = i;
 				// Scan until next $
 				idx_t next_dollar = 0;
@@ -256,6 +257,8 @@ bool BaseTokenizer::TokenizeInput() {
 					}
 				}
 				if (next_dollar == 0) {
+					// Collabel parameter ($collabel)
+					tokens.emplace_back(string(1, c), i, TokenType::OPERATOR);
 					break;
 				}
 				state = TokenizeState::DOLLAR_QUOTED_STRING;

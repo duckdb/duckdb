@@ -28,6 +28,7 @@
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -35,7 +36,8 @@ namespace duckdb {
 
 class ReplayState {
 public:
-	ReplayState(AttachedDatabase &db, ClientContext &context) : db(db), context(context), catalog(db.GetCatalog()) {
+	ReplayState(AttachedDatabase &db, ClientContext &context, WALReplayState replay_state_p)
+	    : db(db), context(context), catalog(db.GetCatalog()), replay_state(replay_state_p) {
 	}
 
 	AttachedDatabase &db;
@@ -47,6 +49,7 @@ public:
 	optional_idx current_position;
 	optional_idx checkpoint_position;
 	optional_idx expected_checkpoint_id;
+	WALReplayState replay_state;
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const string &table_schema,
@@ -127,8 +130,26 @@ public:
 			auto offset = stream.CurrentOffset();
 			auto file_size = stream.FileSize();
 
-			EncryptionNonce nonce;
+			EncryptionNonce nonce(state_p.db.GetStorageManager().GetCipher(),
+			                      state_p.db.GetStorageManager().GetEncryptionVersion());
 			EncryptionTag tag;
+
+			stream.ReadData(nonce.data(), nonce.size());
+
+			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
+			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
+			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
+			auto metadata = make_uniq<EncryptionStateMetadata>(state_p.db.GetStorageManager().GetCipher(),
+			                                                   MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH,
+			                                                   state_p.db.GetStorageManager().GetEncryptionVersion());
+			//! initialize the decryption
+			auto encryption_state =
+			    database.GetEncryptionUtil(state_p.db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
+			encryption_state->InitializeDecryption(nonce, derived_key);
+
+			if (encryption_state->GetCipher() == EncryptionTypes::CipherType::CTR) {
+				tag.SetSize(0);
+			}
 
 			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
 				throw SerializationException(
@@ -137,18 +158,6 @@ public:
 				    offset, size, file_size);
 			}
 
-			stream.ReadData(nonce.data(), nonce.size());
-
-			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
-			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
-			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
-
-			//! initialize the decryption
-			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
-			    state_p.db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
-			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-
 			//! Allocate a decryption buffer
 			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);
 			auto out_buffer = unique_ptr<data_t[]>(new data_t[size]);
@@ -156,10 +165,14 @@ public:
 			stream.ReadData(buffer.get(), ciphertext_size);
 			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
 
-			//! read and verify the stored tag
-			stream.ReadData(tag.data(), tag.size());
-
-			encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
+			if (encryption_state->GetCipher() == EncryptionTypes::CipherType::GCM) {
+				//! read and verify the stored tag
+				stream.ReadData(tag.data(), tag.size());
+				D_ASSERT(!tag.IsAllZeros());
+				encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
+			} else {
+				encryption_state->Finalize(buffer.get(), ciphertext_size, nullptr, 0);
+			}
 
 			//! read the stored checksum
 			auto stored_checksum = Load<uint64_t>(buffer.get());
@@ -307,7 +320,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
-	ReplayState checkpoint_state(database, *con.context);
+	ReplayState checkpoint_state(database, *con.context, replay_state);
 	try {
 		idx_t replay_entry_count = 0;
 		while (true) {
@@ -403,7 +416,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 					BufferedFileReader checkpoint_reader(FileSystem::Get(database), std::move(checkpoint_handle));
 
 					// skip over the version entry
-					ReplayState checkpoint_replay_state(database, *con.context);
+					ReplayState checkpoint_replay_state(database, *con.context, WALReplayState::CHECKPOINT_WAL);
 					auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_replay_state,
 					                                                                    checkpoint_reader, true);
 					deserializer.ReplayEntry();
@@ -452,7 +465,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, St
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	ReplayState state(database, *con.context);
+	ReplayState state(database, *con.context, replay_state);
 
 	// reset the reader - we are going to read the WAL from the beginning again
 	reader.Reset();
@@ -637,6 +650,12 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 			state.expected_checkpoint_id = expected_checkpoint_iteration;
 			return;
 		}
+		if (state.replay_state == WALReplayState::CHECKPOINT_WAL &&
+		    wal_checkpoint_iteration == expected_checkpoint_iteration + 1) {
+			// if we are recovering from a checkpoint WAL, the checkpoint iteration is possibly one higher
+			// (depending on when the crash happened)
+			return;
+		}
 		ThrowVersionError(wal_checkpoint_iteration, expected_checkpoint_iteration);
 	}
 }
@@ -765,7 +784,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto &storage = table.GetStorage();
-	CreateIndexInput input(TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
 	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
 	                       index_storage_info.options);
 
@@ -1059,10 +1078,39 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
-	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), 0);
+	auto base_row = storage.GetTotalRows();
+	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), base_row);
 	new_row_groups.Initialize(data);
-	TableIndexList index_list;
-	storage.MergeStorage(new_row_groups, index_list, nullptr);
+
+	// if we have any indexes - scan the row groups and add data to the indexes
+	auto &indexes = table_info->GetIndexes();
+	if (!indexes.Empty()) {
+		auto &transaction = DuckTransaction::Get(context, db);
+		// we have indexes - append
+		vector<StorageIndex> column_ids;
+		for (auto &col : state.current_table->GetColumns().Physical()) {
+			column_ids.emplace_back(col.StorageOid());
+		}
+		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
+		auto row_ids = FlatVector::GetData<row_t>(row_id_vector);
+		auto current_row_id = storage.GetTotalRows();
+		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
+			for (idx_t r = 0; r < chunk.size(); r++) {
+				row_ids[r] = NumericCast<row_t>(current_row_id + r);
+			}
+			current_row_id += chunk.size();
+			for (auto &index : indexes.Indexes()) {
+				if (!index.IsBound()) {
+					auto &unbound_index = index.Cast<UnboundIndex>();
+					unbound_index.BufferChunk(chunk, row_id_vector, column_ids, BufferedIndexReplay::INSERT_ENTRY);
+					continue;
+				}
+				auto &bound_index = index.Cast<BoundIndex>();
+				bound_index.Append(chunk, row_id_vector);
+			}
+		}
+	}
+	storage.MergeStorage(new_row_groups, nullptr);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {

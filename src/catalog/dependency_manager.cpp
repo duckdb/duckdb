@@ -372,6 +372,9 @@ static string EntryToString(CatalogEntryInfo &info) {
 	case CatalogType::COLLATION_ENTRY: {
 		return StringUtil::Format("collation \"%s\"", info.name);
 	}
+	case CatalogType::COORDINATE_SYSTEM_ENTRY: {
+		return StringUtil::Format("coordinate system \"%s\"", info.name);
+	}
 	case CatalogType::TYPE_ENTRY: {
 		return StringUtil::Format("type \"%s\"", info.name);
 	}

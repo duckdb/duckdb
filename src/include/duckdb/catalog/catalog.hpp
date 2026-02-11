@@ -38,6 +38,7 @@ struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
+struct CreateCoordinateSystemInfo;
 struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
@@ -173,6 +174,11 @@ public:
 	//! Creates a collation in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(ClientContext &context, CreateCollationInfo &info);
+	//! Creates a coordinate system in the catalog
+	DUCKDB_API optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
+	                                                             CreateCoordinateSystemInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateCoordinateSystem(ClientContext &context,
+	                                                             CreateCoordinateSystemInfo &info);
 	//! Creates an index in the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateIndex(ClientContext &context, CreateIndexInfo &info);
@@ -202,8 +208,12 @@ public:
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                                 CreateTypeInfo &info);
 	//! Creates a collation in the catalog
-	DUCKDB_API optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-	                                                      CreateCollationInfo &info);
+	DUCKDB_API static optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction,
+	                                                             SchemaCatalogEntry &schema, CreateCollationInfo &info);
+	//! Creates a coordinate system in the catalog
+	DUCKDB_API static optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
+	                                                                    SchemaCatalogEntry &schema,
+	                                                                    CreateCoordinateSystemInfo &info);
 
 	//! Drops an entry from the catalog
 	DUCKDB_API void DropEntry(ClientContext &context, DropInfo &info);

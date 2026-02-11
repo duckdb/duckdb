@@ -720,7 +720,7 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	j += (entry_idx - entry_idx_before) * ValidityMask::BITS_PER_VALUE;
 
 	// Check the final entry
-	return j > n ? n : j + CountZeros<validity_t>::Trailing(bits.GetValidityEntryUnsafe(entry_idx));
+	return j >= n ? n : j + CountZeros<validity_t>::Trailing(bits.GetValidityEntryUnsafe(entry_idx));
 }
 
 idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {

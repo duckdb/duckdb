@@ -8,102 +8,101 @@ create table dummy as select range % 10 g, range d from range(100);
 # ungrouped aggr
 
 query IIIIII nosort res0
-SELECT count(*), count(d), sum(d), min(d), max(d) FROM dummy;
+SELECT count(*), count(d), min(d), max(d) FROM dummy;
 ----
 
 query IIIIII nosort res0
-SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE)  FROM dummy;
+SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE)  FROM dummy;
 ----
 
 # grouped aggr
 query IIIIIII nosort res1
-SELECT g, count(*), count(d), sum(d), min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, count(*), count(d), min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIII nosort res1
-SELECT g, finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE)  FROM dummy GROUP BY g ORDER BY g;
+SELECT g, finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE)  FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, sum(d) EXPORT_STATE sum_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
 
 query IIIIIII nosort res1
-SELECT g, finalize(count_star_state),finalize(count_state), finalize(sum_state), finalize(min_state), finalize(max_state) FROM state ORDER BY g;
+SELECT g, finalize(count_star_state),finalize(count_state), finalize(min_state), finalize(max_state) FROM state ORDER BY g;
 ----
 
 query II nosort res2
-SELECT sum(d)*2 FROM dummy;
+SELECT count(d) * 2 FROM dummy;
 ----
 
-
 query II nosort res2
-SELECT FINALIZE(COMBINE(SUM(d) EXPORT_STATE, SUM(d) EXPORT_STATE)) FROM dummy;
+SELECT FINALIZE(COMBINE(count(d) EXPORT_STATE, count(d) EXPORT_STATE)) FROM dummy;
 ----
 
 
 query II nosort res3
-SELECT g, sum(d)*2 combined_sum FROM dummy GROUP BY g ORDER BY g;
+SELECT g, count(d) * 2 combined_count FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query II nosort res3
-select g, finalize(combine(sum(d) EXPORT_STATE, sum_state)) combined_sum from dummy join state using (g) group by g, sum_state ORDER BY g;
+select g, finalize(combine(count(d) EXPORT_STATE, count_state)) combined_count from dummy join state using (g) group by g, count_state ORDER BY g;
 ----
 
 # combine aggregate state in UNION
 statement ok
-CREATE TABLE state2 AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
+CREATE TABLE state2 AS SELECT g, count(d) EXPORT_STATE count_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
 
 query II rowsort res3
-select g, finalize(sum_state) * 2 combined_sum from (select g, sum(d) EXPORT_STATE sum_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
+select g, finalize(count_state) * 2 combined_count from (select g, count(d) EXPORT_STATE count_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
 ----
 
 # combine aggregate states in JOINs with NULLs
 query II rowsort res3
 with groups as (select distinct g from dummy)
-select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join state2 using(g) left join (select g, sum(d) EXPORT_STATE sum_state2 from dummy where g >= 5 GROUP BY g) using (g)
+select g, FINALIZE(COMBINE(count_state, count_state2)) * 2 from groups left join state2 using(g) left join (select g, count(d) EXPORT_STATE count_state2 from dummy where g >= 5 GROUP BY g) using (g)
 ----
 
 query IIII
 with groups as (select distinct g from dummy)
-select g, FINALIZE(sum_state), FINALIZE(sum_state2), FINALIZE(COMBINE(sum_state, sum_state2))  from groups left join state2 using(g) left join (select g, sum(d) EXPORT_STATE sum_state2 from dummy where g >= 3 GROUP BY g) using (g) order by g
+select g, FINALIZE(count_state), FINALIZE(count_state2), FINALIZE(COMBINE(count_state, count_state2))  from groups left join state2 using(g) left join (select g, count(d) EXPORT_STATE count_state2 from dummy where g >= 3 GROUP BY g) using (g) order by g
 ----
-0	450	NULL	450
-1	460	NULL	460
-2	470	NULL	470
-3	480	480	960
-4	490	490	980
-5	NULL	500	500
-6	NULL	510	510
-7	NULL	520	520
-8	NULL	530	530
-9	NULL	540	540
+0	10	NULL	10
+1	10	NULL	10
+2	10	NULL	10
+3	10	10	20
+4	10	10	20
+5	NULL	10	10
+6	NULL	10	10
+7	NULL	10	10
+8	NULL	10	10
+9	NULL	10	10
 
 # empty groups
 query IIIIII nosort res4
-SELECT count(*), count(d), sum(d), min(d), max(d) FROM dummy WHERE FALSE;
+SELECT count(*), count(d), min(d), max(d) FROM dummy WHERE FALSE;
 ----
 
 query IIIIII nosort res4
-SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy WHERE FALSE;
 ----
 
 # only null scanned
 query IIIIII nosort res5
-SELECT count(*), count(d), sum(d), min(d), max(d) FROM (SELECT NULL::integer d);
+SELECT count(*), count(d), min(d), max(d) FROM (SELECT NULL::integer d);
 ----
 
 query IIIIII nosort res5
-SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
 ----
 
 # only null scanned, but grouped
 query IIIIII nosort res6
-SELECT count(*), count(d), sum(d), min(d), max(d) FROM (SELECT NULL::integer d, g FROM dummy);
+SELECT count(*), count(d), min(d), max(d) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 query IIIIII nosort res6
-SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(sum(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 # more aggregates
@@ -123,11 +122,11 @@ select FINALIZE(argmin(a,b) EXPORT_STATE), FINALIZE(argmax(a,b) EXPORT_STATE) fr
 mode unskip
 
 query IIIIIII nosort res8
-SELECT g, first(d), last(d), fsum(d), product(d), bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, first(d), last(d), product(d), bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIII nosort res8
-SELECT g, FINALIZE(first(d) EXPORT_STATE), FINALIZE(last(d) EXPORT_STATE), FINALIZE(fsum(d) EXPORT_STATE), FINALIZE(product(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, FINALIZE(first(d) EXPORT_STATE), FINALIZE(last(d) EXPORT_STATE), FINALIZE(product(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query II nosort res9
@@ -155,7 +154,7 @@ SELECT string_agg(d) EXPORT_STATE from dummy;
 ----
 
 statement error
-SELECT FINALIZE(COMBINE(SUM(d) EXPORT_STATE)) FROM dummy;
+SELECT FINALIZE(COMBINE(MIN(d) EXPORT_STATE)) FROM dummy;
 ----
 
 statement error
@@ -175,20 +174,20 @@ SELECT finalize(42);
 ----
 
 statement error
-SELECT finalize(sum(d)) from dummy;
+SELECT finalize(min(d)) from dummy;
 ----
 
 statement error
-SELECT finalize(sum(d)) from dummy group by g;
+SELECT finalize(min(d)) from dummy group by g;
 ----
 
 # can't finalize twice
 statement error
-SELECT finalize(finalize(sum(d) EXPORT_STATE)) from dummy;
+SELECT finalize(finalize(min(d) EXPORT_STATE)) from dummy;
 ----
 
 statement error
-select sum(42) EXPORT_STATE over ();
+select min(42) EXPORT_STATE over ();
 ----
 
 
@@ -201,66 +200,67 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, sum(d) EXPORT_STATE sum_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
 
 statement ok
-CREATE VIEW state_view AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, sum(d) EXPORT_STATE sum_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+CREATE VIEW state_view AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
 
 restart
 
 query IIIIIII nosort res10
-SELECT g, count(*), count(d), sum(d), min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, count(*), count(d), min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIII nosort res10
-SELECT g, finalize(count_star_state),finalize(count_state), finalize(sum_state), finalize(min_state), finalize(max_state) FROM state ORDER BY g;
+SELECT g, finalize(count_star_state),finalize(count_state), finalize(min_state), finalize(max_state) FROM state ORDER BY g;
 ----
 
 query IIIIIII nosort res10
-SELECT g, finalize(count_star_state),finalize(count_state), finalize(sum_state), finalize(min_state), finalize(max_state) FROM state_view ORDER BY g;
+SELECT g, finalize(count_star_state),finalize(count_state), finalize(min_state), finalize(max_state) FROM state_view ORDER BY g;
 ----
 
 # BLOB casting back and forth
 statement ok
-SELECT (SUM(42) EXPORT_STATE)::BLOB;
+SELECT (min(42) EXPORT_STATE)::BLOB;
 
 query I
-SELECT FINALIZE(COMBINE(SUM(42) EXPORT_STATE, (SUM(42) EXPORT_STATE)::BLOB));
+SELECT FINALIZE(COMBINE(min(42) EXPORT_STATE, (min(20) EXPORT_STATE)::BLOB));
 ----
-84
+20
 
 statement error
-SELECT (SUM(42) EXPORT_STATE)::INTEGER;
-----
-
-statement error
-SELECT COMBINE(SUM(42) EXPORT_STATE, 42);
+SELECT (min(42) EXPORT_STATE)::INTEGER;
 ----
 
 statement error
-SELECT COMBINE(SUM(42) EXPORT_STATE, 'ASDF'::BLOB);
+SELECT COMBINE(min(42) EXPORT_STATE, 42);
 ----
 
 statement error
-SELECT COMBINE((SUM(42) EXPORT_STATE)::BLOB, SUM(42) EXPORT_STATE);
+SELECT COMBINE(min(42) EXPORT_STATE, 'ASDF'::BLOB);
+----
+
+statement error
+SELECT COMBINE((min(42) EXPORT_STATE)::BLOB, min(42) EXPORT_STATE);
 ----
 
 # simulate round tripping
 require parquet
 
+# TODO - we should support the new aggregate state in parquet files
 statement ok
-COPY (SELECT g, (SUM(d) EXPORT_STATE)::BLOB s1 FROM dummy GROUP BY g) TO '__TEST_DIR__/state.parquet' (FORMAT PARQUET);
+COPY (SELECT g, (min(d) EXPORT_STATE)::BLOB s1 FROM dummy GROUP BY g) TO '__TEST_DIR__/state.parquet' (FORMAT PARQUET);
 
 query II
-SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, SUM(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '__TEST_DIR__/state.parquet' USING(g) ORDER BY g;
+SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, min(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '__TEST_DIR__/state.parquet' USING(g) ORDER BY g;
 ----
-0	900
-1	920
-2	940
-3	960
-4	980
-5	1000
-6	1020
-7	1040
-8	1060
-9	1080
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+8	8
+9	9

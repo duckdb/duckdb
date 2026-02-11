@@ -1985,10 +1985,10 @@ typedef struct PGExplainStmt {
  */
 typedef struct PGCreateTableAsStmt {
 	PGNodeTag type;
-	PGNode *query;        /* the query (see comments above) */
-	PGIntoClause *into;   /* destination table */
-	PGObjectType relkind; /* PG_OBJECT_TABLE or PG_OBJECT_MATVIEW */
-	bool is_select_into;  /* it was written as SELECT INTO */
+	PGNode *query;			/* the query (see comments above) */
+	PGIntoClause *into;		/* destination table */
+	PGObjectType relkind;	/* PG_OBJECT_TABLE or PG_OBJECT_MATVIEW */
+	bool is_select_into;	/* it was written as SELECT INTO */
 	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTableAsStmt;
 
