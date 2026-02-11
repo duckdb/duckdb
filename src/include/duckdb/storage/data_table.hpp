@@ -189,7 +189,7 @@ public:
 	                      const std::function<void(DataChunk &chunk)> &function);
 
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
-	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, optional_ptr<StorageCommitState> commit_state);
+	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state);
 
 	//! Appends a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
 	//! If an index is bound, it appends table_chunk. Else, it buffers index_chunk.
@@ -282,7 +282,7 @@ public:
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              const IndexStorageInfo &info);
+	              IndexStorageInfo index_info);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index);
 

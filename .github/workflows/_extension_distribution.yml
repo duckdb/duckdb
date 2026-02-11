@@ -44,7 +44,7 @@ jobs:
     with:
       # We piggy-back extension-template to build the extensions in extension_config, it's hacky, but it works ¯\_(ツ)_/¯
       override_repository: duckdb/extension-template
-      override_ref: v1.4-andium
+      override_ref: main
 
       # Note when `upload_all_extensions` is true, the extension name is used as prefix to the artifact holding all built extensions
       upload_all_extensions: true

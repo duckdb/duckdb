@@ -1,0 +1,37 @@
+# name: test/parquet/variant/variant_stats_propagation.test
+# group: [variant]
+
+require parquet
+
+# shredded stats
+query I
+SELECT stats(var::TIMESTAMP_NS).min FROM '{DATA_DIR}/parquet-testing/variant_shredded_timestamp_nanos_ntz_positive.parquet';
+----
+2024-11-07 12:33:54.123456789
+
+query I
+SELECT stats(var::FLOAT).min FROM '{DATA_DIR}/parquet-testing/variant_shredded_float_negative.parquet';
+----
+-10.11
+
+query I
+SELECT stats(var::BIGINT).min FROM '{DATA_DIR}/parquet-testing/variant_shredded_int64_negative.parquet';
+----
+-9876543210
+
+# nested shredded
+query I
+SELECT stats(var.a::BIGINT).min FROM '{DATA_DIR}/parquet-testing/variant_shredded_object1.parquet';
+----
+123456789
+
+query I
+SELECT stats(var::STRUCT(a INT, c VARCHAR)).child_stats.a.min FROM '{DATA_DIR}/parquet-testing/variant_shredded_object1.parquet';
+----
+NULL
+
+# partially shredded - no stats
+query I
+SELECT stats(var::BIGINT).min FROM '{DATA_DIR}/parquet-testing/variant_partial_shredded1.parquet' LIMIT 1;
+----
+NULL

@@ -72,8 +72,6 @@ public:
 	//! The main optimistic data writer associated with this table.
 	OptimisticDataWriter optimistic_writer;
 
-	//! Whether or not storage was merged
-	bool merged_storage = false;
 	//! Whether or not the storage was dropped
 	bool is_dropped = false;
 
@@ -102,6 +100,7 @@ public:
 	OptimisticDataWriter &GetOptimisticWriter();
 
 	RowGroupCollection &GetCollection();
+	OptimisticWriteCollection &GetPrimaryCollection();
 
 private:
 	mutex collections_lock;

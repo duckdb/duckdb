@@ -13,7 +13,7 @@
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 
 namespace duckdb {
-
+class BlockMemory;
 class Allocator;
 class BufferPool;
 class TemporaryMemoryManager;
@@ -53,8 +53,6 @@ public:
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) = 0;
 	//! Allocate block-based memory and pin it.
 	virtual BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) = 0;
-	//! Reallocate a pinned in-memory buffer.
-	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	//! Pin a block handle.
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
 	virtual BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) = 0;
@@ -119,6 +117,8 @@ public:
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 	//! Get the buffer pool.
 	virtual BufferPool &GetBufferPool() const;
+	//! Get the const database.
+	virtual const DatabaseInstance &GetDatabase() const = 0;
 	//! Get the database.
 	virtual DatabaseInstance &GetDatabase() = 0;
 	//! Get the manager assigning reservations for temporary memory, e.g., for query intermediates.
@@ -133,8 +133,8 @@ public:
 	//! Read a temporary buffer.
 	virtual unique_ptr<FileBuffer> ReadTemporaryBuffer(QueryContext context, MemoryTag tag, BlockHandle &block,
 	                                                   unique_ptr<FileBuffer> buffer);
-	//! Delete the temporary file containing the block.
-	virtual void DeleteTemporaryFile(BlockHandle &block);
+	//! Delete the temporary file containing the block memory.
+	virtual void DeleteTemporaryFile(BlockMemory &memory);
 };
 
 } // namespace duckdb

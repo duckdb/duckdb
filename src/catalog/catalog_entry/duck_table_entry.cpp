@@ -78,18 +78,18 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, index_info);
+				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info));
 				continue;
 			}
 
 			// We read the index from an old storage version applying a dummy name.
-			if (info.indexes[indexes_idx].name.empty()) {
+			auto index_storage_info = std::move(info.indexes[indexes_idx++]);
+			if (index_storage_info.name.empty()) {
 				auto name_info = GetIndexInfo(constraint_type, true, info.base, i);
-				info.indexes[indexes_idx].name = name_info.name;
+				index_storage_info.name = name_info.name;
 			}
 
-			// Now we can add the index.
-			storage->AddIndex(columns, column_indexes, constraint_type, info.indexes[indexes_idx++]);
+			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info));
 			continue;
 		}
 
@@ -107,24 +107,30 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-					storage->AddIndex(columns, column_indexes, constraint_type, index_info);
+					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info));
 					continue;
 				}
 
 				// We read the index from an old storage version applying a dummy name.
-				if (info.indexes[indexes_idx].name.empty()) {
+				auto index_storage_info = std::move(info.indexes[indexes_idx++]);
+				if (index_storage_info.name.empty()) {
 					auto name_info = GetIndexInfo(IndexConstraintType::FOREIGN, true, info.base, i);
-					info.indexes[indexes_idx].name = name_info.name;
+					index_storage_info.name = name_info.name;
 				}
 
-				// Now we can add the index.
-				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, info.indexes[indexes_idx++]);
+				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info));
 			}
 		}
 	}
 
-	if (!info.indexes.empty()) {
-		storage->SetIndexStorageInfo(std::move(info.indexes));
+	// Move any remaining unused IndexStorageInfos to storage.
+	// These are non-constraint indexes that are still unbound at this point.
+	vector<IndexStorageInfo> remaining_indexes;
+	while (indexes_idx < info.indexes.size()) {
+		remaining_indexes.push_back(std::move(info.indexes[indexes_idx++]));
+	}
+	if (!remaining_indexes.empty()) {
+		storage->SetIndexStorageInfo(std::move(remaining_indexes));
 	}
 }
 

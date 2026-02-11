@@ -26,18 +26,19 @@ struct EvictionQueue;
 struct BufferEvictionNode {
 	BufferEvictionNode() {
 	}
-	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t eviction_seq_num);
+	BufferEvictionNode(weak_ptr<BlockMemory> block_memory_p, idx_t eviction_seq_num);
 
-	weak_ptr<BlockHandle> handle;
+	weak_ptr<BlockMemory> memory_p;
 	idx_t handle_sequence_number;
 
-	bool CanUnload(BlockHandle &handle_p);
-	shared_ptr<BlockHandle> TryGetBlockHandle();
+	bool CanUnload(BlockMemory &memory);
+	shared_ptr<BlockMemory> TryGetBlockMemory();
 };
 
 //! The BufferPool is in charge of handling memory management for one or more databases. It defines memory limits
 //! and implements priority eviction among all users of the pool.
 class BufferPool {
+	friend class BlockMemory;
 	friend class BlockHandle;
 	friend class BlockManager;
 	friend class BufferManager;
@@ -97,15 +98,16 @@ protected:
 	//! Purge all blocks that haven't been pinned within the last N seconds
 	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
 	idx_t PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit);
+
 	//! Garbage collect dead nodes in the eviction queue.
 	void PurgeQueue(const BlockHandle &handle);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
 	//! ready to be purged, and false otherwise.
 	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 	//! Gets the eviction queue for the specified type
-	EvictionQueue &GetEvictionQueueForBlockHandle(const BlockHandle &handle);
+	EvictionQueue &GetEvictionQueueForBlockMemory(const BlockMemory &memory);
 	//! Increments the dead nodes for the queue with specified type
-	void IncrementDeadNodes(const BlockHandle &handle);
+	void IncrementDeadNodes(const BlockMemory &memory);
 
 	//! How many eviction queue types we have (BLOCK and EXTERNAL_FILE go into same queue)
 	static constexpr idx_t EVICTION_QUEUE_TYPES = FILE_BUFFER_TYPE_COUNT - 1;

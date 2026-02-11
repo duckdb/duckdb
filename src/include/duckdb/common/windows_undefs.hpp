@@ -55,4 +55,8 @@
 #undef LIST
 #endif
 
+#ifdef DELETE
+#undef DELETE
+#endif
+
 #endif
