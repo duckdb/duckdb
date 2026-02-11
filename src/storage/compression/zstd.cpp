@@ -374,10 +374,10 @@ public:
 	//	return starting_page == segment_state.GetCurrentId();
 	//}
 
-	// bool AddStringLength(const string_t &str) {
-	//	string_lengths[tuple_count++] = UnsafeNumericCast<string_length_t>(str.GetSize());
-	//	return tuple_count >= vector_size;
-	//}
+	bool AddStringLength(const string_t &str) {
+		string_lengths[tuple_count++] = UnsafeNumericCast<string_length_t>(str.GetSize());
+		return tuple_count >= vector_size;
+	}
 
 	// bool IsLastString() const {
 	//	return tuple_count + 1 >= vector_size;
@@ -622,12 +622,9 @@ public:
 			InitializeVector();
 		}
 
-		vector_state.string_lengths[vector_state.tuple_count] = UnsafeNumericCast<string_length_t>(string.GetSize());
-		bool final_tuple = vector_state.tuple_count + 1 >= vector_state.vector_size;
-		CompressString(string, final_tuple);
-
-		vector_state.tuple_count++;
-		if (vector_state.tuple_count == vector_state.vector_size) {
+		auto is_final_string = vector_state.AddStringLength(string);
+		CompressString(string, is_final_string);
+		if (is_final_string) {
 			// Reached the end of this vector
 			FlushVector();
 		}
