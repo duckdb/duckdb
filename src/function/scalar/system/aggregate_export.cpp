@@ -136,55 +136,23 @@ struct AggregateStateLayout {
 	}
 
 	// Reconstruct a packed binary state from the vector representation
+	// Works only on a legacy state format where the entire state is stored as a blob
 	void Load(Vector &vec, const UnifiedVectorFormat &state_data, idx_t row, data_ptr_t dest) {
-		if (!is_struct) {
-			auto idx = state_data.sel->get_index(row);
-			auto &blob = UnifiedVectorFormat::GetData<string_t>(state_data)[idx];
-			if (blob.GetSize() != state_size) {
-				throw IOException("Aggregate state size mismatch, expect %llu, got %llu", state_size, blob.GetSize());
-			}
-			memcpy(dest, blob.GetData(), state_size);
-		} else {
-			auto &children = StructVector::GetEntries(vec);
-			D_ASSERT(child_types->size() == children.size());
-			idx_t offset = 0;
-			for (idx_t f = 0; f < child_types->size(); f++) {
-				auto &field_type = (*child_types)[f].second;
-				auto physical = field_type.InternalType();
-				auto field_size = GetTypeIdSize(physical);
-				idx_t alignment = MinValue<idx_t>(field_size, 8);
-				offset = AlignValue(offset, alignment);
-
-				auto &child = *children[f];
-				auto data = data_ptr_cast(FlatVector::GetData(child));
-				memcpy(dest + offset, data + row * field_size, field_size);
-				offset += field_size;
-			}
+		D_ASSERT(!is_struct);
+		auto idx = state_data.sel->get_index(row);
+		auto &blob = UnifiedVectorFormat::GetData<string_t>(state_data)[idx];
+		if (blob.GetSize() != state_size) {
+			throw IOException("Aggregate state size mismatch, expect %llu, got %llu", state_size, blob.GetSize());
 		}
+		memcpy(dest, blob.GetData(), state_size);
 	}
 
 	// Serializes a packed binary state back into a `Vector` format
+	// Works only on a legacy state format where the entire state is stored as a blob
 	void Store(Vector &result, idx_t row, data_ptr_t src) const {
-		if (!is_struct) {
-			auto result_ptr = FlatVector::GetData<string_t>(result);
-			result_ptr[row] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(src), state_size);
-		} else {
-			auto &children = StructVector::GetEntries(result);
-			D_ASSERT(child_types->size() == children.size());
-			idx_t offset = 0;
-			for (idx_t f = 0; f < child_types->size(); f++) {
-				auto &field_type = (*child_types)[f].second;
-				auto physical = field_type.InternalType();
-				auto field_size = GetTypeIdSize(physical);
-				idx_t alignment = MinValue<idx_t>(field_size, 8);
-				offset = AlignValue(offset, alignment);
-
-				auto &child = *children[f];
-				auto data = data_ptr_cast(FlatVector::GetData(child));
-				memcpy(data + row * field_size, src + offset, field_size);
-				offset += field_size;
-			}
-		}
+		D_ASSERT(!is_struct);
+		auto result_ptr = FlatVector::GetData<string_t>(result);
+		result_ptr[row] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(src), state_size);
 	}
 
 	bool is_struct;
