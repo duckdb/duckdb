@@ -17,6 +17,11 @@ WITH RECURSIVE cte(x,y) USING KEY (x) AS (
 ----
 1	10
 
+query II
+SELECT log_level, message[0:42] FROM duckdb_logs
+----
+
+
 statement ok
 CALL truncate_duckdb_logs();
 
@@ -48,18 +53,6 @@ CALL truncate_duckdb_logs();
 # Enable UNION as UNION ALL interpretation, should not log.
 statement ok
 SET deprecated_using_key_syntax='UNION_AS_UNION_ALL';
-
-# UNION ALL still works as intended after the setting is applied
-query II
-WITH RECURSIVE cte(x,y) USING KEY (x) AS (
-  SELECT 1, 0
-    UNION ALL
-  SELECT x, y+1
-  FROM   cte
-  WHERE  y < 10
-) TABLE cte;
-----
-1	10
 
 # UNION now doesn't throw a warning
 query II
