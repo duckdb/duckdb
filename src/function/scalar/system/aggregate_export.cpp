@@ -100,41 +100,6 @@ struct AggregateStateLayout {
 		}
 	}
 
-	/*
-	 * Load a specific field from the struct aggregate state into the packed binary representation
-	 * By iterating over rows in the inner loop for a specific type T, the compiler is given a tight loop with a
-	 * predictable memory access pattern. Since the field in a struct is a contiguous array of type `T`, the compiler
-	 * can easily vectorize the read operations using SIMD instructions
-	 */
-	template <class T>
-	void LoadFieldTyped(Vector &struct_vec, idx_t field_idx, const UnifiedVectorFormat &state_data, idx_t count,
-	                    data_ptr_t base_ptr, idx_t field_offset) const {
-		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
-		auto child_data = FlatVector::GetData<T>(child);
-
-		for (idx_t row = 0; row < count; row++) {
-			auto row_idx = state_data.sel->get_index(row);
-			if (!state_data.validity.RowIsValid(row_idx)) {
-				continue;
-			}
-
-			auto dest = base_ptr + row * aligned_state_size + field_offset;
-			*reinterpret_cast<T *>(dest) = child_data[row];
-		}
-	}
-
-	template <class T>
-	void StoreFieldTyped(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources,
-	                     idx_t field_offset) const {
-		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
-		auto child_data = FlatVector::GetData<T>(child);
-
-		for (idx_t row = 0; row < count; row++) {
-			auto src = sources[row] + field_offset;
-			child_data[row] = *reinterpret_cast<T *>(src);
-		}
-	}
-
 	// Reconstruct a packed binary state from the vector representation
 	// Works only on a legacy state format where the entire state is stored as a blob
 	void Load(Vector &vec, const UnifiedVectorFormat &state_data, idx_t row, data_ptr_t dest) {
@@ -162,19 +127,41 @@ struct AggregateStateLayout {
 	const child_list_t<LogicalType> *child_types = nullptr;
 };
 
+/*
+ * Load a specific field from the struct aggregate state into the packed binary representation
+ * By iterating over rows in the inner loop for a specific type T, the compiler is given a tight loop with a
+ * predictable memory access pattern. Since the field in a struct is a contiguous array of type `T`, the compiler
+ * can easily vectorize the read operations using SIMD instructions
+ */
 struct LoadFieldOp {
 	template <class T>
-	static void Operation(const AggregateStateLayout &layout, Vector &struct_vector, idx_t f,
-	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr, idx_t offset) {
-		layout.LoadFieldTyped<T>(struct_vector, f, state_data, count, base_ptr, offset);
+	static void Operation(const AggregateStateLayout &layout, Vector &struct_vec, idx_t field_idx,
+	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
+		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
+		auto child_data = FlatVector::GetData<T>(child);
+
+		for (idx_t row = 0; row < count; row++) {
+			auto row_idx = state_data.sel->get_index(row);
+			if (!state_data.validity.RowIsValid(row_idx)) {
+				continue;
+			}
+
+			auto dest = base_ptr + row * layout.aligned_state_size + field_offset;
+			*reinterpret_cast<T *>(dest) = child_data[row];
+		}
 	}
 };
 
 struct StoreFieldOp {
 	template <class T>
-	static void Operation(const AggregateStateLayout &layout, Vector &struct_vec, idx_t field_idx, idx_t count,
-	                      data_ptr_t *sources, idx_t field_offset) {
-		layout.StoreFieldTyped<T>(struct_vec, field_idx, count, sources, field_offset);
+	static void Operation(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources, idx_t field_offset) {
+		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
+		auto child_data = FlatVector::GetData<T>(child);
+
+		for (idx_t row = 0; row < count; row++) {
+			auto src = sources[row] + field_offset;
+			child_data[row] = *reinterpret_cast<T *>(src);
+		}
 	}
 };
 
@@ -608,7 +595,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 			idx_t alignment = MinValue<idx_t>(field_size, 8);
 			offset_in_state = AlignValue(offset_in_state, alignment);
 
-			TemplateDispatch<StoreFieldOp>(physical, layout, result, field_idx, count, addresses_ptrs, offset_in_state);
+			TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
 
 			offset_in_state += field_size;
 		}
