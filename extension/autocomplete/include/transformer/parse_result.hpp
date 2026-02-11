@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "parser/special_string_utils.hpp"
 
 namespace duckdb {
 
@@ -27,8 +28,6 @@ enum class ParseResultType : uint8_t {
 	STRING,
 	INVALID
 };
-
-enum class SpecialStringCharacter { STANDARD = 0, NATIONAL_STRING, HEXADECIMAL_STRING, ESCAPE_STRING };
 
 inline const char *ParseResultToString(ParseResultType type) {
 	switch (type) {
@@ -337,7 +336,7 @@ public:
 						break;
 					case '\\':
 						escaped_result += '\\';
-						break; // This handles your '\\' case
+						break;
 					case '\'':
 						escaped_result += '\'';
 						break;
@@ -360,15 +359,15 @@ public:
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
 	                      const std::string &indent, bool is_last) const override {
 		ParseResult::ToStringInternal(ss, visited, indent, is_last);
-		if (string_type == SpecialStringCharacter::STANDARD) {
-			ss << ": \"" << result << "\"\n";
-		} else if (string_type == SpecialStringCharacter::ESCAPE_STRING) {
-			ss << ": E\"" << result << "\"\n";
+		string special_string;
+		if (string_type == SpecialStringCharacter::ESCAPE_STRING) {
+			special_string = "E";
 		} else if (string_type == SpecialStringCharacter::NATIONAL_STRING) {
-			ss << ": N\"" << result << "\"\n";
+			special_string = "N";
 		} else if (string_type == SpecialStringCharacter::HEXADECIMAL_STRING) {
-			ss << ": X\"" << result << "\"\n";
+			special_string = "X";
 		}
+		ss << ": " << special_string << "\"" << result << "\"n";
 	}
 };
 

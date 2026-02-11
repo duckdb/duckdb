@@ -588,8 +588,14 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		// variable matchers match anything except for reserved keywords
-		if (!MatchStringLiteral(state)) {
+		if (state.token_index >= state.tokens.size()) {
+			return MatchResultType::FAIL;
+		}
+
+		auto &token_text = state.tokens[state.token_index].text;
+		auto string_info = GetSpecialStringInfo(token_text);
+
+		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
 		return MatchResultType::SUCCESS;
@@ -601,21 +607,21 @@ public:
 		}
 
 		auto &token = state.tokens[state.token_index];
-		auto &token_text = token.text;
+		auto string_info = GetSpecialStringInfo(token.text);
 
-		auto special_type = SpecialStringCharacter(token_text.front());
-
-		if (!MatchStringLiteral(state)) {
+		if (!MatchStringLiteral(state, string_info)) {
 			return nullptr;
 		}
 
-		idx_t prefix_len = (special_type == SpecialStringCharacter::STANDARD) ? 1 : 2;
 		idx_t suffix_len = 1;
+		if (token.text.length() < string_info.prefix_len + suffix_len) {
+			return nullptr;
+		}
 
-		string stripped_string = token_text.substr(prefix_len, token_text.length() - (prefix_len + suffix_len));
+		string stripped_string =
+		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
 
-		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, special_type));
-
+		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, string_info.type));
 		result->name = name;
 		return result;
 	}
@@ -629,35 +635,14 @@ public:
 	}
 
 private:
-	static SpecialStringCharacter SpecialStringCharacter(char c) {
-		if (c == '\'') {
-			// Most likely case
-			return SpecialStringCharacter::STANDARD;
-		}
-		if (c == 'N' || c == 'n') {
-			return SpecialStringCharacter::NATIONAL_STRING;
-		}
-		if (c == 'X' || c == 'x') {
-			return SpecialStringCharacter::HEXADECIMAL_STRING;
-		}
-		if (c == 'E' || c == 'e') {
-			return SpecialStringCharacter::ESCAPE_STRING;
-		}
-		return SpecialStringCharacter::STANDARD;
-	}
-
-	static bool MatchStringLiteral(MatchState &state) {
+	static bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) {
 		if (state.token_index >= state.tokens.size()) {
 			return false;
 		}
 		auto &token_text = state.tokens[state.token_index].text;
-		if (token_text.empty()) {
-			return false;
-		}
 
-		auto special_type = SpecialStringCharacter(token_text.front());
-		idx_t open_quote_idx = (special_type == SpecialStringCharacter::STANDARD) ? 0 : 1;
-		idx_t min_len = open_quote_idx + 2;
+		idx_t open_quote_idx = string_info.prefix_len - 1;
+		idx_t min_len = string_info.prefix_len + 1;
 
 		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
 			state.token_index++;
