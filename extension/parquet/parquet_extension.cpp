@@ -217,8 +217,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				}
 				auto &shredding_types_value = option.second[0];
 				if (shredding_types_value.type().id() != LogicalTypeId::STRUCT) {
-					BinderException("SHREDDING value should be a STRUCT of column names to types, i.e: {col1: "
-					                "'INTEGER[]', col2: 'BOOLEAN'}");
+					throw BinderException("SHREDDING value should be a STRUCT of column names to types, i.e: {col1: "
+					                      "'INTEGER[]', col2: 'BOOLEAN'}");
 				}
 				const auto &struct_type = shredding_types_value.type();
 				const auto &struct_children = StructValue::GetChildren(shredding_types_value);
