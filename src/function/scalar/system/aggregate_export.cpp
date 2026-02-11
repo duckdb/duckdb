@@ -183,7 +183,7 @@ struct CopyFromInputFieldOp {
 	}
 };
 
-struct LoadSelectedFieldOp {
+struct LoadFieldForSelectedRowsOp {
 	template <class T>
 	static void Operation(const AggregateStateLayout &layout, Vector &struct_vec, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, const UnifiedVectorFormat &state_data,
@@ -200,7 +200,7 @@ struct LoadSelectedFieldOp {
 	}
 };
 
-struct StoreSelectedFieldOp {
+struct StoreFieldForSelectedRowsOp {
 	template <class T>
 	static void Operation(const AggregateStateLayout &layout, Vector &result, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
@@ -453,12 +453,12 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 				idx_t alignment = MinValue<idx_t>(field_size, 8);
 				offset_in_state = AlignValue(offset_in_state, alignment);
 
-				TemplateDispatch<LoadSelectedFieldOp>(physical, layout, input.data[0], field_idx, both_valid_sel,
-				                                      both_valid_count, state0_data, local_state.state_buffer0.get(),
-				                                      offset_in_state);
-				TemplateDispatch<LoadSelectedFieldOp>(physical, layout, input.data[1], field_idx, both_valid_sel,
-				                                      both_valid_count, state1_data, local_state.state_buffer1.get(),
-				                                      offset_in_state);
+				TemplateDispatch<LoadFieldForSelectedRowsOp>(physical, layout, input.data[0], field_idx, both_valid_sel,
+				                                             both_valid_count, state0_data,
+				                                             local_state.state_buffer0.get(), offset_in_state);
+				TemplateDispatch<LoadFieldForSelectedRowsOp>(physical, layout, input.data[1], field_idx, both_valid_sel,
+				                                             both_valid_count, state1_data,
+				                                             local_state.state_buffer1.get(), offset_in_state);
 				offset_in_state += field_size;
 			}
 		} else {
@@ -485,9 +485,9 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 				idx_t alignment = MinValue<idx_t>(field_size, 8);
 				offset_in_state = AlignValue(offset_in_state, alignment);
 
-				TemplateDispatch<StoreSelectedFieldOp>(physical, layout, result, field_idx, both_valid_sel,
-				                                       both_valid_count, local_state.state_buffer1.get(),
-				                                       offset_in_state);
+				TemplateDispatch<StoreFieldForSelectedRowsOp>(physical, layout, result, field_idx, both_valid_sel,
+				                                              both_valid_count, local_state.state_buffer1.get(),
+				                                              offset_in_state);
 				offset_in_state += field_size;
 			}
 		} else {
