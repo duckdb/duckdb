@@ -214,15 +214,15 @@ struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
 	unsafe_unique_array<data_t> state_buffer0, state_buffer1;
-	Vector state_vector0, state_vector1;
+	Vector addresses0, addresses1;
 
 	ArenaAllocator allocator;
 
 	explicit CombineState(idx_t state_size_p)
-	    : state_size(state_size_p), state_buffer0(make_unsafe_uniq_array<data_t>(state_size_p)),
-	      state_buffer1(make_unsafe_uniq_array<data_t>(state_size_p)),
-	      state_vector0(Value::POINTER(CastPointerToValue(state_buffer0.get()))),
-	      state_vector1(Value::POINTER(CastPointerToValue(state_buffer1.get()))),
+	    : state_size(state_size_p),
+	      state_buffer0(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
+	      state_buffer1(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
+	      addresses0(LogicalType::POINTER), addresses1(LogicalType::POINTER),
 	      allocator(Allocator::DefaultAllocator()) {
 	}
 };
@@ -372,9 +372,13 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 		layout.Load(input.data[0], state0_data, i, local_state.state_buffer0.get());
 		layout.Load(input.data[1], state1_data, i, local_state.state_buffer1.get());
 
+		auto state0_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses0);
+		auto state1_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses1);
+		state0_ptr[0] = local_state.state_buffer0.get();
+		state1_ptr[0] = local_state.state_buffer1.get();
+
 		AggregateInputData aggr_input_data(nullptr, local_state.allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
-		bind_data.aggr.GetStateCombineCallback()(local_state.state_vector0, local_state.state_vector1, aggr_input_data,
-		                                         1);
+		bind_data.aggr.GetStateCombineCallback()(local_state.addresses0, local_state.addresses1, aggr_input_data, 1);
 
 		layout.Store(result, i, local_state.state_buffer1.get());
 	}
