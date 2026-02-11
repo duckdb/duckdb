@@ -2,8 +2,13 @@
 # description: Test recovery when doing concurrent appends with a failing auto-checkpoint
 # group: [concurrent_wal]
 
+foreach skip_wal_threshold  0 9999999999
+
 statement ok
-ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db
+SET auto_checkpoint_skip_wal_threshold=${skip_wal_threshold}
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_abort_${skip_wal_threshold}.db' AS main_db
 
 statement ok
 SET checkpoint_threshold='50KB'
@@ -45,7 +50,11 @@ endloop
 restart
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_abort.db' AS main_db (READ_ONLY)
+ATTACH '__TEST_DIR__/concurrent_abort_${skip_wal_threshold}.db' AS main_db (READ_ONLY)
 
 statement ok
 FROM main_db.integers
+
+restart
+
+endloop

@@ -323,9 +323,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// any failure during checkpoint will cause this transactions' changes to be lost,
 		// while later concurrent commits will not be
 		// this can cause undefined / "weird" state, as those commits were made assuming this one was already committed
-		skip_wal_write_due_to_checkpoint = true;
-
-		// FIXME: make this depend on transaction WAL size
+		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context)) {
+			skip_wal_write_due_to_checkpoint = true;
+		}
 	}
 
 	if (transaction.ShouldWriteToWAL(db)) {
