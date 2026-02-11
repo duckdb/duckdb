@@ -320,8 +320,7 @@ MissingExtensionException::MissingExtensionException(const string &msg)
 
 AutoloadException::AutoloadException(const string &extension_name, const string &message)
     : Exception(ExceptionType::AUTOLOAD,
-                "An error occurred while trying to automatically install the required extension '" + extension_name +
-                    "':\n" + message) {
+                StringUtil::Format("An error occurred while trying to automatically install the required extension '%s:\n%s", extension_name, message)) {
 }
 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
