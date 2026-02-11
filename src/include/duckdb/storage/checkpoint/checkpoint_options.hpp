@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/enums/checkpoint_type.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
