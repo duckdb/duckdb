@@ -11,15 +11,6 @@ namespace duckdb {
 
 ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) : executor(context) {
 	executor.AddExpression(expression);
-	if (expression.type == ExpressionType::BOUND_FUNCTION) {
-		auto &func_expr = expression.Cast<BoundFunctionExpression>();
-		if (func_expr.function.HasFilterPrunerCallbacks() && func_expr.function.init_local_state) {
-			ExpressionExecutorState exec_state;
-			exec_state.executor = &executor;
-			ExpressionState expr_state(expression, exec_state);
-			extension_state = func_expr.function.init_local_state(expr_state, func_expr, func_expr.bind_info.get());
-		}
-	}
 }
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context, const TableFilter &filter) {

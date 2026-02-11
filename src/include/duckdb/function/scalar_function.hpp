@@ -56,6 +56,15 @@ class ScalarFunctionCatalogEntry;
 
 struct StatementProperties;
 
+struct FunctionStatisticsPruneInput {
+	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, BaseStatistics &stats_p)
+	    : bind_data(bind_data_p), stats(stats_p) {
+	}
+
+	optional_ptr<FunctionData> bind_data;
+	BaseStatistics &stats;
+};
+
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
 	                        vector<BaseStatistics> &child_stats_p, unique_ptr<Expression> *expr_ptr_p)
@@ -120,13 +129,8 @@ typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<
                                      const ScalarFunction &function);
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
 
-//! The type to prune row groups using statistics.
-typedef FilterPropagateResult (*row_group_pruner_t)(const FunctionData *bind_data, const BaseStatistics &stats);
-//! The type to prune tuples within a vector.
-typedef idx_t (*vector_pruner_t)(const FunctionData *bind_data, FunctionLocalState &state, Vector &vector,
-                                 SelectionVector &sel, idx_t &approved_tuple_count);
-//! The type to prune constant vectors by evaluating their single value.
-typedef bool (*value_pruner_t)(const FunctionData *bind_data, const Value &value);
+//! The type to prune row groups based on statistics
+typedef FilterPropagateResult (*propagate_filter_t)(const FunctionStatisticsPruneInput &input);
 
 //! The type to bind lambda-specific parameter types
 typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
@@ -191,13 +195,9 @@ public:
 	function_serialize_t GetSerializeCallback() const { return serialize; }
 	function_deserialize_t GetDeserializeCallback() const { return deserialize; }
 
-	bool HasFilterPrunerCallbacks() const {return row_group_prune != nullptr && vector_prune != nullptr && value_prune != nullptr; }
-	void SetRowGroupPrunerCallback(row_group_pruner_t callback) { row_group_prune = callback; }
-	void SetVectorPrunerCallback(vector_pruner_t callback) { vector_prune = callback; }
-	void SetValuePrunerCallback(value_pruner_t callback) {value_prune = callback; }
-	row_group_pruner_t GetRowGroupPruneCallback() const { return row_group_prune; }
-	vector_pruner_t GetVectorPruneCallback() const { return vector_prune; }
-	value_pruner_t GetValuePruneCallback() const {return value_prune; }
+	bool HasFilterPruneCallback() const {return filter_prune != nullptr; }
+	void SetFilterPruneCallback(propagate_filter_t callback) { filter_prune = callback; }
+	propagate_filter_t GetFilterPruneCallback() const { return filter_prune; }
 	// clang-format on
 
 	bool HasExtraFunctionInfo() const {
@@ -236,12 +236,8 @@ public:
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
 
-	//! The group filter prune function (if any)
-	row_group_pruner_t row_group_prune = nullptr;
-	//! The vector filter prune function (if any)
-	vector_pruner_t vector_prune = nullptr;
-	//! The value filter prune function (if any)
-	value_pruner_t value_prune = nullptr;
+	//! The filter prune function (if any)
+	propagate_filter_t filter_prune = nullptr;
 	//! Additional function info, passed to the bind
 	shared_ptr<ScalarFunctionInfo> function_info;
 

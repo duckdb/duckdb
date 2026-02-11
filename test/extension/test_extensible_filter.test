@@ -15,7 +15,7 @@ statement ok
 PRAGMA disable_verification;
 
 statement ok
-LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_filter_demo.duckdb_extension';
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
 CREATE TABLE rowid_test_table AS SELECT * FROM range(10) t(id)
