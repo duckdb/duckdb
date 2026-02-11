@@ -85,7 +85,7 @@ if not args.parallel:
     num_workers = 1  # --no-parallel forces sequential execution
 elif args.workers == 0:
     num_workers = get_cpu_count()
-    print(f"Auto-detected {num_workers} CPU cores for parallel execution")
+    print(f"Auto-detected {num_workers} CPU cores for parallel execution", flush=True)
 else:
     num_workers = args.workers
 
@@ -95,7 +95,7 @@ if no_exit:
         exit(1)
 
 if num_workers > 1 and fast_fail:
-    print("Warning: --fast-fail with --workers > 1 may not stop immediately on first failure")
+    print("Warning: --fast-fail with --workers > 1 may not stop immediately on first failure", flush=True)
 
 profile = args.profile
 assertions = args.no_assertions
@@ -320,9 +320,9 @@ def run_tests_parallel(num_workers, batch_size=1):
         batch_size: Number of tests per invocation (1 = single test mode, >1 = batch mode)
     """
     if batch_size > 1:
-        print(f"Running {test_count} tests with {num_workers} parallel workers, {batch_size} tests per batch...")
+        print(f"Running {test_count} tests with {num_workers} parallel workers, {batch_size} tests per batch...", flush=True)
     else:
-        print(f"Running {test_count} tests with {num_workers} parallel worker processes...")
+        print(f"Running {test_count} tests with {num_workers} parallel worker processes...", flush=True)
 
     config = {
         'unittest_program': unittest_program,
