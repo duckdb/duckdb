@@ -132,6 +132,10 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	if (storage_manager.InMemory()) {
 		return;
 	}
+	if (ValidChecker::IsInvalidated(db.GetDatabase())) {
+		// don't checkpoint invalidated databases
+		return;
+	}
 	// assert that the checkpoint manager hasn't been used before
 	D_ASSERT(!metadata_writer);
 
@@ -270,6 +274,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		// any exceptions thrown here are fatal
 		ErrorData error(ex);
 		if (error.Type() == ExceptionType::FATAL) {
+			ValidChecker::Invalidate(db.GetDatabase(), error.Message());
 			throw;
 		}
 		throw FatalException("Failed to create checkpoint: %s", error.Message());
