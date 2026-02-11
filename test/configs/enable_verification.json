@@ -34,6 +34,7 @@
         "test/sql/catalog/sequence/test_duckdb_sequences.test",
         "test/sql/catalog/sequence/test_sequence.test",
         "test/sql/catalog/test_temporary.test",
+        "test/sql/catalog/test_temporary_schema.test",
         "test/sql/copy_database/copy_database_different_types.test",
         "test/sql/export/export_database.test",
         "test/sql/function/list/aggregates/avg.test",
@@ -45,7 +46,8 @@
         "test/sql/storage/catalog/test_store_sequences.test",
         "test/sql/storage/wal/wal_sequence_uncommitted_transaction.test",
         "test/sql/storage/wal/wal_store_default_sequence.test",
-        "test/sql/storage/wal/wal_store_sequences.test"
+        "test/sql/storage/wal/wal_store_sequences.test",
+        "test/sql/storage/catalog/test_store_temporary_schema.test"
       ]
     },
     {

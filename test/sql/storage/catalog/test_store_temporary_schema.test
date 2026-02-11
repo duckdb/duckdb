@@ -1,0 +1,183 @@
+# name: test/sql/storage/catalog/test_store_temporary_schema.test
+# description: Temporary schemas and their objects are not written to disk
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/test_store_temporary_schema.db
+
+# create a persistent schema for comparison
+statement ok
+CREATE SCHEMA persistent_schema
+
+statement ok
+CREATE TABLE persistent_schema.persistent_table(i INTEGER)
+
+statement ok
+INSERT INTO persistent_schema.persistent_table VALUES (1)
+
+# create a temporary schema with various objects
+statement ok
+CREATE SCHEMA temp.temp_schema
+
+statement ok
+CREATE TEMPORARY TABLE temp.temp_schema.temp_table(i INTEGER)
+
+statement ok
+INSERT INTO temp.temp_schema.temp_table VALUES (42)
+
+statement ok
+CREATE TEMPORARY VIEW temp.temp_schema.temp_view AS SELECT 100 AS val
+
+statement ok
+CREATE TEMPORARY SEQUENCE temp.temp_schema.temp_seq
+
+statement ok
+CREATE TEMPORARY MACRO temp.temp_schema.temp_macro(x) AS x * 2
+
+# verify all objects are accessible
+query I
+SELECT * FROM temp.temp_schema.temp_table
+----
+42
+
+query I
+SELECT * FROM temp.temp_schema.temp_view
+----
+100
+
+query I
+SELECT nextval('temp.temp_schema.temp_seq')
+----
+1
+
+query I
+SELECT temp.temp_schema.temp_macro(21)
+----
+42
+
+# verify persistent schema is accessible
+query I
+SELECT * FROM persistent_schema.persistent_table
+----
+1
+
+# now restart
+restart
+
+# persistent schema and table are still there
+query I
+SELECT * FROM persistent_schema.persistent_table
+----
+1
+
+# temporary schema and all its objects are gone
+statement error
+SELECT * FROM temp.temp_schema.temp_table
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+statement error
+SELECT * FROM temp.temp_schema.temp_view
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+statement error
+SELECT nextval('temp.temp_schema.temp_seq')
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+statement error
+SELECT temp.temp_schema.temp_macro(21)
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+# can recreate the temp schema after restart
+statement ok
+CREATE SCHEMA temp.temp_schema
+
+statement ok
+CREATE TEMPORARY TABLE temp.temp_schema.temp_table(i INTEGER)
+
+statement ok
+INSERT INTO temp.temp_schema.temp_table VALUES (99)
+
+query I
+SELECT * FROM temp.temp_schema.temp_table
+----
+99
+
+# =============================================================================
+# Part 2: Test multiple temp schemas are not persisted
+# =============================================================================
+
+# restart to clean up, then create multiple temp schemas
+restart
+
+# create second temp schema with table and view
+statement ok
+CREATE SCHEMA temp.second_schema
+
+statement ok
+CREATE TEMPORARY TABLE temp.second_schema.second_table(val VARCHAR)
+
+statement ok
+INSERT INTO temp.second_schema.second_table VALUES ('second schema data')
+
+statement ok
+CREATE TEMPORARY VIEW temp.second_schema.second_view AS SELECT 200 AS num
+
+# create third temp schema with sequence and macro
+statement ok
+CREATE SCHEMA temp.third_schema
+
+statement ok
+CREATE TEMPORARY SEQUENCE temp.third_schema.third_seq
+
+statement ok
+CREATE TEMPORARY MACRO temp.third_schema.third_macro(x) AS x * 3
+
+# verify all objects are accessible
+query I
+SELECT * FROM temp.second_schema.second_table
+----
+second schema data
+
+query I
+SELECT * FROM temp.second_schema.second_view
+----
+200
+
+query I
+SELECT nextval('temp.third_schema.third_seq')
+----
+1
+
+query I
+SELECT temp.third_schema.third_macro(7)
+----
+21
+
+# restart again - all temp schemas and objects should be gone
+restart
+
+# second_schema is gone
+statement error
+SELECT * FROM temp.second_schema.second_table
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+statement error
+SELECT * FROM temp.second_schema.second_view
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+# third_schema is gone
+statement error
+SELECT nextval('temp.third_schema.third_seq')
+----
+<REGEX>:.*Catalog Error.*does not exist.*
+
+statement error
+SELECT temp.third_schema.third_macro(7)
+----
+<REGEX>:.*Catalog Error.*does not exist.*
