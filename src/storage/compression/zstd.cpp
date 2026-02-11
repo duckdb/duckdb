@@ -251,19 +251,19 @@ public:
 	//		D_ASSERT((IsOnSegmentBuffer() && new_id == INVALID_BLOCK) || new_id != INVALID_BLOCK);
 	//		block_id = new_id;
 	//	}
-	//	void WriteBlockIdPointer(page_id_t block_id) {
-	//		Store<block_id_t>(block_id, current_buffer_ptr);
-	//		current_buffer_ptr += sizeof(block_id_t);
-	//	}
+	void WriteBlockIdPointer(page_id_t block_id) {
+		Store<block_id_t>(block_id, current_buffer_ptr);
+		current_buffer_ptr += sizeof(block_id_t);
+	}
 
-	//	page_offset_t GetCurrentOffset(const CompressionInfo &info) {
-	//		auto &handle = *current_buffer;
-	//		auto start_of_buffer = handle.Ptr();
-	//		D_ASSERT(current_buffer_ptr >= start_of_buffer);
-	//		auto res = (page_offset_t)(current_buffer_ptr - start_of_buffer);
-	//		D_ASSERT(res <= GetWritableSpace(info));
-	//		return res;
-	//	}
+	page_offset_t GetCurrentOffset(const CompressionInfo &info) {
+		auto &handle = *current_buffer;
+		auto start_of_buffer = handle.Ptr();
+		D_ASSERT(current_buffer_ptr >= start_of_buffer);
+		auto res = (page_offset_t)(current_buffer_ptr - start_of_buffer);
+		D_ASSERT(res <= GetWritableSpace(info));
+		return res;
+	}
 	bool IsOnSegmentBuffer() const {
 		return current_buffer.get() == &segment_handle;
 	}
@@ -280,26 +280,26 @@ public:
 	//	data_ptr_t GetCurrentBufferPtr() {
 	//		return current_buffer_ptr;
 	//	}
-	//	idx_t InitializeSegment(idx_t vectors_in_segment) {
-	//		auto base = segment_handle.Ptr();
-	//		idx_t offset = 0;
-	//		page_ids = reinterpret_cast<page_id_t *>(base + offset);
-	//		offset += (sizeof(page_id_t) * vectors_in_segment);
+	idx_t InitializeSegment(idx_t vectors_in_segment) {
+		auto base = segment_handle.Ptr();
+		idx_t offset = 0;
+		page_ids = reinterpret_cast<page_id_t *>(base + offset);
+		offset += (sizeof(page_id_t) * vectors_in_segment);
 
-	//		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
-	//		page_offsets = reinterpret_cast<page_offset_t *>(base + offset);
-	//		offset += (sizeof(page_offset_t) * vectors_in_segment);
+		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
+		page_offsets = reinterpret_cast<page_offset_t *>(base + offset);
+		offset += (sizeof(page_offset_t) * vectors_in_segment);
 
-	//		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
-	//		uncompressed_sizes = reinterpret_cast<uncompressed_size_t *>(base + offset);
-	//		offset += (sizeof(uncompressed_size_t) * vectors_in_segment);
+		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
+		uncompressed_sizes = reinterpret_cast<uncompressed_size_t *>(base + offset);
+		offset += (sizeof(uncompressed_size_t) * vectors_in_segment);
 
-	//		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
-	//		compressed_sizes = reinterpret_cast<compressed_size_t *>(base + offset);
-	//		offset += (sizeof(compressed_size_t) * vectors_in_segment);
+		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
+		compressed_sizes = reinterpret_cast<compressed_size_t *>(base + offset);
+		offset += (sizeof(compressed_size_t) * vectors_in_segment);
 
-	//		return offset;
-	//	}
+		return offset;
+	}
 	//	void WriteVectorMetadata(page_id_t page_id, page_offset_t page_offset, uncompressed_size_t uncompressed_size,
 	// compressed_size_t compressed_size) { 		page_ids[vector_in_segment_count] = page_id;
 	//		page_offsets[vector_in_segment_count] = page_offset;
@@ -383,26 +383,24 @@ public:
 	//	return tuple_count + 1 >= vector_size;
 	//}
 
-	// void Initialize(idx_t expected_tuple_count, ZSTDCompressionSegmentState &segment_state, const CompressionInfo
-	// &info) { 	vector_size = expected_tuple_count;
+	void Initialize(idx_t expected_tuple_count, ZSTDCompressionSegmentState &segment_state,
+	                const CompressionInfo &info) {
+		vector_size = expected_tuple_count;
 
-	//	auto current_offset = segment_state.GetCurrentOffset(info);
-	//	//! Mark where the vector begins (page_id + page_offset)
-	//	starting_offset = current_offset;
-	//	starting_page = segment_state.GetCurrentId();
+		auto current_offset = segment_state.GetCurrentOffset(info);
+		//! Mark where the vector begins (page_id + page_offset)
+		starting_offset = current_offset;
+		starting_page = segment_state.GetCurrentId();
 
-	//	//! Set the string_lengths destination and save in what buffer its stored
-	//	vector_lengths_buffer = segment_state.current_buffer;
-	//	string_lengths = reinterpret_cast<string_length_t *>(segment_state.current_buffer->Ptr() + current_offset);
+		//! Set the string_lengths destination and save in what buffer its stored
+		vector_lengths_buffer = segment_state.current_buffer;
+		string_lengths = reinterpret_cast<string_length_t *>(segment_state.current_buffer->Ptr() + current_offset);
 
-	//	//! Finally forward the current_buffer_ptr to point *after* all string lengths we'll write
-	//	segment_state.current_buffer_ptr = reinterpret_cast<data_ptr_t>(string_lengths);
-	//	segment_state.current_buffer_ptr += expected_tuple_count * sizeof(string_length_t);
+		//! Finally forward the current_buffer_ptr to point *after* all string lengths we'll write
+		segment_state.current_buffer_ptr = reinterpret_cast<data_ptr_t>(string_lengths);
+		segment_state.current_buffer_ptr += expected_tuple_count * sizeof(string_length_t);
+	}
 
-	//	compressed_size = 0;
-	//	uncompressed_size = 0;
-	//	in_vector = true;
-	//}
 public:
 	page_id_t starting_page;
 	page_offset_t starting_offset;
@@ -515,34 +513,19 @@ public:
 			vectors_in_segment = vectors_per_segment;
 		}
 
-		idx_t offset = 0;
-		auto base = segment_state.segment_handle.Ptr();
-		segment_state.page_ids = reinterpret_cast<page_id_t *>(base + offset);
-		offset += (sizeof(page_id_t) * vectors_in_segment);
-
-		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
-		segment_state.page_offsets = reinterpret_cast<page_offset_t *>(base + offset);
-		offset += (sizeof(page_offset_t) * vectors_in_segment);
-
-		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
-		segment_state.uncompressed_sizes = reinterpret_cast<uncompressed_size_t *>(base + offset);
-		offset += (sizeof(uncompressed_size_t) * vectors_in_segment);
-
-		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
-		segment_state.compressed_sizes = reinterpret_cast<compressed_size_t *>(base + offset);
-		offset += (sizeof(compressed_size_t) * vectors_in_segment);
-
+		auto offset = segment_state.InitializeSegment(vectors_in_segment);
 		D_ASSERT(offset == GetVectorMetadataSize(vectors_in_segment));
 		return offset;
 	}
 
 	void InitializeVector() {
 		D_ASSERT(!vector_state.in_vector);
+		idx_t expected_tuple_count;
 		if (vector_count + 1 >= total_vector_count) {
 			//! Last vector
-			vector_state.vector_size = analyze_state->count - (ZSTD_VECTOR_SIZE * vector_count);
+			expected_tuple_count = analyze_state->count - (ZSTD_VECTOR_SIZE * vector_count);
 		} else {
-			vector_state.vector_size = ZSTD_VECTOR_SIZE;
+			expected_tuple_count = ZSTD_VECTOR_SIZE;
 		}
 		auto current_offset = GetCurrentOffset();
 		current_offset = UnsafeNumericCast<page_offset_t>(
@@ -558,19 +541,13 @@ public:
 			NewSegment();
 		}
 
-		if (current_offset + (vector_state.vector_size * sizeof(string_length_t)) >= GetWritableSpace(info)) {
+		if (current_offset + (expected_tuple_count * sizeof(string_length_t)) >= GetWritableSpace(info)) {
 			// Check if there is room on the current page for the vector data
 			NewPage();
 		}
-		current_offset = GetCurrentOffset();
-		vector_state.starting_offset = current_offset;
-		vector_state.starting_page = segment_state.GetCurrentId();
 
-		vector_state.vector_lengths_buffer = segment_state.current_buffer;
-		vector_state.string_lengths =
-		    reinterpret_cast<string_length_t *>(segment_state.current_buffer->Ptr() + current_offset);
-		segment_state.current_buffer_ptr = reinterpret_cast<data_ptr_t>(vector_state.string_lengths);
-		segment_state.current_buffer_ptr += vector_state.vector_size * sizeof(string_length_t);
+		vector_state.Initialize(expected_tuple_count, segment_state, info);
+
 		// 'out_buffer' should be set to point directly after the string_lengths
 		ResetOutBuffer();
 
@@ -654,8 +631,7 @@ public:
 		D_ASSERT(GetCurrentOffset() <= GetWritableSpace(info));
 
 		// Write the new id at the end of the last page
-		Store<block_id_t>(new_id, segment_state.current_buffer_ptr);
-		segment_state.current_buffer_ptr += sizeof(block_id_t);
+		segment_state.WriteBlockIdPointer(new_id);
 		return new_id;
 	}
 
