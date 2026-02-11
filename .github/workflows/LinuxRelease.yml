@@ -251,7 +251,7 @@ jobs:
           echo Tests
           python3 scripts/run_tests_one_by_one.py build/release/test/unittest \"*\" --time_execution
           echo Release specific tests
-          ./build/release/test/unittest --select-tag release
+          python3 scripts/run_tests_one_by_one.py build/release/test/unittest --select-tag release
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
