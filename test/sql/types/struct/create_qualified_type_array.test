@@ -1,5 +1,5 @@
-# name: test/sql/types/struct/create_type_struct.test
-# description: Test create qualified types with array 
+# name: test/sql/types/struct/create_qualified_type_array.test
+# description: Test create qualified types with array
 # group: [struct]
 
 # Original issue: https://github.com/duckdb/duckdb/issues/20142
