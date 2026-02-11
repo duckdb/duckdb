@@ -317,7 +317,21 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	ErrorData error;
 	unique_ptr<lock_guard<mutex>> held_wal_lock;
 	unique_ptr<StorageCommitState> commit_state;
-	if (!checkpoint_decision.can_checkpoint && transaction.ShouldWriteToWAL(db)) {
+	bool skip_wal_write_due_to_checkpoint = false;
+	if (checkpoint_decision.can_checkpoint) {
+		// we can perform an automatic checkpoint
+		// we have two options:
+		// either we write to the WAL, in which case we can perform concurrent commits while running
+		// OR we skip writing to the WAL, in which case we cannot perform concurrent commits
+		// the reason for this is that if we don't write this transactions' changes to the WAL
+		// any failure during checkpoint will cause this transactions' changes to be lost,
+		// while later concurrent commits will not be
+		// this can cause undefined / "weird" state, as those commits were made assuming this one was already committed
+
+		// FIXME: make this depend on transaction WAL size
+	}
+
+	if (transaction.ShouldWriteToWAL(db)) {
 		auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 		// if we are committing changes and we are not checkpointing, we need to write to the WAL
 		// since WAL writes can take a long time - we grab the WAL lock here and unlock the transaction lock
@@ -328,7 +342,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		held_wal_lock = storage_manager.GetWALLock();
 
 		// Commit the changes to the WAL.
-		error = transaction.WriteToWAL(context, db, commit_state);
+		if (!skip_wal_write_due_to_checkpoint) {
+			error = transaction.WriteToWAL(context, db, commit_state);
+		}
 
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();
@@ -398,7 +414,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	// We do not need to hold the transaction lock during cleanup of transactions,
 	// as they (1) have been removed, or (2) enter cleanup_info.
 	t_lock.unlock();
-	held_wal_lock.reset();
+	// if we have skipped the WAL write due to checkpoint, we keep the WAL lock while checkpointing
+	// this prevents any concurrent transactions from happening during this time
+	if (!skip_wal_write_due_to_checkpoint) {
+		held_wal_lock.reset();
+	}
 
 	CleanupTransactions();
 
@@ -417,7 +437,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		try {
 			storage_manager.CreateCheckpoint(context, options);
 		} catch (std::exception &ex) {
-			error.Merge(ErrorData(ex));
+			// a checkpoint failure here should not result in the commit being turned into a rollback
+			// .. UNLESS we have skipped writing to the WAL and there are concurrent transactions active
+			if (skip_wal_write_due_to_checkpoint) {
+				error.Merge(ErrorData(ex));
+			}
 		}
 	}
 
