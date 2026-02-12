@@ -630,6 +630,7 @@ public:
 
 			if (!RefersToSameObject(current.op, root.get())) {
 				// We have all child information for this operator now, compute signature
+				D_ASSERT(operator_infos.find(current.op) != operator_infos.end());
 				auto &signature = operator_infos.find(current.op)->second.signature;
 				signature = CreatePlanSignature(current.op);
 
@@ -687,7 +688,9 @@ public:
 				continue;
 			}
 
+			D_ASSERT(operator_infos.find(subplan_info.subplans[0].op) != operator_infos.end());
 			auto &parent_op = operator_infos.find(subplan_info.subplans[0].op)->second.parent;
+			D_ASSERT(operator_infos.find(parent_op) != operator_infos.end());
 			auto &parent_signature = operator_infos.find(parent_op)->second.signature;
 			if (parent_signature) {
 				auto parent_it = subplans.find(*parent_signature);
