@@ -120,6 +120,7 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 	for (auto &entry : equivalence_map) {
 		auto equivalence_set = entry.first;
 		auto &entries = entry.second;
+		D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 		auto &constant_list = constant_values.find(equivalence_set)->second;
 		// for each entry generate an equality expression comparing to each other
 		for (idx_t i = 0; i < entries.size(); i++) {
@@ -341,6 +342,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	}
 	//! Here we check if these filters are column references
 	auto filter_exp = equivalence_map.find(expr_id);
+	D_ASSERT(filter_exp != equivalence_map.end());
 	if (filter_exp->second.size() != 1) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
@@ -359,6 +361,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
+	D_ASSERT(constant_values.find(equiv_set) != constant_values.end());
 	auto &constant_list = constant_values.find(equiv_set)->second;
 	for (auto &constant_cmp : constant_list) {
 		auto constant_filter = make_uniq<ConstantFilter>(constant_cmp.comparison_type, constant_cmp.constant);
@@ -977,7 +980,8 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		// this equality filter already exists, prune it
 		return FilterResult::SUCCESS;
 	}
-
+	D_ASSERT(constant_values.find(left_equivalence_set) != constant_values.end());
+	D_ASSERT(constant_values.find(right_equivalence_set) != constant_values.end());
 	vector<ExpressionValueInformation> &left_constants = constant_values.find(left_equivalence_set)->second;
 	vector<ExpressionValueInformation> &right_constants = constant_values.find(right_equivalence_set)->second;
 	bool is_successful = false;
