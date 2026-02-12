@@ -9,18 +9,18 @@
 #pragma once
 
 #include "duckdb/common/enums/memory_tag.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 class BlockMemory;
 class Allocator;
 class BufferPool;
 class TemporaryMemoryManager;
+class AttachedDatabase;
+class BlockManager;
+class DatabaseInstance;
 
 class BufferManager {
 	friend class BufferHandle;
