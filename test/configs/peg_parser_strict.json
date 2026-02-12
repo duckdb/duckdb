@@ -91,7 +91,13 @@
       "paths": [
         "test/extension/loadable_parser_override.test",
         "test/sql/peg_parser/transformer/peg_transformer.test",
-        "test/sql/collate/test_unsupported_collations.test"
+        "test/sql/collate/test_unsupported_collations.test",
+        "test/extension/test_custom_type_modifier_cast.test",
+        "test/extension/test_alias_point.test",
+        "test/extension/concurrent_load_extension.test",
+        "test/extension/test_tags.test",
+        "test/extension/load_test_alias.test",
+        "test/extension/load_extension.test"
       ]
     },
     {
