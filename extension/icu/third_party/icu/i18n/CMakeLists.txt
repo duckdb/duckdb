@@ -1,4 +1,4 @@
-add_library_unity(
+add_library(
   duckdb_icu_i18n
   OBJECT
   alphaindex.cpp
@@ -44,6 +44,7 @@ add_library_unity(
   decContext.cpp
   decNumber.cpp
   decimfmt.cpp
+  displayoptions.cpp
   double-conversion-bignum-dtoa.cpp
   double-conversion-bignum.cpp
   double-conversion-cached-powers.cpp
@@ -59,7 +60,6 @@ add_library_unity(
   erarules.cpp
   ethpccal.cpp
   fmtable.cpp
-  fmtable_cnv.cpp
   format.cpp
   formatted_string_builder.cpp
   formattedval_iterimpl.cpp
@@ -73,15 +73,16 @@ add_library_unity(
   hebrwcal.cpp
   indiancal.cpp
   islamcal.cpp
+  iso8601cal.cpp
   listformatter.cpp
   measfmt.cpp
   measunit.cpp
+  measunit_extra.cpp
   measure.cpp
   msgfmt.cpp
   nfrs.cpp
   nfrule.cpp
   nfsubs.cpp
-  nounit.cpp
   number_affixutils.cpp
   number_asformat.cpp
   number_capi.cpp
@@ -104,7 +105,10 @@ add_library_unity(
   number_patternstring.cpp
   number_rounding.cpp
   number_scientific.cpp
+  number_simple.cpp
   number_skeletons.cpp
+  number_symbolswrapper.cpp
+  number_usageprefs.cpp
   number_utils.cpp
   numfmt.cpp
   numparse_affixes.cpp
@@ -116,22 +120,22 @@ add_library_unity(
   numparse_scientific.cpp
   numparse_symbols.cpp
   numparse_validators.cpp
+  numrange_capi.cpp
   numrange_fluent.cpp
   numrange_impl.cpp
   numsys.cpp
   olsontz.cpp
   persncal.cpp
+  pluralranges.cpp
   plurfmt.cpp
   plurrule.cpp
   quantityformatter.cpp
   rbnf.cpp
   rbtz.cpp
   region.cpp
-  reldatefmt.cpp
   reldtfmt.cpp
   rulebasedcollator.cpp
   scientificnumberformatter.cpp
-  search.cpp
   selfmt.cpp
   simpletz.cpp
   smpdtfmt.cpp
@@ -139,13 +143,11 @@ add_library_unity(
   sortkey.cpp
   standardplural.cpp
   string_segment.cpp
-  stsearch.cpp
   taiwncal.cpp
   timezone.cpp
   tmunit.cpp
   tmutamt.cpp
   tmutfmt.cpp
-  translit.cpp
   tzfmt.cpp
   tzgnames.cpp
   tznames.cpp
@@ -166,11 +168,14 @@ add_library_unity(
   ulistformatter.cpp
   ulocdata.cpp
   umsg.cpp
+  units_complexconverter.cpp
+  units_converter.cpp
+  units_data.cpp
+  units_router.cpp
   unum.cpp
   unumsys.cpp
   upluralrules.cpp
   uregion.cpp
-  usearch.cpp
   utf16collationiterator.cpp
   utf8collationiterator.cpp
   utmscale.cpp
@@ -184,6 +189,7 @@ add_library_unity(
   winnmfmt.cpp
   wintzimpl.cpp
 )
+disable_target_warnings(duckdb_icu_i18n)
 set(ICU_LIBRARY_FILES
     ${ICU_LIBRARY_FILES} $<TARGET_OBJECTS:duckdb_icu_i18n>
     PARENT_SCOPE)

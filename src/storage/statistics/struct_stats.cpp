@@ -4,6 +4,7 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 
@@ -115,17 +116,14 @@ void StructStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	});
 }
 
-string StructStats::ToString(const BaseStatistics &stats) {
-	string result;
-	result += " {";
+child_list_t<Value> StructStats::ToStruct(const BaseStatistics &stats) {
+	child_list_t<Value> result;
+	child_list_t<Value> child_info;
 	auto &child_types = StructType::GetChildTypes(stats.GetType());
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		if (i > 0) {
-			result += ", ";
-		}
-		result += child_types[i].first + ": " + stats.child_stats[i].ToString();
+		child_info.emplace_back(child_types[i].first, stats.child_stats[i].ToStruct());
 	}
-	result += "}";
+	result.emplace_back("child_stats", Value::STRUCT(std::move(child_info)));
 	return result;
 }
 
@@ -133,6 +131,30 @@ void StructStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
 		stats.child_stats[i].Verify(*child_entries[i], sel, count, true);
+	}
+}
+
+unique_ptr<BaseStatistics> StructStats::PushdownExtract(const BaseStatistics &stats, const StorageIndex &index) {
+	D_ASSERT(index.GetPrimaryIndex() < StructType::GetChildCount(stats.type));
+	auto child_index = index.GetPrimaryIndex();
+	auto &child_types = StructType::GetChildTypes(stats.type);
+
+	auto &child_stats = GetChildStats(stats, child_index);
+	auto &child_type = child_types[child_index].second;
+
+	auto &child_indexes = index.GetChildIndexes();
+	if (child_indexes.empty()) {
+		D_ASSERT(child_stats.type == child_type);
+		if (index.GetType() != child_type) {
+			//! FIXME: support try_cast
+			return StatisticsPropagator::TryPropagateCast(child_stats, child_type, index.GetType());
+		} else {
+			return child_stats.ToUnique();
+		}
+	} else {
+		D_ASSERT(child_indexes.size() == 1);
+		auto &child_index = child_indexes[0];
+		return child_stats.PushdownExtract(child_index);
 	}
 }
 

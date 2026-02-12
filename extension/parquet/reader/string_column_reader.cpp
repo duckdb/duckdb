@@ -16,16 +16,23 @@ StringColumnReader::StringColumnReader(ParquetReader &reader, const ParquetColum
 	}
 }
 
-void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len, const bool is_varchar) {
+bool StringColumnReader::IsValid(const char *str_data, uint32_t str_len, const bool is_varchar) {
 	if (!is_varchar) {
-		return;
+		return true;
 	}
 	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
 	// technically Parquet should guarantee this, but reality is often disappointing
 	UnicodeInvalidReason reason;
 	size_t pos;
 	auto utf_type = Utf8Proc::Analyze(str_data, str_len, &reason, &pos);
-	if (utf_type == UnicodeType::INVALID) {
+	return utf_type != UnicodeType::INVALID;
+}
+
+bool StringColumnReader::IsValid(const string &str, bool is_varchar) {
+	return IsValid(str.c_str(), str.size(), is_varchar);
+}
+void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len, const bool is_varchar) {
+	if (!IsValid(str_data, str_len, is_varchar)) {
 		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"%s\" is not valid UTF8!",
 		                            Blob::ToString(string_t(str_data, str_len)));
 	}

@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/common.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 
@@ -41,12 +39,13 @@ public:
 	TableIndexList &GetIndexes() {
 		return indexes;
 	}
-	const vector<IndexStorageInfo> &GetIndexStorageInfo() const {
-		return index_storage_infos;
-	}
+	//! Find and move out an IndexStorageInfo by name from the stored collection.
+	IndexStorageInfo ExtractIndexStorageInfo(const string &name);
 	unique_ptr<StorageLockKey> GetSharedLock() {
 		return checkpoint_lock.GetSharedLock();
 	}
+	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
+	void VerifyIndexBuffers();
 
 	string GetSchemaName();
 	string GetTableName();
@@ -69,6 +68,10 @@ private:
 	vector<IndexStorageInfo> index_storage_infos;
 	//! Lock held while checkpointing
 	StorageLock checkpoint_lock;
+	//! The last seen checkpoint while doing a concurrent operation, if any
+	optional_idx last_seen_checkpoint;
+	//! The amount of row groups the checkpoint is processing
+	optional_idx checkpoint_row_group_count;
 };
 
 } // namespace duckdb

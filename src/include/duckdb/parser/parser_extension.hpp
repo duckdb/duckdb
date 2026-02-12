@@ -8,12 +8,14 @@
 
 #pragma once
 
+#include "duckdb/parser/parser_options.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
 namespace duckdb {
+struct DBConfig;
 
 //! The ParserExtensionInfo holds static information relevant to the parser extension
 //! It is made available in the parse_function, and will be kept alive as long as the database system is kept alive
@@ -67,7 +69,7 @@ struct ParserExtensionPlanResult { // NOLINT: work-around bug in clang-tidy
 	//! Parameters to the function
 	vector<Value> parameters;
 	//! The set of databases that will be modified by this statement (empty for a read-only statement)
-	unordered_map<string, StatementProperties::CatalogIdentity> modified_databases;
+	unordered_map<string, StatementProperties::ModificationInfo> modified_databases;
 	//! Whether or not the statement requires a valid transaction to be executed
 	bool requires_valid_transaction = true;
 	//! What type of result set the statement returns
@@ -94,7 +96,8 @@ struct ParserOverrideResult {
 	ErrorData error;
 };
 
-typedef ParserOverrideResult (*parser_override_function_t)(ParserExtensionInfo *info, const string &query);
+typedef ParserOverrideResult (*parser_override_function_t)(ParserExtensionInfo *info, const string &query,
+                                                           ParserOptions &options);
 
 //===--------------------------------------------------------------------===//
 // ParserExtension
@@ -114,6 +117,8 @@ public:
 
 	//! Additional parser info passed to the parse function
 	shared_ptr<ParserExtensionInfo> parser_info;
+
+	static void Register(DBConfig &config, ParserExtension extension);
 };
 
 } // namespace duckdb

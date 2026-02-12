@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/planner/joinside.hpp"
@@ -99,6 +100,10 @@ public:
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
 
+	//! Get a reference to the ArenaAllocator of the underlying physical plan.
+	//! Creates a new (empty) physical plan if none exists yet.
+	ArenaAllocator &ArenaRef();
+
 public:
 	PhysicalOperator &ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child);
 
@@ -152,7 +157,8 @@ protected:
 	PhysicalOperator &PlanComparisonJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &PlanDelimJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &ExtractAggregateExpressions(PhysicalOperator &child, vector<unique_ptr<Expression>> &expressions,
-	                                              vector<unique_ptr<Expression>> &groups);
+	                                              vector<unique_ptr<Expression>> &groups,
+	                                              optional_ptr<vector<GroupingSet>> grouping_sets);
 
 private:
 	ClientContext &context;

@@ -131,12 +131,7 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global] --break-system-packages
 
-      - name: Setup Ccache
-        if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Download clang-tidy-cache
         if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
@@ -155,4 +150,4 @@ jobs:
       - name: Tidy Check Diff
         shell: bash
         if: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/feature' }}
-        run: make tidy-check-diff
+        run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff

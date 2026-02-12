@@ -24,7 +24,8 @@ try:
     ver = subprocess.check_output(('black', '--version'), text=True)
     if int(ver.split(' ')[1].split('.')[0]) < 24:
         print('you need to run `pip install "black>=24"`', ver)
-        exit(-1)
+        if 'DUCKDB_FORMAT_SKIP_VERSION_CHECKS' not in os.environ:
+            exit(-1)
 except Exception as e:
     print('you need to run `pip install "black>=24"`', e)
     exit(-1)
@@ -33,7 +34,8 @@ try:
     ver = subprocess.check_output(('clang-format', '--version'), text=True)
     if '11.' not in ver:
         print('you need to run `pip install clang_format==11.0.1 - `', ver)
-        exit(-1)
+        if 'DUCKDB_FORMAT_SKIP_VERSION_CHECKS' not in os.environ:
+            exit(-1)
 except Exception as e:
     print('you need to run `pip install clang_format==11.0.1 - `', e)
     exit(-1)
@@ -68,7 +70,6 @@ ignored_files = [
     'tpch_constants.hpp',
     'tpcds_constants.hpp',
     '_generated',
-    'tpce_flat_input.hpp',
     'test_csv_header.hpp',
     'duckdb.cpp',
     'duckdb.hpp',
@@ -360,7 +361,7 @@ def format_file(f, full_path, directory, ext):
             difference_files.append(full_path)
     else:
         tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
-        with open_utf8(tmpfile, 'w+') as f:
+        with open_utf8(tmpfile, 'w+', newline='\n') as f:
             f.write(new_text)
         shutil.move(tmpfile, full_path)
 

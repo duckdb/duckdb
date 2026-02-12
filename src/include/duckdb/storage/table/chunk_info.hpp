@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
 
 namespace duckdb {
 class RowGroup;
@@ -40,18 +38,19 @@ public:
 public:
 	//! Gets up to max_count entries from the chunk info. If the ret is 0>ret>max_count, the selection vector is filled
 	//! with the tuples
-	virtual idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) const = 0;
-	virtual idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
-	                                    SelectionVector &sel_vector, idx_t max_count) = 0;
+	virtual idx_t GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector,
+	                           idx_t max_count) const = 0;
+	idx_t GetCheckpointRowCount(TransactionData transaction, idx_t max_count);
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
-	virtual idx_t GetCommittedDeletedCount(idx_t max_count) const = 0;
-	virtual bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const;
+	idx_t GetCommittedDeletedCount(idx_t max_count) const;
+	virtual bool Cleanup(transaction_t lowest_transaction) const;
+	virtual string ToString(idx_t max_count) const = 0;
 
-	virtual bool HasDeletes() const = 0;
+	virtual bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const = 0;
 
-	virtual void Write(WriteStream &writer) const;
+	virtual void Write(WriteStream &writer, transaction_t transaction_id) const;
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 public:
@@ -83,23 +82,20 @@ public:
 	transaction_t delete_id;
 
 public:
-	idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) const override;
-	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
-	                            SelectionVector &sel_vector, idx_t max_count) override;
+	idx_t GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector, idx_t max_count) const override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
-	idx_t GetCommittedDeletedCount(idx_t max_count) const override;
-	bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const override;
+	bool Cleanup(transaction_t lowest_transaction) const override;
+	string ToString(idx_t max_count) const override;
 
-	bool HasDeletes() const override;
+	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const override;
 
-	void Write(WriteStream &writer) const override;
+	void Write(WriteStream &writer, transaction_t transaction_id) const override;
 	static unique_ptr<ChunkInfo> Read(ReadStream &reader);
 
 private:
-	template <class OP>
-	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                            idx_t max_count) const;
+	template <class INSERT_OP, class DELETE_OP>
+	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, idx_t max_count) const;
 };
 
 class ChunkVectorInfo : public ChunkInfo {
@@ -111,15 +107,11 @@ public:
 	~ChunkVectorInfo() override;
 
 public:
-	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                   idx_t max_count) const;
-	idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) const override;
-	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
-	                            SelectionVector &sel_vector, idx_t max_count) override;
+	idx_t GetSelVector(ScanOptions options, optional_ptr<SelectionVector> sel_vector, idx_t max_count) const override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
-	bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const override;
-	idx_t GetCommittedDeletedCount(idx_t max_count) const override;
+	bool Cleanup(transaction_t lowest_transaction) const override;
+	string ToString(idx_t max_count) const override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 
@@ -131,18 +123,18 @@ public:
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
 
-	bool HasDeletes() const override;
+	bool HasDeletes(transaction_t transaction_id = MAX_TRANSACTION_ID) const override;
 	bool AnyDeleted() const;
 	bool HasConstantInsertionId() const;
 	transaction_t ConstantInsertId() const;
 
-	void Write(WriteStream &writer) const override;
+	void Write(WriteStream &writer, transaction_t transaction_id) const override;
 	static unique_ptr<ChunkInfo> Read(FixedSizeAllocator &allocator, ReadStream &reader);
 
 private:
-	template <class OP>
-	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                            idx_t max_count) const;
+	template <class INSERT_OP, class DELETE_OP>
+	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id,
+	                            optional_ptr<SelectionVector> sel_vector, idx_t max_count) const;
 
 	IndexPointer GetInsertedPointer() const;
 	IndexPointer GetDeletedPointer() const;

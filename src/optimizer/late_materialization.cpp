@@ -21,7 +21,7 @@
 namespace duckdb {
 
 LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {
-	max_row_count = DBConfig::GetSetting<LateMaterializationMaxRowsSetting>(optimizer.context);
+	max_row_count = Settings::Get<LateMaterializationMaxRowsSetting>(optimizer.context);
 }
 
 vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op) {
@@ -318,10 +318,10 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 
 	for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
 		auto &row_id_col = row_id_columns[r_idx];
-		JoinCondition condition;
-		condition.comparison = ExpressionType::COMPARE_EQUAL;
-		condition.left = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]);
-		condition.right = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, rhs_bindings[r_idx]);
+		JoinCondition condition(
+		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]),
+		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, rhs_bindings[r_idx]),
+		    ExpressionType::COMPARE_EQUAL);
 		join->conditions.push_back(std::move(condition));
 	}
 
@@ -371,7 +371,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 }
 
 bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset) {
-	if (!has_offset && !DBConfig::GetSetting<PreserveInsertionOrderSetting>(optimizer.context)) {
+	if (!has_offset && !Settings::Get<PreserveInsertionOrderSetting>(optimizer.context)) {
 		// we avoid optimizing large limits if preserve insertion order is false
 		// since the limit is executed in parallel anyway
 		return false;
@@ -390,6 +390,11 @@ bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_va
 			return false;
 		}
 		current_op = *current_op.get().children[0];
+	}
+	// if there are any filters we shouldn't do large limit optimization
+	auto &get = current_op.get().Cast<LogicalGet>();
+	if (!get.table_filters.filters.empty()) {
+		return false;
 	}
 	return true;
 }

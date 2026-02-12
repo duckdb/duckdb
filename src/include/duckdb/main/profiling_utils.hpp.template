@@ -1,0 +1,136 @@
+// !!!!!!!
+// WARNING: this file is used for header generation by scripts/generate_metric_enums.py after modifying the code below, rerun
+//          the script to apply changes to the generated files
+// !!!!!!!
+
+// DUCKDB_START_OF_FILE
+
+#pragma once
+
+#include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/main/profiling_node.hpp"
+#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/common/profiler.hpp"
+
+namespace duckdb_yyjson {
+struct yyjson_mut_doc;
+struct yyjson_mut_val;
+} // namespace duckdb_yyjson
+
+namespace duckdb {
+
+struct ActiveTimer;
+
+// Top level query metrics
+struct QueryMetrics {
+public:
+    QueryMetrics() {
+        Reset();
+    }
+
+	ProfilingInfo query_global_info;
+
+	std::string query_name;
+	unique_ptr<ActiveTimer> latency_timer;
+
+public:
+    void UpdateMetric(const MetricType metric, idx_t addition) {
+        active_metrics[GetMetricsIndex(metric)] += addition;
+    }
+
+    idx_t GetMetricValue(const MetricType metric) const {
+        return active_metrics[GetMetricsIndex(metric)];
+    }
+
+    double GetMetricInSeconds(const MetricType metric) const {
+        return static_cast<double>(active_metrics[GetMetricsIndex(metric)]) / 1e9;
+    }
+
+    void Reset() {
+        for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
+            active_metrics[i] = 0;
+        }
+
+        latency_timer.reset();
+        query_name = "";
+    }
+
+    void Merge(const QueryMetrics &other) {
+        for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
+            active_metrics[i] += other.active_metrics[i];
+        }
+    }
+
+// DUCKDB_INSERT_CODE_HERE
+	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
+};
+
+class ProfilingUtils {
+public:
+	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
+	static void MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr,  profiler_metrics_t &metrics, const MetricType &type);
+	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingNode &node, ProfilingInfo &child_info);
+};
+
+struct ActiveTimer {
+public:
+	ActiveTimer() : metric(MetricType::EXTRA_INFO), is_active(false) {
+	}
+	ActiveTimer(QueryMetrics &query_metrics, const MetricType metric, const bool is_active = true) : query_metrics(query_metrics), metric(metric), is_active(is_active) {
+		// start on constructor
+		if (!is_active) {
+			return;
+		}
+		profiler.Start();
+	}
+	~ActiveTimer() {
+		if (is_active) {
+			// automatically end in destructor
+			EndTimer();
+		}
+	}
+	// disable copy constructors
+	ActiveTimer(const ActiveTimer &other) = delete;
+	ActiveTimer &operator=(const ActiveTimer &) = delete;
+	//! enable move constructors
+	ActiveTimer(ActiveTimer &&other) noexcept : is_active(false) {
+		std::swap(query_metrics, other.query_metrics);
+		std::swap(metric, other.metric);
+		std::swap(profiler, other.profiler);
+		std::swap(is_active, other.is_active);
+	}
+	ActiveTimer &operator=(ActiveTimer &&other) noexcept {
+		std::swap(query_metrics, other.query_metrics);
+		std::swap(metric, other.metric);
+		std::swap(profiler, other.profiler);
+		std::swap(is_active, other.is_active);
+		return *this;
+	}
+
+	// Automatically called in the destructor.
+	void EndTimer() {
+		if (!is_active) {
+			return;
+		}
+		// stop profiling and report
+		is_active = false;
+		profiler.End();
+		query_metrics->UpdateMetric(metric, profiler.ElapsedNanos());
+	}
+
+	void Reset() {
+	    if (!is_active) {
+			return;
+		}
+		profiler.Reset();
+		is_active = false;
+	}
+
+private:
+	optional_ptr<QueryMetrics> query_metrics;
+	MetricType metric;
+	Profiler profiler;
+	bool is_active;
+};
+
+}

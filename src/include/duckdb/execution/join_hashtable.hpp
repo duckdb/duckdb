@@ -18,6 +18,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 
 namespace duckdb {
 
@@ -26,6 +27,7 @@ class BufferHandle;
 class ColumnDataCollection;
 struct ColumnDataAppendState;
 struct ClientConfig;
+struct ResidualPredicateInfo;
 
 struct JoinHTScanState {
 public:
@@ -58,6 +60,21 @@ private:
 class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
+
+	struct ResidualPredicateProbeState {
+		//! Evaluation chunk
+		DataChunk eval_chunk;
+		SelectionVector selected_sel;
+		SelectionVector remaining_sel;
+
+		ResidualPredicateProbeState() : selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {
+		}
+
+		void Initialize(Allocator &allocator, const vector<LogicalType> &eval_types,
+		                const vector<bool> &initialize_columns) {
+			eval_chunk.Initialize(allocator, eval_types, initialize_columns, STANDARD_VECTOR_SIZE);
+		}
+	};
 
 #ifdef DUCKDB_HASH_ZERO
 	//! Verify salt when all hashes are 0
@@ -98,38 +115,39 @@ public:
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
-		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void Next(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		//! Are pointer chains all pointing to NULL?
 		bool PointersExhausted() const;
 
 	private:
 		//! Next operator for the inner join
-		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the semi join
-		void NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the anti join
-		void NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the RIGHT semi and anti join
-		void NextRightSemiOrAntiJoin(DataChunk &keys);
-		//! Next operator for the left outer join
-		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the mark join
-		void NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the single join
-		void NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data);
+		void NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 
 		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false
 		//! for every tuple
-		void ScanKeyMatches(DataChunk &keys);
+		void ScanKeyMatches(DataChunk &keys, DataChunk &probe_data);
 		template <bool MATCH>
 		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-
 		void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result);
 
-		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
+		idx_t ScanInnerJoin(DataChunk &keys, DataChunk &probe_data, SelectionVector &result_vector);
 
 		//! Update the data chunk compaction buffer
 		void UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count);
+
+		//! Apply residual predicate filtering
+		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
+		                             SelectionVector *no_match_sel);
+
+	private:
+		unique_ptr<ExpressionExecutor> residual_executor;
+		unique_ptr<ResidualPredicateProbeState> residual_state;
 
 	public:
 		void AdvancePointers();
@@ -138,7 +156,8 @@ public:
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel);
+		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
+		                        SelectionVector *no_match_sel);
 	};
 
 public:
@@ -174,7 +193,9 @@ public:
 	};
 
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
-	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
+	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns,
+	              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr = nullptr,
+	              const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -214,6 +235,10 @@ public:
 	TupleDataCollection &GetDataCollection() {
 		return *data_collection;
 	}
+	//! Perform a full scan of a build column, filling the provided addresses vector and result vector.
+	//! Returns the number of tuples found (can be smaller than the vector capacity).
+	idx_t ScanKeyColumn(Vector &addresses, Vector &result, idx_t column_index) const;
+
 	bool NullValuesAreEqual(idx_t col_idx) const {
 		return null_values_are_equal[col_idx];
 	}
@@ -281,6 +306,12 @@ public:
 	bool insert_duplicate_keys = true;
 	//! Number of probe matches
 	atomic<idx_t> total_probe_matches {0};
+	//! Residual predicate to evaluate during probing
+	optional_ptr<Expression> residual_predicate;
+	//! Residual predicate mapping info
+	unique_ptr<ResidualPredicateInfo> residual_info;
+	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
+	vector<idx_t> lhs_output_in_probe;
 
 	struct {
 		mutex mj_lock;
@@ -334,6 +365,10 @@ private:
 	vector<bool> null_values_are_equal;
 	//! An empty tuple that's a "dead end", can be used to stop chains early
 	unsafe_unique_array<data_t> dead_end;
+
+	//! Whether or not to use a bloom filter will be determined by the operator
+	BloomFilter bloom_filter;
+	bool should_build_bloom_filter = false;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
@@ -399,19 +434,27 @@ public:
 	static constexpr double DEFAULT_LOAD_FACTOR = 2.0;
 	//! For a LOAD_FACTOR of 1.5, the HT is between 33% and 67% full
 	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
+	//! Minimum capacity of the pointer table
+	static constexpr idx_t MINIMUM_CAPACITY = 16384;
 
 	double load_factor = DEFAULT_LOAD_FACTOR;
 
 	//! Capacity of the pointer table given the ht count
 	idx_t PointerTableCapacity(idx_t count) const {
-		static constexpr idx_t MINIMUM_CAPACITY = 16384;
-
 		const auto capacity = NextPowerOfTwo(LossyNumericCast<idx_t>(static_cast<double>(count) * load_factor));
 		return MaxValue<idx_t>(capacity, MINIMUM_CAPACITY);
 	}
 	//! Size of the pointer table (in bytes)
 	idx_t PointerTableSize(idx_t count) const {
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
+	}
+
+	void SetBuildBloomFilter(const bool should_build) {
+		this->should_build_bloom_filter = should_build;
+	}
+
+	BloomFilter &GetBloomFilter() {
+		return bloom_filter;
 	}
 
 	//! Get total size of HT if all partitions would be built

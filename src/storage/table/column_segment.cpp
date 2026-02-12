@@ -4,17 +4,15 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
-#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 #include <cstring>
 
@@ -72,7 +70,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 	}
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
-	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
+	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other)
@@ -81,7 +79,7 @@ ColumnSegment::ColumnSegment(ColumnSegment &other)
       block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
       segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
-	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
+	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
 
 ColumnSegment::~ColumnSegment() {
@@ -167,7 +165,7 @@ idx_t ColumnSegment::SegmentSize() const {
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > segment_size);
 	D_ASSERT(offset == 0);
-	D_ASSERT(block && new_size <= GetBlockManager().GetBlockSize());
+	D_ASSERT(block && new_size <= GetBlockSize());
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
@@ -274,12 +272,12 @@ DataPointer ColumnSegment::GetDataPointer(idx_t row_start) {
 //===--------------------------------------------------------------------===//
 // Drop Segment
 //===--------------------------------------------------------------------===//
-void ColumnSegment::CommitDropSegment() {
+void ColumnSegment::VisitBlockIds(BlockIdVisitor &visitor) const {
 	if (block_id != INVALID_BLOCK) {
-		GetBlockManager().MarkBlockAsModified(block_id);
+		visitor.Visit(block_id);
 	}
-	if (function.get().cleanup_state) {
-		function.get().cleanup_state(*this);
+	if (function.get().visit_block_ids) {
+		function.get().visit_block_ids(*this, visitor);
 	}
 }
 
@@ -408,7 +406,8 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
                                      idx_t &approved_tuple_count) {
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER: {
-		return scan_count;
+		auto &opt_filter = filter.Cast<OptionalFilter>();
+		return opt_filter.FilterSelection(sel, vector, vdata, filter_state, scan_count, approved_tuple_count);
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
@@ -554,6 +553,11 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		child_vec->ToUnifiedFormat(scan_count, child_data);
 		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
 		                       approved_tuple_count);
+	}
+	case TableFilterType::BLOOM_FILTER: {
+		auto &bloom_filter = filter.Cast<BFTableFilter>();
+		auto &state = filter_state.Cast<BFTableFilterState>();
+		return bloom_filter.Filter(vector, sel, approved_tuple_count, state);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();

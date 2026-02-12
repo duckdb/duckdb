@@ -2,6 +2,7 @@
 
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
@@ -24,6 +25,7 @@
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -282,6 +284,35 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 	}
 }
 
+bool FilterCombiner::FindNextLegalUTF8(string &prefix_string) {
+	// find the start of the last codepoint
+	idx_t last_codepoint_start;
+	for (last_codepoint_start = prefix_string.size(); last_codepoint_start > 0; last_codepoint_start--) {
+		if (IsCharacter(prefix_string[last_codepoint_start - 1])) {
+			break;
+		}
+	}
+	if (last_codepoint_start == 0) {
+		throw InvalidInputException("Invalid UTF8 found in string \"%s\"", prefix_string);
+	}
+	last_codepoint_start--;
+	int codepoint_size;
+	auto codepoint = Utf8Proc::UTF8ToCodepoint(prefix_string.c_str() + last_codepoint_start, codepoint_size) + 1;
+	if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
+		// next codepoint falls within surrogate range increment to next valid character
+		codepoint = 0xE000;
+	}
+	char next_codepoint_text[4];
+	int next_codepoint_size;
+	if (!Utf8Proc::CodepointToUtf8(codepoint, next_codepoint_size, next_codepoint_text)) {
+		// invalid codepoint
+		return false;
+	}
+	auto s = static_cast<idx_t>(next_codepoint_size);
+	prefix_string = prefix_string.substr(0, last_codepoint_start) + string(next_codepoint_text, s);
+	return true;
+}
+
 bool TypeSupportsConstantFilter(const LogicalType &type) {
 	if (TypeIsNumeric(type.InternalType())) {
 		return true;
@@ -323,6 +354,10 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	if (!TryGetBoundColumnIndex(column_ids, expr, column_index)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+	if (column_index.IsPushdownExtract()) {
+		//! FIXME: can't push down filters on a column that has a pushed down extract currently
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
 
 	auto &constant_list = constant_values.find(equiv_set)->second;
 	for (auto &constant_cmp : constant_list) {
@@ -336,7 +371,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &expr) {
-		    expr = make_uniq<BoundReferenceExpression>(col_ref.return_type, 0ULL);
+		    expr = make_uniq<BoundReferenceExpression>(col_ref.alias, col_ref.return_type, 0ULL);
 	    });
 }
 
@@ -369,6 +404,10 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	auto &column_ids = get.GetColumnIds();
 	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
 	auto &column_index = column_ids[bindings[0].column_index];
+	if (column_index.IsPushdownExtract()) {
+		//! FIXME: can't support filters on a pushed down extract currently
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
 	get.table_filters.PushFilter(column_index, std::move(expr_filter));
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
@@ -395,13 +434,20 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &column_index = column_ids[column_ref.binding.column_index];
+	if (column_index.IsPushdownExtract()) {
+		//! FIXME: can't support filter pushdown on pushed down extract currently
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
 	//! Replace prefix with a set of comparisons
 	auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix_string));
-	prefix_string[prefix_string.size() - 1]++;
-	auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
 	table_filters.PushFilter(column_index, std::move(lower_bound));
-	table_filters.PushFilter(column_index, std::move(upper_bound));
-	return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	if (FilterCombiner::FindNextLegalUTF8(prefix_string)) {
+		auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
+		table_filters.PushFilter(column_index, std::move(upper_bound));
+		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	}
+	// could not find next legal utf8 string - skip upper bound
+	return FilterPushdownResult::NO_PUSHDOWN;
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table_filters,
@@ -423,6 +469,11 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 	auto &column_index = column_ids[column_ref.binding.column_index];
+	if (column_index.IsPushdownExtract()) {
+		//! FIXME: can't support filter pushdown on pushed down extract currently
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
 	// constant value expr can sometimes be null. if so, push is not null filter, which will
 	// make the filter unsatisfiable and return no results.
 	if (constant_value_expr.value.IsNull()) {
@@ -474,6 +525,11 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	}
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &column_index = column_ids[column_ref.binding.column_index];
+	if (column_index.IsPushdownExtract()) {
+		//! FIXME: can't support filter pushdown on pushed down extract currently
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
 	//! check if all children are const expr
 	bool children_constant = true;
 	for (size_t i {1}; i < func.children.size(); i++) {
@@ -569,6 +625,10 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		if (i == 0) {
 			auto &col_id = column_ids[column_ref->binding.column_index];
 			column_id = col_id.GetPrimaryIndex();
+			if (col_id.IsPushdownExtract()) {
+				//! FIXME: can't support filter pushdown on pushed down extract currently
+				return FilterPushdownResult::NO_PUSHDOWN;
+			}
 		} else if (column_id != column_ids[column_ref->binding.column_index].GetPrimaryIndex()) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}

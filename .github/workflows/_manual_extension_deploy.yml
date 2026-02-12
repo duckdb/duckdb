@@ -1,0 +1,165 @@
+# Note: *will* override existing extensions, tread with care
+
+name: Single Extension Build and Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      extension_name:
+        description: 'extension to deploy (using current config)'
+        required: true
+        type: string
+      override_git_describe:
+        description: 'Override git describe (use for tagged releases)'
+        type: string
+      duckdb_ref:
+        description: 'DuckDB version (empty for current commit)'
+        type: string
+        required: false
+        default: ''
+      extension_template_ref:
+        description: 'The extension-template version to use (empty for vx.y-codename)'
+        type: string
+        required: false
+        default: 'main'
+      extra_exclude_archs:
+        description: 'Inject more architectures to skip (optional)'
+        type: string
+        required: false
+        default: ''
+      skip_tests:
+        description: 'Set to true to skip all testing (optional)'
+        type: boolean
+        required: false
+        default: false
+      extra_toolchains:
+        description: 'extra toolchains (optional)'
+        required: false
+        type: string
+        default: ""
+
+env:
+  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
+
+jobs:
+  load-extension-configs:
+    name: Load Extension Config
+    runs-on: ubuntu-latest
+    outputs:
+      extension_config: ${{ steps.set-extension.outputs.extension_config }}
+      extension_exclude_archs: ${{ steps.set-extension.outputs.exclude_archs }}
+    env:
+      BASE_EXCLUDE_ARCHS: ''
+      EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: set-extension
+        name: Configure extension
+        env:
+          EXT_CONFIG: .github/config/extensions/${{ inputs.extension_name }}.cmake
+        run: |
+          # Set config
+          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
+          ext_config="`cat $EXT_CONFIG`"
+          echo "extension_config<<EOF" >> $GITHUB_OUTPUT
+          echo "$ext_config" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
+
+  vars:
+    runs-on: ubuntu-24.04
+    outputs:
+      BRANCHES_TO_BE_CACHED: ${{ env.BRANCHES_TO_BE_CACHED }}
+    steps:
+      - run: echo "Exposing env vars"
+
+  build:
+    name: Build Extension
+    needs:
+      - load-extension-configs
+      - vars
+    uses: ./.github/workflows/_extension_distribution.yml
+    with:
+      artifact_prefix: extensions
+      exclude_archs: ${{ needs.load-extension-configs.outputs.extension_exclude_archs }}
+      extension_config: ${{ needs.load-extension-configs.outputs.extension_config }}
+      override_tag: ${{ inputs.override_git_describe }}
+      override_duckdb_version: ${{ inputs.duckdb_ref }}
+      skip_tests: ${{ inputs.skip_tests && true || false }}
+      save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
+      extra_toolchains: 'rust'
+
+  # Merge all extensions into a single, versioned repository
+  create-extension-repository:
+    name: Create Extension Repository
+    runs-on: ubuntu-latest
+    needs:
+      - build
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        name: Download extensions
+        with:
+          pattern: extensions-${{ inputs.duckdb_ref }}*
+          path: /tmp/repository_generation/extensions
+
+      - name: Print all extensions
+        run: |
+          tree /tmp/repository_generation
+
+      - name: Merge into single repository
+        run: |
+          mkdir /tmp/merged_repository
+          cp -r  /tmp/repository_generation/*/*/* /tmp/merged_repository
+          tree /tmp/merged_repository
+
+      - name: Remove all non-target extensions
+        run: |
+          find /tmp/merged_repository -type f ! -name "${{ inputs.extension_name }}.duckdb_extension*" -delete
+          tree /tmp/merged_repository
+
+      - uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          name: extension-repository-${{ inputs.duckdb_ref }}
+          path: |
+            /tmp/merged_repository/**/*.duckdb_extension*
+
+  upload-extensions:
+    name: Upload Extensions
+    runs-on: ubuntu-latest
+    needs:
+      - create-extension-repository
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: extension-repository-${{ inputs.duckdb_ref }}
+          path: /tmp
+
+      - name: List extensions to deploy
+        shell: bash
+        run: |
+          tree /tmp/extension-repository-${{ inputs.duckdb_ref }}
+
+      - name: Deploy extensions
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.DUCKDB_CORE_EXTENSION_S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{secrets.DUCKDB_CORE_EXTENSION_S3_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.DUCKDB_CORE_EXTENSION_S3_SECRET}}
+          DUCKDB_DEPLOY_SCRIPT_MODE: for_real
+          DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+        run: |
+          pip install awscli
+          ./scripts/extension-upload-repository.sh /tmp/extension-repository-${{ inputs.duckdb_ref }} duckdb-staging

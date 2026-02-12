@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -34,7 +35,7 @@
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
 #include "duckdb/main/result_set_manager.hpp"
-#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -48,14 +49,14 @@ DBConfig::DBConfig() {
 	encoding_functions->Initialize(*this);
 	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
 	arrow_extensions->Initialize(*this);
-	cast_functions = make_uniq<CastFunctionSet>(*this);
+	type_manager = make_uniq<TypeManager>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
 	http_util = make_shared_ptr<HTTPUtil>();
-	storage_extensions["__open_file__"] = OpenFileStorageExtension::Create();
-	NumericStats::SetColumnImprintEnabled(options.enable_column_imprint);
+	callback_manager = make_uniq<ExtensionCallbackManager>();
+	callback_manager->Register("__open_file__", OpenFileStorageExtension::Create());
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
@@ -79,7 +80,7 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
 	if (db_manager) {
-		db_manager->ResetDatabases(scheduler);
+		db_manager->ResetDatabases();
 	}
 	// destroy child elements
 	connection_manager.reset();
@@ -173,15 +174,15 @@ shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 	if (!options.db_type.empty()) {
 		// Find the storage extension for this database file.
 		auto extension_name = ExtensionHelper::ApplyExtensionAlias(options.db_type);
-		auto entry = config.storage_extensions.find(extension_name);
-		if (entry == config.storage_extensions.end()) {
+		auto storage_extension = StorageExtension::Find(config, extension_name);
+		if (!storage_extension) {
 			throw BinderException("Unrecognized storage type \"%s\"", options.db_type);
 		}
 
-		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
+		if (storage_extension->attach != nullptr && storage_extension->create_transaction_manager != nullptr) {
 			// Use the storage extension to create the initial database.
-			attached_database =
-			    make_shared_ptr<AttachedDatabase>(*this, catalog, *entry->second, context, info.name, info, options);
+			attached_database = make_shared_ptr<AttachedDatabase>(*this, catalog, *storage_extension, context,
+			                                                      info.name, info, options);
 			return attached_database;
 		}
 
@@ -222,7 +223,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 	// copy the map, to protect against modifications during
 	auto unrecognized_options_copy = config.options.unrecognized_options;
 
-	if (config.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(*this)) {
 		if (unrecognized_options_copy.empty()) {
 			// Nothing to do
 			return;
@@ -245,14 +246,14 @@ void DatabaseInstance::LoadExtensionSettings() {
 				    "To set the %s setting, the %s extension needs to be loaded. But it could not be autoloaded.", name,
 				    extension_name);
 			}
-			auto it = config.extension_parameters.find(name);
-			if (it == config.extension_parameters.end()) {
+			ExtensionOption extension_option;
+			if (!config.TryGetExtensionOption(name, extension_option)) {
 				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
 			}
 			// if the extension provided the option, it should no longer be unrecognized.
 			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
-			PhysicalSet::SetExtensionVariable(context, it->second, name, SetScope::GLOBAL, value);
+			PhysicalSet::SetExtensionVariable(context, extension_option, name, SetScope::GLOBAL, value);
 			extension_options.push_back(name);
 		}
 
@@ -289,11 +290,13 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
-	external_file_cache = make_uniq<ExternalFileCache>(*this, config.options.enable_external_file_cache);
+	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
+	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
 	result_set_manager = make_uniq<ResultSetManager>(*this);
 
 	scheduler = make_uniq<TaskScheduler>(*this);
-	object_cache = make_uniq<ObjectCache>();
+	object_cache = make_uniq<ObjectCache>(*config.buffer_pool);
+	config.buffer_pool->SetObjectCache(object_cache.get());
 	connection_manager = make_uniq<ConnectionManager>();
 	extension_manager = make_uniq<ExtensionManager>(*this);
 
@@ -312,8 +315,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
-		auto entry = config.storage_extensions.find(config.options.database_type);
-		if (entry == config.storage_extensions.end()) {
+		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
+		if (!storage_extension) {
 			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 		}
 	}
@@ -325,7 +328,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
-	scheduler->SetThreads(config.options.maximum_threads, config.options.external_threads);
+	scheduler->SetThreads(config.options.maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	scheduler->RelaunchThreads();
 }
 
@@ -416,8 +419,9 @@ Allocator &Allocator::Get(AttachedDatabase &db) {
 
 void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path) {
 	config.options = new_config.options;
+	config.user_settings = new_config.user_settings;
 
-	if (config.options.duckdb_api.empty()) {
+	if (Settings::Get<DuckDBAPISetting>(*this).empty()) {
 		config.SetOptionByName("duckdb_api", "cpp");
 	}
 
@@ -434,13 +438,12 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
-	config.extension_parameters = new_config.extension_parameters;
 	if (new_config.file_system) {
 		config.file_system = std::move(new_config.file_system);
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
-	if (database_path && !config.options.enable_external_access) {
+	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedPath(database_path);
 		config.AddAllowedPath(database_path + string(".wal"));
 		if (!config.options.temporary_directory.empty()) {
@@ -449,9 +452,6 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	}
 	if (new_config.secret_manager) {
 		config.secret_manager = std::move(new_config.secret_manager);
-	}
-	if (!new_config.storage_extensions.empty()) {
-		config.storage_extensions = std::move(new_config.storage_extensions);
 	}
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
 		config.SetDefaultMaxMemory();
@@ -463,11 +463,15 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	if (!config.allocator) {
 		config.allocator = make_uniq<Allocator>();
 	}
-	config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, config.options.default_block_alloc_size,
+	auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
+	config.block_allocator = make_uniq<BlockAllocator>(*config.allocator, default_block_size,
 	                                                   DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
 	                                                   config.options.block_allocator_size);
 	config.replacement_scans = std::move(new_config.replacement_scans);
-	config.parser_extensions = std::move(new_config.parser_extensions);
+	if (new_config.callback_manager) {
+		config.callback_manager = std::move(new_config.callback_manager);
+		new_config.callback_manager = make_uniq<ExtensionCallbackManager>();
+	}
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_uniq<ErrorManager>();
@@ -516,18 +520,44 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const string &key, Va
 	return db_config.TryGetCurrentSetting(key, result);
 }
 
-shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() {
-	if (!config.encryption_util || !config.encryption_util->SupportsEncryption()) {
+shared_ptr<EncryptionUtil> DatabaseInstance::GetMbedTLSUtil(bool force_mbedtls) const {
+	auto encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+
+	if (force_mbedtls) {
+		encryption_util->ForceMbedTLSUnsafe();
+	}
+
+	return encryption_util;
+}
+
+shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil(bool read_only) {
+	auto force_mbedtls = config.options.force_mbedtls;
+
+	if (force_mbedtls) {
+		// return mbedtls if setting is enabled
+		return GetMbedTLSUtil(force_mbedtls);
+	}
+
+	if (!config.encryption_util) {
 		ExtensionHelper::TryAutoLoadExtension(*this, "httpfs");
 	}
 
 	if (config.encryption_util) {
+		// httpfs is correctly loaded
 		return config.encryption_util;
 	}
 
-	auto result = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	if (read_only) {
+		// return mbedtls if database is read only
+		// and OpenSSL not set
+		return GetMbedTLSUtil(force_mbedtls);
+	}
 
-	return std::move(result);
+	throw InvalidConfigurationException(
+	    " DuckDB currently has a read-only crypto module "
+	    "loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`. "
+	    " To write an encrypted database that is NOT securely encrypted, one can use SET force_mbedtls_unsafe = "
+	    "'true'.");
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

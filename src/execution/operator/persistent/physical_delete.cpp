@@ -14,10 +14,11 @@ namespace duckdb {
 
 PhysicalDelete::PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
                                DataTable &table, vector<unique_ptr<BoundConstraint>> bound_constraints,
-                               idx_t row_id_index, idx_t estimated_cardinality, bool return_chunk)
+                               idx_t row_id_index, idx_t estimated_cardinality, bool return_chunk,
+                               vector<idx_t> return_columns)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::DELETE_OPERATOR, std::move(types), estimated_cardinality),
       tableref(tableref), table(table), bound_constraints(std::move(bound_constraints)), row_id_index(row_id_index),
-      return_chunk(return_chunk) {
+      return_chunk(return_chunk), return_columns(std::move(return_columns)) {
 }
 //===--------------------------------------------------------------------===//
 // Sink
@@ -46,8 +47,11 @@ public:
 class DeleteLocalState : public LocalSinkState {
 public:
 	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-		const auto &types = table.GetTypes();
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
+	                 const vector<LogicalType> &return_types, bool return_chunk) {
+		// For RETURNING: use operator's return types (may include virtual columns)
+		// For non-RETURNING with indexes: use table types for index updates
+		auto types = return_chunk ? return_types : table.GetTypes();
 		auto initialize = vector<bool>(types.size(), false);
 		delete_chunk.Initialize(Allocator::Get(context), types, initialize);
 
@@ -64,7 +68,6 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &g_state = input.global_state.Cast<DeleteGlobalState>();
 	auto &l_state = input.local_state.Cast<DeleteLocalState>();
 
-	auto &transaction = DuckTransaction::Get(context.client, table.db);
 	auto &row_ids = chunk.data[row_id_index];
 
 	lock_guard<mutex> delete_guard(g_state.delete_lock);
@@ -74,59 +77,28 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto types = table.GetTypes();
-	auto to_be_fetched = vector<bool>(types.size(), return_chunk);
-	vector<StorageIndex> column_ids;
-	vector<LogicalType> column_types;
-	if (return_chunk) {
-		// Fetch all columns.
-		column_types = types;
-		for (idx_t i = 0; i < table.ColumnCount(); i++) {
-			column_ids.emplace_back(i);
-		}
-
-	} else {
-		// Fetch only the required columns for updating the delete indexes.
-		auto &local_storage = LocalStorage::Get(context.client, table.db);
-		auto storage = local_storage.GetStorage(table);
-		unordered_set<column_t> indexed_column_id_set;
-		storage->delete_indexes.Scan([&](Index &index) {
-			if (!index.IsBound() || !index.IsUnique()) {
-				return false;
-			}
-			auto &set = index.GetColumnIdSet();
-			indexed_column_id_set.insert(set.begin(), set.end());
-			return false;
-		});
-		for (auto &col : indexed_column_id_set) {
-			column_ids.emplace_back(col);
-		}
-		sort(column_ids.begin(), column_ids.end());
-		for (auto &col : column_ids) {
-			auto i = col.GetPrimaryIndex();
-			to_be_fetched[i] = true;
-			column_types.push_back(types[i]);
-		}
-	}
-
 	l_state.delete_chunk.Reset();
 	row_ids.Flatten(chunk.size());
 
-	// Fetch the to-be-deleted chunk.
-	DataChunk fetch_chunk;
-	fetch_chunk.Initialize(Allocator::Get(context.client), column_types, chunk.size());
-	auto fetch_state = ColumnFetchState();
-	table.Fetch(transaction, fetch_chunk, column_ids, row_ids, chunk.size(), fetch_state);
-
-	// Reference the necessary columns of the fetch_chunk.
-	idx_t fetch_idx = 0;
+	// Use columns from the input chunk - they were passed through from the scan
+	// return_columns maps storage_idx -> chunk_idx
+	// For RETURNING: all columns have valid indices
+	// For index-only: only indexed columns have valid indices (sparse mapping)
+	D_ASSERT(!return_columns.empty() && "return_columns should always be populated for RETURNING or unique indexes");
 	for (idx_t i = 0; i < table.ColumnCount(); i++) {
-		if (to_be_fetched[i]) {
-			l_state.delete_chunk.data[i].Reference(fetch_chunk.data[fetch_idx++]);
-			continue;
+		if (return_columns[i] != DConstants::INVALID_INDEX) {
+			// Column was passed through from the scan
+			l_state.delete_chunk.data[i].Reference(chunk.data[return_columns[i]]);
+		} else {
+			// Column not in scan (sparse mapping for index-only case) - use NULL placeholder
+			l_state.delete_chunk.data[i].Reference(Value(types[i]));
 		}
-		l_state.delete_chunk.data[i].Reference(Value(types[i]));
 	}
-	l_state.delete_chunk.SetCardinality(fetch_chunk);
+	// Add virtual columns (e.g., rowid) after table columns
+	for (idx_t i = table.ColumnCount(); i < l_state.delete_chunk.ColumnCount(); i++) {
+		l_state.delete_chunk.data[i].Reference(row_ids);
+	}
+	l_state.delete_chunk.SetCardinality(chunk.size());
 
 	// Append the deleted row IDs to the delete indexes.
 	// If we only delete local row IDs, then the delete_chunk is empty.
@@ -134,17 +106,16 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		storage->delete_indexes.Scan([&](Index &index) {
+		for (auto &index : storage->delete_indexes.Indexes()) {
 			if (!index.IsBound() || !index.IsUnique()) {
-				return false;
+				continue;
 			}
 			auto &bound_index = index.Cast<BoundIndex>();
 			auto error = bound_index.Append(l_state.delete_chunk, row_ids, index_append_info);
 			if (error.HasError()) {
 				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
 			}
-			return false;
-		});
+		}
 	}
 
 	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
@@ -189,7 +160,7 @@ unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &co
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints);
+	return make_uniq<DeleteLocalState>(context.client, tableref, bound_constraints, GetTypes(), return_chunk);
 }
 
 //===--------------------------------------------------------------------===//

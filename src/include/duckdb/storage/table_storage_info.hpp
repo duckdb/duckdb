@@ -8,11 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
@@ -27,7 +25,7 @@ struct ColumnSegmentInfo {
 	idx_t segment_start;
 	idx_t segment_count;
 	string compression_type;
-	string segment_stats;
+	Value segment_stats;
 	bool has_updates;
 	bool persistent;
 	block_id_t block_id;

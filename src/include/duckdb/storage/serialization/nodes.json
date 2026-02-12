@@ -1,28 +1,5 @@
 [
   {
-    "class": "LogicalType",
-    "includes": [
-      "duckdb/common/types.hpp",
-      "duckdb/common/extra_type_info.hpp"
-    ],
-    "members": [
-      {
-        "id": 100,
-        "name": "id",
-        "type": "LogicalTypeId",
-        "serialize_property": "id_"
-      },
-      {
-        "id": 101,
-        "name": "type_info",
-        "type": "shared_ptr<ExtraTypeInfo>",
-        "serialize_property": "type_info_"
-      }
-    ],
-    "pointer_type": "none",
-    "constructor": ["id", "type_info"]
-  },
-  {
     "class": "CommonTableExpressionInfo",
     "includes": [
       "duckdb/parser/common_table_expression_info.hpp"
@@ -47,6 +24,11 @@
       {
         "id": 103,
         "name": "key_targets",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 104,
+        "name": "payload_aggregates",
         "type": "vector<ParsedExpression*>"
       }
     ]
@@ -338,28 +320,6 @@
     "pointer_type": "none"
   },
   {
-    "class": "PivotColumnEntry",
-    "members": [
-      {
-        "id": 100,
-        "name": "values",
-        "type": "vector<Value>"
-      },
-      {
-        "id": 101,
-        "name": "star_expr",
-        "type": "ParsedExpression*",
-        "property": "expr"
-      },
-      {
-        "id": 102,
-        "name": "alias",
-        "type": "string"
-      }
-    ],
-    "pointer_type": "none"
-  },
-  {
     "class": "BoundPivotInfo",
     "includes": [
       "duckdb/planner/tableref/bound_pivotref.hpp"
@@ -511,6 +471,7 @@
         "type": "ExpressionType"
       }
     ],
+    "constructor": ["left", "right", "comparison"],
     "pointer_type": "none"
   },
   {
@@ -1084,6 +1045,30 @@
         "id": 2,
         "name": "child_indexes",
         "type": "vector<ColumnIndex>"
+      },
+      {
+        "id": 3,
+        "name": "index_type",
+        "type": "ColumnIndexType",
+        "default": "ColumnIndexType::FULL_READ"
+      },
+      {
+        "id": 4,
+        "name": "type",
+        "type": "LogicalType",
+        "default": "LogicalType::INVALID"
+      },
+      {
+        "id": 5,
+        "name": "field",
+        "type": "string",
+        "default": "\"\""
+      },
+      {
+        "id": 6,
+        "name": "has_index",
+        "type": "bool",
+        "default": "true"
       }
     ],
     "pointer_type": "none"
@@ -1133,6 +1118,84 @@
         "id": 103,
         "name": "sample_options",
         "type": "unique_ptr<SampleOptions>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "RowGroupOrderOptions",
+    "includes": [
+      "duckdb/storage/table/row_group_reorderer.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "column_idx",
+        "type": "StorageIndex"
+      },
+      {
+        "id": 101,
+        "name": "order_by",
+        "type": "OrderByStatistics"
+      },
+      {
+        "id": 102,
+        "name": "order_type",
+        "type": "OrderType"
+      },
+      {
+        "id": 103,
+        "name": "column_type",
+        "type": "OrderByColumnType"
+      },
+      {
+        "id": 104,
+        "name": "row_limit",
+        "type": "optional_idx"
+      },
+      {
+        "id": 105,
+        "name": "row_group_offset",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["column_idx", "order_by", "order_type", "column_type", "row_limit", "row_group_offset"]
+  },
+  {
+    "class": "StorageIndex",
+    "includes": [
+      "duckdb/storage/storage_index.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "has_index",
+        "type": "bool"
+      },
+      {
+        "id": 101,
+        "name": "index",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "field",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 104,
+        "name": "index_type",
+        "type": "StorageIndexType"
+      },
+      {
+        "id": 105,
+        "name": "child_indexes",
+        "type": "vector<StorageIndex>"
       }
     ],
     "pointer_type": "none"

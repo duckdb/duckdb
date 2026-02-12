@@ -478,7 +478,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 		return cost;
 	}
-	if (from.id() == LogicalTypeId::STRUCT && to.id() == LogicalTypeId::STRUCT) {
+	if ((from.id() == LogicalTypeId::STRUCT || from.IsAggregateStateStructType()) &&
+	    (to.id() == LogicalTypeId::STRUCT || to.IsAggregateStateStructType())) {
 		if (to.AuxInfo() == nullptr) {
 			// If this struct is not fully resolved, we'll leave it to the actual cast logic to handle it.
 			return 0;

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/enums/physical_table_scan_enum.hpp
+// duckdb/execution/physical_table_scan_enum.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -19,4 +19,4 @@ enum class PhysicalTableScanExecutionStrategy : uint8_t {
 	TASK_EXECUTOR_BUT_FORCE_SYNC_CHECKS
 };
 
-}; // namespace duckdb
+} // namespace duckdb

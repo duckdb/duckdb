@@ -192,12 +192,10 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	ExecutionBudget chunk_budget(max_chunks);
 	do {
-		if (context.client.interrupted) {
-			throw InterruptException();
-		}
+		context.client.InterruptCheck();
 
 		OperatorResultType result;
-		if (exhausted_source && done_flushing && !remaining_sink_chunk && !next_batch_blocked &&
+		if (exhausted_pipeline && done_flushing && !remaining_sink_chunk && !next_batch_blocked &&
 		    in_process_operators.empty()) {
 			break;
 		} else if (remaining_sink_chunk) {
@@ -210,8 +208,8 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 			// the operators have to be called with the same input chunk to produce the rest of the output
 			D_ASSERT(source_chunk.size() > 0);
 			result = ExecutePushInternal(source_chunk, chunk_budget);
-		} else if (exhausted_source && !next_batch_blocked && !done_flushing) {
-			// The source was exhausted, try flushing all operators
+		} else if (exhausted_pipeline && !next_batch_blocked && !done_flushing) {
+			// The pipeline was exhausted, try flushing all operators
 			auto flush_completed = TryFlushCachingOperators(chunk_budget);
 			if (flush_completed) {
 				done_flushing = true;
@@ -224,7 +222,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 					return PipelineExecuteResult::NOT_FINISHED;
 				}
 			}
-		} else if (!exhausted_source || next_batch_blocked) {
+		} else if (!exhausted_pipeline || next_batch_blocked) {
 			SourceResultType source_result = SourceResultType::BLOCKED;
 			if (!next_batch_blocked) {
 				// "Regular" path: fetch a chunk from the source and push it through the pipeline
@@ -234,7 +232,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 					return PipelineExecuteResult::INTERRUPTED;
 				}
 				if (source_result == SourceResultType::FINISHED) {
-					exhausted_source = true;
+					exhausted_pipeline = true;
 				}
 			}
 
@@ -246,7 +244,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 				}
 			}
 
-			if (exhausted_source && source_chunk.size() == 0) {
+			if (exhausted_pipeline && source_chunk.size() == 0) {
 				continue;
 			}
 
@@ -262,11 +260,12 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 
 		if (result == OperatorResultType::FINISHED) {
-			break;
+			D_ASSERT(in_process_operators.empty());
+			exhausted_pipeline = true;
 		}
 	} while (chunk_budget.Next());
 
-	if ((!exhausted_source || !done_flushing) && !IsFinished()) {
+	if ((!exhausted_pipeline || !done_flushing) && !IsFinished()) {
 		return PipelineExecuteResult::NOT_FINISHED;
 	}
 
@@ -420,9 +419,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	while (true) {
-		if (context.client.interrupted) {
-			throw InterruptException();
-		}
+		context.client.InterruptCheck();
 		// now figure out where to put the chunk
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
@@ -454,7 +451,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				FinishProcessing(NumericCast<int32_t>(current_idx));
 				return OperatorResultType::FINISHED;
 			}
-			current_chunk.Verify();
+			current_chunk.Verify(context.client.db);
 		}
 
 		if (current_chunk.size() == 0) {
@@ -547,9 +544,7 @@ void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 }
 
 void PipelineExecutor::StartOperator(PhysicalOperator &op) {
-	if (context.client.interrupted) {
-		throw InterruptException();
-	}
+	context.client.InterruptCheck();
 	context.thread.profiler.StartOperator(&op);
 }
 
@@ -557,7 +552,7 @@ void PipelineExecutor::EndOperator(PhysicalOperator &op, optional_ptr<DataChunk>
 	context.thread.profiler.EndOperator(chunk);
 
 	if (chunk) {
-		chunk->Verify();
+		chunk->Verify(context.client.db);
 	}
 }
 

@@ -67,9 +67,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
 	idx_t row_group_size_bytes = NumericLimits<idx_t>::Maximum();
 
-	//! How/Whether to encrypt the data
+	//! Encryption configuration
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	bool debug_use_openssl = true;
 
 	//! After how many distinct values should we abandon dictionary compression and bloom filters?
 	//! Defaults to 1/5th of the row group size if unset (in templated_column_writer.hpp)
@@ -99,34 +98,22 @@ struct ParquetWriteBindData : public TableFunctionData {
 	GeoParquetVersion geoparquet_version = GeoParquetVersion::V1;
 };
 
-struct ParquetWriteGlobalState : public GlobalFunctionData {
-	unique_ptr<ParquetWriter> writer;
-	optional_ptr<const PhysicalOperator> op;
-
-	void LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
-		if (!op) {
-			return;
-		}
-		DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
-		           {{"file", writer->GetFileName()},
-		            {"rows", to_string(buffer.Count())},
-		            {"size", to_string(buffer.SizeInBytes())},
-		            {"reason", reason}});
+void ParquetWriteGlobalState::LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
+	if (!op) {
+		return;
 	}
+	DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
+	           {{"file", writer->GetFileName()},
+	            {"rows", to_string(buffer.Count())},
+	            {"size", to_string(buffer.SizeInBytes())},
+	            {"reason", reason}});
+}
 
-	mutex lock;
-	unique_ptr<ColumnDataCollection> combine_buffer;
-};
-
-struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(context, types) {
-		buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
-		buffer.InitializeAppend(append_state);
-	}
-
-	ColumnDataCollection buffer;
-	ColumnDataAppendState append_state;
-};
+ParquetWriteLocalState::ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
+    : buffer(context, types) {
+	buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
+	buffer.InitializeAppend(append_state);
+}
 
 static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &input) {
 	auto &copy_options = input.options;
@@ -143,8 +130,8 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["dictionary_size_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["string_dictionary_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
-	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 	copy_options["debug_use_openssl"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
+	copy_options["write_bloom_filter"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 	copy_options["compression_level"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["parquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["binary_as_string"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
@@ -223,18 +210,15 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			} else {
 				case_insensitive_set_t variant_names;
 				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
-					if (sql_types[col_idx].id() != LogicalTypeId::STRUCT) {
-						continue;
-					}
-					if (sql_types[col_idx].GetAlias() != "PARQUET_VARIANT") {
+					if (sql_types[col_idx].id() != LogicalTypeId::VARIANT) {
 						continue;
 					}
 					variant_names.emplace(names[col_idx]);
 				}
 				auto &shredding_types_value = option.second[0];
 				if (shredding_types_value.type().id() != LogicalTypeId::STRUCT) {
-					BinderException("SHREDDING value should be a STRUCT of column names to types, i.e: {col1: "
-					                "'INTEGER[]', col2: 'BOOLEAN'}");
+					throw BinderException("SHREDDING value should be a STRUCT of column names to types, i.e: {col1: "
+					                      "'INTEGER[]', col2: 'BOOLEAN'}");
 				}
 				const auto &struct_type = shredding_types_value.type();
 				const auto &struct_children = StructValue::GetChildren(shredding_types_value);
@@ -263,7 +247,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 						}
 					}
 					const auto &child_value = struct_children[i];
-					bind_data->shredding_types.AddChild(col_name, ShreddingType::GetShreddingTypes(child_value));
+					bind_data->shredding_types.AddChild(col_name,
+					                                    ShreddingType::GetShreddingTypes(child_value, context));
 				}
 			}
 		} else if (loption == "kv_metadata") {
@@ -286,7 +271,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			}
 		} else if (loption == "encryption_config") {
 			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
-		} else if (loption == "dictionary_compression_ratio_threshold") {
+		} else if (loption == "dictionary_compression_ratio_threshold" || loption == "debug_use_openssl") {
 			// deprecated, ignore setting
 		} else if (loption == "dictionary_size_limit") {
 			auto val = option.second[0].GetValue<int64_t>();
@@ -310,15 +295,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				throw BinderException("bloom_filter_false_positive_ratio must be greater than 0");
 			}
 			bind_data->bloom_filter_false_positive_ratio = val;
-		} else if (loption == "debug_use_openssl") {
-			auto val = StringUtil::Lower(option.second[0].GetValue<std::string>());
-			if (val == "false") {
-				bind_data->debug_use_openssl = false;
-			} else if (val == "true") {
-				bind_data->debug_use_openssl = true;
-			} else {
-				throw BinderException("Expected debug_use_openssl to be a BOOLEAN");
-			}
 		} else if (loption == "compression_level") {
 			const auto val = option.second[0].GetValue<int64_t>();
 			if (val < ZStdFileSystem::MinimumCompressionLevel() || val > ZStdFileSystem::MaximumCompressionLevel()) {
@@ -355,7 +331,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		}
 	}
 	if (row_group_size_bytes_set) {
-		if (DBConfig::GetSetting<PreserveInsertionOrderSetting>(context)) {
+		if (Settings::Get<PreserveInsertionOrderSetting>(context)) {
 			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
 			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
 		}
@@ -381,8 +357,8 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types.Copy(), parquet_bind.kv_metadata,
 	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
 	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
-	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.debug_use_openssl,
-	    parquet_bind.parquet_version, parquet_bind.geoparquet_version);
+	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
+	    parquet_bind.geoparquet_version);
 	return std::move(global_state);
 }
 
@@ -408,7 +384,7 @@ static void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_
 		global_state.LogFlushingRowGroup(local_state.buffer, reason);
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
-		global_state.writer->Flush(local_state.buffer);
+		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
 		local_state.buffer.InitializeAppend(local_state.append_state);
 	}
 }
@@ -423,7 +399,7 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes / 2) {
 		// local state buffer is more than half of the row_group_size(_bytes), just flush it
 		global_state.LogFlushingRowGroup(local_state.buffer, "Combine");
-		global_state.writer->Flush(local_state.buffer);
+		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
 		return;
 	}
 
@@ -438,7 +414,7 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 			guard.unlock();
 			global_state.LogFlushingRowGroup(*owned_combine_buffer, "Combine");
 			// Lock free, of course
-			global_state.writer->Flush(*owned_combine_buffer);
+			global_state.writer->Flush(*owned_combine_buffer, local_state.transform_data);
 		}
 		return;
 	}
@@ -452,7 +428,7 @@ static void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data
 	// flush the combine buffer (if it's there)
 	if (global_state.combine_buffer) {
 		global_state.LogFlushingRowGroup(*global_state.combine_buffer, "Finalize");
-		global_state.writer->Flush(*global_state.combine_buffer);
+		global_state.writer->Flush(*global_state.combine_buffer, global_state.transform_data);
 	}
 
 	// finalize: write any additional metadata to the file here
@@ -625,8 +601,6 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
 	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file,
 	                                    default_value.row_groups_per_file);
-	serializer.WritePropertyWithDefault(111, "debug_use_openssl", bind_data.debug_use_openssl,
-	                                    default_value.debug_use_openssl);
 	serializer.WritePropertyWithDefault(112, "dictionary_size_limit", bind_data.dictionary_size_limit,
 	                                    default_value.dictionary_size_limit);
 	serializer.WritePropertyWithDefault(113, "bloom_filter_false_positive_ratio",
@@ -662,8 +636,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	ParquetWriteBindData default_value;
 	data->row_groups_per_file = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(
 	    110, "row_groups_per_file", default_value.row_groups_per_file);
-	data->debug_use_openssl =
-	    deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", default_value.debug_use_openssl);
+	deserializer.ReadDeletedProperty<bool>(111, "debug_use_openssl");
 	data->dictionary_size_limit =
 	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(112, "dictionary_size_limit", optional_idx());
 	data->bloom_filter_false_positive_ratio = deserializer.ReadPropertyWithExplicitDefault<double>(
@@ -711,7 +684,8 @@ static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &con
                                                               unique_ptr<ColumnDataCollection> collection) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto result = make_uniq<ParquetWriteBatchData>();
-	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group);
+	unique_ptr<ParquetWriteTransformData> transform_data;
+	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
 	return std::move(result);
 }
 
@@ -805,38 +779,6 @@ static bool IsExtensionGeometryType(const LogicalType &type, ClientContext &cont
 	return GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context);
 }
 
-static string GetShredding(case_insensitive_map_t<vector<Value>> &options, const string &col_name) {
-	//! At this point, the options haven't been parsed yet, so we have to parse them ourselves.
-	auto it = options.find("shredding");
-	if (it == options.end()) {
-		return string();
-	}
-	auto &shredding = it->second;
-	if (shredding.empty()) {
-		return string();
-	}
-
-	auto &shredding_val = shredding[0];
-	if (shredding_val.type().id() != LogicalTypeId::STRUCT) {
-		return string();
-	}
-
-	auto &shredded_variants = StructType::GetChildTypes(shredding_val.type());
-	auto &values = StructValue::GetChildren(shredding_val);
-	for (idx_t i = 0; i < shredded_variants.size(); i++) {
-		auto &shredded_variant = shredded_variants[i];
-		if (shredded_variant.first != col_name) {
-			continue;
-		}
-		auto &shredded_val = values[i];
-		if (shredded_val.type().id() != LogicalTypeId::VARCHAR) {
-			return string();
-		}
-		return shredded_val.GetValue<string>();
-	}
-	return string();
-}
-
 static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &input) {
 	auto &context = input.context;
 
@@ -856,23 +798,6 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 			    BoundCastExpression::AddCastToType(context, std::move(expr), LogicalType::GEOMETRY(), false);
 			cast_expr->SetAlias(name);
 			result.push_back(std::move(cast_expr));
-			any_change = true;
-		} else if (input.copy_to_type == CopyToType::COPY_TO_FILE && type.id() == LogicalTypeId::VARIANT) {
-			vector<unique_ptr<Expression>> arguments;
-			arguments.push_back(std::move(expr));
-
-			auto shredded_type_str = GetShredding(input.options, name);
-			if (!shredded_type_str.empty()) {
-				arguments.push_back(make_uniq<BoundConstantExpression>(Value(shredded_type_str)));
-			}
-
-			auto transform_func = VariantColumnWriter::GetTransformFunction();
-			transform_func.bind(context, transform_func, arguments);
-
-			auto func_expr = make_uniq<BoundFunctionExpression>(transform_func.GetReturnType(), transform_func,
-			                                                    std::move(arguments), nullptr, false);
-			func_expr->SetAlias(name);
-			result.push_back(std::move(func_expr));
 			any_change = true;
 		}
 		// If this is an EXPORT DATABASE statement, we dont want to write "lossy" types, instead cast them to VARCHAR

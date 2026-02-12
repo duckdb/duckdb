@@ -178,7 +178,15 @@ void LogicalOperator::Verify(ClientContext &context) {
 		MemoryStream stream(Allocator::Get(context));
 		// We are serializing a query plan
 		try {
-			BinarySerializer::Serialize(*expressions[expr_idx], stream);
+			auto &config = DBConfig::GetConfig(context);
+			SerializationOptions options;
+			if (config.options.serialization_compatibility.manually_set) {
+				options.serialization_compatibility = config.options.serialization_compatibility;
+			} else {
+				options.serialization_compatibility = SerializationCompatibility::Latest();
+			}
+
+			BinarySerializer::Serialize(*expressions[expr_idx], stream, options);
 		} catch (NotImplementedException &ex) {
 			// ignore for now (FIXME)
 			continue;

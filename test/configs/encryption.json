@@ -29,7 +29,6 @@
         "test/sql/pg_catalog/system_functions.test",
         "test/sql/attach/attach_table_info.test",
         "test/sql/attach/attach_did_you_mean.test",
-        "test/sql/attach/show_databases.test",
         "test/sql/attach/attach_show_all_tables.test",
         "test/sql/attach/attach_default_table.test",
         "test/sql/attach/attach_icu_collation.test",
@@ -55,6 +54,21 @@
           "test/sql/secrets/create_secret_hffs_autoload.test",
           "test/sql/secrets/secret_autoloading_errors.test",
           "test/sql/partitioning/hive_partitioning_autodetect.test"
+      ]
+    },
+    {
+      "reason": "Unclassified failures",
+      "paths": [
+        "test/sql/storage/encryption/wal/encrypted_wal_lazy_creation.test",
+        "test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test",
+        "test/sql/copy/encryption/different_aes_engines.test"
+      ]
+    },
+    {
+      "reason": "Expects db with name 'memory'",
+      "paths": [
+        "test/sql/attach/show_databases.test",
+        "test/sql/attach/show_schemas.test"
       ]
     }
   ]

@@ -56,6 +56,53 @@ enum class ParquetVersion : uint8_t {
 	V2 = 2, //! Includes the encodings above
 };
 
+class ParquetWriteTransformData {
+public:
+	ParquetWriteTransformData(ClientContext &context, vector<LogicalType> types,
+	                          vector<unique_ptr<Expression>> expressions);
+
+public:
+	ColumnDataCollection &ApplyTransform(ColumnDataCollection &input);
+
+private:
+	//! The buffer to store the transformed chunks of a rowgroup
+	ColumnDataCollection buffer;
+	//! The expression(s) to apply to the input chunk
+	vector<unique_ptr<Expression>> expressions;
+	//! The expression executor used to transform the input chunk
+	ExpressionExecutor executor;
+	//! The intermediate chunk to target the transform to
+	DataChunk chunk;
+};
+
+struct ParquetWriteLocalState : public LocalFunctionData {
+public:
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types);
+
+public:
+	ColumnDataCollection buffer;
+	ColumnDataAppendState append_state;
+	//! If any of the column writers require a transformation to a different shape, this will be initialized and used
+	unique_ptr<ParquetWriteTransformData> transform_data;
+};
+
+struct ParquetWriteGlobalState : public GlobalFunctionData {
+public:
+	ParquetWriteGlobalState() {
+	}
+
+public:
+	void LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason);
+
+public:
+	unique_ptr<ParquetWriter> writer;
+	optional_ptr<const PhysicalOperator> op;
+	mutex lock;
+	unique_ptr<ColumnDataCollection> combine_buffer;
+	//! If any of the column writers require a transformation to a different shape, this will be initialized and used
+	unique_ptr<ParquetWriteTransformData> transform_data;
+};
+
 class ParquetWriter {
 public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
@@ -63,19 +110,20 @@ public:
 	              ShreddingType shredding_types, const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, optional_idx dictionary_size_limit,
 	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
-	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl,
-	              ParquetVersion parquet_version, GeoParquetVersion geoparquet_version);
+	              double bloom_filter_false_positive_ratio, int64_t compression_level, ParquetVersion parquet_version,
+	              GeoParquetVersion geoparquet_version);
 	~ParquetWriter();
 
 public:
-	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
+	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result,
+	                     unique_ptr<ParquetWriteTransformData> &transform_data);
 	void FlushRowGroup(PreparedRowGroup &row_group);
-	void Flush(ColumnDataCollection &buffer);
+	void Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data);
 	void Finalize();
 
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
 	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-	                                bool allow_geometry);
+	                                bool allow_geometry, ClientContext &context);
 
 	ClientContext &GetContext() {
 		return context;
@@ -125,6 +173,7 @@ public:
 	const string &GetFileName() const {
 		return file_name;
 	}
+	void AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_ptr<ColumnWriter>> &column_writers);
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
@@ -138,6 +187,8 @@ public:
 	void SetWrittenStatistics(CopyFunctionFileStatistics &written_stats);
 	void FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &chunk,
 	                      optional_ptr<ColumnWriterStatistics> writer_stats);
+	void InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data);
+	void InitializeSchemaElements();
 
 private:
 	void GatherWrittenStatistics();
@@ -156,11 +207,9 @@ private:
 	bool enable_bloom_filters;
 	double bloom_filter_false_positive_ratio;
 	int64_t compression_level;
-	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
 	ParquetVersion parquet_version;
 	GeoParquetVersion geoparquet_version;
-	vector<ParquetColumnSchema> column_schemas;
 
 	unique_ptr<BufferedFileWriter> writer;
 	//! Atomics to reduce contention when rotating writes to multiple Parquet files

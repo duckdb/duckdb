@@ -5,6 +5,8 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include <algorithm>
 
@@ -13,21 +15,24 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p,
-                                         shared_ptr<ArenaAllocator> stl_allocator_p)
-    : stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
+                                         MemoryTag tag_p, shared_ptr<ArenaAllocator> stl_allocator_p)
+    : scheduler(TaskScheduler::GetScheduler(buffer_manager.GetDatabase())),
+      stl_allocator(stl_allocator_p ? std::move(stl_allocator_p)
                                     : make_shared_ptr<ArenaAllocator>(buffer_manager.GetBufferAllocator())),
-      layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr),
-      allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, stl_allocator)),
+      layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr), tag(tag_p),
+      allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr, tag, stl_allocator)),
       segments(*stl_allocator), scatter_functions(*stl_allocator), gather_functions(*stl_allocator) {
 	Initialize();
 }
 
-TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr,
+TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<TupleDataLayout> layout_ptr, MemoryTag tag,
                                          shared_ptr<ArenaAllocator> stl_allocator)
-    : TupleDataCollection(BufferManager::GetBufferManager(context), std::move(layout_ptr), std::move(stl_allocator)) {
+    : TupleDataCollection(BufferManager::GetBufferManager(context), std::move(layout_ptr), tag,
+                          std::move(stl_allocator)) {
 }
 
 TupleDataCollection::~TupleDataCollection() {
+	ParallelDestroyTask<decltype(segments)>::Schedule(scheduler, segments);
 }
 
 void TupleDataCollection::Initialize() {
@@ -49,7 +54,7 @@ void TupleDataCollection::Initialize() {
 }
 
 unique_ptr<TupleDataCollection> TupleDataCollection::CreateUnique() const {
-	return make_uniq<TupleDataCollection>(allocator->GetBufferManager(), layout_ptr);
+	return make_uniq<TupleDataCollection>(allocator->GetBufferManager(), layout_ptr, tag);
 }
 
 void GetAllColumnIDsInternal(vector<column_t> &column_ids, const idx_t column_count) {
@@ -88,7 +93,7 @@ idx_t TupleDataCollection::ChunkCount() const {
 }
 
 idx_t TupleDataCollection::SizeInBytes() const {
-	return data_size;
+	return data_size + stl_allocator->AllocationSize();
 }
 
 void TupleDataCollection::Unpin() {
@@ -571,11 +576,13 @@ void TupleDataCollection::InitializeScan(TupleDataParallelScanState &state, vect
 	InitializeScan(state.scan_state, std::move(column_ids), properties);
 }
 
-idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap) {
+idx_t TupleDataCollection::FetchChunk(TupleDataScanState &state, idx_t chunk_idx, bool init_heap,
+                                      optional_ptr<SortKeyPayloadState> sort_key_payload_state) {
 	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
 		auto &segment = *segments[segment_idx];
 		if (chunk_idx < segment.ChunkCount()) {
-			segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap);
+			segment.allocator->InitializeChunkState(segment, state.pin_state, state.chunk_state, chunk_idx, init_heap,
+			                                        sort_key_payload_state);
 			return segment.chunks[chunk_idx]->count;
 		}
 		chunk_idx -= segment.ChunkCount();

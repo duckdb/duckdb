@@ -9,12 +9,11 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/database_size.hpp"
-#include "duckdb/common/enums/checkpoint_type.hpp"
+#include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 #include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
@@ -47,21 +46,10 @@ public:
 	}
 };
 
-struct CheckpointOptions {
-	CheckpointOptions()
-	    : wal_action(CheckpointWALAction::DONT_DELETE_WAL), action(CheckpointAction::CHECKPOINT_IF_REQUIRED),
-	      type(CheckpointType::FULL_CHECKPOINT) {
-	}
-
-	CheckpointWALAction wal_action;
-	CheckpointAction action;
-	CheckpointType type;
-};
-
 //! StorageManager is responsible for managing the physical storage of a persistent database.
 class StorageManager {
 public:
-	StorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
+	StorageManager(AttachedDatabase &db, string path, AttachOptions &options);
 	virtual ~StorageManager();
 
 public:
@@ -80,10 +68,21 @@ public:
 
 	//! Gets the size of the WAL, or zero, if there is no WAL.
 	idx_t GetWALSize();
+	bool HasWAL() const;
+	void AddWALSize(idx_t size);
+	void SetWALSize(idx_t size);
+	//! Gets the number of WAL entries since last checkpoint
+	idx_t GetWALEntriesCount() const;
+	void ResetWALEntriesCount();
+	void IncrementWALEntriesCount();
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
-	//! Deletes the WAL file, and resets the unique pointer.
-	void ResetWAL();
+	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
+	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options);
+	//! Finishes a checkpoint
+	void WALFinishCheckpoint(lock_guard<mutex> &wal_lock);
+	// Get the WAL lock
+	unique_ptr<lock_guard<mutex>> GetWALLock();
 
 	//! Returns the database file path
 	string GetDBPath() const {
@@ -93,7 +92,11 @@ public:
 		return load_complete;
 	}
 	//! The path to the WAL, derived from the database file path
-	string GetWALPath() const;
+	string GetWALPath(const string &suffix = ".wal");
+	//! The path to the WAL that is used while a checkpoint is running
+	string GetCheckpointWALPath();
+	//! The path to the WAL that is used while recovering from a crash involving the checkpoint WAL
+	string GetRecoveryWALPath();
 	bool InMemory() const;
 
 	virtual bool AutomaticCheckpoint(idx_t estimated_wal_bytes) = 0;
@@ -116,12 +119,6 @@ public:
 		D_ASSERT(HasStorageVersion());
 		return storage_version.GetIndex();
 	}
-	void AddInMemoryChange(idx_t size) {
-		in_memory_change_size += size;
-	}
-	void ResetInMemoryChange() {
-		in_memory_change_size = 0;
-	}
 	bool CompressionIsEnabled() const {
 		return storage_options.compress_in_memory == CompressInMemory::COMPRESS;
 	}
@@ -135,8 +132,17 @@ public:
 		}
 		storage_options.encryption_cipher = cipher_p;
 	}
+
+	void SetEncryptionVersion(EncryptionTypes::EncryptionVersion version) {
+		storage_options.encryption_version = version;
+	}
+
 	bool IsEncrypted() const {
 		return storage_options.encryption;
+	}
+
+	EncryptionTypes::EncryptionVersion GetEncryptionVersion() const {
+		return storage_options.encryption_version;
 	}
 
 protected:
@@ -147,8 +153,12 @@ protected:
 	AttachedDatabase &db;
 	//! The path of the database
 	string path;
+	//! The WAL path
+	string wal_path;
 	//! The WriteAheadLog of the storage manager
 	unique_ptr<WriteAheadLog> wal;
+	//! Mutex used to control writes to the WAL
+	mutex wal_lock;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
@@ -158,7 +168,8 @@ protected:
 	optional_idx storage_version;
 	//! Estimated size of changes for determining automatic checkpointing on in-memory databases and databases without a
 	//! WAL.
-	atomic<idx_t> in_memory_change_size;
+	atomic<idx_t> wal_size;
+	atomic<idx_t> wal_entries_count;
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
 
@@ -179,9 +190,9 @@ public:
 class SingleFileStorageManager : public StorageManager {
 public:
 	SingleFileStorageManager() = delete;
-	SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options);
+	SingleFileStorageManager(AttachedDatabase &db, string path, AttachOptions &options);
 
-	//! The BlockManager to read from and write to blocks (meta data and data).
+	//! The BlockManager to read from and write to blocks, both for the metadata and the data itself.
 	unique_ptr<BlockManager> block_manager;
 	//! The table I/O manager.
 	unique_ptr<TableIOManager> table_io_manager;

@@ -75,8 +75,8 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	if (!partitioned_data ||
 	    RadixPartitioning::RadixBitsOfPowerOfTwo(partitioned_data->PartitionCount()) != radix_bits) {
 		D_ASSERT(!partitioned_data || partitioned_data->Count() == 0);
-		partitioned_data =
-		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, radix_bits, layout_ptr->ColumnCount() - 1);
+		partitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
+		                                                        radix_bits, layout_ptr->ColumnCount() - 1);
 	} else {
 		partitioned_data->Reset();
 	}
@@ -92,8 +92,8 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 void GroupedAggregateHashTable::InitializeUnpartitionedData() {
 	D_ASSERT(radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD);
 	if (!unpartitioned_data) {
-		unpartitioned_data =
-		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, 0ULL, layout_ptr->ColumnCount() - 1);
+		unpartitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
+		                                                          0ULL, layout_ptr->ColumnCount() - 1);
 	} else {
 		unpartitioned_data->Reset();
 	}
@@ -106,10 +106,6 @@ const PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() cons
 }
 
 unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
-	// Flush/unpin partitioned data
-	partitioned_data->FlushAppendState(state.partitioned_append_state);
-	partitioned_data->Unpin();
-
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
 		// Flush/unpin unpartitioned data and append to partitioned data
 		if (unpartitioned_data) {
@@ -119,6 +115,10 @@ unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedDa
 		}
 		InitializeUnpartitionedData();
 	}
+
+	// Flush/unpin partitioned data
+	partitioned_data->FlushAppendState(state.partitioned_append_state);
+	partitioned_data->Unpin();
 
 	// Return and re-initialize
 	auto result = std::move(partitioned_data);
@@ -584,7 +584,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 #ifdef DEBUG
-	groups.Verify();
+	groups.Verify(context.db);
 	D_ASSERT(groups.ColumnCount() + 1 == layout_ptr->ColumnCount());
 	for (idx_t i = 0; i < result.ColumnCount(); i++) {
 		D_ASSERT(result.data[i].GetType() == payload_types[i]);
@@ -895,9 +895,7 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
 		// Check for interrupts with each chunk
-		if (context.interrupted.load(std::memory_order_relaxed)) {
-			throw InterruptException();
-		}
+		context.InterruptCheck();
 		const auto input_chunk_size = fm_state.groups.size();
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,

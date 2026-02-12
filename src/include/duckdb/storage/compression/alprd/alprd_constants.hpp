@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/limits.hpp"
+
 namespace duckdb {
 
 class AlpRDConstants {
@@ -22,7 +24,9 @@ public:
 
 	static constexpr uint8_t EXCEPTION_SIZE = sizeof(uint16_t);
 	static constexpr uint8_t METADATA_POINTER_SIZE = sizeof(uint32_t);
+	//! exceptions_count can store the UNCOMPRESSED_MODE_SENTINEL value
 	static constexpr uint8_t EXCEPTIONS_COUNT_SIZE = sizeof(uint16_t);
+	static constexpr uint16_t UNCOMPRESSED_MODE_SENTINEL = std::numeric_limits<uint16_t>::max();
 	static constexpr uint8_t EXCEPTION_POSITION_SIZE = sizeof(uint16_t);
 	static constexpr uint8_t RIGHT_BIT_WIDTH_SIZE = sizeof(uint8_t);
 	static constexpr uint8_t LEFT_BIT_WIDTH_SIZE = sizeof(uint8_t);

@@ -1,0 +1,190 @@
+# name: test/sql/storage/types/variant/variant_extract_stats.test
+# group: [variant]
+
+require noforcestorage
+
+load __TEST_DIR__/variant_extract_stats_propagation.db
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+SET force_variant_shredding = 'VARCHAR[]';
+
+statement ok
+create table tbl(col VARIANT);
+
+statement ok
+insert into tbl select
+	['hello', 'world']
+from range(5) t(i)
+
+statement ok
+checkpoint
+
+# ------------------------------ Extract the child from the list ------------------------------
+
+query I
+select s.fully_shredded.stats from (select stats(col[1]) s from tbl limit 1);
+----
+{'min': hello, 'max': world, 'has_unicode': false, 'max_string_length': 5, 'has_null': false, 'has_no_null': true}
+
+statement ok
+insert into tbl select 42::INTEGER from range(5) t(i)
+
+statement ok
+checkpoint
+
+query I
+select s.fully_shredded from (select stats(col) s from tbl limit 1);
+----
+NULL
+
+# ------------------------------ Extracting the child from the list is not possible for some rows ------------------------------
+
+# Result is inconsistent, data isn't fully shredded
+query I
+select stats(col[1]).shredding_state from tbl offset 5 limit 1;
+----
+INCONSISTENT
+
+statement ok
+delete from tbl where not variant_typeof(col).starts_with('ARRAY')
+
+statement ok
+insert into tbl select
+	[42, 21, 1337]
+from range(5)
+
+statement ok
+checkpoint
+
+# ------------------------------ Child of the list is no longer fully shredded, types differ ------------------------------
+
+query I
+select stats(col[1]).shredding_state from tbl offset 5 limit 1;
+----
+INCONSISTENT
+
+statement ok
+delete from tbl;
+
+statement ok
+insert into tbl select {'a': 42, 'b': false} from range(5)
+
+statement ok
+checkpoint
+
+# We're shredded on VARCHAR[], so we can't propagate any stats for a field extract
+query I
+select stats(col.a).shredding_state from tbl limit 1;
+----
+INCONSISTENT
+
+statement ok
+delete from tbl;
+
+statement ok
+checkpoint
+
+restart
+
+# ------------------------------ Tests with OBJECT and the OBJECT's fields ------------------------------
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a VARCHAR, b INTEGER)';
+
+statement ok
+insert into tbl select {'a': 'test', 'b': false}
+
+statement ok
+checkpoint
+
+restart
+
+# Field 'a' is fully shredded
+query I
+select s.fully_shredded.stats from (select stats(col.a) s from tbl limit 1);
+----
+{'min': test, 'max': test, 'has_unicode': false, 'max_string_length': 4, 'has_null': false, 'has_no_null': true}
+
+# Field 'b' is not shredded
+query I
+select stats(col.b).shredding_state from tbl limit 1;
+----
+INCONSISTENT
+
+# OBJECT is fully shredded
+query I
+select s.fully_shredded.a.stats from (select stats(col) s from tbl limit 1);
+----
+{'min': test, 'max': test, 'has_unicode': false, 'max_string_length': 4, 'has_null': false, 'has_no_null': true}
+
+statement ok
+insert into tbl select {'a': 42::INTEGER, 'b': false}
+
+# OBJECT is fully shredded, but we've inserted unshredded data so its INCONSISTENT
+query I
+select stats(col).shredding_state from tbl limit 1;
+----
+INCONSISTENT
+
+statement ok
+checkpoint
+
+# We inserted a field a that's not a VARCHAR, but it's still an object, so the root remains fully shredded
+query I
+select stats(col).shredding_state from tbl limit 1;
+----
+SHREDDED
+
+# But field a isn't fully shredded anymore:
+query I
+select stats(col.a).shredding_state from tbl limit 1;
+----
+INCONSISTENT
+
+# Insert an object with additional field(s)
+statement ok
+insert into tbl select {'a': 'test', 'c': [42], 'b': false}
+
+statement ok
+checkpoint
+
+# Root is still fully shredded, even with an additional field it's always an OBJECT
+query I
+select stats(col).shredding_state from tbl limit 1;
+----
+SHREDDED
+
+# Insert an object that's missing shredded field(s)
+statement ok
+insert into tbl select {'b': 1337::INTEGER}
+
+statement ok
+checkpoint
+
+# Root is still shredded
+query I
+select stats(col).shredding_state from tbl limit 1;
+----
+SHREDDED
+
+# Now insert something that's NOT an OBJECT
+statement ok
+insert into tbl select 42::INTEGER
+
+statement ok
+checkpoint;
+
+# Now the root is no longer fully shredded
+query I
+select s.fully_shredded from (select stats(col) s from tbl limit 1);
+----
+NULL
+
+# Data is not fully shredded on the extracted field, result is inconsistent
+query I
+select stats(col.c).shredding_state from tbl order by rowid offset 2 limit 1;
+----
+INCONSISTENT

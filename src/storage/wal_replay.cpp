@@ -1,9 +1,5 @@
-#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/encryption_functions.hpp"
@@ -11,7 +7,7 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -32,13 +28,16 @@
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 class ReplayState {
 public:
-	ReplayState(AttachedDatabase &db, ClientContext &context) : db(db), context(context), catalog(db.GetCatalog()) {
+	ReplayState(AttachedDatabase &db, ClientContext &context, WALReplayState replay_state_p)
+	    : db(db), context(context), catalog(db.GetCatalog()), replay_state(replay_state_p) {
 	}
 
 	AttachedDatabase &db;
@@ -47,7 +46,10 @@ public:
 	optional_ptr<TableCatalogEntry> current_table;
 	MetaBlockPointer checkpoint_id;
 	idx_t wal_version = 1;
+	optional_idx current_position;
+	optional_idx checkpoint_position;
 	optional_idx expected_checkpoint_id;
+	WALReplayState replay_state;
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, const string &table_schema,
@@ -76,8 +78,8 @@ public:
 		deserializer.Set<Catalog &>(catalog);
 	}
 
-	static WriteAheadLogDeserializer Open(ReplayState &state_p, BufferedFileReader &stream,
-	                                      bool deserialize_only = false) {
+	static WriteAheadLogDeserializer GetEntryDeserializer(ReplayState &state_p, BufferedFileReader &stream,
+	                                                      bool deserialize_only = false) {
 		if (state_p.wal_version == 1) {
 			// old WAL versions do not have checksums
 			return WriteAheadLogDeserializer(state_p, stream, deserialize_only);
@@ -128,8 +130,26 @@ public:
 			auto offset = stream.CurrentOffset();
 			auto file_size = stream.FileSize();
 
-			EncryptionNonce nonce;
+			EncryptionNonce nonce(state_p.db.GetStorageManager().GetCipher(),
+			                      state_p.db.GetStorageManager().GetEncryptionVersion());
 			EncryptionTag tag;
+
+			stream.ReadData(nonce.data(), nonce.size());
+
+			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
+			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
+			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
+			auto metadata = make_uniq<EncryptionStateMetadata>(state_p.db.GetStorageManager().GetCipher(),
+			                                                   MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH,
+			                                                   state_p.db.GetStorageManager().GetEncryptionVersion());
+			//! initialize the decryption
+			auto encryption_state =
+			    database.GetEncryptionUtil(state_p.db.IsReadOnly())->CreateEncryptionState(std::move(metadata));
+			encryption_state->InitializeDecryption(nonce, derived_key);
+
+			if (encryption_state->GetCipher() == EncryptionTypes::CipherType::CTR) {
+				tag.SetSize(0);
+			}
 
 			if (offset + nonce.size() + ciphertext_size + tag.size() > file_size) {
 				throw SerializationException(
@@ -138,18 +158,6 @@ public:
 				    offset, size, file_size);
 			}
 
-			stream.ReadData(nonce.data(), nonce.size());
-
-			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
-			auto &catalog = state_p.db.GetCatalog().Cast<DuckCatalog>();
-			auto derived_key = keys.GetKey(catalog.GetEncryptionKeyId());
-
-			//! initialize the decryption
-			auto encryption_state = database.GetEncryptionUtil()->CreateEncryptionState(
-			    state_p.db.GetStorageManager().GetCipher(), MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-			encryption_state->InitializeDecryption(nonce.data(), nonce.size(), derived_key,
-			                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-
 			//! Allocate a decryption buffer
 			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);
 			auto out_buffer = unique_ptr<data_t[]>(new data_t[size]);
@@ -157,10 +165,14 @@ public:
 			stream.ReadData(buffer.get(), ciphertext_size);
 			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
 
-			//! read and verify the stored tag
-			stream.ReadData(tag.data(), tag.size());
-
-			encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
+			if (encryption_state->GetCipher() == EncryptionTypes::CipherType::GCM) {
+				//! read and verify the stored tag
+				stream.ReadData(tag.data(), tag.size());
+				D_ASSERT(!tag.IsAllZeros());
+				encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
+			} else {
+				encryption_state->Finalize(buffer.get(), ciphertext_size, nullptr, 0);
+			}
 
 			//! read the stored checksum
 			auto stored_checksum = Load<uint64_t>(buffer.get());
@@ -257,29 +269,43 @@ private:
 //===--------------------------------------------------------------------===//
 // Replay
 //===--------------------------------------------------------------------===//
-unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, FileSystem &fs, AttachedDatabase &db,
+unique_ptr<WriteAheadLog> WriteAheadLog::Replay(QueryContext context, StorageManager &storage_manager,
                                                 const string &wal_path) {
+	auto &fs = FileSystem::Get(storage_manager.GetAttached());
 	auto handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 	if (!handle) {
 		// WAL does not exist - instantiate an empty WAL
-		return make_uniq<WriteAheadLog>(db, wal_path);
+		return make_uniq<WriteAheadLog>(storage_manager, wal_path);
 	}
 
 	// context is passed for metric collection purposes only!!
-	auto wal_handle = ReplayInternal(context, db, std::move(handle));
+	auto wal_handle = ReplayInternal(context, storage_manager, std::move(handle));
 	if (wal_handle) {
 		return wal_handle;
 	}
 	// replay returning NULL indicates we can nuke the WAL entirely - but only if this is not a read-only connection
-	if (!db.IsReadOnly()) {
+	if (!storage_manager.GetAttached().IsReadOnly()) {
 		fs.TryRemoveFile(wal_path);
 	}
-	return make_uniq<WriteAheadLog>(db, wal_path);
+	return make_uniq<WriteAheadLog>(storage_manager, wal_path);
 }
 
-// QueryContext is passed for metric collection purposes only!!
-unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, AttachedDatabase &database,
-                                                        unique_ptr<FileHandle> handle) {
+static void CopyOverWAL(QueryContext context, BufferedFileReader &reader, FileHandle &target, data_ptr_t buffer,
+                        idx_t buffer_size, idx_t copy_end) {
+	while (!reader.Finished()) {
+		idx_t read_count = MinValue<idx_t>(buffer_size, copy_end - reader.CurrentOffset());
+		if (read_count == 0) {
+			break;
+		}
+		reader.ReadData(context, buffer, read_count);
+
+		target.Write(buffer, read_count);
+	}
+}
+
+unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, StorageManager &storage_manager,
+                                                        unique_ptr<FileHandle> handle, WALReplayState replay_state) {
+	auto &database = storage_manager.GetAttached();
 	Connection con(database.GetDatabase());
 	auto wal_path = handle->GetPath();
 	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));
@@ -289,18 +315,19 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 	}
 
 	con.BeginTransaction();
-	MetaTransaction::Get(*con.context).ModifyDatabase(database);
+	MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
 
 	auto &config = DBConfig::GetConfig(database.GetDatabase());
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
-	ReplayState checkpoint_state(database, *con.context);
+	ReplayState checkpoint_state(database, *con.context, replay_state);
 	try {
 		idx_t replay_entry_count = 0;
 		while (true) {
 			replay_entry_count++;
 			// read the current entry (deserialize only)
-			auto deserializer = WriteAheadLogDeserializer::Open(checkpoint_state, reader, true);
+			checkpoint_state.current_position = reader.CurrentOffset();
+			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_state, reader, true);
 			if (deserializer.ReplayEntry()) {
 				// check if the file is exhausted
 				if (reader.Finished()) {
@@ -312,7 +339,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto &profiler = *client_context->client_data->profiler;
-			profiler.AddToCounter(MetricsType::WAL_REPLAY_ENTRY_COUNT, replay_entry_count);
+			profiler.AddToCounter(MetricType::WAL_REPLAY_ENTRY_COUNT, replay_entry_count);
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
@@ -321,13 +348,114 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} // LCOV_EXCL_STOP
+	unique_ptr<FileHandle> checkpoint_handle;
 	if (checkpoint_state.checkpoint_id.IsValid()) {
-		// there is a checkpoint flag: check if we need to deserialize the WAL
+		if (replay_state == WALReplayState::CHECKPOINT_WAL) {
+			throw InvalidInputException(
+			    "Failure while replaying checkpoint WAL file \"%s\": checkpoint WAL cannot contain a checkpoint marker",
+			    wal_path);
+		}
+		// there is a checkpoint flag
+		// this means a checkpoint was on-going when we crashed
+		// we need to reconcile this with what is in the data file
+		// first check if there is a checkpoint WAL
 		auto &manager = database.GetStorageManager();
-		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
-			// the contents of the WAL have already been checkpointed
-			// we can safely truncate the WAL and ignore its contents
-			return nullptr;
+		auto &fs = FileSystem::Get(storage_manager.GetAttached());
+		auto checkpoint_wal = manager.GetCheckpointWALPath();
+		checkpoint_handle =
+		    fs.OpenFile(checkpoint_wal, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+		bool checkpoint_was_successful = manager.IsCheckpointClean(checkpoint_state.checkpoint_id);
+		if (!checkpoint_handle) {
+			// no checkpoint WAL - either we just need to replay this WAL, or we are done
+			if (checkpoint_was_successful) {
+				// the contents of the WAL have already been checkpointed and there is no checkpoint WAL - we are done
+				return nullptr;
+			}
+		} else {
+			// we have a checkpoint WAL
+			if (checkpoint_was_successful) {
+				// the checkpoint was successful
+				// the main WAL is no longer needed, we only need to replay the checkpoint WAL
+				// if this is a read-only connection then replay the checkpoint WAL directly
+				if (storage_manager.GetAttached().IsReadOnly()) {
+					return ReplayInternal(context, storage_manager, std::move(checkpoint_handle),
+					                      WALReplayState::CHECKPOINT_WAL);
+				}
+				// if this is not a read-only connection we need to finish the checkpoint
+				// overwrite the current WAL with the checkpoint WAL
+				checkpoint_handle.reset();
+
+				fs.MoveFile(checkpoint_wal, wal_path);
+
+				// now open the handle again and replay the checkpoint WAL
+				checkpoint_handle =
+				    fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+				return ReplayInternal(context, storage_manager, std::move(checkpoint_handle),
+				                      WALReplayState::CHECKPOINT_WAL);
+			}
+			// the checkpoint was unsuccessful
+			// this means we need to replay both this WAL and the checkpoint WAL
+			// if this is a read-only connection - replay both WAL files
+			if (!storage_manager.GetAttached().IsReadOnly()) {
+				// if this is not a read-only connection, then merge the two WALs and replay the merged WAL
+				// we merge into the recovery WAL path
+				auto recovery_path = manager.GetRecoveryWALPath();
+				auto recovery_handle =
+				    fs.OpenFile(recovery_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+
+				static constexpr idx_t BATCH_SIZE = Storage::DEFAULT_BLOCK_SIZE;
+				auto buffer = make_uniq_array<data_t>(BATCH_SIZE);
+
+				// first copy over the main WAL contents
+				auto copy_end = checkpoint_state.checkpoint_position.GetIndex();
+				reader.Reset();
+				CopyOverWAL(context, reader, *recovery_handle, buffer.get(), BATCH_SIZE, copy_end);
+
+				// now copy over the checkpoint WAL
+				{
+					BufferedFileReader checkpoint_reader(FileSystem::Get(database), std::move(checkpoint_handle));
+
+					// skip over the version entry
+					ReplayState checkpoint_replay_state(database, *con.context, WALReplayState::CHECKPOINT_WAL);
+					auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(checkpoint_replay_state,
+					                                                                    checkpoint_reader, true);
+					deserializer.ReplayEntry();
+
+					if (checkpoint_replay_state.wal_version != checkpoint_state.wal_version) {
+						throw InvalidInputException("Failure while replaying checkpoint WAL file \"%s\": checkpoint "
+						                            "WAL version is different from main WAL version",
+						                            wal_path);
+					}
+
+					CopyOverWAL(context, checkpoint_reader, *recovery_handle, buffer.get(), BATCH_SIZE,
+					            checkpoint_reader.FileSize());
+				}
+
+				auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(storage_manager.GetDatabase());
+
+				// move over the recovery WAL over the main WAL
+				recovery_handle->Sync();
+				recovery_handle.reset();
+
+				if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_MOVING_RECOVERY) {
+					throw FatalException(
+					    "Checkpoint aborted before moving recovery file because of PRAGMA checkpoint_abort flag");
+				}
+
+				fs.MoveFile(recovery_path, wal_path);
+
+				if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_DELETING_CHECKPOINT_WAL) {
+					throw FatalException(
+					    "Checkpoint aborted before deleting checkpoint file because of PRAGMA checkpoint_abort flag");
+				}
+
+				// delete the checkpoint WAL
+				fs.RemoveFile(checkpoint_wal);
+
+				// replay the (combined) recovery WAL
+				auto main_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
+				return ReplayInternal(context, storage_manager, std::move(main_handle), WALReplayState::CHECKPOINT_WAL);
+			}
 		}
 	}
 	if (checkpoint_state.expected_checkpoint_id.IsValid()) {
@@ -337,7 +465,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 	}
 
 	// we need to recover from the WAL: actually set up the replay state
-	ReplayState state(database, *con.context);
+	ReplayState state(database, *con.context, replay_state);
 
 	// reset the reader - we are going to read the WAL from the beginning again
 	reader.Reset();
@@ -350,7 +478,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 	try {
 		while (true) {
 			// read the current entry
-			auto deserializer = WriteAheadLogDeserializer::Open(state, reader);
+			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(state, reader);
 			if (deserializer.ReplayEntry()) {
 				con.Commit();
 
@@ -368,7 +496,7 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 					break;
 				}
 				con.BeginTransaction();
-				MetaTransaction::Get(*con.context).ModifyDatabase(database);
+				MetaTransaction::Get(*con.context).ModifyDatabase(database, DatabaseModificationType());
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -386,8 +514,14 @@ unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(QueryContext context, At
 		con.Query("ROLLBACK");
 		throw;
 	} // LCOV_EXCL_STOP
+	if (all_succeeded && checkpoint_handle) {
+		// we have successfully replayed the main WAL - but there is still a checkpoint WAL remaining
+		// this can only happen in read-only mode
+		// replay the checkpoint WAL and return
+		return ReplayInternal(context, storage_manager, std::move(checkpoint_handle), WALReplayState::CHECKPOINT_WAL);
+	}
 	auto init_state = all_succeeded ? WALInitState::UNINITIALIZED : WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE;
-	return make_uniq<WriteAheadLog>(database, wal_path, successful_offset, init_state);
+	return make_uniq<WriteAheadLog>(storage_manager, wal_path, successful_offset, init_state);
 }
 
 //===--------------------------------------------------------------------===//
@@ -516,6 +650,12 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 			state.expected_checkpoint_id = expected_checkpoint_iteration;
 			return;
 		}
+		if (state.replay_state == WALReplayState::CHECKPOINT_WAL &&
+		    wal_checkpoint_iteration == expected_checkpoint_iteration + 1) {
+			// if we are recovering from a checkpoint WAL, the checkpoint iteration is possibly one higher
+			// (depending on when the crash happened)
+			return;
+		}
 		ThrowVersionError(wal_checkpoint_iteration, expected_checkpoint_iteration);
 	}
 }
@@ -585,7 +725,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 
 			// Convert the buffer handle to a persistent block and store the block id.
 			if (!deserialize_only) {
-				auto block_id = block_manager->GetFreeBlockId();
+				auto block_id = block_manager->GetFreeBlockIdForCheckpoint();
 				block_manager->ConvertToPersistent(context, block_id, std::move(block_handle),
 				                                   std::move(buffer_handle));
 				data_info.block_pointers[j].block_id = block_id;
@@ -644,7 +784,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	}
 
 	auto &storage = table.GetStorage();
-	CreateIndexInput input(TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
+	CreateIndexInput input(context, TableIOManager::Get(storage), storage.db, IndexConstraintType::PRIMARY,
 	                       index_storage_info.name, column_ids, unbound_expressions, index_storage_info,
 	                       index_storage_info.options);
 
@@ -938,10 +1078,39 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
-	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), 0);
+	auto base_row = storage.GetTotalRows();
+	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), base_row);
 	new_row_groups.Initialize(data);
-	TableIndexList index_list;
-	storage.MergeStorage(new_row_groups, index_list, nullptr);
+
+	// if we have any indexes - scan the row groups and add data to the indexes
+	auto &indexes = table_info->GetIndexes();
+	if (!indexes.Empty()) {
+		auto &transaction = DuckTransaction::Get(context, db);
+		// we have indexes - append
+		vector<StorageIndex> column_ids;
+		for (auto &col : state.current_table->GetColumns().Physical()) {
+			column_ids.emplace_back(col.StorageOid());
+		}
+		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
+		auto row_ids = FlatVector::GetData<row_t>(row_id_vector);
+		auto current_row_id = storage.GetTotalRows();
+		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
+			for (idx_t r = 0; r < chunk.size(); r++) {
+				row_ids[r] = NumericCast<row_t>(current_row_id + r);
+			}
+			current_row_id += chunk.size();
+			for (auto &index : indexes.Indexes()) {
+				if (!index.IsBound()) {
+					auto &unbound_index = index.Cast<UnboundIndex>();
+					unbound_index.BufferChunk(chunk, row_id_vector, column_ids, BufferedIndexReplay::INSERT_ENTRY);
+					continue;
+				}
+				auto &bound_index = index.Cast<BoundIndex>();
+				bound_index.Append(chunk, row_id_vector);
+			}
+		}
+	}
+	storage.MergeStorage(new_row_groups, nullptr);
 }
 
 void WriteAheadLogDeserializer::ReplayDelete() {
@@ -955,21 +1124,20 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 	}
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
-	row_t row_ids[1];
-	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_ids));
-	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
+	auto &row_identifiers = chunk.data[0];
+	row_identifiers.Flatten(chunk.size());
+	auto source_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	// Delete the row IDs from the current table.
 	auto &storage = state.current_table->GetStorage();
 	auto total_rows = storage.GetTotalRows();
-	TableDeleteState delete_state;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		if (source_ids[i] >= UnsafeNumericCast<row_t>(total_rows)) {
 			throw SerializationException("invalid row ID delete in WAL");
 		}
-		row_ids[0] = source_ids[i];
-		storage.Delete(delete_state, context, row_identifiers, 1);
 	}
+	TableDeleteState delete_state;
+	storage.Delete(delete_state, context, row_identifiers, chunk.size());
 }
 
 void WriteAheadLogDeserializer::ReplayUpdate() {
@@ -999,6 +1167,7 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 
 void WriteAheadLogDeserializer::ReplayCheckpoint() {
 	state.checkpoint_id = deserializer.ReadProperty<MetaBlockPointer>(101, "meta_block");
+	state.checkpoint_position = state.current_position;
 }
 
 } // namespace duckdb

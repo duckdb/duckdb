@@ -601,11 +601,8 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 		// no zone map, no pruning
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-
-	// first check zonemap (min/max)
-	FilterPropagateResult zonemap_result;
-	auto internal_type = stats.GetType().InternalType();
-	switch (internal_type) {
+	D_ASSERT(stats.CanHaveNoNull());
+	switch (stats.GetType().InternalType()) {
 	case PhysicalType::INT8:
 		zonemap_result = CheckZonemapTemplated<int8_t>(stats, comparison_type, constants);
 		break;
@@ -970,9 +967,13 @@ void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &resul
 	deserializer.ReadPropertyWithExplicitDefault<uint64_t>(203, "imprint_bitmap", numeric_stats.imprint_bitmap, 0);
 }
 
-string NumericStats::ToString(const BaseStatistics &stats) {
-	return StringUtil::Format("[Min: %s, Max: %s]", NumericStats::MinOrNull(stats).ToString(),
-	                          NumericStats::MaxOrNull(stats).ToString());
+child_list_t<Value> NumericStats::ToStruct(const BaseStatistics &stats) {
+	child_list_t<Value> result;
+	if (NumericStats::HasMinMax(stats)) {
+		result.emplace_back("min", NumericStats::MinOrNull(stats));
+		result.emplace_back("max", NumericStats::MaxOrNull(stats));
+	}
+	return result;
 }
 
 template <class T>
@@ -1047,58 +1048,6 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 	}
 }
 
-void NumericStats::BuildImprintForSegment(ColumnData &col_data, SegmentNode<ColumnSegment> &segment_node) {
-	auto &segment = *segment_node.node;
-	auto &stats = segment.stats.statistics;
-
-	// only support persistent segments
-	if (segment.segment_type != ColumnSegmentType::PERSISTENT) {
-		NumericStats::ResetImprint(stats);
-		return;
-	}
-
-	switch (segment.type.InternalType()) {
-	case PhysicalType::INT8:
-		BuildImprintForSegmentInternal<int8_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::INT16:
-		BuildImprintForSegmentInternal<int16_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::INT32:
-		BuildImprintForSegmentInternal<int32_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::INT64:
-		BuildImprintForSegmentInternal<int64_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::UINT8:
-		BuildImprintForSegmentInternal<uint8_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::UINT16:
-		BuildImprintForSegmentInternal<uint16_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::UINT32:
-		BuildImprintForSegmentInternal<uint32_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::UINT64:
-		BuildImprintForSegmentInternal<uint64_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::INT128:
-		BuildImprintForSegmentInternal<hugeint_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::UINT128:
-		BuildImprintForSegmentInternal<uhugeint_t>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::FLOAT:
-		BuildImprintForSegmentInternal<float>(stats, col_data, segment_node);
-		break;
-	case PhysicalType::DOUBLE:
-		BuildImprintForSegmentInternal<double>(stats, col_data, segment_node);
-		break;
-	default:
-		// for unsupported types, invalid imprint stats
-		NumericStats::ResetImprint(stats);
-		break;
-	}
-}
-
+template uint32_t NumericStats::GetMinUnsafe(const BaseStatistics &stats);
+template uint32_t NumericStats::GetMaxUnsafe(const BaseStatistics &stats);
 } // namespace duckdb

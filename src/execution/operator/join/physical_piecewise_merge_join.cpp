@@ -19,13 +19,13 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
                         join_type, estimated_cardinality, std::move(pushdown_info_p)) {
 	for (auto &join_cond : conditions) {
-		D_ASSERT(join_cond.left->return_type == join_cond.right->return_type);
-		join_key_types.push_back(join_cond.left->return_type);
+		D_ASSERT(join_cond.GetLHS().return_type == join_cond.GetRHS().return_type);
+		join_key_types.push_back(join_cond.GetLHS().return_type);
 
 		// Convert the conditions to sort orders
-		auto left_expr = join_cond.left->Copy();
-		auto right_expr = join_cond.right->Copy();
-		switch (join_cond.comparison) {
+		auto left_expr = join_cond.GetLHS().Copy();
+		auto right_expr = join_cond.GetRHS().Copy();
+		switch (join_cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left_expr));
@@ -190,7 +190,7 @@ public:
 	PiecewiseMergeJoinState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op)
 	    : client(client), allocator(Allocator::Get(client)), op(op), left_outer(IsLeftOuterJoin(op.join_type)),
 	      left_position(0), first_fetch(true), finished(true), right_position(0), right_chunk_index(0),
-	      rhs_executor(client) {
+	      rhs_executor(client), pred_executor(client) {
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 		lhs_payload.Initialize(client, op.children[0].get().GetTypes());
 
@@ -215,6 +215,11 @@ public:
 
 		//	Since we have now materialized the payload, the keys will not have payloads?
 		sort_key_type = rhs_table.GetSortKeyType();
+
+		if (op.predicate) {
+			pred_executor.AddExpression(*op.predicate);
+			pred_matches.Initialize();
+		}
 	}
 
 	ClientContext &client;
@@ -250,6 +255,10 @@ public:
 	DataChunk rhs_keys;
 	DataChunk rhs_input;
 	ExpressionExecutor rhs_executor;
+
+	//! Arbitrary expressions
+	ExpressionExecutor pred_executor;
+	SelectionVector pred_matches;
 
 public:
 	void ResolveJoinKeys(ExecutionContext &context, DataChunk &input) {
@@ -404,7 +413,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	// perform the actual join
 	bool found_match[STANDARD_VECTOR_SIZE];
 	memset(found_match, 0, sizeof(found_match));
-	MergeJoinSimpleBlocks(state, gstate, found_match, conditions[0].comparison);
+	MergeJoinSimpleBlocks(state, gstate, found_match, conditions[0].GetComparisonType());
 
 	// use the sorted payload
 	const auto lhs_not_null = lhs_table.count - lhs_table.has_null;
@@ -450,11 +459,13 @@ struct ChunkMergeInfo {
 	const idx_t not_null;
 	//! The current offset in the chunk
 	idx_t &entry_idx;
-	//! The offsets that match
-	SelectionVector result;
+	//! The left chunk offsets that match
+	SelectionVector lhs;
+	//! The right table offsets that match
+	unsafe_vector<idx_t> rhs;
 
 	ChunkMergeInfo(ExternalBlockIteratorState &state, idx_t block_idx, idx_t &entry_idx, idx_t not_null)
-	    : state(state), block_idx(block_idx), not_null(not_null), entry_idx(entry_idx), result(STANDARD_VECTOR_SIZE) {
+	    : state(state), block_idx(block_idx), not_null(not_null), entry_idx(entry_idx), lhs(STANDARD_VECTOR_SIZE) {
 	}
 
 	idx_t GetIndex() const {
@@ -468,18 +479,19 @@ static idx_t TemplatedMergeJoinComplexBlocks(ChunkMergeInfo &l, ChunkMergeInfo &
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 
+	idx_t result_count = 0;
+	r.rhs.resize(0);
 	if (r.entry_idx >= r.not_null) {
-		return 0;
+		return result_count;
 	}
 
-	idx_t result_count = 0;
 	BLOCK_ITERATOR l_ptr(l.state);
 	BLOCK_ITERATOR r_ptr(r.state);
 	while (true) {
 		if (l.entry_idx < prev_left_index) {
 			// left side smaller: found match
-			l.result.set_index(result_count, sel_t(l.entry_idx));
-			r.result.set_index(result_count, sel_t(r.entry_idx));
+			l.lhs.set_index(result_count, sel_t(l.entry_idx));
+			r.rhs.emplace_back(r.entry_idx);
 			result_count++;
 			// move left side forward
 			l.entry_idx++;
@@ -493,8 +505,8 @@ static idx_t TemplatedMergeJoinComplexBlocks(ChunkMergeInfo &l, ChunkMergeInfo &
 		if (l.entry_idx < l.not_null) {
 			if (MergeJoinBefore(l_ptr[l.GetIndex()], r_ptr[r.GetIndex()], strict)) {
 				// left side smaller: found match
-				l.result.set_index(result_count, sel_t(l.entry_idx));
-				r.result.set_index(result_count, sel_t(r.entry_idx));
+				l.lhs.set_index(result_count, sel_t(l.entry_idx));
+				r.rhs.emplace_back(r.entry_idx);
 				result_count++;
 				// move left side forward
 				l.entry_idx++;
@@ -560,7 +572,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(context, input);
-			state.lhs_payload.Verify();
+			state.lhs_payload.Verify(context.client.db);
 
 			state.right_chunk_index = 0;
 			state.right_base = 0;
@@ -596,7 +608,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		rhs_table.Repin(rhs_iterator);
 
 		idx_t result_count = MergeJoinComplexBlocks(state.sort_key_type, left_info, right_info,
-		                                            conditions[0].comparison, state.prev_left_index);
+		                                            conditions[0].GetComparisonType(), state.prev_left_index);
 		if (result_count == 0) {
 			// exhausted this chunk on the right side
 			// move to the next right chunk
@@ -610,12 +622,12 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		} else {
 			// found matches: extract them
 			SliceSortedPayload(state.rhs_input, rhs_table, rhs_iterator, state.rhs_chunk_state, right_info.block_idx,
-			                   right_info.result, result_count, *state.rhs_scan_state);
+			                   right_info.rhs, *state.rhs_scan_state);
 
 			chunk.Reset();
 			for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
 				if (col_idx < left_cols) {
-					chunk.data[col_idx].Slice(state.lhs_payload.data[col_idx], left_info.result, result_count);
+					chunk.data[col_idx].Slice(state.lhs_payload.data[col_idx], left_info.lhs, result_count);
 				} else {
 					chunk.data[col_idx].Reference(state.rhs_input.data[col_idx - left_cols]);
 				}
@@ -633,7 +645,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 				auto tail_count = result_count;
 				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
 					Vector left(state.lhs_local_table->keys.data[cmp_idx]);
-					left.Slice(left_info.result, result_count);
+					left.Slice(left_info.lhs, result_count);
 
 					auto &right = state.rhs_keys.data[cmp_idx];
 					state.rhs_executor.ExecuteExpression(cmp_idx, right);
@@ -642,8 +654,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 						left.Slice(*sel, tail_count);
 						right.Slice(*sel, tail_count);
 					}
-					tail_count =
-					    SelectJoinTail(conditions[cmp_idx].comparison, left, right, sel, tail_count, &state.sel);
+					tail_count = SelectJoinTail(conditions[cmp_idx].GetComparisonType(), left, right, sel, tail_count,
+					                            &state.sel);
 					sel = &state.sel;
 				}
 
@@ -657,21 +669,28 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					}
 				}
 			}
+			chunk.SetCardinality(result_count);
+
+			//	Apply any arbitrary predicate
+			if (predicate) {
+				result_count = state.pred_executor.SelectExpression(chunk, state.pred_matches);
+				chunk.Slice(state.pred_matches, result_count);
+				sel = &state.pred_matches;
+			}
 
 			// found matches: mark the found matches if required
 			if (state.left_outer.Enabled()) {
 				for (idx_t i = 0; i < result_count; i++) {
-					state.left_outer.SetMatch(left_info.result[sel->get_index(i)]);
+					state.left_outer.SetMatch(left_info.lhs[sel->get_index(i)]);
 				}
 			}
 			if (gstate.table->found_match) {
 				//	Absolute position of the block + start position inside that block
 				for (idx_t i = 0; i < result_count; i++) {
-					gstate.table->found_match[state.right_base + right_info.result[sel->get_index(i)]] = true;
+					gstate.table->found_match[state.right_base + right_info.rhs[sel->get_index(i)]] = true;
 				}
 			}
-			chunk.SetCardinality(result_count);
-			chunk.Verify();
+			chunk.Verify(context.client.db);
 		}
 	} while (chunk.size() == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -692,7 +711,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 		}
 	}
 
-	input.Verify();
+	input.Verify(context.client.db);
 	switch (join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:

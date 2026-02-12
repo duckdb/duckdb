@@ -12,11 +12,15 @@ on:
         required: false
         type: string
         default: ''
+      opt_in_archs:
+        required: false
+        type: string
+        default: ''
       extra_toolchains:
         required: false
         type: string
         default: ""
-      duckdb_ref:
+      override_duckdb_version:
         required: false
         type: string
         default: ""
@@ -40,7 +44,7 @@ jobs:
     with:
       # We piggy-back extension-template to build the extensions in extension_config, it's hacky, but it works ¯\_(ツ)_/¯
       override_repository: duckdb/extension-template
-      override_ref: v1.4-andium
+      override_ref: main
 
       # Note when `upload_all_extensions` is true, the extension name is used as prefix to the artifact holding all built extensions
       upload_all_extensions: true
@@ -48,13 +52,14 @@ jobs:
 
       # DuckDB version is overridden to the current commit of the current repository
       set_caller_as_duckdb: true
-      duckdb_version: ${{ github.sha }}
+      duckdb_version: ${{ inputs.override_duckdb_version != '' && inputs.override_duckdb_version || github.sha }}
 
       # CI tools is pinned to main
       override_ci_tools_repository: duckdb/extension-ci-tools
       ci_tools_version: main
 
       exclude_archs: ${{ inputs.exclude_archs }}
+      opt_in_archs: ${{ inputs.opt_in_archs }}
 
       extra_toolchains: ${{ inputs.extra_toolchains }}
       use_merged_vcpkg_manifest: '1'

@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
@@ -29,8 +30,7 @@ PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<Logical
 class TableScanGlobalSourceState : public GlobalSourceState {
 public:
 	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
-		physical_table_scan_execution_strategy =
-		    DBConfig::GetSetting<DebugPhysicalTableScanExecutionStrategySetting>(context);
+		physical_table_scan_execution_strategy = Settings::Get<DebugPhysicalTableScanExecutionStrategySetting>(context);
 
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
@@ -272,7 +272,7 @@ OperatorPartitionData PhysicalTableScan::GetPartitionData(ExecutionContext &cont
 }
 
 string PhysicalTableScan::GetName() const {
-	return StringUtil::Upper(function.name + " " + function.extra_info);
+	return StringUtil::Upper(function.name + (function.extra_info.empty() ? "" : " " + function.extra_info));
 }
 
 void AddProjectionNames(const ColumnIndex &index, const string &name, const LogicalType &type, string &result) {
@@ -284,11 +284,54 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 		result += name;
 		return;
 	}
-	auto &child_types = StructType::GetChildTypes(type);
-	for (auto &child_index : index.GetChildIndexes()) {
-		auto &ele = child_types[child_index.GetPrimaryIndex()];
-		AddProjectionNames(child_index, name + "." + ele.first, ele.second, result);
+
+	if (type.id() == LogicalTypeId::STRUCT) {
+		auto &child_types = StructType::GetChildTypes(type);
+		for (auto &child_index : index.GetChildIndexes()) {
+			if (child_index.HasPrimaryIndex()) {
+				auto &ele = child_types[child_index.GetPrimaryIndex()];
+				AddProjectionNames(child_index, name + "." + ele.first, ele.second, result);
+			} else {
+				auto field_type = child_index.HasType() ? child_index.GetType() : LogicalType::VARIANT();
+				AddProjectionNames(child_index, name + "." + child_index.GetFieldName(), field_type, result);
+			}
+		}
+	} else if (type.id() == LogicalTypeId::VARIANT) {
+		for (auto &child_index : index.GetChildIndexes()) {
+			D_ASSERT(!child_index.HasPrimaryIndex());
+			auto field_type = child_index.HasType() ? child_index.GetType() : LogicalType::VARIANT();
+			AddProjectionNames(child_index, name + "." + child_index.GetFieldName(), field_type, result);
+		}
+	} else {
+		throw InternalException("Unexpected type (%s) in AddProjectionNames", type.ToString());
 	}
+}
+
+static string GetFilterInfo(const PhysicalTableScan *scan, const unique_ptr<TableFilterSet> &filter_set) {
+	string filters_info;
+	bool first_item = true;
+	for (auto &f : filter_set->filters) {
+		auto &column_index = f.first;
+		auto &filter = f.second;
+		if (column_index < scan->names.size()) {
+			if (!first_item) {
+				filters_info += "\n";
+			}
+			first_item = false;
+
+			const auto col_id = scan->column_ids[column_index].GetPrimaryIndex();
+			if (IsVirtualColumn(col_id)) {
+				auto entry = scan->virtual_columns.find(col_id);
+				if (entry == scan->virtual_columns.end()) {
+					throw InternalException("Virtual column not found");
+				}
+				filters_info += filter->ToString(entry->second.name);
+			} else {
+				filters_info += filter->ToString(scan->names[col_id]);
+			}
+		}
+	}
+	return filters_info;
 }
 
 InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
@@ -317,31 +360,13 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 		result["Projections"] = projections;
 	}
 	if (function.filter_pushdown && table_filters) {
-		string filters_info;
-		bool first_item = true;
-		for (auto &f : table_filters->filters) {
-			auto &column_index = f.first;
-			auto &filter = f.second;
-			if (column_index < names.size()) {
-				if (!first_item) {
-					filters_info += "\n";
-				}
-				first_item = false;
-
-				const auto col_id = column_ids[column_index].GetPrimaryIndex();
-				if (IsVirtualColumn(col_id)) {
-					auto entry = virtual_columns.find(col_id);
-					if (entry == virtual_columns.end()) {
-						throw InternalException("Virtual column not found");
-					}
-					filters_info += filter->ToString(entry->second.name);
-				} else {
-					filters_info += filter->ToString(names[col_id]);
-				}
-			}
-		}
-		result["Filters"] = filters_info;
+		result["Filters"] = GetFilterInfo(this, table_filters);
 	}
+
+	if (function.filter_pushdown && dynamic_filters && dynamic_filters->HasFilters()) {
+		result["Dynamic Filters"] = GetFilterInfo(this, dynamic_filters->GetFinalTableFilters(*this, nullptr));
+	}
+
 	if (extra_info.sample_options) {
 		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
 	}
@@ -393,6 +418,15 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalS
 	TableFunctionDynamicToStringInput input(function, bind_data.get(), state.local_state.get(),
 	                                        gstate.global_state.get());
 	return function.dynamic_to_string(input);
+}
+
+optional_idx PhysicalTableScan::GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+	if (function.rows_scanned) {
+		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
+		auto &state = lstate.Cast<TableScanLocalSourceState>();
+		return function.rows_scanned(*gstate.global_state, *state.local_state);
+	}
+	return optional_idx();
 }
 
 } // namespace duckdb

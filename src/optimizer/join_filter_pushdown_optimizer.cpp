@@ -146,6 +146,28 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	}
 }
 
+bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> &op) {
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_GET: {
+		auto &get = op->Cast<LogicalGet>();
+		return !get.table_filters.filters.empty();
+	}
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_TOP_N: {
+		return true;
+	}
+	default:
+		for (const unique_ptr<LogicalOperator> &child : op->children) {
+			if (IsFiltering(child)) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
 	switch (join.join_type) {
 	case JoinType::MARK:
@@ -170,7 +192,10 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	vector<JoinFilterPushdownColumn> pushdown_columns;
 	for (idx_t cond_idx = 0; cond_idx < join.conditions.size(); cond_idx++) {
 		auto &cond = join.conditions[cond_idx];
-		switch (cond.comparison) {
+		if (!cond.IsComparison()) {
+			continue;
+		}
+		switch (cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
@@ -183,20 +208,20 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		default:
 			continue;
 		}
-		if (cond.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.GetLHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			// only bound column ref supported for now
 			continue;
 		}
-		if (cond.left->return_type.IsNested()) {
+		if (cond.GetLHS().return_type.IsNested()) {
 			// nested columns are not supported for pushdown
 			continue;
 		}
-		if (cond.left->return_type.id() == LogicalTypeId::INTERVAL) {
+		if (cond.GetLHS().return_type.id() == LogicalTypeId::INTERVAL) {
 			// interval is not supported for pushdown
 			continue;
 		}
 		JoinFilterPushdownColumn pushdown_col;
-		auto &colref = cond.left->Cast<BoundColumnRefExpression>();
+		auto &colref = cond.GetLHS().Cast<BoundColumnRefExpression>();
 		pushdown_col.probe_column_index = colref.binding;
 		pushdown_columns.push_back(pushdown_col);
 
@@ -225,10 +250,10 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	// Even if we cannot find any table sources in which we can push down filters,
 	// we still initialize the aggregate states so that we have the possibility of doing a perfect hash join
 	// TODO: Can ExpressionType::COMPARE_NOT_DISTINCT_FROM be used with perfect hash joins?
-	const auto compute_aggregates_anyway = join.join_type == JoinType::INNER && join.conditions.size() == 1 &&
-	                                       pushdown_info->join_condition.size() == 1 &&
-	                                       join.conditions[0].comparison == ExpressionType::COMPARE_EQUAL &&
-	                                       TypeIsIntegral(join.conditions[0].right->return_type.InternalType());
+	const auto compute_aggregates_anyway =
+	    join.join_type == JoinType::INNER && join.conditions.size() == 1 && pushdown_info->join_condition.size() == 1 &&
+	    join.conditions[0].IsComparison() && join.conditions[0].GetComparisonType() == ExpressionType::COMPARE_EQUAL &&
+	    TypeIsIntegral(join.conditions[0].GetRHS().return_type.InternalType());
 	if (pushdown_info->probe_info.empty() && !compute_aggregates_anyway) {
 		// no table sources found in which we can push down filters
 		return;
@@ -242,7 +267,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		for (auto &aggr : aggr_functions) {
 			FunctionBinder function_binder(optimizer.GetContext());
 			vector<unique_ptr<Expression>> aggr_children;
-			aggr_children.push_back(join.conditions[join_condition].right->Copy());
+			aggr_children.push_back(join.conditions[join_condition].GetRHS().Copy());
 			auto aggr_expr = function_binder.BindAggregateFunction(aggr, std::move(aggr_children), nullptr,
 			                                                       AggregateType::NON_DISTINCT);
 			if (aggr_expr->children.size() != 1) {
@@ -250,6 +275,14 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 				return;
 			}
 			pushdown_info->min_max_aggregates.push_back(std::move(aggr_expr));
+		}
+	}
+	if (!pushdown_info->probe_info.empty()) {
+		const auto &rhs_child = join.children[1];
+		if (rhs_child->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+			pushdown_info->build_side_has_filter = IsFiltering(join.children[0]);
+		} else {
+			pushdown_info->build_side_has_filter = IsFiltering(join.children[1]);
 		}
 	}
 	// set up the filter pushdown in the join itself

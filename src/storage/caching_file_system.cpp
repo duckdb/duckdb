@@ -1,88 +1,37 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
-#include "duckdb/common/chrono.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache_util.hpp"
 
 namespace duckdb {
 
-CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db)
-    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)) {
-}
+namespace {
 
-CachingFileSystem::~CachingFileSystem() {
-}
-
-CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
-	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
-}
-
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags) {
-	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags,
-	                                    external_file_cache.GetOrCreateCachedFile(path.path));
-}
-
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
-                                                          FileOpenFlags flags) {
-	return make_uniq<CachingFileHandle>(context, *this, path, flags,
-	                                    external_file_cache.GetOrCreateCachedFile(path.path));
-}
-
-CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
-                                     const OpenFileInfo &path_p, FileOpenFlags flags_p, CachedFile &cached_file_p)
-    : context(context), caching_file_system(caching_file_system_p),
-      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), validate(true),
-      cached_file(cached_file_p), position(0) {
-	if (path.extended_info) {
-		const auto &open_options = path.extended_info->options;
-		const auto validate_entry = open_options.find("validate_external_file_cache");
-		if (validate_entry != open_options.end()) {
-			if (validate_entry->second.IsNull()) {
-				throw InvalidInputException("Cannot use NULL as argument for validate_external_file_cache");
-			}
-			validate = BooleanValue::Get(validate_entry->second);
-		}
-	}
-	if (!external_file_cache.IsEnabled() || validate) {
-		// If caching is disabled, or if we must validate cache entries, we always have to open the file
-		GetFileHandle();
-		return;
-	}
-	// If we don't have any cached file ranges, we must also open the file
-	auto guard = cached_file.lock.GetSharedLock();
-	if (cached_file.Ranges(guard).empty()) {
-		guard.reset();
-		GetFileHandle();
+// Return whether validation should occur for a specific file
+bool ShouldValidate(const OpenFileInfo &info, optional_ptr<ClientContext> client_context, DatabaseInstance &db,
+                    const string &filepath) {
+	const CacheValidationMode mode = ExternalFileCacheUtil::GetCacheValidationMode(info, client_context, db);
+	switch (mode) {
+	case CacheValidationMode::VALIDATE_ALL:
+		return true;
+	case CacheValidationMode::VALIDATE_REMOTE:
+		return FileSystem::IsRemoteFile(filepath);
+	case CacheValidationMode::NO_VALIDATION:
+		return false;
+	default:
+		return true;
 	}
 }
 
-CachingFileHandle::~CachingFileHandle() {
-}
-
-FileHandle &CachingFileHandle::GetFileHandle() {
-	if (!file_handle) {
-		file_handle = caching_file_system.file_system.OpenFile(path, flags);
-		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
-		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
-
-		auto guard = cached_file.lock.GetExclusiveLock();
-		if (!cached_file.IsValid(guard, validate, version_tag, last_modified)) {
-			cached_file.Ranges(guard).clear(); // Invalidate entire cache
-		}
-		cached_file.FileSize(guard) = file_handle->GetFileSize();
-		cached_file.LastModified(guard) = last_modified;
-		cached_file.VersionTag(guard) = version_tag;
-		cached_file.CanSeek(guard) = file_handle->CanSeek();
-		cached_file.OnDiskFile(guard) = file_handle->OnDiskFile();
-	}
-	return *file_handle;
-}
-
-static bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length) {
+bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_length) {
 	const idx_t MAX_BOUND_TO_BE_ADDED_LENGTH = 1048576;
 
 	if (added_length > MAX_BOUND_TO_BE_ADDED_LENGTH) {
@@ -95,6 +44,74 @@ static bool ShouldExpandToFillGap(const idx_t current_length, const idx_t added_
 	}
 
 	return true;
+}
+
+} // namespace
+
+CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db_p)
+    : file_system(file_system_p), db(db_p), external_file_cache(ExternalFileCache::Get(db)) {
+}
+
+CachingFileSystem::~CachingFileSystem() {
+}
+
+CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
+	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
+}
+
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+                                                          optional_ptr<FileOpener> opener) {
+	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener,
+	                                    external_file_cache.GetOrCreateCachedFile(path.path));
+}
+
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
+                                                          FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+	return make_uniq<CachingFileHandle>(context, *this, path, flags, opener,
+	                                    external_file_cache.GetOrCreateCachedFile(path.path));
+}
+
+CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
+                                     const OpenFileInfo &path_p, FileOpenFlags flags_p,
+                                     optional_ptr<FileOpener> opener_p, CachedFile &cached_file_p)
+    : context(context), caching_file_system(caching_file_system_p),
+      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), opener(opener_p),
+      validate(
+          ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
+      cached_file(cached_file_p), position(0) {
+	if (!external_file_cache.IsEnabled() || Validate()) {
+		// If caching is disabled, or if we must validate cache entries, we always have to open the file
+		GetFileHandle();
+		return;
+	}
+	// If we don't have any cached file ranges, we must also open the file.
+	auto guard = cached_file.lock.GetSharedLock();
+	if (cached_file.Ranges(guard).empty()) {
+		guard.reset();
+		GetFileHandle();
+	}
+}
+
+CachingFileHandle::~CachingFileHandle() {
+}
+
+FileHandle &CachingFileHandle::GetFileHandle() {
+	if (!file_handle) {
+		file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
+		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
+		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
+
+		auto guard = cached_file.lock.GetExclusiveLock();
+		if (!cached_file.IsValid(guard, Validate(), version_tag, last_modified)) {
+			cached_file.Ranges(guard).clear(); // Invalidate entire cache
+		}
+		cached_file.FileSize(guard) = file_handle->GetFileSize();
+		cached_file.LastModified(guard) = last_modified;
+		cached_file.VersionTag(guard) = version_tag;
+		cached_file.CanSeek(guard) = file_handle->CanSeek();
+		cached_file.OnDiskFile(guard) = file_handle->OnDiskFile();
+	}
+	return *file_handle;
 }
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
@@ -191,7 +208,7 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	if (file_handle || validate) {
+	if (file_handle || Validate()) {
 		return GetFileHandle().GetFileSize();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -199,7 +216,7 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
-	if (file_handle || validate) {
+	if (file_handle || Validate()) {
 		GetFileHandle();
 		return last_modified;
 	}
@@ -208,7 +225,7 @@ timestamp_t CachingFileHandle::GetLastModifiedTime() {
 }
 
 string CachingFileHandle::GetVersionTag() {
-	if (file_handle || validate) {
+	if (file_handle || Validate()) {
 		GetFileHandle();
 		return version_tag;
 	}
@@ -217,11 +234,11 @@ string CachingFileHandle::GetVersionTag() {
 }
 
 bool CachingFileHandle::Validate() const {
-	return validate;
+	return ShouldValidate(path, context.GetClientContext(), caching_file_system.db, cached_file.path);
 }
 
 bool CachingFileHandle::CanSeek() {
-	if (file_handle || validate) {
+	if (file_handle || Validate()) {
 		return GetFileHandle().CanSeek();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -233,7 +250,7 @@ bool CachingFileHandle::IsRemoteFile() const {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	if (file_handle || validate) {
+	if (file_handle || Validate()) {
 		return GetFileHandle().OnDiskFile();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -241,11 +258,22 @@ bool CachingFileHandle::OnDiskFile() {
 }
 
 const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> &guard) {
-	if (file_handle || validate) {
+	if (file_handle || Validate()) {
 		GetFileHandle();
 		return version_tag;
 	}
 	return cached_file.VersionTag(guard);
+}
+
+idx_t CachingFileHandle::SeekPosition() {
+	return position;
+}
+
+void CachingFileHandle::Seek(idx_t location) {
+	position = location;
+	if (file_handle != nullptr) {
+		file_handle->Seek(location);
+	}
 }
 
 BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,

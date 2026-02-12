@@ -64,14 +64,20 @@ bool ExtractNumericValue(Value val, hugeint_t &result) {
 }
 
 bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, const Value &min, const Value &max) {
+	// TODO: Add support for residual predicates
+	if (op.predicate) {
+		return false;
+	}
+
 	if (perfect_join_statistics.is_build_small) {
 		return true; // Already true based on static statistics
 	}
 
 	// We only do this optimization for inner joins with one integer equality condition
-	const auto key_type = op.conditions[0].left->return_type;
+	const auto key_type = op.conditions[0].GetLHS().return_type;
 	if (op.join_type != JoinType::INNER || op.conditions.size() != 1 ||
-	    op.conditions[0].comparison != ExpressionType::COMPARE_EQUAL || !TypeIsInteger(key_type.InternalType())) {
+	    op.conditions[0].GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
+	    !TypeIsInteger(key_type.InternalType())) {
 		return false;
 	}
 
@@ -143,20 +149,8 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-
-	idx_t key_count = 0;
-	if (data_collection.ChunkCount() > 0) {
-		JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
-		                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-
-		// Go through all the blocks and fill the keys addresses
-		key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
-	}
-
-	// Scan the build keys in the hash table
-	Vector build_vector(key_type, key_count);
-	data_collection.Gather(tuples_addresses, *FlatVector::IncrementalSelectionVector(), key_count, 0, build_vector,
-	                       *FlatVector::IncrementalSelectionVector(), nullptr);
+	Vector build_vector(key_type, ht.Count());
+	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, 0);
 
 	// Now fill the selection vector using the build keys and create a sequential vector
 	// TODO: add check for fast pass when probe is part of build domain
@@ -259,7 +253,7 @@ public:
 	PerfectHashJoinState(ClientContext &context, const PhysicalHashJoin &join) : probe_executor(context) {
 		join_keys.Initialize(Allocator::Get(context), join.condition_types);
 		for (auto &cond : join.conditions) {
-			probe_executor.AddExpression(*cond.left);
+			probe_executor.AddExpression(cond.GetLHS());
 		}
 		build_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
 		probe_sel_vec.Initialize(STANDARD_VECTOR_SIZE);

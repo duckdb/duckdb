@@ -19,10 +19,7 @@ namespace duckdb {
 class BaseStatistics;
 struct SelectionVector;
 class Vector;
-class ColumnData;
-class ColumnSegment;
-template <class T>
-struct SegmentNode;
+class Value;
 
 struct NumericStatsData {
 	//! Whether or not the value has a max value
@@ -113,7 +110,7 @@ struct NumericStats {
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
 	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &stats);
 
-	DUCKDB_API static string ToString(const BaseStatistics &stats);
+	DUCKDB_API static child_list_t<Value> ToStruct(const BaseStatistics &stats);
 
 	template <class T>
 	static inline void UpdateValue(T new_value, T &min, T &max) {

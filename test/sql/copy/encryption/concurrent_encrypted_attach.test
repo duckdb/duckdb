@@ -1,0 +1,13 @@
+# name: test/sql/copy/encryption/concurrent_encrypted_attach.test
+# group: [encryption]
+
+require httpfs
+
+require no_extension_autoloading "FIXME: there are timing issues in autoloading httpfs"
+
+concurrentloop i 0 10
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_encrypted${i}.duckdb' AS encrypted${i} (ENCRYPTION_KEY 'asdf${i}');
+
+endloop

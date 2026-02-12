@@ -27,13 +27,7 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &showref = select_node.from_table->Cast<duckdb::ShowRef>();
-	if (showref.show_type == duckdb::ShowType::SUMMARY) {
-		return false;
-	}
-	if (showref.table_name == "\"databases\"" || showref.table_name == "\"tables\"" ||
-	    showref.table_name == "\"variables\"" || showref.table_name == "__show_tables_expanded") {
-		// ignore special cases in ShowRef
-		// TODO: this is ugly, should just be using the ShowType enum...
+	if (showref.show_type != duckdb::ShowType::DESCRIBE) {
 		return false;
 	}
 	describe_table_name = "Describe";
@@ -428,11 +422,16 @@ void RenderLineDisplay(ShellHighlight &highlight, string &text, idx_t total_rend
 	highlight.PrintText(middle_line, PrintOutput::STDOUT, element_type);
 }
 
-void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
+idx_t ShellState::GetMaxRenderWidth() const {
 	idx_t max_render_width = max_width == 0 ? duckdb::Printer::TerminalWidth() : max_width;
 	if (max_render_width < 80) {
 		max_render_width = 80;
 	}
+	return max_render_width;
+}
+
+void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
+	idx_t max_render_width = GetMaxRenderWidth();
 	duckdb::BoxRendererConfig config;
 	// figure out the render width of each table
 	vector<ShellTableRenderInfo> table_list;

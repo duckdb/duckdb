@@ -36,8 +36,11 @@ struct StorageOptions {
 	//! encryption key
 	//! FIXME: change to a unique_ptr in the future
 	shared_ptr<string> user_key;
+	//! encryption version (set default to 1)
+	EncryptionTypes::EncryptionVersion encryption_version = EncryptionTypes::NONE;
 
-	void Initialize(const unordered_map<string, Value> &options);
+	void SetEncryptionVersion(string &storage_version_user_provided);
+	void Initialize(unordered_map<string, Value> &options);
 };
 
 } // namespace duckdb

@@ -498,7 +498,7 @@ unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, FunctionS
 	D_ASSERT(child_stats.size() >= 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP>;
+		expr.function.SetFunctionCallback(ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP>);
 	}
 	return nullptr;
 }

@@ -17,6 +17,7 @@ add_library_unity(
   expression-c.cpp
   helper-c.cpp
   hugeint-c.cpp
+  logging-c.cpp
   logical_types-c.cpp
   pending-c.cpp
   prepared-c.cpp

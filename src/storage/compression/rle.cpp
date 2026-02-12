@@ -176,8 +176,13 @@ struct RLECompressState : public CompressionState {
 		entry_count++;
 
 		// update meta data
-		if (WRITE_STATISTICS && !is_null) {
-			current_segment->stats.statistics.UpdateNumericStats<T>(value);
+		if (WRITE_STATISTICS) {
+			if (!is_null) {
+				current_segment->stats.statistics.SetHasNoNullFast();
+				current_segment->stats.statistics.UpdateNumericStats<T>(value);
+			} else {
+				current_segment->stats.statistics.SetHasNullFast();
+			}
 		}
 		current_segment->count += count;
 
@@ -259,7 +264,7 @@ struct RLEScanState : public SegmentScanState {
 		entry_pos = 0;
 		position_in_entry = 0;
 		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));
-		D_ASSERT(rle_count_offset <= segment.GetBlockManager().GetBlockSize());
+		D_ASSERT(rle_count_offset <= segment.GetBlockSize());
 	}
 
 	inline void SkipInternal(rle_count_t *index_pointer, idx_t skip_count) {

@@ -7,7 +7,7 @@
       "paths": [
         "test/optimizer/pushdown/no_mark_to_semi_if_mark_index_is_projected.test",
         "test/optimizer/joins/tpcds_nofail.test",
-        "test/fuzzer/duckfuzz/bind_limit_num.test",
+        "test/fuzzer/duckfuzz/bind_limit_num.test_slow",
         "test/sql/types/enum/test_5983.test",
         "test/sql/insert/insert_from_many_grouping_sets.test",
         "test/sql/subquery/lateral/pg_lateral.test",
@@ -18,7 +18,8 @@
         "test/sql/copy/csv/auto/test_auto_cranlogs.test",
         "test/sql/copy/csv/test_8890.test",
         "test/sql/copy/csv/test_15211.test",
-        "test/sql/copy/csv/csv_limit_copy.test"
+        "test/sql/copy/csv/csv_limit_copy.test",
+        "test/sql/aggregate/aggregates/test_mode.test"
       ]
     },
     {
@@ -31,8 +32,15 @@
         "test/sql/show_select/test_summarize.test",
         "test/sql/vacuum/test_analyze.test",
         "test/sql/aggregate/aggregates/test_approximate_distinct_count.test",
+        "test/sql/cte/recursive_cte_key_hll_aggregation.test",
         "test/sql/function/list/aggregates/approx_count_distinct.test",
-        "test/sql/copy/csv/test_glob_reorder_lineitem.test"
+        "test/sql/copy/csv/test_glob_reorder_lineitem.test",
+        "test/sql/types/geo/geometry_stats.test",
+        "test/sql/types/geo/geometry_shred.test",
+        "test/sql/types/geo/geometry_shred_types.test",
+        "test/sql/types/geo/geometry_shred_empty.test",
+        "test/sql/types/geo/geometry_shred_limit.test",
+        "test/sql/types/geo/geometry_shred_checkpoint.test"
       ]
     },
     {

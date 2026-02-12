@@ -9,6 +9,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -21,40 +22,6 @@ namespace duckdb {
 
 constexpr const idx_t BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SIZE > 512 ? STANDARD_VECTOR_SIZE : 2048;
-
-BitpackingMode BitpackingModeFromString(const string &str) {
-	auto mode = StringUtil::Lower(str);
-	if (mode == "auto" || mode == "none") {
-		return BitpackingMode::AUTO;
-	} else if (mode == "constant") {
-		return BitpackingMode::CONSTANT;
-	} else if (mode == "constant_delta") {
-		return BitpackingMode::CONSTANT_DELTA;
-	} else if (mode == "delta_for") {
-		return BitpackingMode::DELTA_FOR;
-	} else if (mode == "for") {
-		return BitpackingMode::FOR;
-	} else {
-		return BitpackingMode::INVALID;
-	}
-}
-
-string BitpackingModeToString(const BitpackingMode &mode) {
-	switch (mode) {
-	case BitpackingMode::AUTO:
-		return "auto";
-	case BitpackingMode::CONSTANT:
-		return "constant";
-	case BitpackingMode::CONSTANT_DELTA:
-		return "constant_delta";
-	case BitpackingMode::DELTA_FOR:
-		return "delta_for";
-	case BitpackingMode::FOR:
-		return "for";
-	default:
-		throw NotImplementedException("Unknown bitpacking mode: " + to_string((uint8_t)mode) + "\n");
-	}
-}
 
 typedef struct {
 	BitpackingMode mode;
@@ -125,6 +92,9 @@ public:
 	bool all_valid;
 	bool all_invalid;
 
+	bool has_valid;
+	bool has_invalid;
+
 	bool can_do_delta;
 	bool can_do_for;
 
@@ -140,6 +110,8 @@ public:
 		delta_offset = 0;
 		all_valid = true;
 		all_invalid = true;
+		has_valid = false;
+		has_invalid = false;
 		can_do_delta = false;
 		can_do_for = false;
 		compression_buffer_idx = 0;
@@ -300,6 +272,8 @@ public:
 	template <class OP = EmptyBitpackingWriter>
 	bool Update(T value, bool is_valid) {
 		compression_buffer_validity[compression_buffer_idx] = is_valid;
+		has_valid = has_valid || is_valid;
+		has_invalid = has_invalid || !is_valid;
 		all_valid = all_valid && is_valid;
 		all_invalid = all_invalid && !is_valid;
 
@@ -331,11 +305,9 @@ struct BitpackingAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
-
 	CompressionInfo info(col_data.GetBlockManager());
 	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
-	state->state.mode = config.options.force_bitpacking_mode;
+	state->state.mode = Settings::Get<ForceBitpackingModeSetting>(col_data.GetDatabase());
 
 	return std::move(state);
 }
@@ -386,9 +358,7 @@ public:
 		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
-
-		auto &config = DBConfig::GetConfig(checkpoint_data.GetDatabase());
-		state.mode = config.options.force_bitpacking_mode;
+		state.mode = Settings::Get<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
@@ -482,9 +452,18 @@ public:
 		static void UpdateStats(BitpackingCompressionState<T, WRITE_STATISTICS> *state, idx_t count) {
 			state->current_segment->count += count;
 
-			if (WRITE_STATISTICS && !state->state.all_invalid) {
-				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
-				state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+			if (WRITE_STATISTICS) {
+				if (state->state.has_valid) {
+					state->current_segment->stats.statistics.SetHasNoNullFast();
+				}
+				if (state->state.has_invalid) {
+					state->current_segment->stats.statistics.SetHasNullFast();
+				}
+
+				if (!state->state.all_invalid) {
+					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
+					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+				}
 			}
 		}
 	};
@@ -663,7 +642,7 @@ public:
 	//! depending on the bitpacking mode of that group.
 	void LoadNextGroup() {
 		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockManager().GetBlockSize()));
+		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockSize()));
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 

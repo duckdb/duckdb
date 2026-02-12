@@ -1,8 +1,7 @@
 #include "shell_prompt.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/common/local_file_system.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 namespace duckdb_shell {
 
@@ -28,6 +27,10 @@ string Prompt::HandleColor(const PromptComponent &component) {
 		return ShellHighlight::TerminalCode(PrintColor::STANDARD, component.intensity);
 	case PromptComponentType::RESET_COLOR:
 		return ShellHighlight::ResetTerminalCode();
+	case PromptComponentType::SET_HIGHLIGHT_ELEMENT: {
+		auto &element = ShellHighlight::GetHighlightElement(component.highlight_element);
+		return ShellHighlight::TerminalCode(element.color, element.intensity);
+	}
 	default:
 		throw InternalException("Invalid prompt color component");
 	}
@@ -90,6 +93,16 @@ void Prompt::AddComponent(const string &bracket_type, const string &value) {
 				throw InvalidInputException(error_msg);
 			}
 			component.type = PromptComponentType::SET_COLOR;
+		}
+	} else if (bracket_type == "highlight_element") {
+		if (value.empty()) {
+			throw InvalidInputException("highlight_element requires a parameter");
+		}
+		component.type = PromptComponentType::SET_HIGHLIGHT_ELEMENT;
+		string error_msg;
+		component.highlight_element = ShellHighlight::TryGetHighlightElement(value.c_str(), error_msg);
+		if (!error_msg.empty()) {
+			throw InvalidInputException(error_msg);
 		}
 	} else if (ParseSetting(bracket_type, value)) {
 		return;
@@ -262,7 +275,7 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 		// max length was already exceeded - skip rendering
 		return string();
 	}
-	auto render_length = state.RenderLength(text.c_str());
+	auto render_length = state.RenderLength(text);
 	if (length + render_length <= max_length.GetIndex()) {
 		// not exceeded - render entire string
 		length += render_length;
@@ -331,6 +344,7 @@ string Prompt::GeneratePrompt(ShellState &state) {
 			break;
 		}
 		case PromptComponentType::SET_COLOR:
+		case PromptComponentType::SET_HIGHLIGHT_ELEMENT:
 		case PromptComponentType::SET_INTENSITY:
 		case PromptComponentType::RESET_COLOR:
 			prompt += HandleColor(component);
@@ -370,6 +384,12 @@ void Prompt::PrintPrompt(ShellState &state, PrintOutput output) {
 		}
 		case PromptComponentType::SET_COLOR: {
 			color = component.color;
+			break;
+		}
+		case PromptComponentType::SET_HIGHLIGHT_ELEMENT: {
+			auto &element = ShellHighlight::GetHighlightElement(component.highlight_element);
+			color = element.color;
+			intensity = element.intensity;
 			break;
 		}
 		case PromptComponentType::SET_INTENSITY: {

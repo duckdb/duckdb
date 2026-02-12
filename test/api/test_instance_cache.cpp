@@ -4,6 +4,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -60,12 +61,12 @@ TEST_CASE("Test db creation does not block instance cache", "[api][.]") {
 	std::thread t1 {[&instance_cache, &second_creation_was_quick, &stick_around]() {
 		DBConfig db_config;
 
-		db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
+		StorageExtension::Register(db_config, "delay", make_shared_ptr<DelayingStorageExtension>());
 		stick_around = instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
 
 		const auto start_time = steady_clock::now();
 		for (idx_t i = 0; i < 10; i++) {
-			db_config.storage_extensions["delay"] = make_uniq<DelayingStorageExtension>();
+			StorageExtension::Register(db_config, "delay", make_shared_ptr<DelayingStorageExtension>());
 			instance_cache.GetOrCreateInstance("delay::memory:", db_config, true);
 		}
 		const auto end_time = steady_clock::now();
@@ -209,5 +210,94 @@ TEST_CASE("Test attaching the same database path from different databases in rea
 
 		// and now we can no longer attach in read-only mode
 		REQUIRE_FAIL(con1.Query(read_only_attach));
+	}
+}
+
+TEST_CASE("Test instance cache canonicalization", "[api][.]") {
+	LocalFileSystem fs;
+
+	DBInstanceCache instance_cache;
+	vector<string> equivalent_paths;
+	auto test_path = TestCreatePath("instance_cache_canonicalization.db");
+	// base path
+	equivalent_paths.push_back(test_path);
+	// abs path
+	equivalent_paths.push_back(fs.JoinPath(fs.GetWorkingDirectory(), test_path));
+	// dot dot
+	auto dot_dot = TestCreatePath(fs.JoinPath("subdir", "..", "instance_cache_canonicalization.db"));
+	equivalent_paths.push_back(dot_dot);
+	// dot dot dot
+	auto subdirs = fs.JoinPath("subdir", "subdir2", "subdir3", "..", "..", "..", "instance_cache_canonicalization.db");
+	auto dot_dot_dot = TestCreatePath(subdirs);
+	equivalent_paths.push_back(dot_dot_dot);
+	// dots
+	auto dots = TestCreatePath(fs.JoinPath(fs.JoinPath(".", "."), "instance_cache_canonicalization.db"));
+	equivalent_paths.push_back(dots);
+	// dots that point to a real directory
+	auto test_dir_path = TestDirectoryPath();
+	auto sep = fs.PathSeparator(test_dir_path);
+	idx_t dir_count = StringUtil::Split(test_dir_path, sep).size();
+	string many_dots_test_path = test_dir_path;
+	for (idx_t i = 0; i < dir_count; i++) {
+		many_dots_test_path = fs.JoinPath(many_dots_test_path, "..");
+	}
+	equivalent_paths.push_back(fs.JoinPath(many_dots_test_path, test_dir_path, "instance_cache_canonicalization.db"));
+
+	vector<shared_ptr<DuckDB>> databases;
+	for (auto &path : equivalent_paths) {
+		DBConfig config;
+		auto db = instance_cache.GetOrCreateInstance(path, config, true);
+		databases.push_back(std::move(db));
+	}
+	{
+		Connection con(*databases[0]);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT 42 i"));
+	}
+	// verify that all these databases point to the same path
+	for (auto &db : databases) {
+		Connection con(*db);
+		auto result = con.Query("SELECT * FROM tbl");
+		REQUIRE(CHECK_COLUMN(*result, 0, {42}));
+	}
+}
+
+TEST_CASE("Test database file path manager absolute path", "[api][.]") {
+	LocalFileSystem fs;
+	DuckDB db;
+	Connection con(db);
+
+	auto test_db = TestCreatePath("test_same_db_attach.db");
+	auto test_db_abs = fs.JoinPath(fs.GetWorkingDirectory(), test_db);
+
+	// we can attach this once
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_db + "' AS db1"));
+	// we cannot attach with absolute path, even though our original attach was with relative path
+	REQUIRE_FAIL(con.Query("ATTACH '" + test_db_abs + "' AS db2"));
+	// after detaching we can attach with absolute path
+	REQUIRE_NO_FAIL(con.Query("DETACH db1"));
+	REQUIRE_NO_FAIL(con.Query("ATTACH '" + test_db_abs + "' AS db2"));
+}
+
+TEST_CASE("Test automatic DB instance caching", "[api][.]") {
+	DBInstanceCache instance_cache;
+	DBConfig config;
+
+	SECTION("Unnamed in-memory connections are not shared") {
+		auto db1 = instance_cache.GetOrCreateInstance(":memory:", config);
+		auto db2 = instance_cache.GetOrCreateInstance(":memory:", config);
+
+		Connection con(*db1);
+		Connection con2(*db2);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INT)"));
+		REQUIRE_NO_FAIL(con2.Query("CREATE TABLE t(i INT)"));
+	}
+	SECTION("Named in-memory connections are shared") {
+		auto db1 = instance_cache.GetOrCreateInstance(":memory:abc", config);
+		auto db2 = instance_cache.GetOrCreateInstance(":memory:abc", config);
+
+		Connection con(*db1);
+		Connection con2(*db2);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INT)"));
+		REQUIRE_NO_FAIL(con2.Query("SELECT * FROM t"));
 	}
 }

@@ -31,29 +31,27 @@ void LogFormatStringCustomType(SOURCE &src, FUN f) {
 	DUCKDB_LOG_INTERNAL(SOURCE, "custom_type", LOG_LEVEL, string("log-a-lot: 'string type with type'"))
 
 // Tests all Logger function entrypoints at the specified log level with the specified enabled/disabled loggers
-void test_logging(const string &minimum_level, const string &enabled_log_types, const string &disabled_log_types) {
+void test_logging(const string &minimum_level, const string &enabled_log_types, const string &disabled_log_types,
+                  bool warnings_as_errors = false) {
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	duckdb::vector<Value> default_types = {"default", "default"};
-	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL"};
 	auto minimum_level_index = std::find(log_levels.begin(), log_levels.end(), minimum_level) - log_levels.begin();
 
 	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
-	REQUIRE_NO_FAIL(con.Query("set logging_level='" + minimum_level +
-	                          ""
-	                          "';"));
+	REQUIRE_NO_FAIL(con.Query("set logging_level='" + minimum_level + "';"));
 	if (!enabled_log_types.empty()) {
-		REQUIRE_NO_FAIL(con.Query("set enabled_log_types='" + enabled_log_types +
-		                          ""
-		                          "';"));
+		REQUIRE_NO_FAIL(con.Query("set enabled_log_types='" + enabled_log_types + "';"));
 		REQUIRE_NO_FAIL(con.Query("set logging_mode='enable_selected';"));
 	}
 	if (!disabled_log_types.empty()) {
-		REQUIRE_NO_FAIL(con.Query("set disabled_log_types='" + disabled_log_types +
-		                          ""
-		                          "';"));
+		REQUIRE_NO_FAIL(con.Query("set disabled_log_types='" + disabled_log_types + "';"));
 		REQUIRE_NO_FAIL(con.Query("set logging_mode='disable_selected';"));
+	}
+	if (warnings_as_errors) {
+		REQUIRE_NO_FAIL(con.Query("set warnings_as_errors=true;"));
 	}
 
 	bool level_only = (enabled_log_types.empty() && disabled_log_types.empty());
@@ -64,7 +62,9 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_TRACE, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_DEBUG, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_INFO, *db.instance, DatabaseInstance);
-	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARN, *db.instance, DatabaseInstance);
+	if (!warnings_as_errors) {
+		TEST_ALL_LOG_MACROS(LogLevel::LOG_WARNING, *db.instance, DatabaseInstance);
+	}
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_ERROR, *db.instance, DatabaseInstance);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_FATAL, *db.instance, DatabaseInstance);
 
@@ -72,7 +72,9 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_TRACE, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_DEBUG, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_INFO, *con.context, ClientContext);
-	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARN, *con.context, ClientContext);
+	if (!warnings_as_errors) {
+		TEST_ALL_LOG_MACROS(LogLevel::LOG_WARNING, *con.context, ClientContext);
+	}
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_ERROR, *con.context, ClientContext);
 	TEST_ALL_LOG_MACROS(LogLevel::LOG_FATAL, *con.context, ClientContext);
 
@@ -85,6 +87,10 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 
 	for (idx_t i = 0; i < num_runs; i++) {
 		for (idx_t j = minimum_level_index; j < num_log_levels; j++) {
+			if (warnings_as_errors && log_levels[j] == "WARNING") {
+				// skip
+				j++;
+			}
 			if (level_only ||
 			    (enabled_mode && enabled_log_types.find(default_types[i].ToString()) != enabled_log_types.npos) ||
 			    (disabled_mode && disabled_log_types.find(default_types[i].ToString()) == enabled_log_types.npos)) {
@@ -124,7 +130,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 // - all log levels
 // - all combinations of log levels and having either enabled_log_types or disabled_log_types
 TEST_CASE("Test logging", "[logging][.]") {
-	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL"};
 	for (const auto &level : log_levels) {
 		// Test in regular mode without explicitly enabled or disabled loggers
 		test_logging(level, "", "");
@@ -134,6 +140,22 @@ TEST_CASE("Test logging", "[logging][.]") {
 		test_logging(level, "custom_type", "");
 		test_logging(level, "", "default");
 		test_logging(level, "", "custom_type,default");
+	}
+}
+
+// Tests non-warning logging with 'warnings_as_errors = True'
+// Note: warning logging with 'warnings_as_errors = True' is tested in test_warning.py
+TEST_CASE("Test logging warnings_as_errors", "[logging][.]") {
+	duckdb::vector<string> log_levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL"};
+	for (const auto &level : log_levels) {
+		// Test in regular mode without explicitly enabled or disabled loggers
+		test_logging(level, "", "", true);
+
+		// Test various combinations of enabled and disabled loggers
+		test_logging(level, "custom_type,default", "", true);
+		test_logging(level, "custom_type", "", true);
+		test_logging(level, "", "default", true);
+		test_logging(level, "", "custom_type,default", true);
 	}
 }
 
@@ -219,4 +241,29 @@ TEST_CASE("Test pluggable log storage", "[logging][.]") {
 	REQUIRE_NO_FAIL(con.Query("select write_log('HELLO, BRO');"));
 
 	REQUIRE(my_log_storage->log_store.find("HELLO, BRO") != my_log_storage->log_store.end());
+}
+
+struct CorrectLogType : public LogType {
+	static constexpr const char *NAME = "CorrectLogType";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	// Correctly using the unstructured type constructor for VARCHAR
+	CorrectLogType() : LogType(NAME, LEVEL) {
+	}
+
+	template <typename... ARGS>
+	static string ConstructLogMessage(const string &str, ARGS... params) {
+		return StringUtil::Format(str, params...);
+	}
+};
+
+constexpr LogLevel CorrectLogType::LEVEL;
+
+TEST_CASE("Add LogType with VARCHAR type", "[logging][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	LogManager &log_manager = db.instance->GetLogManager();
+
+	REQUIRE_NOTHROW(log_manager.RegisterLogType(make_uniq<CorrectLogType>()));
 }

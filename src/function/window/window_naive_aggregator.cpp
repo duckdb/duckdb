@@ -165,7 +165,8 @@ void WindowNaiveLocalState::FlushStates(const WindowAggregatorGlobalState &gsink
 
 	const auto &aggr = gsink.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	aggr.function.update(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), statep, flush_count);
+	aggr.function.GetStateUpdateCallback()(leaves.data.data(), aggr_input_data, leaves.ColumnCount(), statep,
+	                                       flush_count);
 
 	flush_count = 0;
 }
@@ -234,7 +235,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 
 	WindowAggregator::EvaluateSubFrames(bounds, aggregator.exclude_mode, count, row_idx, frames, [&](idx_t rid) {
 		auto agg_state = fdata[rid];
-		aggr.function.initialize(aggr.function, agg_state);
+		aggr.function.GetStateInitCallback()(aggr.function, agg_state);
 
 		//	Reset the DISTINCT hash table
 		row_set.clear();
@@ -351,11 +352,11 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 
 	//	Finalise the result aggregates and write to the result
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	aggr.function.finalize(statef, aggr_input_data, result, count, 0);
+	aggr.function.GetStateFinalizeCallback()(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates
-	if (aggr.function.destructor) {
-		aggr.function.destructor(statef, aggr_input_data, count);
+	if (aggr.function.HasStateDestructorCallback()) {
+		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, count);
 	}
 }
 

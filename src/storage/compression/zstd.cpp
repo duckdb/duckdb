@@ -1,13 +1,13 @@
-#include "duckdb/common/bitpacking.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 
 #include "zstd.h"
 
@@ -98,7 +98,7 @@ struct ZSTDStorage {
 	                                                            optional_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
-	static void CleanupState(ColumnSegment &segment);
+	static void VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor);
 };
 
 //===--------------------------------------------------------------------===//
@@ -204,7 +204,7 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	double penalty;
 	idx_t average_length = state.total_size / state.count;
-	auto threshold = state.config.options.zstd_min_string_length;
+	auto threshold = Settings::Get<ZstdMinStringLengthSetting>(state.config);
 	if (average_length >= threshold) {
 		penalty = 1.0;
 	} else {
@@ -423,7 +423,7 @@ public:
 		}
 	}
 
-	void AddString(const string_t &string) {
+	void AddStringInternal(const string_t &string) {
 		if (!tuple_count) {
 			InitializeVector();
 		}
@@ -437,7 +437,10 @@ public:
 			// Reached the end of this vector
 			FlushVector();
 		}
+	}
 
+	void AddString(const string_t &string) {
+		AddStringInternal(string);
 		UncompressedStringStorage::UpdateStringStats(segment->stats, string);
 	}
 
@@ -452,7 +455,8 @@ public:
 
 	block_id_t FinalizePage() {
 		auto &block_manager = partial_block_manager.GetBlockManager();
-		auto new_id = block_manager.GetFreeBlockId();
+		auto new_id = partial_block_manager.GetFreeBlockId();
+
 		auto &state = segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
 
@@ -555,7 +559,8 @@ public:
 	}
 
 	void AddNull() {
-		AddString("");
+		segment->stats.statistics.SetHasNullFast();
+		AddStringInternal("");
 	}
 
 public:
@@ -690,7 +695,7 @@ struct ZSTDScanState : public SegmentScanState {
 public:
 	explicit ZSTDScanState(ColumnSegment &segment)
 	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
-	      block_manager(segment.GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
+	      block_manager(segment.block->GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
 	      segment_block_offset(segment.GetBlockOffset()), segment(segment) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
 		segment_handle = buffer_manager.Pin(segment.block);
@@ -1037,11 +1042,10 @@ unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deser
 	return std::move(result);
 }
 
-void ZSTDStorage::CleanupState(ColumnSegment &segment) {
+void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	auto &block_manager = segment.GetBlockManager();
 	for (auto &block_id : state.on_disk_blocks) {
-		block_manager.MarkBlockAsModified(block_id);
+		visitor.Visit(block_id);
 	}
 }
 
@@ -1058,7 +1062,7 @@ CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	zstd.init_segment = ZSTDStorage::StringInitSegment;
 	zstd.serialize_state = ZSTDStorage::SerializeState;
 	zstd.deserialize_state = ZSTDStorage::DeserializeState;
-	zstd.cleanup_state = ZSTDStorage::CleanupState;
+	zstd.visit_block_ids = ZSTDStorage::VisitBlockIds;
 	return zstd;
 }
 

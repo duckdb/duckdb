@@ -22,10 +22,10 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 	const auto &op = global_table.op;
 	vector<LogicalType> types;
 	for (const auto &cond : op.conditions) {
-		const auto &expr = child ? cond.right : cond.left;
-		executor.AddExpression(*expr);
+		const auto &expr = child ? cond.GetRHS() : cond.GetLHS();
+		executor.AddExpression(expr);
 
-		types.push_back(expr->return_type);
+		types.push_back(expr.return_type);
 	}
 	auto &allocator = Allocator::Get(context.client);
 	keys.Initialize(allocator, types);
@@ -101,6 +101,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Combine(ExecutionContext &context, Lo
 void PhysicalRangeJoin::GlobalSortedTable::Finalize(ClientContext &client, InterruptState &interrupt) {
 	OperatorSinkFinalizeInput finalize {*global_sink, interrupt};
 	sort->Finalize(client, finalize);
+	global_source = sort->GetGlobalSourceState(client, *global_sink);
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
@@ -154,6 +155,7 @@ public:
 			if (!table.sorted) {
 				table.MaterializeEmpty(execution.client);
 			}
+			table.global_source.reset();
 		}
 
 		event->FinishTask();
@@ -193,9 +195,6 @@ public:
 		auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
 		vector<shared_ptr<Task>> tasks;
 
-		auto &sort = *table.sort;
-		auto &global_sink = *table.global_sink;
-		table.global_source = sort.GetGlobalSourceState(client, global_sink);
 		const auto tasks_scheduled = MinValue<idx_t>(num_threads, table.global_source->MaxThreads());
 		for (idx_t tnum = 0; tnum < tasks_scheduled; ++tnum) {
 			tasks.push_back(
@@ -212,15 +211,23 @@ void PhysicalRangeJoin::GlobalSortedTable::Materialize(Pipeline &pipeline, Event
 	event.InsertEvent(std::move(sort_event));
 }
 
-void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context, InterruptState &interrupt) {
-	global_source = sort->GetGlobalSourceState(context.client, *global_sink);
+void PhysicalRangeJoin::GlobalSortedTable::MaterializeSortedRun(ExecutionContext &context, InterruptState &interrupt) {
 	auto local_source = sort->GetLocalSourceState(context, *global_source);
 	OperatorSourceInput source {*global_source, *local_source, interrupt};
 	sort->MaterializeSortedRun(context, source);
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::GetSortedRun(ClientContext &client) {
 	sorted = sort->GetSortedRun(*global_source);
 	if (!sorted) {
-		MaterializeEmpty(context.client);
+		MaterializeEmpty(client);
 	}
+	global_source.reset();
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context, InterruptState &interrupt) {
+	MaterializeSortedRun(context, interrupt);
+	GetSortedRun(context.client);
 }
 
 PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
@@ -239,7 +246,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 		idx_t range_position = 0;
 		idx_t other_position = conditions_p.size();
 		for (idx_t i = 0; i < conditions_p.size(); ++i) {
-			switch (conditions_p[i].comparison) {
+			switch (conditions_p[i].GetComparisonType()) {
 			case ExpressionType::COMPARE_LESSTHAN:
 			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			case ExpressionType::COMPARE_GREATERTHAN:
@@ -311,7 +318,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		}
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
-			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
 			auto &v = keys.data[c];
@@ -336,7 +343,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
-			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
 			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
@@ -397,26 +404,26 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorted_run,
                                         ExternalBlockIteratorState &state, Vector &sort_key_pointers,
-                                        SortedRunScanState &scan_state, const idx_t chunk_idx, SelectionVector &result,
-                                        const idx_t result_count) {
+                                        SortedRunScanState &scan_state, const idx_t chunk_idx,
+                                        const unsafe_vector<idx_t> &result) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
 
 	const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
-	for (idx_t i = 0; i < result_count; ++i) {
-		const auto idx = state.GetIndex(chunk_idx, result.get_index(i));
+	for (idx_t i = 0; i < result.size(); ++i) {
+		const auto idx = state.GetIndex(chunk_idx, result[i]);
 		sort_keys[i] = &itr[idx];
 	}
 
 	// Scan
 	chunk.Reset();
-	scan_state.Scan(sorted_run, sort_key_pointers, result_count, chunk);
+	scan_state.Scan(sorted_run, sort_key_pointers, result.size(), chunk);
 }
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,
                                            ExternalBlockIteratorState &state, TupleDataChunkState &chunk_state,
-                                           const idx_t chunk_idx, SelectionVector &result, const idx_t result_count,
+                                           const idx_t chunk_idx, const unsafe_vector<idx_t> &result,
                                            SortedRunScanState &scan_state) {
 	auto &sorted = *table.sorted;
 	auto &sort_keys = chunk_state.row_locations;
@@ -425,39 +432,39 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_8>(chunk, sorted, state, sort_keys, scan_state,
-		                                                             chunk_idx, result, result_count);
+		                                                             chunk_idx, result);
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_16>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result, result_count);
+		                                                              chunk_idx, result);
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_24:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_24>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result, result_count);
+		                                                              chunk_idx, result);
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_FIXED_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result, result_count);
+		                                                              chunk_idx, result);
 		break;
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		TemplatedSliceSortedPayload<SortKeyType::NO_PAYLOAD_VARIABLE_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                                 chunk_idx, result, result_count);
+		                                                                 chunk_idx, result);
 		break;
 	case SortKeyType::PAYLOAD_FIXED_16:
 		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_16>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result, result_count);
+		                                                           chunk_idx, result);
 		break;
 	case SortKeyType::PAYLOAD_FIXED_24:
 		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_24>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result, result_count);
+		                                                           chunk_idx, result);
 		break;
 	case SortKeyType::PAYLOAD_FIXED_32:
 		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_FIXED_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                           chunk_idx, result, result_count);
+		                                                           chunk_idx, result);
 		break;
 	case SortKeyType::PAYLOAD_VARIABLE_32:
 		TemplatedSliceSortedPayload<SortKeyType::PAYLOAD_VARIABLE_32>(chunk, sorted, state, sort_keys, scan_state,
-		                                                              chunk_idx, result, result_count);
+		                                                              chunk_idx, result);
 		break;
 	default:
 		throw NotImplementedException("MergeJoinSimpleBlocks for %s", EnumUtil::ToString(sort_key_type));

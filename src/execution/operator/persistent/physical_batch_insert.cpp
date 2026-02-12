@@ -94,7 +94,7 @@ public:
 
 				while (true) {
 					scan_chunk.Reset();
-					scan_state.local_state.ScanCommitted(scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+					scan_state.local_state.Scan(scan_chunk, TableScanType::TABLE_SCAN_ALL_ROWS);
 					if (scan_chunk.size() == 0) {
 						break;
 					}
@@ -106,9 +106,9 @@ public:
 				data_table.ResetOptimisticCollection(context, collection_indexes[i]);
 			}
 			result_collection.FinalizeAppend(TransactionData(0, 0), append_state);
-			writer.WriteLastRowGroup(optimistic_collection);
+			writer.WriteUnflushedRowGroups(optimistic_collection);
 		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
-			writer.WriteLastRowGroup(optimistic_collection);
+			writer.WriteUnflushedRowGroups(optimistic_collection);
 		}
 
 		collection_indexes.clear();
@@ -380,7 +380,7 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 	auto new_count = collection.GetTotalRows();
 	auto batch_type = new_count < row_group_size ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 	if (batch_type == RowGroupBatchType::FLUSHED && writer) {
-		writer->WriteLastRowGroup(optimistic_collection);
+		writer->WriteUnflushedRowGroups(optimistic_collection);
 	}
 	lock_guard<mutex> l(lock);
 	insert_count += new_count;
@@ -672,10 +672,9 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 		auto &optimistic_collection = data_table.GetOptimisticCollection(context, entry.collection_index);
 		auto &collection = *optimistic_collection.collection;
-		collection.Scan(transaction, [&](DataChunk &insert_chunk) {
+		for (auto &insert_chunk : collection.Chunks(transaction)) {
 			data_table.LocalAppend(append_state, context, insert_chunk, false);
-			return true;
-		});
+		}
 		data_table.ResetOptimisticCollection(context, entry.collection_index);
 	}
 

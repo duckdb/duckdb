@@ -37,6 +37,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 				// there are null values: need to merge them into the result
 				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);
+				result_mask.EnsureWritable();
 				result_mask.Combine(input_mask, args.size());
 			}
 			break;
@@ -104,7 +105,7 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value
 ScalarFunction ConstantOrNullFun::GetFunction() {
 	auto fun = ScalarFunction("constant_or_null", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
 	                          ConstantOrNullFunction);
-	fun.bind = ConstantOrNullBind;
+	fun.SetBindCallback(ConstantOrNullBind);
 	fun.varargs = LogicalType::ANY;
 	return fun;
 }

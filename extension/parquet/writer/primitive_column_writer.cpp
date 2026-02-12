@@ -10,9 +10,9 @@ using duckdb_parquet::PageType;
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_PAGE_SIZE;
 constexpr const idx_t PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
-PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
-                                             vector<string> schema_path, bool can_have_nulls)
-    : ColumnWriter(writer, column_schema, std::move(schema_path), can_have_nulls) {
+PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema,
+                                             vector<string> schema_path)
+    : ColumnWriter(writer, std::move(column_schema), std::move(schema_path)) {
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
@@ -264,11 +264,11 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	if (!state.stats_state) {
 		return;
 	}
-	if (MaxRepeat() == 0) {
-		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
-		column_chunk.meta_data.statistics.__isset.null_count = true;
-		column_chunk.meta_data.__isset.statistics = true;
-	}
+	auto null_count = MaxRepeat() == 0 ? state.null_count : state.null_count + state.parent_null_count;
+	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(null_count);
+	column_chunk.meta_data.statistics.__isset.null_count = true;
+	column_chunk.meta_data.__isset.statistics = true;
+
 	// if we have NaN values - don't write the min/max here
 	if (!state.stats_state->HasNaN()) {
 		// set min/max/min_value/max_value
@@ -321,8 +321,8 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		}
 		if (has_json_stats) {
 			// Add the geospatial statistics to the extra GeoParquet metadata
-			writer.GetGeoParquetData().AddGeoParquetStats(column_schema.name, column_schema.type,
-			                                              *state.stats_state->GetGeoStats());
+			writer.GetGeoParquetData().AddGeoParquetStats(writer.GetContext(), column_schema.name, column_schema.type,
+			                                              *state.stats_state->GetGeoStats(), gpq_version);
 		}
 	}
 
@@ -382,7 +382,6 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));
 	}
-
 	// finalize the stats
 	writer.FlushColumnStats(state.col_idx, column_chunk, state.stats_state.get());
 }
@@ -429,6 +428,36 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 
 	// insert the dictionary page as the first page to write for this column
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
+}
+
+idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+	idx_t schema_idx = schemas.size();
+
+	auto &schema = column_schema;
+	schema.SetSchemaIndex(schema_idx);
+
+	auto &repetition_type = schema.repetition_type;
+	auto &name = schema.name;
+	auto &field_id = schema.field_id;
+	auto &type = schema.type;
+	auto allow_geometry = schema.allow_geometry;
+
+	duckdb_parquet::SchemaElement schema_element;
+	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
+	schema_element.repetition_type = repetition_type;
+	schema_element.__isset.num_children = false;
+	schema_element.__isset.type = true;
+	schema_element.__isset.repetition_type = true;
+	schema_element.name = name;
+	if (field_id.IsValid()) {
+		schema_element.__isset.field_id = true;
+		schema_element.field_id = field_id.GetIndex();
+	}
+	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext());
+	schemas.push_back(std::move(schema_element));
+
+	D_ASSERT(child_writers.empty());
+	return 1;
 }
 
 } // namespace duckdb

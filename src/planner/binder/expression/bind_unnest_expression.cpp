@@ -19,13 +19,13 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_ptr<Expression> expr,
-                                                const vector<string> &key_path, bool keep_parent_names) {
+static unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_ptr<Expression> expr,
+                                                       const vector<string> &key_path, bool keep_parent_names) {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key_path.back())));
 	auto extract_function = GetKeyExtractFunction();
-	auto bind_info = extract_function.bind(context, extract_function, arguments);
+	auto bind_info = extract_function.GetBindCallback()(context, extract_function, arguments);
 	auto return_type = extract_function.GetReturnType();
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
 	                                                 std::move(bind_info));
@@ -42,12 +42,13 @@ unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_p
 	return std::move(result);
 }
 
-unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &context, unique_ptr<Expression> expr, idx_t key) {
+static unique_ptr<Expression> CreateBoundStructExtractIndex(ClientContext &context, unique_ptr<Expression> expr,
+                                                            idx_t key) {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(int64_t(key))));
 	auto extract_function = GetIndexExtractFunction();
-	auto bind_info = extract_function.bind(context, extract_function, arguments);
+	auto bind_info = extract_function.GetBindCallback()(context, extract_function, arguments);
 	auto return_type = extract_function.GetReturnType();
 	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
 	                                                 std::move(bind_info));

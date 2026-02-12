@@ -224,7 +224,26 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context);
+		// modification type depends on actions
+		DatabaseModificationType modification;
+		for (auto &action_condition : stmt.actions) {
+			for (auto &action : action_condition.second) {
+				switch (action->action_type) {
+				case MergeActionType::MERGE_UPDATE:
+					modification |= DatabaseModificationType::UPDATE_DATA;
+					break;
+				case MergeActionType::MERGE_DELETE:
+					modification |= DatabaseModificationType::DELETE_DATA;
+					break;
+				case MergeActionType::MERGE_INSERT:
+					modification |= DatabaseModificationType::INSERT_DATA;
+					break;
+				default:
+					break;
+				}
+			}
+		}
+		properties.RegisterDBModify(table.catalog, context, modification);
 	}
 
 	// bind the source
@@ -347,6 +366,40 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
 		marker_ref->alias = "source_marker";
 		projection_expressions.push_back(std::move(marker_ref));
+	}
+
+	// Check if we have a DELETE action
+	bool has_delete_action = false;
+	for (auto &entry : merge_into->actions) {
+		for (auto &action : entry.second) {
+			if (action->action_type == MergeActionType::MERGE_DELETE) {
+				has_delete_action = true;
+				break;
+			}
+		}
+		if (has_delete_action) {
+			break;
+		}
+	}
+
+	// If RETURNING is present and we have a DELETE action, add all physical columns to the scan
+	// so we can pass them through instead of fetching by row ID in PhysicalDelete.
+	// Generated columns will be computed in the RETURNING projection by the binder.
+	if (has_delete_action) {
+		if (!stmt.returning_list.empty()) {
+			// Use the overloaded helper to add physical columns to the scan and build projection expressions
+			auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
+			BindDeleteReturningColumns(table, get, merge_into->delete_return_columns, projection_expressions,
+			                           *target_binding);
+		} else if (table.IsDuckTable()) {
+			// Only optimize for DuckDB tables (not attached external tables like SQLite)
+			auto &storage = table.GetStorage();
+			if (storage.HasUniqueIndexes()) {
+				auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
+				BindDeleteIndexColumns(table, get, merge_into->delete_return_columns, projection_expressions,
+				                       *target_binding);
+			}
+		}
 	}
 
 	merge_into->row_id_start = projection_expressions.size();

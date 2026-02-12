@@ -2,6 +2,8 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/config.hpp"
@@ -9,6 +11,7 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -19,6 +22,68 @@ IndexEntry::IndexEntry(unique_ptr<Index> index_p) : index(std::move(index_p)) {
 		bind_state = IndexBindState::UNBOUND;
 	}
 }
+
+template <class T>
+TableIndexIterationHelper<T>::TableIndexIterationHelper(mutex &index_lock,
+                                                        const vector<unique_ptr<IndexEntry>> &index_entries)
+    : lock(index_lock), index_entries(index_entries) {
+}
+
+template <class T>
+TableIndexIterationHelper<T>::TableIndexIterator::TableIndexIterator(
+    optional_ptr<const vector<unique_ptr<IndexEntry>>> index_entries_p)
+    : index_entries(index_entries_p) {
+	if (index_entries) {
+		if (index_entries->empty()) {
+			index_entries = nullptr;
+		} else {
+			index = 0;
+		}
+	}
+}
+
+template <class T>
+typename TableIndexIterationHelper<T>::TableIndexIterator &
+TableIndexIterationHelper<T>::TableIndexIterator::operator++() {
+	if (index_entries) {
+		auto next_index = index.GetIndex() + 1;
+		if (next_index >= index_entries->size()) {
+			// reached the end
+			index = optional_idx();
+			index_entries = nullptr;
+		} else {
+			// next index
+			index = next_index;
+		}
+	}
+	return *this;
+}
+
+template <class T>
+bool TableIndexIterationHelper<T>::TableIndexIterator::operator!=(const TableIndexIterator &other) const {
+	return index != other.index || index_entries != other.index_entries;
+}
+
+template <>
+IndexEntry &TableIndexIterationHelper<IndexEntry>::TableIndexIterator::operator*() const {
+	return *index_entries->at(index.GetIndex());
+}
+
+template <>
+Index &TableIndexIterationHelper<Index>::TableIndexIterator::operator*() const {
+	return *index_entries->at(index.GetIndex())->index;
+}
+
+TableIndexIterationHelper<IndexEntry> TableIndexList::IndexEntries() const {
+	return TableIndexIterationHelper<IndexEntry>(index_entries_lock, index_entries);
+}
+
+TableIndexIterationHelper<Index> TableIndexList::Indexes() const {
+	return TableIndexIterationHelper<Index>(index_entries_lock, index_entries);
+}
+
+template class TableIndexIterationHelper<IndexEntry>;
+template class TableIndexIterationHelper<Index>;
 
 void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	D_ASSERT(index);
@@ -117,8 +182,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 			}
 		}
 		if (!index_entry) {
-			// We bound all indexes.
-			D_ASSERT(unbound_count == 0);
+			// We bound all indexes. (of this type)
 			break;
 		}
 		if (index_entry->bind_state == IndexBindState::BINDING) {
@@ -193,12 +257,13 @@ bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, Forei
 	return true;
 }
 
-optional_ptr<Index> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
-                                                        const ForeignKeyType fk_type) {
+optional_ptr<IndexEntry> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
+                                                             const ForeignKeyType fk_type) {
+	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
-			return index;
+			return entry;
 		}
 	}
 	return nullptr;
@@ -211,15 +276,27 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
 	// Check whether the chunk can be inserted in or deleted from the referenced table storage.
-	auto index = FindForeignKeyIndex(fk_keys, fk_type);
-	D_ASSERT(index && index->IsBound());
+	auto entry = FindForeignKeyIndex(fk_keys, fk_type);
+	auto &index = *entry->index;
+	lock_guard<mutex> guard(entry->lock);
+	D_ASSERT(index.IsBound());
+	IndexAppendInfo index_append_info;
 	if (storage) {
-		auto delete_index = storage->delete_indexes.Find(index->GetIndexName());
-		IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
-		index->Cast<BoundIndex>().VerifyConstraint(chunk, index_append_info, conflict_manager);
-	} else {
-		IndexAppendInfo index_append_info;
-		index->Cast<BoundIndex>().VerifyConstraint(chunk, index_append_info, conflict_manager);
+		auto delete_index = storage->delete_indexes.Find(index.GetIndexName());
+		if (delete_index) {
+			index_append_info.delete_indexes.push_back(*delete_index);
+		}
+	}
+	if (entry->removed_data_during_checkpoint) {
+		index_append_info.delete_indexes.push_back(*entry->removed_data_during_checkpoint);
+	}
+
+	auto &main_index = index.Cast<BoundIndex>();
+	main_index.VerifyConstraint(chunk, index_append_info, conflict_manager);
+	if (entry->added_data_during_checkpoint) {
+		// if we have added any rows during checkpoint - check in that index as well
+		IndexAppendInfo added_during_checkpoint_info;
+		entry->added_data_during_checkpoint->VerifyConstraint(chunk, added_during_checkpoint_info, conflict_manager);
 	}
 }
 
@@ -235,23 +312,72 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context,
-                                                         const case_insensitive_map_t<Value> &options) {
-	vector<IndexStorageInfo> infos;
+IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
+	lock_guard<mutex> lock(index_entries_lock);
+
+	IndexSerializationResult result;
+
+	idx_t bound_count = 0;
+	for (auto &entry : index_entries) {
+		if (entry->index->IsBound()) {
+			bound_count++;
+		}
+	}
+	result.bound_infos.reserve(bound_count);
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
-		if (index.IsBound()) {
-			auto info = index.Cast<BoundIndex>().SerializeToDisk(context, options);
-			D_ASSERT(info.IsValid() && !info.name.empty());
-			infos.push_back(info);
+		if (!index.IsBound()) {
+			// Unbound: reference existing storage info
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			D_ASSERT(!unbound_index.GetStorageInfo().name.empty());
+			result.ordered_infos.push_back(unbound_index.GetStorageInfo());
 			continue;
 		}
-
-		auto info = index.Cast<UnboundIndex>().GetStorageInfo();
-		D_ASSERT(!info.name.empty());
-		infos.push_back(info);
+		// Bound: move new storage info into bound_infos, then reference it
+		auto &bound_index = index.Cast<BoundIndex>();
+		auto storage_info = bound_index.SerializeToDisk(context, info.options);
+		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
+		result.bound_infos.push_back(std::move(storage_info));
+		result.ordered_infos.push_back(result.bound_infos.back());
 	}
-	return infos;
+
+	return result;
+}
+
+void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
+	lock_guard<mutex> lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		// Merge any data appended to the index while the checkpoint was running.
+		auto &index = *entry->index;
+		if (!index.IsBound()) {
+			continue;
+		}
+		lock_guard<mutex> guard(entry->lock);
+		auto &bound_index = index.Cast<BoundIndex>();
+		auto &art = bound_index.Cast<ART>();
+
+		if (entry->removed_data_during_checkpoint) {
+			art.RemovalMerge(*entry->removed_data_during_checkpoint);
+		}
+		if (entry->added_data_during_checkpoint) {
+			// NOTE: we insert duplicates here (IndexAppendMode::INSERT_DUPLICATES)
+			// this is necessary due to the way that data is inserted into indexes during transaction commit
+			// essentially we always FIRST insert data into the index, THEN remove data
+			// even if the data was logically removed first
+			// i.e. if we have a transaction like: DELETE FROM tbl WHERE i=42; INSERT INTO tbl VALUES (42);
+			// we will FIRST insert 42, THEN delete 42 from the index
+			// We plan to change this in the future - see https://github.com/duckdblabs/duckdb-internal/issues/6886
+			auto error = art.InsertMerge(*entry->added_data_during_checkpoint, IndexAppendMode::INSERT_DUPLICATES);
+			if (error.HasError()) {
+				throw InternalException("Failed to append while merging checkpoint deltas - this "
+				                        "signifies a bug or broken index: %s",
+				                        error.Message());
+			}
+		}
+		entry->removed_data_during_checkpoint.reset();
+		entry->added_data_during_checkpoint.reset();
+		entry->last_written_checkpoint = checkpoint_id;
+	}
 }
 
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,

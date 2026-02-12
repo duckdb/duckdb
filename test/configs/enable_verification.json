@@ -96,7 +96,8 @@
         "test/sql/logging/logging_csv.test",
         "test/sql/logging/logging_types.test",
         "test/sql/logging/test_logging_function.test",
-        "test/sql/pragma/test_query_log.test"
+        "test/sql/pragma/test_query_log.test",
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
       ]
     },
     {
@@ -115,7 +116,13 @@
         "test/sql/optimizer/test_in_rewrite_rule.test",
         "test/sql/storage/compression/rle/rle_constant.test",
         "test/sql/types/geo/geometry_stats.test",
-        "test/sql/window/test_window_constant_allocator.test"
+        "test/sql/types/geo/geometry_shred.test",
+        "test/sql/types/geo/geometry_shred_types.test",
+        "test/sql/types/geo/geometry_shred_empty.test",
+        "test/sql/types/geo/geometry_shred_limit.test",
+        "test/sql/types/geo/geometry_shred_checkpoint.test",
+        "test/sql/window/test_window_constant_allocator.test",
+        "test/parquet/variant/variant_stats_propagation.test"
       ]
     },
     {
@@ -124,6 +131,7 @@
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/optimizer/statistics/statistics_numeric.test",
         "test/parquet/parquet_stats_function.test",
+        "test/sql/copy/parquet/shredded_variant_stats.test",
         "test/sql/alter/add_col/test_add_col_stats.test",
         "test/sql/function/generic/test_stats.test",
         "test/sql/pg_catalog/pg_prepared_statements.test",
@@ -132,6 +140,9 @@
         "test/sql/types/list/list_stats.test",
         "test/sql/types/nested/array/array_statistics.test",
         "test/sql/types/struct/struct_stats.test",
+        "test/sql/storage/types/variant/variant_shredding.test_slow",
+        "test/sql/storage/types/variant/variant_stats_merging.test_slow",
+        "test/sql/storage/types/variant/variant_extract_stats.test",
         "test/sql/vacuum/test_analyze.test"
       ]
     },
@@ -201,11 +212,9 @@
       "reason": "FIXME: Misc. unexpected failures (including internal exception).",
       "paths": [
         "test/fuzzer/duckfuzz/null_arguments.test",
-        "test/issues/internal/test_5457.test",
-        "test/sql/aggregate/aggregates/test_state_export.test",
+        "test/sql/aggregate/aggregates/test_state_export_opaque.test",
         "test/sql/copy/parquet/bloom_filters.test",
         "test/sql/copy/parquet/corrupt_stats.test",
-        "test/sql/copy/parquet/parquet_1618_struct_strings.test",
         "test/sql/create/create_table_compression.test",
         "test/sql/logging/logging_file_bind_replace.test",
         "test/sql/optimizer/test_rowid_pushdown_plan.test",
@@ -230,6 +239,12 @@
       "reason": "Verification query results are not buffer managed",
       "paths": [
         "test/sql/outofcore/buffer_managed_query_result.test_slow"
+      ]
+    },
+    {
+      "reason": "Geometry with CRS is not always string round-trippable",
+      "paths": [
+        "test/geoparquet/with_crs.test"
       ]
     }
   ]

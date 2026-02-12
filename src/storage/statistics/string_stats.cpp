@@ -201,6 +201,7 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
                                                 array_ptr<const Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
+	D_ASSERT(stats.CanHaveNoNull());
 	for (auto &constant_value : constants) {
 		D_ASSERT(constant_value.type() == stats.GetType());
 		D_ASSERT(!constant_value.IsNull());
@@ -265,15 +266,23 @@ static uint32_t GetValidMinMaxSubstring(const_data_ptr_t data) {
 	return StringStatsData::MAX_STRING_MINMAX_SIZE;
 }
 
-string StringStats::ToString(const BaseStatistics &stats) {
+child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
+	child_list_t<Value> result;
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	uint32_t min_len = GetValidMinMaxSubstring(string_data.min);
-	uint32_t max_len = GetValidMinMaxSubstring(string_data.max);
-	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]",
-	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.min), min_len)),
-	                          Blob::ToString(string_t(const_char_ptr_cast(string_data.max), max_len)),
-	                          string_data.has_unicode ? "true" : "false",
-	                          string_data.has_max_string_length ? to_string(string_data.max_string_length) : "?");
+	auto min_len = GetValidMinMaxSubstring(string_data.min);
+	auto max_len = GetValidMinMaxSubstring(string_data.max);
+	string_t min_str(const_char_ptr_cast(string_data.min), min_len);
+	string_t max_str(const_char_ptr_cast(string_data.max), max_len);
+	// if min > max the stats are empty and min/max is not yet initialized - so don't emit
+	if (min_str <= max_str) {
+		result.emplace_back("min", Blob::ToString(min_str));
+		result.emplace_back("max", Blob::ToString(max_str));
+	}
+	result.emplace_back("has_unicode", Value::BOOLEAN(string_data.has_unicode));
+	if (StringStats::HasMaxStringLength(stats)) {
+		result.emplace_back("max_string_length", Value::UBIGINT(string_data.max_string_length));
+	}
+	return result;
 }
 
 void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {

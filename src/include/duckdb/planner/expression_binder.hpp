@@ -10,11 +10,11 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/stack_checker.hpp"
-#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/error_data.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -74,6 +74,18 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
+	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
+	                                      BindResult &result, unique_ptr<ParsedExpression> &expr_ptr) {
+		return false;
+	}
+
+	virtual bool DoesColumnAliasExist(const ColumnRefExpression &colref) {
+		return false;
+	}
+
+	// Returns true if the ColumnRef could be an alias reference (unqualified or qualified with table name "alias")
+	static bool IsPotentialAlias(const ColumnRefExpression &colref);
+
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
@@ -104,7 +116,8 @@ public:
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
 	//! Returns a qualified column reference from a column name
-	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, ErrorData &error);
+	unique_ptr<ParsedExpression> QualifyColumnName(const ParsedExpression &expr, const string &column_name,
+	                                               ErrorData &error);
 	//! Returns a qualified column reference from a column reference with column_names.size() > 2
 	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDots(ColumnRefExpression &col_ref, ErrorData &error);
 	//! Returns a qualified column reference from a column reference
@@ -132,9 +145,6 @@ public:
 	static LogicalType ExchangeNullType(const LogicalType &type);
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
-
-	virtual bool TryBindAlias(ColumnRefExpression &colref, bool root_expression, BindResult &result);
-	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
 
 	//! Bind the given expression. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
@@ -165,12 +175,14 @@ protected:
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
-	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression);
+	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth, bool root_expression,
+	                          unique_ptr<ParsedExpression> &expr_ptr);
 	BindResult BindExpression(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> &expr_ptr);
+	BindResult BindExpression(TypeExpression &expr, idx_t depth);
 
 	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const vector<LogicalType> &function_child_types,
 	                          optional_ptr<bind_lambda_function_t> bind_lambda_function);

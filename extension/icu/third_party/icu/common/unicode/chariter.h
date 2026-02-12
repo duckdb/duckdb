@@ -65,7 +65,7 @@ U_NAMESPACE_BEGIN
  * check for the end of the iteration. When there are no more
  * characters in the text object:
  * <ul>
- * <li>The hasNext() function returns FALSE.</li>
+ * <li>The hasNext() function returns false.</li>
  * <li>nextPostInc() and next32PostInc() return DONE
  *     when one attempts to read beyond the end of the text object.</li>
  * </ul>
@@ -142,7 +142,7 @@ public:
      * @return a UClassID for this ForwardCharacterIterator 
      * @stable ICU 2.0
      */
-    virtual UClassID getDynamicClassID(void) const = 0;
+    virtual UClassID getDynamicClassID(void) const override = 0;
     
     /**
      * Gets the current code unit for returning and advances to the next code unit
@@ -165,11 +165,11 @@ public:
     virtual UChar32       next32PostInc(void) = 0;
     
     /**
-     * Returns FALSE if there are no more code units or code points
+     * Returns false if there are no more code units or code points
      * at or after the current position in the iteration range.
      * This is used with nextPostInc() or next32PostInc() in forward
      * iteration.
-     * @returns FALSE if there are no more code units or code points
+     * @returns false if there are no more code units or code points
      * at or after the current position in the iteration range.
      * @stable ICU 2.0
      */
@@ -297,7 +297,7 @@ protected:
  * \code
  *  void traverseForward(CharacterIterator& iter)
  *  {
- *      for(char16_t c = iter.first(); c != CharacterIterator.DONE; c = iter.next()) {
+ *      for(char16_t c = iter.first(); c != CharacterIterator::DONE; c = iter.next()) {
  *          processChar(c);
  *      }
  *  }
@@ -308,7 +308,7 @@ protected:
  * \code
  *  void traverseBackward(CharacterIterator& iter)
  *  {
- *      for(char16_t c = iter.last(); c != CharacterIterator.DONE; c = iter.previous()) {
+ *      for(char16_t c = iter.last(); c != CharacterIterator::DONE; c = iter.previous()) {
  *          processChar(c);
  *      }
  *  }
@@ -322,11 +322,11 @@ protected:
  * {
  *      char16_t c;
  *      for (c = iter.setIndex(pos);
- *      c != CharacterIterator.DONE && (Unicode::isLetter(c) || Unicode::isDigit(c));
+ *      c != CharacterIterator::DONE && (Unicode::isLetter(c) || Unicode::isDigit(c));
  *          c = iter.next()) {}
  *      int32_t end = iter.getIndex();
  *      for (c = iter.setIndex(pos);
- *          c != CharacterIterator.DONE && (Unicode::isLetter(c) || Unicode::isDigit(c));
+ *          c != CharacterIterator::DONE && (Unicode::isLetter(c) || Unicode::isDigit(c));
  *          c = iter.previous()) {}
  *      int32_t start = iter.getIndex() + 1;
  *  
@@ -535,12 +535,12 @@ public:
     virtual UChar32       previous32(void) = 0;
 
     /**
-     * Returns FALSE if there are no more code units or code points
+     * Returns false if there are no more code units or code points
      * before the current position in the iteration range.
      * This is used with previous() or previous32() in backward
      * iteration.
-     * @return FALSE if there are no more code units or code points
-     * before the current position in the iteration range, return TRUE otherwise.
+     * @return false if there are no more code units or code points
+     * before the current position in the iteration range, return true otherwise.
      * @stable ICU 2.0
      */
     virtual UBool        hasPrevious() = 0;

@@ -4,8 +4,15 @@
 
 load __TEST_DIR__/vacuum_deletes_cleanup.db
 
+foreach storage_mode no_index index
+
+onlyif storage_mode=no_index
 statement ok
-CREATE TABLE integers(i INTEGER);
+CREATE OR REPLACE TABLE integers(i INTEGER);
+
+onlyif storage_mode=index
+statement ok
+CREATE OR REPLACE TABLE integers(i INTEGER PRIMARY KEY);
 
 # verify that deleting an entire table in a loop doesn't increase database size (i.e. deletes are vacuumed correctly)
 
@@ -22,6 +29,9 @@ SELECT SUM(i) FROM integers;
 statement ok
 DELETE FROM integers;
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT SUM(i) FROM integers;
 ----
@@ -30,7 +40,7 @@ NULL
 # ensure that the expected total storage size is the same as in the first iteration of the loop
 
 query I nosort expected_blocks_delete_table
-SELECT total_blocks FROM pragma_database_size();
+SELECT case when total_blocks < 5 then null else database_size end FROM pragma_database_size() database_size;
 
 endloop
 
@@ -39,7 +49,7 @@ endloop
 # for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
 # therefore, we need to compare to a range of total block counts
 statement ok
-CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+CREATE OR REPLACE TEMPORARY TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
 
 loop i 0 10
 
@@ -86,6 +96,9 @@ SELECT SUM(i) FROM integers;
 statement ok
 DELETE FROM integers;
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT SUM(i) FROM integers;
 ----
@@ -108,5 +121,7 @@ statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
 	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
 		ELSE (total_blocks) END);
+
+endloop
 
 endloop

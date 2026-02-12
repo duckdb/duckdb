@@ -1,11 +1,13 @@
 #include "duckdb/execution/index/bound_index.hpp"
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
 
@@ -62,10 +64,30 @@ void BoundIndex::CommitDrop() {
 	CommitDrop(index_lock);
 }
 
+idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,
+                            optional_ptr<SelectionVector> non_deleted_sel) {
+	IndexLock state;
+	InitializeLock(state);
+	return TryDelete(state, entries, row_identifiers, deleted_sel, non_deleted_sel);
+}
+
+idx_t BoundIndex::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+                            optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
+	throw InternalException("TryDelete not implemented");
+}
+
 void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	Delete(state, entries, row_identifiers);
+}
+
+void BoundIndex::Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) {
+	auto deleted_rows = TryDelete(state, entries, row_identifiers);
+	if (deleted_rows != entries.size()) {
+		throw InvalidInputException("Failed to delete all rows from index. Only deleted %d out of %d rows.\nChunk: %s",
+		                            deleted_rows, entries.size(), entries.ToString());
+	}
 }
 
 ErrorData BoundIndex::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
@@ -140,6 +162,14 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
+bool BoundIndex::SupportsDeltaIndexes() const {
+	return false;
+}
+
+unique_ptr<BoundIndex> BoundIndex::CreateDeltaIndex(DeltaIndexType delta_index_type) const {
+	throw InternalException("BoundIndex::CreateDeltaIndex is not supported for this index type");
+}
+
 IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
 	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
 }
@@ -159,39 +189,80 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 	return error;
 }
 
-void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types,
-                                      vector<BufferedIndexData> &buffered_replays,
+namespace {
+
+struct BufferedReplayState {
+	optional_ptr<ColumnDataCollection> buffer = nullptr;
+	ColumnDataScanState scan_state;
+	DataChunk current_chunk;
+	bool scan_initialized = false;
+};
+} // namespace
+
+void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, BufferedIndexReplays &buffered_replays,
                                       const vector<StorageIndex> &mapped_column_ids) {
-	for (auto &replay : buffered_replays) {
-		ColumnDataScanState state;
-		auto &buffered_data = *replay.data;
-		buffered_data.InitializeScan(state);
+	if (!buffered_replays.HasBufferedReplays()) {
+		return;
+	}
 
-		DataChunk scan_chunk;
-		buffered_data.InitializeScanChunk(scan_chunk);
-		DataChunk table_chunk;
-		table_chunk.InitializeEmpty(table_types);
+	// We have two replay states: one for inserts and one for deletes. These are indexed into using the
+	// replay_type. Both scans are interleaved, so the state maintains the position of each scan.
+	array<BufferedReplayState, 2> replay_states;
+	DataChunk table_chunk;
+	table_chunk.InitializeEmpty(table_types);
 
-		while (buffered_data.Scan(state, scan_chunk)) {
-			for (idx_t i = 0; i < scan_chunk.ColumnCount() - 1; i++) {
-				auto col_id = mapped_column_ids[i].GetPrimaryIndex();
-				table_chunk.data[col_id].Reference(scan_chunk.data[i]);
+	for (const auto &replay_range : buffered_replays.ranges) {
+		const auto type_idx = static_cast<idx_t>(replay_range.type);
+		auto &state = replay_states[type_idx];
+
+		// Initialize the scan state if necessary. Take ownership of buffered operations, since we won't need
+		// them after replaying anyways.
+		if (!state.scan_initialized) {
+			state.buffer = buffered_replays.GetBuffer(replay_range.type);
+			state.buffer->InitializeScan(state.scan_state);
+			state.buffer->InitializeScanChunk(state.current_chunk);
+			state.scan_initialized = true;
+		}
+
+		idx_t current_row = replay_range.start;
+		while (current_row < replay_range.end) {
+			// Scan the next DataChunk from the ColumnDataCollection buffer if the current row is on or after
+			// that chunk's starting row index.
+			if (current_row >= state.scan_state.next_row_index) {
+				if (!state.buffer->Scan(state.scan_state, state.current_chunk)) {
+					throw InternalException("Buffered index data exhausted during replay");
+				}
 			}
-			table_chunk.SetCardinality(scan_chunk.size());
 
-			switch (replay.type) {
-			case BufferedIndexReplay::INSERT_ENTRY: {
-				IndexAppendInfo index_append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
-				auto error = Append(table_chunk, scan_chunk.data.back(), index_append_info);
+			// We need to process the remaining rows in the current chunk, which is the minimum of the available
+			// rows in the chunk and the remaining rows in the current range.
+			const auto offset_in_chunk = current_row - state.scan_state.current_row_index;
+			const auto available_in_chunk = state.current_chunk.size() - offset_in_chunk;
+			// [start, end) in ReplayRange is [inclusive, exclusive).
+			const auto range_remaining = replay_range.end - current_row;
+			const auto rows_to_process = MinValue<idx_t>(available_in_chunk, range_remaining);
+
+			SelectionVector sel(offset_in_chunk, rows_to_process);
+
+			for (idx_t col_idx = 0; col_idx < state.current_chunk.ColumnCount() - 1; col_idx++) {
+				const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
+				table_chunk.data[col_id].Reference(state.current_chunk.data[col_idx]);
+				table_chunk.data[col_id].Slice(sel, rows_to_process);
+			}
+			table_chunk.SetCardinality(rows_to_process);
+			Vector row_ids(state.current_chunk.data.back(), sel, rows_to_process);
+
+			if (replay_range.type == BufferedIndexReplay::INSERT_ENTRY) {
+				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+				const auto error = Append(table_chunk, row_ids, append_info);
 				if (error.HasError()) {
 					throw InternalException("error while applying buffered appends: " + error.Message());
 				}
+				current_row += rows_to_process;
 				continue;
 			}
-			case BufferedIndexReplay::DEL_ENTRY: {
-				Delete(table_chunk, scan_chunk.data.back());
-			}
-			}
+			Delete(table_chunk, row_ids);
+			current_row += rows_to_process;
 		}
 	}
 }

@@ -30,21 +30,21 @@ template <bool IS_UPPER>
 static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 	idx_t output_length = 0;
 	for (idx_t i = 0; i < input_length;) {
-		if (input_data[i] & 0x80) {
-			// unicode
-			int sz = 0;
-			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
-			auto converted_codepoint =
-			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
-			auto new_sz = Utf8Proc::CodepointLength(converted_codepoint);
-			D_ASSERT(new_sz >= 0);
-			output_length += UnsafeNumericCast<idx_t>(new_sz);
-			i += UnsafeNumericCast<idx_t>(sz);
-		} else {
-			// ascii
+		if (!(input_data[i] & 0x80)) {
+			// ASCII.
 			output_length++;
 			i++;
+			continue;
 		}
+
+		// UTF-8.
+		int sz = 0;
+		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+		auto converted = IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
+		auto new_sz = Utf8Proc::CodepointLength(converted);
+		output_length += UnsafeNumericCast<idx_t>(new_sz);
+		D_ASSERT(sz != 0);
+		i += UnsafeNumericCast<idx_t>(sz);
 	}
 	return output_length;
 }
@@ -135,7 +135,7 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.function = CaseConvertFunctionASCII<IS_UPPER>;
+		expr.function.SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
 	}
 	return nullptr;
 }

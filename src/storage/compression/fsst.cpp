@@ -5,7 +5,6 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/settings.hpp"
@@ -276,7 +275,7 @@ public:
 		current_segment->count++;
 	}
 
-	void AddNull() {
+	void AddEmptyStringInternal() {
 		if (!HasEnoughSpace(0)) {
 			Flush();
 			if (!HasEnoughSpace(0)) {
@@ -287,8 +286,13 @@ public:
 		current_segment->count++;
 	}
 
+	void AddNull() {
+		AddEmptyStringInternal();
+		current_segment->stats.statistics.SetHasNullFast();
+	}
+
 	void AddEmptyString() {
-		AddNull();
+		AddEmptyStringInternal();
 		UncompressedStringStorage::UpdateStringStats(current_segment->stats, "");
 	}
 
@@ -448,7 +452,8 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		auto idx = vdata.sel->get_index(i);
 
 		// Note: we treat nulls and empty strings the same
-		if (!vdata.validity.RowIsValid(idx) || data[idx].GetSize() == 0) {
+		const bool is_null = !vdata.validity.RowIsValid(idx);
+		if (is_null || data[idx].GetSize() == 0) {
 			continue;
 		}
 
@@ -568,7 +573,7 @@ struct FSSTScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto block_size = segment.GetBlockManager().GetBlockSize();
+	auto block_size = segment.GetBlockSize();
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -644,7 +649,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 
 	bool enable_fsst_vectors;
 	if (ALLOW_FSST_VECTORS) {
-		enable_fsst_vectors = DBConfig::GetSetting<EnableFSSTVectorsSetting>(segment.db);
+		enable_fsst_vectors = Settings::Get<EnableFSSTVectorsSetting>(segment.db);
 	} else {
 		enable_fsst_vectors = false;
 	}
@@ -663,7 +668,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
 			result.SetVectorType(VectorType::FSST_VECTOR);
-			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
+			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockSize());
 			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder, string_block_limit);
 			result_data = FSSTVector::GetCompressedData<string_t>(result);
 		} else {
@@ -740,7 +745,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 
 	duckdb_fsst_decoder_t decoder;
 	bitpacking_width_t width;
-	auto block_size = segment.GetBlockManager().GetBlockSize();
+	auto block_size = segment.GetBlockSize();
 	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width, block_size);
 
 	auto result_data = FlatVector::GetData<string_t>(result);

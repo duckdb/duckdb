@@ -10,8 +10,8 @@ namespace duckdb {
 // WindowAggregator
 //===--------------------------------------------------------------------===//
 WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr)
-    : wexpr(wexpr), aggr(wexpr), result_type(wexpr.return_type), state_size(aggr.function.state_size(aggr.function)),
-      exclude_mode(wexpr.exclude_clause) {
+    : wexpr(wexpr), aggr(wexpr), result_type(wexpr.return_type),
+      state_size(aggr.function.GetStateSizeCallback()(aggr.function)), exclude_mode(wexpr.exclude_clause) {
 	for (auto &child : wexpr.children) {
 		arg_types.emplace_back(child->return_type);
 	}

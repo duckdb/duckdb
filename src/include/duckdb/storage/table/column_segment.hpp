@@ -12,11 +12,9 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
-#include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
 
 namespace duckdb {
@@ -112,11 +110,9 @@ public:
 		return block_id;
 	}
 
-	//! Returns the block manager handling this segment. For transient segments, this might be the temporary block
-	//! manager. Later, we possibly convert this (transient) segment to a persistent segment. In that case, there
-	//! exists another block manager handling the ColumnData, of which this segment is a part.
-	BlockManager &GetBlockManager() const {
-		return block->block_manager;
+	//! Returns the size of the underlying block of the segment. It is size is the size available for usage on a block.
+	idx_t GetBlockSize() const {
+		return block->GetBlockSize();
 	}
 
 	idx_t GetBlockOffset() {
@@ -124,11 +120,11 @@ public:
 		return offset;
 	}
 
-	optional_ptr<CompressedSegmentState> GetSegmentState() {
+	optional_ptr<CompressedSegmentState> GetSegmentState() const {
 		return segment_state.get();
 	}
 
-	void CommitDropSegment();
+	void VisitBlockIds(BlockIdVisitor &visitor) const;
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);

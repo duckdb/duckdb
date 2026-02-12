@@ -1778,12 +1778,14 @@ unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunction &bo
 		case LogicalType::TIMESTAMP_S:
 		case LogicalType::TIMESTAMP_MS:
 		case LogicalType::TIMESTAMP_NS:
-			bound_function.function = DatePart::UnaryFunction<timestamp_t, double, DatePart::JulianDayOperator>;
-			bound_function.statistics = DatePart::JulianDayOperator::template PropagateStatistics<timestamp_t>;
+			bound_function.SetFunctionCallback(
+			    DatePart::UnaryFunction<timestamp_t, double, DatePart::JulianDayOperator>);
+			bound_function.SetStatisticsCallback(
+			    DatePart::JulianDayOperator::template PropagateStatistics<timestamp_t>);
 			break;
 		case LogicalType::DATE:
-			bound_function.function = DatePart::UnaryFunction<date_t, double, DatePart::JulianDayOperator>;
-			bound_function.statistics = DatePart::JulianDayOperator::template PropagateStatistics<date_t>;
+			bound_function.SetFunctionCallback(DatePart::UnaryFunction<date_t, double, DatePart::JulianDayOperator>);
+			bound_function.SetStatisticsCallback(DatePart::JulianDayOperator::template PropagateStatistics<date_t>);
 			break;
 		default:
 			throw BinderException("%s can only take DATE or TIMESTAMP arguments", bound_function.name);
@@ -1799,28 +1801,28 @@ unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunction &bo
 		case LogicalType::TIMESTAMP_S:
 		case LogicalType::TIMESTAMP_MS:
 		case LogicalType::TIMESTAMP_NS:
-			bound_function.function = DatePart::UnaryFunction<timestamp_t, double, DatePart::EpochOperator>;
-			bound_function.statistics = DatePart::EpochOperator::template PropagateStatistics<timestamp_t>;
+			bound_function.SetFunctionCallback(DatePart::UnaryFunction<timestamp_t, double, DatePart::EpochOperator>);
+			bound_function.SetStatisticsCallback(DatePart::EpochOperator::template PropagateStatistics<timestamp_t>);
 			break;
 		case LogicalType::DATE:
-			bound_function.function = DatePart::UnaryFunction<date_t, double, DatePart::EpochOperator>;
-			bound_function.statistics = DatePart::EpochOperator::template PropagateStatistics<date_t>;
+			bound_function.SetFunctionCallback(DatePart::UnaryFunction<date_t, double, DatePart::EpochOperator>);
+			bound_function.SetStatisticsCallback(DatePart::EpochOperator::template PropagateStatistics<date_t>);
 			break;
 		case LogicalType::INTERVAL:
-			bound_function.function = DatePart::UnaryFunction<interval_t, double, DatePart::EpochOperator>;
-			bound_function.statistics = DatePart::EpochOperator::template PropagateStatistics<interval_t>;
+			bound_function.SetFunctionCallback(DatePart::UnaryFunction<interval_t, double, DatePart::EpochOperator>);
+			bound_function.SetStatisticsCallback(DatePart::EpochOperator::template PropagateStatistics<interval_t>);
 			break;
 		case LogicalType::TIME:
-			bound_function.function = DatePart::UnaryFunction<dtime_t, double, DatePart::EpochOperator>;
-			bound_function.statistics = DatePart::EpochOperator::template PropagateStatistics<dtime_t>;
+			bound_function.SetFunctionCallback(DatePart::UnaryFunction<dtime_t, double, DatePart::EpochOperator>);
+			bound_function.SetStatisticsCallback(DatePart::EpochOperator::template PropagateStatistics<dtime_t>);
 			break;
 		case LogicalType::TIME_NS:
-			bound_function.function = DatePart::UnaryFunction<dtime_ns_t, double, DatePart::EpochOperator>;
-			bound_function.statistics = DatePart::EpochOperator::template PropagateStatistics<dtime_ns_t>;
+			bound_function.SetFunctionCallback(DatePart::UnaryFunction<dtime_ns_t, double, DatePart::EpochOperator>);
+			bound_function.SetStatisticsCallback(DatePart::EpochOperator::template PropagateStatistics<dtime_ns_t>);
 			break;
 		case LogicalType::TIME_TZ:
-			bound_function.function = DatePart::UnaryFunction<dtime_tz_t, double, DatePart::EpochOperator>;
-			bound_function.statistics = DatePart::EpochOperator::template PropagateStatistics<dtime_tz_t>;
+			bound_function.SetFunctionCallback(DatePart::UnaryFunction<dtime_tz_t, double, DatePart::EpochOperator>);
+			bound_function.SetStatisticsCallback(DatePart::EpochOperator::template PropagateStatistics<dtime_tz_t>);
 			break;
 		default:
 			throw BinderException("%s can only take temporal arguments", bound_function.name);
@@ -2122,8 +2124,8 @@ struct StructDatePart {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
 		ScalarFunction result({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, Bind);
-		result.serialize = SerializeFunction;
-		result.deserialize = DeserializeFunction;
+		result.SetSerializeCallback(SerializeFunction);
+		result.SetDeserializeCallback(DeserializeFunction);
 		return result;
 	}
 };

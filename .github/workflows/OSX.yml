@@ -46,7 +46,7 @@ env:
 jobs:
   xcode-debug:
     name: OSX Debug
-    runs-on: macos-14
+    runs-on: macos-latest
 
     env:
       TREAT_WARNINGS_AS_ERRORS: 1
@@ -63,15 +63,13 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Install ninja
       shell: bash
       run: brew install ninja
+
+    - uses: ./.github/actions/cleanup_runner
 
     - name: Build
       shell: bash
@@ -102,7 +100,7 @@ jobs:
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
-    runs-on: macos-14
+    runs-on: macos-latest
     needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
@@ -124,11 +122,7 @@ jobs:
       - name: Install Ninja
         run: brew install ninja
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ vars.BRANCHES_TO_BE_CACHED == '' || contains(vars.BRANCHES_TO_BE_CACHED, github.ref) }}
+      - uses: ./.github/actions/ccache-action
 
       - name: Install pytest
         run: |

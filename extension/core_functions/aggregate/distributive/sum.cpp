@@ -73,6 +73,37 @@ struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd
 	}
 };
 
+template <class T>
+static LogicalType GetValueLogicalType();
+
+template <>
+LogicalType GetValueLogicalType<int64_t>() {
+	return LogicalType::BIGINT;
+}
+template <>
+LogicalType GetValueLogicalType<hugeint_t>() {
+	return LogicalType::HUGEINT;
+}
+template <>
+LogicalType GetValueLogicalType<double>() {
+	return LogicalType::DOUBLE;
+}
+
+template <class T>
+LogicalType GetSumStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("isset", LogicalType::BOOLEAN);
+
+	LogicalType value_type = GetValueLogicalType<T>();
+	// Use the return type when its physical representation matches the state type
+	if (function.return_type.InternalType() == value_type.InternalType()) {
+		value_type = function.return_type;
+	}
+	child_types.emplace_back("value", value_type);
+
+	return LogicalType::STRUCT(std::move(child_types));
+}
+
 unique_ptr<FunctionData> SumNoOverflowBind(ClientContext &context, AggregateFunction &function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	throw BinderException("sum_no_overflow is for internal use only!");
@@ -94,21 +125,21 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.name = "sum_no_overflow";
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		function.bind = SumNoOverflowBind;
-		function.serialize = SumNoOverflowSerialize;
-		function.deserialize = SumNoOverflowDeserialize;
-		return function;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		function.SetBindCallback(SumNoOverflowBind);
+		function.SetSerializeCallback(SumNoOverflowSerialize);
+		function.SetDeserializeCallback(SumNoOverflowDeserialize);
+		return function.SetStructStateExport(GetSumStateType<int64_t>);
 	}
 	case PhysicalType::INT64: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.name = "sum_no_overflow";
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		function.bind = SumNoOverflowBind;
-		function.serialize = SumNoOverflowSerialize;
-		function.deserialize = SumNoOverflowDeserialize;
-		return function;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		function.SetBindCallback(SumNoOverflowBind);
+		function.SetSerializeCallback(SumNoOverflowSerialize);
+		function.SetDeserializeCallback(SumNoOverflowDeserialize);
+		return function.SetStructStateExport(GetSumStateType<int64_t>);
 	}
 	default:
 		throw BinderException("Unsupported internal type for sum_no_overflow");
@@ -118,8 +149,8 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	AggregateFunction aggr({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
 	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, SumNoOverflowBind);
-	aggr.serialize = SumNoOverflowSerialize;
-	aggr.deserialize = SumNoOverflowDeserialize;
+	aggr.SetSerializeCallback(SumNoOverflowSerialize);
+	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;
 }
 
@@ -163,38 +194,38 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 	case PhysicalType::BOOL: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, bool, hugeint_t, IntegerSumOperation>(
 		    LogicalType::BOOLEAN, LogicalType::HUGEINT);
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		return function;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		return function.SetStructStateExport(GetSumStateType<int64_t>);
 	}
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::SMALLINT, LogicalType::HUGEINT);
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		return function;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		return function.SetStructStateExport(GetSumStateType<int64_t>);
 	}
 
 	case PhysicalType::INT32: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::INTEGER, LogicalType::HUGEINT);
-		function.statistics = SumPropagateStats;
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		return function;
+		function.SetStatisticsCallback(SumPropagateStats);
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		return function.SetStructStateExport(GetSumStateType<hugeint_t>);
 	}
 	case PhysicalType::INT64: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
 		        LogicalType::BIGINT, LogicalType::HUGEINT);
-		function.statistics = SumPropagateStats;
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		return function;
+		function.SetStatisticsCallback(SumPropagateStats);
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		return function.SetStructStateExport(GetSumStateType<hugeint_t>);
 	}
 	case PhysicalType::INT128: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
 		        LogicalType::HUGEINT, LogicalType::HUGEINT);
-		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
-		return function;
+		function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		return function.SetStructStateExport(GetSumStateType<hugeint_t>);
 	}
 	default:
 		throw InternalException("Unimplemented sum aggregate");
@@ -208,7 +239,7 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	function.name = "sum";
 	function.arguments[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
-	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;
 }
 
@@ -283,7 +314,8 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	                    LogicalType::DOUBLE, LogicalType::DOUBLE)
+	                    .SetStructStateExport(GetSumStateType<double>));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<BignumState, bignum_t, bignum_t, BignumOperation>(
 	    LogicalType::BIGNUM, LogicalType::BIGNUM));
 	return sum;
@@ -301,9 +333,18 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	return sum_no_overflow;
 }
 
+LogicalType GetKahanSumStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("isset", LogicalType::BOOLEAN);
+	children.emplace_back("value", LogicalType::DOUBLE);
+	children.emplace_back("err", LogicalType::DOUBLE);
+	return LogicalType::STRUCT(std::move(children));
+}
+
 AggregateFunction KahanSumFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE);
+	                                                                                           LogicalType::DOUBLE)
+	    .SetStructStateExport(GetKahanSumStateType);
 }
 
 } // namespace duckdb

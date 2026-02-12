@@ -2,12 +2,9 @@
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/transaction/undo_buffer.hpp"
-#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 
@@ -1015,6 +1012,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 	auto &mask = update.validity;
 
 	if (mask.AllValid()) {
+		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			stats.statistics.UpdateNumericStats<T>(update_data[idx]);
@@ -1027,8 +1025,11 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (mask.RowIsValid(idx)) {
+				stats.statistics.SetHasNoNullFast();
 				sel.set_index(not_null_count++, i);
 				stats.statistics.UpdateNumericStats<T>(update_data[idx]);
+			} else {
+				stats.statistics.SetHasNullFast();
 			}
 		}
 		return not_null_count;
@@ -1040,6 +1041,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 	auto update_data = update.GetDataNoConst<string_t>(update);
 	auto &mask = update.validity;
 	if (mask.AllValid()) {
+		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			auto &str = update_data[idx];
@@ -1056,12 +1058,15 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (mask.RowIsValid(idx)) {
+				stats.statistics.SetHasNoNullFast();
 				sel.set_index(not_null_count++, i);
 				auto &str = update_data[idx];
 				StringStats::Update(stats.statistics, str);
 				if (!str.IsInlined()) {
 					update_data[idx] = segment->GetStringHeap().AddBlob(str);
 				}
+			} else {
+				stats.statistics.SetHasNullFast();
 			}
 		}
 		if (not_null_count == count) {

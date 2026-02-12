@@ -19,7 +19,7 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-set enable_logging=true;
+CALL enable_logging(level='trace')
 
 statement ok
 CREATE TABLE test_uncompressed AS SELECT
@@ -42,7 +42,7 @@ where
 	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
 	message.contains('test_uncompressed') and
 	message.contains('VALIDITY') and
-	message.contains('COMPRESSION_UNCOMPRESSED');
+	message.contains('UNCOMPRESSED');
 ----
 15360
 
@@ -78,6 +78,6 @@ where
 	message.starts_with('ColumnDataCheckpointer FinalAnalyze') and
 	message.contains('test_roaring') and
 	message.contains('VALIDITY') and
-	message.contains('COMPRESSION_ROARING');
+	message.contains('ROARING');
 ----
 30872

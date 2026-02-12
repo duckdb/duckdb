@@ -1,40 +1,31 @@
 #include "parquet_reader.hpp"
 
-#include "reader/boolean_column_reader.hpp"
-#include "reader/callback_column_reader.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "parquet_types.h"
 #include "column_reader.hpp"
-#include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_geometry.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
-#include "parquet_timestamp.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "reader/row_number_column_reader.hpp"
-#include "reader/string_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
-#include "reader/templated_column_reader.hpp"
 #include "thrift_tools.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/logging/log_manager.hpp"
-
-#include <cassert>
-#include <chrono>
-#include <cstring>
-#include <sstream>
+#include "duckdb/common/types/geometry_crs.hpp"
 
 namespace duckdb {
 
@@ -156,14 +147,25 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	}
 
 	auto metadata = make_uniq<FileMetaData>();
+	auto crypto_metadata = make_uniq<FileCryptoMetaData>();
+
 	if (footer_encrypted) {
-		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->read(file_proto.get());
+
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.GetPath());
 		}
-		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
+		auto file_aad = crypto_metadata->encryption_algorithm.AES_GCM_V1.aad_file_unique;
+		CryptoMetaData aad_crypto_metadata = CryptoMetaData(allocator);
+
+		if (!file_aad.empty()) {
+			aad_crypto_metadata.Initialize(file_aad);
+			aad_crypto_metadata.SetModule(ParquetCrypto::FOOTER);
+		}
+		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util,
+		                    aad_crypto_metadata);
 	} else {
 		metadata->read(file_proto.get());
 	}
@@ -171,10 +173,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
-	                                                 footer_len);
+	                                                 std::move(crypto_metadata), footer_len);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {
+	return DeriveLogicalType(s_ele, parquet_options, schema);
+}
+
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const ParquetOptions &parquet_options,
+                                             ParquetColumnSchema &schema) {
 	// inner node
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
@@ -392,10 +399,8 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
                                                      idx_t schema_index, idx_t column_index,
                                                      ParquetColumnSchemaType type) {
-	ParquetColumnSchema schema(max_define, max_repeat, schema_index, column_index, type);
-	schema.name = s_ele.name;
-	schema.type = DeriveLogicalType(s_ele, schema);
-	return schema;
+	return ParquetColumnSchema::FromSchemaElement(s_ele, max_define, max_repeat, schema_index, column_index, type,
+	                                              parquet_options);
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context,
@@ -463,8 +468,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 		auto column_id = entry.first;
 		auto &expression = entry.second;
 		auto child_reader = std::move(root_struct_reader.child_readers[column_id]);
-		auto expr_schema = make_uniq<ParquetColumnSchema>(child_reader->Schema(), expression->return_type,
-		                                                  ParquetColumnSchemaType::EXPRESSION);
+		auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
+		    child_reader->Schema(), expression->return_type, ParquetColumnSchemaType::EXPRESSION));
 		auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(child_reader), expression->Copy(),
 		                                                     std::move(expr_schema));
 		root_struct_reader.child_readers[column_id] = std::move(expr_reader);
@@ -472,50 +477,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	return ret;
 }
 
-ParquetColumnSchema::ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, idx_t column_index,
-                                         ParquetColumnSchemaType schema_type)
-    : ParquetColumnSchema(string(), LogicalTypeId::INVALID, max_define, max_repeat, schema_index, column_index,
-                          schema_type) {
-}
-
-ParquetColumnSchema::ParquetColumnSchema(string name_p, LogicalType type_p, idx_t max_define, idx_t max_repeat,
-                                         idx_t schema_index, idx_t column_index, ParquetColumnSchemaType schema_type)
-    : schema_type(schema_type), name(std::move(name_p)), type(std::move(type_p)), max_define(max_define),
-      max_repeat(max_repeat), schema_index(schema_index), column_index(column_index) {
-}
-
-ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema child, LogicalType result_type,
-                                         ParquetColumnSchemaType schema_type)
-    : schema_type(schema_type), name(child.name), type(std::move(result_type)), max_define(child.max_define),
-      max_repeat(child.max_repeat), schema_index(child.schema_index), column_index(child.column_index) {
-	children.push_back(std::move(child));
-}
-
-unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_meta_data,
-                                                      const ParquetOptions &parquet_options, idx_t row_group_idx_p,
-                                                      const vector<ColumnChunk> &columns) const {
-	if (schema_type == ParquetColumnSchemaType::EXPRESSION) {
-		return nullptr;
-	}
-	if (schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
-		auto stats = NumericStats::CreateUnknown(type);
-		auto &row_groups = file_meta_data.row_groups;
-		D_ASSERT(row_group_idx_p < row_groups.size());
-		idx_t row_group_offset_min = 0;
-		for (idx_t i = 0; i < row_group_idx_p; i++) {
-			row_group_offset_min += row_groups[i].num_rows;
-		}
-
-		NumericStats::SetMin(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min)));
-		NumericStats::SetMax(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min +
-		                                                                     row_groups[row_group_idx_p].num_rows)));
-		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
-		return stats.ToUnique();
-	}
-	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns, parquet_options.can_have_nan);
-}
-
-static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadataCache &metadata, idx_t depth) {
+static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadataCache &metadata, idx_t depth,
+                           string &crs) {
 	const auto is_blob = s_ele.__isset.type && s_ele.type == Type::BYTE_ARRAY;
 	if (!is_blob) {
 		return false;
@@ -523,18 +486,33 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 
 	// TODO: Handle CRS in the future
 	const auto is_native_geom = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOMETRY;
+	if (is_native_geom) {
+		if (s_ele.logicalType.GEOMETRY.__isset.crs) {
+			crs = s_ele.logicalType.GEOMETRY.crs;
+		}
+		return true;
+	}
+
 	const auto is_native_geog = s_ele.__isset.logicalType && s_ele.logicalType.__isset.GEOGRAPHY;
-	if (is_native_geom || is_native_geog) {
+	if (is_native_geog) {
+		if (s_ele.logicalType.GEOGRAPHY.__isset.crs) {
+			crs = s_ele.logicalType.GEOGRAPHY.crs;
+		}
 		return true;
 	}
 
 	// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata.
 	const auto is_at_root = depth == 1;
 	const auto is_in_gpq_metadata = metadata.geo_metadata && metadata.geo_metadata->IsGeometryColumn(s_ele.name);
-	const auto is_leaf = s_ele.num_children == 0;
+	// A leaf node has a type set (as per Parquet spec)
+	const auto is_leaf = s_ele.__isset.type;
 	const auto is_geoparquet_geom = is_at_root && is_in_gpq_metadata && is_leaf;
 
 	if (is_geoparquet_geom) {
+		auto meta_ptr = metadata.geo_metadata->GetColumnMeta(s_ele.name);
+		if (meta_ptr) {
+			crs = meta_ptr->projjson;
+		}
 		return true;
 	}
 
@@ -565,7 +543,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	}
 
 	// Check for geometry type
-	if (IsGeometryType(s_ele, *metadata, depth)) {
+	string crs;
+	if (IsGeometryType(s_ele, *metadata, depth, crs)) {
 		// Geometries in both GeoParquet and native parquet are stored as a WKB-encoded BLOB.
 		// Because we don't just want to validate that the WKB encoding is correct, but also transform it into
 		// little-endian if necessary, we cant just make use of the StringColumnReader without heavily modifying it.
@@ -574,23 +553,43 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		// which performs the WKB validation/transformation using the `ST_GeomFromWKB` function of DuckDB.
 		// This enables us to also support other geometry encodings (such as GeoArrow geometries) easier in the future.
 
+		// Try to parse the CRS
+		LogicalType target_type;
+
+		auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs);
+		if (lookup) {
+			target_type = LogicalType::GEOMETRY(*lookup);
+		} else {
+			target_type = LogicalType::GEOMETRY();
+		}
+
 		// Inner BLOB schema
-		ParquetColumnSchema blob_schema(max_define, max_repeat, this_idx, next_file_idx++,
-		                                ParquetColumnSchemaType::COLUMN);
-		blob_schema.name = s_ele.name;
-		blob_schema.type = LogicalType::BLOB;
+		vector<ParquetColumnSchema> geometry_child;
+		geometry_child.emplace_back(ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx));
 
 		// Wrap in geometry schema
-		ParquetColumnSchema geom_schema(std::move(blob_schema), LogicalType::GEOMETRY(),
-		                                ParquetColumnSchemaType::GEOMETRY);
-		return geom_schema;
+		return ParquetColumnSchema::FromChildSchemas(s_ele.name, target_type, max_define, max_repeat, this_idx,
+		                                             next_file_idx++, std::move(geometry_child),
+		                                             ParquetColumnSchemaType::GEOMETRY);
 	}
 
-	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
+	// Determine if this is an inner node
+	// According to Parquet spec: nodes without 'type' set are inner nodes (groups)
+	// For backwards compatibility with non-standard files, also check the old condition
+	bool is_inner_node = !s_ele.__isset.type || (s_ele.__isset.num_children && s_ele.num_children > 0);
+
+	if (is_inner_node && s_ele.__isset.type) {
+		// This case handles non-standard files where both type and num_children are set
+		// Prioritize num_children if set and > 0
+		is_inner_node = s_ele.__isset.num_children && s_ele.num_children > 0;
+	}
+
+	if (is_inner_node) { // inner node
 		vector<ParquetColumnSchema> child_schemas;
 
 		idx_t c_idx = 0;
-		while (c_idx < NumericCast<idx_t>(s_ele.num_children)) {
+		idx_t num_children = (s_ele.__isset.num_children) ? NumericCast<idx_t>(s_ele.num_children) : 0;
+		while (c_idx < num_children) {
 			next_schema_idx++;
 
 			auto child_schema =
@@ -634,14 +633,12 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 				throw IOException("MAP_KEY_VALUE needs to be repeated");
 			}
 			auto result_type = LogicalType::MAP(child_schemas[0].type, child_schemas[1].type);
-			ParquetColumnSchema struct_schema(s_ele.name, ListType::GetChildType(result_type), max_define - 1,
-			                                  max_repeat - 1, this_idx, next_file_idx);
-			struct_schema.children = std::move(child_schemas);
-
-			ParquetColumnSchema map_schema(s_ele.name, std::move(result_type), max_define, max_repeat, this_idx,
-			                               next_file_idx);
-			map_schema.children.push_back(std::move(struct_schema));
-			return map_schema;
+			vector<ParquetColumnSchema> map_children;
+			map_children.emplace_back(ParquetColumnSchema::FromChildSchemas(
+			    s_ele.name, ListType::GetChildType(result_type), max_define - 1, max_repeat - 1, this_idx,
+			    next_file_idx, std::move(child_schemas)));
+			return ParquetColumnSchema::FromChildSchemas(s_ele.name, result_type, max_define, max_repeat, this_idx,
+			                                             next_file_idx, std::move(map_children));
 		}
 		ParquetColumnSchema result;
 		if (child_schemas.size() > 1 || (!is_list && !is_map && !is_repeated)) {
@@ -656,13 +653,10 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 			} else {
 				result_type = LogicalType::STRUCT(std::move(struct_types));
 			}
-			ParquetColumnSchema struct_schema(s_ele.name, std::move(result_type), max_define, max_repeat, this_idx,
-			                                  next_file_idx);
-			struct_schema.children = std::move(child_schemas);
-			if (is_variant) {
-				struct_schema.schema_type = ParquetColumnSchemaType::VARIANT;
-			}
-			result = std::move(struct_schema);
+			ParquetColumnSchemaType schema_type =
+			    is_variant ? ParquetColumnSchemaType::VARIANT : ParquetColumnSchemaType::COLUMN;
+			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, result_type, max_define, max_repeat, this_idx,
+			                                               next_file_idx, std::move(child_schemas), schema_type);
 		} else {
 			// if we have a struct with only a single type, pull up
 			result = std::move(child_schemas[0]);
@@ -670,10 +664,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		}
 		if (is_repeated) {
 			auto list_type = LogicalType::LIST(result.type);
-			ParquetColumnSchema list_schema(s_ele.name, std::move(list_type), max_define, max_repeat, this_idx,
-			                                next_file_idx);
-			list_schema.children.push_back(std::move(result));
-			result = std::move(list_schema);
+			vector<ParquetColumnSchema> list_child = {std::move(result)};
+			result = ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
+			                                               next_file_idx, std::move(list_child));
 		}
 		result.parent_schema_index = this_idx;
 		return result;
@@ -686,10 +679,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		auto result = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
 			auto list_type = LogicalType::LIST(result.type);
-			ParquetColumnSchema list_schema(s_ele.name, std::move(list_type), max_define, max_repeat, this_idx,
-			                                next_file_idx);
-			list_schema.children.push_back(std::move(result));
-			return list_schema;
+			vector<ParquetColumnSchema> list_child = {std::move(result)};
+			return ParquetColumnSchema::FromChildSchemas(s_ele.name, list_type, max_define, max_repeat, this_idx,
+			                                             next_file_idx, std::move(list_child));
 		}
 
 		return result;
@@ -697,8 +689,7 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 }
 
 static ParquetColumnSchema FileRowNumberSchema() {
-	return ParquetColumnSchema("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
-	                           ParquetColumnSchemaType::FILE_ROW_NUMBER);
+	return ParquetColumnSchema::FileRowNumber();
 }
 
 unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &context) {
@@ -743,7 +734,8 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
 		result.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
 		return result;
 	}
-	auto &column_schema = file_meta_data.schema[element.schema_index];
+	D_ASSERT(element.schema_index.IsValid());
+	auto &column_schema = file_meta_data.schema[element.schema_index.GetIndex()];
 
 	if (column_schema.__isset.field_id) {
 		result.identifier = Value::INTEGER(column_schema.field_id);
@@ -805,7 +797,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 
 	const auto children = StructValue::GetChildren(column_def);
 	result.name = StringValue::Get(children[0]);
-	result.type = TransformStringToLogicalType(StringValue::Get(children[1]));
+	result.type = TransformStringToLogicalType(StringValue::Get(children[1]), context);
 	string error_message;
 	if (!children[2].TryCastAs(context, result.type, result.default_value, &error_message)) {
 		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
@@ -840,13 +832,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			footer_size = UBigIntValue::Get(footer_entry->second);
 		}
 	}
-	// set pointer to factory method for AES state
-	auto &config = DBConfig::GetConfig(context_p);
-	if (config.encryption_util && parquet_options.debug_use_openssl) {
-		encryption_util = config.encryption_util;
-	} else {
-		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-	}
+
+	// Get the encryption util
+	// The parquet reader only reads data, so we set util to true
+	encryption_util = context_p.db->GetEncryptionUtil(true);
+
 	// If metadata cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
@@ -965,22 +955,37 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData 
 	                              file_col_idx);
 }
 
-uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
-	if (parquet_options.encryption_config) {
-		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util);
+string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {
+	if (encryption_algorithm.__isset.AES_GCM_V1) {
+		return encryption_algorithm.AES_GCM_V1.aad_file_unique;
+	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		throw InternalException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
 	} else {
-		return object.read(&iprot);
+		throw InternalException("File is encrypted but no encryption algorithm is set");
 	}
+}
+
+uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot) {
+	return object.read(&iprot);
+}
+
+uint32_t ParquetReader::ReadEncrypted(duckdb_apache::thrift::TBase &object, TProtocol &iprot,
+                                      CryptoMetaData &aad_crypto_metadata) const {
+	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+	return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
+	                           aad_crypto_metadata);
 }
 
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
                                  const uint32_t buffer_size) {
-	if (parquet_options.encryption_config) {
-		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
-		                               *encryption_util);
-	} else {
-		return iprot.getTransport()->read(buffer, buffer_size);
-	}
+	return iprot.getTransport()->read(buffer, buffer_size);
+}
+
+uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
+                                          const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const {
+	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
+	return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
+	                               *encryption_util, aad_crypto_metadata);
 }
 
 static idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {
@@ -1125,6 +1130,12 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 	auto column_id = column_ids[col_idx];
 	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
 
+	// keep track of column and row group ordinal if data is encrypted
+	if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		column_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+		                                       GetGroup(state).ordinal);
+	}
+
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
@@ -1235,17 +1246,64 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
-	GetPartitionStats(*GetFileMetadata(), result);
+	GetPartitionStats(*GetFileMetadata(), result, *root_schema, parquet_options);
 }
 
-void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata,
-                                      vector<PartitionStatistics> &result) {
+struct ParquetPartitionRowGroup : public PartitionRowGroup {
+	ParquetPartitionRowGroup(const duckdb_parquet::FileMetaData &metadata_p,
+	                         optional_ptr<ParquetColumnSchema> root_schema_p,
+	                         optional_ptr<ParquetOptions> parquet_options_p, const idx_t row_group_idx_p)
+	    : metadata(metadata_p), root_schema(root_schema_p), parquet_options(parquet_options_p),
+	      row_group_idx(row_group_idx_p) {
+	}
+
+	const duckdb_parquet::FileMetaData &metadata;
+	const optional_ptr<ParquetColumnSchema> root_schema;
+	const optional_ptr<ParquetOptions> parquet_options;
+	const idx_t row_group_idx;
+
+	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
+		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		D_ASSERT(metadata.row_groups.size() > row_group_idx);
+		D_ASSERT(root_schema->children.size() > primary_index);
+
+		const auto &row_group = metadata.row_groups[row_group_idx];
+		const auto &column_schema = root_schema->children[primary_index];
+		return column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
+	}
+
+	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
+		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		D_ASSERT(metadata.row_groups.size() > row_group_idx);
+		D_ASSERT(root_schema->children.size() > primary_index);
+
+		const auto &row_group = metadata.row_groups[row_group_idx];
+		const auto &column_chunk = row_group.columns[primary_index];
+
+		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
+		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
+		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
+			const auto &stats = column_chunk.meta_data.statistics;
+			return stats.is_min_value_exact && stats.is_max_value_exact;
+		}
+		return false;
+	}
+};
+
+void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
+                                      optional_ptr<ParquetColumnSchema> root_schema,
+                                      optional_ptr<ParquetOptions> parquet_options) {
 	idx_t offset = 0;
-	for (auto &row_group : metadata.row_groups) {
+	for (idx_t i = 0; i < metadata.row_groups.size(); i++) {
+		auto &row_group = metadata.row_groups[i];
 		PartitionStatistics partition_stats;
 		partition_stats.row_start = offset;
 		partition_stats.count = row_group.num_rows;
 		partition_stats.count_type = CountType::COUNT_EXACT;
+		if (root_schema && parquet_options) {
+			partition_stats.partition_row_group =
+			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, root_schema, parquet_options, i);
+		}
 		offset += row_group.num_rows;
 		result.push_back(partition_stats);
 	}
@@ -1415,6 +1473,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			}
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
+			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+				                                      GetGroup(state).ordinal);
+			}
 			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
 		}
 		if (scan_count != filter_count) {
@@ -1426,6 +1488,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			auto file_col_idx = column_ids[col_idx];
 			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
+			if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
+				                                      GetGroup(state).ordinal);
+			}
 			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",

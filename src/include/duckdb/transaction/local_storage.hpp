@@ -61,8 +61,6 @@ public:
 	//! The main optimistic data writer associated with this table.
 	OptimisticDataWriter optimistic_writer;
 
-	//! Whether or not storage was merged
-	bool merged_storage = false;
 	//! Whether or not the storage was dropped
 	bool is_dropped = false;
 
@@ -74,7 +72,8 @@ public:
 	void Rollback();
 	idx_t EstimatedSize();
 
-	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, bool append_to_table);
+	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
+	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
 	                          const vector<LogicalType> &table_types, row_t &start_row);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
@@ -90,6 +89,7 @@ public:
 	OptimisticDataWriter &GetOptimisticWriter();
 
 	RowGroupCollection &GetCollection();
+	OptimisticWriteCollection &GetPrimaryCollection();
 
 private:
 	mutex collections_lock;

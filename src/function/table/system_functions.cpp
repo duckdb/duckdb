@@ -23,6 +23,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBApproxDatabaseCountFun::RegisterFunction(*this);
 	DuckDBColumnsFun::RegisterFunction(*this);
 	DuckDBConstraintsFun::RegisterFunction(*this);
+	DuckDBCoordinateSystemsFun::RegisterFunction(*this);
 	DuckDBDatabasesFun::RegisterFunction(*this);
 	DuckDBFunctionsFun::RegisterFunction(*this);
 	DuckDBKeywordsFun::RegisterFunction(*this);
@@ -48,6 +49,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBVariablesFun::RegisterFunction(*this);
 	DuckDBViewsFun::RegisterFunction(*this);
 	EnableLoggingFun::RegisterFunction(*this);
+	EnableProfilingFun::RegisterFunction(*this);
 	TestAllTypesFun::RegisterFunction(*this);
 	TestVectorTypesFun::RegisterFunction(*this);
 

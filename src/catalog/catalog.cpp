@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/parser/parsed_data/create_coordinate_system_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
@@ -139,6 +140,10 @@ optional_ptr<CatalogEntry> Catalog::CreateTable(ClientContext &context, unique_p
 
 optional_ptr<CatalogEntry> Catalog::CreateTable(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                                 BoundCreateTableInfo &info) {
+	auto supports_create_table = SupportsCreateTable(info);
+	if (supports_create_table.HasError()) {
+		supports_create_table.Throw();
+	}
 	return schema.CreateTable(transaction, info);
 }
 
@@ -292,6 +297,24 @@ optional_ptr<CatalogEntry> Catalog::CreateCollation(ClientContext &context, Crea
 optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                                     CreateCollationInfo &info) {
 	return schema.CreateCollation(transaction, info);
+}
+
+//===--------------------------------------------------------------------===//
+// Coordinate System
+//===--------------------------------------------------------------------===//
+optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction transaction,
+                                                           CreateCoordinateSystemInfo &info) {
+	auto &schema = GetSchema(transaction, info.schema);
+	return CreateCoordinateSystem(transaction, schema, info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(ClientContext &context, CreateCoordinateSystemInfo &info) {
+	return CreateCoordinateSystem(GetCatalogTransaction(context), info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                                           CreateCoordinateSystemInfo &info) {
+	return schema.CreateCoordinateSystem(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -520,8 +543,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 		return true;
 	}
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
-	if (!dbconfig.options.autoload_known_extensions) {
+	if (!Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 	try {
@@ -537,8 +559,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 
 String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const String &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(context);
-	if (dbconfig.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		auto extension_name =
 		    ExtensionHelper::FindExtensionInEntries(configuration_name.ToStdString(), EXTENSION_SETTINGS);
 		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
@@ -594,8 +615,7 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
-	auto &dbconfig = DBConfig::GetConfig(db);
-	if (dbconfig.options.autoload_known_extensions) {
+	if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 		string extension_name;
 		if (IsAutoloadableFunction(type)) {
 			auto lookup_result = ExtensionHelper::FindExtensionInFunctionEntries(entry_name, EXTENSION_FUNCTIONS);
@@ -640,7 +660,7 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	// the setting is not in an extension
 	// get a list of all options
 	vector<string> potential_names = DBConfig::GetOptionNames();
-	for (auto &entry : DBConfig::GetConfig(context).extension_parameters) {
+	for (auto &entry : DBConfig::GetConfig(context).GetExtensionSettings()) {
 		potential_names.push_back(entry.first);
 	}
 	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);
@@ -651,7 +671,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
                                                       const reference_set_t<SchemaCatalogEntry> &schemas) {
 	auto &context = retriever.GetContext();
 	auto entries = SimilarEntriesInSchemas(context, lookup_info, schemas);
-	auto max_schema_count = DBConfig::GetSetting<CatalogErrorMaxSchemasSetting>(context);
+	auto max_schema_count = Settings::Get<CatalogErrorMaxSchemasSetting>(context);
 
 	reference_set_t<SchemaCatalogEntry> unseen_schemas;
 	auto &db_manager = DatabaseManager::Get(context);
@@ -909,6 +929,22 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr, ErrorData()};
 	}
+
+	// If we have a specific schema name and no schemas were found, the schema doesn't exist.
+	// Throw an error about the schema instead of the table
+	if (schemas.empty() && !lookups.empty() && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
+		string schema_name = lookups[0].schema;
+		if (!IsInvalidSchema(schema_name)) {
+			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name, lookup_info.GetErrorContext());
+			string relation_name = schema_name + "." + lookup_info.GetEntryName();
+			auto except =
+			    CatalogException(schema_lookup.GetErrorContext(),
+			                     "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
+			                     relation_name, schema_name);
+			return {nullptr, nullptr, ErrorData(except)};
+		}
+	}
+
 	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
 	// otherwise.
 	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
@@ -1193,6 +1229,25 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 
 optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
 	return nullptr;
+}
+
+ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
+	auto &base = info.Base().Cast<CreateTableInfo>();
+	if (!base.partition_keys.empty()) {
+		return ErrorData(
+		    ExceptionType::CATALOG,
+		    StringUtil::Format("PARTITIONED BY is not supported for tables in a %s catalog", GetCatalogType()));
+	}
+	if (!base.sort_keys.empty()) {
+		return ErrorData(ExceptionType::CATALOG,
+		                 StringUtil::Format("SORTED BY is not supported for tables in a %s catalog", GetCatalogType()));
+	}
+	if (!base.options.empty()) {
+		return ErrorData(
+		    ExceptionType::CATALOG,
+		    StringUtil::Format("WITH clause is not supported for tables in a %s catalog", GetCatalogType()));
+	}
+	return ErrorData();
 }
 
 string Catalog::GetDefaultSchema() const {

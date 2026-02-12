@@ -5,6 +5,7 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/types/variant_visitor.hpp"
+#include "duckdb/function/variant/variant_value_convert.hpp"
 
 namespace duckdb {
 
@@ -55,7 +56,6 @@ VariantNestedData VariantUtils::DecodeNestedData(const UnifiedVariantVectorData 
 	auto ptr = data + byte_offset;
 
 	VariantNestedData result;
-	result.is_null = false;
 	result.child_count = VarintDecode<uint32_t>(ptr);
 	if (result.child_count) {
 		result.children_idx = VarintDecode<uint32_t>(ptr);
@@ -75,17 +75,17 @@ vector<string> VariantUtils::GetObjectKeys(const UnifiedVariantVectorData &varia
 	return object_keys;
 }
 
-//! FIXME: this shouldn't return a "result", it should populate a validity mask instead.
 void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, const VariantPathComponent &component,
                                    optional_ptr<const SelectionVector> sel, SelectionVector &res,
-                                   ValidityMask &res_validity, VariantNestedData *nested_data, idx_t count) {
+                                   ValidityMask &res_validity, const VariantNestedData *nested_data,
+                                   const ValidityMask &validity, idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = sel ? sel->get_index(i) : i;
 
-		auto &nested_data_entry = nested_data[i];
-		if (nested_data_entry.is_null) {
+		if (!validity.RowIsValid(i)) {
 			continue;
 		}
+		auto &nested_data_entry = nested_data[i];
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
 			auto child_idx = component.index;
 			if (child_idx >= nested_data_entry.child_count) {
@@ -139,193 +139,44 @@ vector<uint32_t> VariantUtils::ValueIsNull(const UnifiedVariantVectorData &varia
 
 VariantNestedDataCollectionResult
 VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
-                                const SelectionVector &sel, idx_t count, optional_idx row, idx_t offset,
+                                const SelectionVector &value_index_sel, idx_t count, optional_idx row, idx_t offset,
                                 VariantNestedData *child_data, ValidityMask &validity) {
+	VariantLogicalType wrong_type = VariantLogicalType::VARIANT_NULL;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
 		//! NOTE: the validity is assumed to be from a FlatVector
-		if (!variant.RowIsValid(row_index) || !validity.RowIsValid(offset + i)) {
-			child_data[i].is_null = true;
-			continue;
-		}
-		auto type_id = variant.GetTypeId(row_index, sel[i]);
-		if (type_id == VariantLogicalType::VARIANT_NULL) {
-			child_data[i].is_null = true;
+		//! Is the input row NULL ?
+		if (!variant.RowIsValid(row_index) || !validity.RowIsValid(i)) {
+			validity.SetInvalid(i);
 			continue;
 		}
 
-		if (type_id != expected_type) {
-			return VariantNestedDataCollectionResult(type_id);
+		//! Is the variant value NULL ?
+		auto type_id = variant.GetTypeId(row_index, value_index_sel[i]);
+		if (type_id == VariantLogicalType::VARIANT_NULL) {
+			validity.SetInvalid(i);
+			continue;
 		}
-		child_data[i] = DecodeNestedData(variant, row_index, sel[i]);
+
+		//! Is the type of the VARIANT correct?
+		if (type_id != expected_type) {
+			if (wrong_type == VariantLogicalType::VARIANT_NULL) {
+				//! Record the type of the first row that doesn't have the expected type
+				wrong_type = type_id;
+			}
+			validity.SetInvalid(i);
+			continue;
+		}
+
+		child_data[i] = DecodeNestedData(variant, row_index, value_index_sel[i]);
+	}
+
+	if (wrong_type != VariantLogicalType::VARIANT_NULL) {
+		return VariantNestedDataCollectionResult(wrong_type);
 	}
 	return VariantNestedDataCollectionResult();
 }
-
-namespace {
-
-struct ValueConverter {
-	using result_type = Value;
-
-	static Value VisitNull() {
-		return Value(LogicalType::SQLNULL);
-	}
-
-	static Value VisitBoolean(bool val) {
-		return Value::BOOLEAN(val);
-	}
-
-	template <typename T>
-	static Value VisitInteger(T val) {
-		throw InternalException("ValueConverter::VisitInteger not implemented!");
-	}
-
-	static Value VisitTime(dtime_t val) {
-		return Value::TIME(val);
-	}
-
-	static Value VisitTimeNanos(dtime_ns_t val) {
-		return Value::TIME_NS(val);
-	}
-
-	static Value VisitTimeTZ(dtime_tz_t val) {
-		return Value::TIMETZ(val);
-	}
-
-	static Value VisitTimestampSec(timestamp_sec_t val) {
-		return Value::TIMESTAMPSEC(val);
-	}
-
-	static Value VisitTimestampMs(timestamp_ms_t val) {
-		return Value::TIMESTAMPMS(val);
-	}
-
-	static Value VisitTimestamp(timestamp_t val) {
-		return Value::TIMESTAMP(val);
-	}
-
-	static Value VisitTimestampNanos(timestamp_ns_t val) {
-		return Value::TIMESTAMPNS(val);
-	}
-
-	static Value VisitTimestampTZ(timestamp_tz_t val) {
-		return Value::TIMESTAMPTZ(val);
-	}
-
-	static Value VisitFloat(float val) {
-		return Value::FLOAT(val);
-	}
-	static Value VisitDouble(double val) {
-		return Value::DOUBLE(val);
-	}
-	static Value VisitUUID(hugeint_t val) {
-		return Value::UUID(val);
-	}
-	static Value VisitDate(date_t val) {
-		return Value::DATE(val);
-	}
-	static Value VisitInterval(interval_t val) {
-		return Value::INTERVAL(val);
-	}
-
-	static Value VisitString(const string_t &str) {
-		return Value(str);
-	}
-	static Value VisitBlob(const string_t &str) {
-		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
-	}
-	static Value VisitBignum(const string_t &str) {
-		return Value::BIGNUM(const_data_ptr_cast(str.GetData()), str.GetSize());
-	}
-	static Value VisitGeometry(const string_t &str) {
-		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
-	}
-	static Value VisitBitstring(const string_t &str) {
-		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
-	}
-
-	template <typename T>
-	static Value VisitDecimal(T val, uint32_t width, uint32_t scale) {
-		if (std::is_same<T, int16_t>::value) {
-			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
-		} else if (std::is_same<T, int32_t>::value) {
-			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
-		} else if (std::is_same<T, int64_t>::value) {
-			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
-		} else if (std::is_same<T, hugeint_t>::value) {
-			return Value::DECIMAL(val, static_cast<uint8_t>(width), static_cast<uint8_t>(scale));
-		} else {
-			throw InternalException("Unhandled decimal type");
-		}
-	}
-
-	static Value VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data) {
-		auto array_items = VariantVisitor<ValueConverter>::VisitArrayItems(variant, row, nested_data);
-		return Value::LIST(LogicalType::VARIANT(), std::move(array_items));
-	}
-
-	static Value VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data) {
-		auto object_children = VariantVisitor<ValueConverter>::VisitObjectItems(variant, row, nested_data);
-		return Value::STRUCT(std::move(object_children));
-	}
-
-	static Value VisitDefault(VariantLogicalType type_id, const_data_ptr_t) {
-		throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
-	}
-};
-
-template <>
-Value ValueConverter::VisitInteger<int8_t>(int8_t val) {
-	return Value::TINYINT(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<int16_t>(int16_t val) {
-	return Value::SMALLINT(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<int32_t>(int32_t val) {
-	return Value::INTEGER(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<int64_t>(int64_t val) {
-	return Value::BIGINT(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<hugeint_t>(hugeint_t val) {
-	return Value::HUGEINT(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<uint8_t>(uint8_t val) {
-	return Value::UTINYINT(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<uint16_t>(uint16_t val) {
-	return Value::USMALLINT(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<uint32_t>(uint32_t val) {
-	return Value::UINTEGER(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<uint64_t>(uint64_t val) {
-	return Value::UBIGINT(val);
-}
-
-template <>
-Value ValueConverter::VisitInteger<uhugeint_t>(uhugeint_t val) {
-	return Value::UHUGEINT(val);
-}
-
-} // namespace
 
 Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx) {
 	return VariantVisitor<ValueConverter>::Visit(variant, row, values_idx);

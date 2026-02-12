@@ -33,10 +33,13 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::P
 				// convert COMPARE_IN to COMPARE_NOT_IN
 				next->SetExpressionTypeUnsafe(ExpressionType::COMPARE_NOT_IN);
 				result = std::move(next);
-			} else if (next->GetExpressionType() >= ExpressionType::COMPARE_EQUAL &&
-			           next->GetExpressionType() <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+			} else if ((next->GetExpressionType() >= ExpressionType::COMPARE_EQUAL &&
+			            next->GetExpressionType() <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) ||
+			           next->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+			           next->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 				// NOT on a comparison: we can negate the comparison
 				// e.g. NOT(x > y) is equivalent to x <= y
+				// NOT(x IS DISTINCT FROM y) is equivalent to x IS NOT DISTINCT FROM y
 				next->SetExpressionTypeUnsafe(NegateComparisonExpression(next->GetExpressionType()));
 				result = std::move(next);
 			} else {
