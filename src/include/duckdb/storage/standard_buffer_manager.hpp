@@ -55,7 +55,7 @@ public:
 	idx_t GetBlockAllocSize() const final;
 	//! Returns the block size for buffer-managed blocks.
 	idx_t GetBlockSize() const final;
-	idx_t GetQueryMaxMemory() const final;
+	idx_t GetOperatorMemoryLimit() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.

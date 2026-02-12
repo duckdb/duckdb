@@ -76,7 +76,7 @@ public:
 	//! Returns the block size for buffer-managed blocks.
 	virtual idx_t GetBlockSize() const = 0;
 	//! Returns the maximum available memory for a given query.
-	virtual idx_t GetQueryMaxMemory() const = 0;
+	virtual idx_t GetOperatorMemoryLimit() const = 0;
 
 	//! Returns a newly registered block of transient memory.
 	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager);

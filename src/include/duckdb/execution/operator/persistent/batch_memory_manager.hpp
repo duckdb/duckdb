@@ -40,7 +40,7 @@ private:
 public:
 	void SetMemorySize(idx_t size) {
 		// request at most 1/4th of all available memory
-		idx_t total_max_memory = BufferManager::GetBufferManager(context).GetQueryMaxMemory();
+		idx_t total_max_memory = BufferManager::GetBufferManager(context).GetOperatorMemoryLimit();
 		idx_t request_cap = total_max_memory / 4;
 
 		size = MinValue<idx_t>(size, request_cap);
