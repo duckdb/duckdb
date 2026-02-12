@@ -318,7 +318,7 @@ idx_t BufferPool::GetMaxMemory() const {
 	return maximum_memory;
 }
 
-idx_t BufferPool::GetQueryMaxMemory() const {
+idx_t BufferPool::GetOperatorMemoryLimit() const {
 	return GetMaxMemory();
 }
 

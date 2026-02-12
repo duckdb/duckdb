@@ -1,8 +1,10 @@
 #include "duckdb/storage/block.hpp"
-#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/assert.hpp"
 
 namespace duckdb {
+
+// Forward declaration.
+class BlockManager;
 
 Block::Block(BlockAllocator &allocator, const block_id_t id, const idx_t block_size, const idx_t block_header_size)
     : FileBuffer(allocator, FileBufferType::BLOCK, block_size, block_header_size), id(id) {

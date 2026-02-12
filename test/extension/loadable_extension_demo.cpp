@@ -1,4 +1,13 @@
 #include "duckdb.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -603,6 +612,147 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 //===--------------------------------------------------------------------===//
+// Row ID Filter — extensible table filter demo
+//
+// This demo shows how an optimizer extension can inject an ExpressionFilter
+// into a table scan's filter set. The filter wraps a ScalarFunction that
+// checks each row's ROW_ID against a sorted allow-list.
+//
+//
+// Three callbacks are involved:
+//   1. RowIdFilterFunction  — execution: stateful linear scan over allow-list
+//   2. RowIdFilterPropagate — row-group pruning via min/max statistics
+//   3. RowIdFilterInit      — per-thread state initialization
+//===--------------------------------------------------------------------===//
+
+// The bind callback is unused for most extensible table filters
+static unique_ptr<FunctionData> RowIdFilterBind(ClientContext &, ScalarFunction &, vector<unique_ptr<Expression>> &) {
+	throw InternalException("rowid_filter: bind should never be called");
+}
+
+struct RowIdFilterBindData : public FunctionData {
+	vector<int64_t> allowed_ids;
+	unordered_set<int64_t> allowed_set;
+
+	explicit RowIdFilterBindData(vector<int64_t> ids) : allowed_ids(std::move(ids)) {
+		allowed_set.insert(allowed_ids.begin(), allowed_ids.end());
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<RowIdFilterBindData>(allowed_ids);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return allowed_ids == other_p.Cast<RowIdFilterBindData>().allowed_ids;
+	}
+};
+
+// Per-thread local state for the filter function.
+// In this demo we use a simple hash-set lookup, so no per-thread state is needed.
+// In practice, if row IDs arrive in non-decreasing order (e.g. sequential scan),
+// a cursor-based linear scan over a sorted allowed list would be more efficient — O(n) total.
+struct RowIdFilterState : public FunctionLocalState {};
+
+static unique_ptr<FunctionLocalState> RowIdFilterInit(ExpressionState &, const BoundFunctionExpression &,
+                                                      FunctionData *) {
+	return make_uniq<RowIdFilterState>();
+}
+
+static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<RowIdFilterBindData>();
+	auto &allowed = bind_data.allowed_set;
+
+	auto &input_vec = args.data[0];
+	idx_t count = args.size();
+
+	UnifiedVectorFormat vdata;
+	input_vec.ToUnifiedFormat(count, vdata);
+	auto row_ids = UnifiedVectorFormat::GetData<int64_t>(vdata);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto out = FlatVector::GetData<bool>(result);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			out[i] = false;
+			continue;
+		}
+		out[i] = allowed.count(row_ids[idx]) > 0;
+	}
+}
+
+static FilterPropagateResult RowIdFilterPropagate(const FunctionStatisticsPruneInput &input) {
+	auto &allowed = input.bind_data->Cast<RowIdFilterBindData>().allowed_ids;
+	auto &stats = input.stats;
+
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto min_val = NumericStats::GetMin<int64_t>(stats);
+	auto max_val = NumericStats::GetMax<int64_t>(stats);
+
+	auto it = std::lower_bound(allowed.begin(), allowed.end(), min_val);
+	if (it != allowed.end() && *it <= max_val) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+}
+
+class RowIdOptimizerExtension : public OptimizerExtension {
+public:
+	RowIdOptimizerExtension() {
+		optimize_function = RowIdOptimizeFunction;
+	}
+
+	static void RowIdOptimizeFunction(OptimizerExtensionInput &input, duckdb::unique_ptr<LogicalOperator> &plan) {
+		for (auto &child : plan->children) {
+			RowIdOptimizeFunction(input, child);
+		}
+		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
+			return;
+		}
+		auto &get = plan->Cast<LogicalGet>();
+		auto table = get.GetTable();
+		if (!table || table->name != "rowid_test_table") {
+			return;
+		}
+
+		// Build the scalar function
+		ScalarFunction func("rowid_filter", {LogicalType::BIGINT}, LogicalType::BOOLEAN, RowIdFilterFunction,
+		                    RowIdFilterBind);
+		func.SetInitStateCallback(RowIdFilterInit);
+		func.SetFilterPruneCallback(RowIdFilterPropagate);
+
+		// Construct the bound expression (column index 0: the filter chunk contains only the filtered column)
+		vector<unique_ptr<Expression>> children;
+		children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0));
+		auto expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, func, std::move(children),
+		                                               make_uniq<RowIdFilterBindData>(vector<int64_t> {3, 4, 5, 7, 9}));
+
+		// Push the filter on the ROW_ID column
+		get.table_filters.PushFilter(ColumnIndex(COLUMN_IDENTIFIER_ROW_ID),
+		                             make_uniq<ExpressionFilter>(std::move(expr)));
+
+		// Ensure ROW_ID is in the scan's column list
+		bool has_rowid = false;
+		for (auto &col : get.GetColumnIds()) {
+			if (col.IsRowIdColumn()) {
+				has_rowid = true;
+				break;
+			}
+		}
+		if (!has_rowid) {
+			if (get.projection_ids.empty()) {
+				for (idx_t i = 0; i < get.GetColumnIds().size(); i++) {
+					get.projection_ids.push_back(i);
+				}
+			}
+			get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+		}
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
@@ -711,5 +861,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	loader.RegisterType("MINMAX", minmax_type, MinMaxType::Bind);
 	loader.RegisterCastFunction(LogicalType::INTEGER, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
 	loader.RegisterFunction(ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
+
+	// Register the RowId optimizer extension (extensible table filter demo)
+	config.GetCallbackManager().Register(RowIdOptimizerExtension());
 }
 }
