@@ -333,8 +333,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			skip_wal_write_due_to_checkpoint = true;
 		}
 	}
-
-	if (transaction.ShouldWriteToWAL(db)) {
+	bool should_write_to_wal = transaction.ShouldWriteToWAL(db);
+	if (should_write_to_wal) {
 		auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 		// if we are committing changes and we are not doing a "checkpoint instead of WAL write"
 		// we need to write to the WAL to make the changes durable
@@ -359,7 +359,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// now that we have the transaction lock again, new transactions can't start
 		// figure out the checkpoint type now
 		checkpoint_decision = GetCheckpointType(transaction, undo_properties);
-		if (skip_wal_write_due_to_checkpoint && !checkpoint_decision.can_checkpoint) {
+		if (should_write_to_wal && skip_wal_write_due_to_checkpoint && !checkpoint_decision.can_checkpoint) {
 			// we have not written to the WAL but we have now realized we can't checkpoint after all
 			// in order to commit we need backpeddle and write to the WAL after all
 			D_ASSERT(held_wal_lock);
