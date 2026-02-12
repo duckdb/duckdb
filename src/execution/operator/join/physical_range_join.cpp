@@ -4,7 +4,6 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -230,39 +229,113 @@ void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context
 	GetSortedRun(context.client);
 }
 
+bool PhysicalRangeJoin::LessThan(const JoinCondition &a, const JoinCondition &b) {
+	//	Comparisons come before non-comparisons
+	if (!b.IsComparison()) {
+		return a.IsComparison();
+	} else if (!a.IsComparison()) {
+		return false;
+	}
+
+	//	Both are comparisons, so use distinct counts to compare selectivities
+	//	(higher is more selective, zero is unknown/completely unselective)
+	const auto a_left = a.GetLeftStats() ? a.GetLeftStats()->GetDistinctCount() : 0;
+	const auto a_right = a.GetRightStats() ? a.GetRightStats()->GetDistinctCount() : 0;
+	const auto a_min = MinValue(a_left, a_right);
+	const auto a_type = a.GetRHS().return_type.InternalType();
+
+	const auto b_left = b.GetLeftStats() ? b.GetLeftStats()->GetDistinctCount() : 0;
+	const auto b_right = b.GetRightStats() ? b.GetRightStats()->GetDistinctCount() : 0;
+	const auto b_min = MinValue(b_left, b_right);
+	const auto b_type = b.GetRHS().return_type.InternalType();
+
+	switch (a.GetComparisonType()) {
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		switch (b.GetComparisonType()) {
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			//	Both inequalities
+			//	Prefer higher selectivities, but use the minimum of both sides
+			if (a_min != b_min) {
+				return a_min > b_min;
+			}
+			//	Prefer narrower types for faster comparisons
+			if (!TypeIsConstantSize(b_type)) {
+				return TypeIsConstantSize(a_type);
+			} else if (!TypeIsConstantSize(a_type)) {
+				return false;
+			}
+			return GetTypeIdSize(a_type) < GetTypeIdSize(b_type);
+		default:
+			//	Inequalities first, so a < b
+			return true;
+		}
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		switch (b.GetComparisonType()) {
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			//	Inequalities first, so a > b
+			return false;
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			//	Both equalities
+			//	Prefer higher rhs selectivities for equalities
+			if (a_right != b_right) {
+				return a_right > b_right;
+			}
+			//	Prefer narrower types for faster comparisons
+			if (!TypeIsConstantSize(b_type)) {
+				return TypeIsConstantSize(a_type);
+			} else if (!TypeIsConstantSize(a_type)) {
+				return false;
+			}
+			return GetTypeIdSize(a_type) < GetTypeIdSize(b_type);
+		default:
+			//	Inequalities first, so a > b
+			return false;
+		}
+	default:
+		//	Some other comparison
+		return false;
+	}
+}
+
 PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalComparisonJoin &op, PhysicalOperatorType type,
                                      PhysicalOperator &left, PhysicalOperator &right, vector<JoinCondition> cond,
                                      JoinType join_type, idx_t estimated_cardinality,
                                      unique_ptr<JoinFilterPushdownInfo> pushdown_info)
     : PhysicalComparisonJoin(physical_plan, op, type, std::move(cond), join_type, estimated_cardinality) {
 	filter_pushdown = std::move(pushdown_info);
-	// Reorder the conditions so that ranges are at the front.
+	// Reorder the conditions so that selective ranges are at the front.
 	if (conditions.size() > 1) {
-		unordered_map<idx_t, idx_t> cond_idx;
-		vector<JoinCondition> conditions_p(conditions.size());
-		std::swap(conditions_p, conditions);
-		idx_t range_position = 0;
-		idx_t other_position = conditions_p.size();
-		for (idx_t i = 0; i < conditions_p.size(); ++i) {
-			switch (conditions_p[i].GetComparisonType()) {
-			case ExpressionType::COMPARE_LESSTHAN:
-			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			case ExpressionType::COMPARE_GREATERTHAN:
-			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				conditions[range_position++] = std::move(conditions_p[i]);
-				cond_idx[i] = range_position - 1;
-				break;
-			default:
-				conditions[--other_position] = std::move(conditions_p[i]);
-				cond_idx[i] = other_position;
-				break;
-			}
+		//	Do an indirect sort so we can remap any positional references to the conditions.
+		vector<idx_t> cond_idx;
+		for (idx_t i = 0; i < conditions.size(); ++i) {
+			cond_idx.emplace_back(i);
 		}
+		std::sort(cond_idx.begin(), cond_idx.end(),
+		          [&](const idx_t &a, const idx_t &b) { return LessThan(conditions[a], conditions[b]); });
+
+		//	Move the conditions into the new order
+		vector<JoinCondition> reordered(conditions.size());
+		for (idx_t i = 0; i < cond_idx.size(); ++i) {
+			reordered[i] = std::move(conditions[cond_idx[i]]);
+		}
+		std::swap(reordered, conditions);
+
+		//	Remap any filter pushdown references.
 		if (filter_pushdown) {
 			for (auto &idx : filter_pushdown->join_condition) {
-				if (cond_idx.find(idx) != cond_idx.end()) {
-					idx = cond_idx[idx];
-				}
+				const auto i = idx;
+				idx = cond_idx[i];
 			}
 		}
 	}

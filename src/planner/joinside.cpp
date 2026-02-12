@@ -52,69 +52,6 @@ unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> con
 	return result;
 }
 
-bool JoinCondition::Compare(const JoinCondition &a, const JoinCondition &b) {
-	//	Comparisons come before non-comparisons
-	if (!b.IsComparison()) {
-		return a.IsComparison();
-	} else if (!a.IsComparison()) {
-		return false;
-	}
-
-	//	Both are comparisons, so use distinct counts to compare selectivities
-	//	(higher is more selective, zero is unknown/completely unselective)
-	const auto a_left = a.GetLeftStats() ? a.GetLeftStats()->GetDistinctCount() : 0;
-	const auto a_right = a.GetRightStats() ? a.GetRightStats()->GetDistinctCount() : 0;
-	const auto a_min = MinValue(a_left, a_right);
-	const auto a_type = a.right->return_type.InternalType();
-
-	const auto b_left = b.GetLeftStats() ? b.GetLeftStats()->GetDistinctCount() : 0;
-	const auto b_right = b.GetRightStats() ? b.GetRightStats()->GetDistinctCount() : 0;
-	const auto b_min = MinValue(b_left, b_right);
-	const auto b_type = b.right->return_type.InternalType();
-
-	switch (a.GetComparisonType()) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		switch (b.GetComparisonType()) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			//	Prefer higher rhs selectivities for equalities
-			if (a_right != b_right) {
-				return a_right > b_right;
-			}
-			//	Prefer narrower types for faster comparisons
-			if (!TypeIsConstantSize(b_type)) {
-				return TypeIsConstantSize(a_type);
-			} else if (!TypeIsConstantSize(a_type)) {
-				return false;
-			}
-			return GetTypeIdSize(a_type) < GetTypeIdSize(b_type);
-		default:
-			//	Prefer equalities
-			return true;
-		}
-	default:
-		switch (b.GetComparisonType()) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			//	Equality before inequality
-			return false;
-		default:
-			//	Prefer higher selectivities, but use the minimum of both sides
-			if (a_min != b_min) {
-				return a_min > b_min;
-			}
-			//	Prefer narrower types for faster comparisons
-			if (!TypeIsConstantSize(b_type)) {
-				return TypeIsConstantSize(a_type);
-			} else if (!TypeIsConstantSize(a_type)) {
-				return false;
-			}
-			return GetTypeIdSize(a_type) < GetTypeIdSize(b_type);
-		}
-	}
-}
-
 JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {
 	if (left == JoinSide::NONE) {
 		return right;

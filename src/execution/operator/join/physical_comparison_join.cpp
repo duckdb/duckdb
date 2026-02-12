@@ -55,7 +55,60 @@ InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() con
 
 void PhysicalComparisonJoin::ReorderConditions(vector<JoinCondition> &conditions) {
 	// we reorder conditions so the ones with COMPARE_EQUAL occur first
-	std::sort(conditions.begin(), conditions.end(), JoinCondition::Compare);
+	// check if this is already the case
+	bool is_ordered = true;
+	bool seen_non_equal = false;
+	bool seen_non_comparison = false;
+
+	for (auto &cond : conditions) {
+		if (!cond.IsComparison()) {
+			seen_non_comparison = true;
+		} else if (cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
+		           cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			if (seen_non_equal || seen_non_comparison) {
+				is_ordered = false;
+				break;
+			}
+		} else {
+			if (seen_non_comparison) {
+				is_ordered = false;
+				break;
+			}
+			seen_non_equal = true;
+		}
+	}
+
+	if (is_ordered) {
+		// no need to re-order
+		return;
+	}
+
+	vector<JoinCondition> equal_conditions;
+	vector<JoinCondition> non_equi_conditions;
+	vector<JoinCondition> arbitrary_conditions;
+
+	for (auto &cond : conditions) {
+		if (!cond.IsComparison()) {
+			arbitrary_conditions.push_back(std::move(cond));
+		} else if (cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
+		           cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			equal_conditions.push_back(std::move(cond));
+		} else {
+			non_equi_conditions.push_back(std::move(cond));
+		}
+	}
+
+	conditions.clear();
+	// reconstruct the sorted conditions
+	for (auto &cond : equal_conditions) {
+		conditions.push_back(std::move(cond));
+	}
+	for (auto &cond : non_equi_conditions) {
+		conditions.push_back(std::move(cond));
+	}
+	for (auto &cond : arbitrary_conditions) {
+		conditions.push_back(std::move(cond));
+	}
 }
 
 void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input,
