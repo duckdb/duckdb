@@ -607,6 +607,8 @@ private:
 	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<QueryNode> TransformShowSelect(PEGTransformer &transformer,
 	                                                 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<QueryNode> TransformShowTables(PEGTransformer &transformer,
+	                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);
 	static unique_ptr<QueryNode> TransformShowQualifiedName(PEGTransformer &transformer,

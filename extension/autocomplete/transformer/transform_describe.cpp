@@ -24,6 +24,28 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowSelect(PEGTransformer 
 	return std::move(select_node);
 }
 
+unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer &transformer,
+                                                                   optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto showref = make_uniq<ShowRef>();
+	showref->show_type = ShowType::SHOW_FROM;
+	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(3));
+	if (!IsInvalidCatalog(qualified_name.catalog)) {
+		throw ParserException("Expected \"SHOW TABLES FROM database\", \"SHOW TABLES FROM schema\", or "
+		                      "\"SHOW TABLES FROM database.schema\"");
+	}
+	if (IsInvalidSchema(qualified_name.schema)) {
+		showref->schema_name = qualified_name.name;
+	} else {
+		showref->catalog_name = qualified_name.schema;
+		showref->schema_name = qualified_name.name;
+	}
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(showref);
+	return std::move(select_node);
+}
+
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto result = make_uniq<ShowRef>();
