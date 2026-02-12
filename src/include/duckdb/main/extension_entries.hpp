@@ -370,6 +370,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"icu_collate_zu", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"icu_sort_key", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"in_search_path", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"index_key", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"instr", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"is_histogram_other_bin", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"isfinite", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
