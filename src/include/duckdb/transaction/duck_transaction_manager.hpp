@@ -113,6 +113,9 @@ private:
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
 	                                 const UndoBufferProperties &properties);
+	//! Get the checkpoint type of an automatic checkpoint
+	CheckpointDecision GetCheckpointType(DuckTransaction &transaction, const UndoBufferProperties &undo_properties);
+
 	bool HasOtherTransactions(DuckTransaction &transaction);
 	void CleanupTransactions();
 
