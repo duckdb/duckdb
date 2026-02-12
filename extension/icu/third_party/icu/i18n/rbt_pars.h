@@ -107,14 +107,14 @@ class TransliteratorParser : public UMemory {
      * <code>variableLimit</code>.  At any point during parsing, available
      * variables are <code>variableNext..variableLimit-1</code>.
      */
-    UChar variableNext;
+    char16_t variableNext;
 
     /**
      * The last available stand-in for variables.  This is discovered
      * dynamically.  At any point during parsing, available variables are
      * <code>variableNext..variableLimit-1</code>.
      */
-    UChar variableLimit;
+    char16_t variableLimit;
 
     /**
      * When we encounter an undefined variable, we do not immediately signal
@@ -130,7 +130,7 @@ class TransliteratorParser : public UMemory {
      * patterns.  This is allocated the first time it is needed, and
      * reused thereafter.
      */
-    UChar dotStandIn;
+    char16_t dotStandIn;
 
 public:
 
@@ -156,7 +156,7 @@ public:
      * call returns.
      * @param rules      rules, separated by ';'
      * @param direction  either FORWARD or REVERSE.
-     * @param pe         Struct to recieve information on position 
+     * @param pe         Struct to receive information on position 
      *                   of error if an error is encountered
      * @param ec         Output param set to success/failure code.
      */
@@ -210,7 +210,7 @@ private:
 
     /**
      * Assert that the given character is NOT within the variable range.
-     * If it is, return FALSE.  This is neccesary to ensure that the
+     * If it is, return false.  This is necessary to ensure that the
      * variable range does not overlap characters used in a rule.
      * @param ch     the given character.
      * @return       True, if the given character is NOT within the variable range.
@@ -272,9 +272,9 @@ private:
      * @param pos     the position in pattern at which to start parsing.
      * @return        the stand-in character used to represent it.
      */
-    UChar parseSet(const UnicodeString& rule,
-                   ParsePosition& pos,
-                   UErrorCode& status);
+    char16_t parseSet(const UnicodeString& rule,
+                      ParsePosition& pos,
+                      UErrorCode& status);
 
     /**
      * Generate and return a stand-in for a new UnicodeFunctor.  Store
@@ -282,14 +282,14 @@ private:
      * @param adopted the UnicodeFunctor to be adopted.
      * @return        a stand-in for a new UnicodeFunctor.
      */
-    UChar generateStandInFor(UnicodeFunctor* adopted, UErrorCode& status);
+    char16_t generateStandInFor(UnicodeFunctor* adopted, UErrorCode& status);
 
     /**
      * Return the standin for segment seg (1-based).
      * @param seg    the given segment.
      * @return       the standIn character for the given segment.
      */
-    UChar getSegmentStandin(int32_t seg, UErrorCode& status);
+    char16_t getSegmentStandin(int32_t seg, UErrorCode& status);
 
     /**
      * Set the object for segment seg (1-based).
@@ -303,7 +303,7 @@ private:
      * time and reused thereafter.
      * @return    the stand-in for the dot set.
      */
-    UChar getDotStandIn(UErrorCode& status);
+    char16_t getDotStandIn(UErrorCode& status);
 
     /**
      * Append the value of the given variable name to the given

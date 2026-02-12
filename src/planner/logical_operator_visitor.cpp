@@ -127,6 +127,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &target : rec.key_targets) {
 			callback(&target);
 		}
+		for (auto &aggregate : rec.payload_aggregates) {
+			callback(&aggregate);
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {

@@ -79,7 +79,10 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 	const auto &primary_order = logical_order->orders[0];
 	auto options = CreateRowGroupReordererOptions(row_limit, row_offset, primary_order, *logical_get, storage_index,
 	                                              logical_limit);
-	logical_get->function.set_scan_order(std::move(options), logical_get->bind_data.get());
+	if (!options) {
+		return false;
+	}
+	logical_get->SetScanOrder(std::move(options));
 
 	return true;
 }
@@ -164,8 +167,8 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 	auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 	auto column_type =
 	    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
-	auto order_type = primary_order.type == OrderType::ASCENDING ? RowGroupOrderType::ASC : RowGroupOrderType::DESC;
-	auto order_by = order_type == RowGroupOrderType::ASC ? OrderByStatistics::MIN : OrderByStatistics::MAX;
+	auto order_type = primary_order.type;
+	auto order_by = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 	optional_idx combined_limit = row_limit.IsValid()
 	                                  ? row_limit.GetIndex() + (row_offset.IsValid() ? row_offset.GetIndex() : 0)
 	                                  : optional_idx();

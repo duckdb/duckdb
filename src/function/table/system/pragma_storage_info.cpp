@@ -63,7 +63,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARIANT());
 
 	names.emplace_back("has_updates");
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -134,7 +134,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		// compression
 		output.SetValue(col_idx++, count, Value(entry.compression_type));
 		// stats
-		output.SetValue(col_idx++, count, Value(entry.segment_stats));
+		output.SetValue(col_idx++, count, entry.segment_stats);
 		// has_updates
 		output.SetValue(col_idx++, count, Value::BOOLEAN(entry.has_updates));
 		// persistent

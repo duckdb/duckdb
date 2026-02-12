@@ -1,10 +1,13 @@
 #include "json_reader.hpp"
 
+#include <utility>
+
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/storage/caching_mode.hpp"
 #include "json_scan.hpp"
-#include <utility>
 
 namespace duckdb {
 
@@ -183,7 +186,9 @@ void JSONReader::OpenJSONFile() {
 	lock_guard<mutex> guard(lock);
 	if (!IsOpen()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		auto regular_file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | options.compression);
+		FileOpenFlags flags = FileFlags::FILE_FLAGS_READ | options.compression;
+		flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
+		auto regular_file_handle = fs.OpenFile(file, flags);
 		file_handle = make_uniq<JSONFileHandle>(context, std::move(regular_file_handle), BufferAllocator::Get(context));
 	}
 	Reset();
@@ -1052,8 +1057,9 @@ void JSONReader::ReadNextBufferSeek(JSONReaderScanState &scan_state) {
 			if (!raw_handle.OnDiskFile() && raw_handle.CanSeek()) {
 				if (!scan_state.thread_local_filehandle ||
 				    scan_state.thread_local_filehandle->GetPath() != raw_handle.GetPath()) {
-					scan_state.thread_local_filehandle = scan_state.fs.OpenFile(
-					    raw_handle.GetPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+					FileOpenFlags flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO;
+					flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
+					scan_state.thread_local_filehandle = scan_state.fs.OpenFile(raw_handle.GetPath(), flags);
 				}
 			} else if (scan_state.thread_local_filehandle) {
 				scan_state.thread_local_filehandle = nullptr;

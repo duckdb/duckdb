@@ -14,13 +14,29 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "matcher.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "tokenizer.hpp"
+#include "include/parser/tokenizer/base_tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "parser/tokenizer/highlight_tokenizer.hpp"
+#include "parser/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb {
+
+struct SQLTokenizeFunctionData : public TableFunctionData {
+	explicit SQLTokenizeFunctionData(vector<MatcherToken> tokens_p) : tokens(std::move(tokens_p)) {
+	}
+
+	vector<MatcherToken> tokens;
+};
+
+struct SQLTokenizeData : public GlobalTableFunctionState {
+	SQLTokenizeData() : offset(0) {
+	}
+
+	idx_t offset;
+};
 
 struct SQLAutoCompleteFunctionData : public TableFunctionData {
 	explicit SQLAutoCompleteFunctionData(vector<AutoCompleteSuggestion> suggestions_p)
@@ -429,11 +445,19 @@ public:
 	}
 
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
-		if (state == TokenizeState::STRING_LITERAL) {
+		if (TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
+		}
+		if (StringUtil::StartsWith(last_word_p, "'")) {
+			last_word_p = last_word_p.substr(1, last_word_p.size() - 1);
+			last_pos_p += 1;
 		}
 		last_word = std::move(last_word_p);
 		last_pos = last_pos_p;
+	}
+
+	void OnStatementEnd(idx_t pos) override {
+		tokens.clear();
 	}
 
 	vector<MatcherSuggestion> &suggestions;
@@ -744,23 +768,61 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(count);
 }
 
-class ParserTokenizer : public BaseTokenizer {
-public:
-	ParserTokenizer(const string &sql, vector<MatcherToken> &tokens) : BaseTokenizer(sql, tokens) {
-	}
-	void OnStatementEnd(idx_t pos) override {
-		statements.push_back(std::move(tokens));
-		tokens.clear();
-	}
-	void OnLastToken(TokenizeState state, string last_word, idx_t last_pos) override {
-		if (last_word.empty()) {
-			return;
-		}
-		tokens.emplace_back(std::move(last_word), last_pos);
+static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
+	HighlightTokenizer tokenizer(sql);
+	tokenizer.TokenizeInput();
+
+	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
+}
+
+unique_ptr<GlobalTableFunctionState> SQLTokenizeInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<SQLTokenizeData>();
+}
+
+static unique_ptr<FunctionData> SQLTokenizeBind(ClientContext &context, TableFunctionBindInput &input,
+                                                vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sql_auto_complete first parameter cannot be NULL");
 	}
 
-	vector<vector<MatcherToken>> statements;
-};
+	names.emplace_back("start");
+	return_types.emplace_back(LogicalType::INTEGER);
+
+	names.emplace_back("token_type");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("word");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	return GenerateTokens(context, StringValue::Get(input.inputs[0]));
+}
+
+void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = data_p.bind_data->Cast<SQLTokenizeFunctionData>();
+	auto &data = data_p.global_state->Cast<SQLTokenizeData>();
+	if (data.offset >= bind_data.tokens.size()) {
+		// finished returning values
+		return;
+	}
+
+	// start returning values
+	// either fill up the chunk or return all the remaining columns
+	idx_t count = 0;
+	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &entry = bind_data.tokens[data.offset++];
+
+		// offset, INTEGER
+		output.SetValue(0, count, Value::INTEGER(NumericCast<int32_t>(entry.offset)));
+
+		// token_type, VARCHAR
+		output.SetValue(1, count, Value(TokenTypeToString(entry.type)));
+
+		// word, VARCHAR
+		output.SetValue(2, count, Value(entry.text));
+		count++;
+	}
+	output.SetCardinality(count);
+}
 
 static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
@@ -822,7 +884,7 @@ public:
 		parser_override = PEGParser;
 	}
 
-	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
+	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
 		vector<MatcherToken> root_tokens;
 		string clean_sql;
 
@@ -830,22 +892,35 @@ public:
 		tokenizer.TokenizeInput();
 		tokenizer.statements.push_back(std::move(root_tokens));
 
-		vector<unique_ptr<SQLStatement>> result;
 		try {
+			vector<unique_ptr<SQLStatement>> result;
 			for (auto &tokenized_statement : tokenizer.statements) {
 				if (tokenized_statement.empty()) {
 					continue;
 				}
 				auto &transformer = PEGTransformerFactory::GetInstance();
-				auto statement = transformer.Transform(tokenized_statement, "Statement");
+				auto statement = transformer.Transform(tokenized_statement, options);
 				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
-					statement->stmt_length =
-					    NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset +
-					                       tokenized_statement[tokenized_statement.size() - 1].length);
+					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +
+					                tokenized_statement[tokenized_statement.size() - 1].length;
+					statement->stmt_length = last_pos - tokenized_statement[0].offset;
 				}
 				statement->query = query;
 				result.push_back(std::move(statement));
+			}
+			if (!result.empty()) {
+				auto &last_statement = result.back();
+				last_statement->stmt_length = query.size() - last_statement->stmt_location;
+				for (auto &statement : result) {
+					statement->query = query.substr(statement->stmt_location, statement->stmt_length);
+					statement->stmt_location = 0;
+					statement->stmt_length = statement->query.size();
+					if (statement->type == StatementType::CREATE_STATEMENT) {
+						auto &create = statement->Cast<CreateStatement>();
+						create.info->sql = statement->query;
+					}
+				}
 			}
 			return ParserOverrideResult(std::move(result));
 		} catch (std::exception &e) {
@@ -866,6 +941,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
 
+	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind,
+	                           SQLTokenizeInit);
+	loader.RegisterFunction(tokenize_fun);
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	ParserExtension::Register(config, PEGParserExtension());
 }

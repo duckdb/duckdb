@@ -139,7 +139,7 @@ public:
     /**
      * Return true if the given TimeZoneNames objects are semantically equal.
      * @param other the object to be compared with.
-     * @return Return TRUE if the given Format objects are semantically equal.
+     * @return Return true if the given Format objects are semantically equal.
      * @stable ICU 50
      */
     virtual bool operator==(const TimeZoneNames& other) const = 0;
@@ -148,7 +148,7 @@ public:
      * Return true if the given TimeZoneNames objects are not semantically
      * equal.
      * @param other the object to be compared with.
-     * @return Return TRUE if the given Format objects are not semantically equal.
+     * @return Return true if the given Format objects are not semantically equal.
      * @stable ICU 50
      */
     bool operator!=(const TimeZoneNames& other) const { return !operator==(other); }
@@ -193,7 +193,7 @@ public:
 
     /**
      * Returns an enumeration of all available meta zone IDs used by the given time zone.
-     * @param tzID The canoical tiem zone ID.
+     * @param tzID The canonical time zone ID.
      * @param status Receives the status.
      * @return an enumeration object, owned by the caller.
      * @stable ICU 50
@@ -373,7 +373,7 @@ public:
          * Gets the zone ID of a match at the specified index.
          * @param idx The index
          * @param tzID Receives the zone ID.
-         * @return TRUE if the zone ID was set to tzID.
+         * @return true if the zone ID was set to tzID.
          * @internal
          */
         UBool getTimeZoneIDAt(int32_t idx, UnicodeString& tzID) const;
@@ -382,7 +382,7 @@ public:
          * Gets the metazone ID of a match at the specified index.
          * @param idx The index
          * @param mzID Receives the metazone ID
-         * @return TRUE if the meta zone ID was set to mzID.
+         * @return true if the meta zone ID was set to mzID.
          * @internal
          */
         UBool getMetaZoneIDAt(int32_t idx, UnicodeString& mzID) const;
@@ -402,7 +402,7 @@ public:
      * @param types The set of name types represented by bitwise flags of UTimeZoneNameType enums,
      *              or UTZNM_UNKNOWN for all name types.
      * @param status Receives the status.
-     * @return A collection of matches (owned by the caller), or NULL if no matches are found.
+     * @return A collection of matches (owned by the caller), or nullptr if no matches are found.
      * @see UTimeZoneNameType
      * @see MatchInfoCollection
      * @internal

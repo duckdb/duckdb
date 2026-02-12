@@ -31,7 +31,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(LogicalTypeId::STRUCT == child_type.id());
+	D_ASSERT(LogicalTypeId::STRUCT == child_type.id() || child_type.IsAggregateStateStructType());
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw InternalException("Can't extract something from an empty struct");

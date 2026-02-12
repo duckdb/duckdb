@@ -25,9 +25,9 @@ checkpoint
 # ------------------------------ Extract the child from the list ------------------------------
 
 query I
-select stats(col[1]) from tbl limit 1;
+select s.fully_shredded.stats from (select stats(col[1]) s from tbl limit 1);
 ----
-<REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: true}.*
+{'min': hello, 'max': world, 'has_unicode': false, 'max_string_length': 5, 'has_null': false, 'has_no_null': true}
 
 statement ok
 insert into tbl select 42::INTEGER from range(5) t(i)
@@ -36,17 +36,17 @@ statement ok
 checkpoint
 
 query I
-select stats(col) from tbl limit 1;
+select s.fully_shredded from (select stats(col) s from tbl limit 1);
 ----
-<REGEX>:.*shredding_state: SHREDDED.*fully_shredded: false, child: fully_shredded: true.*
+NULL
 
 # ------------------------------ Extracting the child from the list is not possible for some rows ------------------------------
 
 # Result is inconsistent, data isn't fully shredded
 query I
-select stats(col[1]) from tbl offset 5 limit 1;
+select stats(col[1]).shredding_state from tbl offset 5 limit 1;
 ----
-shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
+INCONSISTENT
 
 statement ok
 delete from tbl where not variant_typeof(col).starts_with('ARRAY')
@@ -62,9 +62,9 @@ checkpoint
 # ------------------------------ Child of the list is no longer fully shredded, types differ ------------------------------
 
 query I
-select stats(col[1]) from tbl offset 5 limit 1;
+select stats(col[1]).shredding_state from tbl offset 5 limit 1;
 ----
-shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
+INCONSISTENT
 
 statement ok
 delete from tbl;
@@ -77,9 +77,9 @@ checkpoint
 
 # We're shredded on VARCHAR[], so we can't propagate any stats for a field extract
 query I
-select stats(col.a) from tbl limit 1;
+select stats(col.a).shredding_state from tbl limit 1;
 ----
-shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
+INCONSISTENT
 
 statement ok
 delete from tbl;
@@ -104,45 +104,45 @@ restart
 
 # Field 'a' is fully shredded
 query I
-select stats(col.a) from tbl limit 1;
+select s.fully_shredded.stats from (select stats(col.a) s from tbl limit 1);
 ----
-<REGEX>:.*shredding_state: SHREDDED.*fully_shredded: true}.*
+{'min': test, 'max': test, 'has_unicode': false, 'max_string_length': 4, 'has_null': false, 'has_no_null': true}
 
 # Field 'b' is not shredded
 query I
-select stats(col.b) from tbl limit 1;
+select stats(col.b).shredding_state from tbl limit 1;
 ----
-shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
+INCONSISTENT
 
 # OBJECT is fully shredded
 query I
-select stats(col) from tbl limit 1;
+select s.fully_shredded.a.stats from (select stats(col) s from tbl limit 1);
 ----
-<REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: true.*
+{'min': test, 'max': test, 'has_unicode': false, 'max_string_length': 4, 'has_null': false, 'has_no_null': true}
 
 statement ok
 insert into tbl select {'a': 42::INTEGER, 'b': false}
 
 # OBJECT is fully shredded, but we've inserted unshredded data so its INCONSISTENT
 query I
-select stats(col) from tbl limit 1;
+select stats(col).shredding_state from tbl limit 1;
 ----
-<REGEX>:.*shredding_state: INCONSISTENT.*
+INCONSISTENT
 
 statement ok
 checkpoint
 
 # We inserted a field a that's not a VARCHAR, but it's still an object, so the root remains fully shredded
 query I
-select stats(col) from tbl limit 1;
+select stats(col).shredding_state from tbl limit 1;
 ----
-<REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: true.*
+SHREDDED
 
 # But field a isn't fully shredded anymore:
 query I
-select stats(col.a) from tbl limit 1;
+select stats(col.a).shredding_state from tbl limit 1;
 ----
-shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
+INCONSISTENT
 
 # Insert an object with additional field(s)
 statement ok
@@ -153,9 +153,9 @@ checkpoint
 
 # Root is still fully shredded, even with an additional field it's always an OBJECT
 query I
-select stats(col) from tbl limit 1;
+select stats(col).shredding_state from tbl limit 1;
 ----
-<REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: true.*
+SHREDDED
 
 # Insert an object that's missing shredded field(s)
 statement ok
@@ -166,9 +166,9 @@ checkpoint
 
 # Root is still shredded
 query I
-select stats(col) from tbl limit 1;
+select stats(col).shredding_state from tbl limit 1;
 ----
-<REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: true.*
+SHREDDED
 
 # Now insert something that's NOT an OBJECT
 statement ok
@@ -179,12 +179,12 @@ checkpoint;
 
 # Now the root is no longer fully shredded
 query I
-select stats(col) from tbl limit 1;
+select s.fully_shredded from (select stats(col) s from tbl limit 1);
 ----
-<REGEX>:.*shredding_state: SHREDDED.*stats: {fully_shredded: false.*
+NULL
 
 # Data is not fully shredded on the extracted field, result is inconsistent
 query I
-select stats(col.c) from tbl order by rowid offset 2 limit 1;
+select stats(col.c).shredding_state from tbl order by rowid offset 2 limit 1;
 ----
-shredding_state: INCONSISTENT[Has Null: true, Has No Null: true]
+INCONSISTENT

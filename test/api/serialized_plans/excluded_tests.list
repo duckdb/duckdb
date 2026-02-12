@@ -21,7 +21,7 @@ test/sql/aggregate/aggregates/test_count_all_types.test
 test/sql/aggregate/aggregates/test_last.test
 test/sql/aggregate/aggregates/test_product.test
 test/sql/aggregate/aggregates/test_regression.test
-test/sql/aggregate/aggregates/test_state_export.test
+test/sql/aggregate/aggregates/test_state_export_opaque.test
 test/sql/aggregate/distinct/distinct_on_order_by.test
 test/sql/aggregate/distinct/grouped/string_agg.test
 test/sql/aggregate/distinct/test_distinct.test

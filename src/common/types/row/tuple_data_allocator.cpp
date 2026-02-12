@@ -55,7 +55,7 @@ void TupleDataAllocator::DestroyRowBlocks(const idx_t row_block_begin, const idx
 	for (idx_t block_idx = row_block_begin; block_idx < row_block_end; block_idx++) {
 		auto &block = row_blocks[block_idx];
 		if (block.handle) {
-			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+			block.handle->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 		}
 	}
 }
@@ -68,7 +68,7 @@ void TupleDataAllocator::DestroyHeapBlocks(const idx_t heap_block_begin, const i
 	for (idx_t block_idx = heap_block_begin; block_idx < heap_block_end; block_idx++) {
 		auto &block = heap_blocks[block_idx];
 		if (block.handle) {
-			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+			block.handle->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 		}
 	}
 }
@@ -229,7 +229,8 @@ TupleDataAllocator::BuildChunkPart(TupleDataSegment &segment, TupleDataPinState 
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
 		CreateRowBlock(segment);
 		if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
-			row_blocks.back().handle->SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+			row_blocks.back().handle->GetMemory().SetEvictionQueueIndex(
+			    RadixPartitioning::RadixBits(partition_index.GetIndex()));
 		}
 	}
 	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
@@ -284,7 +285,7 @@ TupleDataAllocator::BuildChunkPart(TupleDataSegment &segment, TupleDataPinState 
 					const auto size = MaxValue<idx_t>(block_size, heap_sizes[append_offset]);
 					CreateHeapBlock(segment, size);
 					if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
-						heap_blocks.back().handle->SetEvictionQueueIndex(
+						heap_blocks.back().handle->GetMemory().SetEvictionQueueIndex(
 						    RadixPartitioning::RadixBits(partition_index.GetIndex()));
 					}
 				}
@@ -471,7 +472,7 @@ static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTyp
                                  const idx_t col_offset, const idx_t offset, const idx_t count) {
 #ifdef D_ASSERT_IS_ENABLED
 	if (type_id != LogicalTypeId::VARCHAR) {
-		// Make sure we don't verify BLOB / AGGREGATE_STATE
+		// Make sure we don't verify BLOB / LEGACY_AGGREGATE_STATE
 		return;
 	}
 	idx_t entry_idx;
@@ -764,7 +765,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 				break;
 			case TupleDataPinProperties::DESTROY_AFTER_DONE:
 				// Prevent it from being added to the eviction queue
-				blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
+				blocks[block_id].handle->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 				// Destroy
 				blocks[block_id].handle.reset();
 				break;

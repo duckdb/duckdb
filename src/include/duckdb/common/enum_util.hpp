@@ -38,6 +38,8 @@ enum class ARTHandlingResult : uint8_t;
 
 enum class ARTScanHandling : uint8_t;
 
+enum class ARTScanResult : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
@@ -306,7 +308,11 @@ enum class OperatorResultType : uint8_t;
 
 enum class OptimizerType : uint32_t;
 
+enum class OrderByColumnType : uint8_t;
+
 enum class OrderByNullType : uint8_t;
+
+enum class OrderByStatistics : uint8_t;
 
 enum class OrderPreservationType : uint8_t;
 
@@ -501,6 +507,9 @@ const char* EnumUtil::ToChars<ARTHandlingResult>(ARTHandlingResult value);
 
 template<>
 const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
+
+template<>
+const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -905,7 +914,13 @@ template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value);
 
 template<>
+const char* EnumUtil::ToChars<OrderByColumnType>(OrderByColumnType value);
+
+template<>
 const char* EnumUtil::ToChars<OrderByNullType>(OrderByNullType value);
+
+template<>
+const char* EnumUtil::ToChars<OrderByStatistics>(OrderByStatistics value);
 
 template<>
 const char* EnumUtil::ToChars<OrderPreservationType>(OrderPreservationType value);
@@ -1192,6 +1207,9 @@ ARTHandlingResult EnumUtil::FromString<ARTHandlingResult>(const char *value);
 
 template<>
 ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
+
+template<>
+ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
@@ -1596,7 +1614,13 @@ template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value);
 
 template<>
+OrderByColumnType EnumUtil::FromString<OrderByColumnType>(const char *value);
+
+template<>
 OrderByNullType EnumUtil::FromString<OrderByNullType>(const char *value);
+
+template<>
+OrderByStatistics EnumUtil::FromString<OrderByStatistics>(const char *value);
 
 template<>
 OrderPreservationType EnumUtil::FromString<OrderPreservationType>(const char *value);

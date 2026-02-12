@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import os
 import json
 import re
@@ -375,7 +376,24 @@ supported_serialize_entries = [
     'set_parameters',
     'includes',
     'finalize_deserialization',
+    'ignore_clang_tidy_rules',
 ]
+
+
+@dataclass(frozen=True)
+class ClangTidyIgnoreRule:
+    name: str
+    reason: str
+
+    @classmethod
+    def from_dict(cls, entry: dict) -> 'ClangTidyIgnoreRule':
+        if 'name' not in entry or 'reason' not in entry:
+            raise ValueError("Each entry in 'ignore_clang_tidy_rules' must have both 'name' and 'reason' fields")
+        return cls(name=entry['name'], reason=entry['reason'])
+
+    @classmethod
+    def from_entries(cls, entries: List[dict]) -> List['ClangTidyIgnoreRule']:
+        return [cls.from_dict(entry) for entry in entries]
 
 
 class SerializableClass:
@@ -398,6 +416,9 @@ class SerializableClass:
         self.return_type = self.name
         self.return_class = self.name
         self.finalize_deserialization = None
+        self.ignore_clang_tidy_rules: List[ClangTidyIgnoreRule] = []
+        if 'ignore_clang_tidy_rules' in entry:
+            self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(entry['ignore_clang_tidy_rules'])
         if 'finalize_deserialization' in entry:
             self.finalize_deserialization = entry['finalize_deserialization']
         if self.is_base_class:
@@ -620,6 +641,26 @@ def generate_base_class_code(base_class: SerializableClass):
         deserialize_return=deserialize_return, class_name=base_class.name, members=base_class_deserialize
     )
     return base_class_generation
+
+
+"""
+Wraps the code with:
+```
+// NOLINTBEGIN(clang-tidy-rule-name-1, clang-tidy-rule-name-2)
+// reasons: {reasons}
+{code}
+// NOLINTEND(clang-tidy-rule-name-1, clang-tidy-rule-name-2)
+```
+"""
+
+
+def wrap_with_clang_tidy_ignore(code: str, rules: List[ClangTidyIgnoreRule]) -> str:
+    if not rules:
+        return code
+    rule_names_to_inject = ", ".join([rule.name for rule in rules])
+    return "// NOLINTBEGIN({rule_names})\n// reasons: {reasons}\n{code}\n// NOLINTEND({rule_names})\n".format(
+        code=code, rule_names=rule_names_to_inject, reasons=", ".join([rule.reason for rule in rules])
+    )
 
 
 def generate_class_code(class_entry: SerializableClass):
@@ -845,12 +886,16 @@ for entry in file_list:
         # generate the base class serialization
         for base_class in base_classes:
             base_class_generation = generate_base_class_code(base_class)
+            base_class_generation = wrap_with_clang_tidy_ignore(
+                base_class_generation, base_class.ignore_clang_tidy_rules
+            )
             f.write(base_class_generation)
 
         # generate the class serialization
         classes = sorted(classes, key=lambda x: x.name)
         for class_entry in classes:
             class_generation = generate_class_code(class_entry)
+            class_generation = wrap_with_clang_tidy_ignore(class_generation, class_entry.ignore_clang_tidy_rules)
             if class_generation is None:
                 continue
             f.write(class_generation)

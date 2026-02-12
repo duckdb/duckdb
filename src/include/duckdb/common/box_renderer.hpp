@@ -95,6 +95,8 @@ struct BoxRendererConfig {
 	RenderMode render_mode = RenderMode::ROWS;
 	//! How to render large numbers
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::NONE;
+	//! Hidden rows hint
+	string hidden_rows_hint;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *LTCORNER = "\342\224\214"; // NOLINT: "┌";

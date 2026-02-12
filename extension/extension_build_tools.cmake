@@ -420,6 +420,12 @@ function(duckdb_extension_load NAME)
     string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
+    # Aggregate LINKED_LIBS globally
+    if(duckdb_extension_load_LINKED_LIBS)
+        list(APPEND DUCKDB_ALL_LINKED_LIBS ${duckdb_extension_load_LINKED_LIBS})
+        set(DUCKDB_ALL_LINKED_LIBS ${DUCKDB_ALL_LINKED_LIBS} PARENT_SCOPE)
+    endif()
+
     # If extension was set already, we ignore subsequent calls
     list (FIND DUCKDB_EXTENSION_NAMES ${EXTENSION_NAME_LOWERCASE} _index)
     if (${_index} GREATER -1)
@@ -547,6 +553,12 @@ endif()
 
 # Load base extension config
 include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
+
+# Write linked libs to file for bundle-setup
+if(DUCKDB_ALL_LINKED_LIBS)
+    string(REPLACE ";" "\n" LINKED_LIBS_CONTENT "${DUCKDB_ALL_LINKED_LIBS}")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/linked_libs.txt" "${LINKED_LIBS_CONTENT}")
+endif()
 
 # For extensions whose tests were loaded, but not linked into duckdb, we need to ensure they are registered to have
 # the sqllogictest "require" statement load the loadable extensions instead of the baked in static one

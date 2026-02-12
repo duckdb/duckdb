@@ -1,5 +1,5 @@
 // © 2019 and later: Unicode, Inc. and others.
-// License & terms of use: http://www.unicode.org/copyright.html#License
+// License & terms of use: http://www.unicode.org/copyright.html
 
 // loclikelysubtags.h
 // created: 2019may08 Markus W. Scherer
@@ -11,50 +11,15 @@
 #include "unicode/utypes.h"
 #include "unicode/bytestrie.h"
 #include "unicode/locid.h"
+#include "unicode/stringpiece.h"
 #include "unicode/uobject.h"
 #include "unicode/ures.h"
+#include "charstrmap.h"
 #include "lsr.h"
-#include "uhash.h"
 
 U_NAMESPACE_BEGIN
 
 struct XLikelySubtagsData;
-
-/**
- * Map of const char * keys & values.
- * Stores pointers as is: Does not own/copy/adopt/release strings.
- */
-class CharStringMap final : public UMemory {
-public:
-    /** Constructs an unusable non-map. */
-    CharStringMap() : map(nullptr) {}
-    CharStringMap(int32_t size, UErrorCode &errorCode) {
-        map = uhash_openSize(uhash_hashChars, uhash_compareChars, uhash_compareChars,
-                             size, &errorCode);
-    }
-    CharStringMap(CharStringMap &&other) U_NOEXCEPT : map(other.map) {
-        other.map = nullptr;
-    }
-    CharStringMap(const CharStringMap &other) = delete;
-    ~CharStringMap() {
-        uhash_close(map);
-    }
-
-    CharStringMap &operator=(CharStringMap &&other) U_NOEXCEPT {
-        map = other.map;
-        other.map = nullptr;
-        return *this;
-    }
-    CharStringMap &operator=(const CharStringMap &other) = delete;
-
-    const char *get(const char *key) const { return static_cast<const char *>(uhash_get(map, key)); }
-    void put(const char *key, const char *value, UErrorCode &errorCode) {
-        uhash_put(map, const_cast<char *>(key), const_cast<char *>(value), &errorCode);
-    }
-
-private:
-    UHashtable *map;
-};
 
 struct LocaleDistanceData {
     LocaleDistanceData() = default;
@@ -83,15 +48,25 @@ public:
     static const XLikelySubtags *getSingleton(UErrorCode &errorCode);
 
     // VisibleForTesting
-    LSR makeMaximizedLsrFrom(const Locale &locale, UErrorCode &errorCode) const;
+    LSR makeMaximizedLsrFrom(const Locale &locale,
+                             bool returnInputIfUnmatch,
+                             UErrorCode &errorCode) const;
 
-    // TODO(ICU-20777): Switch Locale/uloc_ likely-subtags API from the old code
-    // in loclikely.cpp to this new code, including activating this
-    // minimizeSubtags() function. The LocaleMatcher does not minimize.
-#if 0
-    LSR minimizeSubtags(const char *languageIn, const char *scriptIn, const char *regionIn,
-                        ULocale.Minimize fieldToFavor, UErrorCode &errorCode) const;
-#endif
+    /**
+     * Tests whether lsr is "more likely" than other.
+     * For example, fr-Latn-FR is more likely than fr-Latn-CH because
+     * FR is the default region for fr-Latn.
+     *
+     * The likelyInfo caches lookup information between calls.
+     * The return value is an updated likelyInfo value,
+     * with bit 0 set if lsr is "more likely".
+     * The initial value of likelyInfo must be negative.
+     */
+    int32_t compareLikely(const LSR &lsr, const LSR &other, int32_t likelyInfo) const;
+
+    LSR minimizeSubtags(StringPiece language, StringPiece script, StringPiece region,
+                        bool favorScript,
+                        UErrorCode &errorCode) const;
 
     // visible for LocaleDistance
     const LocaleDistanceData &getDistanceData() const { return distanceData; }
@@ -104,14 +79,25 @@ private:
     static void initLikelySubtags(UErrorCode &errorCode);
 
     LSR makeMaximizedLsr(const char *language, const char *script, const char *region,
-                         const char *variant, UErrorCode &errorCode) const;
+                         const char *variant,
+                         bool returnInputIfUnmatch,
+                         UErrorCode &errorCode) const;
 
     /**
      * Raw access to addLikelySubtags. Input must be in canonical format, eg "en", not "eng" or "EN".
      */
-    LSR maximize(const char *language, const char *script, const char *region) const;
+    LSR maximize(const char *language, const char *script, const char *region,
+                 bool returnInputIfUnmatch,
+                 UErrorCode &errorCode) const;
+    LSR maximize(StringPiece language, StringPiece script, StringPiece region,
+                 bool returnInputIfUnmatch,
+                 UErrorCode &errorCode) const;
+
+    int32_t getLikelyIndex(const char *language, const char *script) const;
+    bool isMacroregion(StringPiece& region, UErrorCode &errorCode) const;
 
     static int32_t trieNext(BytesTrie &iter, const char *s, int32_t i);
+    static int32_t trieNext(BytesTrie &iter, StringPiece s, int32_t i);
 
     UResourceBundle *langInfoBundle;
     // We could store the strings by value, except that if there were few enough strings,

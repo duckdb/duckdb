@@ -98,7 +98,7 @@ void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 	has_temporary_directory = buffer_manager.HasTemporaryDirectory();
 	num_threads = NumericCast<idx_t>(task_scheduler.NumberOfThreads());
 	num_connections = ConnectionManager::Get(context).GetConnectionCount();
-	query_max_memory = buffer_manager.GetQueryMaxMemory();
+	query_max_memory = buffer_manager.GetOperatorMemoryLimit();
 }
 
 TemporaryMemoryManager &TemporaryMemoryManager::Get(ClientContext &context) {

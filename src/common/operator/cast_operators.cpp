@@ -1469,7 +1469,9 @@ bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_ve
 	}
 
 	result = StringVector::EmptyString(result_vector, result_size);
-	Bit::ToBit(input, result);
+	if (!Bit::ToBit(input, result, parameters.error_message)) {
+		return false;
+	}
 	result.Finalize();
 	return true;
 }

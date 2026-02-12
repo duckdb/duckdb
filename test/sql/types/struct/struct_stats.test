@@ -3,28 +3,28 @@
 # group: [struct]
 
 # struct stats
-query I
-SELECT STATS({'i': 3, 'j': 4})
+query II
+SELECT s.child_stats.i.min, s.child_stats.j.min FROM (SELECT STATS({'i': 3, 'j': 4}) s)
 ----
-<REGEX>:.*3.*4.*
+3	4
 
 query I
-SELECT STATS(NULL::ROW(i INTEGER))
+SELECT STATS(NULL::ROW(i INTEGER)).has_null
 ----
-<REGEX>:.*Has Null: true.*
+true
 
 statement ok
 CREATE TABLE integers AS SELECT 3 i, 4 j
 
-query I
-SELECT STATS({'i': i, 'j': j}) FROM integers
+query II
+SELECT s.child_stats.i.min, s.child_stats.j.min FROM (SELECT STATS({'i': i, 'j': j}) s FROM integers)
 ----
-<REGEX>:.*3.*4.*
+3	4
 
 statement ok
 CREATE TABLE structs AS SELECT {'i': 3, 'j': 4} s
 
-query I
-SELECT STATS(s['i']) FROM structs
+query II
+SELECT s.min, s.max FROM (SELECT STATS(s['i']) s FROM structs)
 ----
-<REGEX>:.*3.*3.*
+3	3

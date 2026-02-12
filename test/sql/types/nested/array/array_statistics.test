@@ -1,12 +1,10 @@
 # name: test/sql/types/nested/array/array_statistics.test
 # group: [array]
 
-# TODO: this does not work with verification, bug is reproducible on main (with list_value), issue has been filed.
-
-query I
-SELECT STATS(array_value(1,2));
+query IIII
+SELECT s.child_stats.min, s.child_stats.max, s.has_no_null, s.has_null FROM (SELECT STATS(array_value(1,2)) s)
 ----
-[[Min: 1, Max: 2][Has Null: false, Has No Null: true]][Has Null: false, Has No Null: true][Approx Unique: 1]
+1	2	true	false
 
 
 # Trigger unknown statistics propagation

@@ -9,13 +9,22 @@
 namespace duckdb {
 
 static bool IsNumeric(LogicalTypeId type) {
-	return type == LogicalTypeId::DOUBLE || type == LogicalTypeId::UBIGINT || type == LogicalTypeId::BIGINT;
+	return type == LogicalTypeId::DOUBLE || type == LogicalTypeId::UBIGINT || type == LogicalTypeId::BIGINT ||
+	       type == LogicalTypeId::HUGEINT;
 }
 
 static LogicalTypeId MaxNumericType(const LogicalTypeId &a, const LogicalTypeId &b) {
 	D_ASSERT(a != b);
 	if (a == LogicalTypeId::DOUBLE || b == LogicalTypeId::DOUBLE) {
 		return LogicalTypeId::DOUBLE;
+	}
+	if (a == LogicalTypeId::HUGEINT || b == LogicalTypeId::HUGEINT) {
+		return LogicalTypeId::HUGEINT;
+	}
+	// One is BIGINT and the other is UBIGINT - need HUGEINT to represent both ranges
+	if ((a == LogicalTypeId::BIGINT && b == LogicalTypeId::UBIGINT) ||
+	    (a == LogicalTypeId::UBIGINT && b == LogicalTypeId::BIGINT)) {
+		return LogicalTypeId::HUGEINT;
 	}
 	return LogicalTypeId::BIGINT;
 }
@@ -343,6 +352,7 @@ static void SwapJSONStructureDescription(JSONStructureDescription &a, JSONStruct
 	std::swap(a.key_map, b.key_map);
 	std::swap(a.children, b.children);
 	std::swap(a.candidate_types, b.candidate_types);
+	std::swap(a.has_large_ubigint, b.has_large_ubigint);
 }
 
 JSONStructureDescription::JSONStructureDescription(JSONStructureDescription &&other) noexcept {
@@ -427,7 +437,11 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 
 static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 	D_ASSERT(!yyjson_is_arr(val) && !yyjson_is_obj(val));
-	node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId(val));
+	auto &desc = node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId(val));
+	if (desc.type == LogicalTypeId::UBIGINT &&
+	    unsafe_yyjson_get_uint(val) > static_cast<uint64_t>(NumericLimits<int64_t>::Maximum())) {
+		desc.has_large_ubigint = true;
+	}
 }
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors) {
@@ -558,6 +572,9 @@ static void MergeNodeVal(JSONStructureNode &merged, const JSONStructureDescripti
                          const bool node_initialized) {
 	D_ASSERT(child_desc.type != LogicalTypeId::LIST && child_desc.type != LogicalTypeId::STRUCT);
 	auto &merged_desc = merged.GetOrCreateDescription(child_desc.type);
+	if (child_desc.has_large_ubigint) {
+		merged_desc.has_large_ubigint = true;
+	}
 	if (merged_desc.type != LogicalTypeId::VARCHAR || !node_initialized || merged.descriptions.size() != 1) {
 		return;
 	}
@@ -798,7 +815,10 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
 	case LogicalTypeId::UBIGINT:
-		return LogicalTypeId::BIGINT; // We prefer not to return UBIGINT in our type auto-detection
+		if (desc.has_large_ubigint) {
+			return LogicalTypeId::HUGEINT;
+		}
+		return LogicalTypeId::BIGINT;
 	case LogicalTypeId::SQLNULL:
 		return null_type;
 	default:

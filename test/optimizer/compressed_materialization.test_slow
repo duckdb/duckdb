@@ -162,13 +162,16 @@ statement ok
 copy (select hash(range + 1) i, null::varchar j, null::bigint k from range(100,200)) to '__TEST_DIR__/cm2.parquet'
 
 # has NULL, and does not have non-NULL
-query II
+query IIII
+select sj.has_null, sj.has_no_null, sk.has_null, sk.has_no_null
+from (
 select
-    stats(j) LIKE '%[Has Null: true, Has No Null: false]%',
-    stats(k) LIKE '%[Has Null: true, Has No Null: false]%'
+    stats(j) sj,
+    stats(k) sk
 from read_parquet('__TEST_DIR__/cm*.parquet', union_by_name=true) limit 1
+)
 ----
-true	true
+true	false	true	false
 
 # this should lead to a plan where both all-NULL columns (varchar j and bigint k) are compressed
 statement ok

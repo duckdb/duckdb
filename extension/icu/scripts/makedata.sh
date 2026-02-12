@@ -11,12 +11,12 @@ set -e
 mkdir -p build
 pushd build
 
-# download ICU 66
-code_version=66-1
+# download ICU 74-2
+code_version=74-2
 wget -nc ${icu/version/$code_version}
 unzip -o ${zip_file/version/$code_version}
 
-# download ICU 77 (replace with latest version)
+# download ICU 77-1 (replace with latest version)
 data_version=77-1
 wget -nc ${icu/version/$data_version}
 unzip -o ${zip_file/version/$data_version}

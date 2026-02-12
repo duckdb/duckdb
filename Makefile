@@ -49,8 +49,8 @@ endif
 ifeq (${DISABLE_VPTR_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
 endif
-ifeq (${FORCE_SANITIZER}, 1)
-	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DFORCE_SANITIZER=1
+ifeq (${RELEASE_SANITIZER}, 1)
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DRELEASE_SANITIZER=1
 endif
 ifeq (${THREADSAN}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DENABLE_THREAD_SANITIZER=1
@@ -538,6 +538,12 @@ bundle-setup:
 	cp extension/*/lib*_extension.a bundle/. && \
 	mkdir -p vcpkg_installed && \
 	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
+	mkdir -p _deps && \
+	if [ -f linked_libs.txt ]; then \
+		while IFS= read -r libline || [ -n "$$libline" ]; do \
+			find _deps -path "*/$$libline" -exec cp {} bundle/. \; 2>/dev/null || true; \
+		done < linked_libs.txt; \
+	fi && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
 	find . -name '*.a' -execdir ${AR} -x {} \;

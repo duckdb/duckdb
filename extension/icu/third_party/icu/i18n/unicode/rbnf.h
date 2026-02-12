@@ -37,7 +37,7 @@
 #include "unicode/numfmt.h"
 #include "unicode/unistr.h"
 #include "unicode/strenum.h"
-// #include "unicode/brkiter.h"
+#include "unicode/brkiter.h"
 #include "unicode/upluralrules.h"
 
 U_NAMESPACE_BEGIN
@@ -54,10 +54,30 @@ class RuleBasedCollator;
  * @stable ICU 2.2
  */
 enum URBNFRuleSetTag {
+    /**
+     * Requests predefined ruleset for spelling out numeric values in words.
+     * @stable ICU 2.2
+     */
     URBNF_SPELLOUT,
+    /**
+     * Requests predefined ruleset for the ordinal form of a number.
+     * @stable ICU 2.2
+     */
     URBNF_ORDINAL,
+#ifndef U_HIDE_DEPRECATED_API
+    /**
+     * Requests predefined ruleset for formatting a value as a duration in hours, minutes, and seconds.
+     * @deprecated ICU 74 Use MeasureFormat instead.
+     */
     URBNF_DURATION,
-    URBNF_NUMBERING_SYSTEM,
+#endif // U_HIDE_DERECATED_API
+    /**
+     * Requests predefined ruleset for various non-place-value numbering systems.
+     * WARNING: The same resource contains rule sets for a variety of different numbering systems.
+     * You need to call setDefaultRuleSet() on the formatter to choose the actual numbering system.
+     * @stable ICU 2.2
+     */
+    URBNF_NUMBERING_SYSTEM = 3,
 #ifndef U_HIDE_DEPRECATED_API
     /**
      * One more than the highest normal URBNFRuleSetTag value.
@@ -108,7 +128,7 @@ enum URBNFRuleSetTag {
  * <p>In these rules, the <em>base value</em> is spelled out explicitly and set off from the
  * rule's output text with a colon. The rules are in a sorted list, and a rule is applicable
  * to all numbers from its own base value to one less than the next rule's base value. The
- * &quot;&gt;&gt;&quot; token is called a <em>substitution</em> and tells the fomatter to
+ * &quot;&gt;&gt;&quot; token is called a <em>substitution</em> and tells the formatter to
  * isolate the number's ones digit, format it using this same set of rules, and place the
  * result at the position of the &quot;&gt;&gt;&quot; token. Text in brackets is omitted if
  * the number being formatted is an even multiple of 10 (the hyphen is a literal hyphen; 24
@@ -297,7 +317,7 @@ enum URBNFRuleSetTag {
  *   </tr>
  *   <tr>
  *     <td>x.0:</td>
- *     <td>The rule is a <em>master rule</em>. If the full stop in
+ *     <td>The rule is a <em>default rule</em>. If the full stop in
  *     the middle of the rule name is replaced with the decimal point
  *     that is used in the language or DecimalFormatSymbols, then that rule will
  *     have precedence when formatting and parsing this rule. For example, some
@@ -332,9 +352,9 @@ enum URBNFRuleSetTag {
  * algorithms: If the rule set is a regular rule set, do the following:
  *
  * <ul>
- *   <li>If the rule set includes a master rule (and the number was passed in as a <tt>double</tt>),
- *     use the master rule.&nbsp; (If the number being formatted was passed in as a <tt>long</tt>,
- *     the master rule is ignored.)</li>
+ *   <li>If the rule set includes a default rule (and the number was passed in as a <tt>double</tt>),
+ *     use the default rule.&nbsp; (If the number being formatted was passed in as a <tt>long</tt>,
+ *     the default rule is ignored.)</li>
  *   <li>If the number is negative, use the negative-number rule.</li>
  *   <li>If the number has a fractional part and is greater than 1, use the improper fraction
  *     rule.</li>
@@ -393,7 +413,7 @@ enum URBNFRuleSetTag {
  *   </tr>
  *   <tr>
  *     <td></td>
- *     <td>in fraction or master rule</td>
+ *     <td>in fraction or default rule</td>
  *     <td>Isolate the number's fractional part and format it.</td>
  *   </tr>
  *   <tr>
@@ -425,7 +445,7 @@ enum URBNFRuleSetTag {
  *   </tr>
  *   <tr>
  *     <td></td>
- *     <td>in fraction or master rule</td>
+ *     <td>in fraction or default rule</td>
  *     <td>Isolate the number's integral part and format it.</td>
  *   </tr>
  *   <tr>
@@ -456,7 +476,7 @@ enum URBNFRuleSetTag {
  *   </tr>
  *   <tr>
  *     <td></td>
- *     <td>in master rule</td>
+ *     <td>in default rule</td>
  *     <td>Omit the optional text if the number is an integer (same as specifying both an x.x
  *     rule and an x.0 rule)</td>
  *   </tr>
@@ -543,7 +563,7 @@ enum URBNFRuleSetTag {
  * names in this array will be treated as public rule set names by the API.  Each subsequent
  * element is an array of localizations of these names.  The first element of one of these
  * subarrays is the locale name, and the remaining elements are localizations of the
- * public rule set names, in the same order as they were listed in the first arrray.</p>
+ * public rule set names, in the same order as they were listed in the first array.</p>
  * <p>In the syntax, angle brackets '<', '>' are used to delimit the arrays, and comma ',' is used
  * to separate elements of an array.  Whitespace is ignored, unless quoted.</p>
  * <p>For example:<pre>
@@ -591,7 +611,7 @@ public:
      * rule sets.  Each of these is one longer than the initial array,
      * with the first String being the ULocale ID, and the remaining
      * Strings being the localizations of the rule set names, in the
-     * same order as the initial array.  Arrays are NULL-terminated.
+     * same order as the initial array.  Arrays are nullptr-terminated.
      * @param rules A description of the formatter's desired behavior.
      * See the class documentation for a complete explanation of the description
      * syntax.
@@ -635,7 +655,7 @@ public:
      * rule sets.  Each of these is one longer than the initial array,
      * with the first String being the ULocale ID, and the remaining
      * Strings being the localizations of the rule set names, in the
-     * same order as the initial array.  Arrays are NULL-terminated.
+     * same order as the initial array.  Arrays are nullptr-terminated.
      * @param rules A description of the formatter's desired behavior.
      * See the class documentation for a complete explanation of the description
      * syntax.
@@ -653,7 +673,7 @@ public:
 
   /**
    * Creates a RuleBasedNumberFormat from a predefined ruleset.  The selector
-   * code choosed among three possible predefined formats: spellout, ordinal,
+   * code chose among three possible predefined formats: spellout, ordinal,
    * and duration.
    * @param tag A selector code specifying which kind of formatter to create for that
    * locale.  There are four legal values: URBNF_SPELLOUT, which creates a formatter that
@@ -662,6 +682,9 @@ public:
    * URBNF_DURATION, which formats a duration in seconds as hours, minutes, and seconds always rounding down,
    * and URBNF_NUMBERING_SYSTEM, which is used to invoke rules for alternate numbering
    * systems such as the Hebrew numbering system, or for Roman Numerals, etc.
+   * NOTE: If you use URBNF_NUMBERING_SYSTEM, you must also call setDefaultRuleSet() to
+   * specify the exact numbering system you want to use.  If you want the default numbering system
+   * for the locale, call NumberFormat::createInstance() instead of creating a RuleBasedNumberFormat directly.
    * @param locale The locale for the formatter.
    * @param status The status indicating whether the constructor succeeded.
    * @stable ICU 2.0
@@ -698,7 +721,7 @@ public:
    * @return  A copy of the object.
    * @stable ICU 2.6
    */
-  virtual RuleBasedNumberFormat* clone() const;
+  virtual RuleBasedNumberFormat* clone() const override;
 
   /**
    * Return true if the given Format objects are semantically equal.
@@ -707,7 +730,7 @@ public:
    * @return        true if the given Format objects are semantically equal.
    * @stable ICU 2.6
    */
-  virtual bool operator==(const Format& other) const;
+  virtual bool operator==(const Format& other) const override;
 
 //-----------------------------------------------------------------------
 // public API functions
@@ -793,7 +816,7 @@ public:
    */
   virtual UnicodeString& format(int32_t number,
                                 UnicodeString& toAppendTo,
-                                FieldPosition& pos) const;
+                                FieldPosition& pos) const override;
 
   /**
    * Formats the specified 64-bit number using the default ruleset.
@@ -805,7 +828,7 @@ public:
    */
   virtual UnicodeString& format(int64_t number,
                                 UnicodeString& toAppendTo,
-                                FieldPosition& pos) const;
+                                FieldPosition& pos) const override;
   /**
    * Formats the specified number using the default ruleset.
    * @param number The number to format.
@@ -816,7 +839,7 @@ public:
    */
   virtual UnicodeString& format(double number,
                                 UnicodeString& toAppendTo,
-                                FieldPosition& pos) const;
+                                FieldPosition& pos) const override;
 
   /**
    * Formats the specified number using the named ruleset.
@@ -888,13 +911,13 @@ protected:
     virtual UnicodeString& format(const number::impl::DecimalQuantity &number,
                                   UnicodeString& appendTo,
                                   FieldPosition& pos,
-                                  UErrorCode& status) const;
+                                  UErrorCode& status) const override;
 public:
 
   using NumberFormat::parse;
 
   /**
-   * Parses the specfied string, beginning at the specified position, according
+   * Parses the specified string, beginning at the specified position, according
    * to this formatter's rules.  This will match the string against all of the
    * formatter's public rule sets and return the value corresponding to the longest
    * parseable substring.  This function's behavior is affected by the lenient
@@ -909,7 +932,7 @@ public:
    */
   virtual void parse(const UnicodeString& text,
                      Formattable& result,
-                     ParsePosition& parsePosition) const;
+                     ParsePosition& parsePosition) const override;
 
 #if !UCONFIG_NO_COLLATION
 
@@ -946,7 +969,7 @@ public:
    * @see RuleBasedCollator
    * @stable ICU 2.0
    */
-  virtual void setLenient(UBool enabled);
+  virtual void setLenient(UBool enabled) override;
 
   /**
    * Returns true if lenient-parse mode is turned on.  Lenient parsing is off
@@ -955,7 +978,7 @@ public:
    * @see #setLenient
    * @stable ICU 2.0
    */
-  virtual inline UBool isLenient(void) const;
+  virtual inline UBool isLenient(void) const override;
 
 #endif
 
@@ -984,24 +1007,24 @@ public:
    * @param value The UDisplayContext value to set.
    * @param status Input/output status. If at entry this indicates a failure
    *               status, the function will do nothing; otherwise this will be
-   *               updated with any new status from the function.
+   *               updated with any new status from the function. 
    * @stable ICU 53
    */
-  virtual void setContext(UDisplayContext value, UErrorCode& status);
+  virtual void setContext(UDisplayContext value, UErrorCode& status) override;
 
     /**
      * Get the rounding mode.
      * @return A rounding mode
      * @stable ICU 60
      */
-    virtual ERoundingMode getRoundingMode(void) const;
+    virtual ERoundingMode getRoundingMode(void) const override;
 
     /**
      * Set the rounding mode.
      * @param roundingMode A rounding mode
      * @stable ICU 60
      */
-    virtual void setRoundingMode(ERoundingMode roundingMode);
+    virtual void setRoundingMode(ERoundingMode roundingMode) override;
 
 public:
     /**
@@ -1016,7 +1039,7 @@ public:
      *
      * @stable ICU 2.8
      */
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID(void) const override;
 
     /**
      * Sets the decimal format symbols, which is generally not changed
@@ -1040,9 +1063,9 @@ public:
     virtual void setDecimalFormatSymbols(const DecimalFormatSymbols& symbols);
 
 private:
-    RuleBasedNumberFormat(); // default constructor not implemented
+    RuleBasedNumberFormat() = delete; // default constructor not implemented
 
-    // this will ref the localizations if they are not NULL
+    // this will ref the localizations if they are not nullptr
     // caller must deref to get adoption
     RuleBasedNumberFormat(const UnicodeString& description, LocalizationInfo* localizations,
               const Locale& locale, UParseError& perror, UErrorCode& status);
@@ -1091,7 +1114,7 @@ private:
     UBool capitalizationInfoSet;
     UBool capitalizationForUIListMenu;
     UBool capitalizationForStandAlone;
-    void* capitalizationBrkIter;
+    BreakIterator* capitalizationBrkIter;
 };
 
 // ---------------

@@ -13,10 +13,11 @@
 
 #include "cecal.h"
 #include "gregoimp.h"   //Math
+#include "cstring.h"
 
 U_NAMESPACE_BEGIN
 
-static const int32_t CECAL_LIMITS[UCAL_FIELD_COUNT][4] = {
+static const int32_t LIMITS[UCAL_FIELD_COUNT][4] = {
     // Minimum  Greatest    Least  Maximum
     //           Minimum  Maximum
     {        0,        0,        1,        1}, // ERA
@@ -42,6 +43,7 @@ static const int32_t CECAL_LIMITS[UCAL_FIELD_COUNT][4] = {
     {/*N/A*/-1,/*N/A*/-1,/*N/A*/-1,/*N/A*/-1}, // JULIAN_DAY
     {/*N/A*/-1,/*N/A*/-1,/*N/A*/-1,/*N/A*/-1}, // MILLISECONDS_IN_DAY
     {/*N/A*/-1,/*N/A*/-1,/*N/A*/-1,/*N/A*/-1}, // IS_LEAP_MONTH
+    {        0,        0,       12,       12}, // ORDINAL_MONTH
 };
 
 //-------------------------------------------------------------------------
@@ -49,12 +51,12 @@ static const int32_t CECAL_LIMITS[UCAL_FIELD_COUNT][4] = {
 //-------------------------------------------------------------------------
 
 CECalendar::CECalendar(const Locale& aLocale, UErrorCode& success)
-:   Calendar(TimeZone::createDefault(), aLocale, success)
+:   Calendar(TimeZone::forLocaleOrDefault(aLocale), aLocale, success)
 {
     setTimeInMillis(getNow(), success);
 }
 
-CECalendar::CECalendar (const CECalendar& other)
+CECalendar::CECalendar (const CECalendar& other) 
 :   Calendar(other)
 {
 }
@@ -83,26 +85,13 @@ CECalendar::handleComputeMonthStart(int32_t eyear,int32_t emonth, UBool /*useMon
 int32_t
 CECalendar::handleGetLimit(UCalendarDateFields field, ELimitType limitType) const
 {
-    return CECAL_LIMITS[field][limitType];
-}
-
-UBool
-CECalendar::inDaylightTime(UErrorCode& status) const
-{
-    if (U_FAILURE(status) || !getTimeZone().useDaylightTime()) {
-        return FALSE;
-    }
-
-    // Force an update of the state of the Calendar.
-    ((CECalendar*)this)->complete(status); // cast away const
-
-    return (UBool)(U_SUCCESS(status) ? (internalGet(UCAL_DST_OFFSET) != 0) : FALSE);
+    return LIMITS[field][limitType];
 }
 
 UBool
 CECalendar::haveDefaultCentury() const
 {
-    return TRUE;
+    return true;
 }
 
 //-------------------------------------------------------------------------
@@ -135,7 +124,7 @@ CECalendar::jdToCE(int32_t julianDay, int32_t jdEpochOffset, int32_t& year, int3
     int32_t c4; // number of 4 year cycle (1461 days)
     int32_t r4; // remainder of 4 year cycle, always positive
 
-    c4 = ClockMath::floorDivide(julianDay - jdEpochOffset, 1461, r4);
+    c4 = ClockMath::floorDivide(julianDay - jdEpochOffset, 1461, &r4);
 
     year = 4 * c4 + (r4/365 - r4/1460); // 4 * <number of 4year cycle> + <years within the last cycle>
 
@@ -143,6 +132,24 @@ CECalendar::jdToCE(int32_t julianDay, int32_t jdEpochOffset, int32_t& year, int3
 
     month = doy / 30;       // 30 -> Coptic/Ethiopic month length up to 12th month
     day = (doy % 30) + 1;   // 1-based days in a month
+}
+
+static const char* kMonthCode13 = "M13";
+
+const char* CECalendar::getTemporalMonthCode(UErrorCode& status) const {
+    if (get(UCAL_MONTH, status) == 12) return kMonthCode13;
+    return Calendar::getTemporalMonthCode(status);
+}
+
+void
+CECalendar::setTemporalMonthCode(const char* code, UErrorCode& status) {
+    if (U_FAILURE(status)) return;
+    if (uprv_strcmp(code, kMonthCode13) == 0) {
+        set(UCAL_MONTH, 12);
+        set(UCAL_IS_LEAP_MONTH, 0);
+        return;
+    }
+    Calendar::setTemporalMonthCode(code, status);
 }
 
 U_NAMESPACE_END

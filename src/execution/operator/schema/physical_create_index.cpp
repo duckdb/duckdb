@@ -3,12 +3,13 @@
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -160,12 +161,11 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
 		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		indexes.Scan([&](Index &index) {
+		for (auto &index : indexes.Indexes()) {
 			if (index.GetIndexName() == info->index_name) {
 				throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
 			}
-			return false;
-		});
+		}
 
 		auto &catalog = Catalog::GetCatalog(context, info->catalog);
 		catalog.Alter(context, *alter_table_info);

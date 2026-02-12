@@ -307,18 +307,26 @@ void VariantStats::Deserialize(Deserializer &deserializer, BaseStatistics &base)
 	}
 }
 
-static string ToStringInternal(const BaseStatistics &stats) {
-	string result;
-	result = StringUtil::Format("fully_shredded: %s", VariantShreddedStats::IsFullyShredded(stats) ? "true" : "false");
-
+static Value GetShreddedStatsStruct(const BaseStatistics &stats, bool fully_shredded) {
+	if (VariantShreddedStats::IsFullyShredded(stats) != fully_shredded) {
+		return Value();
+	}
 	auto &typed_value = StructStats::GetChildStats(stats, 1);
 	auto type_id = typed_value.GetType().id();
 	if (type_id == LogicalTypeId::LIST) {
-		result += ", child: ";
+		// list
 		auto &child_stats = ListStats::GetChildStats(typed_value);
-		result += ToStringInternal(child_stats);
-	} else if (type_id == LogicalTypeId::STRUCT) {
-		result += ", children: {";
+		child_list_t<Value> result;
+		auto result_stats = GetShreddedStatsStruct(child_stats, fully_shredded);
+		if (result_stats.IsNull()) {
+			return Value();
+		}
+		result.emplace_back("child_stats", std::move(result_stats));
+		return Value::STRUCT(std::move(result));
+	}
+	if (type_id == LogicalTypeId::STRUCT) {
+		// struct
+		child_list_t<Value> result;
 		auto &fields = StructType::GetChildTypes(typed_value.GetType());
 		vector<idx_t> indices(fields.size());
 		for (idx_t i = 0; i < indices.size(); i++) {
@@ -330,28 +338,39 @@ static string ToStringInternal(const BaseStatistics &stats) {
 			return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
 		});
 		for (idx_t i = 0; i < indices.size(); i++) {
-			if (i) {
-				result += ", ";
-			}
 			auto &child_stats = StructStats::GetChildStats(typed_value, indices[i]);
 			auto &field = fields[indices[i]];
-			result += StringUtil::Format("%s: %s", field.first, ToStringInternal(child_stats));
+			auto child_stats_entry = GetShreddedStatsStruct(child_stats, fully_shredded);
+			if (child_stats_entry.IsNull()) {
+				continue;
+			}
+			result.emplace_back(field.first, std::move(child_stats_entry));
 		}
-		result += "}";
+		if (result.empty()) {
+			return Value();
+		}
+		return Value::STRUCT(std::move(result));
 	}
-	return result;
+	child_list_t<Value> result;
+	result.emplace_back("type", Value(typed_value.GetType().ToString()));
+	result.emplace_back("stats", typed_value.ToStruct());
+	return Value::STRUCT(std::move(result));
 }
 
-string VariantStats::ToString(const BaseStatistics &stats) {
-	string result;
+child_list_t<Value> VariantStats::ToStruct(const BaseStatistics &stats) {
+	child_list_t<Value> result;
 	bool is_shredded = IsShredded(stats);
 	auto &data = GetDataUnsafe(stats);
-	result = StringUtil::Format("shredding_state: %s", EnumUtil::ToString(data.shredding_state));
+	result.emplace_back("shredding_state", Value(EnumUtil::ToString(data.shredding_state)));
 	if (is_shredded) {
-		result += ", shredding: {";
-		result += StringUtil::Format("typed_value_type: %s, ", ToStructuredType(stats.child_stats[1].type).ToString());
-		result += StringUtil::Format("stats: {%s}", ToStringInternal(stats.child_stats[1]));
-		result += "}";
+		auto fully_shredded_stats = GetShreddedStatsStruct(stats.child_stats[1], true);
+		if (!fully_shredded_stats.IsNull()) {
+			result.emplace_back("fully_shredded", std::move(fully_shredded_stats));
+		}
+		auto partially_shredded_stats = GetShreddedStatsStruct(stats.child_stats[1], false);
+		if (!partially_shredded_stats.IsNull()) {
+			result.emplace_back("partially_shredded", std::move(partially_shredded_stats));
+		}
 	}
 	return result;
 }

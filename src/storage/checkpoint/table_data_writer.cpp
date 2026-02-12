@@ -9,9 +9,10 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
 
@@ -172,8 +173,8 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
 	if (debug_verify_blocks) {
-		for (auto &entry : index_storage_infos) {
-			for (auto &allocator : entry.allocator_infos) {
+		for (auto &entry : index_storage_infos.ordered_infos) {
+			for (auto &allocator : entry.get().allocator_infos) {
 				for (auto &block : allocator.block_pointers) {
 					checkpoint_manager.verify_block_usage_count[block.block_id]++;
 				}
@@ -184,7 +185,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
+	serializer.WriteList(
+	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
+	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
 }
 
 } // namespace duckdb

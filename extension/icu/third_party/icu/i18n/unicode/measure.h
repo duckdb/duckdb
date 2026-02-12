@@ -48,8 +48,8 @@ class U_I18N_API Measure: public UObject {
      * Construct an object with the given numeric amount and the given
      * unit.  After this call, the caller must not delete the given
      * unit object.
-     * @param number a numeric object; amount.isNumeric() must be TRUE
-     * @param adoptedUnit the unit object, which must not be NULL
+     * @param number a numeric object; amount.isNumeric() must be true
+     * @param adoptedUnit the unit object, which must not be nullptr
      * @param ec input-output error code. If the amount or the unit
      * is invalid, then this will be set to a failing value.
      * @stable ICU 3.0
@@ -89,6 +89,16 @@ class U_I18N_API Measure: public UObject {
      */
     bool operator==(const UObject& other) const;
 
+#ifndef U_HIDE_DRAFT_API
+    /**
+     * Inequality operator.  Returns true if this object is not equal to the other object.
+     * @param other the object to compare with
+     * @return true if the objects are not equal
+     * @draft ICU 74
+     */
+    inline bool operator!=(const UObject& other) const { return !operator==(other); }
+#endif  // U_HIDE_DRAFT_API
+
     /**
      * Return a reference to the numeric value of this object.  The
      * numeric value may be of any numeric type supported by
@@ -127,7 +137,7 @@ class U_I18N_API Measure: public UObject {
      *                  other classes have different class IDs.
      * @stable ICU 53
      */
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID(void) const override;
 
  protected:
     /**

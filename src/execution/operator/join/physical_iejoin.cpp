@@ -720,7 +720,7 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	j += (entry_idx - entry_idx_before) * ValidityMask::BITS_PER_VALUE;
 
 	// Check the final entry
-	return j > n ? n : j + CountZeros<validity_t>::Trailing(bits.GetValidityEntryUnsafe(entry_idx));
+	return j >= n ? n : j + CountZeros<validity_t>::Trailing(bits.GetValidityEntryUnsafe(entry_idx));
 }
 
 idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
@@ -1309,7 +1309,7 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 				right_table.found_match[right_base + rsel[sel->get_index(i)]] = true;
 			}
 		}
-		result.Verify();
+		result.Verify(context.client.db);
 	} while (result.size() == 0);
 }
 
@@ -1579,7 +1579,7 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 
 	op.ProjectResult(chunk, result);
 	result.SetCardinality(count);
-	result.Verify();
+	result.Verify(context.client.db);
 }
 
 void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk &result) {
@@ -1613,7 +1613,7 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 
 	op.ProjectResult(chunk, result);
 	result.SetCardinality(count);
-	result.Verify();
+	result.Verify(context.client.db);
 }
 
 //===--------------------------------------------------------------------===//

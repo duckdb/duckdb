@@ -7,9 +7,7 @@
 
 // Allow implicit conversion from char16_t* to UnicodeString for this file:
 // Helpful in toString methods and elsewhere.
-#ifndef UNISTR_FROM_STRING_EXPLICIT
 #define UNISTR_FROM_STRING_EXPLICIT
-#endif
 
 #include "numparse_types.h"
 #include "numparse_affixes.h"
@@ -103,7 +101,7 @@ void AffixPatternMatcherBuilder::consumeToken(AffixPatternType type, UChar32 cp,
                 addMatcher(fWarehouse.currency(status));
                 break;
             default:
-                UPRV_UNREACHABLE;
+                UPRV_UNREACHABLE_EXIT;
         }
 
     } else if (fIgnorables != nullptr && fIgnorables->getSet()->contains(cp)) {
@@ -129,8 +127,8 @@ void AffixPatternMatcherBuilder::addMatcher(NumberParseMatcher& matcher) {
     fMatchers[fMatchersLen++] = &matcher;
 }
 
-AffixPatternMatcher AffixPatternMatcherBuilder::build() {
-    return AffixPatternMatcher(fMatchers, fMatchersLen, fPattern);
+AffixPatternMatcher AffixPatternMatcherBuilder::build(UErrorCode& status) {
+    return AffixPatternMatcher(fMatchers, fMatchersLen, fPattern, status);
 }
 
 AffixTokenMatcherWarehouse::AffixTokenMatcherWarehouse(const AffixTokenMatcherSetupData* setupData)
@@ -169,6 +167,10 @@ NumberParseMatcher* AffixTokenMatcherWarehouse::nextCodePointMatcher(UChar32 cp,
         status = U_MEMORY_ALLOCATION_ERROR;
     }
     return result;
+}
+
+bool AffixTokenMatcherWarehouse::hasEmptyCurrencySymbol() const {
+    return fSetupData->currencySymbols.hasEmptyCurrencySymbol();
 }
 
 
@@ -211,12 +213,13 @@ AffixPatternMatcher AffixPatternMatcher::fromAffixPattern(const UnicodeString& a
 
     AffixPatternMatcherBuilder builder(affixPattern, tokenWarehouse, ignorables);
     AffixUtils::iterateWithConsumer(affixPattern, builder, status);
-    return builder.build();
+    return builder.build(status);
 }
 
 AffixPatternMatcher::AffixPatternMatcher(MatcherArray& matchers, int32_t matchersLen,
-                                         const UnicodeString& pattern)
-        : ArraySeriesMatcher(matchers, matchersLen), fPattern(pattern) {}
+                                         const UnicodeString& pattern, UErrorCode& status)
+    : ArraySeriesMatcher(matchers, matchersLen), fPattern(pattern, status) {
+}
 
 UnicodeString AffixPatternMatcher::getPattern() const {
     return fPattern.toAliasedUnicodeString();
@@ -273,8 +276,6 @@ void AffixMatcherWarehouse::createAffixMatchers(const AffixPatternProvider& patt
     // Use initial capacity of 6, the highest possible number of AffixMatchers.
     UnicodeString sb;
     bool includeUnpaired = 0 != (parseFlags & PARSE_FLAG_INCLUDE_UNPAIRED_AFFIXES);
-    UNumberSignDisplay signDisplay = (0 != (parseFlags & PARSE_FLAG_PLUS_SIGN_ALLOWED)) ? UNUM_SIGN_ALWAYS
-                                                                                        : UNUM_SIGN_AUTO;
 
     int32_t numAffixMatchers = 0;
     int32_t numAffixPatternMatchers = 0;
@@ -283,28 +284,48 @@ void AffixMatcherWarehouse::createAffixMatchers(const AffixPatternProvider& patt
     AffixPatternMatcher* posSuffix = nullptr;
 
     // Pre-process the affix strings to resolve LDML rules like sign display.
-    for (int8_t signumInt = 1; signumInt >= -1; signumInt--) {
-        auto signum = static_cast<Signum>(signumInt);
+    for (int8_t typeInt = 0; typeInt < PATTERN_SIGN_TYPE_COUNT * 2; typeInt++) {
+        auto type = static_cast<PatternSignType>(typeInt / 2);
+        bool dropCurrencySymbols = (typeInt % 2) == 1;
+
+        if (dropCurrencySymbols && !patternInfo.hasCurrencySign()) {
+            continue;
+        }
+        if (dropCurrencySymbols && !fTokenWarehouse->hasEmptyCurrencySymbol()) {
+            continue;
+        }
+
+        // Skip affixes in some cases
+        if (type == PATTERN_SIGN_TYPE_POS
+                && 0 != (parseFlags & PARSE_FLAG_PLUS_SIGN_ALLOWED)) {
+            continue;
+        }
+        if (type == PATTERN_SIGN_TYPE_POS_SIGN
+                && 0 == (parseFlags & PARSE_FLAG_PLUS_SIGN_ALLOWED)) {
+            continue;
+        }
 
         // Generate Prefix
+        // TODO: Handle approximately sign?
         bool hasPrefix = false;
         PatternStringUtils::patternInfoToStringBuilder(
-                patternInfo, true, signum, signDisplay, StandardPlural::OTHER, false, sb);
+                patternInfo, true, type, false, StandardPlural::OTHER, false, dropCurrencySymbols, sb);
         fAffixPatternMatchers[numAffixPatternMatchers] = AffixPatternMatcher::fromAffixPattern(
                 sb, *fTokenWarehouse, parseFlags, &hasPrefix, status);
         AffixPatternMatcher* prefix = hasPrefix ? &fAffixPatternMatchers[numAffixPatternMatchers++]
                                                 : nullptr;
 
         // Generate Suffix
+        // TODO: Handle approximately sign?
         bool hasSuffix = false;
         PatternStringUtils::patternInfoToStringBuilder(
-                patternInfo, false, signum, signDisplay, StandardPlural::OTHER, false, sb);
+                patternInfo, false, type, false, StandardPlural::OTHER, false, dropCurrencySymbols, sb);
         fAffixPatternMatchers[numAffixPatternMatchers] = AffixPatternMatcher::fromAffixPattern(
                 sb, *fTokenWarehouse, parseFlags, &hasSuffix, status);
         AffixPatternMatcher* suffix = hasSuffix ? &fAffixPatternMatchers[numAffixPatternMatchers++]
                                                 : nullptr;
 
-        if (signum == 1) {
+        if (type == PATTERN_SIGN_TYPE_POS) {
             posPrefix = prefix;
             posSuffix = suffix;
         } else if (equals(prefix, posPrefix) && equals(suffix, posSuffix)) {
@@ -313,17 +334,17 @@ void AffixMatcherWarehouse::createAffixMatchers(const AffixPatternProvider& patt
         }
 
         // Flags for setting in the ParsedNumber; the token matchers may add more.
-        int flags = (signum == -1) ? FLAG_NEGATIVE : 0;
+        int flags = (type == PATTERN_SIGN_TYPE_NEG) ? FLAG_NEGATIVE : 0;
 
         // Note: it is indeed possible for posPrefix and posSuffix to both be null.
         // We still need to add that matcher for strict mode to work.
         fAffixMatchers[numAffixMatchers++] = {prefix, suffix, flags};
         if (includeUnpaired && prefix != nullptr && suffix != nullptr) {
             // The following if statements are designed to prevent adding two identical matchers.
-            if (signum == 1 || !equals(prefix, posPrefix)) {
+            if (type == PATTERN_SIGN_TYPE_POS || !equals(prefix, posPrefix)) {
                 fAffixMatchers[numAffixMatchers++] = {prefix, nullptr, flags};
             }
-            if (signum == 1 || !equals(suffix, posSuffix)) {
+            if (type == PATTERN_SIGN_TYPE_POS || !equals(suffix, posSuffix)) {
                 fAffixMatchers[numAffixMatchers++] = {nullptr, suffix, flags};
             }
         }
@@ -440,28 +461,3 @@ UnicodeString AffixMatcher::toString() const {
 
 
 #endif /* #if !UCONFIG_NO_FORMATTING */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

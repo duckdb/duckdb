@@ -125,9 +125,9 @@
     ]
   },
   {
-    "class": "AggregateStateTypeInfo",
+    "class": "LegacyAggregateStateTypeInfo",
     "base": "ExtraTypeInfo",
-    "enum": "AGGREGATE_STATE_TYPE_INFO",
+    "enum": "LEGACY_AGGREGATE_STATE_TYPE_INFO",
     "members": [
       {
         "id": 200,
@@ -146,14 +146,42 @@
         "name": "bound_argument_types",
         "type": "vector<LogicalType>",
         "property": "state_type.bound_argument_types"
+      }
+    ]
+  },
+  {
+    "class": "AggregateStateTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "AGGREGATE_STATE_TYPE_INFO",
+    "ignore_clang_tidy_rules": [
+      {
+        "name": "bugprone-parent-virtual-call",
+        "reason": "Multi-level inheritance is not supported in the generation tool"
+      }
+    ],
+    "members": [
+      {
+        "id": 300,
+        "name": "function_name",
+        "type": "string",
+        "property": "state_type.function_name"
       },
       {
-        "id": 203,
-        "name": "state_type",
+        "id": 301,
+        "name": "return_type",
         "type": "LogicalType",
-        "property": "state_type.state_type",
-        "default": "LogicalTypeId::INVALID",
-        "version": "v1.5.0"
+        "property": "state_type.return_type"
+      },
+      {
+        "id": 302,
+        "name": "bound_argument_types",
+        "type": "vector<LogicalType>",
+        "property": "state_type.bound_argument_types"
+      },
+      {
+        "id": 303,
+        "name": "child_types",
+        "type": "child_list_t<LogicalType>"
       }
     ]
   },

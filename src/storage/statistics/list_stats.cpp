@@ -84,9 +84,11 @@ void ListStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
 	deserializer.Unset<LogicalType>();
 }
 
-string ListStats::ToString(const BaseStatistics &stats) {
+child_list_t<Value> ListStats::ToStruct(const BaseStatistics &stats) {
 	auto &child_stats = ListStats::GetChildStats(stats);
-	return StringUtil::Format("[%s]", child_stats.ToString());
+	child_list_t<Value> result;
+	result.emplace_back("child_stats", child_stats.ToStruct());
+	return result;
 }
 
 void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {

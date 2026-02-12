@@ -78,7 +78,7 @@ class ClockMath {
      * @return the floor of the quotient
      */
     static int32_t floorDivide(double numerator, int32_t denominator,
-                               int32_t& remainder);
+                               int32_t* remainder);
 
     /**
      * For a positive divisor, return the quotient and remainder
@@ -86,12 +86,12 @@ class ClockMath {
      * 0 <= remainder < divisor.
      *
      * Works around edge-case bugs.  Handles pathological input
-     * (divident >> divisor) reasonably.
+     * (dividend >> divisor) reasonably.
      *
      * Calling with a divisor <= 0 is disallowed.
      */
     static double floorDivide(double dividend, double divisor,
-                              double& remainder);
+                              double* remainder);
 };
 
 // Useful millisecond constants
@@ -148,9 +148,9 @@ class ClockMath {
 class Grego {
  public:
     /**
-     * Return TRUE if the given year is a leap year.
+     * Return true if the given year is a leap year.
      * @param year Gregorian year, with 0 == 1 BCE, -1 == 2 BCE, etc.
-     * @return TRUE if the year is a leap year
+     * @return true if the year is a leap year
      */
     static inline UBool isLeapYear(int32_t year);
 
@@ -214,7 +214,7 @@ class Grego {
      * @param dom output parameter to receive day-of-month (1-based)
      * @param dow output parameter to receive day-of-week (1-based, 1==Sun)
      * @param doy output parameter to receive day-of-year (1-based)
-     * @param mid output parameter to recieve millis-in-day
+     * @param mid output parameter to receive millis-in-day
      */
     static void timeToFields(UDate time, int32_t& year, int32_t& month,
                             int32_t& dom, int32_t& dow, int32_t& doy, int32_t& mid);
