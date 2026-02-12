@@ -328,14 +328,9 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// the reason for this is that if we don't write this transactions' changes to the WAL
 		// any failure during checkpoint will cause this transactions' changes to be lost,
 		// while later concurrent commits will not be
-		// this can cause undefined / "weird" state, as those commits were made assuming this one was already committed
+		// this can cause undefined state, as those commits were made assuming this one was already committed
 		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context)) {
-			// if we are skipping the WAL write we need to figure out the checkpoint type immediately
-			checkpoint_decision = GetCheckpointType(transaction, undo_properties);
-			if (checkpoint_decision.can_checkpoint) {
-				// only if we can still checkpoint
-				skip_wal_write_due_to_checkpoint = true;
-			}
+			skip_wal_write_due_to_checkpoint = true;
 		}
 	}
 
@@ -360,8 +355,17 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// after we finish writing to the WAL we grab the transaction lock again
 		t_lock.lock();
 	}
-	if (!skip_wal_write_due_to_checkpoint && checkpoint_decision.can_checkpoint) {
+	if (!error.HasError() && checkpoint_decision.can_checkpoint) {
+		// now that we have the transaction lock again, new transactions can't start
+		// figure out the checkpoint type now
 		checkpoint_decision = GetCheckpointType(transaction, undo_properties);
+		if (skip_wal_write_due_to_checkpoint && !checkpoint_decision.can_checkpoint) {
+			// we have not written to the WAL but we have now realized we can't checkpoint after all
+			// in order to commit we need backpeddle and write to the WAL after all
+			D_ASSERT(held_wal_lock);
+			error = transaction.WriteToWAL(context, db, commit_state);
+			skip_wal_write_due_to_checkpoint = false;
+		}
 	}
 	// in-memory databases don't have a WAL - we estimate how large their changeset is based on the undo properties
 	if (!db.IsSystem()) {
