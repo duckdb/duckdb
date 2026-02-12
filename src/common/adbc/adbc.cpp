@@ -258,6 +258,10 @@ AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key,
 		wrapper->path = value;
 		return ADBC_STATUS_OK;
 	}
+	if (strcmp(key, ADBC_OPTION_USERNAME) == 0 || strcmp(key, ADBC_OPTION_PASSWORD) == 0) {
+		SetError(error, "DuckDB does not support authentication");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
 	if (strcmp(key, "uri") == 0) {
 		if (strncmp(value, "file:", 5) != 0) {
 			wrapper->uri_path = value;
@@ -342,6 +346,10 @@ AdbcStatusCode DatabaseGetOption(struct AdbcDatabase *database, const char *key,
 	auto wrapper = static_cast<DuckDBAdbcDatabaseWrapper *>(database->private_data);
 	if (strcmp(key, "path") == 0) {
 		return GetOptionStringHelper(wrapper->path.c_str(), value, length, error);
+	}
+	if (strcmp(key, ADBC_OPTION_USERNAME) == 0 || strcmp(key, ADBC_OPTION_PASSWORD) == 0) {
+		SetError(error, "DuckDB does not support authentication");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
 	}
 	if (strcmp(key, "uri") == 0) {
 		if (wrapper->uri_set) {
@@ -511,19 +519,37 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 			SetError(error, error_message);
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
-	} else {
-		// This is an unknown option to the DuckDB driver
-		auto error_message =
-		    "Unknown connection option " + std::string(key) + "=" + (value ? std::string(value) : "(NULL)");
-		SetError(error, error_message);
-		return ADBC_STATUS_NOT_IMPLEMENTED;
+		if (!conn_wrapper->connection) {
+			// If the connection has not yet been initialized, we just return here.
+			return ADBC_STATUS_OK;
+		}
+		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+		return InternalSetOption(*conn, conn_wrapper->options, error);
 	}
-	if (!conn_wrapper->connection) {
-		// If the connection has not yet been initialized, we just return here.
-		return ADBC_STATUS_OK;
+	if (strcmp(key, ADBC_CONNECTION_OPTION_CURRENT_CATALOG) == 0) {
+		if (!conn_wrapper->connection) {
+			SetError(error, "Connection is not initialized");
+			return ADBC_STATUS_INVALID_STATE;
+		}
+		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+		std::string query = "USE " + duckdb::KeywordHelper::WriteOptionallyQuoted(value);
+		return ExecuteQuery(conn, query.c_str(), error);
 	}
-	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
-	return InternalSetOption(*conn, conn_wrapper->options, error);
+	if (strcmp(key, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA) == 0) {
+		if (!conn_wrapper->connection) {
+			SetError(error, "Connection is not initialized");
+			return ADBC_STATUS_INVALID_STATE;
+		}
+		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+		std::string escaped = duckdb::StringUtil::Replace(value, "'", "''");
+		std::string query = "SET schema = '" + escaped + "'";
+		return ExecuteQuery(conn, query.c_str(), error);
+	}
+	// This is an unknown option to the DuckDB driver
+	auto error_message =
+	    "Unknown connection option " + std::string(key) + "=" + (value ? std::string(value) : "(NULL)");
+	SetError(error, error_message);
+	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
 // Connection Typed Option API (ADBC 1.1.0)

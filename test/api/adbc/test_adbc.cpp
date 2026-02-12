@@ -3648,6 +3648,101 @@ TEST_CASE("ADBC - Connection GetOption current_catalog and current_db_schema", "
 	}
 }
 
+TEST_CASE("ADBC - Connection SetOption current_catalog and current_db_schema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create a new schema to switch to
+	db.Query("CREATE SCHEMA test_schema");
+
+	// Set current_db_schema and verify
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA,
+	                                        "test_schema", &db.adbc_error)));
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "test_schema");
+	}
+
+	// Switch back to main
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, "main",
+	                                        &db.adbc_error)));
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "main");
+	}
+
+	// Set current_catalog (DuckDB in-memory database is "memory")
+	// Setting to the same catalog should succeed
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, "memory",
+	                                        &db.adbc_error)));
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "memory");
+	}
+}
+
+TEST_CASE("ADBC - Database username/password not supported", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// SetOption for username should return NOT_IMPLEMENTED
+	{
+		auto status = AdbcDatabaseSetOption(&db.adbc_database, ADBC_OPTION_USERNAME, "user", &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// SetOption for password should return NOT_IMPLEMENTED
+	{
+		auto status = AdbcDatabaseSetOption(&db.adbc_database, ADBC_OPTION_PASSWORD, "pass", &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// GetOption for username should return NOT_IMPLEMENTED
+	{
+		char buf[64];
+		size_t length = sizeof(buf);
+		auto status = AdbcDatabaseGetOption(&db.adbc_database, ADBC_OPTION_USERNAME, buf, &length, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// GetOption for password should return NOT_IMPLEMENTED
+	{
+		char buf[64];
+		size_t length = sizeof(buf);
+		auto status = AdbcDatabaseGetOption(&db.adbc_database, ADBC_OPTION_PASSWORD, buf, &length, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+}
+
 TEST_CASE("ADBC - Statement GetOption ingestion options", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
