@@ -2681,7 +2681,7 @@ idx_t ListVector::GetTotalEntryCount(Vector &list, idx_t count) {
 		if (!unified_list_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		total_count = list_data[idx].length;
+		total_count += list_data[idx].length;
 		break;
 	}
 	return total_count;
