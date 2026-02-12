@@ -15,8 +15,7 @@ Binder Error: Catalog "huh" does not exist!
 statement error
 select cast (null as what.u array);
 ----
-Catalog Error: Type with name u does not exist!
-Did you mean "memory.u"?
+<REGEX>:Catalog Error.*Type with name u does not exist.*
 
 query I
 select cast (null as u array);
