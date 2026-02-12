@@ -36,7 +36,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 ## CI for pull requests
 
 * Pull requests will need to pass all continuous integration checks before merging.
-* Create pull requests as "Draft" so that you can run CI on your local fork first (GH actions is free for forks of open source projects), or locally on your machine.
+* Create pull requests as "Draft" so that you can run CI on your local fork first (GH actions is free for public forks of open source projects), or locally on your machine.
 * When all checks look good on your local CI, you can mark it as "Ready for Review" to run the CI on the main DuckDB repo ('ready for review', via the Web UI button on the bottom right).
 * Submitting changes to an open pull request will move it to 'draft' state, and the above process repeats.
 * Note that occasionally CI failures may be unrelated. You should try to ascertain if it's related or not to your changes (because if it is, that means your changes are breaking something and needs to be fixed). If not related, you should 1) remember to merge with main frequently and properly run make format-fix (sometimes you need to run generate-files if you're adding new types 2) check if other PR's CI are failing on the same tests (that's usually a give away that it's a temporary problem with the CI) and 3) investigate that there is a non-overlap between the failure and your changes.
