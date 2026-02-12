@@ -182,7 +182,8 @@
         "test/sql/window/test_ignore_nulls.test",
         "test/sql/function/tokenize/simple_tokenize.test",
         "test/sql/join/iejoin/test_iejoin_predicate.test",
-        "test/sql/join/test_merge_join_predicate.test"
+        "test/sql/join/test_merge_join_predicate.test",
+        "test/sql/cte/recursive_cte_key_hll_aggregation.test"
       ]
     },
     {
