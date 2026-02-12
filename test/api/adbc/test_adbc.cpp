@@ -3459,4 +3459,371 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	adbc_error.release(&adbc_error);
 }
 
+TEST_CASE("ADBC - Database GetOption", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	AdbcError adbc_error = {};
+	InitializeADBCError(&adbc_error);
+
+	// Set up a database with a path and a config option
+	AdbcDatabase adbc_database;
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "threads", "4", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	// GetOption: path
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcDatabaseGetOption(&adbc_database, "path", buf, &length, &adbc_error)));
+		REQUIRE(std::string(buf) == ":memory:");
+		REQUIRE(length == strlen(":memory:") + 1);
+	}
+
+	// GetOption: config round-trip
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcDatabaseGetOption(&adbc_database, "threads", buf, &length, &adbc_error)));
+		REQUIRE(std::string(buf) == "4");
+	}
+
+	// GetOption: NOT_FOUND for unknown key
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		auto status = AdbcDatabaseGetOption(&adbc_database, "nonexistent_option", buf, &length, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_FOUND);
+		if (adbc_error.release) {
+			adbc_error.release(&adbc_error);
+		}
+		InitializeADBCError(&adbc_error);
+	}
+
+	// GetOption: buffer convention - size query (length=0)
+	{
+		size_t length = 0;
+		REQUIRE(SUCCESS(AdbcDatabaseGetOption(&adbc_database, "path", nullptr, &length, &adbc_error)));
+		REQUIRE(length == strlen(":memory:") + 1);
+	}
+
+	// GetOption: buffer convention - exact size
+	{
+		size_t length = strlen(":memory:") + 1;
+		char buf[64];
+		REQUIRE(SUCCESS(AdbcDatabaseGetOption(&adbc_database, "path", buf, &length, &adbc_error)));
+		REQUIRE(std::string(buf) == ":memory:");
+	}
+
+	// GetOption: buffer convention - undersized buffer only sets length
+	{
+		size_t length = 2; // too small
+		char buf[2] = {0};
+		REQUIRE(SUCCESS(AdbcDatabaseGetOption(&adbc_database, "path", buf, &length, &adbc_error)));
+		REQUIRE(length == strlen(":memory:") + 1);
+		// Buffer should not have been written to (too small)
+	}
+
+	// GetOptionBytes: always NOT_FOUND
+	{
+		uint8_t buf[64];
+		size_t length = sizeof(buf);
+		auto status = AdbcDatabaseGetOptionBytes(&adbc_database, "path", buf, &length, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_FOUND);
+		if (adbc_error.release) {
+			adbc_error.release(&adbc_error);
+		}
+		InitializeADBCError(&adbc_error);
+	}
+
+	// GetOptionInt: NOT_FOUND
+	{
+		int64_t val;
+		auto status = AdbcDatabaseGetOptionInt(&adbc_database, "threads", &val, &adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_FOUND);
+		if (adbc_error.release) {
+			adbc_error.release(&adbc_error);
+		}
+		InitializeADBCError(&adbc_error);
+	}
+
+	// SetOptionInt: convert to string and delegate
+	{
+		REQUIRE(SUCCESS(AdbcDatabaseSetOptionInt(&adbc_database, "threads", 2, &adbc_error)));
+		// Verify round-trip via GetOption (string)
+		char buf[64];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcDatabaseGetOption(&adbc_database, "threads", buf, &length, &adbc_error)));
+		REQUIRE(std::string(buf) == "2");
+	}
+
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+	InitializeADBCError(&adbc_error);
+}
+
+TEST_CASE("ADBC - Connection GetOption autocommit", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Default: autocommit is enabled
+	{
+		char buf[64];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT, buf, &length,
+		                                        &db.adbc_error)));
+		REQUIRE(std::string(buf) == ADBC_OPTION_VALUE_ENABLED);
+	}
+
+	// GetOptionInt: autocommit as integer
+	{
+		int64_t val = -1;
+		REQUIRE(SUCCESS(
+		    AdbcConnectionGetOptionInt(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT, &val, &db.adbc_error)));
+		REQUIRE(val == 1);
+	}
+
+	// Disable autocommit
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+	{
+		char buf[64];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT, buf, &length,
+		                                        &db.adbc_error)));
+		REQUIRE(std::string(buf) == ADBC_OPTION_VALUE_DISABLED);
+	}
+
+	// SetOptionInt: toggle autocommit back on
+	REQUIRE(
+	    SUCCESS(AdbcConnectionSetOptionInt(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT, 1, &db.adbc_error)));
+	{
+		int64_t val = -1;
+		REQUIRE(SUCCESS(
+		    AdbcConnectionGetOptionInt(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT, &val, &db.adbc_error)));
+		REQUIRE(val == 1);
+	}
+
+	// NOT_FOUND for unknown key
+	{
+		char buf[64];
+		size_t length = sizeof(buf);
+		auto status = AdbcConnectionGetOption(&db.adbc_connection, "nonexistent", buf, &length, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_FOUND);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+}
+
+TEST_CASE("ADBC - Connection GetOption current_catalog and current_db_schema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// current_catalog should return "memory" (DuckDB's default in-memory catalog name)
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "memory");
+	}
+
+	// current_db_schema should return "main"
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "main");
+	}
+}
+
+TEST_CASE("ADBC - Statement GetOption ingestion options", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+
+	// Set all ingestion options
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                                       &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, "my_schema", &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_CATALOG, "my_catalog", &db.adbc_error)));
+
+	// Read them back via GetOption
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(
+		    AdbcStatementGetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, buf, &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "my_table");
+	}
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(
+		    SUCCESS(AdbcStatementGetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, buf, &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == ADBC_INGEST_OPTION_MODE_APPEND);
+	}
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcStatementGetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, buf, &length,
+		                                       &db.adbc_error)));
+		REQUIRE(std::string(buf) == "my_schema");
+	}
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(
+		    AdbcStatementGetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_CATALOG, buf, &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "my_catalog");
+	}
+
+	// temporary: default is false
+	{
+		char buf[64];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(
+		    AdbcStatementGetOption(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY, buf, &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == ADBC_OPTION_VALUE_DISABLED);
+	}
+
+	// SetOptionInt for temporary
+	REQUIRE(SUCCESS(AdbcStatementSetOptionInt(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY, 1, &db.adbc_error)));
+	{
+		int64_t val = -1;
+		REQUIRE(
+		    SUCCESS(AdbcStatementGetOptionInt(&adbc_statement, ADBC_INGEST_OPTION_TEMPORARY, &val, &db.adbc_error)));
+		REQUIRE(val == 1);
+	}
+
+	// Verify all mode strings round-trip
+	for (const auto *mode : {ADBC_INGEST_OPTION_MODE_CREATE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                         ADBC_INGEST_OPTION_MODE_REPLACE, ADBC_INGEST_OPTION_MODE_CREATE_APPEND}) {
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, mode, &db.adbc_error)));
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(
+		    SUCCESS(AdbcStatementGetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, buf, &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == mode);
+	}
+
+	// NOT_FOUND for unknown key
+	{
+		char buf[64];
+		size_t length = sizeof(buf);
+		auto status = AdbcStatementGetOption(&adbc_statement, "nonexistent", buf, &length, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_FOUND);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// GetOptionBytes: NOT_FOUND
+	{
+		uint8_t buf[64];
+		size_t length = sizeof(buf);
+		auto status =
+		    AdbcStatementGetOptionBytes(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, buf, &length, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_FOUND);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// SetOptionBytes: NOT_IMPLEMENTED
+	{
+		uint8_t data[] = {1, 2, 3};
+		auto status = AdbcStatementSetOptionBytes(&adbc_statement, "some_key", data, sizeof(data), &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// SetOptionDouble: NOT_IMPLEMENTED
+	{
+		auto status = AdbcStatementSetOptionDouble(&adbc_statement, "some_key", 3.14, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Connection SetOptionBytes/Double not implemented", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// SetOptionBytes: NOT_IMPLEMENTED
+	{
+		uint8_t data[] = {1, 2, 3};
+		auto status = AdbcConnectionSetOptionBytes(&db.adbc_connection, "some_key", data, sizeof(data), &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// SetOptionDouble: NOT_IMPLEMENTED
+	{
+		auto status = AdbcConnectionSetOptionDouble(&db.adbc_connection, "some_key", 3.14, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// GetOptionBytes: NOT_FOUND
+	{
+		uint8_t buf[64];
+		size_t length = sizeof(buf);
+		auto status = AdbcConnectionGetOptionBytes(&db.adbc_connection, "some_key", buf, &length, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_FOUND);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// GetOptionDouble: NOT_FOUND
+	{
+		double val;
+		auto status = AdbcConnectionGetOptionDouble(&db.adbc_connection, "some_key", &val, &db.adbc_error);
+		REQUIRE(status == ADBC_STATUS_NOT_FOUND);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+}
+
 } // namespace duckdb
