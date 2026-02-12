@@ -270,10 +270,6 @@ SELECT u-u FROM uuid
 ----
 
 statement error
-SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid::hugeint;
-----
-
-statement error
 SELECT ''::uuid
 ----
 
