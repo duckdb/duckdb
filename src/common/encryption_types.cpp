@@ -68,6 +68,7 @@ using CipherType = EncryptionTypes::CipherType;
 using Version = EncryptionTypes::EncryptionVersion;
 
 EncryptionTag::EncryptionTag() : tag(new data_t[MainHeader::AES_TAG_LEN]()) {
+	tag_len = MainHeader::AES_TAG_LEN;
 }
 
 data_ptr_t EncryptionTag::data() {
@@ -75,7 +76,22 @@ data_ptr_t EncryptionTag::data() {
 }
 
 idx_t EncryptionTag::size() const {
-	return MainHeader::AES_TAG_LEN;
+	return tag_len;
+}
+
+bool EncryptionTag::IsAllZeros() const {
+	auto tag_ptr = tag.get();
+	idx_t len = size();
+
+	data_t is_only_zero = 0;
+	for (idx_t i = 0; i < len; ++i) {
+		is_only_zero |= tag_ptr[i];
+	}
+	return is_only_zero == 0;
+}
+
+void EncryptionTag::SetSize(idx_t size) {
+	tag_len = size;
 }
 
 EncryptionCanary::EncryptionCanary() : canary(new data_t[MainHeader::CANARY_BYTE_SIZE]()) {

@@ -1,3 +1,4 @@
+#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -5,6 +6,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
 
@@ -13,8 +16,32 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.left);
 	D_ASSERT(statement.right);
-	if (statement.union_all && !statement.key_targets.empty()) {
-		throw BinderException("UNION ALL cannot be used with USING KEY in recursive CTE.");
+
+	auto is_using_key = !statement.key_targets.empty();
+
+	if (is_using_key) {
+		auto setting = Settings::Get<DeprecatedUsingKeySyntaxSetting>(context);
+
+		// The USING KEY currently implement is actually the UNION ALL variant,
+		// but we use UNION syntax. This stands in the way of a possible addition of
+		// the UNION variant, so we will deprecate the UNION syntax for now (with
+		// the ability to still use it via a setting). Once enough time has elapsed
+		// and users have migrated relevant code to using UNION ALL syntax, we can
+		// declare the UNION syntax either as illegal syntax or implement the UNION
+		// variant proper (again with the ability to override the UNION syntax to
+		// use the "old" UNION ALL variant).
+
+		bool warn_deprecated_syntax = setting == DeprecatedUsingKeySyntax::DEFAULT && !statement.union_all;
+		const string msg =
+		    "Deprecated UNION in USING KEY CTE detected."
+		    "Please transition to using UNION ALL, before DuckDB's next release. \n"
+		    "Use SET deprecated_using_key_syntax='UNION_AS_UNION_ALL' to enable the deprecated behavior. \n"
+		    "For more information, see "
+		    "https://duckdb.org/docs/stable/sql/query_syntax/with#recursive-ctes-with-using-key.";
+
+		if (warn_deprecated_syntax) {
+			DUCKDB_LOG_WARNING(context, msg);
+		}
 	}
 
 	auto ctename = statement.ctename;
@@ -41,6 +68,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	// Add bindings of left side to temporary CTE bindings context
 	BindingAlias cte_alias(statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, result.types);
+
 	BindingAlias recurring_alias("recurring", statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(recurring_alias), result.names, result.types);
 

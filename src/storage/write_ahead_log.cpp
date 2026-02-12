@@ -174,7 +174,10 @@ public:
 		stream->WriteData(temp_buf.get(), ciphertext_size);
 
 		// Write the tag to the stream
-		stream->WriteData(tag.data(), tag.size());
+		if (encryption_state->GetCipher() == EncryptionTypes::CipherType::GCM) {
+			D_ASSERT(!tag.IsAllZeros());
+			stream->WriteData(tag.data(), tag.size());
+		}
 
 		// rewind the buffer
 		memory_stream.Rewind();

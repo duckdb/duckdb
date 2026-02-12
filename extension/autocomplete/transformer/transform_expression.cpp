@@ -1481,7 +1481,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLiteralExpression(P
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &matched_rule_result = list_pr.Child<ChoiceParseResult>(0);
 	if (matched_rule_result.name == "StringLiteral") {
-		return make_uniq<ConstantExpression>(Value(transformer.Transform<string>(matched_rule_result.result)));
+		auto string_literal = matched_rule_result.result->Cast<StringLiteralParseResult>();
+		return string_literal.ToExpression();
 	}
 	return transformer.Transform<unique_ptr<ParsedExpression>>(matched_rule_result.result);
 }

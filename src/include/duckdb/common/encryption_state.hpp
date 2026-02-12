@@ -69,6 +69,11 @@ public:
 
 public:
 	unique_ptr<EncryptionStateMetadata> metadata;
+
+public:
+	EncryptionTypes::CipherType GetCipher() const {
+		return metadata->GetCipher();
+	}
 };
 
 class EncryptionUtil {
