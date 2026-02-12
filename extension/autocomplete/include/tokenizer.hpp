@@ -45,6 +45,7 @@ public:
 	static bool CharacterIsControlFlow(char c);
 	static bool CharacterIsKeyword(char c);
 	static bool CharacterIsOperator(char c);
+	static bool CharacterIsSpecialStringCharacter(char c);
 	bool IsValidDollarTagCharacter(char c);
 
 protected:
