@@ -9,15 +9,13 @@
 #pragma once
 
 #include "duckdb/function/window/window_executor.hpp"
-#include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/function/window/window_aggregator.hpp"
 
 namespace duckdb {
 
 class WindowAggregateExecutor : public WindowExecutor {
 public:
-	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &client, WindowSharedExpressions &shared,
-	                        WindowAggregationMode mode);
+	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &client, WindowSharedExpressions &shared);
 
 	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, const idx_t input_idx,
 	          OperatorSinkInput &sink) const override;
