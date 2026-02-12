@@ -25,7 +25,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowSelect(PEGTransformer 
 }
 
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowTables(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
+                                                                 optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto showref = make_uniq<ShowRef>();
 	showref->show_type = ShowType::SHOW_FROM;
