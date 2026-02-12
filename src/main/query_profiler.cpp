@@ -294,7 +294,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
-		if (query_metrics.query_name.empty() && !root) {
+		if (query_metrics.query_name.empty() || !root) {
 			return "";
 		}
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
