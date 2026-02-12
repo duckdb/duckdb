@@ -473,7 +473,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 		return;
 	}
 
-	auto &info = operator_infos.find(phys_op)->second;
+	auto &info = entry->second;
 	info.name = phys_op.GetName();
 }
 
