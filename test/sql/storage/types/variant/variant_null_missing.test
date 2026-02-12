@@ -1,0 +1,97 @@
+# name: test/sql/storage/types/variant/variant_null_missing.test
+# group: [variant]
+
+load __TEST_DIR__/variant_null_missing.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+# basic struct
+statement ok
+SET force_variant_shredding = 'STRUCT(a INT, b INT)';
+
+statement ok
+create table shredded_values (col VARIANT)
+
+statement ok
+insert into shredded_values values
+	({'a': 1, 'b': 100}),
+	({'a': 10, 'b': NULL}),
+	({'a': 100}),
+	({'a': NULL, 'b': NULL})
+;
+
+statement ok
+CHECKPOINT
+
+query I
+FROM shredded_values
+----
+{'a': 1, 'b': 100}
+{'a': 10, 'b': NULL}
+{'a': 100}
+{'a': NULL, 'b': NULL}
+
+# nested struct
+statement ok
+SET force_variant_shredding = 'STRUCT(id INT, s STRUCT(a INT, b INT))';
+
+statement ok
+create table nested_shredded_values (col VARIANT)
+
+
+statement ok
+insert into nested_shredded_values values
+ 	({'id': 1, 's': {'a': 1, 'b': 100}}),
+	({'id': 2, 's': {'a': 10, 'b': NULL}}),
+ 	({'id': 3, 's': {'a': 100}}),
+ 	({'id': 4, 's': {'a': NULL, 'b': NULL}}),
+ 	({'id': 5, 's': NULL}),
+ 	({'id': 6})
+;
+
+statement ok
+CHECKPOINT
+
+query I
+FROM nested_shredded_values
+----
+{'id': 1, 's': {'a': 1, 'b': 100}}
+{'id': 2, 's': {'a': 10, 'b': NULL}}
+{'id': 3, 's': {'a': 100}}
+{'id': 4, 's': {'a': NULL, 'b': NULL}}
+{'id': 5, 's': NULL}
+{'id': 6}
+
+# arrays
+statement ok
+SET force_variant_shredding = 'STRUCT(a INT, b INT)[]';
+
+statement ok
+create table shredded_array (col VARIANT)
+
+statement ok
+insert into shredded_array values
+	([{'a': 1, 'b': 100}]),
+	([{'a': 10, 'b': NULL}]),
+	([{'a': 100}]),
+	([{'a': NULL, 'b': NULL}]),
+	([]),
+	([NULL]),
+	(NULL)
+;
+
+statement ok
+CHECKPOINT
+
+query I
+FROM shredded_array
+----
+[{'a': 1, 'b': 100}]
+[{'a': 10, 'b': NULL}]
+[{'a': 100}]
+[{'a': NULL, 'b': NULL}]
+[]
+[NULL]
+NULL

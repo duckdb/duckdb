@@ -149,7 +149,7 @@ bool VariantShreddedStats::IsFullyShredded(const BaseStatistics &stats) {
 		return true;
 	}
 	if (!untyped_value_index_stats.CanHaveNoNull()) {
-		//! In the event that this field is entirely missing from the parent OBJECT, both are NULL
+		//! In the event that the untyped_value_index is entirely NULL, all values are NULL Variant values
 		//! But that doesn't mean we can't do pushdown into this field, so it is shredded (only when the extract path
 		//! ends at the parent we can't do pushdown)
 		D_ASSERT(untyped_value_index_stats.CanHaveNull());
@@ -165,7 +165,7 @@ bool VariantShreddedStats::IsFullyShredded(const BaseStatistics &stats) {
 		//! Not a constant
 		return false;
 	}
-	//! 0 is reserved for NULL Variant values
+	//! 0 is reserved for missing values (field absent from parent object)
 	return min_value == 0;
 }
 

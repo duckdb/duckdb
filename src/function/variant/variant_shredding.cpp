@@ -209,8 +209,8 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 			idx_t child_count = 0;
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
-					//! The field is missing, set it to null
-					FlatVector::SetNull(*child_variant_vectors[0], result_sel[i], true);
+					//! The field is missing, set the untyped value index to 0
+					FlatVector::GetData<uint32_t>(*child_variant_vectors[0])[result_sel[i]] = 0;
 					if (child_variant_vectors.size() >= 2) {
 						FlatVector::SetNull(*child_variant_vectors[1], result_sel[i], true);
 					}
