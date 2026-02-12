@@ -115,12 +115,13 @@
         "test/geoparquet/unsupported.test",
         "test/geoparquet/versions.text",
         "test/sql/types/variant/variant_distinct.test",
+        "test/parquet/variant/variant_comparison.test",
         "test/sql/function/variant/variant_typeof.test",
         "test/sql/storage/types/variant/append_shredded.test",
-        "test/sql/storage/types/variant/big_table.test",
+        "test/sql/storage/types/variant/big_table.test_slow",
         "test/sql/storage/types/variant/extension_types.test",
         "test/sql/storage/types/variant/index_fetch.test",
-        "test/sql/storage/types/variant/null_tests.test",
+        "test/sql/storage/types/variant/null_tests.test_slow",
         "test/sql/storage/types/variant/test_all_types.test",
         "test/sql/storage/types/variant/test_all_types_single_table.test",
         "test/sql/storage/types/variant/test_all_types_variant.test",
@@ -128,8 +129,8 @@
         "test/sql/storage/types/variant/tpch_sf1.test_slow",
         "test/sql/storage/types/variant/update.test",
         "test/sql/storage/types/variant/variant_index.test",
-        "test/sql/storage/types/variant/variant_shredding.test",
-        "test/sql/storage/types/variant/variant_stats_merging.test",
+        "test/sql/storage/types/variant/variant_shredding.test_slow",
+        "test/sql/storage/types/variant/variant_stats_merging.test_slow",
         "test/sql/types/variant/tpch_test.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test",
@@ -142,7 +143,9 @@
         "test/sql/storage/compression/roaring/roaring_bool_run_simple.test",
         "test/sql/storage/compression/roaring/roaring_bool_run_simple_w_null.test",
         "test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test",
-        "test/sql/storage/compression/roaring/roaring_bool_uncompressed_under_v1_5_0.test"
+        "test/sql/storage/compression/roaring/roaring_bool_uncompressed_under_v1_5_0.test",
+        "test/sql/aggregate/aggregates/test_state_export_struct.test",
+        "test/sql/aggregate/aggregates/test_aggregate_state_bc.test"
       ]
     },
     {
@@ -161,6 +164,14 @@
         "test/sql/index/art/storage/test_art_duckdb_versions.test",
         "test/sql/attach/attach_read_only.test",
         "test/sql/function/list/lambdas/test_lambda_storage.test"
+      ]
+    },
+    {
+      "reason": "Contents of view were altered",
+      "paths": [
+        "test/sql/table_function/duckdb_columns.test",
+        "test/sql/catalog/view/test_view_schema_change.test",
+        "test/sql/catalog/dependencies/add_column_to_table_referenced_by_view.test"
       ]
     }
   ]

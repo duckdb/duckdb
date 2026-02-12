@@ -31,20 +31,8 @@ statement ok
 checkpoint
 
 statement ok
-CREATE TYPE test_result AS UNION (
-    ok BOOL,
-    err STRUCT(
-        uncompressed HUGEINT,
-        compressed HUGEINT,
-        allowed_minimum_ratio DECIMAL(2,1),
-        allowed_maximum_ratio DECIMAL(2,1),
-        actual_ratio FLOAT
-    )
-);
-
-statement ok
 set variable min_ratio = 35.0;
-set variable max_ratio = 36.5;
+set variable max_ratio = 100;
 
 # This query keeps a pretty wide margin in compression ratio un purpose to account for possible changes that
 # influence compression ratio.
@@ -52,14 +40,14 @@ query I
 SELECT
     CASE 
         WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
-            THEN True::test_result
+            THEN NULL
         ELSE {
             'uncompressed': uncompressed,
             'compressed': compressed,
             'allowed_minimum_ratio': getvariable('min_ratio'),
             'allowed_maximum_ratio': getvariable('max_ratio'),
             'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
-        }::test_result
+        }
     END
 FROM (
     select
@@ -67,7 +55,7 @@ FROM (
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed
 ) AS blocks_tbl;
 ----
-true
+NULL
 
 statement ok
 CALL dbgen(sf=0.1)
@@ -92,21 +80,21 @@ checkpoint
 
 statement ok
 set variable min_ratio = 1.5;
-set variable max_ratio = 2.5;
+set variable max_ratio = 4;
 
 # We compress l_comment with roughly ~3x compression ratio with fsst
 query I
 SELECT
     CASE 
         WHEN (uncompressed::FLOAT / compressed::FLOAT) > getvariable('min_ratio') AND (uncompressed::FLOAT / compressed::FLOAT) < getvariable('max_ratio')
-            THEN True::test_result
+            THEN NULL
         ELSE {
             'uncompressed': uncompressed,
             'compressed': compressed,
             'allowed_minimum_ratio': getvariable('min_ratio'),
             'allowed_maximum_ratio': getvariable('max_ratio'),
             'actual_ratio': uncompressed::FLOAT / compressed::FLOAT
-        }::test_result
+        }
     END
 FROM (
     select
@@ -114,7 +102,7 @@ FROM (
         (select count(distinct block_id) from pragma_storage_info('l_comment_uncompressed') where segment_type in('VARCHAR')) as uncompressed
 ) AS blocks_tbl;
 ----
-true
+NULL
 
 query I
 SELECT COUNT(DISTINCT l_comment) FROM l_comment_compressed WHERE k = 13

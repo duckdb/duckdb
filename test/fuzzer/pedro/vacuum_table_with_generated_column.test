@@ -32,15 +32,15 @@ statement ok
 INSERT INTO test SELECT range % 5000 FROM range(10000);
 
 # The approximate unique count is inaccurate due to sampling.
-query T
-SELECT stats(x) FROM test LIMIT 1;
+query TTTTT
+SELECT s.min, s.max, s.has_null, s.has_no_null, s.approx_unique FROM (SELECT stats(x) s FROM test LIMIT 1);
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 10000]
+0	4999	false	true	10000
 
-query T
-SELECT stats(y) FROM test LIMIT 1;
+query TTTT
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT stats(y) s FROM test LIMIT 1);
 ----
-[Min: 100, Max: 5099][Has Null: false, Has No Null: true]
+100	5099	false	true
 
 statement ok
 PRAGMA verify_parallelism;
@@ -55,12 +55,12 @@ statement ok
 PRAGMA disable_verify_parallelism;
 
 # The approximate unique count is more accurate now.
-query T
-SELECT stats(x) FROM test LIMIT 1;
+query TTTTT
+SELECT s.min, s.max, s.has_null, s.has_no_null, s.approx_unique FROM (SELECT stats(x) s FROM test LIMIT 1);
 ----
-[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5661]
+0	4999	false	true	5661
 
-query T
-SELECT stats(y) FROM test LIMIT 1;
+query TTTT
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT stats(y) s FROM test LIMIT 1);
 ----
-[Min: 100, Max: 5099][Has Null: false, Has No Null: true]
+100	5099	false	true

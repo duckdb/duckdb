@@ -42,12 +42,6 @@
       ]
     },
     {
-      "reason": "Geometry with CRS is not always string round-trippable",
-        "paths": [
-          "test/geoparquet/with_crs.test"
-        ]
-    },
-    {
       "reason": "Expects db with name 'memory'",
       "paths": [
         "test/sql/attach/show_databases.test",

@@ -169,7 +169,9 @@ void CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr
 }
 
 int64_t CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	idx_t current_position = SeekPosition(handle);
+	const idx_t current_position = SeekPosition(handle);
+	const idx_t max_read = GetFileSize(handle) - current_position;
+	nr_bytes = MinValue<int64_t>(NumericCast<int64_t>(max_read), nr_bytes);
 	Read(handle, buffer, nr_bytes, current_position);
 	Seek(handle, current_position + NumericCast<idx_t>(nr_bytes));
 	return nr_bytes;
@@ -310,6 +312,10 @@ void CachingFileSystemWrapper::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) 
 
 void CachingFileSystemWrapper::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) {
 	underlying_file_system.RegisterSubSystem(compression_type, std::move(fs));
+}
+
+void CachingFileSystemWrapper::UnregisterSubSystem(const string &name) {
+	underlying_file_system.UnregisterSubSystem(name);
 }
 
 unique_ptr<FileSystem> CachingFileSystemWrapper::ExtractSubSystem(const string &name) {

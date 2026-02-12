@@ -130,21 +130,30 @@ void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base
 	deserializer.ReadPropertyWithDefault<uint8_t>(202, "flags", data.flags.flags);
 }
 
-string GeometryStats::ToString(const BaseStatistics &stats) {
+child_list_t<Value> GeometryStats::ToStruct(const BaseStatistics &stats) {
 	const auto &data = GetDataUnsafe(stats);
-	string result;
+	child_list_t<Value> result;
+	child_list_t<Value> extent;
 
-	result += "[";
-	result += StringUtil::Format("Extent: [X: [%f, %f], Y: [%f, %f], Z: [%f, %f], M: [%f, %f]]", data.extent.x_min,
-	                             data.extent.x_max, data.extent.y_min, data.extent.y_max, data.extent.z_min,
-	                             data.extent.z_max, data.extent.m_min, data.extent.m_max);
-	result += StringUtil::Format(", Types: [%s]", StringUtil::Join(data.types.ToString(true), ", "));
-	result += StringUtil::Format(
-	    ", Flags: [Has Empty Geom: %s, Has No Empty Geom: %s, Has Empty Part: %s, Has No Empty Part: %s]",
-	    data.flags.HasEmptyGeometry() ? "true" : "false", data.flags.HasNonEmptyGeometry() ? "true" : "false",
-	    data.flags.HasEmptyPart() ? "true" : "false", data.flags.HasNonEmptyPart() ? "true" : "false");
+	extent.emplace_back("x_min", Value::DOUBLE(data.extent.x_min));
+	extent.emplace_back("x_max", Value::DOUBLE(data.extent.x_max));
+	extent.emplace_back("y_min", Value::DOUBLE(data.extent.y_min));
+	extent.emplace_back("y_max", Value::DOUBLE(data.extent.y_max));
+	if (Value::IsFinite(data.extent.z_min) || Value::IsFinite(data.extent.z_max)) {
+		extent.emplace_back("z_min", Value::DOUBLE(data.extent.z_min));
+		extent.emplace_back("z_max", Value::DOUBLE(data.extent.z_max));
+	}
+	if (Value::IsFinite(data.extent.m_min) || Value::IsFinite(data.extent.m_max)) {
+		extent.emplace_back("m_min", Value::DOUBLE(data.extent.m_min));
+		extent.emplace_back("m_max", Value::DOUBLE(data.extent.m_max));
+	}
 
-	result += "]";
+	result.emplace_back("extent", Value::STRUCT(std::move(extent)));
+
+	result.emplace_back("has_empty_geom", Value::BOOLEAN(data.flags.HasEmptyGeometry()));
+	result.emplace_back("has_non_empty_geom", Value::BOOLEAN(data.flags.HasNonEmptyGeometry()));
+	result.emplace_back("has_empty_part", Value::BOOLEAN(data.flags.HasEmptyPart()));
+	result.emplace_back("has_non_empty_part", Value::BOOLEAN(data.flags.HasNonEmptyPart()));
 	return result;
 }
 

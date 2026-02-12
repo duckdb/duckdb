@@ -44,7 +44,12 @@ LogicalType PEGTransformerFactory::TransformEnumStringLiteralList(PEGTransformer
                                                                   optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
-	auto string_literal_list = ExtractParseResultsFromList(extract_parens);
+	auto string_list_opt = extract_parens->Cast<OptionalParseResult>();
+	if (!string_list_opt.HasResult()) {
+		Vector enum_vector(LogicalType::VARCHAR, (idx_t)0);
+		return LogicalType::ENUM(enum_vector, 0);
+	}
+	auto string_literal_list = ExtractParseResultsFromList(string_list_opt.optional_result);
 
 	Vector enum_vector(LogicalType::VARCHAR, string_literal_list.size());
 	auto string_data = FlatVector::GetData<string_t>(enum_vector);

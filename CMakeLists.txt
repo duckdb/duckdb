@@ -184,6 +184,7 @@ option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
 option(DISABLE_VPTR_SANITIZER "Disable vptr sanitizer; work-around for sanitizer false positive on Macbook M1" FALSE)
 option(STANDALONE_DEBUG "add clang compile option -fstandalone-debug" FALSE)
+option(RELEASE_SANITIZER "Enable address sanitizer in release mode." FALSE)
 
 if(${ENABLE_THREAD_SANITIZER})
   if(${ENABLE_SANITIZER})
@@ -195,7 +196,7 @@ if(${ENABLE_THREAD_SANITIZER})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_THREAD_SANITIZER")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
 elseif(${ENABLE_SANITIZER})
-  if(FORCE_ASSERT)
+  if(FORCE_ASSERT OR RELEASE_SANITIZER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
   else()
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
@@ -600,44 +601,47 @@ endif()
 
 
 if(NOT MSVC)
+  set(CXX_EXTRA_DEBUG
+          "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic"
+  )
+
   if(${FORCE_WARN_UNUSED})
     set(CXX_EXTRA "${CXX_EXTRA} -Wunused")
   endif()
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CXX_EXTRA "${CXX_EXTRA} -Werror")
   endif()
+  if (FORCE_DEBUG)
+    set(CXX_EXTRA "${CXX_EXTRA} -Wall ${CXX_EXTRA_DEBUG}")
+  endif()
+
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
+          VERSION_GREATER 8.0)
+    if(REDUCE_SYMBOLS)
+      set(CXX_EXTRA "${CXX_EXTRA} -g1 -gsplit-dwarf")
+    endif()
+  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
+          AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
+    if(REDUCE_SYMBOLS)
+      set(CXX_EXTRA "${CXX_EXTRA} -gline-tables-only")
+    endif()
+  else()
+    message(WARNING "Please use a recent compiler for debug builds")
+  endif()
+
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=${CMAKE_LTO}")
   elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
   endif()
+
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
-
-  set(CXX_EXTRA_DEBUG
-      "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic"
-  )
-
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
-                                                   VERSION_GREATER 8.0)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
-    if(REDUCE_SYMBOLS)
-      set(CMAKE_CXX_FLAGS_DEBUG "-g1 -gsplit-dwarf")
-      set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-g1 -gsplit-dwarf")
-    endif()
-  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
-         AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
-    if(REDUCE_SYMBOLS)
-      set(CMAKE_CXX_FLAGS_DEBUG "-gline-tables-only")
-      set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-gline-tables-only")
-    endif()
-  else()
-    message(WARNING "Please use a recent compiler for debug builds")
-  endif()
 else()
   set(CMAKE_CXX_WINDOWS_FLAGS
       "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")

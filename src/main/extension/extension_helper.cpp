@@ -112,6 +112,7 @@ static const DefaultExtension internal_extensions[] = {
     {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
+    {"odbc_scanner", "Adds support for connecting to remote databases over ODBC", false},
     {"sqlite_scanner", "Adds support for reading and writing SQLite database files", false},
     {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
@@ -143,8 +144,9 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
 static const char *const auto_install[] = {
-    "motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", "delta", "iceberg", "uc_catalog",
-    "ui",         "ducklake",         nullptr};
+    "motherduck", "postgres_scanner", "mysql_scanner", "odbc_scanner", "sqlite_scanner",
+    "delta",      "iceberg",          "unity_catalog", "ui",           "ducklake",
+    nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {

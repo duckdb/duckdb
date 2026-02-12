@@ -6,31 +6,27 @@ statement ok
 select 1=1
 
 # scalar stats
-query I
-SELECT STATS(5);
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT STATS(5) s);
 ----
-<REGEX>:.*5.*5.*
+5	5	false	true
 
-query I
-SELECT STATS(7);
+query IIIIII
+SELECT s.min, s.max, s.has_null, s.has_no_null, s.has_unicode, s.max_string_length FROM (SELECT STATS('hello') s);
 ----
-<REGEX>:.*7.*7.*
+hello	hello	false	true	false	5
 
-query I
-SELECT STATS('hello');
-----
-<REGEX>:.*hello.*hello.*
 
-query I
-SELECT STATS('1234567ü');
+query IIIIII
+SELECT s.min, s.max, s.has_null, s.has_no_null, s.has_unicode, s.max_string_length FROM (SELECT STATS('1234567ü') s);
 ----
-<REGEX>:.*1234567.*1234567.*
+1234567\xC3	1234567\xC3	false	true	true	9
 
 # arithmetic
-query I
-SELECT STATS(5+2);
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT STATS(5 + 2) s);
 ----
-<REGEX>:.*7.*7.*
+7	7	false	true
 
 # non-scalar stats
 statement ok
@@ -40,31 +36,31 @@ statement ok
 INSERT INTO integers VALUES (1), (2), (3);
 
 # read stats
-query I
-SELECT STATS(i) FROM integers LIMIT 1;
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT STATS(i) s FROM integers LIMIT 1);
 ----
-<REGEX>:.*1.*3.*
+1	3	false	true
 
 # arithmetic
-query I
-SELECT STATS(i+2) FROM integers LIMIT 1;
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT STATS(i + 2) s FROM integers LIMIT 1);
 ----
-<REGEX>:.*3.*5.*
+3	5	false	true
 
-query I
-SELECT STATS(i-5) FROM integers LIMIT 1;
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT STATS(i - 5) s FROM integers LIMIT 1);
 ----
-<REGEX>:.*-4.*-2.*
+-4	-2	false	true
 
-query I
-SELECT STATS(i*2) FROM integers LIMIT 1;
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT STATS(i * 2) s FROM integers LIMIT 1);
 ----
-<REGEX>:.*2.*6.*
+2	6	false	true
 
-query I
-SELECT STATS(i*-1) FROM integers LIMIT 1;
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT STATS(i * -1) s FROM integers LIMIT 1);
 ----
-<REGEX>:.*-3.*-1.*
+-3	-1	false	true
 
 # disabling statistics propagation means there will be no stats
 statement ok
@@ -73,13 +69,13 @@ PRAGMA disable_optimizer
 query I
 SELECT STATS(i+1) FROM integers LIMIT 1;
 ----
-No statistics
+NULL
 
 # we can enable the optimizer again
 statement ok
 PRAGMA enable_optimizer
 
-query I
-SELECT STATS(i*-1) FROM integers LIMIT 1;
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT STATS(i * -1) s FROM integers LIMIT 1);
 ----
-<REGEX>:.*-3.*-1.*
+-3	-1	false	true

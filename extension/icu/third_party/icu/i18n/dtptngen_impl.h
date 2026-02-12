@@ -23,81 +23,81 @@
 // TODO(claireho): Split off Builder class.
 // TODO(claireho): If splitting off Builder class: As subclass or independent?
 
-#define dtptngen_MAX_PATTERN_ENTRIES 52
-#define dtptngen_MAX_CLDR_FIELD_LEN  60
-#define dtptngen_MAX_DT_TOKEN        50
-#define dtptngen_MAX_RESOURCE_FIELD  12
-#define dtptngen_MAX_AVAILABLE_FORMATS  12
-#define dtptngen_NONE          0
-#define dtptngen_EXTRA_FIELD   0x10000
-#define dtptngen_MISSING_FIELD  0x1000
-#define dtptngen_MAX_STRING_ENUMERATION  200
-#define dtptngen_SINGLE_QUOTE      ((UChar)0x0027)
-#define dtptngen_FORWARDSLASH      ((UChar)0x002F)
-#define dtptngen_BACKSLASH         ((UChar)0x005C)
-#define dtptngen_SPACE             ((UChar)0x0020)
-#define dtptngen_QUOTATION_MARK    ((UChar)0x0022)
-#define dtptngen_ASTERISK          ((UChar)0x002A)
-#define dtptngen_PLUSSITN          ((UChar)0x002B)
-#define dtptngen_COMMA             ((UChar)0x002C)
-#define dtptngen_HYPHEN            ((UChar)0x002D)
-#define dtptngen_DOT               ((UChar)0x002E)
-#define dtptngen_COLON             ((UChar)0x003A)
-#define dtptngen_CAP_A             ((UChar)0x0041)
-#define dtptngen_CAP_B             ((UChar)0x0042)
-#define dtptngen_CAP_C             ((UChar)0x0043)
-#define dtptngen_CAP_D             ((UChar)0x0044)
-#define dtptngen_CAP_E             ((UChar)0x0045)
-#define dtptngen_CAP_F             ((UChar)0x0046)
-#define dtptngen_CAP_G             ((UChar)0x0047)
-#define dtptngen_CAP_H             ((UChar)0x0048)
-#define dtptngen_CAP_J             ((UChar)0x004A)
-#define dtptngen_CAP_K             ((UChar)0x004B)
-#define dtptngen_CAP_L             ((UChar)0x004C)
-#define dtptngen_CAP_M             ((UChar)0x004D)
-#define dtptngen_CAP_O             ((UChar)0x004F)
-#define dtptngen_CAP_Q             ((UChar)0x0051)
-#define dtptngen_CAP_S             ((UChar)0x0053)
-#define dtptngen_CAP_T             ((UChar)0x0054)
-#define dtptngen_CAP_U             ((UChar)0x0055)
-#define dtptngen_CAP_V             ((UChar)0x0056)
-#define dtptngen_CAP_W             ((UChar)0x0057)
-#define dtptngen_CAP_X             ((UChar)0x0058)
-#define dtptngen_CAP_Y             ((UChar)0x0059)
-#define dtptngen_CAP_Z             ((UChar)0x005A)
-#define dtptngen_LOWLINE           ((UChar)0x005F)
-#define dtptngen_LOW_A             ((UChar)0x0061)
-#define dtptngen_LOW_B             ((UChar)0x0062)
-#define dtptngen_LOW_C             ((UChar)0x0063)
-#define dtptngen_LOW_D             ((UChar)0x0064)
-#define dtptngen_LOW_E             ((UChar)0x0065)
-#define dtptngen_LOW_F             ((UChar)0x0066)
-#define dtptngen_LOW_G             ((UChar)0x0067)
-#define dtptngen_LOW_H             ((UChar)0x0068)
-#define dtptngen_LOW_I             ((UChar)0x0069)
-#define dtptngen_LOW_J             ((UChar)0x006A)
-#define dtptngen_LOW_K             ((UChar)0x006B)
-#define dtptngen_LOW_L             ((UChar)0x006C)
-#define dtptngen_LOW_M             ((UChar)0x006D)
-#define dtptngen_LOW_N             ((UChar)0x006E)
-#define dtptngen_LOW_O             ((UChar)0x006F)
-#define dtptngen_LOW_P             ((UChar)0x0070)
-#define dtptngen_LOW_Q             ((UChar)0x0071)
-#define dtptngen_LOW_R             ((UChar)0x0072)
-#define dtptngen_LOW_S             ((UChar)0x0073)
-#define dtptngen_LOW_T             ((UChar)0x0074)
-#define dtptngen_LOW_U             ((UChar)0x0075)
-#define dtptngen_LOW_V             ((UChar)0x0076)
-#define dtptngen_LOW_W             ((UChar)0x0077)
-#define dtptngen_LOW_X             ((UChar)0x0078)
-#define dtptngen_LOW_Y             ((UChar)0x0079)
-#define dtptngen_LOW_Z             ((UChar)0x007A)
-#define dtptngen_DT_NARROW         -0x101
-#define dtptngen_DT_SHORTER        -0x102
-#define dtptngen_DT_SHORT          -0x103
-#define dtptngen_DT_LONG           -0x104
-#define dtptngen_DT_NUMERIC         0x100
-#define dtptngen_DT_DELTA           0x10
+#define MAX_PATTERN_ENTRIES 52
+#define MAX_CLDR_FIELD_LEN  60
+#define MAX_DT_TOKEN        50
+#define MAX_RESOURCE_FIELD  12
+#define MAX_AVAILABLE_FORMATS  12
+#define NONE          0
+#define EXTRA_FIELD   0x10000
+#define MISSING_FIELD  0x1000
+#define MAX_STRING_ENUMERATION  200
+#define SINGLE_QUOTE      ((char16_t)0x0027)
+#define FORWARDSLASH      ((char16_t)0x002F)
+#define BACKSLASH         ((char16_t)0x005C)
+#define SPACE             ((char16_t)0x0020)
+#define QUOTATION_MARK    ((char16_t)0x0022)
+#define ASTERISK          ((char16_t)0x002A)
+#define PLUSSITN          ((char16_t)0x002B)
+#define COMMA             ((char16_t)0x002C)
+#define HYPHEN            ((char16_t)0x002D)
+#define DOT               ((char16_t)0x002E)
+#define COLON             ((char16_t)0x003A)
+#define CAP_A             ((char16_t)0x0041)
+#define CAP_B             ((char16_t)0x0042)
+#define CAP_C             ((char16_t)0x0043)
+#define CAP_D             ((char16_t)0x0044)
+#define CAP_E             ((char16_t)0x0045)
+#define CAP_F             ((char16_t)0x0046)
+#define CAP_G             ((char16_t)0x0047)
+#define CAP_H             ((char16_t)0x0048)
+#define CAP_J             ((char16_t)0x004A)
+#define CAP_K             ((char16_t)0x004B)
+#define CAP_L             ((char16_t)0x004C)
+#define CAP_M             ((char16_t)0x004D)
+#define CAP_O             ((char16_t)0x004F)
+#define CAP_Q             ((char16_t)0x0051)
+#define CAP_S             ((char16_t)0x0053)
+#define CAP_T             ((char16_t)0x0054)
+#define CAP_U             ((char16_t)0x0055)
+#define CAP_V             ((char16_t)0x0056)
+#define CAP_W             ((char16_t)0x0057)
+#define CAP_X             ((char16_t)0x0058)
+#define CAP_Y             ((char16_t)0x0059)
+#define CAP_Z             ((char16_t)0x005A)
+#define LOWLINE           ((char16_t)0x005F)
+#define LOW_A             ((char16_t)0x0061)
+#define LOW_B             ((char16_t)0x0062)
+#define LOW_C             ((char16_t)0x0063)
+#define LOW_D             ((char16_t)0x0064)
+#define LOW_E             ((char16_t)0x0065)
+#define LOW_F             ((char16_t)0x0066)
+#define LOW_G             ((char16_t)0x0067)
+#define LOW_H             ((char16_t)0x0068)
+#define LOW_I             ((char16_t)0x0069)
+#define LOW_J             ((char16_t)0x006A)
+#define LOW_K             ((char16_t)0x006B)
+#define LOW_L             ((char16_t)0x006C)
+#define LOW_M             ((char16_t)0x006D)
+#define LOW_N             ((char16_t)0x006E)
+#define LOW_O             ((char16_t)0x006F)
+#define LOW_P             ((char16_t)0x0070)
+#define LOW_Q             ((char16_t)0x0071)
+#define LOW_R             ((char16_t)0x0072)
+#define LOW_S             ((char16_t)0x0073)
+#define LOW_T             ((char16_t)0x0074)
+#define LOW_U             ((char16_t)0x0075)
+#define LOW_V             ((char16_t)0x0076)
+#define LOW_W             ((char16_t)0x0077)
+#define LOW_X             ((char16_t)0x0078)
+#define LOW_Y             ((char16_t)0x0079)
+#define LOW_Z             ((char16_t)0x007A)
+#define DT_NARROW         -0x101
+#define DT_SHORTER        -0x102
+#define DT_SHORT          -0x103
+#define DT_LONG           -0x104
+#define DT_NUMERIC         0x100
+#define DT_DELTA           0x10
 
 U_NAMESPACE_BEGIN
 
@@ -111,7 +111,7 @@ typedef enum dtStrEnum {
 }dtStrEnum;
 
 typedef struct dtTypeElem {
-    UChar                  patternChar;
+    char16_t               patternChar;
     UDateTimePatternField  field;
     int16_t                type;
     int16_t                minLen;
@@ -126,14 +126,14 @@ public:
     void clear();
     void copyFrom(const SkeletonFields& other);
     void clearField(int32_t field);
-    UChar getFieldChar(int32_t field) const;
+    char16_t getFieldChar(int32_t field) const;
     int32_t getFieldLength(int32_t field) const;
     void populate(int32_t field, const UnicodeString& value);
-    void populate(int32_t field, UChar repeatChar, int32_t repeatCount);
+    void populate(int32_t field, char16_t repeatChar, int32_t repeatCount);
     UBool isFieldEmpty(int32_t field) const;
     UnicodeString& appendTo(UnicodeString& string) const;
     UnicodeString& appendFieldTo(int32_t field, UnicodeString& string) const;
-    UChar getFirstChar() const;
+    char16_t getFirstChar() const;
     inline bool operator==(const SkeletonFields& other) const;
     inline bool operator!=(const SkeletonFields& other) const;
 
@@ -165,7 +165,7 @@ public:
     UBool equals(const PtnSkeleton& other) const;
     UnicodeString getSkeleton() const;
     UnicodeString getBaseSkeleton() const;
-    UChar getFirstChar() const;
+    char16_t getFirstChar() const;
 
     // TODO: Why is this virtual, as well as the other destructors in this file? We don't want
     // vtables when we don't use class objects polymorphically.
@@ -186,7 +186,7 @@ public:
 
 class FormatParser : public UMemory {
 public:
-    UnicodeString items[dtptngen_MAX_DT_TOKEN];
+    UnicodeString items[MAX_DT_TOKEN];
     int32_t itemNumber;
 
     FormatParser();
@@ -195,7 +195,7 @@ public:
     void getQuoteLiteral(UnicodeString& quote, int32_t *itemIndex);
     UBool isPatternSeparator(const UnicodeString& field) const;
     static UBool isQuoteLiteral(const UnicodeString& s);
-    static int32_t getCanonicalIndex(const UnicodeString& s) { return getCanonicalIndex(s, TRUE); }
+    static int32_t getCanonicalIndex(const UnicodeString& s) { return getCanonicalIndex(s, true); }
     static int32_t getCanonicalIndex(const UnicodeString& s, UBool strict);
 
 private:
@@ -238,20 +238,21 @@ public:
     int32_t getDistance(const DateTimeMatcher& other, int32_t includeMask, DistanceInfo& distanceInfo) const;
     DateTimeMatcher();
     DateTimeMatcher(const DateTimeMatcher& other);
+    DateTimeMatcher& operator=(const DateTimeMatcher& other);
     virtual ~DateTimeMatcher();
     int32_t getFieldMask() const;
 };
 
 class PatternMap : public UMemory {
 public:
-    PtnElem *boot[dtptngen_MAX_PATTERN_ENTRIES];
+    PtnElem *boot[MAX_PATTERN_ENTRIES];
     PatternMap();
     virtual  ~PatternMap();
     void  add(const UnicodeString& basePattern, const PtnSkeleton& skeleton, const UnicodeString& value, UBool skeletonWasSpecified, UErrorCode& status);
     const UnicodeString* getPatternFromBasePattern(const UnicodeString& basePattern, UBool& skeletonWasSpecified) const;
     const UnicodeString* getPatternFromSkeleton(const PtnSkeleton& skeleton, const PtnSkeleton** specifiedSkeletonPtr = 0) const;
     void copyFrom(const PatternMap& other, UErrorCode& status);
-    PtnElem* getHeader(UChar baseChar) const;
+    PtnElem* getHeader(char16_t baseChar) const;
     UBool equals(const PatternMap& other) const;
 private:
     UBool isDupAllowed;
@@ -277,11 +278,11 @@ class DTSkeletonEnumeration : public StringEnumeration {
 public:
     DTSkeletonEnumeration(PatternMap& patternMap, dtStrEnum type, UErrorCode& status);
     virtual ~DTSkeletonEnumeration();
-    static UClassID U_EXPORT2 getStaticClassID(void);
-    virtual UClassID getDynamicClassID(void) const;
-    virtual const UnicodeString* snext(UErrorCode& status);
-    virtual void reset(UErrorCode& status);
-    virtual int32_t count(UErrorCode& status) const;
+    static UClassID U_EXPORT2 getStaticClassID();
+    virtual UClassID getDynamicClassID() const override;
+    virtual const UnicodeString* snext(UErrorCode& status) override;
+    virtual void reset(UErrorCode& status) override;
+    virtual int32_t count(UErrorCode& status) const override;
 private:
     int32_t pos;
     UBool isCanonicalItem(const UnicodeString& item);
@@ -292,11 +293,11 @@ class DTRedundantEnumeration : public StringEnumeration {
 public:
     DTRedundantEnumeration();
     virtual ~DTRedundantEnumeration();
-    static UClassID U_EXPORT2 getStaticClassID(void);
-    virtual UClassID getDynamicClassID(void) const;
-    virtual const UnicodeString* snext(UErrorCode& status);
-    virtual void reset(UErrorCode& status);
-    virtual int32_t count(UErrorCode& status) const;
+    static UClassID U_EXPORT2 getStaticClassID();
+    virtual UClassID getDynamicClassID() const override;
+    virtual const UnicodeString* snext(UErrorCode& status) override;
+    virtual void reset(UErrorCode& status) override;
+    virtual int32_t count(UErrorCode& status) const override;
     void add(const UnicodeString &pattern, UErrorCode& status);
 private:
     int32_t pos;

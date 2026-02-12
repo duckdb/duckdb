@@ -22,10 +22,10 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 	const auto &op = global_table.op;
 	vector<LogicalType> types;
 	for (const auto &cond : op.conditions) {
-		const auto &expr = child ? cond.right : cond.left;
-		executor.AddExpression(*expr);
+		const auto &expr = child ? cond.GetRHS() : cond.GetLHS();
+		executor.AddExpression(expr);
 
-		types.push_back(expr->return_type);
+		types.push_back(expr.return_type);
 	}
 	auto &allocator = Allocator::Get(context.client);
 	keys.Initialize(allocator, types);
@@ -155,6 +155,7 @@ public:
 			if (!table.sorted) {
 				table.MaterializeEmpty(execution.client);
 			}
+			table.global_source.reset();
 		}
 
 		event->FinishTask();
@@ -221,6 +222,7 @@ void PhysicalRangeJoin::GlobalSortedTable::GetSortedRun(ClientContext &client) {
 	if (!sorted) {
 		MaterializeEmpty(client);
 	}
+	global_source.reset();
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Materialize(ExecutionContext &context, InterruptState &interrupt) {
@@ -244,7 +246,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 		idx_t range_position = 0;
 		idx_t other_position = conditions_p.size();
 		for (idx_t i = 0; i < conditions_p.size(); ++i) {
-			switch (conditions_p[i].comparison) {
+			switch (conditions_p[i].GetComparisonType()) {
 			case ExpressionType::COMPARE_LESSTHAN:
 			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			case ExpressionType::COMPARE_GREATERTHAN:
@@ -316,7 +318,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		}
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
-			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
 			auto &v = keys.data[c];
@@ -341,7 +343,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
 			// Skip comparisons that accept NULLs
-			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
 			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
@@ -403,7 +405,7 @@ template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorted_run,
                                         ExternalBlockIteratorState &state, Vector &sort_key_pointers,
                                         SortedRunScanState &scan_state, const idx_t chunk_idx,
-                                        const vector<idx_t> &result) {
+                                        const unsafe_vector<idx_t> &result) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
@@ -421,7 +423,7 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,
                                            ExternalBlockIteratorState &state, TupleDataChunkState &chunk_state,
-                                           const idx_t chunk_idx, const vector<idx_t> &result,
+                                           const idx_t chunk_idx, const unsafe_vector<idx_t> &result,
                                            SortedRunScanState &scan_state) {
 	auto &sorted = *table.sorted;
 	auto &sort_keys = chunk_state.row_locations;

@@ -330,9 +330,7 @@ public:
 			}
 
 			// Before looping back, check if we are interrupted
-			if (context.interrupted) {
-				throw InterruptException();
-			}
+			context.InterruptCheck();
 		} while (true);
 	}
 
@@ -688,16 +686,19 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	set<row_t> row_ids;
 
 	info->BindIndexes(context, ART::TYPE_NAME);
-	info->GetIndexes().ScanEntries([&](IndexEntry &entry) {
+	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
 		if (index.GetIndexType() != ART::TYPE_NAME) {
-			return false;
+			continue;
 		}
 		D_ASSERT(index.IsBound());
 		auto &art = index.Cast<ART>();
 		index_scan = TryScanIndex(art, entry, column_list, input, filter_set, max_count, row_ids);
-		return index_scan;
-	});
+		if (index_scan) {
+			// found an index - break
+			break;
+		}
+	}
 
 	if (!index_scan) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);

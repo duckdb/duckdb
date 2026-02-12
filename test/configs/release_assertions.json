@@ -2,12 +2,6 @@
   "description": "Config for NightlyTests Release Assertions that skips tests that take too long.",
   "skip_tests": [
     {
-      "reason": "FIXME: Internal Error",
-      "paths": [
-        "test/parquet/variant/variant_roundtrip.test_slow"
-      ]
-    },
-    {
       "reason": "FIXME: Catalog Error",
       "paths": [
         "test/sql/storage/encryption/temp_files/encrypt_asof_join_merge.test_slow"

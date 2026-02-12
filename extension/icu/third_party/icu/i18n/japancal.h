@@ -70,14 +70,14 @@ public:
      * Check environment variable. 
      * @internal
      */
-    U_I18N_API static UBool U_EXPORT2 enableTentativeEra(void);
+    U_I18N_API static UBool U_EXPORT2 enableTentativeEra();
 
     /**
      * Useful constants for JapaneseCalendar.
      * Exported for use by test code.
      * @internal
      */
-    U_I18N_API static uint32_t U_EXPORT2 getCurrentEra(void); // the current era
+    U_I18N_API static uint32_t U_EXPORT2 getCurrentEra(); // the current era
 
     /**
      * Constructs a JapaneseCalendar based on the current time in the default time zone
@@ -116,20 +116,20 @@ public:
      * @return    return a polymorphic copy of this calendar.
      * @internal
      */
-    virtual JapaneseCalendar* clone() const;
+    virtual JapaneseCalendar* clone() const override;
 
     /**
      * Return the extended year defined by the current fields.  In the 
      * Japanese calendar case, this is equal to the equivalent extended Gregorian year.
      * @internal
      */
-    virtual int32_t handleGetExtendedYear();
+    virtual int32_t handleGetExtendedYear() override;
 
     /**
      * Return the maximum value that this field could have, given the current date.
      * @internal
      */
-    virtual int32_t getActualMaximum(UCalendarDateFields field, UErrorCode& status) const;
+    virtual int32_t getActualMaximum(UCalendarDateFields field, UErrorCode& status) const override;
 
 
 public:
@@ -143,7 +143,7 @@ public:
      *           same class ID. Objects of other classes have different class IDs.
      * @internal
      */
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID() const override;
 
     /**
      * Return the class ID for this class. This is useful only for comparing to a return
@@ -156,7 +156,7 @@ public:
      * @return   The class ID for all objects of this class.
      * @internal
      */
-    U_I18N_API static UClassID U_EXPORT2 getStaticClassID(void);
+    U_I18N_API static UClassID U_EXPORT2 getStaticClassID();
 
     /**
      * return the calendar type, "japanese".
@@ -164,24 +164,24 @@ public:
      * @return calendar type
      * @internal
      */
-    virtual const char * getType() const;
+    virtual const char * getType() const override;
 
     /**
-     * @return FALSE - no default century in Japanese
+     * @return false - no default century in Japanese
      * @internal 
      */
-    virtual UBool haveDefaultCentury() const;
+    virtual UBool haveDefaultCentury() const override;
 
     /**
      * Not used - no default century.
      * @internal
      */
-    virtual UDate defaultCenturyStart() const;
+    virtual UDate defaultCenturyStart() const override;
     /**
      * Not used - no default century.
      * @internal
      */
-    virtual int32_t defaultCenturyStartYear() const;
+    virtual int32_t defaultCenturyStartYear() const override;
 
 private:
     JapaneseCalendar(); // default constructor not implemented
@@ -191,19 +191,19 @@ protected:
      * Calculate the era for internal computation
      * @internal
      */
-    virtual int32_t internalGetEra() const;
+    virtual int32_t internalGetEra() const override;
 
     /**
      * Compute fields from the JD
      * @internal
      */
-    virtual void handleComputeFields(int32_t julianDay, UErrorCode& status);
+    virtual void handleComputeFields(int32_t julianDay, UErrorCode& status) override;
 
     /**
      * Calculate the limit for a specified type of limit and field
      * @internal
      */
-    virtual int32_t handleGetLimit(UCalendarDateFields field, ELimitType limitType) const;
+    virtual int32_t handleGetLimit(UCalendarDateFields field, ELimitType limitType) const override;
 
     /***
      * Called by computeJulianDay.  Returns the default month (0-based) for the year,
@@ -212,7 +212,7 @@ protected:
      * @param eyear the extended year
      * @internal
      */
-    virtual int32_t getDefaultMonthInYear(int32_t eyear);
+    virtual int32_t getDefaultMonthInYear(int32_t eyear) override;
 
     /***
      * Called by computeJulianDay.  Returns the default day (1-based) for the month,
@@ -222,7 +222,7 @@ protected:
      * @param mon the month in the year
      * @internal
      */
-    virtual int32_t getDefaultDayInMonth(int32_t eyear, int32_t month);
+    virtual int32_t getDefaultDayInMonth(int32_t eyear, int32_t month) override;
 };
 
 U_NAMESPACE_END

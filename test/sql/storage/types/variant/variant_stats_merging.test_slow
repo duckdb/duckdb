@@ -1,0 +1,126 @@
+# name: test/sql/storage/types/variant/variant_stats_merging.test_slow
+# group: [variant]
+
+load __TEST_DIR__/variant_stats_merging.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+# -------------------------- Shred 'tbl' on VARCHAR[] --------------------------
+
+statement ok
+SET force_variant_shredding = 'VARCHAR[]';
+
+statement ok
+create table tbl(col VARIANT);
+
+statement ok
+insert into tbl select NULL from range(122880)
+
+statement ok
+checkpoint
+
+restart
+
+# only nulls, so no min/max
+query I
+select s.fully_shredded.child_stats.stats from (select stats(col) s from tbl limit 1);
+----
+{'has_unicode': false, 'max_string_length': 0, 'has_null': false, 'has_no_null': false}
+
+# -------------------------- Shred 'tbl' on INTEGER[] --------------------------
+
+statement ok
+SET force_variant_shredding = 'INTEGER[]';
+
+statement ok
+insert into tbl select NULL from range(122880)
+
+statement ok
+checkpoint
+
+restart
+
+# Mixing VARCHAR[] + INTEGER[] results in inconsistent stats
+query I
+select s.shredding_state from (select stats(col) s from tbl limit 1);
+----
+INCONSISTENT
+
+# -------------------------- Shred 'tbl2' on OBJECT(a INTEGER, b VARCHAR, c BOOLEAN) --------------------------
+
+statement ok
+create table tbl2 (col VARIANT)
+
+statement ok
+SET force_variant_shredding = 'STRUCT(a INTEGER, b VARCHAR, c BOOLEAN)';
+
+statement ok
+insert into tbl2 select NULL from range(122880)
+
+statement ok
+checkpoint
+
+restart
+
+query III
+select s.fully_shredded.a.type, s.fully_shredded.b.type, s.fully_shredded.c.type from (select stats(col) s from tbl2 limit 1);
+----
+INTEGER	VARCHAR	BOOLEAN
+
+# -------------------------- Shred 'tbl2' on OBJECT(b VARCHAR, a INTEGER, c BOOLEAN) --------------------------
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b VARCHAR, a INTEGER, c BOOLEAN)';
+
+statement ok
+insert into tbl2 select NULL from range(122880)
+
+statement ok
+checkpoint
+
+restart
+
+# Order of fields shouldn't matter
+query III
+select s.fully_shredded.a.type, s.fully_shredded.b.type, s.fully_shredded.c.type from (select stats(col) s from tbl2 limit 1);
+----
+INTEGER	VARCHAR	BOOLEAN
+
+# -------------------------- Shred 'tbl2' on OBJECT(b VARCHAR, a INTEGER, c INTEGER) --------------------------
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b VARCHAR, a INTEGER, c INTEGER)';
+
+statement ok
+insert into tbl2 select NULL from range(122880)
+
+statement ok
+checkpoint
+
+restart
+
+# We lose field 'c' because its type is different
+query II
+select s.fully_shredded.a.type, s.fully_shredded.b.type from (select stats(col) s from tbl2 limit 1);
+----
+INTEGER	VARCHAR
+
+# -------------------------- Shred 'tbl2' on OBJECT(b VARCHAR, c BOOLEAN) --------------------------
+
+statement ok
+SET force_variant_shredding = 'STRUCT(b VARCHAR, c BOOLEAN)';
+
+statement ok
+insert into tbl2 select NULL from range(122880)
+
+statement ok
+checkpoint
+
+restart
+
+query I
+select s.fully_shredded.b.type from (select stats(col) s from tbl2 limit 1);
+----
+VARCHAR

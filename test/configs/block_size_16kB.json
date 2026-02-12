@@ -12,12 +12,6 @@
       ]
     },
     {
-      "reason": "FIXME: Internal Error",
-      "paths": [
-        "test/parquet/variant/variant_roundtrip.test_slow"
-      ]
-    },
-    {
       "reason": "Loading from disk does not trigger OOM.",
       "paths": [
         "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
@@ -29,7 +23,9 @@
         "test/sql/storage/compression/alp/alp_min_max.test",
         "test/sql/storage/compression/alprd/alprd_min_max.test",
         "test/sql/storage/compression/alp/alp_uncompressed_mode_v1_4_0.test_slow",
-        "test/sql/storage/compression/alp/alp_uncompressed_mode_v1_5_0.test_slow"
+        "test/sql/storage/compression/alp/alp_uncompressed_mode_v1_5_0.test_slow",
+        "test/sql/storage/compression/alprd/alprd_tpcds.test_slow",
+        "test/sql/storage/compression/alp/alp_tpcds.test_slow"
       ]
     }
   ]

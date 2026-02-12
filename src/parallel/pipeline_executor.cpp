@@ -192,9 +192,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	ExecutionBudget chunk_budget(max_chunks);
 	do {
-		if (context.client.interrupted) {
-			throw InterruptException();
-		}
+		context.client.InterruptCheck();
 
 		OperatorResultType result;
 		if (exhausted_pipeline && done_flushing && !remaining_sink_chunk && !next_batch_blocked &&
@@ -262,8 +260,8 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 
 		if (result == OperatorResultType::FINISHED) {
+			D_ASSERT(in_process_operators.empty());
 			exhausted_pipeline = true;
-			break;
 		}
 	} while (chunk_budget.Next());
 
@@ -421,9 +419,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	while (true) {
-		if (context.client.interrupted) {
-			throw InterruptException();
-		}
+		context.client.InterruptCheck();
 		// now figure out where to put the chunk
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
@@ -455,7 +451,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				FinishProcessing(NumericCast<int32_t>(current_idx));
 				return OperatorResultType::FINISHED;
 			}
-			current_chunk.Verify();
+			current_chunk.Verify(context.client.db);
 		}
 
 		if (current_chunk.size() == 0) {
@@ -548,9 +544,7 @@ void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 }
 
 void PipelineExecutor::StartOperator(PhysicalOperator &op) {
-	if (context.client.interrupted) {
-		throw InterruptException();
-	}
+	context.client.InterruptCheck();
 	context.thread.profiler.StartOperator(&op);
 }
 
@@ -558,7 +552,7 @@ void PipelineExecutor::EndOperator(PhysicalOperator &op, optional_ptr<DataChunk>
 	context.thread.profiler.EndOperator(chunk);
 
 	if (chunk) {
-		chunk->Verify();
+		chunk->Verify(context.client.db);
 	}
 }
 

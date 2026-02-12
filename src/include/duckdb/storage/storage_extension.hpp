@@ -44,10 +44,13 @@ public:
 
 	virtual void OnCheckpointEnd(AttachedDatabase &db, CheckpointOptions checkpoint_options) {
 	}
+
+	static optional_ptr<StorageExtension> Find(const DBConfig &config, const string &extension_name);
+	static void Register(DBConfig &config, const string &extension_name, shared_ptr<StorageExtension> extension);
 };
 
 struct OpenFileStorageExtension {
-	static unique_ptr<StorageExtension> Create();
+	static shared_ptr<StorageExtension> Create();
 };
 
 } // namespace duckdb
