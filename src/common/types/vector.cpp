@@ -599,6 +599,13 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			index = sel_vector.get_index(index);
 			break;
 		}
+		case VectorType::SHREDDED_VECTOR: {
+			// FIXME: this is extremely inefficient
+			Vector copy(LogicalType::VARIANT());
+			copy.Reference(*vector);
+			copy.Flatten(index + 1);
+			return copy.GetValue(index);
+		}
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
