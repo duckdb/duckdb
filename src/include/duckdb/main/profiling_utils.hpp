@@ -53,6 +53,9 @@ public:
         for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
             active_metrics[i] = 0;
         }
+
+        latency_timer.reset();
+        query_name = "";
     }
 
     void Merge(const QueryMetrics &other) {
@@ -94,6 +97,8 @@ public:
 
 struct ActiveTimer {
 public:
+	ActiveTimer() : metric(MetricType::EXTRA_INFO), is_active(false) {
+	}
 	ActiveTimer(QueryMetrics &query_metrics, const MetricType metric, const bool is_active = true) : query_metrics(query_metrics), metric(metric), is_active(is_active) {
 		// start on constructor
 		if (!is_active) {
@@ -101,12 +106,28 @@ public:
 		}
 		profiler.Start();
 	}
-
 	~ActiveTimer() {
 		if (is_active) {
 			// automatically end in destructor
 			EndTimer();
 		}
+	}
+	// disable copy constructors
+	ActiveTimer(const ActiveTimer &other) = delete;
+	ActiveTimer &operator=(const ActiveTimer &) = delete;
+	//! enable move constructors
+	ActiveTimer(ActiveTimer &&other) noexcept : is_active(false) {
+		std::swap(query_metrics, other.query_metrics);
+		std::swap(metric, other.metric);
+		std::swap(profiler, other.profiler);
+		std::swap(is_active, other.is_active);
+	}
+	ActiveTimer &operator=(ActiveTimer &&other) noexcept {
+		std::swap(query_metrics, other.query_metrics);
+		std::swap(metric, other.metric);
+		std::swap(profiler, other.profiler);
+		std::swap(is_active, other.is_active);
+		return *this;
 	}
 
 	// Automatically called in the destructor.
@@ -117,7 +138,7 @@ public:
 		// stop profiling and report
 		is_active = false;
 		profiler.End();
-		query_metrics.UpdateMetric(metric, profiler.ElapsedNanos());
+		query_metrics->UpdateMetric(metric, profiler.ElapsedNanos());
 	}
 
 	void Reset() {
@@ -129,8 +150,8 @@ public:
 	}
 
 private:
-	QueryMetrics &query_metrics;
-	const MetricType metric;
+	optional_ptr<QueryMetrics> query_metrics;
+	MetricType metric;
 	Profiler profiler;
 	bool is_active;
 };

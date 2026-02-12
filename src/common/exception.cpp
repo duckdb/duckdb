@@ -33,7 +33,7 @@ string Exception::ToJSON(ExceptionType type, const string &message) {
 string Exception::ToJSON(const unordered_map<string, string> &extra_info, ExceptionType type, const string &message) {
 #ifndef DUCKDB_DEBUG_STACKTRACE
 	// by default we only enable stack traces for internal exceptions
-	if (type == ExceptionType::INTERNAL || type == ExceptionType::FATAL)
+	if (type == ExceptionType::INTERNAL)
 #endif
 	{
 		auto extended_extra_info = extra_info;
@@ -330,7 +330,7 @@ SerializationException::SerializationException(const string &msg) : Exception(Ex
 SequenceException::SequenceException(const string &msg) : Exception(ExceptionType::SEQUENCE, msg) {
 }
 
-InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
+InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, INTERRUPT_MESSAGE) {
 }
 
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {

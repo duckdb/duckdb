@@ -822,7 +822,7 @@ public:
 		parser_override = PEGParser;
 	}
 
-	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query) {
+	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
 		vector<MatcherToken> root_tokens;
 		string clean_sql;
 
@@ -830,26 +830,35 @@ public:
 		tokenizer.TokenizeInput();
 		tokenizer.statements.push_back(std::move(root_tokens));
 
-		vector<unique_ptr<SQLStatement>> result;
 		try {
+			vector<unique_ptr<SQLStatement>> result;
 			for (auto &tokenized_statement : tokenizer.statements) {
 				if (tokenized_statement.empty()) {
 					continue;
 				}
 				auto &transformer = PEGTransformerFactory::GetInstance();
-				auto statement = transformer.Transform(tokenized_statement, "Statement");
+				auto statement = transformer.Transform(tokenized_statement, options);
 				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
-					statement->stmt_length =
-					    NumericCast<idx_t>(tokenized_statement[tokenized_statement.size() - 1].offset +
-					                       tokenized_statement[tokenized_statement.size() - 1].length);
+					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +
+					                tokenized_statement[tokenized_statement.size() - 1].length;
+					statement->stmt_length = last_pos - tokenized_statement[0].offset;
 				}
 				statement->query = query;
-				if (statement->type == StatementType::CREATE_STATEMENT) {
-					auto &create = statement->Cast<CreateStatement>();
-					create.info->sql = statement->query;
-				}
 				result.push_back(std::move(statement));
+			}
+			if (!result.empty()) {
+				auto &last_statement = result.back();
+				last_statement->stmt_length = query.size() - last_statement->stmt_location;
+				for (auto &statement : result) {
+					statement->query = query.substr(statement->stmt_location, statement->stmt_length);
+					statement->stmt_location = 0;
+					statement->stmt_length = statement->query.size();
+					if (statement->type == StatementType::CREATE_STATEMENT) {
+						auto &create = statement->Cast<CreateStatement>();
+						create.info->sql = statement->query;
+					}
+				}
 			}
 			return ParserOverrideResult(std::move(result));
 		} catch (std::exception &e) {

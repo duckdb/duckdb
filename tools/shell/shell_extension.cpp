@@ -9,6 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifndef DUCKDB_API_CLI
+#define DUCKDB_API_CLI "cli"
+#endif
+
 namespace duckdb {
 
 static void GetEnvFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -49,6 +53,7 @@ void ShellExtension::Load(ExtensionLoader &loader) {
 	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind));
 
 	auto &config = duckdb::DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.SetOptionByName("duckdb_api", DUCKDB_API_CLI);
 	config.replacement_scans.push_back(duckdb::ReplacementScan(duckdb::ShellScanLastResult));
 }
 

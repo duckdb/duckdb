@@ -8,10 +8,11 @@ constexpr idx_t Storage::MAX_ROW_GROUP_SIZE;
 constexpr idx_t Storage::MAX_BLOCK_ALLOC_SIZE;
 constexpr idx_t Storage::MIN_BLOCK_ALLOC_SIZE;
 constexpr idx_t Storage::DEFAULT_BLOCK_HEADER_SIZE;
+constexpr uint64_t MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 
 const uint64_t VERSION_NUMBER = 64;
 const uint64_t VERSION_NUMBER_LOWER = 64;
-const uint64_t VERSION_NUMBER_UPPER = 67;
+const uint64_t VERSION_NUMBER_UPPER = 68;
 
 static_assert(VERSION_NUMBER_LOWER <= VERSION_NUMBER, "Check on VERSION_NUMBER lower bound");
 static_assert(VERSION_NUMBER <= VERSION_NUMBER_UPPER, "Check on VERSION_NUMBER upper bound");
@@ -91,7 +92,7 @@ static const StorageVersionInfo storage_version_info[] = {
 	{"v1.4.2", 67},
 	{"v1.4.3", 67},
 	{"v1.4.4", 67},
-	{"v1.5.0", 67},
+	{"v1.5.0", 68},
 	{nullptr, 0}
 };
 // END OF STORAGE VERSION INFO

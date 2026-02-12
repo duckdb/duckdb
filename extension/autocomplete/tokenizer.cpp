@@ -74,6 +74,19 @@ bool BaseTokenizer::CharacterIsInitialNumber(char c) {
 	return c == '.';
 }
 
+bool BaseTokenizer::CharacterIsSpecialStringCharacter(char c) {
+	if (c == 'N' || c == 'n') {
+		return true;
+	}
+	if (c == 'X' || c == 'x') {
+		return true;
+	}
+	if (c == 'E' || c == 'e') {
+		return true;
+	}
+	return false;
+}
+
 bool BaseTokenizer::CharacterIsNumber(char c) {
 	if (CharacterIsInitialNumber(c)) {
 		return true;
@@ -199,9 +212,10 @@ bool BaseTokenizer::TokenizeInput() {
 				}
 				if (sql[i + 1] >= '0' && sql[i + 1] <= '9') {
 					// $[numeric] is a parameter, not a dollar-quoted string
+					tokens.emplace_back(string(1, c), i);
 					break;
 				}
-				// Dollar-quoted string
+				// Dollar-quoted string or collabel parameter ($collabel)
 				last_pos = i;
 				// Scan until next $
 				idx_t next_dollar = 0;
@@ -215,6 +229,8 @@ bool BaseTokenizer::TokenizeInput() {
 					}
 				}
 				if (next_dollar == 0) {
+					// Collabel parameter ($collabel)
+					tokens.emplace_back(string(1, c), i);
 					break;
 				}
 				state = TokenizeState::DOLLAR_QUOTED_STRING;
@@ -261,6 +277,15 @@ bool BaseTokenizer::TokenizeInput() {
 				state = TokenizeState::NUMERIC;
 				last_pos = i;
 				break;
+			}
+			if (CharacterIsSpecialStringCharacter(c)) {
+				// Look ahead to see if a quote follows
+				if (i + 1 < sql.size() && sql[i + 1] == '\'') {
+					state = TokenizeState::STRING_LITERAL;
+					last_pos = i;
+					i++;
+					break;
+				}
 			}
 			if (StringUtil::CharacterIsOperator(c)) {
 				state = TokenizeState::OPERATOR;

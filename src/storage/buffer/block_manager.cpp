@@ -22,12 +22,19 @@ bool BlockManager::BlockIsRegistered(block_id_t block_id) {
 		return false;
 	}
 	// already exists: check if it hasn't expired yet
-	auto existing_ptr = entry->second.lock();
-	if (existing_ptr) {
-		//! it hasn't! return it
-		return true;
+	return !entry->second.expired();
+}
+
+shared_ptr<BlockHandle> BlockManager::TryGetBlock(block_id_t block_id) {
+	lock_guard<mutex> lock(blocks_lock);
+	// check if the block already exists
+	auto entry = blocks.find(block_id);
+	if (entry == blocks.end()) {
+		// the block does not exist
+		return nullptr;
 	}
-	return false;
+	// the block exists - try to lock it
+	return entry->second.lock();
 }
 
 shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id) {

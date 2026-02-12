@@ -588,8 +588,14 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		// variable matchers match anything except for reserved keywords
-		if (!MatchStringLiteral(state)) {
+		if (state.token_index >= state.tokens.size()) {
+			return MatchResultType::FAIL;
+		}
+
+		auto &token_text = state.tokens[state.token_index].text;
+		auto string_info = GetSpecialStringInfo(token_text);
+
+		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
 		return MatchResultType::SUCCESS;
@@ -599,13 +605,23 @@ public:
 		if (state.token_index >= state.tokens.size()) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		if (!MatchStringLiteral(state)) {
+
+		auto &token = state.tokens[state.token_index];
+		auto string_info = GetSpecialStringInfo(token.text);
+
+		if (!MatchStringLiteral(state, string_info)) {
 			return nullptr;
 		}
-		string stripped_string = token_text.substr(1, token_text.length() - 2);
 
-		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string));
+		idx_t suffix_len = 1;
+		if (token.text.length() < string_info.prefix_len + suffix_len) {
+			return nullptr;
+		}
+
+		string stripped_string =
+		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
+
+		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, string_info.type));
 		result->name = name;
 		return result;
 	}
@@ -619,9 +635,16 @@ public:
 	}
 
 private:
-	static bool MatchStringLiteral(MatchState &state) {
+	static bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
-		if (token_text.size() >= 2 && token_text.front() == '\'' && token_text.back() == '\'') {
+
+		idx_t open_quote_idx = string_info.prefix_len - 1;
+		idx_t min_len = string_info.prefix_len + 1;
+
+		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
 			state.token_index++;
 			return true;
 		}

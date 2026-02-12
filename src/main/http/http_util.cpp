@@ -516,4 +516,13 @@ unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {
 	}
 }
 
+bool HTTPUtil::IsHTTPProtocol(const string &url) {
+	return StringUtil::StartsWith(url, "http://");
+}
+void HTTPUtil::BumpToSecureProtocol(string &url) {
+	if (IsHTTPProtocol(url)) {
+		url = "https://" + url.substr(7);
+	}
+}
+
 } // namespace duckdb

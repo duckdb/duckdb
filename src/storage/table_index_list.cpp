@@ -182,8 +182,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 			}
 		}
 		if (!index_entry) {
-			// We bound all indexes.
-			D_ASSERT(unbound_count == 0);
+			// We bound all indexes. (of this type)
 			break;
 		}
 		if (index_entry->bind_state == IndexBindState::BINDING) {
@@ -313,24 +312,36 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-vector<IndexStorageInfo> TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
+IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
 	lock_guard<mutex> lock(index_entries_lock);
-	vector<IndexStorageInfo> infos;
+
+	IndexSerializationResult result;
+
+	idx_t bound_count = 0;
+	for (auto &entry : index_entries) {
+		if (entry->index->IsBound()) {
+			bound_count++;
+		}
+	}
+	result.bound_infos.reserve(bound_count);
 	for (auto &entry : index_entries) {
 		auto &index = *entry->index;
 		if (!index.IsBound()) {
-			auto storage_info = index.Cast<UnboundIndex>().GetStorageInfo();
-			D_ASSERT(!storage_info.name.empty());
-			infos.push_back(storage_info);
+			// Unbound: reference existing storage info
+			auto &unbound_index = index.Cast<UnboundIndex>();
+			D_ASSERT(!unbound_index.GetStorageInfo().name.empty());
+			result.ordered_infos.push_back(unbound_index.GetStorageInfo());
 			continue;
 		}
-		// serialize the index to disk
+		// Bound: move new storage info into bound_infos, then reference it
 		auto &bound_index = index.Cast<BoundIndex>();
 		auto storage_info = bound_index.SerializeToDisk(context, info.options);
 		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
-		infos.push_back(storage_info);
+		result.bound_infos.push_back(std::move(storage_info));
+		result.ordered_infos.push_back(result.bound_infos.back());
 	}
-	return infos;
+
+	return result;
 }
 
 void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
@@ -349,7 +360,14 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 			art.RemovalMerge(*entry->removed_data_during_checkpoint);
 		}
 		if (entry->added_data_during_checkpoint) {
-			auto error = art.InsertMerge(*entry->added_data_during_checkpoint);
+			// NOTE: we insert duplicates here (IndexAppendMode::INSERT_DUPLICATES)
+			// this is necessary due to the way that data is inserted into indexes during transaction commit
+			// essentially we always FIRST insert data into the index, THEN remove data
+			// even if the data was logically removed first
+			// i.e. if we have a transaction like: DELETE FROM tbl WHERE i=42; INSERT INTO tbl VALUES (42);
+			// we will FIRST insert 42, THEN delete 42 from the index
+			// We plan to change this in the future - see https://github.com/duckdblabs/duckdb-internal/issues/6886
+			auto error = art.InsertMerge(*entry->added_data_during_checkpoint, IndexAppendMode::INSERT_DUPLICATES);
 			if (error.HasError()) {
 				throw InternalException("Failed to append while merging checkpoint deltas - this "
 				                        "signifies a bug or broken index: %s",
