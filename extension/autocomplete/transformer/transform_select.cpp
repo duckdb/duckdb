@@ -1510,7 +1510,8 @@ CommonTableExpressionMap PEGTransformerFactory::TransformWithClause(PEGTransform
 				}
 			}
 			// Now safe to call on SELECT, VALUES, etc.
-			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases);
+			query_node = ToRecursiveCTE(std::move(query_node), with_entry.first, with_entry.second->aliases,
+			                            with_entry.second->key_targets);
 		}
 		auto cte_name = string(with_entry.first);
 
