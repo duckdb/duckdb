@@ -1,0 +1,23 @@
+# name: test/sql/storage/alter/alter_add_col_defaultexpr_sequence.test
+# group: [alter]
+
+statement ok
+attach ':memory:' as db1;
+
+statement ok
+attach ':memory:' as db2;
+
+statement ok
+use db1;
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE db1.tbl (id INTEGER DEFAULT nextval('seq'), s VARCHAR);
+
+statement ok
+USE db2;
+
+statement ok
+ALTER TABLE db1.tbl ADD COLUMN m INTEGER DEFAULT nextval('seq');

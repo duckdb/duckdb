@@ -25,7 +25,17 @@
         "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/storage/read_duckdb/concurrent_duckdb_read.test_slow",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
+        "test/sql/copy_database/copy_database_tpch.test_slow"
+      ]
+    },
+    {
+      "reason": "Measures memory usage.",
+      "paths": [
+        "test/sql/delete/in_memory_bulk_delete.test_slow",
+        "test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow",
+        "test/sql/index/art/vacuum/test_art_vacuum_strings.test_slow",
+        "test/sql/index/art/vacuum/test_art_vacuum_integers.test_slow"
       ]
     }
   ]

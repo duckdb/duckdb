@@ -31,7 +31,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateStatement(PEGTran
 	auto temporary_pr = list_pr.Child<OptionalParseResult>(2);
 	auto persistent_type = SecretPersistType::DEFAULT;
 	transformer.TransformOptional<SecretPersistType>(list_pr, 2, persistent_type);
-	if (result->info->TYPE == ParseInfoType::CREATE_SECRET_INFO) {
+	if (result->info->type == CatalogType::SECRET_ENTRY) {
 		auto &secret_info = result->info->Cast<CreateSecretInfo>();
 		secret_info.persist_type = persistent_type;
 	}
@@ -268,6 +268,11 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 		if (type != LogicalType::ANY) {
 			generated.expr = make_uniq<CastExpression>(type, std::move(generated.expr));
 		}
+		if (generated.expr->HasSubquery()) {
+			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			                      qualified_name.name);
+		}
+
 		ColumnDefinition col(qualified_name.name, type, std::move(generated.expr), TableColumnType::GENERATED);
 		col.SetCompressionType(compression_type);
 		if (column_constraint.default_value) {
@@ -472,7 +477,12 @@ pair<bool, ConstraintType> PEGTransformerFactory::TransformUniqueConstraint(PEGT
 
 pair<bool, ConstraintType> PEGTransformerFactory::TransformNotNullConstraint(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
-	return make_pair(false, ConstraintType::NOT_NULL);
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto not_null = list_pr.Child<OptionalParseResult>(0).HasResult();
+	if (not_null) {
+		return make_pair(false, ConstraintType::NOT_NULL);
+	}
+	return make_pair(false, ConstraintType::INVALID);
 }
 
 LogicalType PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,

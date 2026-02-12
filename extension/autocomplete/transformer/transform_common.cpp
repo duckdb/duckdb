@@ -74,6 +74,10 @@ LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer, op
 int64_t PEGTransformerFactory::TransformArrayBounds(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	if (choice_pr->name.empty()) {
+		return -1;
+	}
 	return transformer.Transform<int64_t>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
@@ -268,24 +272,23 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSimpleType(PEGTrans
 
 QualifiedName PEGTransformerFactory::TransformQualifiedTypeName(PEGTransformer &transformer,
                                                                 optional_ptr<ParseResult> parse_result) {
-	// TODO(Dtenwolde) figure out what to do with qualified names
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	QualifiedName result;
-	auto catalog_pr = list_pr.Child<OptionalParseResult>(0);
-	if (catalog_pr.HasResult()) {
-		result.catalog = transformer.Transform<string>(catalog_pr.optional_result);
-	}
-	auto schema_pr = list_pr.Child<OptionalParseResult>(1);
-	if (schema_pr.HasResult()) {
-		result.schema = transformer.Transform<string>(schema_pr.optional_result);
+	vector<string> qualified_typename;
+	auto opt_identifiers = list_pr.Child<OptionalParseResult>(0);
+	if (opt_identifiers.HasResult()) {
+		auto repeat_identifiers = opt_identifiers.optional_result->Cast<RepeatParseResult>();
+		for (auto &child : repeat_identifiers.children) {
+			auto repeat_list = child->Cast<ListParseResult>();
+			qualified_typename.push_back(repeat_list.Child<IdentifierParseResult>(0).identifier);
+		}
 	}
 
-	if (list_pr.GetChild(2)->type == ParseResultType::IDENTIFIER) {
-		result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	if (list_pr.GetChild(1)->type == ParseResultType::IDENTIFIER) {
+		qualified_typename.push_back(list_pr.Child<IdentifierParseResult>(1).identifier);
 	} else {
-		result.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
+		qualified_typename.push_back(transformer.Transform<string>(list_pr.Child<ListParseResult>(2)));
 	}
-	return result;
+	return StringToQualifiedName(qualified_typename);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCharacterType(PEGTransformer &transformer,
@@ -333,6 +336,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGeometryType(PEGTra
 	auto extract_parens = ExtractResultFromParens(crs_opt.optional_result);
 	auto crs = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
 	vector<unique_ptr<ParsedExpression>> geo_children;
+	if (crs->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		throw ParserException("Expected a constant as type modifier");
+	}
 	geo_children.push_back(std::move(crs));
 	return make_uniq<TypeExpression>("GEOMETRY", std::move(geo_children));
 }

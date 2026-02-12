@@ -178,6 +178,8 @@ private:
 	void AddStorageVersionTag();
 
 	block_id_t GetFreeBlockIdInternal(FreeBlockType type);
+	//! Adds a free block to the free_list, returns true if it was added to the regular free_list
+	bool AddFreeBlock(unique_lock<mutex> &lock, block_id_t block_id);
 
 private:
 	AttachedDatabase &db;
@@ -212,6 +214,6 @@ private:
 	//! The storage manager options
 	StorageManagerOptions options;
 	//! Lock for performing various operations in the single file block manager
-	mutex block_lock;
+	mutex single_file_block_lock;
 };
 } // namespace duckdb

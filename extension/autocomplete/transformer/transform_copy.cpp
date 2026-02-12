@@ -14,6 +14,72 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyStatement(PEGTransf
 	return transformer.Transform<unique_ptr<SQLStatement>>(copy_mode.Child<ChoiceParseResult>(0).result);
 }
 
+void SetCopyOptions(unique_ptr<CopyInfo> &info, vector<GenericCopyOption> &options) {
+	case_insensitive_string_set_t option_names;
+	for (auto &option : options) {
+		if (option_names.find(option.name) != option_names.end()) {
+			throw ParserException("Unexpected duplicate option \"%s\"", option.name);
+		}
+		option_names.insert(option.name);
+		auto option_upper = StringUtil::Upper(option.name);
+		if (option_upper == "PARTITION_BY" || option_upper == "FORCE_QUOTE" || option_upper == "FORCE_NOT_NULL" ||
+		    option_upper == "FORCE_NULL") {
+			if (option.expression) {
+				info->parsed_options[option_upper] = std::move(option.expression);
+			} else {
+				if (option.children.empty()) {
+					throw BinderException("\"%s\" expects a column list or * as parameter", option.name);
+				}
+				vector<unique_ptr<ParsedExpression>> func_children;
+				for (const auto &partition : option.children) {
+					func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<string>()));
+				}
+				auto row_func =
+				    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
+				info->parsed_options[option_upper] = std::move(row_func);
+			}
+		} else if (option_upper == "HEADER" || option_upper == "ESCAPE") {
+			if (option.children.empty()) {
+				info->parsed_options[option_upper] = nullptr;
+			} else {
+				info->parsed_options[option_upper] = make_uniq<ConstantExpression>(option.children[0]);
+			}
+		} else if (option_upper == "NULL") {
+			// (Dtenwolde) Unclear why NULL should be in parsed options rather than options.
+			if (option.children.empty()) {
+				info->parsed_options[option_upper] = nullptr;
+			} else {
+				info->parsed_options[option_upper] = make_uniq<ConstantExpression>(option.children[0]);
+			}
+		} else if (option_upper == "NULLSTR") {
+			if (option.children.empty()) {
+				info->parsed_options[option_upper] = std::move(option.expression);
+			} else {
+				if (option.children[0].IsNull()) {
+					info->parsed_options[option_upper] = make_uniq<ConstantExpression>(Value());
+				} else {
+					throw InvalidInputException("Unexpected argument %s for nullstr", option.children[0].ToString());
+				}
+			}
+		} else {
+			if (option.expression) {
+				info->parsed_options[option_upper] = std::move(option.expression);
+			} else {
+				info->options[option_upper] = option.children;
+			}
+		}
+	}
+	auto format_option = info->options.find("format");
+	if (format_option != info->options.end()) {
+		if (format_option->second.empty()) {
+			throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
+		}
+		info->format = format_option->second[0].GetValue<string>();
+		info->is_format_auto_detected = false;
+		info->options.erase(format_option);
+	}
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -22,10 +88,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransform
 	auto result = make_uniq<CopyStatement>();
 	auto info = make_uniq<CopyInfo>();
 	info->is_from = false;
-	info->file_path = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
+	auto file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
+	if (file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
+		auto &const_expr = file_name->Cast<ConstantExpression>();
+		info->file_path = const_expr.value.GetValue<string>();
+	} else {
+		info->file_path_expression = std::move(file_name);
+	}
 	auto options_opt = list_pr.Child<OptionalParseResult>(3);
 	if (options_opt.HasResult()) {
-		info->options = transformer.Transform<case_insensitive_map_t<vector<Value>>>(options_opt.optional_result);
+		auto options = transformer.Transform<vector<GenericCopyOption>>(options_opt.optional_result);
+		SetCopyOptions(info, options);
 	}
 	info->select_statement = std::move(select_statement->node);
 	result->info = std::move(info);
@@ -95,66 +168,19 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 		info->select_list = transformer.Transform<vector<string>>(insert_column_list.optional_result);
 	}
 	info->is_from = transformer.Transform<bool>(list_pr.Child<ListParseResult>(2));
-	info->file_path = transformer.Transform<string>(list_pr.Child<ListParseResult>(3));
+	auto file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
+	if (file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
+		auto &const_expr = file_name->Cast<ConstantExpression>();
+		info->file_path = const_expr.value.GetValue<string>();
+	} else {
+		info->file_path_expression = std::move(file_name);
+	}
 	info->format = ExtractFormat(info->file_path);
 
 	auto &copy_options_pr = list_pr.Child<OptionalParseResult>(4);
 	if (copy_options_pr.HasResult()) {
 		auto generic_options = transformer.Transform<vector<GenericCopyOption>>(copy_options_pr.optional_result);
-		case_insensitive_string_set_t option_names;
-		for (auto &option : generic_options) {
-			if (option_names.find(option.name) != option_names.end()) {
-				throw ParserException("Unexpected duplicate option \"%s\"", option.name);
-			}
-			option_names.insert(option.name);
-			auto option_upper = StringUtil::Upper(option.name);
-			if (option_upper == "PARTITION_BY" || option_upper == "FORCE_QUOTE" || option_upper == "FORCE_NOT_NULL" ||
-			    option_upper == "FORCE_NULL") {
-				if (option.expression) {
-					info->parsed_options[option_upper] = std::move(option.expression);
-				} else {
-					if (option.children.empty()) {
-						throw BinderException("\"%s\" expects a column list or * as parameter", option.name);
-					}
-					vector<unique_ptr<ParsedExpression>> func_children;
-					for (auto partition : option.children) {
-						func_children.push_back(make_uniq<ColumnRefExpression>(partition.GetValue<string>()));
-					}
-					auto row_func =
-					    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(func_children));
-					info->parsed_options[option_upper] = std::move(row_func);
-				}
-			} else if (option_upper == "NULL") {
-				// (Dtenwolde) Unclear why NULL should be in parsed options rather than options.
-				if (option.children.empty()) {
-					info->parsed_options[option_upper] = nullptr;
-				} else {
-					info->parsed_options[option_upper] = make_uniq<ConstantExpression>(option.children[0]);
-				}
-			} else if (option_upper == "NULLSTR") {
-				if (option.children.empty()) {
-					info->parsed_options[option_upper] = std::move(option.expression);
-				} else {
-					if (option.children[0].IsNull()) {
-						info->parsed_options[option_upper] = make_uniq<ConstantExpression>(Value());
-					} else {
-						throw InvalidInputException("Unexpected argument %s for nullstr",
-						                            option.children[0].ToString());
-					}
-				}
-			} else {
-				info->options[option_upper] = option.children;
-			}
-		}
-		auto format_option = info->options.find("format");
-		if (format_option != info->options.end()) {
-			if (format_option->second.empty()) {
-				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
-			}
-			info->format = format_option->second[0].GetValue<string>();
-			info->is_format_auto_detected = false;
-			info->options.erase(format_option);
-		}
+		SetCopyOptions(info, generic_options);
 	}
 
 	result->info = std::move(info);
@@ -168,23 +194,15 @@ bool PEGTransformerFactory::TransformFromOrTo(PEGTransformer &transformer, optio
 	return StringUtil::CIEquals(keyword.keyword, "from");
 }
 
-string PEGTransformerFactory::TransformCopyFileName(PEGTransformer &transformer,
-                                                    optional_ptr<ParseResult> parse_result) {
-	// TODO(dtenwolde) support stdin and stdout
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileName(PEGTransformer &transformer,
+                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	if (choice_pr->name == "Expression") {
-		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
-		if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
-			throw ParserException("Expected a constant expression as file name");
-		}
-		auto &const_expr = expr->Cast<ConstantExpression>();
-		if (const_expr.value.type() != LogicalType::VARCHAR) {
-			throw ParserException("Expected a string as file name");
-		}
-		return const_expr.value.GetValue<string>();
+		return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
 	}
-	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto file_name = transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+	return make_uniq<ConstantExpression>(Value(file_name));
 }
 
 string PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &transformer,
@@ -252,7 +270,7 @@ GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransforme
 		result.expression = make_uniq<StarExpression>();
 	} else if (StringUtil::CIEquals(star_or_column_list->name, "ColumnList")) {
 		auto column_list = transformer.Transform<vector<string>>(star_or_column_list);
-		for (auto col : column_list) {
+		for (auto &col : column_list) {
 			result.children.push_back(Value(col));
 		}
 	}
@@ -274,7 +292,7 @@ GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer
 	auto result = GenericCopyOption();
 	result.name = is_not ? "force_not_null" : "force_null";
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(3));
-	for (auto col : column_list) {
+	for (auto &col : column_list) {
 		result.children.push_back(Value(col));
 	}
 	return result;
@@ -291,11 +309,32 @@ GenericCopyOption PEGTransformerFactory::TransformPartitionByOption(PEGTransform
 		result.expression = make_uniq<StarExpression>();
 	} else if (StringUtil::CIEquals(star_or_column_list->name, "ColumnList")) {
 		auto column_list = transformer.Transform<vector<string>>(star_or_column_list);
-		for (auto col : column_list) {
+		for (auto &col : column_list) {
 			result.children.push_back(Value(col));
 		}
 	}
 	return result;
+}
+
+GenericCopyOption PEGTransformerFactory::TransformNullAsOption(PEGTransformer &transformer,
+                                                               optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto string_literal = list_pr.Child<StringLiteralParseResult>(2).result;
+	return GenericCopyOption("null", string_literal);
+}
+
+GenericCopyOption PEGTransformerFactory::TransformDelimiterAsOption(PEGTransformer &transformer,
+                                                                    optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto string_literal = list_pr.Child<StringLiteralParseResult>(2).result;
+	return GenericCopyOption("delimiter", string_literal);
+}
+
+GenericCopyOption PEGTransformerFactory::TransformEscapeAsOption(PEGTransformer &transformer,
+                                                                 optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto string_literal = list_pr.Child<StringLiteralParseResult>(2).result;
+	return GenericCopyOption("escape", string_literal);
 }
 
 } // namespace duckdb
