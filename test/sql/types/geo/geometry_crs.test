@@ -2,6 +2,11 @@
 # group: [geo]
 
 query I
+select st_crs(NULL);
+----
+NULL
+
+query I
 select st_crs(st_setcrs('POINT(0 1)', 'OGC:CRS84'));
 ----
 OGC:CRS84
