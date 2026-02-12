@@ -467,6 +467,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"map_keys", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_values", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"max_by", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"max_intersections", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"mean", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"median", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"min_by", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},

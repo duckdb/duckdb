@@ -1,0 +1,124 @@
+# name: test/sql/aggregate/aggregates/test_max_intersections.test
+# description: Test Aggregate Function max_intersections
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+query I
+select max_intersections(NULL, NULL)
+----
+0
+
+query I
+select max_intersections(1,1)
+----
+1
+
+query I
+select max_intersections(i,i) from range(100) tbl(i);
+----
+1
+
+query I
+select max_intersections(i,i) from range(100) tbl(i) where 1 = 0;
+----
+0
+
+# Basic overlaps
+statement ok
+create table intervals (part string, s integer, e integer)
+
+statement ok
+insert into intervals values
+ ('a',1,5), ('a',4,8), ('a',7,9), ('a',2,6), ('a',3,3), ('b',3,5), ('b',2,7), ('b',3,4), ('b',4,9), ('b',1,2)
+
+query I
+select max_intersections(s,e) from intervals;
+----
+7
+
+# windows over
+query II
+select part, max_intersections(s,e) over(partition by part) from intervals order by part;
+----
+a	3
+a	3
+a	3
+a	3
+a	3
+b	4
+b	4
+b	4
+b	4
+b	4
+
+# windows over with sort
+query II
+select part, max_intersections(s,e) over(partition by part order by s) from intervals order by part;
+----
+a	1
+a	2
+a	3
+a	3
+a	3
+b	1
+b	2
+b	3
+b	3
+b	4
+
+
+# Group by
+query II
+select s%2, max_intersections(s,e) from intervals group by s%2 order by s%2;
+----
+0	4
+1	4
+
+
+
+# Adjacency counts touching endpoints
+query I
+select max_intersections(i, i+1) from range(3) tbl(i);
+----
+2
+
+# Constant intervals across multiple rows
+query I
+select max_intersections(2,5) from range(3);
+----
+3
+
+# Invalid intervals ignored
+query I
+select max_intersections(i+1, i) from range(10) tbl(i);
+----
+0
+
+# Mixed NULL and invalid values
+statement ok
+create table mixed (s integer, e integer)
+
+statement ok
+insert into mixed values (NULL,NULL), (5,2), (1,3), (2,3), (2,2)
+
+query I
+select max_intersections(s,e) from mixed;
+----
+3
+
+# All NULLs
+statement ok
+create table empties (s integer, e integer)
+
+statement ok
+insert into empties values (NULL,NULL), (NULL,NULL)
+
+query I
+select max_intersections(s,e) from empties;
+----
+0
