@@ -546,6 +546,8 @@ struct ListVector {
 	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
 	//! Share the entry of the other list vector
 	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
+	//! Returns the total number of entries in the list
+	DUCKDB_API static idx_t GetTotalEntryCount(Vector &list, idx_t count);
 
 private:
 	template <class T>

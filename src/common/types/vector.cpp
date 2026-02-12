@@ -2670,6 +2670,23 @@ idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t of
 	return info.child_list_info.length;
 }
 
+idx_t ListVector::GetTotalEntryCount(Vector &list, idx_t count) {
+	UnifiedVectorFormat unified_list_data;
+	list.ToUnifiedFormat(count, unified_list_data);
+
+	idx_t total_count = 0;
+	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
+	for (idx_t r = 0; r < count; r++) {
+		auto idx = unified_list_data.sel->get_index(r);
+		if (!unified_list_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		total_count = list_data[idx].length;
+		break;
+	}
+	return total_count;
+}
+
 ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count) {
 	ConsecutiveChildListInfo info;
 	UnifiedVectorFormat unified_list_data;
