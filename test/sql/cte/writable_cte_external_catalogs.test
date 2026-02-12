@@ -1,0 +1,59 @@
+# name: test/sql/cte/writable_cte_external_catalogs.test
+# description: Test writable CTEs with external catalog types
+# group: [cte]
+
+# ============================================
+# SQLite Catalog Tests
+# ============================================
+# SQLite is the only external catalog that can be tested in the main repo
+# because it's file-based and doesn't require an external server.
+#
+# For Postgres/MySQL external catalogs, writable CTEs should be tested
+# in their respective extension repositories (postgres_scanner, mysql_scanner).
+# Expected behavior: If RETURNING is not supported by the extension's
+# DML operators, a descriptive error should be thrown.
+
+require sqlite_scanner
+
+statement ok
+SET autoinstall_known_extensions=true;
+
+statement ok
+SET autoload_known_extensions=true;
+
+statement ok
+ATTACH '__TEST_DIR__/writable_cte_test.sqlite' AS sqlite_db (TYPE SQLITE);
+
+statement ok
+CREATE TABLE sqlite_db.main.test_table (id INTEGER, val TEXT);
+
+# INSERT with RETURNING in CTE - SQLite does not support RETURNING yet
+statement error
+WITH ins AS (INSERT INTO sqlite_db.main.test_table VALUES (1, 'test'), (2, 'hello') RETURNING *)
+SELECT * FROM ins ORDER BY id;
+----
+RETURNING clause not yet supported
+
+# INSERT data for UPDATE/DELETE tests
+statement ok
+INSERT INTO sqlite_db.main.test_table VALUES (1, 'test'), (2, 'hello');
+
+# UPDATE with RETURNING in CTE - SQLite does not support RETURNING yet
+statement error
+WITH upd AS (UPDATE sqlite_db.main.test_table SET val = 'updated' WHERE id = 1 RETURNING *)
+SELECT * FROM upd;
+----
+RETURNING clause not yet supported
+
+# DELETE with RETURNING in CTE - SQLite does not support RETURNING yet
+statement error
+WITH del AS (DELETE FROM sqlite_db.main.test_table WHERE id = 2 RETURNING *)
+SELECT * FROM del;
+----
+RETURNING clause not yet supported
+
+statement ok
+DROP TABLE sqlite_db.main.test_table;
+
+statement ok
+DETACH sqlite_db;

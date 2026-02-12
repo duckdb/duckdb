@@ -3,7 +3,11 @@
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/parser/query_node/statement_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -88,17 +92,85 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			throw NotImplementedException("CTE collations not supported");
 		}
 		// we need a query
-		if (!cte.ctequery || cte.ctequery->type != duckdb_libpgquery::T_PGSelectStmt) {
-			throw ParserException("A CTE needs a SELECT");
+		if (!cte.ctequery) {
+			throw ParserException("A CTE needs a query");
 		}
 
-		// CTE transformation can either result in inlining for non recursive CTEs, or in recursive CTE bindings
-		// otherwise.
-		if (cte.cterecursive || de_with_clause.recursive) {
-			info->query = TransformRecursiveCTE(cte, *info);
-		} else {
+		bool is_dml_cte = false;
+		switch (cte.ctequery->type) {
+		case duckdb_libpgquery::T_PGSelectStmt: {
+			// CTE transformation can either result in inlining for non recursive CTEs, or in recursive CTE bindings
+			// otherwise.
+			if (cte.cterecursive || de_with_clause.recursive) {
+				info->query = TransformRecursiveCTE(cte, *info);
+			} else {
+				Transformer cte_transformer(*this);
+				info->query = cte_transformer.TransformSelectStmt(*cte.ctequery);
+			}
+			break;
+		}
+		case duckdb_libpgquery::T_PGInsertStmt: {
+			// Recursive CTEs cannot contain data-modifying statements
+			if (cte.cterecursive || de_with_clause.recursive) {
+				throw ParserException("Recursive CTEs cannot contain data-modifying statements");
+			}
 			Transformer cte_transformer(*this);
-			info->query = cte_transformer.TransformSelectStmt(*cte.ctequery);
+			auto &insert_stmt = *PGPointerCast<duckdb_libpgquery::PGInsertStmt>(cte.ctequery);
+			auto insert = cte_transformer.TransformInsert(insert_stmt);
+			if (insert->returning_list.empty()) {
+				throw ParserException("INSERT in a CTE must have a RETURNING clause");
+			}
+			// Wrap the DML statement in a SelectStatement via StatementNode
+			info->query = make_uniq<SelectStatement>();
+			// Copy inner CTEs before moving the statement (for WITH ... INSERT ... syntax)
+			auto inner_ctes = insert->cte_map.Copy();
+			info->query->node = make_uniq<StatementNode>(std::move(insert));
+			info->query->node->cte_map = std::move(inner_ctes);
+			is_dml_cte = true;
+			break;
+		}
+		case duckdb_libpgquery::T_PGUpdateStmt: {
+			// Recursive CTEs cannot contain data-modifying statements
+			if (cte.cterecursive || de_with_clause.recursive) {
+				throw ParserException("Recursive CTEs cannot contain data-modifying statements");
+			}
+			Transformer cte_transformer(*this);
+			auto &update_stmt = *PGPointerCast<duckdb_libpgquery::PGUpdateStmt>(cte.ctequery);
+			auto update = cte_transformer.TransformUpdate(update_stmt);
+			if (update->returning_list.empty()) {
+				throw ParserException("UPDATE in a CTE must have a RETURNING clause");
+			}
+			// Wrap the DML statement in a SelectStatement via StatementNode
+			info->query = make_uniq<SelectStatement>();
+			// Copy inner CTEs before moving the statement (for WITH ... UPDATE ... syntax)
+			auto inner_ctes = update->cte_map.Copy();
+			info->query->node = make_uniq<StatementNode>(std::move(update));
+			info->query->node->cte_map = std::move(inner_ctes);
+			is_dml_cte = true;
+			break;
+		}
+		case duckdb_libpgquery::T_PGDeleteStmt: {
+			// Recursive CTEs cannot contain data-modifying statements
+			if (cte.cterecursive || de_with_clause.recursive) {
+				throw ParserException("Recursive CTEs cannot contain data-modifying statements");
+			}
+			Transformer cte_transformer(*this);
+			auto &delete_stmt = *PGPointerCast<duckdb_libpgquery::PGDeleteStmt>(cte.ctequery);
+			auto del = cte_transformer.TransformDelete(delete_stmt);
+			if (del->returning_list.empty()) {
+				throw ParserException("DELETE in a CTE must have a RETURNING clause");
+			}
+			// Wrap the DML statement in a SelectStatement via StatementNode
+			info->query = make_uniq<SelectStatement>();
+			// Copy inner CTEs before moving the statement (for WITH ... DELETE ... syntax)
+			auto inner_ctes = del->cte_map.Copy();
+			info->query->node = make_uniq<StatementNode>(std::move(del));
+			info->query->node->cte_map = std::move(inner_ctes);
+			is_dml_cte = true;
+			break;
+		}
+		default:
+			throw ParserException("A CTE needs a SELECT, INSERT, UPDATE, or DELETE statement");
 		}
 		D_ASSERT(info->query);
 		auto cte_name = string(cte.ctename);
@@ -109,7 +181,10 @@ void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, 
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
 
-		if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeDefault) {
+		// DML CTEs must always be materialized to ensure they execute exactly once
+		if (is_dml_cte) {
+			info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+		} else if (cte.ctematerialized == duckdb_libpgquery::PGCTEMaterializeDefault) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 			info->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 #else
