@@ -168,6 +168,7 @@ public:
 
 protected:
 	bool BlockIsRegistered(block_id_t block_id);
+	shared_ptr<BlockHandle> TryGetBlock(block_id_t block_id);
 
 public:
 	template <class TARGET>

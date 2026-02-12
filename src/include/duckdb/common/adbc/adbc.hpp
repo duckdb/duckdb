@@ -129,6 +129,10 @@ AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcEr
 
 AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct AdbcError *error);
 
+AdbcStatusCode ConnectionCancel(struct AdbcConnection *connection, struct AdbcError *error);
+
+const AdbcError *ErrorFromArrayStream(struct ArrowArrayStream *stream, AdbcStatusCode *status);
+
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error);
 
@@ -136,6 +140,8 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                      int64_t *rows_affected, struct AdbcError *error);
+
+AdbcStatusCode StatementCancel(struct AdbcStatement *statement, struct AdbcError *error);
 
 AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcError *error);
 

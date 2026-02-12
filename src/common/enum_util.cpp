@@ -28,6 +28,7 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
+#include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
@@ -1535,6 +1536,24 @@ const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value) {
 template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value) {
 	return static_cast<DeprecatedIndexType>(StringUtil::StringToEnum(GetDeprecatedIndexTypeValues(), 3, "DeprecatedIndexType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDeprecatedUsingKeySyntaxValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DeprecatedUsingKeySyntax::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(DeprecatedUsingKeySyntax::UNION_AS_UNION_ALL), "UNION_AS_UNION_ALL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value) {
+	return StringUtil::EnumToString(GetDeprecatedUsingKeySyntaxValues(), 2, "DeprecatedUsingKeySyntax", static_cast<uint32_t>(value));
+}
+
+template<>
+DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value) {
+	return static_cast<DeprecatedUsingKeySyntax>(StringUtil::StringToEnum(GetDeprecatedUsingKeySyntaxValues(), 2, "DeprecatedUsingKeySyntax", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDestroyBufferUponValues() {

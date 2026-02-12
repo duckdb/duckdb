@@ -477,7 +477,12 @@ pair<bool, ConstraintType> PEGTransformerFactory::TransformUniqueConstraint(PEGT
 
 pair<bool, ConstraintType> PEGTransformerFactory::TransformNotNullConstraint(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
-	return make_pair(false, ConstraintType::NOT_NULL);
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto not_null = list_pr.Child<OptionalParseResult>(0).HasResult();
+	if (not_null) {
+		return make_pair(false, ConstraintType::NOT_NULL);
+	}
+	return make_pair(false, ConstraintType::INVALID);
 }
 
 LogicalType PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,
