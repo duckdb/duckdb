@@ -2682,7 +2682,6 @@ idx_t ListVector::GetTotalEntryCount(Vector &list, idx_t count) {
 			continue;
 		}
 		total_count += list_data[idx].length;
-		break;
 	}
 	return total_count;
 }
