@@ -151,4 +151,11 @@ ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
 ManagedVectorBuffer::~ManagedVectorBuffer() {
 }
 
+ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p)
+    : VectorBuffer(VectorBufferType::SHREDDED_BUFFER), shredded_data(make_uniq<Vector>(shredded_data_p)) {
+}
+
+ShreddedVectorBuffer::~ShreddedVectorBuffer() {
+}
+
 } // namespace duckdb

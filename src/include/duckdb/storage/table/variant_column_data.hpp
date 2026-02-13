@@ -70,7 +70,6 @@ public:
 	void Verify(RowGroup &parent) override;
 
 	static void ShredVariantData(Vector &input, Vector &output, idx_t count);
-	static void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);
