@@ -625,6 +625,10 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 	if (aggregate_args.size() == 1) {
 		// If we only project the aggregate value itself, we do not need it as an arg
 		VisitExpression(&window_expr.orders[0].expression);
+		if (column_references.size() != 1) {
+			column_references.clear();
+			return aggregate_args;
+		}
 		const auto aggregate_value_binding = column_references.begin()->first;
 		column_references.clear();
 

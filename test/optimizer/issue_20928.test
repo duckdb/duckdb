@@ -1,0 +1,12 @@
+# name: test/optimizer/issue_20928.test
+# description: TopN window elimination should not crash with ORDER BY expression wrapping the payload column
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t (id VARCHAR, val VARCHAR)
+
+query TT
+SELECT id, val
+FROM t
+QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY val IS NOT NULL) = 1
+----
