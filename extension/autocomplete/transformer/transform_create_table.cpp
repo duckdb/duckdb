@@ -225,7 +225,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 	auto generated_opt = list_pr.Child<OptionalParseResult>(2);
 	LogicalType type = LogicalType::ANY;
 	if (!type_opt.HasResult() && !generated_opt.HasResult()) {
-		throw ParserException("For column %s specify either a type or column must be generated",
+		throw ParserException("Column %s must have a type or be defined as a GENERATED column.",
 		                      qualified_name.ToString());
 	}
 	transformer.TransformOptional<LogicalType>(list_pr, 1, type);
