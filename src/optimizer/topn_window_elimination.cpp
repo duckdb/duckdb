@@ -8,6 +8,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -73,6 +74,20 @@ vector<LogicalType> ExtractReturnTypes(const vector<unique_ptr<Expression>> &exp
 		types.push_back(expr->return_type);
 	}
 	return types;
+}
+
+//! Recursively replace BoundColumnRefExpression matching `binding` with `replacement` in `expr`
+static void SubstituteColumnBinding(unique_ptr<Expression> &expr, const ColumnBinding &binding,
+                                    const Expression &replacement) {
+	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = expr->Cast<BoundColumnRefExpression>();
+		if (colref.binding == binding) {
+			expr = replacement.Copy();
+			return;
+		}
+	}
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { SubstituteColumnBinding(child, binding, replacement); });
 }
 
 bool BindingsReferenceRowNumber(const vector<ColumnBinding> &bindings, const LogicalWindow &window) {
@@ -185,8 +200,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	reference<LogicalOperator> child = *filter.children[0];
 
 	// Get bindings and types from filter to use in top-most operator later
-	const auto topmost_bindings = filter.GetColumnBindings();
-	auto new_bindings = TraverseProjectionBindings(topmost_bindings, child);
+	auto topmost_bindings = filter.GetColumnBindings();
+	vector<pair<ColumnBinding, unique_ptr<Expression>>> constant_bindings;
+	auto new_bindings = TraverseProjectionBindings(topmost_bindings, child, constant_bindings);
 
 	D_ASSERT(child.get().type == LogicalOperatorType::LOGICAL_WINDOW);
 	auto &window = child.get().Cast<LogicalWindow>();
@@ -222,6 +238,48 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 
 	UpdateTopmostBindings(window_idx, op, group_projection_idxs, topmost_bindings, new_bindings, replacer);
 	replacer.stop_operator = op.get();
+
+	// Add constant expressions (e.g., SELECT 1 AS one) back to the topmost projection
+	if (!constant_bindings.empty()) {
+		if (op->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			auto &projection = op->Cast<LogicalProjection>();
+			for (auto &cb : constant_bindings) {
+				ColumnBinding new_binding(projection.table_index, projection.expressions.size());
+				projection.expressions.push_back(std::move(cb.second));
+				replacer.replacement_bindings.emplace_back(cb.first, new_binding);
+			}
+			projection.ResolveOperatorTypes();
+		} else {
+			// For join case (late materialization), wrap in a pass-through projection with constants
+			op->ResolveOperatorTypes();
+			auto child_bindings = op->GetColumnBindings();
+			vector<unique_ptr<Expression>> proj_exprs;
+			proj_exprs.reserve(child_bindings.size() + constant_bindings.size());
+			for (idx_t i = 0; i < child_bindings.size(); i++) {
+				proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(op->types[i], child_bindings[i]));
+			}
+			auto proj_table_idx = optimizer.binder.GenerateTableIndex();
+			// Remap existing replacement bindings through the new projection
+			for (auto &replacement : replacer.replacement_bindings) {
+				for (idx_t j = 0; j < child_bindings.size(); j++) {
+					if (child_bindings[j] == replacement.new_binding) {
+						replacement.new_binding = ColumnBinding(proj_table_idx, j);
+						break;
+					}
+				}
+			}
+			for (auto &cb : constant_bindings) {
+				ColumnBinding new_binding(proj_table_idx, proj_exprs.size());
+				proj_exprs.push_back(std::move(cb.second));
+				replacer.replacement_bindings.emplace_back(cb.first, new_binding);
+			}
+			auto projection = make_uniq<LogicalProjection>(proj_table_idx, std::move(proj_exprs));
+			projection->children.push_back(std::move(op));
+			projection->ResolveOperatorTypes();
+			op = std::move(projection);
+			replacer.stop_operator = op.get();
+		}
+	}
 
 	RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
 	unused_optimizer.VisitOperator(*op);
@@ -531,6 +589,19 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		const auto current_column_ref = column_references.begin()->first;
 		column_references.clear();
 		D_ASSERT(current_column_ref.table_index == projection.table_index);
+
+		// Check all projection expressions to ensure they reference at most one column each
+		for (auto &proj_expr : projection.expressions) {
+			VisitExpression(&proj_expr);
+			if (column_references.size() > 1) {
+				// Expression references multiple columns (e.g., a + b), cannot optimize
+				column_references.clear();
+				return false;
+			}
+			column_references.clear();
+		}
+
+		// Now track the specific column we're following through the projection
 		VisitExpression(&projection.expressions[current_column_ref.column_index]);
 
 		child = *child.get().children[0];
@@ -637,19 +708,46 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 	return aggregate_args;
 }
 
-vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(const std::vector<ColumnBinding> &old_bindings,
-                                                                        reference<LogicalOperator> &op) {
-	auto new_bindings = old_bindings;
+vector<ColumnBinding> TopNWindowElimination::TraverseProjectionBindings(
+    std::vector<ColumnBinding> &topmost_bindings, reference<LogicalOperator> &op,
+    vector<pair<ColumnBinding, unique_ptr<Expression>>> &constant_bindings) {
+	auto new_bindings = topmost_bindings;
+	vector<unique_ptr<Expression>> outer_exprs(new_bindings.size()); // null = simple pass-through
 
 	// Traverse child projections to retrieve projections on window output
 	while (op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		auto &projection = op.get().Cast<LogicalProjection>();
 
-		for (idx_t i = 0; i < new_bindings.size(); i++) {
-			auto &new_binding = new_bindings[i];
-			D_ASSERT(new_binding.table_index == projection.table_index);
-			VisitExpression(&projection.expressions[new_binding.column_index]);
-			new_binding = column_references.begin()->first;
+		for (idx_t i = new_bindings.size(); i > 0; i--) {
+			idx_t idx = i - 1;
+			auto &new_binding = new_bindings[idx];
+			auto &proj_expr = projection.expressions[new_binding.column_index];
+
+			VisitExpression(&proj_expr);
+			if (column_references.empty()) {
+				// Constant expression (e.g., SELECT 1 AS one) - substitute into outer expression chain if needed
+				unique_ptr<Expression> final_expr;
+				if (outer_exprs[idx]) {
+					SubstituteColumnBinding(outer_exprs[idx], new_binding, *proj_expr);
+					final_expr = std::move(outer_exprs[idx]);
+				} else {
+					final_expr = proj_expr->Copy();
+				}
+				constant_bindings.emplace_back(topmost_bindings[idx], std::move(final_expr));
+				new_bindings.erase(new_bindings.begin() + NumericCast<int64_t>(idx));
+				topmost_bindings.erase(topmost_bindings.begin() + NumericCast<int64_t>(idx));
+				outer_exprs.erase(outer_exprs.begin() + NumericCast<int64_t>(idx));
+			} else {
+				// Has column references - track non-trivial expressions in outer chain
+				if (outer_exprs[idx] || proj_expr->type != ExpressionType::BOUND_COLUMN_REF) {
+					if (outer_exprs[idx]) {
+						SubstituteColumnBinding(outer_exprs[idx], new_binding, *proj_expr);
+					} else {
+						outer_exprs[idx] = proj_expr->Copy();
+					}
+				}
+				new_binding = column_references.begin()->first;
+			}
 			column_references.clear();
 		}
 		op = *op.get().children[0];
