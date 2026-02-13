@@ -91,7 +91,7 @@ public:
 	static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node);
 	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, idx_t max_depth,
 	                                   double field_appearance_threshold, idx_t map_inference_threshold,
-	                                   idx_t depth = 0, const LogicalType &null_type = LogicalType::JSON());
+	                                   idx_t depth = 0, const LogicalType &null_type = LogicalType::SQLNULL);
 };
 
 } // namespace duckdb
