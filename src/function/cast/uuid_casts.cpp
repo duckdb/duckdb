@@ -15,7 +15,8 @@ BoundCastInfo DefaultCasts::UUIDCastSwitch(BindCastInput &input, const LogicalTy
 		return BoundCastInfo(&VectorCastHelpers::StringCast<hugeint_t, duckdb::CastFromUUIDToBlob>);
 	case LogicalTypeId::UHUGEINT:
 		// uuid to uhugeint
-		return BoundCastInfo(&VectorCastHelpers::TemplatedCastLoop<hugeint_t, uhugeint_t, duckdb::CastFromUUIDToUHugeint>);
+		return BoundCastInfo(
+		    &VectorCastHelpers::TemplatedCastLoop<hugeint_t, uhugeint_t, duckdb::CastFromUUIDToUHugeint>);
 	default:
 		return TryVectorNullCast;
 	}
