@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -603,13 +604,39 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			return;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
-		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
 
 		// check the sampling info if we have to sample this chunk
-		if (state.GetSamplingInfo().do_system_sample &&
-		    state.random.NextRandom() > state.GetSamplingInfo().sample_rate) {
-			NextVector(state);
-			continue;
+		if (state.GetSamplingInfo().do_system_sample) {
+			auto &sampling_info = state.GetSamplingInfo();
+			if (!sampling_info.is_percentage) {
+				double rate = sampling_info.sample_rate;
+				if (rate <= 0) {
+					NextVector(state);
+					continue;
+				}
+
+				// To satisfy the distribution requirement while remaining deterministic,
+				// consistent across all paths, and fast (via early stopping), we take
+				// a fraction of rows from every chunk.
+				idx_t rows_to_take = static_cast<idx_t>(std::ceil(rate * STANDARD_VECTOR_SIZE));
+				if (rows_to_take < 1) {
+					rows_to_take = 1;
+				}
+				if (rows_to_take > max_count) {
+					rows_to_take = max_count;
+				}
+
+				// Adjust max_count to limit the number of rows scanned from this chunk.
+				// The actual count may be further reduced by filters or deletions.
+				max_count = rows_to_take;
+			} else {
+				// Percentage-based system sampling: original behavior
+				if (state.random.NextRandom() > sampling_info.sample_rate) {
+					NextVector(state);
+					continue;
+				}
+			}
 		}
 
 		//! first check the zonemap if we have to scan this partition
@@ -722,6 +749,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			D_ASSERT(approved_tuple_count > 0);
 			count = approved_tuple_count;
 		}
+
 		result.SetCardinality(count);
 		state.vector_index++;
 		break;

@@ -266,7 +266,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// perform sampling pushdown
 	RunOptimizer(OptimizerType::SAMPLING_PUSHDOWN, [&]() {
-		SamplingPushdown sampling_pushdown;
+		SamplingPushdown sampling_pushdown(context);
 		plan = sampling_pushdown.Optimize(std::move(plan));
 	});
 
