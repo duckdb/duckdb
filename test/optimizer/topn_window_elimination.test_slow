@@ -318,3 +318,77 @@ SELECT * FROM a, LATERAL (SELECT *, a_id AS id_dup FROM b ORDER BY array_distanc
 [1.0, 2.0, 3.0]	1	[1.0, 2.0, 3.0]	a	1
 [4.0, 5.0, 6.0]	2	[4.0, 5.0, 6.0]	b	2
 
+# Test that constant expressions in projections between Filter and Window are handled correctly
+statement ok
+CREATE TABLE small_test AS SELECT i % 3 as grp, i as val FROM range(20) t(i);
+
+query I
+SELECT count(*) FROM (
+    SELECT row_number() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+    FROM small_test
+) WHERE rk <= 3;
+----
+9
+
+statement ok
+SET disabled_optimizers = 'filter_pushdown';
+
+query IIII
+SELECT * FROM (
+    SELECT 1 AS one, row_number() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+    FROM small_test
+) WHERE rk <= 3
+ORDER BY grp, rk;
+----
+1	1	0	18
+1	2	0	15
+1	3	0	12
+1	1	1	19
+1	2	1	16
+1	3	1	13
+1	1	2	17
+1	2	2	14
+1	3	2	11
+
+query II
+EXPLAIN SELECT * FROM (
+    SELECT 1 AS one, row_number() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+    FROM small_test
+) WHERE rk <= 3;
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+query IIII
+SELECT * FROM (
+    SELECT one + grp, rk, grp, val FROM (
+        SELECT 1 AS one, row_number() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+        FROM small_test
+    ) t
+) WHERE rk <= 3
+ORDER BY grp, rk;
+----
+1	1	0	18
+1	2	0	15
+1	3	0	12
+2	1	1	19
+2	2	1	16
+2	3	1	13
+3	1	2	17
+3	2	2	14
+3	3	2	11
+
+# Outer projection references multiple columns (one + grp), violates CanOptimize check
+# that ensures each projection expression references at most one column
+query II
+EXPLAIN SELECT * FROM (
+    SELECT one + grp, rk, grp, val FROM (
+        SELECT 1 AS one, row_number() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+        FROM small_test
+    ) t
+) WHERE rk <= 3;
+----
+logical_opt	<REGEX>:.*FILTER.*WINDOW.*
+
+statement ok
+SET disabled_optimizers = '';
+
