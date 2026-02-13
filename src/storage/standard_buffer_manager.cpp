@@ -112,8 +112,8 @@ idx_t StandardBufferManager::GetBlockSize() const {
 	return temp_block_manager->GetBlockSize();
 }
 
-idx_t StandardBufferManager::GetQueryMaxMemory() const {
-	return GetBufferPool().GetQueryMaxMemory();
+idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
+	return GetBufferPool().GetOperatorMemoryLimit();
 }
 
 template <typename... ARGS>

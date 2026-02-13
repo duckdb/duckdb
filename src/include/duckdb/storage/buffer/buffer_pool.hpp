@@ -63,7 +63,7 @@ public:
 
 	idx_t GetMaxMemory() const;
 
-	virtual idx_t GetQueryMaxMemory() const;
+	virtual idx_t GetOperatorMemoryLimit() const;
 
 	TemporaryMemoryManager &GetTemporaryMemoryManager();
 
