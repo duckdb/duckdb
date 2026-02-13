@@ -695,16 +695,14 @@ unique_ptr<MultiFileList> FileSystem::GlobFileList(const string &pattern, const 
 	if (result->IsEmpty()) {
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB && !HasGlob(pattern)) {
 			// if we have no glob in the pattern and we have an extension, we try to glob
-			if (!HasGlob(pattern)) {
-				if (input.extension.empty()) {
-					throw InternalException("FALLBACK_GLOB requires an extension to be specified");
-				}
-				string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
-				result = GlobFileList(new_pattern, FileGlobOptions::ALLOW_EMPTY);
-				if (!result->IsEmpty()) {
-					// we found files by globbing the target as if it was a directory - return them
-					return result;
-				}
+			if (input.extension.empty()) {
+				throw InternalException("FALLBACK_GLOB requires an extension to be specified");
+			}
+			string new_pattern = JoinPath(JoinPath(pattern, "**"), "*." + input.extension);
+			result = GlobFileList(new_pattern, FileGlobOptions::ALLOW_EMPTY);
+			if (!result->IsEmpty()) {
+				// we found files by globbing the target as if it was a directory - return them
+				return result;
 			}
 		}
 		if (input.behavior == FileGlobOptions::FALLBACK_GLOB || input.behavior == FileGlobOptions::DISALLOW_EMPTY) {

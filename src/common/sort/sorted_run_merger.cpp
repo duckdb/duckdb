@@ -557,7 +557,9 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 
 		// Erase from active if begin is equal to end
 		if (min_run_boundary.begin == min_run_boundary.end) {
-			active_run_idxs.erase(std::find(active_run_idxs.begin(), active_run_idxs.end(), min_idx));
+			auto it = std::find(active_run_idxs.begin(), active_run_idxs.end(), min_idx);
+			D_ASSERT(it != active_run_idxs.end());
+			active_run_idxs.erase(it);
 		}
 
 		// Update total remaining accordingly
