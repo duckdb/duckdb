@@ -359,7 +359,8 @@ public:
 	}
 	page_offset_t &GetCurrentOffset() {
 		if (!buffer_index.IsValid()) {
-			throw InternalException("Can't get BufferHandle, no buffer set yet!");
+			throw InternalException(
+			    "(ZSTDCompressionBufferCollection::GetCurrentOffset) Can't get BufferHandle, no buffer set yet!");
 		}
 		auto index = buffer_index.GetIndex();
 		auto &offset = buffer_states[index].offset;
@@ -372,7 +373,8 @@ public:
 	}
 	BufferHandle &BufferHandleMutable() {
 		if (!buffer_index.IsValid()) {
-			throw InternalException("Can't get BufferHandle, no buffer set yet!");
+			throw InternalException(
+			    "(ZSTDCompressionBufferCollection::BufferHandleMutable) Can't get BufferHandle, no buffer set yet!");
 		}
 		auto index = buffer_index.GetIndex();
 		if (index == 0) {
@@ -383,7 +385,8 @@ public:
 	}
 	data_ptr_t GetCurrentBufferPtr() {
 		if (!buffer_index.IsValid()) {
-			throw InternalException("Can't get BufferHandle, no buffer set yet!");
+			throw InternalException(
+			    "(ZSTDCompressionBufferCollection::GetCurrentBufferPtr) Can't get BufferHandle, no buffer set yet!");
 		}
 		auto index = buffer_index.GetIndex();
 		auto &state = buffer_states[index];
@@ -391,7 +394,8 @@ public:
 	}
 	bool CanFlush() const {
 		if (!buffer_index.IsValid()) {
-			throw InternalException("Can't determine CanFlush, no buffer set yet!");
+			throw InternalException(
+			    "(ZSTDCompressionBufferCollection::CanFlush) Can't determine CanFlush, no buffer set yet!");
 		}
 		auto index = buffer_index.GetIndex();
 		if (index == 0) {
@@ -406,7 +410,8 @@ public:
 	}
 	ZSTDCompressionBufferState &GetCurrentBufferState() {
 		if (!buffer_index.IsValid()) {
-			throw InternalException("Can't get BufferState, no buffer set yet!");
+			throw InternalException(
+			    "(ZSTDCompressionBufferCollection::GetCurrentBufferState) Can't get BufferState, no buffer set yet!");
 		}
 		return buffer_states[buffer_index.GetIndex()];
 	}
@@ -453,8 +458,11 @@ public:
 		buffer_collection.block_id = INVALID_BLOCK;
 
 		//! Have to be on the segment handle
-		if (buffer_collection.GetCurrentBufferIndex().GetIndex() != 0) {
-			throw InternalException("Can't InitializeSegment on a non-segment buffer!");
+		auto buffer_index = buffer_collection.GetCurrentBufferIndex();
+		if (!buffer_index.IsValid() || buffer_index.GetIndex() != 0) {
+			throw InternalException("(ZSTDCompressionSegmentState::InitializeSegment) Can't InitializeSegment on a "
+			                        "non-segment buffer (%d)!",
+			                        buffer_index.IsValid() ? buffer_index.GetIndex() : DConstants::INVALID_INDEX);
 		}
 		auto base = buffer_collection.segment_handle.Ptr();
 		page_offset_t offset = 0;
@@ -550,14 +558,17 @@ public:
 
 		NewSegment();
 		if (!(buffer_collection.GetCurrentOffset() <= GetWritableSpace(info))) {
-			throw InternalException("Offset exceeds writable space!");
+			throw InternalException(
+			    "(ZSTDCompressionState::ZSTDCompressionState) Offset (%d) exceeds writable space! (%d)",
+			    buffer_collection.GetCurrentOffset(), GetWritableSpace(info));
 		}
 	}
 
 public:
 	void ResetOutBuffer() {
 		if (!(buffer_collection.GetCurrentOffset() <= GetWritableSpace(info))) {
-			throw InternalException("Offset exceeds writable space!");
+			throw InternalException("(ZSTDCompressionState::ResetOutBuffer) Offset (%d) exceeds writable space! (%d)",
+			                        buffer_collection.GetCurrentOffset(), GetWritableSpace(info));
 		}
 		out_buffer.dst = buffer_collection.GetCurrentBufferPtr();
 		out_buffer.pos = 0;
@@ -606,7 +617,8 @@ public:
 			}
 			return;
 		}
-		throw InternalException("Wasn't able to find a buffer to write overflow data to!");
+		throw InternalException(
+		    "(ZSTDCompressionState::GetExtraPageBuffer) Wasn't able to find a buffer to write overflow data to!");
 	}
 
 	void NewSegment() {
@@ -614,7 +626,8 @@ public:
 		if (current_buffer_index.IsValid() && current_buffer_index.GetIndex() == 0) {
 			// This should never happen, the string lengths + vector metadata size should always exceed a page size,
 			// even if the strings are all empty
-			throw InternalException("We are asking for a new segment, but somehow we're still writing vector data onto "
+			throw InternalException("(ZSTDCompressionState::NewSegment) We are asking for a new segment, but somehow "
+			                        "we're still writing vector data onto "
 			                        "the initial (segment) page");
 		}
 		FlushSegment();
@@ -632,7 +645,8 @@ public:
 		buffer_collection.buffer_states[0].flags.SetVectorMetadata();
 		segment_state.InitializeSegment(buffer_collection, vectors_in_segment);
 		if (!(buffer_collection.GetCurrentOffset() <= GetWritableSpace(info))) {
-			throw InternalException("Offset exceeds writable space!");
+			throw InternalException("(ZSTDCompressionState::NewSegment) Offset (%d) exceeds writable space! (%d)",
+			                        buffer_collection.GetCurrentOffset(), GetWritableSpace(info));
 		}
 	}
 
@@ -647,7 +661,8 @@ public:
 		}
 		buffer_collection.AlignCurrentOffset();
 		if (!(buffer_collection.GetCurrentOffset() <= GetWritableSpace(info))) {
-			throw InternalException("Offset exceeds writable space!");
+			throw InternalException("(ZSTDCompressionState::InitializeVector) Offset (%d) exceeds writable space! (%d)",
+			                        buffer_collection.GetCurrentOffset(), GetWritableSpace(info));
 		}
 		vector_state.compressed_size = 0;
 		vector_state.uncompressed_size = 0;
@@ -709,7 +724,9 @@ public:
 				                            duckdb_zstd::ZSTD_getErrorName(compress_result));
 			}
 			if (!(buffer_collection.GetCurrentOffset() <= GetWritableSpace(info))) {
-				throw InternalException("Offset exceeds writable space!");
+				throw InternalException(
+				    "(ZSTDCompressionState::CompressString) Offset (%d) exceeds writable space! (%d)",
+				    buffer_collection.GetCurrentOffset(), GetWritableSpace(info));
 			}
 			if (compress_result == 0) {
 				// Finished
@@ -778,7 +795,9 @@ public:
 		segment_state.compressed_sizes[segment_state.vector_in_segment_count] = vector_state.compressed_size;
 		segment_state.uncompressed_sizes[segment_state.vector_in_segment_count] = vector_state.uncompressed_size;
 		if (segment_state.vector_in_segment_count >= segment_state.total_vectors_in_segment) {
-			throw InternalException("Written too many vectors to this segment!");
+			throw InternalException(
+			    "(ZSTDCompressionState::FlushVector) Written too many vectors (%d) to this segment! (expected: %d)",
+			    segment_state.vector_in_segment_count, segment_state.total_vectors_in_segment);
 		}
 		vector_count++;
 		segment_state.vector_in_segment_count++;
@@ -795,8 +814,9 @@ public:
 			auto &buffer_state = buffer_collection.buffer_states[i];
 			if (buffer_state.flags.HasStringMetadata()) {
 				if (buffer_index.IsValid()) {
-					throw InternalException(
-					    "Multiple buffers have string metadata on them, this is impossible and indicates a bug!");
+					throw InternalException("(ZSTDCompressionState::FlushVector) Multiple buffers (%d and %d) have "
+					                        "string metadata on them, this is impossible and indicates a bug!",
+					                        buffer_index.GetIndex(), i);
 				}
 				buffer_index = i;
 			}
@@ -805,8 +825,8 @@ public:
 		}
 
 		if (!buffer_index.IsValid()) {
-			throw InternalException(
-			    "None of the buffers have string metadata on them, this is impossible and indicates a bug!");
+			throw InternalException("(ZSTDCompressionState::FlushVector) None of the buffers have string metadata on "
+			                        "them, this is impossible and indicates a bug!");
 		}
 		auto index = buffer_index.GetIndex();
 		if (index == 0) {
@@ -841,16 +861,17 @@ public:
 			return;
 		}
 		if (segment_state.vector_in_segment_count != segment_state.total_vectors_in_segment) {
-			throw InternalException(
-			    "We haven't written all vectors that we were expecting to write (%d instead of %d)!",
-			    segment_state.vector_in_segment_count, segment_state.total_vectors_in_segment);
+			throw InternalException("(ZSTDCompressionState::FlushSegment) We haven't written all vectors that we were "
+			                        "expecting to write (%d instead of %d)!",
+			                        segment_state.vector_in_segment_count, segment_state.total_vectors_in_segment);
 		}
 
 		auto &buffer_state = buffer_collection.buffer_states[0];
 		auto segment_block_size = buffer_state.offset;
 		if (segment_block_size < GetVectorMetadataSize(segment_state.total_vectors_in_segment)) {
 			throw InternalException(
-			    "Somehow the segment buffer offset doesn't include space for all vector metadata???");
+			    "(ZSTDCompressionState::FlushSegment) Expected offset to be at least %d, but found %d instead",
+			    GetVectorMetadataSize(segment_state.total_vectors_in_segment), segment_block_size);
 		}
 
 		bool seen_dirty_buffer = false;
@@ -859,8 +880,8 @@ public:
 			auto &buffer_handle = buffer_collection.extra_pages[i];
 			if (buffer_state.offset != 0) {
 				if (seen_dirty_buffer) {
-					throw InternalException(
-					    "Both extra pages were dirty (needed to be flushed), this should be impossible");
+					throw InternalException("(ZSTDCompressionState::FlushSegment) Both extra pages were dirty (needed "
+					                        "to be flushed), this should be impossible");
 				}
 				FlushPage(buffer_handle, buffer_collection.block_id);
 				buffer_state.full = false;
