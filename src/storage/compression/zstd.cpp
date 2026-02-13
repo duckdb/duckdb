@@ -222,7 +222,7 @@ public:
 public:
 	DBConfig &config;
 
-	duckdb_zstd::ZSTD_CCtx *context;
+	duckdb_zstd::ZSTD_CCtx *context = nullptr;
 	//! The combined string lengths for all values in the segment
 	idx_t total_size = 0;
 	//! The total amount of values in the segment
@@ -298,6 +298,9 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	if (state.values_in_vector) {
 		D_ASSERT(state.values_in_vector < ZSTD_VECTOR_SIZE);
+		state.vectors_in_segment++;
+	}
+	if (state.vectors_in_segment) {
 		state.segment_count++;
 	}
 
@@ -450,8 +453,10 @@ public:
 		buffer_collection.block_id = INVALID_BLOCK;
 
 		//! Have to be on the segment handle
-		D_ASSERT(buffer_collection.GetCurrentBufferIndex() == 0);
-		auto base = buffer_collection.GetCurrentBufferPtr();
+		if (buffer_collection.GetCurrentBufferIndex().GetIndex() != 0) {
+			throw InternalException("Can't InitializeSegment on a non-segment buffer!");
+		}
+		auto base = buffer_collection.segment_handle.Ptr();
 		page_offset_t offset = 0;
 		page_ids = reinterpret_cast<page_id_t *>(base + offset);
 		offset += (sizeof(page_id_t) * vectors_in_segment);
@@ -577,7 +582,6 @@ public:
 
 		if (buffer_collection.CanFlush()) {
 			auto &buffer_state = buffer_collection.GetCurrentBufferState();
-			memset(buffer_collection.GetCurrentBufferPtr(), 0, info.GetBlockSize() - buffer_state.offset);
 			FlushPage(buffer_collection.BufferHandleMutable(), current_block_id);
 			buffer_state.flags.Clear();
 			buffer_state.full = false;
@@ -619,8 +623,7 @@ public:
 		// Figure out how many vectors we are storing in this segment
 		idx_t vectors_in_segment;
 		if (segment_count + 1 >= total_segment_count) {
-			vectors_in_segment = total_vector_count % vectors_per_segment;
-			//! FIXME: if vectors_in_segment == 0, use vectors_per_segment ?
+			vectors_in_segment = total_vector_count - (segment_count * vectors_per_segment);
 		} else {
 			vectors_in_segment = vectors_per_segment;
 		}
@@ -751,10 +754,10 @@ public:
 
 		auto &buffer_state = buffer_collection.buffer_states[buffer_collection.GetCurrentBufferIndex().GetIndex()];
 		buffer_state.full = true;
-		D_ASSERT(buffer_state.offset <= GetWritableSpace(info));
 
 		// Write the new id at the end of the last page
 		WriteBlockIdPointer(new_id);
+		D_ASSERT(buffer_state.offset <= GetWritableSpace(info));
 		return new_id;
 	}
 
@@ -774,6 +777,9 @@ public:
 		segment_state.page_offsets[segment_state.vector_in_segment_count] = vector_state.starting_offset;
 		segment_state.compressed_sizes[segment_state.vector_in_segment_count] = vector_state.compressed_size;
 		segment_state.uncompressed_sizes[segment_state.vector_in_segment_count] = vector_state.uncompressed_size;
+		if (segment_state.vector_in_segment_count >= segment_state.total_vectors_in_segment) {
+			throw InternalException("Written too many vectors to this segment!");
+		}
 		vector_count++;
 		segment_state.vector_in_segment_count++;
 		vector_state.in_vector = false;
@@ -834,11 +840,17 @@ public:
 		if (!buffer_collection.segment) {
 			return;
 		}
+		if (segment_state.vector_in_segment_count != segment_state.total_vectors_in_segment) {
+			throw InternalException(
+			    "We haven't written all vectors that we were expecting to write (%d instead of %d)!",
+			    segment_state.vector_in_segment_count, segment_state.total_vectors_in_segment);
+		}
 
 		auto &buffer_state = buffer_collection.buffer_states[0];
 		auto segment_block_size = buffer_state.offset;
-		if (segment_block_size == 0) {
-			throw InternalException("Segment block size is 0??");
+		if (segment_block_size < GetVectorMetadataSize(segment_state.total_vectors_in_segment)) {
+			throw InternalException(
+			    "Somehow the segment buffer offset doesn't include space for all vector metadata???");
 		}
 
 		bool seen_dirty_buffer = false;
@@ -850,8 +862,7 @@ public:
 					throw InternalException(
 					    "Both extra pages were dirty (needed to be flushed), this should be impossible");
 				}
-				memset(buffer_collection.GetCurrentBufferPtr(), 0, info.GetBlockSize() - buffer_state.offset);
-				FlushPage(buffer_collection.BufferHandleMutable(), buffer_collection.block_id);
+				FlushPage(buffer_handle, buffer_collection.block_id);
 				buffer_state.full = false;
 				buffer_state.offset = 0;
 				buffer_state.flags.Clear();
