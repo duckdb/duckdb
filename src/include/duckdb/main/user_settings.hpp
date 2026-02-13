@@ -57,7 +57,7 @@ public:
 	idx_t AddExtensionOption(const string &name, ExtensionOption extension_option);
 	case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
 	bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
-	shared_ptr<CachedGlobalSettings> GetSettings(shared_ptr<CachedGlobalSettings> &cache) const;
+	CachedGlobalSettings &GetSettings() const;
 
 private:
 	mutable mutex lock;
@@ -67,8 +67,6 @@ private:
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! Current version of the settings - incremented when settings are modified
 	atomic<idx_t> settings_version;
-	//! Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
-	mutable shared_ptr<CachedGlobalSettings> global_settings_cache;
 };
 
 struct LocalUserSettings {
@@ -84,7 +82,5 @@ public:
 private:
 	//! Client-local settings
 	UserSettingsMap settings_map;
-	//! Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
-	mutable shared_ptr<CachedGlobalSettings> global_settings_cache;
 };
 } // namespace duckdb

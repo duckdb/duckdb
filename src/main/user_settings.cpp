@@ -81,8 +81,8 @@ bool GlobalUserSettings::IsSet(idx_t setting_index) const {
 
 SettingLookupResult GlobalUserSettings::TryGetSetting(idx_t setting_index, Value &result_value) const {
 	// look-up in global settings
-	auto cache = GetSettings(global_settings_cache);
-	if (cache->settings.TryGetSetting(setting_index, result_value)) {
+	const auto &cache = GetSettings();
+	if (cache.settings.TryGetSetting(setting_index, result_value)) {
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
 	return SettingLookupResult();
@@ -117,24 +117,17 @@ bool GlobalUserSettings::TryGetExtensionOption(const String &name, ExtensionOpti
 	return true;
 }
 
-shared_ptr<CachedGlobalSettings> GlobalUserSettings::GetSettings(shared_ptr<CachedGlobalSettings> &cache) const {
-	auto current_cache = cache.atomic_load(std::memory_order_relaxed);
+CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
+	// Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
+	thread_local unique_ptr<CachedGlobalSettings> current_cache; // NOLINT
+
 	auto current_version = settings_version.load(std::memory_order_relaxed);
-	if (current_cache && current_cache->version == current_version) {
-		// we have a cached version and it is up to date - done
-		return current_cache;
+	if (!current_cache || current_cache->version != current_version) {
+		// out-of-date, refresh the cache
+		lock_guard<mutex> guard(lock);
+		current_cache = make_uniq<CachedGlobalSettings>(settings_version, settings_map);
 	}
-	lock_guard<mutex> guard(lock);
-	// check if another thread updated the cache while we were waiting for the lock
-	auto updated_cache = cache.atomic_load(std::memory_order_relaxed);
-	auto updated_version = settings_version.load(std::memory_order_relaxed);
-	if (updated_cache && updated_version == updated_cache->version) {
-		// already written - load
-		return updated_cache;
-	}
-	auto new_cache = make_shared_ptr<CachedGlobalSettings>(settings_version, settings_map);
-	cache.atomic_store(new_cache);
-	return new_cache;
+	return *current_cache;
 }
 
 CachedGlobalSettings::CachedGlobalSettings(idx_t version, UserSettingsMap settings_p)
@@ -165,8 +158,8 @@ SettingLookupResult LocalUserSettings::TryGetSetting(const GlobalUserSettings &g
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// look-up in global settings
-	auto cache = global_settings.GetSettings(global_settings_cache);
-	if (cache->settings.TryGetSetting(setting_index, result_value)) {
+	const auto &cache = global_settings.GetSettings();
+	if (cache.settings.TryGetSetting(setting_index, result_value)) {
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
 	return SettingLookupResult();
