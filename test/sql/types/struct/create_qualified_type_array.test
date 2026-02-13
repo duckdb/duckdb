@@ -36,6 +36,9 @@ statement ok
 CREATE SCHEMA schema2; 
 
 statement ok 
+checkpoint; 
+
+statement ok 
 use schema2; 
 
 statement ok 
