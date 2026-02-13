@@ -109,13 +109,16 @@ void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
 		return;
 	}
 
-	// FIXME: Copy into new prefix (chain) instead of shifting.
-	for (idx_t i = 0; i < art.PrefixCount() - pos - 1; i++) {
-		prefix.data[i] = prefix.data[pos + i + 1];
-	}
+	// Copy into new prefix.
+	auto remaining_count = UnsafeNumericCast<uint8_t>(prefix.data[art.PrefixCount()] - pos - 1);
+	Node new_node;
+	auto new_prefix = NewInternal(art, new_node, prefix.data, remaining_count, pos + 1);
 
-	prefix.data[art.PrefixCount()] -= pos + 1;
-	prefix.Append(art, *prefix.ptr);
+	*new_prefix.ptr = *prefix.ptr;
+	new_prefix.Append(art, *new_prefix.ptr);
+
+	Node::FreeNode(art, node);
+	node = new_node;
 }
 
 GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos) {
