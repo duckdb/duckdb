@@ -44,7 +44,7 @@ SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'operator_mem
 ----
 operator_memory_limit	NULL	VARCHAR
 
-# test that operator_memory_limit causes OOM for operators that check GetQueryMaxMemory()
+# test that operator_memory_limit causes OOM for operators that check GetOperatorMemoryLimit()
 # while memory_limit (hard cap) is set high enough to not interfere
 statement ok
 PRAGMA memory_limit='100MB'
@@ -82,7 +82,7 @@ SELECT i, SUM(i) OVER (PARTITION BY i % 100000 ORDER BY i) FROM range(5000000) t
 ----
 Out of Memory
 
-# streaming operations succeed - they dont check GetQueryMaxMemory()
+# streaming operations succeed - they dont check GetOperatorMemoryLimit()
 # this same query fails with memory_limit='1MB' but succeeds here
 statement ok
 CREATE TABLE t1 AS SELECT * FROM range(1000000)

@@ -713,7 +713,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 #ifdef DEBUG
 	Vector roundtrip_result(LogicalType::VARIANT(), count);
-	VariantColumnData::UnshredVariantData(output, roundtrip_result, count);
+	VariantUtils::UnshredVariantData(output, roundtrip_result, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto input_val = input.GetValue(i);
