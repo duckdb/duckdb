@@ -97,6 +97,15 @@ public:
 	bool HasFileBufferType(const FileBufferType &type) const {
 		return std::find(file_buffer_types.begin(), file_buffer_types.end(), type) != file_buffer_types.end();
 	}
+	idx_t GetApproximateSize() const {
+		return q.size_approx();
+	}
+	idx_t GetDeadNodes() const {
+		return total_dead_nodes.load(std::memory_order_relaxed);
+	}
+	idx_t GetTotalInsertions() const {
+		return evict_queue_insertions.load(std::memory_order_relaxed);
+	}
 
 private:
 	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
@@ -520,6 +529,27 @@ void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {
 
 idx_t BufferPool::GetAllocatorBulkDeallocationFlushThreshold() {
 	return allocator_bulk_deallocation_flush_threshold;
+}
+
+vector<EvictionQueueInformation> BufferPool::GetEvictionQueueInfo() const {
+	static const char *QUEUE_TYPE_NAMES[] = {"BLOCK_AND_EXTERNAL_FILE", "MANAGED_BUFFER", "TINY_BUFFER"};
+	vector<EvictionQueueInformation> result;
+	idx_t global_queue_index = 0;
+	for (idx_t type_idx = 0; type_idx < EVICTION_QUEUE_TYPES; type_idx++) {
+		const auto &type_queue_size = eviction_queue_sizes[type_idx];
+		for (idx_t local_queue_idx = 0; local_queue_idx < type_queue_size; local_queue_idx++) {
+			auto &queue = *queues[global_queue_index];
+			EvictionQueueInformation info;
+			info.queue_index = global_queue_index;
+			info.queue_type = QUEUE_TYPE_NAMES[type_idx];
+			info.approximate_size = queue.GetApproximateSize();
+			info.dead_nodes = queue.GetDeadNodes();
+			info.total_insertions = queue.GetTotalInsertions();
+			result.push_back(std::move(info));
+			global_queue_index++;
+		}
+	}
+	return result;
 }
 
 BufferPool::MemoryUsage::MemoryUsage() {
