@@ -200,6 +200,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
+    DUCKDB_GLOBAL(AllowedConfigsSetting),
     FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 95),
@@ -561,6 +562,10 @@ void DBConfig::CheckLock(const String &name) {
 		// we are always allowed to change these settings
 		return;
 	}
+	if (options.allowed_configs.find(name.ToStdString()) != options.allowed_configs.end()) {
+		// settings that are allowed through allowed_configs
+		return;
+	}
 	// not allowed!
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
@@ -791,6 +796,17 @@ string DBConfig::SanitizeAllowedPath(const string &path_p) const {
 		result = StringUtil::Replace(result, path_sep, "/");
 	}
 	return result;
+}
+
+void DBConfig::AddAllowedConfig(const string &config_name) {
+	if (config_name.empty()){
+		throw InvalidInputException("Cannot provide an empty string for allowed_configs");
+	}
+	duckdb::case_insensitive_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
+	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
+		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
+	}
+	options.allowed_configs.insert(config_name);
 }
 
 void DBConfig::AddAllowedDirectory(const string &path) {

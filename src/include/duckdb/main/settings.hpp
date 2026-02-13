@@ -196,6 +196,17 @@ struct AllowUnsignedExtensionsSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct AllowedConfigsSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "allowed_configs";
+	static constexpr const char *Description =
+	    "List of additional configuration options that are allowed to be changed even when the configuration is locked";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AllowedDirectoriesSetting {
 	using RETURN_TYPE = vector<string>;
 	static constexpr const char *Name = "allowed_directories";
