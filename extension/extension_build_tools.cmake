@@ -53,9 +53,9 @@ function(get_statically_linked_extensions DUCKDB_EXTENSION_NAMES OUT_VARIABLE)
 endfunction()
 
 function(link_extension_libraries LIBRARY LINKAGE)
-    target_link_libraries(${LIBRARY} ${LINKAGE} duckdb_generated_extension_loader)
+    target_link_libraries(${LIBRARY} ${LINKAGE} "$<LINK_LIBRARY:WHOLE_ARCHIVE,duckdb_generated_extension_loader>")
     get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
-    # Now link against any registered out-of-tree extensions
+    # Link against any registered out-of-tree extensions
     foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
         string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
         if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
