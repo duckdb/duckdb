@@ -716,7 +716,7 @@ unique_ptr<ColumnCheckpointState> VariantColumnData::Checkpoint(const RowGroup &
 	if (!HasAnyChanges()) {
 		should_shred = false;
 	}
-	if (!EnableShredding(Settings::Get<VariantMinimumShreddingSizeSetting>(config), row_group.count.load())) {
+	if (!EnableShredding(Settings::Get<VariantMinimumShreddingSizeSetting>(config), count.load())) {
 		should_shred = false;
 	}
 

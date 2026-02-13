@@ -404,7 +404,7 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 			//! Can't shred on DECIMAL, not consistent
 			continue;
 		}
-		idx_t count = column.type_counts[i];
+		idx_t count = column.type_counts[i] + column.type_counts[0];
 		if (!max_count || count > max_count) {
 			max_count = count;
 			type_index = i;
