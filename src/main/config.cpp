@@ -799,7 +799,7 @@ string DBConfig::SanitizeAllowedPath(const string &path_p) const {
 }
 
 void DBConfig::AddAllowedConfig(const string &config_name) {
-	if (config_name.empty()){
+	if (config_name.empty()) {
 		throw InvalidInputException("Cannot provide an empty string for allowed_configs");
 	}
 	duckdb::case_insensitive_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
