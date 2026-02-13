@@ -1,11 +1,13 @@
 #include "duckdb/function/window/window_aggregate_function.hpp"
 
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/function/window/window_constant_aggregator.hpp"
 #include "duckdb/function/window/window_custom_aggregator.hpp"
 #include "duckdb/function/window/window_distinct_aggregator.hpp"
 #include "duckdb/function/window/window_naive_aggregator.hpp"
 #include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -50,8 +52,9 @@ static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &w
 }
 
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &client,
-                                                 WindowSharedExpressions &shared, WindowAggregationMode mode)
-    : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared), mode(mode) {
+                                                 WindowSharedExpressions &shared)
+    : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared),
+      mode(Settings::Get<DebugWindowModeSetting>(client)) {
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
 	if (!ClientConfig::GetConfig(client).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {
 		if (!WindowNaiveAggregator::CanAggregate(wexpr)) {
