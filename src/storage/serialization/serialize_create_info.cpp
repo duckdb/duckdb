@@ -29,6 +29,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(2)) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
+	serializer.WritePropertyWithDefault<string>(110, "extension_name", extension_name);
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -42,6 +43,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto comment = deserializer.ReadPropertyWithExplicitDefault<Value>(107, "comment", Value());
 	auto tags = deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(108, "tags", InsertionOrderPreservingMap<string>());
 	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
+	auto extension_name = deserializer.ReadPropertyWithDefault<string>(110, "extension_name");
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -82,6 +84,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->comment = comment;
 	result->tags = std::move(tags);
 	result->dependencies = dependencies;
+	result->extension_name = std::move(extension_name);
 	return result;
 }
 

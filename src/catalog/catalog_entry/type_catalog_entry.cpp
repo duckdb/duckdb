@@ -16,6 +16,7 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
       bind_function(info.bind_function) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->extension_name = info.extension_name;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
 	this->tags = info.tags;
@@ -34,6 +35,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->type = user_type;
+	result->extension_name = extension_name;
 	result->dependencies = dependencies;
 	result->comment = comment;
 	result->tags = tags;

@@ -62,7 +62,12 @@
         "type": "LogicalDependencyList",
         "default": "LogicalDependencyList()",
         "version": "v0.10.3"
-	  }
+	  },
+      {
+        "id": 110,
+        "name": "extension_name",
+        "type": "string"
+      }
     ]
   },
   {
