@@ -23,6 +23,10 @@ public:
 	vector<shared_ptr<ColumnData>> sub_columns;
 	shared_ptr<ValidityColumnData> validity;
 
+	//! Indices into the inner shredded struct: STRUCT(typed_value <type>, untyped_value_index UINTEGER)
+	static constexpr idx_t TYPED_VALUE_INDEX = 0;
+	static constexpr idx_t UNTYPED_VALUE_INDEX = 1;
+
 public:
 	idx_t GetMaxEntry() override;
 	bool IsShredded() const {

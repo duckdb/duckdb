@@ -185,8 +185,8 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 	auto &child_entries = StructVector::GetEntries(shredded);
 	D_ASSERT(child_entries.size() == 2);
 
-	auto &untyped_value_index = *child_entries[0];
-	auto &typed_value = *child_entries[1];
+	auto &typed_value = *child_entries[VariantColumnData::TYPED_VALUE_INDEX];
+	auto &untyped_value_index = *child_entries[VariantColumnData::UNTYPED_VALUE_INDEX];
 
 	UnifiedVectorFormat untyped_format;
 	untyped_value_index.ToUnifiedFormat(count, untyped_format);

@@ -369,8 +369,8 @@ static LogicalType ProduceShreddedType(VariantLogicalType type_id) {
 
 static LogicalType SetShreddedType(const LogicalType &typed_value) {
 	child_list_t<LogicalType> child_types;
-	child_types.emplace_back("untyped_value_index", LogicalType::UINTEGER);
 	child_types.emplace_back("typed_value", typed_value);
+	child_types.emplace_back("untyped_value_index", LogicalType::UINTEGER);
 	return LogicalType::STRUCT(child_types);
 }
 
@@ -577,7 +577,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 	}
 }
 
-//! Receive a 'shredded' result Vector, consisting of the 'untyped_value_index' and the 'typed_value' Vector
+//! Receive a 'shredded' result Vector, consisting of the 'typed_value' and the 'untyped_value_index' Vector
 void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
                                                 optional_ptr<const SelectionVector> sel,
                                                 optional_ptr<const SelectionVector> value_index_sel,
@@ -590,8 +590,8 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 	D_ASSERT(child_types.size() == child_vectors.size());
 #endif
 
-	auto &untyped_value_index = *child_vectors[0];
-	auto &typed_value = *child_vectors[1];
+	auto &typed_value = *child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
+	auto &untyped_value_index = *child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
 
 	DuckDBVariantShreddingState shredding_state(typed_value.GetType(), count);
 	AnalyzeVariantValues(variant, untyped_value_index, sel, value_index_sel, result_sel, shredding_state, count);

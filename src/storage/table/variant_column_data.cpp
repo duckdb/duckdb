@@ -38,10 +38,10 @@ bool FindShreddedColumnInternal(const StructColumnData &shredded, reference<cons
 	auto &field_name = path.GetFieldName();
 
 	D_ASSERT(shredded.type.id() == LogicalTypeId::STRUCT);
-	auto &typed_value = shredded.GetChildColumn(1);
+	auto &typed_value = shredded.GetChildColumn(VariantColumnData::TYPED_VALUE_INDEX);
 	auto &parent_stats = stats.get();
 
-	stats = StructStats::GetChildStats(parent_stats, 1);
+	stats = StructStats::GetChildStats(parent_stats, VariantColumnData::TYPED_VALUE_INDEX);
 	if (typed_value.type.id() != LogicalTypeId::STRUCT) {
 		//! Not shredded on an OBJECT, but we're looking for a specific OBJECT field
 		return false;
@@ -51,7 +51,7 @@ bool FindShreddedColumnInternal(const StructColumnData &shredded, reference<cons
 		return false;
 	}
 	//! shredded.typed_value
-	out.AddChildIndex(ColumnIndex(1));
+	out.AddChildIndex(ColumnIndex(VariantColumnData::TYPED_VALUE_INDEX));
 	auto &typed_value_index = out.GetChildIndex(0);
 
 	auto &object_children = StructType::GetChildTypes(typed_value.type);
@@ -83,13 +83,13 @@ bool FindShreddedColumnInternal(const StructColumnData &shredded, reference<cons
 		}
 		//! We're done, we've found the field referenced by the path!
 		//! typed_value_index.<child_name>.typed_value
-		child_column.AddChildIndex(ColumnIndex(1));
-		stats = StructStats::GetChildStats(stats.get(), 1);
+		child_column.AddChildIndex(ColumnIndex(VariantColumnData::TYPED_VALUE_INDEX));
+		stats = StructStats::GetChildStats(stats.get(), VariantColumnData::TYPED_VALUE_INDEX);
 		return true;
 	}
 	path_iter = path.GetChildIndex(0);
 
-	//! Child of object is always a STRUCT(untyped_value_index UINTEGER, typed_value <...>)
+	//! Child of object is always a STRUCT(typed_value <...>, untyped_value_index UINTEGER)
 	D_ASSERT(object_field.type.id() == LogicalTypeId::STRUCT);
 	auto &struct_field = object_field.Cast<StructColumnData>();
 
@@ -102,7 +102,7 @@ bool VariantColumnData::PushdownShreddedFieldExtract(const StorageIndex &variant
 	auto &shredded = *sub_columns[1];
 	D_ASSERT(shredded.type.id() == LogicalTypeId::STRUCT);
 	D_ASSERT(StructType::GetChildCount(shredded.type) == 2);
-	D_ASSERT(StructType::GetChildTypes(shredded.type)[0].second.id() == LogicalTypeId::UINTEGER);
+	D_ASSERT(StructType::GetChildTypes(shredded.type)[UNTYPED_VALUE_INDEX].second.id() == LogicalTypeId::UINTEGER);
 	auto &variant_stats = GetStatisticsRef();
 
 	if (!VariantStats::IsShredded(variant_stats)) {
@@ -228,7 +228,7 @@ idx_t VariantColumnData::ScanWithCallback(
 			auto res = callback(*sub_columns[1], state.child_states[2], result, target_count);
 			if (result.GetType().id() == LogicalTypeId::LIST) {
 				//! Shredded ARRAY Variant looks like:
-				//! LIST(STRUCT(untyped_value_index UINTEGER, typed_value <child_type>))
+				//! LIST(STRUCT(typed_value <child_type>, untyped_value_index UINTEGER))
 				//! We need to transform this to:
 				//! LIST(<child_type>)
 
@@ -236,7 +236,7 @@ idx_t VariantColumnData::ScanWithCallback(
 				D_ASSERT(list_child.GetType().id() == LogicalTypeId::STRUCT);
 				D_ASSERT(StructType::GetChildCount(list_child.GetType()) == 2);
 
-				auto &typed_value = *StructVector::GetEntries(list_child)[1];
+				auto &typed_value = *StructVector::GetEntries(list_child)[TYPED_VALUE_INDEX];
 				auto list_res = Vector(LogicalType::LIST(typed_value.GetType()));
 				ListVector::SetListSize(list_res, ListVector::GetListSize(result));
 				list_res.CopyBuffer(result);

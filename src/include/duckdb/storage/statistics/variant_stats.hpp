@@ -36,6 +36,10 @@ public:
 //! would store any other column).
 struct VariantStats {
 public:
+	static constexpr idx_t TYPED_VALUE_INDEX = 0;
+	static constexpr idx_t UNTYPED_VALUE_INDEX = 1;
+
+public:
 	DUCKDB_API static void Construct(BaseStatistics &stats);
 
 public:

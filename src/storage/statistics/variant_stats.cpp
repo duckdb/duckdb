@@ -99,9 +99,9 @@ static void AssertShreddedStats(const BaseStatistics &stats) {
 		    "Shredded stats need to consist of 2 children, 'untyped_value_index' and 'typed_value', not: %s",
 		    stats.GetType().ToString());
 	}
-	if (struct_children[0].second.id() != LogicalTypeId::UINTEGER) {
+	if (struct_children[VariantStats::UNTYPED_VALUE_INDEX].second.id() != LogicalTypeId::UINTEGER) {
 		throw InternalException("Shredded stats 'untyped_value_index' should be of type UINTEGER, not %s",
-		                        EnumUtil::ToString(struct_children[0].second.id()));
+		                        EnumUtil::ToString(struct_children[VariantStats::UNTYPED_VALUE_INDEX].second.id()));
 	}
 }
 
@@ -109,7 +109,7 @@ optional_ptr<const BaseStatistics> VariantShreddedStats::FindChildStats(const Ba
                                                                         const VariantPathComponent &component) {
 	AssertShreddedStats(stats);
 
-	auto &typed_value_stats = StructStats::GetChildStats(stats, 1);
+	auto &typed_value_stats = StructStats::GetChildStats(stats, VariantStats::TYPED_VALUE_INDEX);
 	auto &typed_value_type = typed_value_stats.GetType();
 	switch (component.lookup_mode) {
 	case VariantChildLookupMode::BY_INDEX: {
@@ -141,8 +141,8 @@ optional_ptr<const BaseStatistics> VariantShreddedStats::FindChildStats(const Ba
 bool VariantShreddedStats::IsFullyShredded(const BaseStatistics &stats) {
 	AssertShreddedStats(stats);
 
-	auto &untyped_value_index_stats = StructStats::GetChildStats(stats, 0);
-	auto &typed_value_stats = StructStats::GetChildStats(stats, 1);
+	auto &typed_value_stats = StructStats::GetChildStats(stats, VariantStats::TYPED_VALUE_INDEX);
+	auto &untyped_value_index_stats = StructStats::GetChildStats(stats, VariantStats::UNTYPED_VALUE_INDEX);
 
 	if (!typed_value_stats.CanHaveNull()) {
 		//! Fully shredded, no nulls
@@ -174,7 +174,7 @@ LogicalType ToStructuredType(const LogicalType &shredding) {
 	auto &child_types = StructType::GetChildTypes(shredding);
 	D_ASSERT(child_types.size() == 2);
 
-	auto &typed_value = child_types[1].second;
+	auto &typed_value = child_types[VariantStats::TYPED_VALUE_INDEX].second;
 
 	if (typed_value.id() == LogicalTypeId::STRUCT) {
 		auto &struct_children = StructType::GetChildTypes(typed_value);
@@ -311,7 +311,7 @@ static string ToStringInternal(const BaseStatistics &stats) {
 	string result;
 	result = StringUtil::Format("fully_shredded: %s", VariantShreddedStats::IsFullyShredded(stats) ? "true" : "false");
 
-	auto &typed_value = StructStats::GetChildStats(stats, 1);
+	auto &typed_value = StructStats::GetChildStats(stats, VariantStats::TYPED_VALUE_INDEX);
 	auto type_id = typed_value.GetType().id();
 	if (type_id == LogicalTypeId::LIST) {
 		result += ", child: ";
@@ -358,10 +358,10 @@ string VariantStats::ToString(const BaseStatistics &stats) {
 
 static BaseStatistics WrapTypedValue(BaseStatistics &untyped_value_index, BaseStatistics &typed_value) {
 	BaseStatistics shredded = BaseStatistics::CreateEmpty(LogicalType::STRUCT(
-	    {{"untyped_value_index", untyped_value_index.GetType()}, {"typed_value", typed_value.GetType()}}));
+	    {{"typed_value", typed_value.GetType()}, {"untyped_value_index", untyped_value_index.GetType()}}));
 
-	StructStats::GetChildStats(shredded, 0).Copy(untyped_value_index);
-	StructStats::GetChildStats(shredded, 1).Copy(typed_value);
+	StructStats::GetChildStats(shredded, VariantStats::TYPED_VALUE_INDEX).Copy(typed_value);
+	StructStats::GetChildStats(shredded, VariantStats::UNTYPED_VALUE_INDEX).Copy(untyped_value_index);
 	return shredded;
 }
 
@@ -379,7 +379,7 @@ unique_ptr<BaseStatistics> VariantStats::WrapExtractedFieldAsVariant(const BaseS
 
 bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &other, BaseStatistics &new_stats) {
 	//! shredded_type:
-	//! STRUCT(untyped_value_index UINTEGER, typed_value <shredding>)
+	//! STRUCT(typed_value <shredding>, untyped_value_index UINTEGER)
 
 	//! shredding, 1 of:
 	//! - <primitive type>
@@ -394,15 +394,15 @@ bool VariantStats::MergeShredding(BaseStatistics &stats, const BaseStatistics &o
 	D_ASSERT(stats_children.size() == 2);
 	D_ASSERT(other_children.size() == 2);
 
-	auto &stats_typed_value_type = stats_children[1].second;
-	auto &other_typed_value_type = other_children[1].second;
+	auto &stats_typed_value_type = stats_children[TYPED_VALUE_INDEX].second;
+	auto &other_typed_value_type = other_children[TYPED_VALUE_INDEX].second;
 
 	//! Merge the untyped_value_index stats
-	auto &untyped_value_index = StructStats::GetChildStats(stats, 0);
-	untyped_value_index.Merge(StructStats::GetChildStats(other, 0));
+	auto &untyped_value_index = StructStats::GetChildStats(stats, UNTYPED_VALUE_INDEX);
+	untyped_value_index.Merge(StructStats::GetChildStats(other, UNTYPED_VALUE_INDEX));
 
-	auto &stats_typed_value = StructStats::GetChildStats(stats, 1);
-	auto &other_typed_value = StructStats::GetChildStats(other, 1);
+	auto &stats_typed_value = StructStats::GetChildStats(stats, TYPED_VALUE_INDEX);
+	auto &other_typed_value = StructStats::GetChildStats(other, TYPED_VALUE_INDEX);
 
 	if (stats_typed_value_type.id() == LogicalTypeId::STRUCT) {
 		if (stats_typed_value_type.id() != other_typed_value_type.id()) {
@@ -623,7 +623,7 @@ unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &s
 	}
 	auto &shredded_child_stats = *res;
 
-	auto &typed_value_stats = StructStats::GetChildStats(shredded_child_stats, 1);
+	auto &typed_value_stats = StructStats::GetChildStats(shredded_child_stats, TYPED_VALUE_INDEX);
 	auto &last_index = index_iter.get();
 	auto &child_type = typed_value_stats.type;
 	if (!last_index.HasType() || last_index.GetType().id() == LogicalTypeId::VARIANT) {
