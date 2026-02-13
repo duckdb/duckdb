@@ -33,12 +33,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	}
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
-	MatchState state(tokens, suggestions, parse_result_allocator);
+	idx_t max_token_index = 0;
+	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index);
 	MatcherAllocator allocator;
 	auto &matcher = Matcher::RootMatcher(allocator);
 	auto match_result = matcher.MatchParseResult(state);
 	if (match_result == nullptr || state.token_index < state.tokens.size()) {
-		// TODO(dtenwolde) add error handling
+		idx_t error_token_idx = state.GetMaxTokenIndex();
+		if (error_token_idx >= tokens.size()) {
+			error_token_idx = tokens.size() - 1;
+		}
+		auto &error_token = tokens[error_token_idx];
 		string token_list;
 		for (idx_t i = 0; i < tokens.size(); i++) {
 			if (!token_list.empty()) {
@@ -49,8 +54,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		throw ParserException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
-		                      state.token_index, tokens[state.token_index].text, token_list);
+		throw ParserException("Syntax error at or near \"%s\" (token position %d)\nTokens:\n%s", error_token.text,
+		                      error_token_idx, token_list);
 	}
 	match_result->name = "Statement";
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());

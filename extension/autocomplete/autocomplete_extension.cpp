@@ -592,7 +592,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
-	MatchState state(tokens, suggestions, parse_allocator);
+	idx_t max_token_index = 0;
+	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
@@ -789,7 +790,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		}
 		vector<MatcherSuggestion> suggestions;
 		ParseResultAllocator parse_allocator;
-		MatchState state(tokens, suggestions, parse_allocator);
+		idx_t max_token_index = 0;
+		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
 		MatcherAllocator allocator;
 		auto &matcher = Matcher::RootMatcher(allocator);
