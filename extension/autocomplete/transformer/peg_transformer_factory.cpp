@@ -54,8 +54,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		throw ParserException("Syntax error at or near \"%s\" (token position %d)\nTokens:\n%s", error_token.text,
-		                      error_token_idx, token_list);
+		auto error_message = "Syntax error at or near \"" + error_token.text + "\"";
+		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
 	match_result->name = "Statement";
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
