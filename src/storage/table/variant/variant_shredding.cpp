@@ -549,7 +549,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 		if (variant.RowIsValid(row) && shredding_state.ValueIsShredded(variant, row, value_index)) {
 			shredding_state.SetShredded(row, value_index, result_index);
 			if (shredding_state.type.id() != LogicalTypeId::STRUCT) {
-				//! Value is shredded, directly write a NULL to the 'value' if the type is not an OBJECT
+				//! Value is shredded, directly write a `NULL` to the 'value' if the type is not an OBJECT
 				validity.SetInvalid(result_index);
 				continue;
 			}
@@ -569,8 +569,8 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 
 		//! Deal with unshredded values
 		if (!variant.RowIsValid(row) || variant.GetTypeId(row, value_index) == VariantLogicalType::VARIANT_NULL) {
-			//! 0 is reserved for NULL
-			untyped_data[result_index] = 0;
+			//! NULL is reserved for NULL Variant values
+			validity.SetInvalid(result_index);
 		} else {
 			unshredded_values[row].emplace_back(value_index, untyped_data[result_index]);
 		}

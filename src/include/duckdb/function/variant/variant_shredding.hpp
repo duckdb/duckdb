@@ -78,6 +78,7 @@ public:
 protected:
 	void WriteTypedValues(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
 	                      const SelectionVector &value_index_sel, const SelectionVector &result_sel, idx_t count);
+	virtual void WriteMissingField(Vector &vector, idx_t index);
 
 private:
 	void WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
