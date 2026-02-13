@@ -80,11 +80,12 @@ bool GlobalUserSettings::IsSet(idx_t setting_index) const {
 }
 
 SettingLookupResult GlobalUserSettings::TryGetSetting(idx_t setting_index, Value &result_value) const {
-	lock_guard<mutex> guard(lock);
-	if (!settings_map.TryGetSetting(setting_index, result_value)) {
-		return SettingLookupResult();
+	// look-up in global settings
+	auto cache = GetSettings(global_settings_cache);
+	if (cache->settings.TryGetSetting(setting_index, result_value)) {
+		return SettingLookupResult(SettingScope::GLOBAL);
 	}
-	return SettingLookupResult(SettingScope::GLOBAL);
+	return SettingLookupResult();
 }
 
 bool GlobalUserSettings::HasExtensionOption(const string &name) const {

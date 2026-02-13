@@ -67,6 +67,8 @@ private:
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! Current version of the settings - incremented when settings are modified
 	atomic<idx_t> settings_version;
+	//! Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
+	mutable shared_ptr<CachedGlobalSettings> global_settings_cache;
 };
 
 struct LocalUserSettings {
