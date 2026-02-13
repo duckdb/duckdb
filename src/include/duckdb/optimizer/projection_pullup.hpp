@@ -1,6 +1,8 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 

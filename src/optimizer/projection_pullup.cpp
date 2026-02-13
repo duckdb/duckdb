@@ -22,7 +22,9 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op->Cast<LogicalComparisonJoin>();
-		if (comp_join.join_type == JoinType::MARK) {
+		// FIXME: for now, skip pulling up projections through SEMI.
+		// Improvement: skip removing projections on the LHS of semi joins
+		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI) {
 			break; // bail
 		}
 
@@ -71,6 +73,18 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 			idx_t parent_idx = i - 1;
 			auto &parent_op = parents[parent_idx];
 			bool can_pull_through = true;
+
+			// Do not remove projections on the right-hand side of semi joins
+			// You can keep removing projections on the LHS - just not the last projection on the RHS
+			// if (parent_op.get().type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			// 	auto &join = parent_op.get().Cast<LogicalComparisonJoin>();
+			// 	if (join.join_type == JoinType::SEMI) {
+			// 		// if we are inside the RHS subtree, do not pull projection past this join
+			// 		if (join.children.size() > 1 && join.children[1].get() == op.get()) {
+			// 			can_pull_through = false;
+			// 		}
+			// 	}
+			// }
 
 			LogicalOperatorVisitor::EnumerateExpressions(parent_op, [&](unique_ptr<Expression> *expr) {
 				ExpressionIterator::EnumerateExpression(*expr, [&](unique_ptr<Expression> &child_expr) {
