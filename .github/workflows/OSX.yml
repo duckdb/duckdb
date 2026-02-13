@@ -85,7 +85,7 @@ jobs:
     - name: Test
       if: ${{ inputs.skip_tests != 'true' }}
       shell: bash
-      run: make unittest_release
+      run: python3 scripts/run_tests_one_by_one.py build/release/test/unittest
 
     - name: Amalgamation
       if: ${{ inputs.skip_tests != 'true' }}
@@ -198,7 +198,7 @@ jobs:
       - name: Unit Test
         shell: bash
         if: ${{ inputs.skip_tests != 'true' }}
-        run: make allunit
+        run: python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*"
 
       - name: Tools Tests
         shell: bash

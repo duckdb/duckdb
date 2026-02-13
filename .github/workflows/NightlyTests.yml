@@ -183,7 +183,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          build/release/test/unittest "*"
+          python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*"
 
   release-assert-clang:
     name: Release Assertions with Clang
@@ -465,11 +465,11 @@ jobs:
 
       - name: All tests with 512 vector size and default block size
         shell: bash
-        run: ./build/relassert/test/unittest "*" --test-config test/configs/vector_size_512.json
+        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/vector_size_512.json
 
       - name: All tests with 512 vector size and 16kB block size
         shell: bash
-        run: ./build/relassert/test/unittest "*" --test-config test/configs/block_size_16kB.json
+        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/block_size_16kB.json
 
   linux-debug-configs:
     name: Tests different configurations with a debug build
@@ -506,7 +506,7 @@ jobs:
       - name: test/configs/enable_verification_for_debug.json
         if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash
-        run: ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
+        run: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
@@ -655,4 +655,4 @@ jobs:
 
      - name: Test
        shell: bash
-       run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+       run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --test-config test/configs/hash_zero.json
