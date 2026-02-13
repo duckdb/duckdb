@@ -382,7 +382,10 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 			query = binder->BindNode(*query_node);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			error.AddQueryLocation(ref);
+			// if the error does not already contain a query location, add one
+			if (error.ExtraInfo().count("position") == 0) {
+				error.AddQueryLocation(ref);
+			}
 			error.Throw();
 		}
 
