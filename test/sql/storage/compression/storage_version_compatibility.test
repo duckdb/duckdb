@@ -1,0 +1,351 @@
+# name: test/sql/storage/compression/storage_version_compatibility.test
+# description: Test table creation with all (non-internal) compression algorithms, all types and all storage versions results in errors when it should
+# group: [compression]
+
+# Test with various storage versions (these version numbers actually refer to
+# "serialization versions" (see storage_info.cpp), even though they are also
+# called "storage versions" in the code.
+statement ok
+ATTACH '__TEST_DIR__/storage_version_compatibility_test_1.db' AS v1 (STORAGE_VERSION 'v0.10.0');
+
+statement ok
+ATTACH '__TEST_DIR__/storage_version_compatibility_test_2.db' AS v2 (STORAGE_VERSION 'v0.10.3');
+
+statement ok
+ATTACH '__TEST_DIR__/storage_version_compatibility_test_3.db' AS v3 (STORAGE_VERSION 'v1.1.0');
+
+statement ok
+ATTACH '__TEST_DIR__/storage_version_compatibility_test_4.db' AS v4 (STORAGE_VERSION 'v1.2.0');
+
+statement ok
+ATTACH '__TEST_DIR__/storage_version_compatibility_test_5.db' AS v5 (STORAGE_VERSION 'v1.3.0');
+
+statement ok
+ATTACH '__TEST_DIR__/storage_version_compatibility_test_6.db' AS v6 (STORAGE_VERSION 'v1.4.0');
+
+statement ok
+ATTACH '__TEST_DIR__/storage_version_compatibility_test_7.db' AS v7 (STORAGE_VERSION 'v1.5.0');
+
+foreach version v1 v2 v3 v4 v5 v6 v7
+
+statement ok
+USE ${version}
+
+foreach type <alltypes>
+
+###############################
+# RLE compression
+# Available on all versions
+###############################
+
+skipif type=interval
+skipif type=varchar
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION RLE
+);
+
+onlyif type=varchar
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION RLE
+);
+----
+Binder Error: Can't compress column "x" with type 'VARCHAR' (physical: VARCHAR) using compression type 'RLE'
+
+onlyif type=interval
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION RLE
+);
+----
+Binder Error: Can't compress column "x" with type 'INTERVAL' (physical: INTERVAL) using compression type 'RLE'
+
+
+###############################
+# Dictionary compression
+# Availabe up to v4, for varchar
+###############################
+
+skipif version=v5
+skipif version=v6
+skipif version=v7
+onlyif type=varchar
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Dictionary
+);
+
+skipif version=v5
+skipif version=v6
+skipif version=v7
+skipif type=varchar
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Dictionary
+);
+----
+<REGEX>:Binder Error: Can't compress column "x" with type '.*' \(physical: .*\) using compression type 'Dictionary'\n
+
+skipif version=v1
+skipif version=v2
+skipif version=v3
+skipif version=v4
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Dictionary
+);
+----
+Binder Error: Can't compress using user-provided compression type 'Dictionary', that type is deprecated and only has decompress support
+
+###############################
+# PFOR compression
+# Not implemented yet
+###############################
+
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION PFOR
+);
+----
+Binder Error: Can't compress using user-provided compression type 'PFOR', that type is not available yet
+
+###############################
+# Bitpacking compression
+# Available on all versions, mostly integer types
+###############################
+
+skipif type=float
+skipif type=double
+skipif type=interval
+skipif type=varchar
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Bitpacking
+);
+
+# Not tested: float, double, interval
+onlyif type=varchar
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Bitpacking
+);
+----
+Binder Error: Can't compress column "x" with type 'VARCHAR' (physical: VARCHAR) using compression type 'BitPacking'
+
+###############################
+# FSST compression
+# Availabe up to v4, for varchar
+###############################
+
+skipif version=v5
+skipif version=v6
+skipif version=v7
+onlyif type=varchar
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION FSST
+);
+
+skipif version=v5
+skipif version=v6
+skipif version=v7
+skipif type=varchar
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION FSST
+);
+----
+<REGEX>:Binder Error: Can't compress column "x" with type '.*' \(physical: .*\) using compression type 'FSST'\n
+
+skipif version=v1
+skipif version=v2
+skipif version=v3
+skipif version=v4
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION FSST
+);
+----
+Binder Error: Can't compress using user-provided compression type 'FSST', that type is deprecated and only has decompress support
+
+###############################
+# Chimp compression
+# Deprecated for all versions
+###############################
+
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Chimp
+);
+----
+Binder Error: Can't compress using user-provided compression type 'Chimp', that type is deprecated and only has decompress support
+
+###############################
+# Patas compression
+# Deprecated for all versions
+###############################
+
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Patas
+);
+----
+Binder Error: Can't compress using user-provided compression type 'Patas', that type is deprecated and only has decompress support
+
+###############################
+# ALP compression
+# Available on all versions, float and double only
+###############################
+
+onlyif type=float
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Alp
+);
+
+onlyif type=double
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Alp
+);
+
+skipif type=float
+skipif type=double
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Alp
+);
+----
+<REGEX>:Binder Error: Can't compress column "x" with type '.*' \(physical: .*\) using compression type 'ALP'\n
+
+###############################
+# ALPRD compression
+# Available on all versions, float and double only
+###############################
+
+onlyif type=float
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Alprd
+);
+
+onlyif type=double
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Alprd
+);
+
+skipif type=float
+skipif type=double
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Alprd
+);
+----
+<REGEX>:Binder Error: Can't compress column "x" with type '.*' \(physical: .*\) using compression type 'ALPRD'\n
+
+###############################
+# Zstd compression
+# Available from version v4, for varchar
+###############################
+
+skipif version=v4
+skipif version=v5
+skipif version=v6
+skipif version=v7
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Zstd
+);
+----
+Binder Error: Can't compress using user-provided compression type 'ZSTD', that type is not available yet
+
+skipif version=v1
+skipif version=v2
+skipif version=v3
+onlyif type=varchar
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Zstd
+);
+
+###############################
+# Roaring compression
+# Available from version v4, for bool and bit
+###############################
+
+skipif version=v4
+skipif version=v5
+skipif version=v6
+skipif version=v7
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Roaring
+);
+----
+Binder Error: Can't compress using user-provided compression type 'Roaring', that type is not available yet
+
+# Not tested: bit
+skipif version=v1
+skipif version=v2
+skipif version=v3
+onlyif type=bool
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Roaring
+);
+
+skipif version=v1
+skipif version=v2
+skipif version=v3
+skipif type=bool
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION Roaring
+);
+----
+<REGEX>:Binder Error: Can't compress column "x" with type '.*' \(physical: .*\) using compression type 'Roaring'\n
+
+###############################
+# DictFSST compression
+# Available from version v5, for varchar
+###############################
+
+skipif version=v5
+skipif version=v6
+skipif version=v7
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION DICT_FSST
+);
+----
+Binder Error: Can't compress using user-provided compression type 'DICT_FSST', that type is not available yet
+
+skipif version=v1
+skipif version=v2
+skipif version=v3
+skipif version=v4
+onlyif type=varchar
+statement ok
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION DICT_FSST
+);
+
+# Not tested: all other types
+skipif version=v1
+skipif version=v2
+skipif version=v3
+skipif version=v4
+onlyif type=integer
+statement error
+CREATE OR REPLACE TABLE t(
+	x ${type} USING COMPRESSION DICT_FSST
+);
+----
+Binder Error: Can't compress column "x" with type 'INTEGER' (physical: INT32) using compression type 'DICT_FSST'
+
+endloop
+
+endloop
+
