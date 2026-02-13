@@ -939,7 +939,7 @@ void ZSTDStorage::Compress(CompressionState &state_p, Vector &input, idx_t count
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		// Note: we treat nulls and empty strings the same
-		if (!vdata.validity.RowIsValid(idx) || data[idx].GetSize() == 0) {
+		if (!vdata.validity.RowIsValid(idx)) {
 			state.AddNull();
 			continue;
 		}
