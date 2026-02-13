@@ -14,15 +14,14 @@ static VariantValue UnshreddedVariantValue(UnifiedVariantVectorData &input, uint
 	}
 
 	if (values_index == 0) {
-		//! 0 is reserved to indicate NULL, to better recognize the situation where a Variant is fully shredded, but has
-		//! NULLs
-		return VariantValue(Value(LogicalTypeId::SQLNULL));
+		//! 0 is reserved to indicate a missing value
+		return VariantValue(VariantValueType::MISSING);
 	}
 	values_index--;
 
 	auto type_id = input.GetTypeId(row, values_index);
 	if (!ALLOW_NULL) {
-		//! We don't expect NULLs at the root, those should have the 'values_index' of 0
+		//! We don't expect NULLs at the root, those should have a NULL 'untyped_value_index'
 		D_ASSERT(type_id != VariantLogicalType::VARIANT_NULL);
 	}
 
@@ -68,9 +67,10 @@ static vector<VariantValue> UnshredTypedLeaf(Vector &typed_value, idx_t count) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
-			continue;
+			res[i] = VariantValue(Value(LogicalTypeId::SQLNULL));
+		} else {
+			res[i] = VariantValue(typed_value.GetValue(i));
 		}
-		res[i] = VariantValue(typed_value.GetValue(i));
 	}
 	return res;
 }
@@ -100,14 +100,18 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 		auto &values = child_values[child_idx];
 
 		for (idx_t i = 0; i < count; i++) {
-			if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
-				continue;
-			}
 			if (values[i].IsMissing()) {
+				// struct field is missing
 				continue;
 			}
-			if (res[i].IsMissing()) {
+			if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
+				res[i] = VariantValue(Value(LogicalTypeId::SQLNULL));
+			} else if (res[i].IsMissing()) {
 				res[i] = VariantValue(VariantValueType::OBJECT);
+			}
+			if (res[i].IsNull()) {
+				// struct itself is NULL
+				continue;
 			}
 			auto &obj_value = res[i];
 			obj_value.AddChild(child_name, std::move(values[i]));
@@ -129,8 +133,11 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 	auto &typed_value_validity = vector_format.validity;
 
 	SelectionVector child_sel(child_size);
+	vector<VariantValue> res(count);
 	for (uint32_t i = 0; i < count; i++) {
 		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
+			// array itself is NULL
+			res[i] = VariantValue(Value(LogicalType::SQLNULL));
 			continue;
 		}
 		auto row = row_sel ? static_cast<uint32_t>(row_sel->get_index(i)) : i;
@@ -141,9 +148,8 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 	}
 	auto child_values = Unshred(variant, child_vector, child_size, child_sel);
 
-	vector<VariantValue> res(count);
 	for (idx_t i = 0; i < count; i++) {
-		if (!typed_value_validity.RowIsValid(vector_format.sel->get_index(i))) {
+		if (res[i].IsNull()) {
 			continue;
 		}
 		auto &list_entry = list_data[i];
@@ -190,16 +196,22 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 	auto res = UnshredTypedValue(variant, typed_value, count, row_sel);
 	for (uint32_t i = 0; i < count; i++) {
 		if (!untyped_index_validity.RowIsValid(untyped_format.sel->get_index(i))) {
+			//! NULL untyped_value_index indicates a fully shredded variant
 			continue;
 		}
 		auto value_index = untyped_index_data[untyped_format.sel->get_index(i)];
+		if (value_index == 0) {
+			// untyped value index of 0 indicates missing
+			res[i] = VariantValue(VariantValueType::MISSING);
+			continue;
+		}
 		auto row = row_sel ? static_cast<uint32_t>(row_sel->get_index(i)) : i;
 		auto unshredded = UnshreddedVariantValue(variant, row, value_index);
 
-		if (res[i].IsMissing()) {
+		if (res[i].IsNull()) {
 			//! Unshredded, has no shredded value
 			res[i] = std::move(unshredded);
-		} else if (!unshredded.IsNull()) {
+		} else {
 			//! Partial shredding, already has a shredded value that this has to be combined into
 			D_ASSERT(res[i].value_type == VariantValueType::OBJECT);
 			D_ASSERT(unshredded.value_type == VariantValueType::OBJECT);
