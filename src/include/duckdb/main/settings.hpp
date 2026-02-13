@@ -197,7 +197,7 @@ struct AllowUnsignedExtensionsSetting {
 };
 
 struct AllowedConfigsSetting {
-	using RETURN_TYPE = string;
+	using RETURN_TYPE = vector<string>;
 	static constexpr const char *Name = "allowed_configs";
 	static constexpr const char *Description =
 	    "List of additional configuration options that are allowed to be changed even when the configuration is locked";

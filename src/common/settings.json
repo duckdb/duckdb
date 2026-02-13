@@ -84,6 +84,13 @@
         ]
     },
     {
+        "name": "allowed_configs",
+        "description": "List of additional configuration options that are allowed to be changed even when the configuration is locked",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "allowed_directories",
         "description": "List of directories/prefixes that are ALWAYS allowed to be queried - even when enable_external_access is false",
         "type": "VARCHAR[]",
