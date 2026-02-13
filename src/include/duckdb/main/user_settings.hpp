@@ -35,9 +35,12 @@ private:
 	vector<GenericSetting> settings;
 };
 
-struct CachedGlobalSettings {
-	CachedGlobalSettings(idx_t version, UserSettingsMap settings);
+struct GlobalUserSettings;
 
+struct CachedGlobalSettings {
+	CachedGlobalSettings(const GlobalUserSettings &global_user_settings, idx_t version, UserSettingsMap settings);
+
+	const GlobalUserSettings &global_user_settings;
 	idx_t version;
 	UserSettingsMap settings;
 };

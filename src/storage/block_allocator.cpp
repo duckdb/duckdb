@@ -200,7 +200,7 @@ BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAll
 	(*local_state).TryInitialize(block_allocator);
 	return *local_state;
 #else
-	thread_local BlockAllocatorThreadLocalState local_state(block_allocator); // NOLINT
+	thread_local BlockAllocatorThreadLocalState local_state(block_allocator);
 	local_state.TryInitialize(block_allocator);
 	return local_state;
 #endif
