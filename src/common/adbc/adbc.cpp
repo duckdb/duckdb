@@ -506,6 +506,10 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	if (!value) {
+		SetError(error, "Option value must not be NULL");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 	std::string key_string = std::string(key);
 	std::string key_value = std::string(value);
 	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);

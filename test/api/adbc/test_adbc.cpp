@@ -3921,4 +3921,115 @@ TEST_CASE("ADBC - Connection SetOptionBytes/Double not implemented", "[adbc]") {
 	}
 }
 
+TEST_CASE("ADBC - ConnectionSetOption NULL value should not crash", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// ConnectionSetOption with NULL value for CURRENT_CATALOG should not crash
+	{
+		auto status = AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, nullptr,
+		                                      &db.adbc_error);
+		REQUIRE(status != ADBC_STATUS_OK);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// ConnectionSetOption with NULL value for CURRENT_DB_SCHEMA should not crash
+	{
+		auto status = AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, nullptr,
+		                                      &db.adbc_error);
+		REQUIRE(status != ADBC_STATUS_OK);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// ConnectionSetOption with NULL value for AUTOCOMMIT should not crash
+	{
+		auto status =
+		    AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT, nullptr, &db.adbc_error);
+		REQUIRE(status != ADBC_STATUS_OK);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// ConnectionSetOption with NULL value for unknown key should not crash
+	{
+		auto status = AdbcConnectionSetOption(&db.adbc_connection, "unknown_key", nullptr, &db.adbc_error);
+		REQUIRE(status != ADBC_STATUS_OK);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// Connection should still be functional after failed SetOption calls
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "memory");
+	}
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "main");
+	}
+}
+
+TEST_CASE("ADBC - ConnectionSetOption non-existent catalog and schema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Setting a non-existent catalog should fail gracefully
+	{
+		auto status = AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
+		                                      "nonexistent_catalog", &db.adbc_error);
+		REQUIRE(status != ADBC_STATUS_OK);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// Setting a non-existent schema should fail gracefully
+	{
+		auto status = AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA,
+		                                      "nonexistent_schema", &db.adbc_error);
+		REQUIRE(status != ADBC_STATUS_OK);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	// Connection should still be functional after failed SetOption calls
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "memory");
+	}
+	{
+		char buf[256];
+		size_t length = sizeof(buf);
+		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, buf,
+		                                        &length, &db.adbc_error)));
+		REQUIRE(std::string(buf) == "main");
+	}
+}
+
 } // namespace duckdb
