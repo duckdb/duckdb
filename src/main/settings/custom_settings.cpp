@@ -1625,4 +1625,12 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
 }
 
+//===----------------------------------------------------------------------===//
+// Warnings As Errors
+//===----------------------------------------------------------------------===//
+
+void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	throw InvalidInputException("Placeholder error message for 'WarningsAsErrorsSetting'");
+}
+
 } // namespace duckdb
