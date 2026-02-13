@@ -66,11 +66,11 @@ public:
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) final;
 
-	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
-	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
+	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
+	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 
-	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
-	void Unpin(shared_ptr<BlockHandle> &handle) final;
+	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
+	void Unpin(shared_ptr<BlockHandle> &handle) final DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
@@ -161,7 +161,7 @@ protected:
 	void VerifyZeroReaders(BlockLock &l, shared_ptr<BlockHandle> &handle);
 
 	void BatchRead(vector<shared_ptr<BlockHandle>> &handles, const map<block_id_t, idx_t> &load_map,
-	               block_id_t first_block, block_id_t last_block);
+	               block_id_t first_block, block_id_t last_block) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 
 	bool EncryptTemporaryFiles();
 

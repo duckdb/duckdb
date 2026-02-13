@@ -217,7 +217,7 @@ private:
 	atomic<idx_t> num_row_groups;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::FileMetaData file_meta_data;
-	std::mutex lock;
+	mutex lock;
 
 	vector<unique_ptr<ColumnWriter>> column_writers;
 

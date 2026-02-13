@@ -49,8 +49,8 @@ public:
 		idx_t size;
 	};
 
-	mutable std::mutex read_calls_mutex;
-	vector<ReadCall> read_calls;
+	mutable mutex read_calls_mutex;
+	vector<ReadCall> read_calls DUCKDB_GUARDED_BY(read_calls_mutex);
 
 	string GetName() const override {
 		return "TrackingFileSystem";
@@ -395,7 +395,7 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 
 	// Use two threads to read from the same file handle in parallel using pread semantics
 	vector<std::thread> threads;
-	std::mutex results_mutex;
+	mutex results_mutex;
 	vector<bool> results(THREAD_COUNT, false);
 
 	const idx_t chunk_size = 20;
