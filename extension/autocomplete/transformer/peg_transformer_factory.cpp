@@ -329,6 +329,7 @@ void PEGTransformerFactory::RegisterDescribe() {
 	// describe.gram
 	REGISTER_TRANSFORM(TransformDescribeStatement);
 	REGISTER_TRANSFORM(TransformShowSelect);
+	REGISTER_TRANSFORM(TransformShowTables);
 	REGISTER_TRANSFORM(TransformShowAllTables);
 	REGISTER_TRANSFORM(TransformShowQualifiedName);
 	REGISTER_TRANSFORM(TransformShowOrDescribeOrSummarize);

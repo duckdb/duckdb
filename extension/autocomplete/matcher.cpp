@@ -434,9 +434,11 @@ public:
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
 		}
 		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
 			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "''", "'");
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
 	}
@@ -561,10 +563,12 @@ public:
 		if (!MatchReservedIdentifier(state)) {
 			return nullptr;
 		}
-		if (IsQuoted(token_text)) {
-			token_text = token_text.substr(1, token_text.size() - 2);
+		string result_text = token_text;
+		if (IsQuoted(result_text)) {
+			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
 	}
 
 private:
@@ -620,6 +624,7 @@ public:
 
 		string stripped_string =
 		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
+		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
 
 		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, string_info.type));
 		result->name = name;

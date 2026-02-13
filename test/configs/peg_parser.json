@@ -5,34 +5,6 @@
   "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
-      "reason": "Quotations",
-      "paths": [
-        "test/sql/pragma/test_show_tables_from.test",
-        "test/sql/attach/attach_dbname_quotes.test",
-        "test/sql/table_function/sqlite_master_quotes.test",
-        "test/sql/keywords/escaped_quotes_expressions.test",
-        "test/sql/catalog/test_quoted_column_name.test",
-        "test/sql/json/issues/large_quoted_string_constant.test",
-        "test/sql/export/export_database.test",
-        "test/sql/cast/string_to_struct_cast.test",
-        "test/sql/export/parquet/export_parquet_enum.test",
-        "test/sql/show_select/show_quote_identifier.test",
-        "test/sql/copy/return_stats.test",
-        "test/sql/copy/csv/multidelimiter/test_abac.test",
-        "test/sql/copy/csv/pollock/test_quotation_char.test",
-        "test/sql/copy/csv/test_validator.test",
-        "test/sql/copy/csv/test_thousands_separator.test",
-        "test/sql/copy/csv/auto/test_csv_auto.test",
-        "test/sql/error/qualified_column_error.test",
-        "test/issues/general/test_3140.test",
-        "test/sql/pivot/test_pivot_duplicate_aggregates.test",
-        "test/sql/cast/string_to_list_cast.test",
-        "test/sql/cast/string_to_struct_escapes.test",
-        "test/sql/cast/string_to_struct_roundtrip.test",
-        "test/sql/catalog/function/query_function.test"
-      ]
-    },
-    {
       "reason": "Autocomplete wrong results",
       "paths": [
         "test/sql/function/autocomplete/copy.test",
@@ -50,6 +22,7 @@
         "test/sql/cast/cast_error_location.test",
         "test/sql/types/nested/array/array_invalid.test",
         "test/sql/error/lineitem_errors.test",
+        "test/sql/error/qualified_column_error.test",
         "test/sql/types/nested/struct/struct_dict.test",
         "test/sql/types/map/map_empty.test",
         "test/sql/binder/column_ref_as_alias.test",
