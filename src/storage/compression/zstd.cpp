@@ -44,8 +44,6 @@ static int32_t GetCompressionLevel() {
 
 static constexpr idx_t ZSTD_VECTOR_SIZE = STANDARD_VECTOR_SIZE > 2048 ? STANDARD_VECTOR_SIZE : 2048;
 
-namespace {
-
 struct ZSTDCompressionBufferFlags {
 public:
 	ZSTDCompressionBufferFlags() : value(0) {
@@ -140,8 +138,6 @@ protected:
 private:
 	uint8_t value;
 };
-
-} // namespace
 
 namespace duckdb {
 
