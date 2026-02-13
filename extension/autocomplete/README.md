@@ -14,15 +14,6 @@ Rules are defined with the `<-` operator:
 RuleName <- RuleDefinition
 ```
 
-Multi-line rules continue with indentation:
-
-```
-Statement <-
-    CreateStatement /
-    SelectStatement /
-    InsertStatement
-```
-
 ### Literals
 
 Keywords and operators are matched with single-quoted strings:
