@@ -181,19 +181,33 @@ static vector<VariantValue> UnshredTypedValue(UnifiedVariantVectorData &variant,
 
 static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &shredded, idx_t count,
                                     optional_ptr<SelectionVector> row_sel) {
-	D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
-	auto &child_entries = StructVector::GetEntries(shredded);
-	D_ASSERT(child_entries.size() == 2);
+	reference<Vector> typed_value_ref(shredded);
+	optional_ptr<Vector> untyped_value_index;
+	if (shredded.GetType().id() == LogicalTypeId::STRUCT) {
+		// "typed_value", "untyped_value"
+		auto &child_vectors = StructVector::GetEntries(shredded);
+		D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
+		auto &child_entries = StructVector::GetEntries(shredded);
+		D_ASSERT(child_entries.size() <= 2);
+		typed_value_ref = *child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
+		if (child_vectors.size() > 1) {
+			D_ASSERT(child_vectors.size() == 2);
+			untyped_value_index = *child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
+		}
+	}
+	auto &typed_value = typed_value_ref.get();
 
-	auto &typed_value = *child_entries[VariantColumnData::TYPED_VALUE_INDEX];
-	auto &untyped_value_index = *child_entries[VariantColumnData::UNTYPED_VALUE_INDEX];
+	// unshred the typed variant
+	auto res = UnshredTypedValue(variant, typed_value, count, row_sel);
 
+	if (!untyped_value_index) {
+		return res;
+	}
+	// if we have any untyped values - unshred them
 	UnifiedVectorFormat untyped_format;
-	untyped_value_index.ToUnifiedFormat(count, untyped_format);
+	untyped_value_index->ToUnifiedFormat(count, untyped_format);
 	auto untyped_index_data = untyped_format.GetData<uint32_t>(untyped_format);
 	auto &untyped_index_validity = untyped_format.validity;
-
-	auto res = UnshredTypedValue(variant, typed_value, count, row_sel);
 	for (uint32_t i = 0; i < count; i++) {
 		if (!untyped_index_validity.RowIsValid(untyped_format.sel->get_index(i))) {
 			//! NULL untyped_value_index indicates a fully shredded variant
