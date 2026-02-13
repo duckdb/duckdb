@@ -100,7 +100,7 @@ PlainIdentifier <- !ReservedKeyword <[a-z_]i[a-z0-9_]i*>
 ```
 
 **Note**: Negative lookahead is parsed but currently ignored by the matcher.
-Todo(Dtenwolde): Implement negative lookahead
+TODO(Dtenwolde): Implement negative lookahead
 
 ### Special Tokens
 
