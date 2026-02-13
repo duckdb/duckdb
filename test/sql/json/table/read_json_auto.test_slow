@@ -315,16 +315,15 @@ select * from read_json_auto('{DATA_DIR}/json/simple_map.jsonl', map_inference_t
 ----
 Binder Error: read_json_auto "map_inference_threshold" parameter must be 0 or positive, or -1 to disable map inference for consistent objects.
 
-# if we only sample the first file (empty array), the type becomes SQLNULL (no data to infer)
-# which gets converted to INTEGER, so all values become NULL
+# if we only sample the first file, we default to a single JSON column
 query I
 select * from read_json_auto(['{DATA_DIR}/json/empty_array.json', '{DATA_DIR}/json/example_n.ndjson'], maximum_sample_files=1);
 ----
-NULL
-NULL
-NULL
-NULL
-NULL
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
 
 # -1 is unlimited
 query II
