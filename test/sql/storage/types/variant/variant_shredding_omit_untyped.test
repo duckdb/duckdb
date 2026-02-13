@@ -1,6 +1,8 @@
 # name: test/sql/storage/types/variant/variant_shredding_omit_untyped.test
 # group: [variant]
 
+require vector_size 2048
+
 load __TEST_DIR__/variant_shredding_omit_untyped.db
 
 # Always shred
