@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Debug",
+      "type": "shell",
+      "command": "GEN=ninja BUILD_BENCHMARK=1 make debug -j 7",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build Debug (incremental)",
+      "type": "shell",
+      "command": "cmake --build build/debug --config Debug -- -j 7",
+      "group": "build",
+      "problemMatcher": ["$gcc"],
+      "presentation": { "reveal": "silent", "panel": "shared" }
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Debug with query script",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/debug/duckdb",
+        "args": [
+          "-f",
+          // "${workspaceFolder}/scripts/debug/left_deep_two_way.sql"
+          // "${workspaceFolder}/scripts/debug/left_deep_two_way_big_unique.sql"
+          "${workspaceFolder}/scripts/debug/left_deep_two_way_big_non_unique.sql"
+          // "${workspaceFolder}/scripts/debug/left_deep_three_way.sql"
+        ],
+        // "preLaunchTask": "Build Debug",
+        "cwd": "${workspaceFolder}"
+      },
+
+      {
+        "name": "Debug interactive",
+        "type": "lldb",
+        // Microsoft C/C++: use "type": "cppdbg" and set "MIMode": "gdb" (or "lldb" if you use LLDB).
+        // TODO what about anysphere's C/C++ extension?
+        "request": "launch",
+        "program": "${workspaceFolder}/build/debug/duckdb",
+        "args": [],
+        // "preLaunchTask": "Build Debug",
+        "cwd": "${workspaceFolder}"
+      }
+    ]
+  }
