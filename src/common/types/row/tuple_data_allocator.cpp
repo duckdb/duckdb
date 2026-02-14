@@ -12,10 +12,13 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p)
+TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p, idx_t eviction_queue_idx)
     : capacity(capacity_p), size(0) {
 	auto buffer_handle = buffer_manager.Allocate(tag, capacity, false);
 	handle = buffer_handle.GetBlockHandle();
+	if (eviction_queue_idx != DConstants::INVALID_INDEX) {
+		handle->GetMemory().SetEvictionQueueIndex(eviction_queue_idx);
+	}
 }
 
 TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept : capacity(0), size(0) {
@@ -228,10 +231,6 @@ TupleDataAllocator::BuildChunkPart(TupleDataSegment &segment, TupleDataPinState 
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
 		CreateRowBlock(segment);
-		if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
-			row_blocks.back().handle->GetMemory().SetEvictionQueueIndex(
-			    RadixPartitioning::RadixBits(partition_index.GetIndex()));
-		}
 	}
 	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
 	auto &row_block = row_blocks[result.row_block_index];
@@ -284,10 +283,6 @@ TupleDataAllocator::BuildChunkPart(TupleDataSegment &segment, TupleDataPinState 
 				if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
 					const auto size = MaxValue<idx_t>(block_size, heap_sizes[append_offset]);
 					CreateHeapBlock(segment, size);
-					if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
-						heap_blocks.back().handle->GetMemory().SetEvictionQueueIndex(
-						    RadixPartitioning::RadixBits(partition_index.GetIndex()));
-					}
 				}
 				result.heap_block_index = NumericCast<uint32_t>(heap_blocks.size() - 1);
 				auto &heap_block = heap_blocks[result.heap_block_index];
@@ -781,12 +776,20 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 }
 
 void TupleDataAllocator::CreateRowBlock(TupleDataSegment &segment) {
-	row_blocks.emplace_back(buffer_manager, tag, buffer_manager.GetBlockSize());
+	idx_t eviction_queue_idx = DConstants::INVALID_INDEX;
+	if (partition_index.IsValid()) {
+		eviction_queue_idx = RadixPartitioning::RadixBits(partition_index.GetIndex());
+	}
+	row_blocks.emplace_back(buffer_manager, tag, buffer_manager.GetBlockSize(), eviction_queue_idx);
 	segment.pinned_row_handles.resize(row_blocks.size());
 }
 
 void TupleDataAllocator::CreateHeapBlock(TupleDataSegment &segment, idx_t size) {
-	heap_blocks.emplace_back(buffer_manager, tag, size);
+	idx_t eviction_queue_idx = DConstants::INVALID_INDEX;
+	if (partition_index.IsValid()) {
+		eviction_queue_idx = RadixPartitioning::RadixBits(partition_index.GetIndex());
+	}
+	heap_blocks.emplace_back(buffer_manager, tag, size, eviction_queue_idx);
 	segment.pinned_heap_handles.resize(heap_blocks.size());
 }
 

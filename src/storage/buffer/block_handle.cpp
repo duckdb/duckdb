@@ -34,8 +34,14 @@ BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 	// The block memory is being destroyed, meaning that any unswizzled pointers are now binary junk.
 	SetSwizzling(nullptr);
 	D_ASSERT(!GetBuffer() || GetBuffer()->GetBufferType() == GetBufferType());
-	if (GetBuffer() && GetBufferType() != FileBufferType::TINY_BUFFER) {
+	if (eviction_seq_num > 0 && GetBufferType() != FileBufferType::TINY_BUFFER) {
 		// Kill the latest version in the eviction queue.
+		// Check eviction_seq_num > 0 (was added to queue) rather than GetBuffer() (is loaded),
+		// because the buffer can be null while a node is still in the queue (e.g., after
+		// SetDestroyBufferUpon(UNPIN) triggers a direct Unload bypassing the eviction queue,
+		// or after ConvertToPersistent moves the buffer to another block).
+		// The seq is reset to 0 when a live node is consumed from the queue, so seq > 0
+		// correctly means there is a stranded node that needs accounting.
 		GetBufferManager().GetBufferPool().IncrementDeadNodes(*this);
 	}
 

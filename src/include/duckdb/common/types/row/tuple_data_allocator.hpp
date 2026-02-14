@@ -21,7 +21,8 @@ class ContinuousIdSet;
 
 struct TupleDataBlock {
 public:
-	TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p);
+	TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p,
+	               idx_t eviction_queue_idx = DConstants::INVALID_INDEX);
 
 	//! Disable copy constructors
 	TupleDataBlock(const TupleDataBlock &other) = delete;
