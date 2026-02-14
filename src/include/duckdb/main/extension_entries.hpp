@@ -166,6 +166,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ducklake_rewrite_data_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_set_commit_message", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_set_option", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_settings", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_snapshots", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_table_changes", "ducklake", CatalogType::TABLE_MACRO_ENTRY},
     {"ducklake_table_deletions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
