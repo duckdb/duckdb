@@ -911,7 +911,11 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 	}
 	stack.push_back(op);
 
-	D_ASSERT(op.get().type == LogicalOperatorType::LOGICAL_GET);
+	if (op.get().type != LogicalOperatorType::LOGICAL_GET) {
+		// Alternative verification can produce leaf operators without children that are not logical gets.
+		// In that case, late materialization is not applicable and we should gracefully fall back.
+		return false;
+	}
 	auto &logical_get = op.get().Cast<LogicalGet>();
 	if (!logical_get.function.late_materialization || !logical_get.function.get_row_id_columns) {
 		return false;
