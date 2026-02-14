@@ -1,5 +1,6 @@
 #include "json_transform.hpp"
 
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -374,10 +375,12 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 
 	// Build hash map from key to column index so we don't have to linearly search using the key
 	json_key_map_t<idx_t> key_map;
+	case_insensitive_map_t<idx_t> ci_key_map;
 	vector<yyjson_val **> nested_vals;
 	nested_vals.reserve(column_count);
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		key_map.insert({{names[col_idx].c_str(), names[col_idx].length()}, col_idx});
+		ci_key_map.insert({names[col_idx], col_idx});
 		nested_vals.push_back(JSONCommon::AllocateArray<yyjson_val *>(alc, count));
 	}
 
@@ -419,6 +422,13 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 			auto key_ptr = unsafe_yyjson_get_str(key);
 			auto key_len = unsafe_yyjson_get_len(key);
 			auto it = key_map.find({key_ptr, key_len});
+			if (it == key_map.end()) {
+				// Exact match failed: try case-insensitive fallback (handles CI-merged schema keys)
+				auto ci_it = ci_key_map.find(string(key_ptr, key_len));
+				if (ci_it != ci_key_map.end()) {
+					it = key_map.find({names[ci_it->second].c_str(), names[ci_it->second].length()});
+				}
+			}
 			if (it != key_map.end()) {
 				const auto &col_idx = it->second;
 				if (found_keys[col_idx]) {

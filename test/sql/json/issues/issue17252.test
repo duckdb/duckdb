@@ -1,0 +1,19 @@
+# name: test/sql/json/issues/issue17252.test
+# description: Test issue 17252 - Case-insensitive duplicate struct keys across JSON records
+# group: [issues]
+
+require json
+
+# Issue 17252: Schema inference should merge struct fields with different casings
+# across different JSON records (e.g. "retention" vs "Retention" vs "RETENTION")
+statement ok
+SELECT * FROM read_json_auto('{DATA_DIR}/json/17252.json', format = 'newline_delimited');
+
+# Verify that schema inference produces a single merged field (not a duplicate error)
+query II
+SELECT event, properties.count FROM read_json_auto('{DATA_DIR}/json/17252.json', format = 'newline_delimited') ORDER BY properties.count;
+----
+Event Started	1
+Event Ended	2
+Event Resumed	3
+
