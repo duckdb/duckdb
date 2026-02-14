@@ -111,12 +111,14 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator)
-	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator) {
+	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
+	           idx_t &max_token_index)
+	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
+	      max_token_index(max_token_index) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator) {
+	      allocator(state.allocator), max_token_index(state.max_token_index) {
 	}
 
 	vector<MatcherToken> &tokens;
@@ -124,6 +126,17 @@ struct MatchState {
 	reference_set_t<const Matcher> added_suggestions;
 	idx_t token_index;
 	ParseResultAllocator &allocator;
+	idx_t &max_token_index;
+
+	void UpdateMaxTokenIndex() {
+		if (token_index > max_token_index) {
+			max_token_index = token_index;
+		}
+	}
+
+	idx_t GetMaxTokenIndex() const {
+		return max_token_index;
+	}
 
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
