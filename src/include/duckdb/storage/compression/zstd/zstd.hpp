@@ -1,6 +1,14 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
