@@ -443,9 +443,19 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
 			const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
 			const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
+			auto &info = GetOperatorInfo(*active_operator);
 			if (rows_scanned.IsValid()) {
-				auto &info = GetOperatorInfo(*active_operator);
+				// Use exact value if available.
 				info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, rows_scanned.GetIndex());
+			} else {
+				// Otherwise estimate as the cardinality of the table scan, if there is no exact value available.
+				auto &bind_data = table_scan.bind_data;
+				if (bind_data && table_scan.function.cardinality) {
+					auto cardinality = table_scan.function.cardinality(context, &(*bind_data));
+					if (cardinality && cardinality->has_estimated_cardinality) {
+						info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
+					}
+				}
 			}
 		}
 	}
