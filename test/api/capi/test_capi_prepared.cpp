@@ -820,8 +820,8 @@ TEST_CASE("Test duckdb_prepared_column_origin_table", "[capi]") {
 	}
 
 	SECTION("literal expression") {
-		REQUIRE(duckdb_prepare(tester.connection, "SELECT 42, a.id FROM t1 a JOIN t2 b ON a.id = b.id",
-		                       &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT 42, a.id FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
 
 		auto origin0 = duckdb_prepared_column_origin_table(stmt, 0);
 		REQUIRE(string(origin0) == "");
@@ -835,8 +835,8 @@ TEST_CASE("Test duckdb_prepared_column_origin_table", "[capi]") {
 	}
 
 	SECTION("SELECT * from a join") {
-		REQUIRE(duckdb_prepare(tester.connection, "SELECT * FROM t1 a JOIN t2 b ON a.id = b.id",
-		                       &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT * FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
 
 		// t1 has (id, name), t2 has (id, value) => columns: id, name, id, value
 		REQUIRE(duckdb_prepared_statement_column_count(stmt) == 4);
