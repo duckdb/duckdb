@@ -437,8 +437,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 			// Collect all BoundColumnRefExpression bindings from this expression
 			vector<ColumnBinding> col_bindings;
 			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-			    expr,
-			    [&](const BoundColumnRefExpression &bound_ref) { col_bindings.push_back(bound_ref.binding); });
+			    expr, [&](const BoundColumnRefExpression &bound_ref) { col_bindings.push_back(bound_ref.binding); });
 
 			if (col_bindings.empty()) {
 				continue;

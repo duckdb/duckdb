@@ -776,8 +776,8 @@ TEST_CASE("Test duckdb_prepared_column_origin_table", "[capi]") {
 	}
 
 	SECTION("aliased column") {
-		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.name AS foo FROM t1 a JOIN t2 b ON a.id = b.id",
-		                       &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.name AS foo FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
 
 		auto origin = duckdb_prepared_column_origin_table(stmt, 0);
 		REQUIRE(string(origin) == "memory.main.t1");
@@ -787,8 +787,8 @@ TEST_CASE("Test duckdb_prepared_column_origin_table", "[capi]") {
 	}
 
 	SECTION("single-table function expression") {
-		REQUIRE(duckdb_prepare(tester.connection, "SELECT upper(a.name) FROM t1 a JOIN t2 b ON a.id = b.id",
-		                       &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT upper(a.name) FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
 
 		auto origin = duckdb_prepared_column_origin_table(stmt, 0);
 		REQUIRE(string(origin) == "memory.main.t1");
@@ -798,8 +798,8 @@ TEST_CASE("Test duckdb_prepared_column_origin_table", "[capi]") {
 	}
 
 	SECTION("single-table arithmetic expression") {
-		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id + 1 FROM t1 a JOIN t2 b ON a.id = b.id",
-		                       &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id + 1 FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
 
 		auto origin = duckdb_prepared_column_origin_table(stmt, 0);
 		REQUIRE(string(origin) == "memory.main.t1");
@@ -809,8 +809,8 @@ TEST_CASE("Test duckdb_prepared_column_origin_table", "[capi]") {
 	}
 
 	SECTION("multi-table expression") {
-		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id + b.id FROM t1 a JOIN t2 b ON a.id = b.id",
-		                       &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id + b.id FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
 
 		auto origin = duckdb_prepared_column_origin_table(stmt, 0);
 		REQUIRE(string(origin) == "");
