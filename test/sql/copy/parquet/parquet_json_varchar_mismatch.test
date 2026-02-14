@@ -1,0 +1,45 @@
+# name: test/sql/copy/parquet/parquet_json_varchar_mismatch.test
+# description: Test reading multiple parquet files where JSON and VARCHAR types are mixed (issue #17126)
+# group: [parquet]
+
+require parquet
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+# Create two JSON files: one with all-null values for a column, one with string values
+statement ok
+COPY (SELECT 'TEST 1' AS groupDn, NULL AS memberDn) TO '__TEST_DIR__/json_varchar_mismatch1.json';
+
+statement ok
+COPY (SELECT 'TEST 1' AS groupDn, 'a' AS memberDn) TO '__TEST_DIR__/json_varchar_mismatch2.json';
+
+# Convert both to Parquet
+statement ok
+COPY (SELECT * FROM '__TEST_DIR__/json_varchar_mismatch1.json') TO '__TEST_DIR__/json_varchar_mismatch1.parquet';
+
+statement ok
+COPY (SELECT * FROM '__TEST_DIR__/json_varchar_mismatch2.json') TO '__TEST_DIR__/json_varchar_mismatch2.parquet';
+
+# Reading both parquet files with union_by_name=true should succeed
+# SQLNULL merges with VARCHAR to produce VARCHAR
+query II rowsort
+SELECT * FROM read_parquet('__TEST_DIR__/json_varchar_mismatch*.parquet', union_by_name=true);
+----
+TEST 1	NULL
+TEST 1	a
+
+# The null-only column is inferred as SQLNULL by the JSON reader (since all values are null)
+# and written as UNKNOWN (NullType) in the parquet file
+query I
+SELECT typeof(memberDn) FROM '__TEST_DIR__/json_varchar_mismatch1.json';
+----
+"NULL"
+
+# Verify the parquet file has UNKNOWN logical type for the all-null column
+query I
+SELECT logical_type FROM parquet_schema('__TEST_DIR__/json_varchar_mismatch1.parquet') WHERE name='memberDn';
+----
+NullType()
