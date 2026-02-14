@@ -617,6 +617,7 @@ typedef struct {
 	duckdb_logical_type (*duckdb_prepared_statement_column_logical_type)(duckdb_prepared_statement prepared_statement,
 	                                                                     idx_t col_idx);
 	duckdb_type (*duckdb_prepared_statement_column_type)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+	const char *(*duckdb_prepared_column_origin_table)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
 	// New query execution functions
 
 	duckdb_arrow_options (*duckdb_result_get_arrow_options)(duckdb_result *result);
@@ -1190,6 +1191,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_prepared_statement_column_name = duckdb_prepared_statement_column_name;
 	result.duckdb_prepared_statement_column_logical_type = duckdb_prepared_statement_column_logical_type;
 	result.duckdb_prepared_statement_column_type = duckdb_prepared_statement_column_type;
+	result.duckdb_prepared_column_origin_table = duckdb_prepared_column_origin_table;
 	result.duckdb_result_get_arrow_options = duckdb_result_get_arrow_options;
 	result.duckdb_scalar_function_set_bind = duckdb_scalar_function_set_bind;
 	result.duckdb_scalar_function_bind_set_error = duckdb_scalar_function_bind_set_error;

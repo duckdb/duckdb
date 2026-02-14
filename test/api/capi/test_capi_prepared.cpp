@@ -727,3 +727,255 @@ TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[c
 	duckdb_disconnect(&conn);
 	duckdb_close(&db);
 }
+
+TEST_CASE("Test duckdb_prepared_column_origin_table", "[capi]") {
+	CAPITester tester;
+	duckdb_prepared_statement stmt = nullptr;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	tester.Query("CREATE TABLE t1 (id INTEGER, name VARCHAR)");
+	tester.Query("CREATE TABLE t2 (id INTEGER, value DOUBLE)");
+
+	SECTION("error cases") {
+		// nullptr prepared statement
+		REQUIRE(duckdb_prepared_column_origin_table(nullptr, 0) == nullptr);
+
+		// failed prepare
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT * FROM nonexistent", &stmt) == DuckDBError);
+		REQUIRE(duckdb_prepared_column_origin_table(stmt, 0) == nullptr);
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("join query - direct column refs") {
+		REQUIRE(duckdb_prepare(tester.connection,
+		                       "SELECT a.id, b.id, a.name, b.value FROM t1 a JOIN t2 b ON a.id = b.id",
+		                       &stmt) == DuckDBSuccess);
+
+		REQUIRE(duckdb_prepared_statement_column_count(stmt) == 4);
+
+		auto origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+		REQUIRE(string(origin0) == "memory.main.t1");
+		duckdb_free((void *)origin0);
+
+		auto origin1 = duckdb_prepared_column_origin_table(stmt, 1);
+		REQUIRE(string(origin1) == "memory.main.t2");
+		duckdb_free((void *)origin1);
+
+		auto origin2 = duckdb_prepared_column_origin_table(stmt, 2);
+		REQUIRE(string(origin2) == "memory.main.t1");
+		duckdb_free((void *)origin2);
+
+		auto origin3 = duckdb_prepared_column_origin_table(stmt, 3);
+		REQUIRE(string(origin3) == "memory.main.t2");
+		duckdb_free((void *)origin3);
+
+		// out of range
+		REQUIRE(duckdb_prepared_column_origin_table(stmt, 99) == nullptr);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("aliased column") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.name AS foo FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
+
+		auto origin = duckdb_prepared_column_origin_table(stmt, 0);
+		REQUIRE(string(origin) == "memory.main.t1");
+		duckdb_free((void *)origin);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("single-table function expression") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT upper(a.name) FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
+
+		auto origin = duckdb_prepared_column_origin_table(stmt, 0);
+		REQUIRE(string(origin) == "memory.main.t1");
+		duckdb_free((void *)origin);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("single-table arithmetic expression") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id + 1 FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
+
+		auto origin = duckdb_prepared_column_origin_table(stmt, 0);
+		REQUIRE(string(origin) == "memory.main.t1");
+		duckdb_free((void *)origin);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("multi-table expression") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id + b.id FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
+
+		auto origin = duckdb_prepared_column_origin_table(stmt, 0);
+		REQUIRE(string(origin) == "");
+		duckdb_free((void *)origin);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("literal expression") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT 42, a.id FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
+
+		auto origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+		REQUIRE(string(origin0) == "");
+		duckdb_free((void *)origin0);
+
+		auto origin1 = duckdb_prepared_column_origin_table(stmt, 1);
+		REQUIRE(string(origin1) == "memory.main.t1");
+		duckdb_free((void *)origin1);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("SELECT * from a join") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT * FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+		        DuckDBSuccess);
+
+		// t1 has (id, name), t2 has (id, value) => columns: id, name, id, value
+		REQUIRE(duckdb_prepared_statement_column_count(stmt) == 4);
+
+		auto origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+		REQUIRE(string(origin0) == "memory.main.t1");
+		duckdb_free((void *)origin0);
+
+		auto origin1 = duckdb_prepared_column_origin_table(stmt, 1);
+		REQUIRE(string(origin1) == "memory.main.t1");
+		duckdb_free((void *)origin1);
+
+		auto origin2 = duckdb_prepared_column_origin_table(stmt, 2);
+		REQUIRE(string(origin2) == "memory.main.t2");
+		duckdb_free((void *)origin2);
+
+		auto origin3 = duckdb_prepared_column_origin_table(stmt, 3);
+		REQUIRE(string(origin3) == "memory.main.t2");
+		duckdb_free((void *)origin3);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("single table query") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT id, name FROM t1", &stmt) == DuckDBSuccess);
+
+		auto origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+		REQUIRE(string(origin0) == "memory.main.t1");
+		duckdb_free((void *)origin0);
+
+		auto origin1 = duckdb_prepared_column_origin_table(stmt, 1);
+		REQUIRE(string(origin1) == "memory.main.t1");
+		duckdb_free((void *)origin1);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+}
+
+TEST_CASE("Test prepared column origin table in C API", "[capi]") {
+	CAPITester tester;
+	duckdb_prepared_statement stmt = nullptr;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE t1 (id INTEGER, name VARCHAR)");
+	tester.Query("CREATE TABLE t2 (id INTEGER, value DOUBLE)");
+
+	// Direct column refs from a join
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id, b.id, a.name, b.value FROM t1 a JOIN t2 b ON a.id = b.id",
+	                       &stmt) == DuckDBSuccess);
+
+	REQUIRE(duckdb_prepared_statement_column_count(stmt) == 4);
+
+	auto origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+	REQUIRE(string(origin0) == "memory.main.t1");
+	duckdb_free((void *)origin0);
+
+	auto origin1 = duckdb_prepared_column_origin_table(stmt, 1);
+	REQUIRE(string(origin1) == "memory.main.t2");
+	duckdb_free((void *)origin1);
+
+	auto origin2 = duckdb_prepared_column_origin_table(stmt, 2);
+	REQUIRE(string(origin2) == "memory.main.t1");
+	duckdb_free((void *)origin2);
+
+	auto origin3 = duckdb_prepared_column_origin_table(stmt, 3);
+	REQUIRE(string(origin3) == "memory.main.t2");
+	duckdb_free((void *)origin3);
+
+	// Out of range returns nullptr
+	REQUIRE(duckdb_prepared_column_origin_table(stmt, 99) == nullptr);
+
+	// nullptr prepared statement returns nullptr
+	REQUIRE(duckdb_prepared_column_origin_table(nullptr, 0) == nullptr);
+
+	duckdb_destroy_prepare(&stmt);
+
+	// Aliased column still traces to origin table
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT a.name AS foo FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+	        DuckDBSuccess);
+	origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+	REQUIRE(string(origin0) == "memory.main.t1");
+	duckdb_free((void *)origin0);
+	duckdb_destroy_prepare(&stmt);
+
+	// Single-table function expression
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT upper(a.name) FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+	        DuckDBSuccess);
+	origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+	REQUIRE(string(origin0) == "memory.main.t1");
+	duckdb_free((void *)origin0);
+	duckdb_destroy_prepare(&stmt);
+
+	// Single-table arithmetic expression
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id + 1 FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+	        DuckDBSuccess);
+	origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+	REQUIRE(string(origin0) == "memory.main.t1");
+	duckdb_free((void *)origin0);
+	duckdb_destroy_prepare(&stmt);
+
+	// Multi-table expression -> empty string
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT a.id + b.id FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+	        DuckDBSuccess);
+	origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+	REQUIRE(string(origin0) == "");
+	duckdb_free((void *)origin0);
+	duckdb_destroy_prepare(&stmt);
+
+	// Literal -> empty string
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT 42, a.id FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) ==
+	        DuckDBSuccess);
+	origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+	REQUIRE(string(origin0) == "");
+	duckdb_free((void *)origin0);
+	origin1 = duckdb_prepared_column_origin_table(stmt, 1);
+	REQUIRE(string(origin1) == "memory.main.t1");
+	duckdb_free((void *)origin1);
+	duckdb_destroy_prepare(&stmt);
+
+	// SELECT * from a join
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT * FROM t1 a JOIN t2 b ON a.id = b.id", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_prepared_statement_column_count(stmt) == 4);
+
+	origin0 = duckdb_prepared_column_origin_table(stmt, 0);
+	REQUIRE(string(origin0) == "memory.main.t1");
+	duckdb_free((void *)origin0);
+
+	origin1 = duckdb_prepared_column_origin_table(stmt, 1);
+	REQUIRE(string(origin1) == "memory.main.t1");
+	duckdb_free((void *)origin1);
+
+	origin2 = duckdb_prepared_column_origin_table(stmt, 2);
+	REQUIRE(string(origin2) == "memory.main.t2");
+	duckdb_free((void *)origin2);
+
+	origin3 = duckdb_prepared_column_origin_table(stmt, 3);
+	REQUIRE(string(origin3) == "memory.main.t2");
+	duckdb_free((void *)origin3);
+
+	duckdb_destroy_prepare(&stmt);
+}

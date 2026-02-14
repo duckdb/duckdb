@@ -56,6 +56,11 @@ const vector<string> &PreparedStatement::GetNames() {
 	return data->names;
 }
 
+const vector<string> &PreparedStatement::GetColumnOriginTables() {
+	D_ASSERT(data);
+	return data->column_origin_tables;
+}
+
 case_insensitive_map_t<LogicalType> PreparedStatement::GetExpectedParameterTypes() const {
 	D_ASSERT(data);
 	case_insensitive_map_t<LogicalType> expected_types(data->value_map.size());
