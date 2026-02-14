@@ -38,6 +38,9 @@ public:
 	vector<string> names;
 	//! The result types of the transaction
 	vector<LogicalType> types;
+	//! The fully qualified origin table name for each result column (parallel to names/types).
+	//! Empty string if the column has no single-table origin.
+	vector<string> column_origin_tables;
 
 	//! The statement properties
 	StatementProperties properties;

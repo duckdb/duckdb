@@ -61,6 +61,8 @@ public:
 	DUCKDB_API const vector<LogicalType> &GetTypes();
 	//! Returns the result names of the prepared statement
 	DUCKDB_API const vector<string> &GetNames();
+	//! Returns the fully qualified origin table name for each result column
+	DUCKDB_API const vector<string> &GetColumnOriginTables();
 	//! Returns the map of parameter index to the expected type of parameter
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
