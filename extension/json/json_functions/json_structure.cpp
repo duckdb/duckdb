@@ -2,6 +2,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "json_executors.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
@@ -374,7 +375,7 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild() {
 }
 
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_ptr, const size_t key_size) {
-	// Check if there is already a child with the same key
+	// Check if there is already a child with the same key (exact match)
 	const JSONKey temp_key {key_ptr, key_size};
 	const auto it = key_map.find(temp_key);
 	if (it != key_map.end()) {
@@ -387,6 +388,18 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_pt
 	JSONKey new_key {persistent_key_string.c_str(), persistent_key_string.length()};
 	key_map.emplace(new_key, children.size() - 1);
 	return children.back();
+}
+
+JSONStructureNode *JSONStructureDescription::FindChildCI(const char *key_ptr, const size_t key_size) {
+	// Case-insensitive linear scan: used to detect cross-record duplicate keys with different casing
+	for (auto &child : children) {
+		D_ASSERT(child.key);
+		const auto &child_key = *child.key;
+		if (StringUtil::CIEquals(child_key.c_str(), child_key.length(), key_ptr, key_size)) {
+			return &child;
+		}
+	}
+	return nullptr;
 }
 
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild(yyjson_val *key, yyjson_val *val,
@@ -413,23 +426,42 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 	D_ASSERT(yyjson_is_obj(obj));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::STRUCT);
 
-	// Keep track of keys so we can detect duplicates
+	// Pre-collect all exact keys in this object so we can distinguish within-object CI duplicates
+	// (e.g. "Platform" and "platform" in the same record) from cross-record CI duplicates
+	// (e.g. "retention" in record 1 and "Retention" in record 2).
+	unordered_set<string> all_obj_keys;
+	{
+		size_t idx, max;
+		yyjson_val *key, *val;
+		yyjson_obj_foreach(obj, idx, max, key, val) {
+			all_obj_keys.emplace(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+		}
+	}
+
+	// Keep track of exact keys seen so far for within-object exact duplicate detection
 	unordered_set<string> obj_keys;
-	case_insensitive_set_t ci_obj_keys;
 
 	size_t idx, max;
 	yyjson_val *key, *val;
 	yyjson_obj_foreach(obj, idx, max, key, val) {
-		const string obj_key(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+		const char *key_ptr = unsafe_yyjson_get_str(key);
+		const size_t key_size = unsafe_yyjson_get_len(key);
+		const string obj_key(key_ptr, key_size);
 		auto insert_result = obj_keys.insert(obj_key);
-		if (!ignore_errors && !insert_result.second) { // Exact match
+		if (!ignore_errors && !insert_result.second) { // Exact duplicate within same object
 			JSONCommon::ThrowValFormatError("Duplicate key \"" + obj_key + "\" in object %s", obj);
 		}
-		insert_result = ci_obj_keys.insert(obj_key);
-		if (!ignore_errors && !insert_result.second) { // Case-insensitive match
-			JSONCommon::ThrowValFormatError("Duplicate key (different case) \"" + obj_key + "\" and \"" +
-			                                    *insert_result.first + "\" in object %s",
-			                                obj);
+		if (insert_result.second) {
+			// Key is unique within this object. Check if a previous record used the same key with
+			// different casing (cross-record CI duplicate). If so, merge into that existing child
+			// rather than creating a new one with a different case spelling.
+			auto *ci_child = description.FindChildCI(key_ptr, key_size);
+			if (ci_child && all_obj_keys.count(*ci_child->key) == 0) {
+				// The CI-matching child's exact key is not present in the current object,
+				// so this is a cross-record CI duplicate. Merge into the existing child.
+				JSONStructure::ExtractStructure(val, *ci_child, ignore_errors);
+				continue;
+			}
 		}
 		description.GetOrCreateChild(key, val, ignore_errors);
 	}
@@ -563,7 +595,20 @@ static void MergeNodeObject(JSONStructureNode &merged, const JSONStructureDescri
 	auto &merged_desc = merged.GetOrCreateDescription(LogicalTypeId::STRUCT);
 	for (auto &struct_child : child_desc.children) {
 		const auto &struct_child_key = *struct_child.key;
-		auto &merged_child = merged_desc.GetOrCreateChild(struct_child_key.c_str(), struct_child_key.length());
+		// Use case-insensitive lookup when merging: if the source has "Retention" but the merged
+		// node already has "retention" (from a different chunk/thread), merge into the existing child
+		// rather than creating a duplicate with a different case spelling.
+		// However, if the CI-matching key also exists as a separate child in child_desc, the two keys
+		// are distinct fields from the same record (e.g. "id" and "Id") and must remain separate.
+		auto *ci_child = merged_desc.FindChildCI(struct_child_key.c_str(), struct_child_key.length());
+		if (ci_child) {
+			const JSONKey ci_key {ci_child->key->c_str(), ci_child->key->length()};
+			if (child_desc.key_map.count(ci_key) > 0) {
+				ci_child = nullptr; // CI match is also a distinct key in child_desc: keep them separate
+			}
+		}
+		auto &merged_child =
+		    ci_child ? *ci_child : merged_desc.GetOrCreateChild(struct_child_key.c_str(), struct_child_key.length());
 		JSONStructure::MergeNodes(merged_child, struct_child);
 	}
 }

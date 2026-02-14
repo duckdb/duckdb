@@ -1,0 +1,3 @@
+{"event":"Event Started","properties":{"retention":5,"count":1}}
+{"event":"Event Ended","properties":{"Retention":7,"count":2}}
+{"event":"Event Resumed","properties":{"RETENTION":3,"count":3}}
