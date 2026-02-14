@@ -756,19 +756,29 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
                                                       vector<reference<LogicalOperator>> &stack) {
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	vector<ColumnBinding> projections(window_expr.partitions.size() + args.size());
+	auto extract_single_binding = [&](unique_ptr<Expression> *expr, ColumnBinding &binding) {
+		VisitExpression(expr);
+		if (column_references.size() != 1) {
+			column_references.clear();
+			return false;
+		}
+		binding = column_references.begin()->first;
+		column_references.clear();
+		return true;
+	};
 
 	// Build a projection list for an LHS table scan to recreate the column order of an aggregate with struct packing
 	for (idx_t i = 0; i < window_expr.partitions.size(); i++) {
 		auto &partition = window_expr.partitions[i];
-		VisitExpression(&partition);
-		projections[i] = column_references.begin()->first;
-		column_references.clear();
+		if (!extract_single_binding(&partition, projections[i])) {
+			return false;
+		}
 	}
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto &arg = args[i];
-		VisitExpression(&arg);
-		projections[window_expr.partitions.size() + i] = column_references.begin()->first;
-		column_references.clear();
+		if (!extract_single_binding(&arg, projections[window_expr.partitions.size() + i])) {
+			return false;
+		}
 	}
 
 	reference<LogicalOperator> op = *window.children[0];
@@ -780,11 +790,16 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &projection = op.get().Cast<LogicalProjection>();
 			for (idx_t i = 0; i < projections.size(); i++) {
-				D_ASSERT(projection.table_index == projections[i].table_index);
+				if (projection.table_index != projections[i].table_index) {
+					return false;
+				}
 				const idx_t projection_idx = projections[i].column_index;
-				VisitExpression(&projection.expressions[projection_idx]);
-				projections[i] = column_references.begin()->first;
-				column_references.clear();
+				if (projection_idx >= projection.expressions.size()) {
+					return false;
+				}
+				if (!extract_single_binding(&projection.expressions[projection_idx], projections[i])) {
+					return false;
+				}
 			}
 			op = *op.get().children[0];
 			break;
@@ -807,12 +822,14 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
 					return false;
 				}
-				VisitExpression(&condition.left);
-				auto left_binding = column_references.begin()->first;
-				column_references.clear();
-				VisitExpression(&condition.right);
-				auto right_binding = column_references.begin()->first;
-				column_references.clear();
+				ColumnBinding left_binding;
+				if (!extract_single_binding(&condition.LeftReference(), left_binding)) {
+					return false;
+				}
+				ColumnBinding right_binding;
+				if (!extract_single_binding(&condition.RightReference(), right_binding)) {
+					return false;
+				}
 
 				replaceable_bindings[left_binding] = right_binding;
 				replaceable_bindings[right_binding] = left_binding;
@@ -832,6 +849,15 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			bool all_right_replaceable = true;
 			for (idx_t i = 0; i < projections.size(); i++) {
 				const auto &projection = projections[i];
+				if (projection.table_index != left_idx && projection.table_index != right_idx) {
+					return false;
+				}
+				if (projection.table_index == left_idx && projection.column_index >= left_column_bindings.size()) {
+					return false;
+				}
+				if (projection.table_index == right_idx && projection.column_index >= right_column_bindings.size()) {
+					return false;
+				}
 				auto &column_binding = projection.table_index == left_idx
 				                           ? left_column_bindings[projection.column_index]
 				                           : right_column_bindings[projection.column_index];
@@ -852,6 +878,17 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 			idx_t replace_table_idx = all_right_replaceable ? right_idx : left_idx;
 			for (idx_t i = 0; i < projections.size(); i++) {
 				const auto projection_idx = projections[i];
+				if (projection_idx.table_index != left_idx && projection_idx.table_index != right_idx) {
+					return false;
+				}
+				if (projection_idx.table_index == left_idx &&
+				    projection_idx.column_index >= left_column_bindings.size()) {
+					return false;
+				}
+				if (projection_idx.table_index == right_idx &&
+				    projection_idx.column_index >= right_column_bindings.size()) {
+					return false;
+				}
 				auto &column_binding = projection_idx.table_index == left_idx
 				                           ? left_column_bindings[projection_idx.column_index]
 				                           : right_column_bindings[projection_idx.column_index];
