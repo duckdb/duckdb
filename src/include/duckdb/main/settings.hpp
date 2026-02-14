@@ -200,7 +200,7 @@ struct AllowedConfigsSetting {
 	using RETURN_TYPE = vector<string>;
 	static constexpr const char *Name = "allowed_configs";
 	static constexpr const char *Description =
-	    "List of additional configuration options that are allowed to be changed even when the configuration is locked";
+	    "List of configuration options that are ALWAYS allowed to be changed - even when lock_configuration is true";
 	static constexpr const char *InputType = "VARCHAR[]";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -1064,7 +1064,7 @@ struct LateMaterializationMaxRowsSetting {
 struct LockConfigurationSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "lock_configuration";
-	static constexpr const char *Description = "Whether or not the configuration can be altered";
+	static constexpr const char *Description = "Whether or not configurations can be altered";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
