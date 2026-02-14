@@ -85,7 +85,7 @@
     },
     {
         "name": "allowed_configs",
-        "description": "List of additional configuration options that are allowed to be changed even when the configuration is locked",
+        "description": "List of configuration options that are ALWAYS allowed to be changed - even when lock_configuration is true",
         "type": "VARCHAR[]",
         "scope": "global",
         "custom_implementation": true
@@ -717,7 +717,7 @@
     },
     {
         "name": "lock_configuration",
-        "description": "Whether or not the configuration can be altered",
+        "description": "Whether or not configurations can be altered",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "false"
