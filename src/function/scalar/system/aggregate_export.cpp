@@ -806,14 +806,6 @@ ScalarFunction CreateCombineFun(LogicalTypeId aggregate_state_logical_type_id) {
 	return function;
 }
 
-AggregateFunction CreateCombineAggrFunction(LogicalType aggregate_state_logical_type_id) {
-	auto function = AggregateFunction("combine_aggr", {aggregate_state_logical_type_id},
-	                                  aggregate_state_logical_type_id, nullptr, nullptr, CombineAggrUpdate, nullptr,
-	                                  CombineAggrFinalize, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
-	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
-	return function;
-}
-
 ScalarFunctionSet FinalizeFun::GetFunctions() {
 	ScalarFunctionSet finalize_set;
 
@@ -838,10 +830,12 @@ ScalarFunctionSet CombineFun::GetFunctions() {
 	return combine_set;
 }
 
-AggregateFunctionSet CombineAggrFun::GetFunctions() {
-	AggregateFunctionSet set("combine_aggr");
-	set.AddFunction(CreateCombineAggrFunction(LogicalTypeId::AGGREGATE_STATE));
-	return set;
+AggregateFunction CombineAggrFun::GetFunction() {
+	auto function = AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE,
+	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr,
+	                                  CombineAggrBind, nullptr, nullptr, nullptr);
+	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	return function;
 }
 
 } // namespace duckdb

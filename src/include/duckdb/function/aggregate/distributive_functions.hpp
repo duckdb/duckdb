@@ -98,7 +98,7 @@ struct CombineAggrFun {
 	static constexpr const char *Example = "combine_aggr(state_column)";
 	static constexpr const char *Categories = "";
 
-	static AggregateFunctionSet GetFunctions();
+	static AggregateFunction GetFunction();
 };
 
 } // namespace duckdb
