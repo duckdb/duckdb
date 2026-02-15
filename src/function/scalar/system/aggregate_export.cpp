@@ -682,9 +682,12 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	auto aligned_size = layout.aligned_state_size;
 	unsafe_unique_array<data_t> temp_state_buf = make_unsafe_uniq_array<data_t>(count * aligned_size);
 
+	// source_vec holds pointers to the binary states buffer (temp_state_buf) deserialized from the input states
 	Vector source_vec(LogicalType::POINTER);
 	auto source_ptrs = FlatVector::GetData<data_ptr_t>(source_vec);
 
+	// target_vec will hold pointers to the binary state buffer where the combined states should be stored, built by the
+	// underlying aggregate function's combine callback
 	Vector target_vec(LogicalType::POINTER);
 	auto target_ptrs = FlatVector::GetData<data_ptr_t>(target_vec);
 
