@@ -592,7 +592,8 @@ public:
 
 	void AddNull() {
 		buffer_collection.segment->stats.statistics.SetHasNullFast();
-		AddStringInternal("");
+		string_t empty(static_cast<uint32_t>(0));
+		AddStringInternal(empty);
 	}
 
 public:
