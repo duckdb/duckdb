@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -29,10 +30,8 @@ static bool ContainsCTERef(LogicalOperator &op, idx_t table_index) {
 	return false;
 }
 
-RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns,
-                               bool rewrite_dependent_joins, bool recursive_cte)
-    : table_index(table_index), correlated_columns(correlated_columns),
-      rewrite_dependent_joins(rewrite_dependent_joins), recursive_cte(recursive_cte) {
+RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns, CTEScanRewriteMode mode)
+    : table_index(table_index), correlated_columns(correlated_columns), mode(mode) {
 }
 
 void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
@@ -46,12 +45,14 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 			}
 			cteref.correlated_columns += correlated_columns.size();
 		}
-	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && rewrite_dependent_joins) {
+	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN &&
+	           (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS ||
+	            mode == CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS)) {
 		// There is another DependentJoin below the correlated recursive CTE.
 		// We have to add the correlated columns of the recursive CTE to the
 		// set of columns of this operator.
 		auto &join = op.Cast<LogicalDependentJoin>();
-		if (!recursive_cte) {
+		if (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS) {
 			bool has_cte_ref = false;
 			for (auto &child : join.children) {
 				if (ContainsCTERef(*child, table_index)) {
@@ -80,13 +81,17 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 				// For recursive CTEs we must prepend to preserve the expected ordering
 				// during recursive rewrites. For non-recursive CTEs we append to keep
 				// existing indices stable.
-				if (recursive_cte) {
+				if (mode == CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS) {
 					join.correlated_columns.AddColumn(std::move(corr));
-				} else {
+				} else if (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS) {
 					join.correlated_columns.AddColumnToBack(std::move(corr));
+				} else {
+					throw InternalException("Unsupported CTEScanRewriteMode in RewriteCTEScan");
 				}
 			}
 		}
+	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && mode != CTEScanRewriteMode::CTE_REF_ONLY) {
+		throw InternalException("Unsupported CTEScanRewriteMode in RewriteCTEScan");
 	}
 	VisitOperatorChildren(op);
 }
