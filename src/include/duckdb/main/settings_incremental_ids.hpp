@@ -1,5 +1,6 @@
+namespace duckdb {
+
 constexpr uint64_t BASE_SETTINGS_INCREMENTAL_ID = __LINE__ + 1;
-;
 constexpr uint64_t AllocatorBackgroundThreadsSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t AllowCommunityExtensionsSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t AllowExtensionsMetadataMismatchSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
@@ -22,8 +23,7 @@ constexpr uint64_t DebugCheckpointAbortSetting_INCREMENTAL_ID = __LINE__ - BASE_
 constexpr uint64_t DebugCheckpointSleepMsSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t DebugEvictionQueueSleepMicroSecondsSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t DebugForceNoCrossProductSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
-constexpr uint64_t DebugPhysicalTableScanExecutionStrategySetting_INCREMENTAL_ID =
-    __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
+constexpr uint64_t DebugPhysicalTableScanExecutionStrategySetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t DebugSkipCheckpointOnCommitSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t DebugVerifyBlocksSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t DebugVerifyVectorSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
@@ -97,3 +97,5 @@ constexpr uint64_t WarningsAsErrorsSetting_INCREMENTAL_ID = __LINE__ - BASE_SETT
 constexpr uint64_t WriteBufferRowGroupCountSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t ZstdMinStringLengthSetting_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
 constexpr uint64_t NUMBER_SETTINGS_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;
+
+} // namespace duckdb

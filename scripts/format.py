@@ -106,6 +106,7 @@ ignored_files = [
     'nf_zformat.h',
     'expr.cc',
     'function_list.cpp',
+    'settings_incremental_ids.hpp',
     'inlined_grammar.hpp',
 ]
 ignored_directories = [
