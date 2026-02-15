@@ -54,7 +54,7 @@ def extract_declarations(setting) -> str:
             definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.scope}_ONLY;\n"
         if setting.setting_index is None:
             raise Exception("Setting index was not set")
-        definition += f"    static constexpr idx_t SettingIndex = {setting.setting_index};\n"
+        definition += f"    static constexpr idx_t SettingIndex = {setting.struct_name}_INCREMENTAL_ID;\n"
         if setting.on_set:
             definition += f"    static void OnSet(SettingCallbackInfo &info, Value &input);\n"
 
@@ -62,8 +62,17 @@ def extract_declarations(setting) -> str:
     return definition
 
 
+def extract_auxiliary_header(setting) -> str:
+    if not setting.is_generic_setting:
+        return ""
+    else:
+        return f"constexpr uint64_t {setting.struct_name}_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;\n"
+
+
 # generate code for all the settings for the the header file
 def generate_content(header_file_path):
+    from .config import DUCKDB_SETTINGS_AUXILIARY_HEADER_FILE
+
     with open(header_file_path, 'r') as source_file:
         source_code = source_file.read()
 
@@ -74,18 +83,23 @@ def generate_content(header_file_path):
     start_section = source_code[: start_index + 1]
     end_section = SEPARATOR + source_code[end_index:]
 
+    auxiliary_header = "".join(extract_auxiliary_header(setting) for setting in SettingsList)
+    write_content_to_file(
+        f"constexpr uint64_t BASE_SETTINGS_INCREMENTAL_ID = __LINE__ + 1;\n;"
+        + auxiliary_header
+        + f"constexpr uint64_t NUMBER_SETTINGS_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;\n",
+        DUCKDB_SETTINGS_AUXILIARY_HEADER_FILE,
+    )
     new_content = "".join(extract_declarations(setting) for setting in SettingsList)
     max_setting_index = (
         max([setting.setting_index for setting in SettingsList if setting.setting_index is not None]) + 1
     )
     new_content += '''
 struct GeneratedSettingInfo {
-	static constexpr idx_t MaxSettingIndex = %s;
+	static constexpr idx_t MaxSettingIndex = NUMBER_SETTINGS_INCREMENTAL_ID;
 };
 
-''' % (
-        max_setting_index,
-    )
+'''
     return start_section + new_content + end_section
 
 
