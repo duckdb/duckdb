@@ -458,7 +458,7 @@ public:
 
 		// Write the new id at the end of the last page
 		WriteBlockIdPointer(new_id);
-		D_ASSERT(buffer_state.offset <= GetWritableSpace(info));
+		D_ASSERT(buffer_state.offset <= info.GetBlockSize());
 		return new_id;
 	}
 
