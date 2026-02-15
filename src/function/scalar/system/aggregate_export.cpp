@@ -216,6 +216,43 @@ struct StoreFieldForSelectedRowsOp {
 	}
 };
 
+// Deserialize struct fields from a flattened struct vector into a state buffer.
+// Uses LoadFieldOp for tight SIMD-friendly loops
+void DeserializeStructFields(const AggregateStateLayout &layout, Vector &struct_vec,
+                             const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t dest_buffer) {
+	idx_t offset_in_state = 0;
+	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
+		auto &field_type = layout.child_types->at(field_idx).second;
+		auto physical = field_type.InternalType();
+		idx_t field_size = GetTypeIdSize(physical);
+		idx_t alignment = MinValue<idx_t>(field_size, 8);
+		offset_in_state = AlignValue(offset_in_state, alignment);
+
+		TemplateDispatch<LoadFieldOp>(physical, layout, struct_vec, field_idx, state_data, count, dest_buffer,
+		                              offset_in_state);
+
+		offset_in_state += field_size;
+	}
+}
+
+// Serialize packed binary states into a struct result vector.
+// Uses StoreFieldOp for tight SIMD-friendly loops
+void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, idx_t count,
+                           data_ptr_t *addresses_ptrs) {
+	idx_t offset_in_state = 0;
+	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
+		auto &field_type = layout.child_types->at(field_idx).second;
+		auto physical = field_type.InternalType();
+		idx_t field_size = GetTypeIdSize(physical);
+		idx_t alignment = MinValue<idx_t>(field_size, 8);
+		offset_in_state = AlignValue(offset_in_state, alignment);
+
+		TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
+
+		offset_in_state += field_size;
+	}
+}
+
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
@@ -282,23 +319,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 			state_vec_ptr[i] = local_state.state_buffer.get() + i * layout.aligned_state_size;
 		}
 
-		idx_t offset = 0;
-		for (idx_t f = 0; f < layout.child_types->size(); f++) {
-			auto type = layout.child_types->at(f).second;
-			idx_t field_size = GetTypeIdSize(type.InternalType());
-			idx_t alignment = MinValue<idx_t>(field_size, 8);
-			offset = AlignValue(offset, alignment);
-
-			auto &struct_vector = input.data[0];
-
-			// switch with templating since we want the compiler to optimize this when copying (reinterpret_cast)
-			// will internally use SIMD
-			auto physical = type.InternalType();
-			TemplateDispatch<LoadFieldOp>(physical, layout, struct_vector, f, state_data, input.size(),
-			                              local_state.state_buffer.get(), offset);
-
-			offset += field_size;
-		}
+		DeserializeStructFields(layout, input.data[0], state_data, input.size(), local_state.state_buffer.get());
 	} else {
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto target_ptr = local_state.state_buffer.get() + layout.aligned_state_size * i;
@@ -588,18 +609,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		AggregateStateLayout layout(bind_data.aggregate->function.GetStateType(), state_size);
 
 		result.Flatten(count);
-		idx_t offset_in_state = 0;
-		for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
-			auto &field_type = layout.child_types->at(field_idx).second;
-			auto physical = field_type.InternalType();
-			idx_t field_size = GetTypeIdSize(physical);
-			idx_t alignment = MinValue<idx_t>(field_size, 8);
-			offset_in_state = AlignValue(offset_in_state, alignment);
-
-			TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
-
-			offset_in_state += field_size;
-		}
+		SerializeStructFields(layout, result, count, addresses_ptrs);
 		return;
 	}
 
@@ -720,19 +730,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
         target_ptrs[i] = state_ptrs[sdata.sel->get_index(i)];
     }
 
-    idx_t offset_in_state = 0;
-    for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
-        auto &field_type = layout.child_types->at(field_idx).second;
-        auto physical = field_type.InternalType();
-        idx_t field_size = GetTypeIdSize(physical);
-        idx_t alignment = MinValue<idx_t>(field_size, 8);
-        offset_in_state = AlignValue(offset_in_state, alignment);
-
-        TemplateDispatch<LoadFieldOp>(physical, layout, inputs[0], field_idx, input_data, count,
-                                      temp_state_buf.get(), offset_in_state);
-
-        offset_in_state += field_size;
-    }
+    DeserializeStructFields(layout, inputs[0], input_data, count, temp_state_buf.get());
 
     ArenaAllocator allocator(Allocator::DefaultAllocator());
     AggregateInputData combine_input(nullptr, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
@@ -750,18 +748,7 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	AggregateStateLayout layout(underlying_aggr.GetStateType(), state_size);
 
 	result.Flatten(count);
-	idx_t offset_in_state = 0;
-	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
-		auto &field_type = layout.child_types->at(field_idx).second;
-		auto physical = field_type.InternalType();
-		idx_t field_size = GetTypeIdSize(physical);
-		idx_t alignment = MinValue<idx_t>(field_size, 8);
-		offset_in_state = AlignValue(offset_in_state, alignment);
-
-		TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
-
-		offset_in_state += field_size;
-	}
+	SerializeStructFields(layout, result, count, addresses_ptrs);
 }
 
 } // namespace
