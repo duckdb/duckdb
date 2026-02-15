@@ -1089,6 +1089,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_use_text_protocol", "postgres_scanner"},
     {"prefetch_all_parquet_files", "parquet"},
     {"s3_access_key_id", "httpfs"},
+    {"s3_allow_recursive_globbing", "httpfs"},
     {"s3_endpoint", "httpfs"},
     {"s3_kms_key_id", "httpfs"},
     {"s3_region", "httpfs"},
