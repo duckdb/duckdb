@@ -174,34 +174,36 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 }
 
 unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, InsertStatement &insert,
-                                                  TableStorageInfo &storage_info) {
+                                                  const TableStorageInfo &storage_info) {
 	auto set_info = make_uniq<UpdateSetInfo>();
 
 	auto &columns = set_info->columns;
-	// Figure out which columns are indexed on
-
-	unordered_set<column_t> indexed_columns;
+	// REPLACE is rewritten to UPDATE and should not try to write conflict-key columns.
+	// Updating those columns triggers unnecessary delete+insert rewrites and can perturb row ordering.
+	unordered_set<column_t> conflict_columns;
 	for (auto &index : storage_info.index_info) {
+		if (!index.is_unique) {
+			continue;
+		}
 		for (auto &column_id : index.column_set) {
-			indexed_columns.insert(column_id);
+			conflict_columns.insert(column_id);
 		}
 	}
 
 	auto &column_list = table.GetColumns();
 	if (insert.columns.empty()) {
 		for (auto &column : column_list.Physical()) {
-			auto &name = column.Name();
 			// FIXME: can these column names be aliased somehow?
-			if (indexed_columns.count(column.Oid())) {
+			if (conflict_columns.count(column.Oid())) {
 				continue;
 			}
-			columns.push_back(name);
+			columns.push_back(column.Name());
 		}
 	} else {
 		// a list of columns was explicitly supplied, only update those
 		for (auto &name : insert.columns) {
 			auto &column = column_list.GetColumn(name);
-			if (indexed_columns.count(column.Oid())) {
+			if (conflict_columns.count(column.Oid())) {
 				continue;
 			}
 			columns.push_back(name);

@@ -1,0 +1,24 @@
+# name: test/sql/upsert/insert_or_replace/issue_20952_non_pk_index_column.test
+# group: [insert_or_replace]
+
+# INSERT OR REPLACE should update indexed non-key columns too.
+statement ok
+create table t(
+	id varchar primary key,
+	state varchar not null,
+	name varchar not null
+);
+
+statement ok
+create index idx_state on t(state);
+
+statement ok
+insert or replace into t values ('a', 'first', 'jeremy');
+
+statement ok
+insert or replace into t values ('a', 'second', 'tim');
+
+query TTT
+select * from t;
+----
+a	second	tim
