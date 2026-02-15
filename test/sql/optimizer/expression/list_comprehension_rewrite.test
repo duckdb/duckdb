@@ -1,0 +1,56 @@
+# name: test/sql/optimizer/expression/list_comprehension_rewrite.test
+# description: Test conditional list comprehension rewriting
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output='OPTIMIZED_ONLY'
+
+statement ok
+CREATE TABLE t(l INTEGER[]);
+
+statement ok
+INSERT INTO t VALUES ([10, 9, 8, 7, 6]);
+
+query II
+EXPLAIN SELECT [i + 5 FOR x, i IN l IF i > 2] FROM t;
+----
+logical_opt	<REGEX>:.*list_apply.*list_filter.*list_apply.*
+
+query II
+EXPLAIN SELECT [i + 5 FOR x, i IN l IF x > 8] FROM t;
+----
+logical_opt	<REGEX>:.*list_apply.*list_filter.*list_apply.*
+
+query II
+EXPLAIN SELECT [x + 5 FOR x, i IN l IF i > 2] FROM t;
+----
+logical_opt	<!REGEX>:.*list_apply.*list_filter.*list_apply.*
+
+query II
+EXPLAIN SELECT [x + 5 FOR x, i IN l IF x > 8] FROM t;
+----
+logical_opt	<!REGEX>:.*list_apply.*list_filter.*list_apply.*
+
+query I
+SELECT [i + 5 FOR x, i IN l IF i > 2] FROM t;
+----
+[8, 9, 10]
+
+query I
+SELECT [i + 5 FOR x, i IN l IF x > 8] FROM t;
+----
+[6, 7]
+
+query I
+SELECT [x + 5 FOR x, i IN l IF i > 2] FROM t;
+----
+[13, 12, 11]
+
+query I
+SELECT [x + 5 FOR x, i IN l IF x > 8] FROM t;
+----
+[15, 14]
+
