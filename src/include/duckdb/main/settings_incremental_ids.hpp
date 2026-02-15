@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 namespace duckdb {
 
 constexpr uint64_t BASE_SETTINGS_INCREMENTAL_ID = __LINE__ + 1;

@@ -85,7 +85,7 @@ def generate_content(header_file_path):
 
     auxiliary_header = "".join(extract_auxiliary_header(setting) for setting in SettingsList)
     write_content_to_file(
-        f"namespace duckdb {{\n\nconstexpr uint64_t BASE_SETTINGS_INCREMENTAL_ID = __LINE__ + 1;\n"
+        f"#include <stdint.h>\n\nnamespace duckdb {{\n\nconstexpr uint64_t BASE_SETTINGS_INCREMENTAL_ID = __LINE__ + 1;\n"
         + auxiliary_header
         + f"constexpr uint64_t NUMBER_SETTINGS_INCREMENTAL_ID = __LINE__ - BASE_SETTINGS_INCREMENTAL_ID;\n\n}} // namespace duckdb",
         DUCKDB_SETTINGS_AUXILIARY_HEADER_FILE,
