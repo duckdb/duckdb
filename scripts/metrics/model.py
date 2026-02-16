@@ -16,11 +16,19 @@ class MetricDef:
     collection_method: Optional[str] = None
     child: Optional[str] = None
     description: str = None
+    value: Optional[int] = None
 
 
 class MetricIndex:
-    def __init__(self, defs: Iterable[MetricDef], optimizers: List[str]):
+    def __init__(self, defs: Iterable[MetricDef], optimizers: List[str], optimizer_start_value: Optional[int] = None):
         self.defs: List[MetricDef] = list(defs)
+        self.optimizer_start_value: Optional[int] = optimizer_start_value
+
+        # Build name → explicit value mapping
+        self._value_of: Dict[str, int] = {}
+        for d in self.defs:
+            if d.value is not None:
+                self._value_of[d.name] = d.value
 
         # Build group → names (existing contract for emitters)
         by_group: Dict[str, List[str]] = defaultdict(list)
@@ -29,8 +37,11 @@ class MetricIndex:
         for g in by_group:
             by_group[g].sort()
 
-        # Add optimizer group (names only)
+        # Add optimizer group (names only) and assign sequential values from optimizer_start_value
         optimizer_names = [f"OPTIMIZER_{o}" for o in optimizers]
+        if optimizer_start_value is not None:
+            for i, name in enumerate(optimizer_names):
+                self._value_of[name] = optimizer_start_value + i
         by_group["optimizer"] = optimizer_names
 
         # Add "all"
@@ -118,11 +129,17 @@ class MetricIndex:
                 return d.description
         return None
 
+    def metric_value(self, metric: str) -> Optional[int]:
+        return self._value_of.get(metric)
+
 
 def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> MetricIndex:
     defs: list[MetricDef] = []
+    optimizer_start_value: Optional[int] = None
     for group in metrics_json:
         gname = group.get("group")
+        if gname == "optimizer":
+            optimizer_start_value = group.get("optimizer_start_value")
         for metric in group.get("metrics", []):
             name = metric["name"]
             validate_identifier(name, gname)
@@ -132,6 +149,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
             collection_method = metric.get("collection_method")
             child = metric.get("child")
             description = metric.get("description", "")
+            value = metric.get("value")
             defs.append(
                 MetricDef(
                     name=name,
@@ -142,6 +160,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
                     collection_method=collection_method,
                     child=child,
                     description=description,
+                    value=value,
                 )
             )
-    return MetricIndex(defs, optimizers)
+    return MetricIndex(defs, optimizers, optimizer_start_value)

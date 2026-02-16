@@ -5,6 +5,7 @@
     "metrics": [
       {
         "name": "CPU_TIME",
+        "value": 4,
         "description": "CPU time spent on the query",
         "type": "double",
         "unit": "seconds",
@@ -14,6 +15,7 @@
       },
       {
         "name": "CUMULATIVE_CARDINALITY",
+        "value": 5,
         "description": "Cumulative cardinality of the query",
         "type": "uint64",
         "unit": "absolute",
@@ -23,6 +25,7 @@
       },
       {
         "name": "CUMULATIVE_ROWS_SCANNED",
+        "value": 6,
         "description": "Cumulative number of rows scanned by the query",
         "type": "uint64",
         "unit": "absolute",
@@ -32,12 +35,14 @@
       },
       {
         "name": "EXTRA_INFO",
+        "value": 7,
         "description": "Unique operator metrics",
         "type": "Value::MAP",
         "is_default": true
       },
       {
         "name": "LATENCY",
+        "value": 8,
         "description": "Time spent executing the entire query",
         "type": "double",
         "unit": "seconds",
@@ -47,6 +52,7 @@
       },
       {
         "name": "QUERY_NAME",
+        "value": 14,
         "description": "The SQL string of the query",
         "type": "string",
         "is_default": true,
@@ -55,6 +61,7 @@
       },
       {
         "name": "RESULT_SET_SIZE",
+        "value": 15,
         "description": "The size of the result",
         "type": "uint64",
         "unit": "bytes",
@@ -64,6 +71,7 @@
       },
       {
         "name": "ROWS_RETURNED",
+        "value": 16,
         "description": "The number of rows returned by the query",
         "type": "uint64",
         "unit": "absolute",
@@ -80,6 +88,7 @@
     "metrics": [
       {
         "name": "BLOCKED_THREAD_TIME",
+        "value": 2,
         "description": "Time spent waiting for a thread to become available",
         "type": "double",
         "unit": "seconds",
@@ -88,6 +97,7 @@
       },
       {
         "name": "SYSTEM_PEAK_BUFFER_MEMORY",
+        "value": 17,
         "description": "Peak memory usage of the system",
         "type": "uint64",
         "unit": "bytes",
@@ -95,6 +105,7 @@
       },
       {
         "name": "SYSTEM_PEAK_TEMP_DIR_SIZE",
+        "value": 18,
         "description": "Peak size of the temporary directory",
         "type": "uint64",
         "unit": "bytes",
@@ -102,6 +113,7 @@
       },
       {
         "name": "TOTAL_MEMORY_ALLOCATED",
+        "value": 21,
         "description": "The total memory allocated by the buffer manager.",
         "type": "uint64",
         "unit": "bytes",
@@ -117,6 +129,7 @@
     "metrics": [
       {
         "name": "ATTACH_LOAD_STORAGE_LATENCY",
+        "value": 0,
         "description": "Time spent loading from storage.",
         "type": "double",
         "unit": "seconds",
@@ -126,6 +139,7 @@
       },
       {
         "name": "ATTACH_REPLAY_WAL_LATENCY",
+        "value": 1,
         "description": "Time spent replaying the WAL file.",
         "type": "double",
         "unit": "seconds",
@@ -135,6 +149,7 @@
       },
       {
         "name": "CHECKPOINT_LATENCY",
+        "value": 3,
         "description": "Time spent running checkpoints",
         "type": "double",
         "unit": "seconds",
@@ -144,6 +159,7 @@
       },
       {
         "name": "COMMIT_LOCAL_STORAGE_LATENCY",
+        "value": 23,
         "description": "Time spent committing the transaction-local storage.",
         "type": "double",
         "unit": "seconds",
@@ -153,6 +169,7 @@
       },
       {
         "name": "TOTAL_BYTES_READ",
+        "value": 19,
         "description": "The total bytes read by the file system.",
         "type": "uint64",
         "unit": "bytes",
@@ -162,6 +179,7 @@
       },
       {
         "name": "TOTAL_BYTES_WRITTEN",
+        "value": 20,
         "description": "The total bytes written by the file system.",
         "type": "uint64",
         "unit": "bytes",
@@ -171,6 +189,7 @@
       },
       {
         "name": "WAITING_TO_ATTACH_LATENCY",
+        "value": 22,
         "description": "Time spent waiting to ATTACH a file.",
         "type": "double",
         "unit": "seconds",
@@ -180,6 +199,7 @@
       },
       {
         "name": "WAL_REPLAY_ENTRY_COUNT",
+        "value": 25,
         "description": "The total number of entries to replay in the WAL.",
         "type": "uint64",
         "unit": "absolute",
@@ -189,6 +209,7 @@
       },
       {
         "name": "WRITE_TO_WAL_LATENCY",
+        "value": 24,
         "description": "Time spent writing to the WAL.",
         "type": "double",
         "unit": "seconds",
@@ -204,10 +225,12 @@
     "metrics": [
       {
         "name": "ALL_OPTIMIZERS",
+        "value": 26,
         "description": "Enables all optimizers"
       },
       {
         "name": "CUMULATIVE_OPTIMIZER_TIMING",
+        "value": 27,
         "description": "Time spent in all optimizers",
         "type": "double",
         "unit": "milliseconds",
@@ -215,36 +238,42 @@
       },
       {
         "name": "PHYSICAL_PLANNER",
+        "value": 28,
         "description": "The time spent generating the physical plan",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PHYSICAL_PLANNER_COLUMN_BINDING",
+        "value": 29,
         "description": "The time spent binding the columns in the logical plan to physical columns",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PHYSICAL_PLANNER_CREATE_PLAN",
+        "value": 30,
         "description": "The time spent creating the physical plan",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PHYSICAL_PLANNER_RESOLVE_TYPES",
+        "value": 31,
         "description": "The time spent resolving the types in the logical plan to physical types",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PLANNER",
+        "value": 32,
         "description": "The time to generate the logical plan from the parsed SQL nodes.",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PLANNER_BINDING",
+        "value": 33,
         "description": "The time taken to bind the logical plan.",
         "type": "double",
         "unit": "milliseconds"
@@ -257,6 +286,7 @@
     "metrics": [
       {
         "name": "OPERATOR_CARDINALITY",
+        "value": 9,
         "description": "Cardinality of the operator",
         "type": "uint64",
         "unit": "absolute",
@@ -264,12 +294,14 @@
       },
       {
         "name": "OPERATOR_NAME",
+        "value": 10,
         "description": "Name of the operator",
         "type": "string",
         "is_default": true
       },
       {
         "name": "OPERATOR_ROWS_SCANNED",
+        "value": 11,
         "description": "Number of rows scanned by the operator",
         "type": "uint64",
         "unit": "absolute",
@@ -277,6 +309,7 @@
       },
       {
         "name": "OPERATOR_TIMING",
+        "value": 12,
         "description": "Time spent in the operator",
         "type": "double",
         "unit": "seconds",
@@ -284,6 +317,7 @@
       },
       {
         "name": "OPERATOR_TYPE",
+        "value": 13,
         "description": "Type of the operator",
         "type": "string",
         "is_default": true
@@ -294,6 +328,7 @@
     "group": "optimizer",
     "description": "metrics that are collected for each optimizer",
     "generated": true,
+    "optimizer_start_value": 34,
     "metrics": []
   }
 ]
