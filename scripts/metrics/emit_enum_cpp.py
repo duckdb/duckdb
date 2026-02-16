@@ -173,6 +173,7 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {{
 """
     )
 
+
 def _generate_get_metric_by_group_function(
     hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter, metric_index: MetricIndex
 ):
