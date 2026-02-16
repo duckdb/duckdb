@@ -69,6 +69,17 @@ def _setup_hpp(out_hpp: Path, f: IndentedFileWriter, metric_index: MetricIndex):
     f.write(HPP_TYPEDEFS)
     f.write('class MetricsUtils {\n')
     f.write('public:\n')
+    opt_metrics = metric_index.metrics_per_group("optimizer")
+    if opt_metrics:
+        f.write_indented(
+            1,
+            f"static constexpr uint8_t START_OPTIMIZER = static_cast<uint8_t>(MetricType::{opt_metrics[0]});",
+        )
+        f.write_indented(
+            1,
+            f"static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::{opt_metrics[-1]});\n",
+        )
+    f.write('public:\n')
 
 
 def _generate_standard_functions(
@@ -85,11 +96,17 @@ def _generate_standard_functions(
 
     cpp_f.write(f"profiler_settings_t MetricsUtils::{get_fn}() {{\n")
 
-    # Always use explicit set construction
-    cpp_f.write_indented(1, "return {")
-    for m in metrics:
-        cpp_f.write_indented(2, f"MetricType::{m},")
-    cpp_f.write_indented(1, "};")
+    if group == "optimizer":
+        cpp_f.write_indented(1, "profiler_settings_t result;")
+        cpp_f.write_indented(1, f"for (auto metric = START_OPTIMIZER; metric <= END_OPTIMIZER; metric++) {{")
+        cpp_f.write_indented(2, f"result.insert(static_cast<MetricType>(metric));")
+        cpp_f.write_indented(1, "}")
+        cpp_f.write_indented(1, "return result;")
+    else:
+        cpp_f.write_indented(1, "return {")
+        for m in metrics:
+            cpp_f.write_indented(2, f"MetricType::{m},")
+        cpp_f.write_indented(1, "};")
     cpp_f.write('}\n\n')
 
     if group == "all":
@@ -99,48 +116,62 @@ def _generate_standard_functions(
     check_fn = f"Is{formatted}Metric"
     hpp_f.write_indented(1, f"static bool {check_fn}(MetricType type);")
 
-    # Always use switch/case for IsXxxMetric
     cpp_f.write(f"bool MetricsUtils::{check_fn}(MetricType type) {{\n")
-    cpp_f.write_indented(1, "switch(type) {")
-    for m in metrics:
-        cpp_f.write_indented(1, f"case MetricType::{m}:")
-    cpp_f.write_indented(2, "return true;")
-    cpp_f.write_indented(1, "default:")
-    cpp_f.write_indented(2, "return false;")
-    cpp_f.write_indented(1, "}")
+    if group == "optimizer":
+        cpp_f.write_indented(
+            1,
+            f"return static_cast<uint8_t>(type) >= START_OPTIMIZER && static_cast<uint8_t>(type) <= END_OPTIMIZER;",
+        )
+    else:
+        cpp_f.write_indented(1, "switch(type) {")
+        for m in metrics:
+            cpp_f.write_indented(1, f"case MetricType::{m}:")
+        cpp_f.write_indented(2, "return true;")
+        cpp_f.write_indented(1, "default:")
+        cpp_f.write_indented(2, "return false;")
+        cpp_f.write_indented(1, "}")
     cpp_f.write("}\n\n")
 
 
-def _generate_custom_optimizer_functions(
-    optimizers: List[str], hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter, metric_index: MetricIndex
-):
+def _generate_custom_optimizer_functions(optimizers: List[str], hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter):
     by_type = "GetOptimizerMetricByType(OptimizerType type)"
     by_metric = "GetOptimizerTypeByMetric(MetricType type)"
 
     hpp_f.write_indented(1, f"static MetricType {by_type};")
     hpp_f.write_indented(1, f"static OptimizerType {by_metric};")
 
-    # Generate switch-based GetOptimizerMetricByType
-    cpp_f.write(f"\nMetricType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {{\n")
-    cpp_f.write_indented(1, "switch(type) {")
-    for opt in optimizers:
-        cpp_f.write_indented(1, f"case OptimizerType::{opt}:")
-        cpp_f.write_indented(2, f"return MetricType::OPTIMIZER_{opt};")
-    cpp_f.write_indented(1, "default:")
-    cpp_f.write_indented(2, 'throw InternalException("Invalid OptimizerType");')
-    cpp_f.write_indented(1, "}")
-    cpp_f.write("}\n\n")
+    first_optimizer = optimizers[0]
 
-    # Generate switch-based GetOptimizerTypeByMetric
-    cpp_f.write(f"OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {{\n")
-    cpp_f.write_indented(1, "switch(type) {")
-    for opt in optimizers:
-        cpp_f.write_indented(1, f"case MetricType::OPTIMIZER_{opt}:")
-        cpp_f.write_indented(2, f"return OptimizerType::{opt};")
-    cpp_f.write_indented(1, "default:")
-    cpp_f.write_indented(2, 'throw InternalException("MetricType is not an optimizer metric");')
-    cpp_f.write_indented(1, "}")
-    cpp_f.write("}\n\n")
+    cpp_f.write(
+        f"""
+MetricType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {{
+\tif (type == OptimizerType::INVALID) {{
+\t\tthrow InternalException("Invalid OptimizerType: INVALID");
+\t}}
+
+\tconst auto base_opt = static_cast<uint8_t>(OptimizerType::{first_optimizer});
+\tconst auto idx = static_cast<uint8_t>(type) - base_opt;
+
+\tconst auto metric_u8 = static_cast<uint8_t>(START_OPTIMIZER + idx);
+\tif (metric_u8 < START_OPTIMIZER || metric_u8 > END_OPTIMIZER) {{
+\t\tthrow InternalException("OptimizerType out of MetricType optimizer range");
+\t}}
+\treturn static_cast<MetricType>(metric_u8);
+}}
+
+OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {{
+\tconst auto metric_u8 = static_cast<uint8_t>(type);
+\tif (!IsOptimizerMetric(type)) {{
+\t\tthrow InternalException("MetricType is not an optimizer metric");
+\t}}
+
+\tconst auto idx = static_cast<uint8_t>(metric_u8 - START_OPTIMIZER);
+\tconst auto result = static_cast<uint8_t>(OptimizerType::{first_optimizer}) + idx;
+\treturn static_cast<OptimizerType>(result);
+}}
+
+"""
+    )
 
 
 def _generate_get_metric_by_group_function(
@@ -175,7 +206,7 @@ def generate_metric_type_files(
         for group in metric_index.metrics_by_group:
             _generate_standard_functions(group, hpp_f, cpp_f, metric_index)
             if group == "optimizer":
-                _generate_custom_optimizer_functions(optimizers, hpp_f, cpp_f, metric_index)
+                _generate_custom_optimizer_functions(optimizers, hpp_f, cpp_f)
 
         _generate_standard_functions("root_scope", hpp_f, cpp_f, metric_index)
 
