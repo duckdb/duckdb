@@ -7,11 +7,10 @@
 namespace duckdb {
 
 namespace {
-
 struct BaseCountFunction {
 	template <class STATE>
 	static void Initialize(STATE &state) {
-		state = 0 ;
+		state = 0;
 	}
 
 	template <class STATE, class OP>
@@ -33,7 +32,7 @@ struct CountStarFunction : public BaseCountFunction {
 
 	template <class STATE, class OP>
 	static void ConstantOperation(STATE &state, AggregateInputData &, idx_t count) {
-		state += UnsafeNumericCast<int64_t>(count);
+		state += count;
 	}
 
 	template <typename RESULT_TYPE>
@@ -68,7 +67,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 
 	static void ConstantOperation(STATE &state, idx_t count) {
-		state += UnsafeNumericCast<int64_t>(count);
+		state += UnsafeNumericCast<STATE>(count);
 	}
 
 	static bool IgnoreNull() {
@@ -172,7 +171,7 @@ struct CountFunction : public BaseCountFunction {
 	                                   const SelectionVector &sel_vector) {
 		if (mask.AllValid()) {
 			// no NULL values
-			result += UnsafeNumericCast<int64_t>(count);
+			result += UnsafeNumericCast<STATE>(count);
 			return;
 		}
 		for (idx_t i = 0; i < count; i++) {
@@ -190,7 +189,7 @@ struct CountFunction : public BaseCountFunction {
 		case VectorType::CONSTANT_VECTOR: {
 			if (!ConstantVector::IsNull(input)) {
 				// if the constant is not null increment the state
-				result += UnsafeNumericCast<int64_t>(count);
+				result += UnsafeNumericCast<STATE>(count);
 			}
 			break;
 		}
@@ -200,7 +199,7 @@ struct CountFunction : public BaseCountFunction {
 		}
 		case VectorType::SEQUENCE_VECTOR: {
 			// sequence vectors cannot have NULL values
-			result += UnsafeNumericCast<int64_t>(count);
+			result += UnsafeNumericCast<STATE>(count);
 			break;
 		}
 		default: {
