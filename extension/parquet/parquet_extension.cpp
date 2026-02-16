@@ -919,6 +919,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.AddExtensionOption("parquet_metadata_cache",
 	                          "Cache Parquet metadata - useful when reading the same files multiple times",
 	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption("parquet_timestamp_is_adjusted_to_utc",
+	                          "Whether Parquet TIMESTAMP columns written from DuckDB timestamps without time zone "
+	                          "should set isAdjustedToUTC to true.",
+	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption(
 	    "enable_geoparquet_conversion",
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",
