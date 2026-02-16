@@ -377,7 +377,10 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 		throw ParameterNotResolvedException();
 	}
 	auto name = std::move(function.name);
+
+	auto state_export_type = function.get_state_type;
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
+	function.SetStructStateExport(state_export_type);
 	function.name = std::move(name);
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
@@ -540,21 +543,28 @@ AggregateFunction GetMinMaxNFunction() {
 	                         nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
 }
 
+LogicalType GetExportStateType(const AggregateFunction &function) {
+	auto struct_children_types = child_list_t<LogicalType>{};
+	struct_children_types.emplace_back("value", function.return_type);
+	struct_children_types.emplace_back("isset", LogicalType::BOOLEAN);
+	return LogicalType::STRUCT(std::move(struct_children_types));
+}
+
 } // namespace
 //---------------------------------------------------
 // Function Registration
 //---------------------------------------------------s
 AggregateFunctionSet MinFun::GetFunctions() {
 	AggregateFunctionSet min("min");
-	min.AddFunction(MinFunction::GetFunction());
-	min.AddFunction(GetMinMaxNFunction<LessThan>());
+	min.AddFunction(MinFunction::GetFunction().SetStructStateExport(GetExportStateType));
+	min.AddFunction(GetMinMaxNFunction<LessThan>().SetStructStateExport(GetExportStateType));
 	return min;
 }
 
 AggregateFunctionSet MaxFun::GetFunctions() {
 	AggregateFunctionSet max("max");
-	max.AddFunction(MaxFunction::GetFunction());
-	max.AddFunction(GetMinMaxNFunction<GreaterThan>());
+	max.AddFunction(MaxFunction::GetFunction().SetStructStateExport(GetExportStateType));
+	max.AddFunction(GetMinMaxNFunction<GreaterThan>().SetStructStateExport(GetExportStateType));
 	return max;
 }
 
