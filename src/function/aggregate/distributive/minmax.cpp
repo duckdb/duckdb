@@ -544,7 +544,7 @@ AggregateFunction GetMinMaxNFunction() {
 }
 
 LogicalType GetExportStateType(const AggregateFunction &function) {
-	auto struct_children_types = child_list_t<LogicalType>{};
+	auto struct_children_types = child_list_t<LogicalType> {};
 	struct_children_types.emplace_back("value", function.return_type);
 	struct_children_types.emplace_back("isset", LogicalType::BOOLEAN);
 	return LogicalType::STRUCT(std::move(struct_children_types));
