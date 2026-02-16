@@ -1,0 +1,78 @@
+# name: test/sql/types/uuid/test_uuid_uhugeint_cast.test
+# description: Test UUID-UHUGEINT casting operations
+# group: [uuid]
+
+statement ok
+PRAGMA enable_verification
+
+# ====================
+# UUID <-> UHUGEINT Tests
+# ====================
+
+# Test basic UUID to UHUGEINT casting
+query I
+SELECT '00000000-0000-0000-0000-000000000000'::UUID::UHUGEINT;
+----
+0
+
+# Test basic UHUGEINT to UUID casting
+query I
+SELECT 0::UHUGEINT::UUID;
+----
+00000000-0000-0000-0000-000000000000
+
+# Test round-trip: UUID -> UHUGEINT -> UUID
+query I
+SELECT '00112233-4455-6677-8899-aabbccddeeff'::UUID::UHUGEINT::UUID;
+----
+00112233-4455-6677-8899-aabbccddeeff
+
+# Test round-trip: UHUGEINT -> UUID -> UHUGEINT
+query I
+SELECT 123456789::UHUGEINT::UUID::UHUGEINT;
+----
+123456789
+
+# Test with maximum UHUGEINT value
+query I
+SELECT 340282366920938463463374607431768211455::UHUGEINT::UUID::UHUGEINT;
+----
+340282366920938463463374607431768211455
+
+# Test UUID with maximum value
+query I
+SELECT 'ffffffff-ffff-ffff-ffff-ffffffffffff'::UUID::UHUGEINT;
+----
+340282366920938463463374607431768211455
+
+# Test with NULL values
+query I
+SELECT NULL::UUID::UHUGEINT;
+----
+NULL
+
+query I
+SELECT NULL::UHUGEINT::UUID;
+----
+NULL
+
+# Test with try_cast
+query I
+SELECT try_cast(try_cast('12345678-1234-5678-1234-567812345678'::UUID AS UHUGEINT) as uuid);
+----
+12345678-1234-5678-1234-567812345678
+
+# Verify the conversion preserves all bits
+query I
+SELECT '12345678-9abc-def0-1234-56789abcdef0'::UUID::UHUGEINT::UUID;
+----
+12345678-9abc-def0-1234-56789abcdef0
+
+# HUGEINT casts to/from UUID should not be available
+statement error
+SELECT '00000000-0000-0000-0000-000000000000'::UUID::HUGEINT;
+----
+
+statement error
+SELECT 0::HUGEINT::UUID;
+----
