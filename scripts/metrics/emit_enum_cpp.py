@@ -60,10 +60,9 @@ def _setup_hpp(out_hpp: Path, f: IndentedFileWriter, metric_index: MetricIndex):
         f.write_indented(1, f"// {_to_pascal_case(g)} metrics")
         for m in metric_index.metrics_per_group(g):
             val = metric_index.metric_value(m)
-            if val is not None:
-                f.write_indented(1, f"{m.upper()} = {val},")
-            else:
-                f.write_indented(1, f"{m.upper()},")
+            if val is None:
+                raise ValueError(f"Metric '{m}' in group '{g}' has no explicit value assigned")
+            f.write_indented(1, f"{m.upper()} = {val},")
 
     f.write("};\n")
 

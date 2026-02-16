@@ -57,9 +57,7 @@ class MetricIndex:
             if name in value_to_name.values():
                 continue
             if val in value_to_name:
-                raise ValueError(
-                    f"Duplicate MetricType value {val}: '{value_to_name[val]}' and '{name}'"
-                )
+                raise ValueError(f"Duplicate MetricType value {val}: '{value_to_name[val]}' and '{name}'")
             is_optimizer = name.startswith("OPTIMIZER_")
             if is_optimizer and not (OPTIMIZER_RANGE_START <= val <= OPTIMIZER_RANGE_END):
                 raise ValueError(
