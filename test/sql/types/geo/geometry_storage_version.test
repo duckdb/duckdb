@@ -1,0 +1,13 @@
+# name: test/sql/types/geo/geometry_storage_version.test
+# group: [geo]
+
+statement ok
+attach '__TEST_DIR__/variant.db' (STORAGE_VERSION 'v1.4.4');
+
+statement ok
+use variant;
+
+statement error
+create table t1 (g STRUCT(a GEOMETRY[]));
+----
+Invalid Input Error: GEOMETRY columns are not supported in storage versions prior to
