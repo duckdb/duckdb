@@ -7,44 +7,33 @@
 namespace duckdb {
 
 namespace {
-struct CountState {
-	int64_t count;
-
-	void Initialize() {
-		count = 0;
-	}
-
-	void Combine(const CountState &other) {
-		count += other.count;
-	}
-};
 
 struct BaseCountFunction {
 	template <class STATE>
 	static void Initialize(STATE &state) {
-		state.Initialize();
+		state = 0 ;
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		target.Combine(source);
+		target += source;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		target = state.count;
+		target = state;
 	}
 };
 
 struct CountStarFunction : public BaseCountFunction {
 	template <class STATE, class OP>
 	static void Operation(STATE &state, AggregateInputData &, idx_t idx) {
-		state.count += 1;
+		state += 1;
 	}
 
 	template <class STATE, class OP>
 	static void ConstantOperation(STATE &state, AggregateInputData &, idx_t count) {
-		state.count += UnsafeNumericCast<int64_t>(count);
+		state += UnsafeNumericCast<int64_t>(count);
 	}
 
 	template <typename RESULT_TYPE>
@@ -72,14 +61,14 @@ struct CountStarFunction : public BaseCountFunction {
 };
 
 struct CountFunction : public BaseCountFunction {
-	using STATE = CountState;
+	using STATE = int64_t;
 
 	static void Operation(STATE &state) {
-		state.count += 1;
+		state += 1;
 	}
 
 	static void ConstantOperation(STATE &state, idx_t count) {
-		state.count += UnsafeNumericCast<int64_t>(count);
+		state += UnsafeNumericCast<int64_t>(count);
 	}
 
 	static bool IgnoreNull() {
@@ -161,7 +150,7 @@ struct CountFunction : public BaseCountFunction {
 			idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 			if (ValidityMask::AllValid(validity_entry)) {
 				// all valid
-				result.count += UnsafeNumericCast<int64_t>(next - base_idx);
+				result += UnsafeNumericCast<STATE>(next - base_idx);
 				base_idx = next;
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
@@ -172,7 +161,7 @@ struct CountFunction : public BaseCountFunction {
 				idx_t start = base_idx;
 				for (; base_idx < next; base_idx++) {
 					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-						result.count++;
+						result++;
 					}
 				}
 			}
@@ -183,13 +172,13 @@ struct CountFunction : public BaseCountFunction {
 	                                   const SelectionVector &sel_vector) {
 		if (mask.AllValid()) {
 			// no NULL values
-			result.count += UnsafeNumericCast<int64_t>(count);
+			result += UnsafeNumericCast<int64_t>(count);
 			return;
 		}
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel_vector.get_index(i);
 			if (mask.RowIsValid(idx)) {
-				result.count++;
+				result++;
 			}
 		}
 	}
@@ -201,7 +190,7 @@ struct CountFunction : public BaseCountFunction {
 		case VectorType::CONSTANT_VECTOR: {
 			if (!ConstantVector::IsNull(input)) {
 				// if the constant is not null increment the state
-				result.count += UnsafeNumericCast<int64_t>(count);
+				result += UnsafeNumericCast<int64_t>(count);
 			}
 			break;
 		}
@@ -211,7 +200,7 @@ struct CountFunction : public BaseCountFunction {
 		}
 		case VectorType::SEQUENCE_VECTOR: {
 			// sequence vectors cannot have NULL values
-			result.count += UnsafeNumericCast<int64_t>(count);
+			result += UnsafeNumericCast<int64_t>(count);
 			break;
 		}
 		default: {
@@ -244,11 +233,10 @@ unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggr
 } // namespace
 
 AggregateFunction CountFunctionBase::GetFunction() {
-	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT,
-	                      AggregateFunction::StateSize<CountState>,
-	                      AggregateFunction::StateInitialize<CountState, CountFunction>, CountFunction::CountScatter,
-	                      AggregateFunction::StateCombine<CountState, CountFunction>,
-	                      AggregateFunction::StateFinalize<CountState, int64_t, CountFunction>,
+	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT, AggregateFunction::StateSize<int64_t>,
+						  AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
+						  AggregateFunction::StateCombine<int64_t, CountFunction>,
+						  AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
 	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate);
 	fun.name = "count";
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
@@ -257,7 +245,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 }
 
 AggregateFunction CountStarFun::GetFunction() {
-	auto fun = AggregateFunction::NullaryAggregate<CountState, int64_t, CountStarFunction>(LogicalType::BIGINT);
+	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 	fun.name = "count_star";
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
