@@ -398,7 +398,9 @@ void TestCreateSymlink(const string &source, const string &target, bool director
 	}
 #else
 	// windows - use native APIs
-	if (!CreateSymbolicLinkA(source.c_str(), target.c_str(), directory_link ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0)) {
+	if (!CreateSymbolicLinkA(source.c_str(), target.c_str(),
+	                         (directory_link ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0) |
+	                             SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE)) {
 		std::cerr << "Error: " << GetLastError() << std::endl;
 		FAIL();
 	}
@@ -476,3 +478,133 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 	read_handle.reset();
 	REQUIRE(!fs->FileExists(fname));
 }
+
+#ifdef _WIN32
+char GenChar(idx_t i) {
+	char idx = static_cast<char>(i % 26);
+	return idx + 'a';
+}
+
+string GenPath(idx_t len) {
+	string res;
+	idx_t i = 0;
+	while (res.length() < len) {
+		if (i > 0 && i % 16 == 0) {
+			res.push_back('\\');
+		} else {
+			res.push_back(GenChar(i));
+		}
+		i++;
+	}
+	REQUIRE(res.length() == len);
+	return res;
+}
+
+string GenString(idx_t len) {
+	string res;
+	idx_t i = 0;
+	while (res.length() < len) {
+		res.push_back(GenChar(i));
+		i++;
+	}
+	REQUIRE(res.length() == len);
+	return res;
+}
+
+TEST_CASE("Test long paths on Windows", "[file_system]") {
+	idx_t max_dir_path_len = 247;
+	idx_t work_dir_path_len = 240;
+
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	string cwd = fs->GetWorkingDirectory();
+	string test_dir = TestDirectoryPath();
+	test_dir = fs->JoinPath(test_dir, "test_long_path");
+	test_dir = fs->JoinPath(cwd, test_dir);
+	REQUIRE(test_dir.length() < max_dir_path_len - 1);
+	fs->CreateDirectory(test_dir);
+
+	string work_dir = fs->JoinPath(test_dir, GenPath(work_dir_path_len - test_dir.length() - 1));
+	REQUIRE(work_dir.length() == work_dir_path_len);
+	fs->CreateDirectoriesRecursive(work_dir);
+	REQUIRE(fs->DirectoryExists(work_dir));
+
+	std::vector<char> test_buf = {'f', 'o', 'o'};
+
+	// create/remove files
+	for (idx_t i = 1; i < 32; i++) {
+		string name = "f_" + GenString(i);
+		string path = fs->JoinPath(work_dir, name);
+		auto fd = fs->OpenFile(path, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
+		fd->Write(test_buf.data(), test_buf.size());
+		fd->Close();
+		REQUIRE(fs->FileExists(path));
+		fs->RemoveFile(path);
+		REQUIRE(!fs->FileExists(path));
+	}
+
+	// create/remove directories
+	for (idx_t i = 1; i < 32; i++) {
+		string name = "d_" + GenString(i);
+		string path = fs->JoinPath(work_dir, name);
+		fs->CreateDirectory(path);
+		REQUIRE(fs->DirectoryExists(path));
+		fs->RemoveDirectory(path);
+		REQUIRE(!fs->DirectoryExists(path));
+	}
+
+	// move file
+	string src_path = fs->JoinPath(work_dir, "move_src_" + GenString(32));
+	{
+		auto fd = fs->OpenFile(src_path, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
+		fd->Write(test_buf.data(), test_buf.size());
+		fd->Close();
+	}
+	REQUIRE(fs->FileExists(src_path));
+	string dest_path = fs->JoinPath(work_dir, "move_dest_" + GenString(32));
+	fs->MoveFile(src_path, dest_path);
+	REQUIRE(!fs->FileExists(src_path));
+	REQUIRE(fs->FileExists(dest_path));
+	{
+		auto fd = fs->OpenFile(dest_path, FileFlags::FILE_FLAGS_READ);
+		std::vector<char> buf;
+		buf.resize(3);
+		auto read = fd->Read(buf.data(), buf.size());
+		fd->Close();
+		REQUIRE(read == 3);
+		REQUIRE(std::string(buf.data(), buf.size()) == "foo");
+	}
+
+	// non-clean paths
+	{
+		string long_dir = fs->JoinPath(work_dir, "long_dir_" + GenString(32));
+		fs->CreateDirectory(long_dir);
+		REQUIRE(fs->DirectoryExists(long_dir));
+		string dir1 = long_dir + "/dir1";
+		string dir2 = long_dir + "/dir1/.//..\\dir2";
+		string dir2_clean = fs->JoinPath(long_dir, "dir2");
+		string file1 = dir2 + "/file1";
+		fs->CreateDirectory(dir1);
+		REQUIRE(fs->DirectoryExists(dir1));
+		fs->CreateDirectory(dir2);
+		REQUIRE(fs->DirectoryExists(dir2));
+		REQUIRE(fs->DirectoryExists(dir2_clean));
+		auto fd = fs->OpenFile(file1, FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_WRITE);
+		fd->Write(test_buf.data(), test_buf.size());
+		fd->Close();
+		REQUIRE(fs->FileExists(file1));
+	}
+
+	// pre-existing prefix
+	{
+		string name = "prefix_dir_" + GenString(32);
+		string path = fs->JoinPath(work_dir, name);
+		string prefixed = "\\\\?\\" + path;
+		fs->CreateDirectory(prefixed);
+		REQUIRE(fs->DirectoryExists(prefixed));
+		REQUIRE(fs->DirectoryExists(path));
+	}
+
+	// cleaning up, as not all tools can remove long dirs
+	fs->RemoveDirectory(work_dir);
+}
+#endif // _WIN32
