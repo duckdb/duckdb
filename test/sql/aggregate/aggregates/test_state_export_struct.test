@@ -14,29 +14,28 @@ create table dummy as select range % 10 g, range d from range(100);
 # ungrouped aggr
 
 query IIIIII nosort res0
-SELECT sum(d), avg(d)::integer FROM dummy;
+SELECT sum(d), avg(d)::integer, min(d), max(d) FROM dummy;
 ----
 
 query IIIIII nosort res0
-SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer FROM dummy;
-----
+SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy;----
 
 # grouped aggr
 query IIIIIII nosort res1
-SELECT g, sum(d), avg(d)::integer FROM dummy GROUP BY g ORDER BY g;
+SELECT g, sum(d), avg(d)::integer, min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIII nosort res1
-SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer FROM dummy GROUP BY g ORDER BY g;
+SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 
 statement ok
-CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
 
 query IIIIIII nosort res1
-SELECT g, finalize(sum_state), finalize(avg_state)::integer FROM state ORDER BY g;
+SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(min_state), finalize(max_state) FROM state ORDER BY g;
 ----
 
 query II nosort res3
@@ -98,6 +97,20 @@ query IIIIIII nosort res8
 SELECT g, FINALIZE(favg(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
+# we skip these for now as argmin/argmax now has a custom binder (so that it can work with extension types like JSON)
+# otherwise we get "Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders"
+mode skip
+
+query II nosort res7
+select argmin(a,b), argmax(a,b) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
+----
+
+query II nosort res7
+select FINALIZE(argmin(a,b) EXPORT_STATE), FINALIZE(argmax(a,b) EXPORT_STATE) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
+----
+
+mode unskip
+
 # You're holding it wrong:
 
 statement error
@@ -126,6 +139,10 @@ SELECT finalize(avg(d)) from dummy;
 
 statement error
 SELECT finalize(avg(d)) from dummy group by g;
+----
+
+statement error
+SELECT FINALIZE(COMBINE(MIN(d) EXPORT_STATE)) FROM dummy;
 ----
 
 # can't finalize twice
