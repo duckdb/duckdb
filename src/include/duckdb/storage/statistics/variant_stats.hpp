@@ -36,6 +36,10 @@ public:
 //! would store any other column).
 struct VariantStats {
 public:
+	static constexpr idx_t TYPED_VALUE_INDEX = 0;
+	static constexpr idx_t UNTYPED_VALUE_INDEX = 1;
+
+public:
 	DUCKDB_API static void Construct(BaseStatistics &stats);
 
 public:
@@ -49,6 +53,14 @@ public:
 	DUCKDB_API static void CreateUnshreddedStats(BaseStatistics &stats);
 	DUCKDB_API static const BaseStatistics &GetUnshreddedStats(const BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics &GetUnshreddedStats(BaseStatistics &stats);
+
+	//! Returns the typed_value stats of a shredded stats entry
+	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &stats);
+	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &&stats) = delete;
+
+	//! Returns the untyped_value_index stats of a shredded stats entry - if there is any
+	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &stats);
+	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &&stats) = delete;
 
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
@@ -66,7 +78,7 @@ public:
 	DUCKDB_API static void SetShreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetShreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
 
-	DUCKDB_API static bool MergeShredding(BaseStatistics &stats, const BaseStatistics &other,
+	DUCKDB_API static bool MergeShredding(const BaseStatistics &stats, const BaseStatistics &other,
 	                                      BaseStatistics &new_stats);
 	DUCKDB_API static unique_ptr<BaseStatistics> WrapExtractedFieldAsVariant(const BaseStatistics &base_variant,
 	                                                                         const BaseStatistics &extracted_field);

@@ -76,6 +76,10 @@ public:
 	                                optional_ptr<const SelectionVector> result_sel, idx_t count) = 0;
 
 protected:
+	idx_t typed_value_index = VariantStats::TYPED_VALUE_INDEX;
+	idx_t untyped_value_index = VariantStats::UNTYPED_VALUE_INDEX;
+
+protected:
 	void WriteTypedValues(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
 	                      const SelectionVector &value_index_sel, const SelectionVector &result_sel, idx_t count);
 	virtual void WriteMissingField(Vector &vector, idx_t index);
