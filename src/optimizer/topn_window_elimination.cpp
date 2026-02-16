@@ -823,11 +823,11 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 					return false;
 				}
 				ColumnBinding left_binding;
-				if (!extract_single_binding(&condition.LeftReference(), left_binding)) {
+				if (!extract_single_binding(&condition.left, left_binding)) {
 					return false;
 				}
 				ColumnBinding right_binding;
-				if (!extract_single_binding(&condition.RightReference(), right_binding)) {
+				if (!extract_single_binding(&condition.right, right_binding)) {
 					return false;
 				}
 
