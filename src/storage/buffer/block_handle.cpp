@@ -35,6 +35,7 @@ BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 	SetSwizzling(nullptr);
 	D_ASSERT(!GetBuffer() || GetBuffer()->GetBufferType() == GetBufferType());
 	if (GetBuffer() && GetBufferType() != FileBufferType::TINY_BUFFER) {
+		// Kill the latest version in the eviction queue.
 		GetBufferManager().GetBufferPool().IncrementDeadNodes(*this);
 	}
 
