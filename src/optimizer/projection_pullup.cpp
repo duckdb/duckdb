@@ -19,6 +19,18 @@ void ProjectionPullup::PopParents(const LogicalOperator &op) {
 
 void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 	switch (op->type) {
+	// These operators depend on column order, so we can't remove projections below them
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+	case LogicalOperatorType::LOGICAL_PIVOT:
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op->Cast<LogicalComparisonJoin>();

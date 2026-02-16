@@ -71,7 +71,7 @@ logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
 
 # Fold mutiple consecutive proejctions into one
 query II
-explain with cte_1 as (select a from t1) select a from (select a from cte_1) b limit 3;
+explain SELECT a3 FROM (SELECT a2 AS a3 FROM (SELECT a1 AS a2 FROM (SELECT a AS a1 FROM tbl) AS t0) AS t1) AS t2 WHERE a3 % 2 = 0
 ----
 logical_opt	<!REGEX>:.*PROJECTION.*PROJECTION.*
 
