@@ -119,16 +119,19 @@ bool GlobalUserSettings::TryGetExtensionOption(const String &name, ExtensionOpti
 
 CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
 	// Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
-	thread_local unique_ptr<CachedGlobalSettings> current_cache;
+	thread_local CachedGlobalSettings current_cache;
 
-	auto current_version = settings_version.load(std::memory_order_relaxed);
-	if (!current_cache || !RefersToSameObject(*this, current_cache->global_user_settings) ||
-	    current_cache->version != current_version) {
+	const auto current_version = settings_version.load(std::memory_order_relaxed);
+	if (!current_cache.global_user_settings || this != current_cache.global_user_settings.get() ||
+	    current_cache.version != current_version) {
 		// out-of-date, refresh the cache
 		lock_guard<mutex> guard(lock);
-		current_cache = make_uniq<CachedGlobalSettings>(*this, settings_version, settings_map);
+		current_cache = CachedGlobalSettings(*this, settings_version, settings_map);
 	}
-	return *current_cache;
+	return current_cache;
+}
+
+CachedGlobalSettings::CachedGlobalSettings() : version(0) {
 }
 
 CachedGlobalSettings::CachedGlobalSettings(const GlobalUserSettings &global_user_settings_p, idx_t version,

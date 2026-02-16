@@ -38,9 +38,10 @@ private:
 struct GlobalUserSettings;
 
 struct CachedGlobalSettings {
+	CachedGlobalSettings();
 	CachedGlobalSettings(const GlobalUserSettings &global_user_settings, idx_t version, UserSettingsMap settings);
 
-	const GlobalUserSettings &global_user_settings;
+	optional_ptr<const GlobalUserSettings> global_user_settings;
 	idx_t version;
 	UserSettingsMap settings;
 };
