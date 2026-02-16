@@ -89,7 +89,8 @@ SELECT a, b,
        nth_value(b, 1)            OVER w AS b1,
        nth_value(b, 1 ORDER BY b) OVER w AS b1_ordered,
 FROM t
-WINDOW w AS (ORDER BY a RANGE BETWEEN CURRENT ROW AND CURRENT ROW);
+WINDOW w AS (ORDER BY a RANGE BETWEEN CURRENT ROW AND CURRENT ROW)
+ORDER BY ALL
 ----
 0	a	a	a
 0	b	a	a
