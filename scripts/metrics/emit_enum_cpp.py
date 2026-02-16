@@ -145,34 +145,33 @@ def _generate_custom_optimizer_functions(optimizers: List[str], hpp_f: IndentedF
     cpp_f.write(
         f"""
 MetricType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {{
-\tif (type == OptimizerType::INVALID) {{
-\t\tthrow InternalException("Invalid OptimizerType: INVALID");
-\t}}
+	if (type == OptimizerType::INVALID) {{
+		throw InternalException("Invalid OptimizerType: INVALID");
+	}}
 
-\tconst auto base_opt = static_cast<uint8_t>(OptimizerType::{first_optimizer});
-\tconst auto idx = static_cast<uint8_t>(type) - base_opt;
+	const auto base_opt = static_cast<uint8_t>(OptimizerType::{first_optimizer});
+	const auto idx = static_cast<uint8_t>(type) - base_opt;
 
-\tconst auto metric_u8 = static_cast<uint8_t>(START_OPTIMIZER + idx);
-\tif (metric_u8 < START_OPTIMIZER || metric_u8 > END_OPTIMIZER) {{
-\t\tthrow InternalException("OptimizerType out of MetricType optimizer range");
-\t}}
-\treturn static_cast<MetricType>(metric_u8);
+	const auto metric_u8 = static_cast<uint8_t>(START_OPTIMIZER + idx);
+	if (metric_u8 < START_OPTIMIZER || metric_u8 > END_OPTIMIZER) {{
+		throw InternalException("OptimizerType out of MetricType optimizer range");
+	}}
+	return static_cast<MetricType>(metric_u8);
 }}
 
 OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {{
-\tconst auto metric_u8 = static_cast<uint8_t>(type);
-\tif (!IsOptimizerMetric(type)) {{
-\t\tthrow InternalException("MetricType is not an optimizer metric");
-\t}}
+	const auto metric_u8 = static_cast<uint8_t>(type);
+	if (!IsOptimizerMetric(type)) {{
+		throw InternalException("MetricType is not an optimizer metric");
+	}}
 
-\tconst auto idx = static_cast<uint8_t>(metric_u8 - START_OPTIMIZER);
-\tconst auto result = static_cast<uint8_t>(OptimizerType::{first_optimizer}) + idx;
-\treturn static_cast<OptimizerType>(result);
+	const auto idx = static_cast<uint8_t>(metric_u8 - START_OPTIMIZER);
+	const auto result = static_cast<uint8_t>(OptimizerType::{first_optimizer}) + idx;
+	return static_cast<OptimizerType>(result);
 }}
 
 """
     )
-
 
 def _generate_get_metric_by_group_function(
     hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter, metric_index: MetricIndex
