@@ -13,6 +13,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
