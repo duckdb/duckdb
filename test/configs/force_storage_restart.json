@@ -9,15 +9,27 @@
       "reason": "Contains explicit use of the memory catalog.",
       "paths": [
         "test/sql/attach/attach_use_rollback.test",
-        "test/sql/attach/show_schemas.test",
-        "test/sql/storage/read_duckdb/concurrent_duckdb_read.test_slow",
         "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
       ]
     },
     {
       "reason": "External file cache cannot persist across database restarts when force_restart is enabled.",
       "paths": [
-        "test/sql/storage/external_file_cache/external_file_cache_validate.test"
+        "test/sql/storage/external_file_cache/external_file_cache_validate.test",
+        "test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow"
+      ]
+    },
+    {
+      "reason": "Doesn't OOM when restarting",
+      "paths": [
+        "test/sql/storage/temp_directory/offloading_block_files.test_slow"
+      ]
+    },
+    {
+      "reason": "Logging setting doesn't survive restarts",
+      "paths": [
+        "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow",
+        "test/sql/logging/physical_operator_logging.test_slow"
       ]
     }
   ]

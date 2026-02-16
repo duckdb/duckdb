@@ -174,7 +174,6 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 				all_valid = false;
 			}
 			result.SetValue(i + offset, value);
-			converted = true;
 		}
 	}
 	return all_valid;
@@ -431,8 +430,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
-		auto json_val =
-		    VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant.variant, row_index, sel[i]);
+		auto json_val = VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
 			error = StringUtil::Format("Failed to convert to JSON object");
 			return false;
@@ -660,7 +658,7 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 				FlatVector::SetNull(result, offset + i, true);
 			}
 			return false;
-		};
+		}
 	}
 }
 

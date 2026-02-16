@@ -19,6 +19,7 @@ class ColumnSegment;
 class RowGroup;
 class BaseStatistics;
 class SegmentStatistics;
+class MetadataWriter;
 
 // Writes data for an entire row group.
 class RowGroupWriter {

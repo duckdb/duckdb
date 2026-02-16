@@ -16,6 +16,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 
@@ -54,6 +55,15 @@ class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
 
 struct StatementProperties;
+
+struct FunctionStatisticsPruneInput {
+	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, BaseStatistics &stats_p)
+	    : bind_data(bind_data_p), stats(stats_p) {
+	}
+
+	optional_ptr<FunctionData> bind_data;
+	BaseStatistics &stats;
+};
 
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
@@ -119,6 +129,9 @@ typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<
                                      const ScalarFunction &function);
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
 
+//! The type to prune row groups based on statistics
+typedef FilterPropagateResult (*propagate_filter_t)(const FunctionStatisticsPruneInput &input);
+
 //! The type to bind lambda-specific parameter types
 typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
 
@@ -181,6 +194,10 @@ public:
 	void SetDeserializeCallback(function_deserialize_t callback) { deserialize = callback; }
 	function_serialize_t GetSerializeCallback() const { return serialize; }
 	function_deserialize_t GetDeserializeCallback() const { return deserialize; }
+
+	bool HasFilterPruneCallback() const {return filter_prune != nullptr; }
+	void SetFilterPruneCallback(propagate_filter_t callback) { filter_prune = callback; }
+	propagate_filter_t GetFilterPruneCallback() const { return filter_prune; }
 	// clang-format on
 
 	bool HasExtraFunctionInfo() const {
@@ -218,6 +235,9 @@ public:
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
+
+	//! The filter prune function (if any)
+	propagate_filter_t filter_prune = nullptr;
 	//! Additional function info, passed to the bind
 	shared_ptr<ScalarFunctionInfo> function_info;
 

@@ -165,7 +165,7 @@ void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState 
 	auto shredded_type = ConstructShreddedType(state.analyze_data);
 	is_analyzed = true;
 
-	if (shredded_type.id() == LogicalTypeId::VARIANT) {
+	if (shredded_type.id() == LogicalTypeId::VARIANT || shredded_type.id() == LogicalTypeId::INVALID) {
 		//! Can't shred, keep the original children
 		return;
 	}

@@ -77,6 +77,20 @@ public:
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
 
+	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
+	// FIXME: replace with structural tree delete merge.
+	void RemovalMerge(IndexLock &state, BoundIndex &source_index);
+	//! Obtains a lock and calls RemovalMerge while holding that lock.
+	void RemovalMerge(BoundIndex &source_index);
+	//! Simple merge: scan source ART and insert each (key, rowid) into this ART.
+	//! Returns error data if constraint violation.
+	// FIXME: This is only used in MergeCheckpointDeltas, and even then it is used in lieu of the existing
+	// MergeIndexes which don't support deprecated leaf chains. Once support for that is added, this simpler insert
+	// merge may be removed.
+	ErrorData InsertMerge(IndexLock &state, BoundIndex &source_index, IndexAppendMode append_mode);
+	//! Obtains a lock and calls InsertMerge while holding that lock.
+	ErrorData InsertMerge(BoundIndex &source_index, IndexAppendMode append_mode);
+
 	//! Appends data to the locked index.
 	ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
 	//! Appends data to the locked index and verifies constraint violations.
@@ -84,8 +98,13 @@ public:
 
 	//! Insert a chunk.
 	ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) override;
-	//! Insert a chunk and verifies constraint violations.
+	//! Insert a chunk and verify constraint violations (generates keys and calls InsertKeys which does the
+	//! verification).
 	ErrorData Insert(IndexLock &l, DataChunk &data, Vector &row_ids, IndexAppendInfo &info) override;
+	//! Insert keys and row_ids into ART and verify constraint violations.
+	ErrorData InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys,
+	                     idx_t count, const DeleteIndexInfo &delete_info, IndexAppendMode append_mode,
+	                     optional_ptr<DataChunk> chunk = nullptr);
 
 	//! Verify that data can be appended to the index without a constraint violation.
 	void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) override;
@@ -93,6 +112,11 @@ public:
 	//! Delete a chunk from the ART.
 	idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
 	                optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) override;
+	//! Delete keys and row_ids from the ART.
+	idx_t DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys, idx_t count,
+	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
+	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
+
 	//! Drop the ART.
 	void CommitDrop(IndexLock &index_lock) override;
 

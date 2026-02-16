@@ -8,31 +8,33 @@
 
 #pragma once
 
-#include "duckdb/common/enums/index_constraint_type.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/storage/statistics/column_statistics.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
 class BoundForeignKeyConstraint;
+class AttachedDatabase;
 class ClientContext;
+class ColumnList;
 class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
+class DataChunk;
+class DistinctStatistics;
 class DuckTransaction;
+class Expression;
+class Index;
+class OptimisticDataWriter;
 class RowGroup;
+class RowGroupCollection;
+class Serializer;
 class StorageManager;
 class TableCatalogEntry;
 class TableIOManager;
+class Vector;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
@@ -41,8 +43,12 @@ class TableScanState;
 struct TableDeleteState;
 struct ConstraintState;
 struct TableUpdateState;
-enum class VerifyExistenceType : uint8_t;
 struct OptimisticWriteCollection;
+struct ColumnFetchState;
+struct DataTableInfo;
+struct LocalAppendState;
+struct ParallelTableScanState;
+struct TableAppendState;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped
@@ -119,7 +125,7 @@ public:
 	                 DataChunk &delete_chunk);
 	//! Appends to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool unsafe = false);
 	//! Append a chunk to the transaction-local storage of this table.
 	void LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                    const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -183,7 +189,7 @@ public:
 	                      const std::function<void(DataChunk &chunk)> &function);
 
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
-	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, optional_ptr<StorageCommitState> commit_state);
+	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state);
 
 	//! Appends a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
 	//! If an index is bound, it appends table_chunk. Else, it buffers index_chunk.
@@ -276,7 +282,7 @@ public:
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              const IndexStorageInfo &info);
+	              IndexStorageInfo index_info);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index);
 
