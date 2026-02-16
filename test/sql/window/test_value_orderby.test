@@ -76,3 +76,25 @@ FROM all_nulls;
 ----
 NULL
 NULL
+
+# Single element frame
+query IIII
+WITH t(a,b) AS (
+  VALUES 
+    (0, 'a'), (0, 'b'),
+    (1, 'c'),
+    (2, 'd'), (2, 'e'), (2, 'f')
+)
+SELECT a, b,
+       nth_value(b, 1)            OVER w AS b1,
+       nth_value(b, 1 ORDER BY b) OVER w AS b1_ordered,
+FROM t
+WINDOW w AS (ORDER BY a RANGE BETWEEN CURRENT ROW AND CURRENT ROW);
+----
+0	a	a	a
+0	b	a	a
+1	c	c	c
+2	d	d	d
+2	e	d	d
+2	f	d	d
+
