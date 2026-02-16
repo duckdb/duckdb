@@ -273,6 +273,7 @@ public:
 	AggregateDistinctDependent distinct_dependent;
 
 	aggregate_get_state_type_t get_state_type = nullptr;
+	bool allow_export_state_with_custom_binding = false;
 
 	AggregateOrderDependent GetOrderDependent() const {
 		return order_dependent;
@@ -294,6 +295,15 @@ public:
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
 		get_state_type = get_state_type_callback;
 		return *this;
+	}
+
+	AggregateFunction &AllowExportStateWithCustomBinding() {
+		allow_export_state_with_custom_binding = true;
+		return *this;
+	}
+
+	bool IsExportStateWithCustomBindingAllowed() const {
+		return allow_export_state_with_custom_binding;
 	}
 
 	LogicalType GetStateType() const {
