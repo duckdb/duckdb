@@ -1630,7 +1630,12 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 
 void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	throw InvalidInputException("Placeholder error message for 'WarningsAsErrorsSetting'");
+	auto &log_manager = LogManager::Get(*info.context);
+	if (input == Value(true) && !log_manager.GetConfig().enabled) {
+		throw Exception(
+		    ExceptionType::SETTINGS,
+		    "Can not set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
+	}
 }
 
 } // namespace duckdb
