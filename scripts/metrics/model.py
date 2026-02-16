@@ -44,6 +44,35 @@ class MetricIndex:
                 self._value_of[name] = optimizer_start_value + i
         by_group["optimizer"] = optimizer_names
 
+        # Validate enum value assignments.
+        # Layout: optimizer metrics must be in [34, 127], non-optimizer in [0, 33] or [128, 255].
+        # This prevents optimizer metrics (which grow as new optimizers are added) from
+        # colliding with non-optimizer metrics.
+        OPTIMIZER_RANGE_START = 34
+        OPTIMIZER_RANGE_END = 127
+        value_to_name: Dict[int, str] = {}
+        for name, val in self._value_of.items():
+            if val < 0 or val > 255:
+                raise ValueError(f"MetricType value {val} for '{name}' is outside uint8_t range (0-255)")
+            if name in value_to_name.values():
+                continue
+            if val in value_to_name:
+                raise ValueError(
+                    f"Duplicate MetricType value {val}: '{value_to_name[val]}' and '{name}'"
+                )
+            is_optimizer = name.startswith("OPTIMIZER_")
+            if is_optimizer and not (OPTIMIZER_RANGE_START <= val <= OPTIMIZER_RANGE_END):
+                raise ValueError(
+                    f"Optimizer metric '{name}' has value {val}, "
+                    f"must be in [{OPTIMIZER_RANGE_START}, {OPTIMIZER_RANGE_END}]"
+                )
+            if not is_optimizer and OPTIMIZER_RANGE_START <= val <= OPTIMIZER_RANGE_END:
+                raise ValueError(
+                    f"Non-optimizer metric '{name}' has value {val}, "
+                    f"which is in the optimizer range [{OPTIMIZER_RANGE_START}, {OPTIMIZER_RANGE_END}]"
+                )
+            value_to_name[val] = name
+
         # Add "all"
         all_set = set().union(*by_group.values()) if by_group else set()
         by_group["all"] = sorted(all_set)
