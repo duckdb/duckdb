@@ -159,6 +159,77 @@ query IIII nosort res6_count
 SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
+# sum tests
+query II nosort res0_sum
+SELECT sum(d) FROM dummy;
+----
+
+query II nosort res0_sum
+SELECT finalize(sum(d) EXPORT_STATE) FROM dummy;
+----
+
+query III nosort res1_sum
+SELECT g, sum(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query III nosort res1_sum
+SELECT g, finalize(sum(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+statement ok
+CREATE TABLE state_sum AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy GROUP BY g ORDER BY g;
+
+query III nosort res1_sum
+SELECT g, finalize(sum_state) FROM state_sum ORDER BY g;
+----
+
+query II nosort res3_sum
+SELECT g, sum(d)*2 combined_sum FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res3_sum
+select g, finalize(combine(sum(d) EXPORT_STATE, sum_state)) combined_sum from dummy join state_sum using (g) group by g, sum_state ORDER BY g;
+----
+
+statement ok
+CREATE TABLE state2_sum AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
+
+query II rowsort res3_sum
+select g, finalize(sum_state) * 2 combined_sum from (select g, sum(d) EXPORT_STATE sum_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2_sum) ORDER BY g;
+----
+
+query II rowsort res3_sum
+with groups as (select distinct g from dummy)
+select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join state2_sum using(g) left join (select g, sum(d) EXPORT_STATE sum_state2 from dummy where g >= 5 GROUP BY g) using (g);
+----
+
+# sum empty groups
+query II nosort res4_sum
+SELECT sum(d) FROM dummy WHERE FALSE;
+----
+
+query II nosort res4_sum
+SELECT finalize(sum(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+----
+
+# sum only null scanned
+query II nosort res5_sum
+SELECT sum(d) FROM (SELECT NULL::integer d);
+----
+
+query II nosort res5_sum
+SELECT finalize(sum(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+----
+
+# sum only null scanned, but grouped
+query II nosort res6_sum
+SELECT sum(d) FROM (SELECT NULL::integer d, g FROM dummy);
+----
+
+query II nosort res6_sum
+SELECT finalize(sum(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+----
+
 # more aggregates
 
 query IIIIIII nosort res8
@@ -215,6 +286,16 @@ SELECT (count(*) export_state)::struct(count bigint);
 ----
 {'count': 1}
 
+query T
+SELECT (sum(42) export_state)::struct(isset boolean, "value" bigint);
+----
+{'isset': true, 'value': 42}
+
+query T
+SELECT (sum(100) export_state)::struct(isset boolean, "value" hugeint);
+----
+{'isset': true, 'value': 100}
+
 # EXPORT_STATAE on a window function is not supported
 statement error
 select avg(42) EXPORT_STATE over ();
@@ -268,4 +349,25 @@ SELECT g, finalize(count_star_state), finalize(count_state) FROM state_count_per
 
 query IIIII nosort res10_count
 SELECT g, finalize(count_star_state), finalize(count_state) FROM state_count_view ORDER BY g;
+----
+
+# sum persistence
+statement ok
+CREATE TABLE state_sum_persist AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy GROUP BY g ORDER BY g;
+
+statement ok
+CREATE VIEW state_sum_view AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy GROUP BY g ORDER BY g;
+
+restart
+
+query III nosort res10_sum
+SELECT g, sum(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query III nosort res10_sum
+SELECT g, finalize(sum_state) FROM state_sum_persist ORDER BY g;
+----
+
+query III nosort res10_sum
+SELECT g, finalize(sum_state) FROM state_sum_view ORDER BY g;
 ----
