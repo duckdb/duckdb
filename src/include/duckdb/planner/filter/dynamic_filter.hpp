@@ -19,7 +19,7 @@ namespace duckdb {
 struct DynamicFilterData {
 	mutex lock;
 	unique_ptr<ConstantFilter> filter;
-	bool initialized = false;
+	atomic<bool> initialized = {false};
 
 	void SetValue(Value val);
 	void Reset();
