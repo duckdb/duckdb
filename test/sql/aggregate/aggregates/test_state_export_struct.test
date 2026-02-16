@@ -97,6 +97,14 @@ query IIIIIII nosort res8
 SELECT g, FINALIZE(favg(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
+query II nosort res9
+SELECT corr(d, d+1) FROM dummy;
+----
+
+query II nosort res9
+SELECT FINALIZE(corr(d, d+1) EXPORT_STATE) from dummy;
+----
+
 # we skip these for now as argmin/argmax now has a custom binder (so that it can work with extension types like JSON)
 # otherwise we get "Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders"
 mode skip

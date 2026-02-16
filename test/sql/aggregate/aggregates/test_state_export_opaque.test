@@ -115,16 +115,6 @@ query IIIIIII nosort res8
 SELECT g, FINALIZE(first(d) EXPORT_STATE), FINALIZE(last(d) EXPORT_STATE), FINALIZE(product(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query II nosort res9
-SELECT corr(d, d+1), covar_pop(d, d+1)FROM dummy;
-----
-
-
-query II nosort res9
-SELECT FINALIZE(corr(d, d+1) EXPORT_STATE), FINALIZE(covar_pop(d, d+1) EXPORT_STATE) from dummy;
-----
-
-
 # you're holding it wrong:
 
 statement error
@@ -160,20 +150,20 @@ SELECT finalize(42);
 ----
 
 statement error
-SELECT finalize(corr(d, 5)) from dummy;
+SELECT finalize(covar_pop(d, 5)) from dummy;
 ----
 
 statement error
-SELECT finalize(corr(d, 5)) from dummy group by g;
+SELECT finalize(covar_pop(d, 5)) from dummy group by g;
 ----
 
 # can't finalize twice
 statement error
-SELECT finalize(finalize(corr(d, 5) EXPORT_STATE)) from dummy;
+SELECT finalize(finalize(covar_pop(d, 5) EXPORT_STATE)) from dummy;
 ----
 
 statement error
-select corr(42, 10) EXPORT_STATE over ();
+select covar_pop(42, 10) EXPORT_STATE over ();
 ----
 
 
