@@ -333,9 +333,14 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 
 		//	Remap any filter pushdown references.
 		if (filter_pushdown) {
+			map<idx_t, idx_t> inverse;
+			for (idx_t i = 0; i < cond_idx.size(); ++i) {
+				inverse[cond_idx[i]] = i;
+			}
 			for (auto &idx : filter_pushdown->join_condition) {
-				const auto i = idx;
-				idx = cond_idx[i];
+				if (inverse.find(idx) != inverse.end()) {
+					idx = inverse[idx];
+				}
 			}
 		}
 	}
