@@ -244,7 +244,8 @@ unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggr
 } // namespace
 
 AggregateFunction CountFunctionBase::GetFunction() {
-	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT, AggregateFunction::StateSize<CountState>,
+	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT,
+	                      AggregateFunction::StateSize<CountState>,
 	                      AggregateFunction::StateInitialize<CountState, CountFunction>, CountFunction::CountScatter,
 	                      AggregateFunction::StateCombine<CountState, CountFunction>,
 	                      AggregateFunction::StateFinalize<CountState, int64_t, CountFunction>,
