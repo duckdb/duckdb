@@ -115,10 +115,6 @@ public:
 	idx_t NextEvictionSequenceNumber() {
 		return ++eviction_seq_num;
 	}
-	//! Resets the eviction sequence number to zero (called when a live node is consumed from the queue).
-	void ResetEvictionSequenceNumber() {
-		eviction_seq_num = 0;
-	}
 	//! Get the LRU timestamp.
 	int64_t GetLRUTimestamp() const {
 		return lru_timestamp_msec;

@@ -485,9 +485,6 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 			continue;
 		}
 
-		// The live node was consumed from the queue. Reset the block's sequence
-		// number so the next AddToEvictionQueue sees ts == 1 (no dead increment).
-		handle->ResetEvictionSequenceNumber();
 		if (!fn(node, handle, lock)) {
 			break;
 		}
