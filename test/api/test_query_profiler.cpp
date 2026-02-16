@@ -80,11 +80,13 @@ TEST_CASE("Test latency when interrupting query", "[api]") {
 	con.Interrupt();
 	t.join();
 
-	string query = "explain analyze select sum(range) from range(1_000_000);";
+	string query = "explain analyze select 42;";
 	REQUIRE_NO_FAIL(con.Query(query));
 
 	auto profiling_info = con.GetProfilingTree()->GetProfilingInfo();
 	auto latency = profiling_info.GetMetricValue<double>(MetricType::LATENCY);
+	auto query_name = profiling_info.GetMetricValue<string>(MetricType::QUERY_NAME);
+	REQUIRE(query == query_name);
 	REQUIRE(latency > 0);
-	REQUIRE(latency < 0.2);
+	REQUIRE(latency < 0.1);
 }
