@@ -516,3 +516,68 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 		}
 	}
 }
+
+// Regression test: Cleanup of index entries after the table has been dropped via CREATE OR REPLACE.
+//
+// Scenario:
+//   1. Transaction A deletes (or updates) rows in a table with a PRIMARY KEY, then commits.
+//      At commit time, the table is still MAIN_TABLE and other transactions are active,
+//      so the delete info is written to DELETED_ROWS_IN_USE for deferred cleanup.
+//   2. Transaction B executes CREATE OR REPLACE TABLE, which drops the old table
+//      and marks the old DataTable as DROPPED.
+//   3. Transaction A's deferred cleanup runs and attempts to remove DELETED_ROWS_IN_USE
+//      entries from the now-dropped table's indexes, hitting D_ASSERT(IsMainTable()) in
+//      DataTable::RemoveFromIndexes.
+//
+// The fix: CleanupState::CleanupDelete skips index cleanup for dropped/altered tables.
+TEST_CASE("cleanup index entries after CREATE OR REPLACE", "[storage][.]") {
+	duckdb::DBConfig config;
+
+	auto path = TestCreatePath("cleanup_index_replace");
+	duckdb::DeleteDatabase(path);
+	duckdb::DuckDB db(path, &config);
+
+	// Create a table with a PRIMARY KEY (which creates an index) and insert some data.
+	{
+		duckdb::Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t (id INTEGER PRIMARY KEY, val INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t SELECT i, i * 10 FROM range(1000) tbl(i)"));
+	}
+
+	// Start Transaction C before anything else, to ensure there are "other transactions"
+	// active when Transaction A commits. This forces the commit to write DELETED_ROWS_IN_USE
+	// entries (because ActiveTransactionState == OTHER_TRANSACTIONS).
+	duckdb::Connection con_c(db);
+	REQUIRE_NO_FAIL(con_c.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con_c.Query("SELECT COUNT(*) FROM t")); // keep the transaction open
+
+	// Transaction A: delete rows from the indexed table and commit.
+	duckdb::Connection con_a(db);
+	REQUIRE_NO_FAIL(con_a.Query("DELETE FROM t WHERE id < 500"));
+	// con_a commits in autocommit mode. At this point, the table is still MAIN_TABLE.
+	// Because con_c is still active, the commit creates DELETED_ROWS_IN_USE entries
+	// that need to be cleaned up later.
+
+	// Transaction B: CREATE OR REPLACE TABLE, which drops the old table (SetAsDropped)
+	// and creates a new one.
+	{
+		duckdb::Connection con_b(db);
+		REQUIRE_NO_FAIL(con_b.Query("CREATE OR REPLACE TABLE t (id INTEGER PRIMARY KEY, val INTEGER)"));
+	}
+
+	// Now close con_c to trigger cleanup of Transaction A's undo buffer.
+	// Without the fix, this would hit D_ASSERT(IsMainTable()) in RemoveFromIndexes
+	// because the old table has been marked as DROPPED.
+	REQUIRE_NO_FAIL(con_c.Query("COMMIT"));
+
+	// Verify the new table is empty (CREATE OR REPLACE created a fresh table).
+	{
+		duckdb::Connection con(db);
+		auto result = con.Query("SELECT COUNT(*) FROM t");
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->GetValue(0, 0) == Value::BIGINT(0));
+	}
+
+	duckdb::DeleteDatabase(path);
+}
+
