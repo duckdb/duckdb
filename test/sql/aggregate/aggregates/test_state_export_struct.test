@@ -13,30 +13,30 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # ungrouped aggr
 
-query IIIIIII nosort res0
-SELECT sum(d), avg(d)::integer, count(d) FROM dummy;
+query IIIIIIIIIII nosort res0
+SELECT sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy;
 ----
 
-query IIIIIII nosort res0
-SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM dummy;
+query IIIIIIIIIII nosort res0
+SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy;
 ----
 
 # grouped aggr
-query IIIIIIIII nosort res1
-SELECT g, sum(d), avg(d)::integer, count(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIIIII nosort res1
+SELECT g, sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIIIIII nosort res1
-SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIIIII nosort res1
+SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 
 statement ok
-CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
 
-query IIIIIIIII nosort res1
-SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(count_state) FROM state ORDER BY g;
+query IIIIIIIIIIIII nosort res1
+SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state ORDER BY g;
 ----
 
 query II nosort res3
@@ -62,30 +62,30 @@ select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join sta
 ----
 
 # empty groups
-query IIIIIII nosort res4
-SELECT avg(d)::integer, count(d) FROM dummy WHERE FALSE;
+query IIIIIIIIIII nosort res4
+SELECT avg(d)::integer, count(d), first(d), last(d) FROM dummy WHERE FALSE;
 ----
 
-query IIIIIII nosort res4
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+query IIIIIIIIIII nosort res4
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy WHERE FALSE;
 ----
 
 # only null scanned
-query IIIIIII nosort res5
-SELECT avg(d)::integer, count(d) FROM (SELECT NULL::integer d);
+query IIIIIIIIIII nosort res5
+SELECT avg(d)::integer, count(d), first(d), last(d) FROM (SELECT NULL::integer d);
 ----
 
-query IIIIIII nosort res5
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+query IIIIIIIIIII nosort res5
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
 ----
 
 # only null scanned, but grouped
-query IIIIIII nosort res6
-SELECT avg(d)::integer, count(d) FROM (SELECT NULL::integer d, g FROM dummy);
+query IIIIIIIIIII nosort res6
+SELECT avg(d)::integer, count(d), first(d), last(d) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
-query IIIIIII nosort res6
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+query IIIIIIIIIII nosort res6
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 
@@ -170,21 +170,21 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
 
 statement ok
-CREATE VIEW state_view AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE VIEW state_view AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
 
 restart
 
-query IIIIIIIII nosort res10
-SELECT g, avg(d)::integer, count(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIIIII nosort res10
+SELECT g, avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIIIIII nosort res10
-SELECT g, finalize(avg_state)::integer, finalize(count_state) FROM state ORDER BY g;
+query IIIIIIIIIIIII nosort res10
+SELECT g, finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state ORDER BY g;
 ----
 
-query IIIIIIIII nosort res10
-SELECT g, finalize(avg_state)::integer, finalize(count_state) FROM state_view ORDER BY g;
+query IIIIIIIIIIIII nosort res10
+SELECT g, finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state_view ORDER BY g;
 ----

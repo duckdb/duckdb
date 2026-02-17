@@ -75,12 +75,12 @@ select FINALIZE(argmin(a,b) EXPORT_STATE), FINALIZE(argmax(a,b) EXPORT_STATE) fr
 
 mode unskip
 
-query IIIIIII nosort res8
-SELECT g, first(d), last(d), product(d), bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
+query IIIIII nosort res8
+SELECT g, product(d), bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIIII nosort res8
-SELECT g, FINALIZE(first(d) EXPORT_STATE), FINALIZE(last(d) EXPORT_STATE), FINALIZE(product(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+query IIIIII nosort res8
+SELECT g, FINALIZE(product(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query II nosort res9

@@ -126,3 +126,39 @@ query T
 SELECT (count(*) export_state)::struct(count bigint);
 ----
 {'count': 1}
+
+# first() now has the new get_state_type callback
+query T
+SELECT typeof(first(42) EXPORT_STATE) = 'AGGREGATE_STATE<first(INTEGER)::INTEGER, STRUCT("value" INTEGER, is_set BOOLEAN, is_null BOOLEAN)>';
+----
+true
+
+# last() now has the new get_state_type callback
+query T
+SELECT typeof(last(42) EXPORT_STATE) = 'AGGREGATE_STATE<last(INTEGER)::INTEGER, STRUCT("value" INTEGER, is_set BOOLEAN, is_null BOOLEAN)>';
+----
+true
+
+# any_value() now has the new get_state_type callback
+query T
+SELECT typeof(any_value(42) EXPORT_STATE) = 'AGGREGATE_STATE<any_value(INTEGER)::INTEGER, STRUCT("value" INTEGER, is_set BOOLEAN, is_null BOOLEAN)>';
+----
+true
+
+# Casting first state to struct should work
+query T
+SELECT (first(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+----
+{'value': 42, 'is_set': true, 'is_null': false}
+
+# Casting last state to struct should work
+query T
+SELECT (last(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+----
+{'value': 42, 'is_set': true, 'is_null': false}
+
+# Casting any_value state to struct should work
+query T
+SELECT (any_value(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
+----
+{'value': 42, 'is_set': true, 'is_null': false}
