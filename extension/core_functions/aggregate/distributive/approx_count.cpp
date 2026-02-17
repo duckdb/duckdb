@@ -1,10 +1,6 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
-#include "duckdb/function/function_set.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "hyperloglog.hpp"
 
 namespace duckdb {
 
@@ -14,7 +10,7 @@ namespace duckdb {
 namespace {
 
 struct ApproxDistinctCountState {
-	HyperLogLog hll;
+	HyperLogLogP<10> hll;
 };
 
 struct ApproxCountDistinctFunction {
