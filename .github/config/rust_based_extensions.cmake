@@ -7,5 +7,4 @@
 #
 
 ################## DELTA
-include("${EXTENSION_CONFIG_BASE_DIR}/unity_catalog.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/delta.cmake")
