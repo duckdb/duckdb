@@ -521,8 +521,8 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
 	auto new_thread_count = NumericCast<idx_t>(n);
+	const auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
 	if (threads.size() == new_thread_count) {
-		auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
 		current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 		return;
 	}
@@ -570,7 +570,6 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 			markers.push_back(std::move(marker));
 		}
 	}
-	auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
 	current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 	BlockAllocator::Get(db).FlushAll();
 #endif
