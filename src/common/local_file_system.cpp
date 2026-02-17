@@ -1737,6 +1737,7 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	}
 }
 
+// XXX: skipped merge here, rebase doesn't make sense since rewritten -- manually reintegrate before landing
 bool LocalGlobResult::ExpandNextPath() const {
 	if (finished) {
 		return false;
