@@ -22,21 +22,21 @@ SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, fi
 ----
 
 # grouped aggr
-query IIIIIIIII nosort res1
-SELECT g, sum(d), avg(d)::integer, count(d), min(d), max(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIII nosort res1
+SELECT g, sum(d), avg(d)::integer, count(d), min(d), max(d), stddev(d)::integer FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIIIIII nosort res1
-SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIII nosort res1
+SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(stddev(d) EXPORT_STATE)::integer FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 
 statement ok
-CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state, stddev(d) EXPORT_STATE stddev_state FROM dummy GROUP BY g ORDER BY g;
 
-query IIIIIIIII nosort res1
-SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(count_state), finalize(min_state), finalize(max_state) FROM state ORDER BY g;
+query IIIIIIIIIII nosort res1
+SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(count_state), finalize(min_state), finalize(max_state), finalize(stddev_state)::integer FROM state ORDER BY g;
 ----
 
 query II nosort res3

@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-LogicalType GetExportStateType(const AggregateFunction &function) {
+static LogicalType GetCovarExportStateType(const AggregateFunction &function) {
 	child_list_t<LogicalType> struct_children;
 	struct_children.emplace_back("count", LogicalType::UINTEGER);
 	struct_children.emplace_back("mean_x", LogicalType::DOUBLE);
@@ -17,13 +17,13 @@ LogicalType GetExportStateType(const AggregateFunction &function) {
 AggregateFunction CovarPopFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarPopOperation>(
 	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetExportStateType);
+	    .SetStructStateExport(GetCovarExportStateType);
 }
 
 AggregateFunction CovarSampFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarSampOperation>(
 	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetExportStateType);
+	    .SetStructStateExport(GetCovarExportStateType);
 }
 
 } // namespace duckdb

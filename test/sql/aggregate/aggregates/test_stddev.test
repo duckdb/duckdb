@@ -150,3 +150,17 @@ statement error
 select var_pop(a) from (values (1e301), (-1e301)) tbl(a)
 ----
 Out of Range Error: VARPOP is out of range
+
+# test struct-based state export
+statement ok
+CREATE TABLE stddev_state AS SELECT STDDEV_POP(val) EXPORT_STATE pop_state, VAR_SAMP(val) EXPORT_STATE samp_state FROM stddev_test;
+
+query T
+SELECT pop_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
+
+query T
+SELECT samp_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
