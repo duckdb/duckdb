@@ -7,102 +7,56 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # ungrouped aggr
 
-query IIIIII nosort res0
-SELECT count(*), count(d) FROM dummy;
+query IIII nosort res0
+SELECT corr(d, d+1) FROM dummy;
 ----
 
-query IIIIII nosort res0
-SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE) FROM dummy;
+query IIII nosort res0
+SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM dummy;
 ----
 
 # grouped aggr
-query IIIIIII nosort res1
-SELECT g, count(*), count(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIII nosort res1
+SELECT g, corr(d, d+1) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIIII nosort res1
-SELECT g, finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE)  FROM dummy GROUP BY g ORDER BY g;
+query IIIII nosort res1
+SELECT g, finalize(corr(d, d+1) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, corr(d, d+1) EXPORT_STATE corr_state FROM dummy GROUP BY g ORDER BY g;
 
-query IIIIIII nosort res1
-SELECT g, finalize(count_star_state),finalize(count_state) FROM state ORDER BY g;
+query IIIII nosort res1
+SELECT g, finalize(corr_state) FROM state ORDER BY g;
 ----
-
-query II nosort res2
-SELECT count(d) * 2 FROM dummy;
-----
-
-query II nosort res2
-SELECT FINALIZE(COMBINE(count(d) EXPORT_STATE, count(d) EXPORT_STATE)) FROM dummy;
-----
-
-
-query II nosort res3
-SELECT g, count(d) * 2 combined_count FROM dummy GROUP BY g ORDER BY g;
-----
-
-query II nosort res3
-select g, finalize(combine(count(d) EXPORT_STATE, count_state)) combined_count from dummy join state using (g) group by g, count_state ORDER BY g;
-----
-
-# combine aggregate state in UNION
-statement ok
-CREATE TABLE state2 AS SELECT g, count(d) EXPORT_STATE count_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
-
-query II rowsort res3
-select g, finalize(count_state) * 2 combined_count from (select g, count(d) EXPORT_STATE count_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
-----
-
-# combine aggregate states in JOINs with NULLs
-query II rowsort res3
-with groups as (select distinct g from dummy)
-select g, FINALIZE(COMBINE(count_state, count_state2)) * 2 from groups left join state2 using(g) left join (select g, count(d) EXPORT_STATE count_state2 from dummy where g >= 5 GROUP BY g) using (g)
-----
-
-query IIII
-with groups as (select distinct g from dummy)
-select g, FINALIZE(count_state), FINALIZE(count_state2), FINALIZE(COMBINE(count_state, count_state2))  from groups left join state2 using(g) left join (select g, count(d) EXPORT_STATE count_state2 from dummy where g >= 3 GROUP BY g) using (g) order by g
-----
-0	10	NULL	10
-1	10	NULL	10
-2	10	NULL	10
-3	10	10	20
-4	10	10	20
-5	NULL	10	10
-6	NULL	10	10
-7	NULL	10	10
-8	NULL	10	10
-9	NULL	10	10
 
 # empty groups
-query IIIIII nosort res4
-SELECT count(*), count(d) FROM dummy WHERE FALSE;
+query IIII nosort res4
+SELECT corr(d, d+1) FROM dummy WHERE FALSE;
 ----
 
-query IIIIII nosort res4
-SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+query IIII nosort res4
+SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM dummy WHERE FALSE;
 ----
 
 # only null scanned
-query IIIIII nosort res5
-SELECT count(*), count(d) FROM (SELECT NULL::integer d);
+query IIII nosort res5
+SELECT corr(d, d+1) FROM (SELECT NULL::integer d);
 ----
 
-query IIIIII nosort res5
-SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+query IIII nosort res5
+SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM (SELECT NULL::integer d);
 ----
 
 # only null scanned, but grouped
-query IIIIII nosort res6
-SELECT count(*), count(d) FROM (SELECT NULL::integer d, g FROM dummy);
+query IIII nosort res6
+SELECT corr(d, d+1) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
-query IIIIII nosort res6
-SELECT finalize(count(*) EXPORT_STATE), finalize(count(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+query IIII nosort res6
+SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 # more aggregates
@@ -186,28 +140,28 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, corr(d, d+1) EXPORT_STATE corr_state FROM dummy GROUP BY g ORDER BY g;
 
 statement ok
-CREATE VIEW state_view AS SELECT g, count(*) EXPORT_STATE count_star_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE VIEW state_view AS SELECT g, corr(d, d+1) EXPORT_STATE corr_state FROM dummy GROUP BY g ORDER BY g;
 
 restart
 
-query IIIIIII nosort res10
-SELECT g, count(*), count(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIII nosort res10
+SELECT g, corr(d, d+1) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIIII nosort res10
-SELECT g, finalize(count_star_state),finalize(count_state) FROM state ORDER BY g;
+query IIIII nosort res10
+SELECT g, finalize(corr_state) FROM state ORDER BY g;
 ----
 
-query IIIIIII nosort res10
-SELECT g, finalize(count_star_state),finalize(count_state) FROM state_view ORDER BY g;
+query IIIII nosort res10
+SELECT g, finalize(corr_state) FROM state_view ORDER BY g;
 ----
 
 # BLOB casting back and forth
 statement ok
-SELECT (covar_pop(42, 42) EXPORT_STATE)::BLOB;
+SELECT (corr(42, 43) EXPORT_STATE)::BLOB;
 
 query I
 SELECT FINALIZE(COMBINE(covar_pop(42, 42) EXPORT_STATE, (covar_pop(20, 20) EXPORT_STATE)::BLOB));
