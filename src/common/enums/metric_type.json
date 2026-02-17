@@ -328,7 +328,6 @@
     "group": "optimizer",
     "description": "metrics that are collected for each optimizer",
     "generated": true,
-    "optimizer_start_value": 34,
     "metrics": []
   }
 ]

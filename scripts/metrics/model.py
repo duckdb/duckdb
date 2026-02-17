@@ -20,9 +20,13 @@ class MetricDef:
 
 
 class MetricIndex:
-    def __init__(self, defs: Iterable[MetricDef], optimizers: List[str], optimizer_start_value: Optional[int] = None):
+    # Values 34-100 are reserved for optimizer metrics (auto-assigned sequentially).
+    # Non-optimizer metrics must use values in [0, 33] or [101, 255].
+    OPTIMIZER_RANGE_START = 34
+    OPTIMIZER_RANGE_END = 100
+
+    def __init__(self, defs: Iterable[MetricDef], optimizers: List[str]):
         self.defs: List[MetricDef] = list(defs)
-        self.optimizer_start_value: Optional[int] = optimizer_start_value
 
         # Build name → explicit value mapping
         self._value_of: Dict[str, int] = {}
@@ -37,19 +41,11 @@ class MetricIndex:
         for g in by_group:
             by_group[g].sort()
 
-        # Add optimizer group (names only) and assign sequential values from optimizer_start_value
+        # Add optimizer group and assign sequential values starting at OPTIMIZER_RANGE_START
         optimizer_names = [f"OPTIMIZER_{o}" for o in optimizers]
-        if optimizer_start_value is not None:
-            for i, name in enumerate(optimizer_names):
-                self._value_of[name] = optimizer_start_value + i
+        for i, name in enumerate(optimizer_names):
+            self._value_of[name] = self.OPTIMIZER_RANGE_START + i
         by_group["optimizer"] = optimizer_names
-
-        # Validate enum value assignments.
-        # Layout: optimizer metrics must be in [34, 127], non-optimizer in [0, 33] or [128, 255].
-        # This prevents optimizer metrics (which grow as new optimizers are added) from
-        # colliding with non-optimizer metrics.
-        OPTIMIZER_RANGE_START = 34
-        OPTIMIZER_RANGE_END = 127
         value_to_name: Dict[int, str] = {}
         for name, val in self._value_of.items():
             if val < 0 or val > 255:
@@ -59,15 +55,16 @@ class MetricIndex:
             if val in value_to_name:
                 raise ValueError(f"Duplicate MetricType value {val}: '{value_to_name[val]}' and '{name}'")
             is_optimizer = name.startswith("OPTIMIZER_")
-            if is_optimizer and not (OPTIMIZER_RANGE_START <= val <= OPTIMIZER_RANGE_END):
+            if is_optimizer and not (self.OPTIMIZER_RANGE_START <= val <= self.OPTIMIZER_RANGE_END):
                 raise ValueError(
                     f"Optimizer metric '{name}' has value {val}, "
-                    f"must be in [{OPTIMIZER_RANGE_START}, {OPTIMIZER_RANGE_END}]"
+                    f"must be in [{self.OPTIMIZER_RANGE_START}, {self.OPTIMIZER_RANGE_END}]"
                 )
-            if not is_optimizer and OPTIMIZER_RANGE_START <= val <= OPTIMIZER_RANGE_END:
+            if not is_optimizer and self.OPTIMIZER_RANGE_START <= val <= self.OPTIMIZER_RANGE_END:
                 raise ValueError(
                     f"Non-optimizer metric '{name}' has value {val}, "
-                    f"which is in the optimizer range [{OPTIMIZER_RANGE_START}, {OPTIMIZER_RANGE_END}]"
+                    f"which is in the reserved optimizer range [{self.OPTIMIZER_RANGE_START}, {self.OPTIMIZER_RANGE_END}]. "
+                    f"New non-optimizer metrics should use values >= {self.OPTIMIZER_RANGE_END + 1}."
                 )
             value_to_name[val] = name
 
@@ -162,11 +159,8 @@ class MetricIndex:
 
 def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> MetricIndex:
     defs: list[MetricDef] = []
-    optimizer_start_value: Optional[int] = None
     for group in metrics_json:
         gname = group.get("group")
-        if gname == "optimizer":
-            optimizer_start_value = group.get("optimizer_start_value")
         for metric in group.get("metrics", []):
             name = metric["name"]
             validate_identifier(name, gname)
@@ -190,4 +184,4 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
                     value=value,
                 )
             )
-    return MetricIndex(defs, optimizers, optimizer_start_value)
+    return MetricIndex(defs, optimizers)
