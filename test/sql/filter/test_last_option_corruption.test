@@ -2,16 +2,13 @@
 # description: Test that extension options don't collide when loaded in specific order
 # group: [filter]
 
-# ICU loads 2 options in slots 1, 2
 require icu
 
-# Restart reloads ICU and install both ICU options in the next slot 3.
 restart
 
-# parquet registers 5 options in slots 3,4,5,6,7
+# parquet registers options in overlapping slot(s)
 require parquet
 
-# The parquet option in slot 3 is invalid since it clashes with the ICU options (that have a default)
 query I
 SELECT current_setting('binary_as_string')::BOOLEAN;
 ----
