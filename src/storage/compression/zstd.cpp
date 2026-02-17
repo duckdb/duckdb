@@ -493,7 +493,7 @@ public:
 		//! then we want to flush it
 
 		auto buffer_data = buffer_collection.GetBufferData(/*include_segment=*/true);
-		ZSTDCompressionBufferCollection::Slot slot;
+		ZSTDCompressionBufferCollection::Slot slot = ZSTDCompressionBufferCollection::Slot::SEGMENT;
 		optional_ptr<BufferHandle> buffer_handle_ptr;
 		optional_ptr<ZSTDCompressionBufferState> buffer_state_ptr;
 		for (auto &buffer : buffer_data) {

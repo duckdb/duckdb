@@ -154,6 +154,8 @@ public:
 		case Slot::OVERFLOW_1:
 			index = 2;
 			break;
+		default:
+			throw InternalException("ZSTDCompressionBufferCollection::Slot value not handled");
 		};
 		buffer_index = index;
 		buffer_states[index].offset = offset;
