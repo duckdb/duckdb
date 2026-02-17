@@ -153,7 +153,13 @@ Out of Range Error: VARPOP is out of range
 
 # test struct-based state export
 statement ok
-CREATE TABLE stddev_state AS SELECT STDDEV_POP(val) EXPORT_STATE pop_state, VAR_SAMP(val) EXPORT_STATE samp_state FROM stddev_test;
+CREATE TABLE stddev_state AS SELECT
+    STDDEV_POP(val) EXPORT_STATE pop_state,
+    VAR_SAMP(val) EXPORT_STATE samp_state,
+    STDDEV_SAMP(val) EXPORT_STATE stddev_samp_state,
+    VAR_POP(val) EXPORT_STATE var_pop_state,
+    SEM(val) EXPORT_STATE sem_state
+FROM stddev_test;
 
 query T
 SELECT pop_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
@@ -162,5 +168,20 @@ SELECT pop_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FRO
 
 query T
 SELECT samp_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
+
+query T
+SELECT stddev_samp_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
+
+query T
+SELECT var_pop_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
+----
+{'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
+
+query T
+SELECT sem_state::STRUCT(count UBIGINT, mean DOUBLE, dsquared DECIMAL(18,2)) FROM stddev_state;
 ----
 {'count': 4, 'mean': 281.75, 'dsquared': 687844.75}
