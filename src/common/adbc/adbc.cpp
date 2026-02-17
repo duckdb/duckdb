@@ -463,7 +463,7 @@ AdbcStatusCode ConnectionNew(struct AdbcConnection *connection, struct AdbcError
 	return ADBC_STATUS_OK;
 }
 
-AdbcStatusCode ExecuteQuery(duckdb::Connection *conn, const char *query, struct AdbcError *error) {
+static AdbcStatusCode ExecuteQuery(duckdb::Connection *conn, const char *query, struct AdbcError *error) {
 	auto res = conn->Query(query);
 	if (res->HasError()) {
 		auto error_message = "Failed to execute query \"" + std::string(query) + "\": " + res->GetError();
@@ -473,8 +473,8 @@ AdbcStatusCode ExecuteQuery(duckdb::Connection *conn, const char *query, struct 
 	return ADBC_STATUS_OK;
 }
 
-AdbcStatusCode InternalSetOption(duckdb::Connection &conn, std::unordered_map<std::string, std::string> &options,
-                                 struct AdbcError *error) {
+static AdbcStatusCode InternalSetOption(duckdb::Connection &conn, std::unordered_map<std::string, std::string> &options,
+                                        struct AdbcError *error) {
 	// If we got here, the options have already been validated and are acceptable
 	for (auto &option : options) {
 		if (strcmp(option.first.c_str(), ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
@@ -500,6 +500,19 @@ AdbcStatusCode InternalSetOption(duckdb::Connection &conn, std::unordered_map<st
 	options.clear();
 	return ADBC_STATUS_OK;
 }
+
+static AdbcStatusCode ConnectionSetOptionCurrentValue(duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper,
+                                                      const char *sql_prefix, const char *value,
+                                                      struct AdbcError *error) {
+	if (!conn_wrapper->connection) {
+		SetError(error, "Connection is not initialized");
+		return ADBC_STATUS_INVALID_STATE;
+	}
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+	std::string query = sql_prefix + duckdb::KeywordHelper::WriteOptionallyQuoted(value);
+	return ExecuteQuery(conn, query.c_str(), error);
+}
+
 AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char *key, const char *value,
                                    struct AdbcError *error) {
 	if (!connection) {
@@ -531,23 +544,10 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 		return InternalSetOption(*conn, conn_wrapper->options, error);
 	}
 	if (strcmp(key, ADBC_CONNECTION_OPTION_CURRENT_CATALOG) == 0) {
-		if (!conn_wrapper->connection) {
-			SetError(error, "Connection is not initialized");
-			return ADBC_STATUS_INVALID_STATE;
-		}
-		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
-		std::string query = "USE " + duckdb::KeywordHelper::WriteOptionallyQuoted(value);
-		return ExecuteQuery(conn, query.c_str(), error);
+		return ConnectionSetOptionCurrentValue(conn_wrapper, "USE ", value, error);
 	}
 	if (strcmp(key, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA) == 0) {
-		if (!conn_wrapper->connection) {
-			SetError(error, "Connection is not initialized");
-			return ADBC_STATUS_INVALID_STATE;
-		}
-		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
-		std::string escaped = duckdb::StringUtil::Replace(value, "'", "''");
-		std::string query = "SET schema = '" + escaped + "'";
-		return ExecuteQuery(conn, query.c_str(), error);
+		return ConnectionSetOptionCurrentValue(conn_wrapper, "SET schema = ", value, error);
 	}
 	// This is an unknown option to the DuckDB driver
 	auto error_message =
