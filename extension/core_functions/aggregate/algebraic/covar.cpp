@@ -4,14 +4,26 @@
 
 namespace duckdb {
 
+LogicalType GetExportStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> struct_children;
+	struct_children.emplace_back("count", LogicalType::UINTEGER);
+	struct_children.emplace_back("mean_x", LogicalType::DOUBLE);
+	struct_children.emplace_back("mean_y", LogicalType::DOUBLE);
+	struct_children.emplace_back("co_moment", LogicalType::DOUBLE);
+
+	return LogicalType::STRUCT(std::move(struct_children));
+}
+
 AggregateFunction CovarPopFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarPopOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetExportStateType);
 }
 
 AggregateFunction CovarSampFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarSampOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetExportStateType);
 }
 
 } // namespace duckdb

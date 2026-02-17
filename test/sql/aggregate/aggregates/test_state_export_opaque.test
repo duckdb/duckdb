@@ -70,12 +70,12 @@ SELECT g, FINALIZE(first(d) EXPORT_STATE), FINALIZE(last(d) EXPORT_STATE), FINAL
 ----
 
 query II nosort res9
-SELECT corr(d, d+1), covar_pop(d, d+1)FROM dummy;
+SELECT corr(d, d+1) FROM dummy;
 ----
 
 
 query II nosort res9
-SELECT FINALIZE(corr(d, d+1) EXPORT_STATE), FINALIZE(covar_pop(d, d+1) EXPORT_STATE) from dummy;
+SELECT FINALIZE(corr(d, d+1) EXPORT_STATE), from dummy;
 ----
 
 
@@ -94,7 +94,7 @@ SELECT string_agg(d) EXPORT_STATE from dummy;
 ----
 
 statement error
-SELECT FINALIZE(COMBINE(covar_pop(d, d) EXPORT_STATE)) FROM dummy;
+SELECT FINALIZE(COMBINE(corr(d, d+1) EXPORT_STATE)) FROM dummy;
 ----
 
 statement error
@@ -164,24 +164,24 @@ statement ok
 SELECT (corr(42, 43) EXPORT_STATE)::BLOB;
 
 query I
-SELECT FINALIZE(COMBINE(covar_pop(42, 42) EXPORT_STATE, (covar_pop(20, 20) EXPORT_STATE)::BLOB));
+SELECT FINALIZE(COMBINE(corr(42, 42) EXPORT_STATE, (corr(20, 20) EXPORT_STATE)::BLOB));
 ----
-121.0
+1.0
 
 statement error
-SELECT (covar_pop(42, 42) EXPORT_STATE)::INTEGER;
-----
-
-statement error
-SELECT COMBINE(covar_pop(42, 42) EXPORT_STATE, 42);
+SELECT (corr(42, 42) EXPORT_STATE)::INTEGER;
 ----
 
 statement error
-SELECT COMBINE(covar_pop(42, 42) EXPORT_STATE, 'ASDF'::BLOB);
+SELECT COMBINE(corr(42, 42) EXPORT_STATE, 42);
 ----
 
 statement error
-SELECT COMBINE((covar_pop(42, 42) EXPORT_STATE)::BLOB, covar_pop(42, 42) EXPORT_STATE);
+SELECT COMBINE(corr(42, 42) EXPORT_STATE, 'ASDF'::BLOB);
+----
+
+statement error
+SELECT COMBINE((corr(42, 42) EXPORT_STATE)::BLOB, corr(42, 42) EXPORT_STATE);
 ----
 
 # simulate round tripping
@@ -189,18 +189,18 @@ require parquet
 
 # TODO - we should support the new aggregate state in parquet files
 statement ok
-COPY (SELECT g, (covar_pop(d, d) EXPORT_STATE)::BLOB s1 FROM dummy GROUP BY g) TO '__TEST_DIR__/state.parquet' (FORMAT PARQUET);
+COPY (SELECT g, (corr(d, d+1) EXPORT_STATE)::BLOB s1 FROM dummy GROUP BY g) TO '__TEST_DIR__/state.parquet' (FORMAT PARQUET);
 
 query II
-SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, covar_pop(d, d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '__TEST_DIR__/state.parquet' USING(g) ORDER BY g;
+SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, corr(d, d+1) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '__TEST_DIR__/state.parquet' USING(g) ORDER BY g;
 ----
-0	825.0
-1	825.0
-2	825.0
-3	825.0
-4	825.0
-5	825.0
-6	825.0
-7	825.0
-8	825.0
-9	825.0
+0	1.0
+1	1.0
+2	1.0
+3	1.0
+4	1.0
+5	1.0
+6	1.0
+7	1.0
+8	1.0
+9	1.0
