@@ -28,7 +28,7 @@ class MetricIndex:
     def __init__(self, defs: Iterable[MetricDef], optimizers: List[str]):
         self.defs: List[MetricDef] = list(defs)
 
-        # Build name → explicit value mapping
+        # Build name -> explicit value mapping
         self._value_of: Dict[str, int] = {}
         for d in self.defs:
             if d.value is not None:
