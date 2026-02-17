@@ -248,6 +248,7 @@ group_1	This is a very long string that exceeds the 12 byte inlining threshold f
 group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t2
 
 # Test 3: Combine states with big strings (tests StoreFieldForSelectedRowsOp)
+query TT nosort
 WITH state1 AS (
     SELECT g, first(big_str) EXPORT_STATE as state1
     FROM big_string_test 
@@ -260,7 +261,6 @@ state2 AS (
     WHERE r >= 10
     GROUP BY g
 )
-query T nosort
 SELECT 
     COALESCE(s1.g, s2.g) as g,
     finalize(COMBINE(s1.state1, s2.state2)) as combined_and_finalized
@@ -268,9 +268,9 @@ FROM state1 s1
 FULL OUTER JOIN state2 s2 ON s1.g = s2.g
 ORDER BY g;
 ----
-group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t0
-group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t1
-group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t2
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t12
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
 
 # Test 4: Store combined state and finalize
 statement ok
@@ -293,18 +293,19 @@ SELECT
 FROM state1 s1
 FULL OUTER JOIN state2 s2 ON s1.g = s2.g;
 
-query T nosort
+query TT nosort
 SELECT 
     g,
     finalize(combined_state) as finalized_combined
 FROM combined_big_string_state
 ORDER BY g;
 ----
-group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t0
-group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t1
-group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t2
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t12
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
 
 # Test 5: Multiple combine operations with big strings
+query TT nosort
 WITH state1 AS (
     SELECT g, first(big_str) EXPORT_STATE as state1
     FROM big_string_test 
@@ -323,7 +324,6 @@ state3 AS (
     WHERE r >= 10
     GROUP BY g
 )
-query T nosort
 SELECT 
     COALESCE(COALESCE(s1.g, s2.g), s3.g) as g,
     finalize(COMBINE(COMBINE(s1.state1, s2.state2), s3.state3)) as triple_combined
@@ -332,6 +332,6 @@ FULL OUTER JOIN state2 s2 ON s1.g = s2.g
 FULL OUTER JOIN state3 s3 ON COALESCE(s1.g, s2.g) = s3.g
 ORDER BY g;
 ----
-group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t0
-group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t1
-group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t2
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t12
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
