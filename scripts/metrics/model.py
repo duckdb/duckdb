@@ -44,7 +44,8 @@ class MetricIndex:
         # Add optimizer group — derive MetricType values from OptimizerType numeric values
         if not optimizers:
             raise ValueError("No optimizers found in optimizer_type.hpp")
-        first_opt_value = optimizers[0][1]
+        # OptimizerType values start at 1 (EXPRESSION_REWRITER); INVALID = 0 is excluded.
+        first_opt_value = 1
         optimizer_names = []
         for opt_name, opt_value in optimizers:
             metric_name = f"OPTIMIZER_{opt_name}"
