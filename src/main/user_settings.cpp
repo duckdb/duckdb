@@ -94,9 +94,16 @@ bool GlobalUserSettings::HasExtensionOption(const string &name) const {
 
 idx_t GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
 	lock_guard<mutex> l(lock);
-	auto setting_index = GeneratedSettingInfo::MaxSettingIndex + extension_parameters.size();
-	extension_option.setting_index = setting_index;
-	extension_parameters.insert(make_pair(name, std::move(extension_option)));
+	const auto new_option = extension_parameters.emplace(make_pair(name, std::move(extension_option)));
+	const auto did_insert = new_option.second;
+	auto &option = new_option.first->second;
+
+	if (!did_insert) {
+		return option.setting_index.GetIndex();
+	}
+
+	auto setting_index = GeneratedSettingInfo::MaxSettingIndex + extension_parameters.size() - 1;
+	option.setting_index = setting_index;
 	++settings_version;
 	return setting_index;
 }
