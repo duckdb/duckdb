@@ -20,10 +20,10 @@ class MetricDef:
 
 
 class MetricIndex:
-    # Values 34-100 are reserved for optimizer metrics (auto-assigned sequentially).
-    # Non-optimizer metrics must use values in [0, 33] or [101, 255].
-    OPTIMIZER_RANGE_START = 34
-    OPTIMIZER_RANGE_END = 100
+    # Values 26-90 are reserved for optimizer metrics (auto-assigned sequentially).
+    # Non-optimizer metrics must use values in [0, 25] or [91, 255].
+    OPTIMIZER_RANGE_START = 26
+    OPTIMIZER_RANGE_END = 90
 
     def __init__(self, defs: Iterable[MetricDef], optimizers: List[str]):
         self.defs: List[MetricDef] = list(defs)
