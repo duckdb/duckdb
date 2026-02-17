@@ -16,7 +16,7 @@ class MetricDef:
     collection_method: Optional[str] = None
     child: Optional[str] = None
     description: str = None
-    value: Optional[int] = None
+    enum_value: Optional[int] = None
 
 
 class MetricIndex:
@@ -31,8 +31,8 @@ class MetricIndex:
         # Build name -> explicit value mapping
         self._value_of: Dict[str, int] = {}
         for d in self.defs:
-            if d.value is not None:
-                self._value_of[d.name] = d.value
+            if d.enum_value is not None:
+                self._value_of[d.name] = d.enum_value
 
         # Build group → names (existing contract for emitters)
         by_group: Dict[str, List[str]] = defaultdict(list)
@@ -170,7 +170,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
             collection_method = metric.get("collection_method")
             child = metric.get("child")
             description = metric.get("description", "")
-            value = metric.get("value")
+            enum_value = metric.get("enum_value")
             defs.append(
                 MetricDef(
                     name=name,
@@ -181,7 +181,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
                     collection_method=collection_method,
                     child=child,
                     description=description,
-                    value=value,
+                    enum_value=enum_value,
                 )
             )
     return MetricIndex(defs, optimizers)
