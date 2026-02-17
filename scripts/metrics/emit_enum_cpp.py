@@ -133,14 +133,16 @@ def _generate_standard_functions(
     cpp_f.write("}\n\n")
 
 
-def _generate_custom_optimizer_functions(optimizers: List[str], hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter):
+def _generate_custom_optimizer_functions(
+    optimizers: List[Tuple[str, int]], hpp_f: IndentedFileWriter, cpp_f: IndentedFileWriter
+):
     by_type = "GetOptimizerMetricByType(OptimizerType type)"
     by_metric = "GetOptimizerTypeByMetric(MetricType type)"
 
     hpp_f.write_indented(1, f"static MetricType {by_type};")
     hpp_f.write_indented(1, f"static OptimizerType {by_metric};")
 
-    first_optimizer = optimizers[0]
+    first_optimizer = optimizers[0][0]
 
     cpp_f.write(
         f"""
@@ -196,7 +198,7 @@ def generate_metric_type_files(
     out_hpp: Path,
     out_cpp: Path,
     metric_index: MetricIndex,
-    optimizers: List[str],
+    optimizers: List[Tuple[str, int]],
 ) -> None:
     with IndentedFileWriter(out_hpp) as hpp_f, IndentedFileWriter(out_cpp) as cpp_f:
         _setup_hpp(out_hpp, hpp_f, metric_index)

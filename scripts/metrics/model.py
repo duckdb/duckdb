@@ -25,7 +25,7 @@ class MetricIndex:
     OPTIMIZER_RANGE_START = 26
     OPTIMIZER_RANGE_END = 90
 
-    def __init__(self, defs: Iterable[MetricDef], optimizers: List[str]):
+    def __init__(self, defs: Iterable[MetricDef], optimizers: List[Tuple[str, int]]):
         self.defs: List[MetricDef] = list(defs)
 
         # Build name -> explicit value mapping
@@ -41,10 +41,16 @@ class MetricIndex:
         for g in by_group:
             by_group[g].sort()
 
-        # Add optimizer group and assign sequential values starting at OPTIMIZER_RANGE_START
-        optimizer_names = [f"OPTIMIZER_{o}" for o in optimizers]
-        for i, name in enumerate(optimizer_names):
-            self._value_of[name] = self.OPTIMIZER_RANGE_START + i
+        # Add optimizer group — derive MetricType values from OptimizerType numeric values
+        if not optimizers:
+            raise ValueError("No optimizers found in optimizer_type.hpp")
+        first_opt_value = optimizers[0][1]
+        optimizer_names = []
+        for opt_name, opt_value in optimizers:
+            metric_name = f"OPTIMIZER_{opt_name}"
+            metric_value = self.OPTIMIZER_RANGE_START + (opt_value - first_opt_value)
+            self._value_of[metric_name] = metric_value
+            optimizer_names.append(metric_name)
         by_group["optimizer"] = optimizer_names
         value_to_name: Dict[int, str] = {}
         for name, val in self._value_of.items():
@@ -157,7 +163,7 @@ class MetricIndex:
         return self._value_of.get(metric)
 
 
-def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> MetricIndex:
+def build_all_metrics(metrics_json: list[dict], optimizers: list[tuple[str, int]]) -> MetricIndex:
     defs: list[MetricDef] = []
     for group in metrics_json:
         gname = group.get("group")
