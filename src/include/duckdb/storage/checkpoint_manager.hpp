@@ -17,7 +17,7 @@ namespace duckdb {
 class AttachedDatabase;
 class BlockManager;
 class CatalogEntry;
-class CatalogTransaction;
+struct CatalogTransaction;
 class ClientContext;
 class ColumnSegment;
 class DatabaseInstance;
