@@ -515,7 +515,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	if (!bound_function.HasStateCombineCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.name);
 	}
-	if (bound_function.HasBindCallback() && !bound_function.IsExportStateWithCustomBindingAllowed()) {
+	if (bound_function.HasBindCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom binders");
 	}
 	if (bound_function.HasStateDestructorCallback()) {
