@@ -271,8 +271,7 @@ public:
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		auto &buffer_manager = block_manager.buffer_manager;
 
-		auto &buffer_states = buffer_collection.buffer_states;
-		auto &current_buffer_state = buffer_states[buffer_collection.GetCurrentBufferIndex().GetIndex()];
+		auto &current_buffer_state = buffer_collection.GetCurrentBufferState();
 		current_buffer_state.full = true;
 
 		if (buffer_collection.CanFlush()) {
@@ -288,13 +287,14 @@ public:
 		//! In the worst case, the segment handle is entirely filled with vector metadata
 		//! The last part of the first extra page is entirely filled with string metadata
 		//! So we can only use the second extra page for data
-		for (idx_t i = 0; i < 2; i++) {
-			auto &buffer_state = buffer_collection.buffer_states[i + 1];
+		auto buffer_data = buffer_collection.GetBufferData(/*include_segment = */ false);
+		for (auto &buffer : buffer_data) {
+			auto &buffer_state = buffer.state;
 			auto &flags = buffer_state.flags;
 			if (flags.HasStringMetadata() || buffer_state.full) {
 				continue;
 			}
-			buffer_collection.SetCurrentBuffer(i + 1);
+			buffer_collection.SetCurrentBuffer(buffer.slot);
 			auto &buffer_handle = buffer_collection.BufferHandleMutable();
 			if (!buffer_handle.IsValid()) {
 				buffer_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, &block_manager);
@@ -306,8 +306,7 @@ public:
 	}
 
 	void NewSegment() {
-		auto current_buffer_index = buffer_collection.GetCurrentBufferIndex();
-		if (current_buffer_index.IsValid() && current_buffer_index.GetIndex() == 0) {
+		if (buffer_collection.IsOnSegmentBuffer()) {
 			// This should never happen, the string lengths + vector metadata size should always exceed a page size,
 			// even if the strings are all empty
 			throw InternalException("(ZSTDCompressionState::NewSegment) We are asking for a new segment, but somehow "
@@ -325,7 +324,7 @@ public:
 			vectors_in_segment = vectors_per_segment;
 		}
 
-		buffer_collection.SetCurrentBuffer(0);
+		buffer_collection.SetCurrentBuffer(ZSTDCompressionBufferCollection::Slot::SEGMENT);
 		buffer_collection.buffer_states[0].flags.SetVectorMetadata();
 		segment_state.InitializeSegment(buffer_collection, vectors_in_segment);
 		if (!(buffer_collection.GetCurrentOffset() <= GetWritableSpace(info))) {
@@ -453,7 +452,7 @@ public:
 		auto &state = buffer_collection.segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
 
-		auto &buffer_state = buffer_collection.buffer_states[buffer_collection.GetCurrentBufferIndex().GetIndex()];
+		auto &buffer_state = buffer_collection.GetCurrentBufferState();
 		buffer_state.full = true;
 
 		// Write the new id at the end of the last page
@@ -493,37 +492,41 @@ public:
 		//! If the string lengths live on an overflow page, and that buffer is full
 		//! then we want to flush it
 
-		optional_idx buffer_index;
-		for (idx_t i = 0; i < 3; i++) {
-			auto &buffer_state = buffer_collection.buffer_states[i];
+		auto buffer_data = buffer_collection.GetBufferData(/*include_segment=*/true);
+		ZSTDCompressionBufferCollection::Slot slot;
+		optional_ptr<BufferHandle> buffer_handle_ptr;
+		optional_ptr<ZSTDCompressionBufferState> buffer_state_ptr;
+		for (auto &buffer : buffer_data) {
+			auto &buffer_state = buffer.state;
 			if (buffer_state.flags.HasStringMetadata()) {
-				if (buffer_index.IsValid()) {
+				if (buffer_handle_ptr) {
 					throw InternalException("(ZSTDCompressionState::FlushVector) Multiple buffers (%d and %d) have "
 					                        "string metadata on them, this is impossible and indicates a bug!",
-					                        buffer_index.GetIndex(), i);
+					                        static_cast<uint8_t>(slot), static_cast<uint8_t>(buffer.slot));
 				}
-				buffer_index = i;
+				slot = buffer.slot;
+				buffer_state_ptr = buffer.state;
+				buffer_handle_ptr = buffer.handle;
 			}
 			buffer_state.flags.UnsetStringMetadata();
 			buffer_state.flags.UnsetData();
 		}
 
-		if (!buffer_index.IsValid()) {
+		if (!buffer_handle_ptr) {
 			throw InternalException("(ZSTDCompressionState::FlushVector) None of the buffers have string metadata on "
 			                        "them, this is impossible and indicates a bug!");
 		}
-		auto index = buffer_index.GetIndex();
-		if (index == 0) {
+		if (slot == ZSTDCompressionBufferCollection::Slot::SEGMENT) {
 			//! This is the segment handle, we don't need to flush that here, it'll get flushed when the segment is done
 			return;
 		}
-		auto &buffer_state = buffer_collection.buffer_states[index];
+		auto &buffer_state = *buffer_state_ptr;
 		if (!buffer_state.full) {
 			//! It contains the string metadata of the current vector, but the buffer isn't full
 			//! so we don't need to flush it yet
 			return;
 		}
-		auto &buffer_handle = buffer_collection.extra_pages[index - 1];
+		auto &buffer_handle = *buffer_handle_ptr;
 		FlushPage(buffer_handle, vector_state.starting_page);
 		buffer_state.offset = 0;
 		buffer_state.full = false;
@@ -550,8 +553,8 @@ public:
 			                        segment_state.vector_in_segment_count, segment_state.total_vectors_in_segment);
 		}
 
-		auto &buffer_state = buffer_collection.buffer_states[0];
-		auto segment_block_size = buffer_state.offset;
+		auto &segment_buffer_state = buffer_collection.buffer_states[0];
+		auto segment_block_size = segment_buffer_state.offset;
 		if (segment_block_size < GetVectorMetadataSize(segment_state.total_vectors_in_segment)) {
 			throw InternalException(
 			    "(ZSTDCompressionState::FlushSegment) Expected offset to be at least %d, but found %d instead",
@@ -559,9 +562,10 @@ public:
 		}
 
 		bool seen_dirty_buffer = false;
-		for (idx_t i = 0; i < 2; i++) {
-			auto &buffer_state = buffer_collection.buffer_states[i + 1];
-			auto &buffer_handle = buffer_collection.extra_pages[i];
+		auto buffer_data = buffer_collection.GetBufferData(/*include_segment=*/false);
+		for (auto &buffer : buffer_data) {
+			auto &buffer_state = buffer.state;
+			auto &buffer_handle = buffer.handle;
 			if (buffer_state.offset != 0) {
 				if (seen_dirty_buffer) {
 					throw InternalException("(ZSTDCompressionState::FlushSegment) Both extra pages were dirty (needed "
@@ -578,9 +582,9 @@ public:
 		auto &state = checkpoint_data.GetCheckpointState();
 		state.FlushSegment(std::move(buffer_collection.segment), std::move(buffer_collection.segment_handle),
 		                   segment_block_size);
-		buffer_state.flags.Clear();
-		buffer_state.full = true;
-		buffer_state.offset = 0;
+		segment_buffer_state.flags.Clear();
+		segment_buffer_state.full = true;
+		segment_buffer_state.offset = 0;
 		segment_count++;
 	}
 

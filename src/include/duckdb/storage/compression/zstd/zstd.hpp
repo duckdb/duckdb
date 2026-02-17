@@ -24,7 +24,7 @@ public:
 	}
 	ZSTDCompressionBufferFlags(const ZSTDCompressionBufferFlags &other) : value(other.value) {
 	}
-	virtual ~ZSTDCompressionBufferFlags() = default;
+	~ZSTDCompressionBufferFlags() = default;
 
 	ZSTDCompressionBufferFlags &operator=(const ZSTDCompressionBufferFlags &other) {
 		value = other.value;
@@ -101,14 +101,6 @@ protected:
 		value &= ~FLAG;
 	}
 
-	void Merge(uint8_t other) {
-		value |= other;
-	}
-
-	uint8_t Value() const {
-		return value;
-	}
-
 private:
 	uint8_t value;
 };
@@ -122,9 +114,24 @@ struct ZSTDCompressionBufferState {
 
 struct ZSTDCompressionBufferCollection {
 public:
+	enum class Slot : uint8_t { SEGMENT, OVERFLOW_0, OVERFLOW_1 };
+
+public:
+	struct BufferData {
+	public:
+		BufferData(BufferHandle &handle, ZSTDCompressionBufferState &state, Slot slot)
+		    : handle(handle), state(state), slot(slot) {
+		}
+
+	public:
+		BufferHandle &handle;
+		ZSTDCompressionBufferState &state;
+		Slot slot;
+	};
+
+public:
 	page_id_t GetCurrentId() const {
 #ifdef DEBUG
-		auto buffer_index = GetCurrentBufferIndex();
 		if (!buffer_index.IsValid() || buffer_index == 0) {
 			D_ASSERT(block_id == INVALID_BLOCK);
 		} else {
@@ -135,8 +142,19 @@ public:
 	}
 
 public:
-	void SetCurrentBuffer(idx_t index, page_offset_t offset = 0) {
-		D_ASSERT(index < 3);
+	void SetCurrentBuffer(Slot slot, page_offset_t offset = 0) {
+		idx_t index;
+		switch (slot) {
+		case Slot::SEGMENT:
+			index = 0;
+			break;
+		case Slot::OVERFLOW_0:
+			index = 1;
+			break;
+		case Slot::OVERFLOW_1:
+			index = 2;
+			break;
+		};
 		buffer_index = index;
 		buffer_states[index].offset = offset;
 	}
@@ -165,6 +183,19 @@ public:
 		}
 		D_ASSERT(index < 3);
 		return extra_pages[index - 1];
+	}
+	vector<BufferData> GetBufferData(bool include_segment) {
+		vector<BufferData> res;
+		for (idx_t i = 0; i < 3; i++) {
+			if (!i) {
+				if (include_segment) {
+					res.emplace_back(segment_handle, buffer_states[i], Slot::SEGMENT);
+				}
+				continue;
+			}
+			res.emplace_back(extra_pages[i - 1], buffer_states[i], i == 1 ? Slot::OVERFLOW_0 : Slot::OVERFLOW_1);
+		}
+		return res;
 	}
 	data_ptr_t GetCurrentBufferPtr() {
 		if (!buffer_index.IsValid()) {
@@ -197,9 +228,6 @@ public:
 			    "(ZSTDCompressionBufferCollection::GetCurrentBufferState) Can't get BufferState, no buffer set yet!");
 		}
 		return buffer_states[buffer_index.GetIndex()];
-	}
-	optional_idx GetCurrentBufferIndex() const {
-		return buffer_index;
 	}
 	bool IsOnSegmentBuffer() const {
 		if (!buffer_index.IsValid()) {
@@ -241,11 +269,9 @@ public:
 		buffer_collection.block_id = INVALID_BLOCK;
 
 		//! Have to be on the segment handle
-		auto buffer_index = buffer_collection.GetCurrentBufferIndex();
-		if (!buffer_index.IsValid() || buffer_index.GetIndex() != 0) {
+		if (!buffer_collection.IsOnSegmentBuffer()) {
 			throw InternalException("(ZSTDCompressionSegmentState::InitializeSegment) Can't InitializeSegment on a "
-			                        "non-segment buffer (%d)!",
-			                        buffer_index.IsValid() ? buffer_index.GetIndex() : DConstants::INVALID_INDEX);
+			                        "non-segment buffer!");
 		}
 		auto base = buffer_collection.segment_handle.Ptr();
 		page_offset_t offset = 0;
@@ -269,7 +295,7 @@ public:
 
 public:
 	//! Amount of vectors in this segment, determined during analyze
-	idx_t total_vectors_in_segment;
+	idx_t total_vectors_in_segment = 0xDEADBEEF;
 	//! The amount of vectors we've seen in the current segment
 	idx_t vector_in_segment_count = 0;
 
