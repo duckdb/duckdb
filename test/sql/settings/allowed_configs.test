@@ -1,0 +1,58 @@
+# name: test/sql/settings/allowed_configs.test
+# description: Test allowed_configs setting together with lock_configuration
+# group: [settings]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SET allowed_configs=['lock_configuration']
+----
+Cannot include 'lock_configuration' in allowed_configs
+
+statement error
+SET allowed_configs=['allowed_configs']
+----
+Cannot include 'allowed_configs' in allowed_configs
+
+statement error
+SET allowed_configs=['']
+----
+Cannot provide an empty string for allowed_configs
+
+statement ok
+SET allowed_configs=['pivot_limit', 'EXPLAIN_output']
+
+statement ok
+SET lock_configuration=true
+
+statement ok
+SET pivot_limit=20000
+
+statement ok
+SET explain_output='OPTIMIZED_ONLY'
+
+# other settings are still locked
+statement error
+SET enable_external_access=true
+----
+configuration has been locked
+
+statement error
+SET allowed_configs=['threads']
+----
+configuration has been locked
+
+# settings that are always allowed to change still work
+statement ok
+SET search_path=''
+
+statement error
+RESET allowed_configs
+----
+configuration has been locked
+
+statement error
+SET lock_configuration=false
+----
+configuration has been locked

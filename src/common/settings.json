@@ -84,6 +84,13 @@
         ]
     },
     {
+        "name": "allowed_configs",
+        "description": "List of configuration options that are ALWAYS allowed to be changed - even when lock_configuration is true",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "allowed_directories",
         "description": "List of directories/prefixes that are ALWAYS allowed to be queried - even when enable_external_access is false",
         "type": "VARCHAR[]",
@@ -724,7 +731,7 @@
     },
     {
         "name": "lock_configuration",
-        "description": "Whether or not the configuration can be altered",
+        "description": "Whether or not configurations can be altered",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "false"
