@@ -163,11 +163,7 @@ SettingLookupResult LocalUserSettings::TryGetSetting(const GlobalUserSettings &g
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// look-up in global settings
-	const auto &cache = global_settings.GetSettings();
-	if (cache.settings.TryGetSetting(setting_index, result_value)) {
-		return SettingLookupResult(SettingScope::GLOBAL);
-	}
-	return SettingLookupResult();
+	return global_settings.TryGetSetting(setting_index, result_value);
 }
 
 } // namespace duckdb
