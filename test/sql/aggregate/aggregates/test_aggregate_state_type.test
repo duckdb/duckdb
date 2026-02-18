@@ -50,13 +50,13 @@ SELECT finalize(combine(state, state)) FROM t1_${type} ORDER BY 1;
 
 endloop
 
-# count(INT) does NOT have the new get_state_type callback yet, so it should show the return type
+# count() now has the new get_state_type callback
 query T
-SELECT typeof(count(1) EXPORT_STATE);
+SELECT typeof(count(1) EXPORT_STATE) = 'AGGREGATE_STATE<count(ANY)::BIGINT, STRUCT(count BIGINT)>';
 ----
-LEGACY_AGGREGATE_STATE<count(ANY)::BIGINT>
+true
 
-# count(INT) (as not opted-in) is still serialized correctly
+# count(INT) (as opted-in) is still serialized correctly
 statement ok
 CREATE TABLE t2_count_int AS SELECT count(range::INT) EXPORT_STATE as state FROM range(10);
 
@@ -114,3 +114,15 @@ query T
 SELECT (avg(42) export_state)::struct(count ubigint, "value" double);
 ----
 {'count': 1, 'value': 42.0}
+
+# Casting count state to struct should work
+query T
+SELECT (count(42) export_state)::struct(count bigint);
+----
+{'count': 1}
+
+# Casting count(*) state to struct should also work
+query T
+SELECT (count(*) export_state)::struct(count bigint);
+----
+{'count': 1}
