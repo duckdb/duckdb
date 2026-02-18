@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/parser/alter.test
+# name: test/sql/peg_parser/peg_syntax_error.test
 # description: Test analyze and vacuum statements in peg parser
-# group: [parser]
+# group: [peg_parser]
 
 require autocomplete
 
