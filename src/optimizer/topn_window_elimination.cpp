@@ -1042,9 +1042,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructLHS(LogicalGet &rhs,
 
 		vector<unique_ptr<Expression>> projs;
 		projs.reserve(projections.size());
-		for (auto projection_id : projections) {
-			projs.push_back(make_uniq<BoundColumnRefExpression>(lhs_get->types[projection_id],
-			                                                    ColumnBinding {lhs_get->table_index, projection_id}));
+		const auto &column_ids = lhs_get->GetColumnIds();
+		for (auto column_idx : projections) {
+			D_ASSERT(column_idx < column_ids.size());
+			const auto &column_type = lhs_get->GetColumnType(column_ids[column_idx]);
+			projs.push_back(
+			    make_uniq<BoundColumnRefExpression>(column_type, ColumnBinding {lhs_get->table_index, column_idx}));
 		}
 		auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(projs));
 		projection->children.push_back(std::move(lhs_get));
