@@ -8,42 +8,36 @@ load __TEST_DIR__/eviction_queues.db
 statement ok
 CREATE MACRO fudge() AS (5);
 
-# dead_nodes bounded by size and insertions on all queues
 statement ok
 CREATE MACRO eviction_invariants_ok() AS (
   SELECT COUNT(*) = 0 FROM duckdb_eviction_queues()
   WHERE dead_nodes < 0 OR dead_nodes > approximate_size + fudge() OR dead_nodes > total_insertions
 );
 
-# queue size roughly matches insertions (nothing removed yet)
 statement ok
 CREATE MACRO queue_no_eviction(idx) AS (
   SELECT (abs(approximate_size - total_insertions) <= fudge())::INT
   FROM duckdb_eviction_queues() WHERE queue_index = idx
 );
 
-# queue has alive blocks in the pool (size minus dead entries)
 statement ok
 CREATE MACRO queue_has_alive_blocks(idx) AS (
   SELECT (approximate_size - dead_nodes > 0)::INT
   FROM duckdb_eviction_queues() WHERE queue_index = idx
 );
 
-# queue is (almost) fully evicted: no blocks remain
 statement ok
 CREATE MACRO queue_fully_evicted(idx) AS (
   SELECT (approximate_size <= fudge())::INT
   FROM duckdb_eviction_queues() WHERE queue_index = idx
 );
 
-# dead nodes are low (fresh write or just cleaned)
 statement ok
 CREATE MACRO queue_dead_nodes_low(idx) AS (
   SELECT (dead_nodes <= fudge())::INT
   FROM duckdb_eviction_queues() WHERE queue_index = idx
 );
 
-# most entries are dead (stale from churn, not yet purged)
 statement ok
 CREATE MACRO queue_mostly_dead(idx) AS (
   SELECT (dead_nodes > approximate_size / 2)::INT
@@ -68,13 +62,11 @@ statement ok
 CREATE TABLE t AS SELECT range AS i, range::VARCHAR AS s
 FROM range(2000000);
 
-# table produced persistent blocks
 query I
 SELECT queue_has_alive_blocks(0);
 ----
 1
 
-# nothing evicted yet
 query I
 SELECT queue_no_eviction(0);
 ----
@@ -85,11 +77,9 @@ SELECT eviction_invariants_ok();
 ----
 1
 
-# checkpoint flushes WAL to disk, blocks remain in buffer pool
 statement ok
 CHECKPOINT;
 
-# blocks still in pool after checkpoint, no eviction on either queue
 query I
 SELECT queue_has_alive_blocks(0);
 ----
@@ -115,13 +105,11 @@ SELECT eviction_invariants_ok();
 ----
 1
 
-# full scan forces all data blocks into the buffer pool
 query I
 SELECT SUM(length(s)) FROM t;
 ----
 12888890
 
-# scan re-inserted existing blocks with new sequence numbers, old entries are now dead
 query I
 SELECT queue_mostly_dead(1);
 ----
@@ -137,11 +125,9 @@ SELECT eviction_invariants_ok();
 ----
 1
 
-# constrain memory to force eviction
 statement ok
 SET memory_limit='2MB';
 
-# eviction sweep cleaned dead nodes on queue 0
 query I
 SELECT queue_dead_nodes_low(0);
 ----
@@ -152,8 +138,6 @@ SELECT eviction_invariants_ok();
 ----
 1
 
-# heavy cycling: repeated scans at 4MB force eviction on every scan,
-# accumulating dead nodes as blocks are evicted and re-loaded
 statement ok
 SET memory_limit='4MB';
 
@@ -166,7 +150,6 @@ SELECT SUM(length(s)) FROM t;
 
 endloop
 
-# dead nodes stay low because eviction sweep cleans them on every scan
 query I
 SELECT queue_dead_nodes_low(0);
 ----
@@ -180,7 +163,6 @@ SELECT eviction_invariants_ok();
 statement ok
 SET memory_limit='2GB';
 
-# snapshot before purge loop
 statement ok
 DELETE FROM snap;
 
