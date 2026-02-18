@@ -5,6 +5,7 @@
     "metrics": [
       {
         "name": "CPU_TIME",
+        "enum_value": 2,
         "description": "CPU time spent on the query",
         "type": "double",
         "unit": "seconds",
@@ -14,6 +15,7 @@
       },
       {
         "name": "CUMULATIVE_CARDINALITY",
+        "enum_value": 4,
         "description": "Cumulative cardinality of the query",
         "type": "uint64",
         "unit": "absolute",
@@ -23,6 +25,7 @@
       },
       {
         "name": "CUMULATIVE_ROWS_SCANNED",
+        "enum_value": 7,
         "description": "Cumulative number of rows scanned by the query",
         "type": "uint64",
         "unit": "absolute",
@@ -32,12 +35,14 @@
       },
       {
         "name": "EXTRA_INFO",
+        "enum_value": 3,
         "description": "Unique operator metrics",
         "type": "Value::MAP",
         "is_default": true
       },
       {
         "name": "LATENCY",
+        "enum_value": 11,
         "description": "Time spent executing the entire query",
         "type": "double",
         "unit": "seconds",
@@ -47,6 +52,7 @@
       },
       {
         "name": "QUERY_NAME",
+        "enum_value": 0,
         "description": "The SQL string of the query",
         "type": "string",
         "is_default": true,
@@ -55,6 +61,7 @@
       },
       {
         "name": "RESULT_SET_SIZE",
+        "enum_value": 10,
         "description": "The size of the result",
         "type": "uint64",
         "unit": "bytes",
@@ -64,6 +71,7 @@
       },
       {
         "name": "ROWS_RETURNED",
+        "enum_value": 12,
         "description": "The number of rows returned by the query",
         "type": "uint64",
         "unit": "absolute",
@@ -80,6 +88,7 @@
     "metrics": [
       {
         "name": "BLOCKED_THREAD_TIME",
+        "enum_value": 1,
         "description": "Time spent waiting for a thread to become available",
         "type": "double",
         "unit": "seconds",
@@ -88,6 +97,7 @@
       },
       {
         "name": "SYSTEM_PEAK_BUFFER_MEMORY",
+        "enum_value": 14,
         "description": "Peak memory usage of the system",
         "type": "uint64",
         "unit": "bytes",
@@ -95,6 +105,7 @@
       },
       {
         "name": "SYSTEM_PEAK_TEMP_DIR_SIZE",
+        "enum_value": 15,
         "description": "Peak size of the temporary directory",
         "type": "uint64",
         "unit": "bytes",
@@ -102,6 +113,7 @@
       },
       {
         "name": "TOTAL_MEMORY_ALLOCATED",
+        "enum_value": 91,
         "description": "The total memory allocated by the buffer manager.",
         "type": "uint64",
         "unit": "bytes",
@@ -117,6 +129,7 @@
     "metrics": [
       {
         "name": "ATTACH_LOAD_STORAGE_LATENCY",
+        "enum_value": 92,
         "description": "Time spent loading from storage.",
         "type": "double",
         "unit": "seconds",
@@ -126,6 +139,7 @@
       },
       {
         "name": "ATTACH_REPLAY_WAL_LATENCY",
+        "enum_value": 93,
         "description": "Time spent replaying the WAL file.",
         "type": "double",
         "unit": "seconds",
@@ -135,6 +149,7 @@
       },
       {
         "name": "CHECKPOINT_LATENCY",
+        "enum_value": 94,
         "description": "Time spent running checkpoints",
         "type": "double",
         "unit": "seconds",
@@ -144,6 +159,7 @@
       },
       {
         "name": "COMMIT_LOCAL_STORAGE_LATENCY",
+        "enum_value": 95,
         "description": "Time spent committing the transaction-local storage.",
         "type": "double",
         "unit": "seconds",
@@ -153,6 +169,7 @@
       },
       {
         "name": "TOTAL_BYTES_READ",
+        "enum_value": 16,
         "description": "The total bytes read by the file system.",
         "type": "uint64",
         "unit": "bytes",
@@ -162,6 +179,7 @@
       },
       {
         "name": "TOTAL_BYTES_WRITTEN",
+        "enum_value": 17,
         "description": "The total bytes written by the file system.",
         "type": "uint64",
         "unit": "bytes",
@@ -171,6 +189,7 @@
       },
       {
         "name": "WAITING_TO_ATTACH_LATENCY",
+        "enum_value": 96,
         "description": "Time spent waiting to ATTACH a file.",
         "type": "double",
         "unit": "seconds",
@@ -180,6 +199,7 @@
       },
       {
         "name": "WAL_REPLAY_ENTRY_COUNT",
+        "enum_value": 97,
         "description": "The total number of entries to replay in the WAL.",
         "type": "uint64",
         "unit": "absolute",
@@ -189,6 +209,7 @@
       },
       {
         "name": "WRITE_TO_WAL_LATENCY",
+        "enum_value": 98,
         "description": "Time spent writing to the WAL.",
         "type": "double",
         "unit": "seconds",
@@ -204,10 +225,12 @@
     "metrics": [
       {
         "name": "ALL_OPTIMIZERS",
+        "enum_value": 18,
         "description": "Enables all optimizers"
       },
       {
         "name": "CUMULATIVE_OPTIMIZER_TIMING",
+        "enum_value": 19,
         "description": "Time spent in all optimizers",
         "type": "double",
         "unit": "milliseconds",
@@ -215,36 +238,42 @@
       },
       {
         "name": "PHYSICAL_PLANNER",
+        "enum_value": 22,
         "description": "The time spent generating the physical plan",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PHYSICAL_PLANNER_COLUMN_BINDING",
+        "enum_value": 23,
         "description": "The time spent binding the columns in the logical plan to physical columns",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PHYSICAL_PLANNER_CREATE_PLAN",
+        "enum_value": 25,
         "description": "The time spent creating the physical plan",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PHYSICAL_PLANNER_RESOLVE_TYPES",
+        "enum_value": 24,
         "description": "The time spent resolving the types in the logical plan to physical types",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PLANNER",
+        "enum_value": 20,
         "description": "The time to generate the logical plan from the parsed SQL nodes.",
         "type": "double",
         "unit": "milliseconds"
       },
       {
         "name": "PLANNER_BINDING",
+        "enum_value": 21,
         "description": "The time taken to bind the logical plan.",
         "type": "double",
         "unit": "milliseconds"
@@ -257,6 +286,7 @@
     "metrics": [
       {
         "name": "OPERATOR_CARDINALITY",
+        "enum_value": 6,
         "description": "Cardinality of the operator",
         "type": "uint64",
         "unit": "absolute",
@@ -264,12 +294,14 @@
       },
       {
         "name": "OPERATOR_NAME",
+        "enum_value": 13,
         "description": "Name of the operator",
         "type": "string",
         "is_default": true
       },
       {
         "name": "OPERATOR_ROWS_SCANNED",
+        "enum_value": 8,
         "description": "Number of rows scanned by the operator",
         "type": "uint64",
         "unit": "absolute",
@@ -277,6 +309,7 @@
       },
       {
         "name": "OPERATOR_TIMING",
+        "enum_value": 9,
         "description": "Time spent in the operator",
         "type": "double",
         "unit": "seconds",
@@ -284,6 +317,7 @@
       },
       {
         "name": "OPERATOR_TYPE",
+        "enum_value": 5,
         "description": "Type of the operator",
         "type": "string",
         "is_default": true
