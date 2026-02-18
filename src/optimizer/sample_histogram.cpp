@@ -49,9 +49,7 @@ void SampleHistogram::Build(Vector &data, idx_t count) {
 	}
 
 	// Sort the values
-	std::sort(values.begin(), values.end(), [](const Value &a, const Value &b) {
-		return a < b;
-	});
+	std::sort(values.begin(), values.end(), [](const Value &a, const Value &b) { return a < b; });
 
 	// Count distinct values
 	distinct_count = 1;

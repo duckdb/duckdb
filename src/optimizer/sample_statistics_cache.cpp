@@ -34,10 +34,9 @@ void SampleStatisticsCache::BuildFromSample(ReservoirSample &sample, const vecto
 	for (idx_t col_idx = 0; col_idx < types.size() && col_idx < chunk.ColumnCount(); col_idx++) {
 		auto &col_type = types[col_idx];
 		// Only build histograms for orderable types (numeric, string, date/time)
-		if (!col_type.IsNumeric() && col_type.id() != LogicalTypeId::VARCHAR &&
-		    col_type.id() != LogicalTypeId::DATE && col_type.id() != LogicalTypeId::TIMESTAMP &&
-		    col_type.id() != LogicalTypeId::TIMESTAMP_TZ && col_type.id() != LogicalTypeId::TIME &&
-		    col_type.id() != LogicalTypeId::INTERVAL) {
+		if (!col_type.IsNumeric() && col_type.id() != LogicalTypeId::VARCHAR && col_type.id() != LogicalTypeId::DATE &&
+		    col_type.id() != LogicalTypeId::TIMESTAMP && col_type.id() != LogicalTypeId::TIMESTAMP_TZ &&
+		    col_type.id() != LogicalTypeId::TIME && col_type.id() != LogicalTypeId::INTERVAL) {
 			continue;
 		}
 
@@ -67,14 +66,20 @@ idx_t SampleStatisticsCache::ProbeExpressionFilter(ClientContext &context, const
 	probe_chunk.data.emplace_back(sample_chunk.data[column_index]);
 	probe_chunk.SetCardinality(sample_count);
 
-	// Create an executor with the filter expression and evaluate against the sample
-	ExpressionExecutor executor(context, *filter.expr);
-	SelectionVector sel(sample_count);
-	idx_t matching = executor.SelectExpression(probe_chunk, sel);
+	// Create an executor with the filter expression and evaluate against the sample.
+	// Wrap in try-catch because the expression may fail due to type mismatches
+	// (e.g., sample column type differs from what the expression expects).
+	try {
+		ExpressionExecutor executor(context, *filter.expr);
+		SelectionVector sel(sample_count);
+		idx_t matching = executor.SelectExpression(probe_chunk, sel);
 
-	// Compute selectivity from the sample and extrapolate to full table
-	double selectivity = static_cast<double>(matching) / static_cast<double>(sample_count);
-	return MaxValue<idx_t>(LossyNumericCast<idx_t>(static_cast<double>(cardinality) * selectivity), 1U);
+		// Compute selectivity from the sample and extrapolate to full table
+		double selectivity = static_cast<double>(matching) / static_cast<double>(sample_count);
+		return MaxValue<idx_t>(LossyNumericCast<idx_t>(static_cast<double>(cardinality) * selectivity), 1U);
+	} catch (...) {
+		return 0;
+	}
 }
 
 optional_ptr<SampleHistogram> SampleStatisticsCache::GetHistogram(idx_t column_index) {

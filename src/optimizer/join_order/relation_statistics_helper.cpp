@@ -156,8 +156,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			}
 
 			if (column_statistics) {
-				idx_t cardinality_with_filter =
-				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics, sample_cache, context);
+				idx_t cardinality_with_filter = InspectTableFilter(base_table_cardinality, it.first, *it.second,
+				                                                   *column_statistics, sample_cache, context);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
@@ -479,8 +479,8 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t colu
 		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : and_filter.child_filters) {
 			cardinality_after_filters =
-			    MinValue(cardinality_after_filters,
-			             InspectTableFilter(cardinality, column_index, *child_filter, base_stats, sample_cache, context));
+			    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, column_index, *child_filter,
+			                                                           base_stats, sample_cache, context));
 		}
 		return cardinality_after_filters;
 	}
@@ -528,8 +528,7 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t colu
 			if (histogram && histogram->IsValid()) {
 				double selectivity = histogram->EstimateInSelectivity(in_filter.values);
 				if (selectivity >= 0.0) {
-					return MaxValue<idx_t>(
-					    LossyNumericCast<idx_t>(static_cast<double>(cardinality) * selectivity), 1U);
+					return MaxValue<idx_t>(LossyNumericCast<idx_t>(static_cast<double>(cardinality) * selectivity), 1U);
 				}
 			}
 		}
@@ -537,8 +536,8 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t colu
 		auto column_count = base_stats.GetDistinctCount();
 		if (column_count > 0) {
 			idx_t values_count = in_filter.values.size();
-			cardinality_after_filters = MaxValue<idx_t>(
-			    (cardinality * values_count + column_count - 1) / column_count, 1U);
+			cardinality_after_filters =
+			    MaxValue<idx_t>((cardinality * values_count + column_count - 1) / column_count, 1U);
 			return MinValue(cardinality_after_filters, cardinality);
 		}
 		return cardinality_after_filters;
