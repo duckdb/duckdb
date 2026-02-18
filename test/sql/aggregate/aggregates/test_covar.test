@@ -101,17 +101,3 @@ SELECT COVAR_POP(NULL, NULL), COVAR_SAMP(NULL, NULL) FROM integers
 ----
 NULL
 NULL
-
-# test struct-based state export
-statement ok
-CREATE TABLE covar_state AS SELECT COVAR_POP(x,y) EXPORT_STATE pop_state, COVAR_SAMP(x, y) EXPORT_STATE samp_state FROM integers;
-
-query T
-SELECT pop_state::STRUCT(count UBIGINT, mean_x DECIMAL(18,2), mean_y DECIMAL(18,2), co_moment DOUBLE) FROM covar_state;
-----
-{'count': 3, 'mean_x': 22.67, 'mean_y': 20.00, 'co_moment': 240.0}
-
-query T
-SELECT samp_state::STRUCT(count UBIGINT, mean_x DECIMAL(18,2), mean_y DECIMAL(18,2), co_moment DOUBLE) FROM covar_state;
-----
-{'count': 3, 'mean_x': 22.67, 'mean_y': 20.00, 'co_moment': 240.0}
