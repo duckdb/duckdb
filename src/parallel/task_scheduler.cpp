@@ -521,7 +521,15 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
 	auto new_thread_count = NumericCast<idx_t>(n);
-	const auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
+
+	idx_t external_threads = 0;
+	ThreadPinMode pin_thread_mode = ThreadPinMode::AUTO;
+	if (n != 0) {
+		// If n == 0, we are calling ~TaskScheduler, and we don't want to read the settings
+		external_threads = Settings::Get<ExternalThreadsSetting>(config);
+		pin_thread_mode = Settings::Get<PinThreadsSetting>(db);
+	}
+
 	if (threads.size() == new_thread_count) {
 		current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 		return;
@@ -546,7 +554,6 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 
 		// Whether to pin threads to cores
 		static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
-		auto pin_thread_mode = Settings::Get<PinThreadsSetting>(db);
 		const auto pin_threads =
 		    pin_thread_mode == ThreadPinMode::ON ||
 		    (pin_thread_mode == ThreadPinMode::AUTO && std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
