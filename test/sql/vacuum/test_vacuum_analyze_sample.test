@@ -63,11 +63,6 @@ SELECT count(*) FROM duckdb_table_sample('t');
 statement ok
 VACUUM ANALYZE t(x);
 
-query T
-SELECT count(*) > 0 FROM duckdb_table_sample('t');
-----
-true
-
 # Test with multiple data types
 statement ok
 CREATE TABLE t_types(
@@ -111,5 +106,62 @@ VACUUM ANALYZE t_blob;
 
 query T
 SELECT count(*) > 0 FROM duckdb_table_sample('t_blob');
+----
+true
+
+# Rolled-back appends should not leak into table sample
+statement ok
+CREATE TABLE t_tx(x INTEGER);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO t_tx SELECT range FROM range(1000);
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT count(*) FROM t_tx;
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_table_sample('t_tx');
+----
+0
+
+statement ok
+INSERT INTO t_tx SELECT range FROM range(1000);
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_tx');
+----
+true
+
+# Concurrent append writers should still produce a valid merged sample
+statement ok
+CREATE TABLE t_parallel(i INTEGER);
+
+concurrentloop threadid 0 8
+
+statement ok
+INSERT INTO t_parallel SELECT ${threadid} * 1000 + range FROM range(500);
+
+endloop
+
+query I
+SELECT count(*) FROM t_parallel;
+----
+4000
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_parallel');
+----
+true
+
+query T
+SELECT count(*) <= 2048 FROM duckdb_table_sample('t_parallel');
 ----
 true

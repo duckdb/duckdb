@@ -48,6 +48,46 @@ false
 statement ok
 SET enable_sample_estimation = true;
 
+# Test CONSTANT_COMPARISON range estimation (non-equality histogram path)
+statement ok
+CREATE TABLE t_range AS SELECT range AS x FROM range(100000);
+
+# With sample estimation enabled, a very selective range should estimate to a small cardinality.
+query II
+EXPLAIN SELECT * FROM t_range WHERE x < 10;
+----
+physical_plan	<REGEX>:.*~[0-9]{1,3} rows?.*
+
+statement ok
+SET enable_sample_estimation = false;
+
+# With sample estimation disabled, non-equality falls back to default selectivity (20000 rows).
+query II
+EXPLAIN SELECT * FROM t_range WHERE x < 10;
+----
+physical_plan	<REGEX>:.*~20,000 rows.*
+
+statement ok
+SET enable_sample_estimation = true;
+
+# Test IN filter estimation path
+query II
+EXPLAIN SELECT * FROM t_range WHERE x IN (9000, 9001, 9002, 9003, 9004);
+----
+physical_plan	<REGEX>:.*~20,[0-9]{3} rows.*
+
+statement ok
+SET enable_sample_estimation = false;
+
+# Current IN planning path still yields the default estimate when sample estimation is disabled.
+query II
+EXPLAIN SELECT * FROM t_range WHERE x IN (9000, 9001, 9002, 9003, 9004);
+----
+physical_plan	<REGEX>:.*~20,000 rows.*
+
+statement ok
+SET enable_sample_estimation = true;
+
 # Test with VARCHAR column
 statement ok
 CREATE TABLE t_str(s VARCHAR);
