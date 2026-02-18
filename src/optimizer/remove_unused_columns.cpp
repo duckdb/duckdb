@@ -453,7 +453,7 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 	vector<unique_ptr<Expression>> expressions;
 	auto &context = this->context;
 
-	column_index_map<idx_t> new_bindings;
+	column_binding_map_t<column_index_map<idx_t>> new_bindings;
 	idx_t expression_idx = 0;
 	for (idx_t i = 0; i < expression_count; i++) {
 		auto binding = ColumnBinding(proj.table_index, i);
@@ -483,7 +483,8 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 				    auto cast = BoundCastExpression::AddCastToType(context, std::move(new_extract), *cast_type);
 				    new_extract = std::move(cast);
 			    }
-			    auto it = new_bindings.emplace(extract_path, expressions.size()).first;
+			    auto &new_bindings_for_column = new_bindings[original_binding];
+			    auto it = new_bindings_for_column.emplace(extract_path, expressions.size()).first;
 			    if (it->second == expressions.size()) {
 				    expressions.push_back(std::move(new_extract));
 			    }

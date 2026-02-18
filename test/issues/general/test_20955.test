@@ -1,0 +1,23 @@
+# name: test/issues/general/test_20955.test
+# description: Wrong result with two struct columns after CTE inlining + unused column pruning
+# group: [general]
+
+query II
+WITH c AS (
+    SELECT STRUCT_PACK(a := 1) AS s, STRUCT_PACK(x := 2) AS t
+)
+SELECT (STRUCT_PACK(a := s.a)).a, (STRUCT_PACK(x := t.x)).x FROM c;
+----
+1	2
+
+query II
+WITH c AS (
+    SELECT * FROM (VALUES
+        (STRUCT_PACK(a := 1), STRUCT_PACK(x := 2)),
+        (STRUCT_PACK(a := 3), STRUCT_PACK(x := 4))
+    ) v(s, t)
+)
+SELECT (STRUCT_PACK(a := s.a)).a, (STRUCT_PACK(x := t.x)).x FROM c ORDER BY 1;
+----
+1	2
+3	4
