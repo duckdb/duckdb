@@ -100,8 +100,16 @@ jobs:
 
     - uses: ./.github/actions/swap_space
 
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11.1
+      with:
+        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+
     - name: Build
       shell: bash
+      env:
+        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: UNSAFE_NUMERIC_CAST=1 make relassert
 
     - name: Test
@@ -216,8 +224,16 @@ jobs:
 
     - uses: ./.github/actions/swap_space
 
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11.1
+      with:
+        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+
     - name: Build
       shell: bash
+      env:
+        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: UNSAFE_NUMERIC_CAST=1 make relassert
 
     - name: Test

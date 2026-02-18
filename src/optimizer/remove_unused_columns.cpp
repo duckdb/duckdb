@@ -77,6 +77,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 		}
 		if (!entry->second.child_columns.empty() &&
 		    entry->second.supports_pushdown_extract == PushdownExtractSupport::ENABLED) {
+			//! One or more children of this column are referenced, and pushdown-extract is enabled
 			should_replace = true;
 		}
 		if (should_replace) {
@@ -476,7 +477,9 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 				    auto cast = BoundCastExpression::AddCastToType(context, std::move(new_extract), *cast_type);
 				    new_extract = std::move(cast);
 			    }
-			    auto it = new_bindings.emplace(extract_path, expressions.size()).first;
+			    ColumnIndex full_path(i);
+			    full_path.AddChildIndex(extract_path);
+			    auto it = new_bindings.emplace(full_path, expressions.size()).first;
 			    if (it->second == expressions.size()) {
 				    expressions.push_back(std::move(new_extract));
 			    }

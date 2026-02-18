@@ -22,11 +22,17 @@ namespace duckdb {
 
 void VariantValue::AddChild(const string &key, VariantValue &&val) {
 	D_ASSERT(value_type == VariantValueType::OBJECT);
+	if (val.IsMissing()) {
+		throw InternalException("Adding a missing value to an object");
+	}
 	object_children.emplace(key, std::move(val));
 }
 
 void VariantValue::AddItem(VariantValue &&val) {
 	D_ASSERT(value_type == VariantValueType::ARRAY);
+	if (val.IsMissing()) {
+		throw InternalException("Adding a missing value to an array");
+	}
 	array_items.push_back(std::move(val));
 }
 
@@ -216,6 +222,8 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 		}
 		break;
 	}
+	case VariantValueType::MISSING:
+		throw InternalException("Unexpected MISSING value in Variant AnalyzeValue");
 	default:
 		throw InternalException("VariantValueType not handled");
 	}

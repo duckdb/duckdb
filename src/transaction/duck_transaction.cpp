@@ -200,6 +200,10 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 	if (db.IsSystem()) {
 		return false;
 	}
+	if (db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
+		// WAL writes are explicitly disabled
+		return false;
+	}
 	auto &storage_manager = db.GetStorageManager();
 	if (!storage_manager.HasWAL()) {
 		return false;

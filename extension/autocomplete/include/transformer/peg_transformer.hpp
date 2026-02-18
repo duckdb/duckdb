@@ -197,6 +197,7 @@ public:
 	static bool TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry);
 	static void AddPivotEntry(PEGTransformer &transformer, string enum_name, unique_ptr<SelectNode> base,
 	                          unique_ptr<ParsedExpression> column, unique_ptr<QueryNode> subquery, bool has_parameters);
+	static Value GetConstantExpressionValue(unique_ptr<ParsedExpression> &expr);
 
 	// Registration methods
 	void RegisterAlter();

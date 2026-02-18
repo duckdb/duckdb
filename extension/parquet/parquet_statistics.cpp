@@ -354,9 +354,11 @@ static bool ConvertShreddedStatsItem(BaseStatistics &result, BaseStatistics &inp
 	D_ASSERT(result.GetType().id() == LogicalTypeId::STRUCT);
 	D_ASSERT(input.GetType().id() == LogicalTypeId::STRUCT);
 
-	auto &untyped_value_index_stats = StructStats::GetChildStats(result, 0);
-	auto &typed_value_result = StructStats::GetChildStats(result, 1);
+	// result variant stats
+	auto &untyped_value_index_stats = StructStats::GetChildStats(result, VariantStats::UNTYPED_VALUE_INDEX);
+	auto &typed_value_result = StructStats::GetChildStats(result, VariantStats::TYPED_VALUE_INDEX);
 
+	// input parquet stats
 	auto &value_stats = StructStats::GetChildStats(input, 0);
 	auto &typed_value_input = StructStats::GetChildStats(input, 1);
 
@@ -441,14 +443,14 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			return nullptr;
 		}
 		auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
-			return LogicalType::STRUCT({{"untyped_value_index", LogicalType::UINTEGER}, {"typed_value", type}});
+			return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
 		});
 		auto variant_stats = VariantStats::CreateShredded(shredding_type);
 
 		//! Take the root stats
 		auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
-		auto &untyped_value_index_stats = StructStats::GetChildStats(shredded_stats, 0);
-		auto &typed_value_stats = StructStats::GetChildStats(shredded_stats, 1);
+		auto &untyped_value_index_stats = StructStats::GetChildStats(shredded_stats, VariantStats::UNTYPED_VALUE_INDEX);
+		auto &typed_value_stats = StructStats::GetChildStats(shredded_stats, VariantStats::TYPED_VALUE_INDEX);
 
 		//! Convert the root 'value' -> 'untyped_value_index'
 		auto &value = schema.children[1];
