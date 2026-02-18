@@ -163,6 +163,12 @@ private:
 };
 
 struct ParquetVariantShredding : public VariantShredding {
+	ParquetVariantShredding() {
+		// for parquet untyped ("value") comes before typed ("typed_value")
+		untyped_value_index = 0;
+		typed_value_index = 1;
+	}
+
 	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
 	                        optional_ptr<const SelectionVector> value_index_sel,
 	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;

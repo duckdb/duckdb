@@ -2,6 +2,6 @@ if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-avro
-            GIT_TAG e4bd712795ecb31f97106880c6f2843ffea630f1
+            GIT_TAG 4fa0f73f816e9878d5b6a39795e060877766ac1a
     )
 endif()

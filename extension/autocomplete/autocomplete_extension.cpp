@@ -869,6 +869,24 @@ public:
 	}
 };
 
+static void EnablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &db_config = DBConfig::GetConfig(context);
+	db_config.SetOptionByName("allow_parser_override_extension", Value("strict"));
+}
+
+static void DisablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &db_config = DBConfig::GetConfig(context);
+	db_config.SetOptionByName("allow_parser_override_extension", Value("default"));
+}
+
+static duckdb::unique_ptr<FunctionData> EnablePEGParserBind(ClientContext &context, TableFunctionBindInput &input,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("success");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	return nullptr;
+}
+
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
@@ -880,6 +898,12 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
+
+	TableFunction enable_peg_parser("enable_peg_parser", {}, EnablePEGParserFunction, EnablePEGParserBind, nullptr);
+	loader.RegisterFunction(enable_peg_parser);
+
+	TableFunction disable_peg_parser("disable_peg_parser", {}, DisablePEGParserFunction, EnablePEGParserBind, nullptr);
+	loader.RegisterFunction(disable_peg_parser);
 
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	ParserExtension::Register(config, PEGParserExtension());

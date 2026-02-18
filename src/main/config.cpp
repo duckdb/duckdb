@@ -388,7 +388,7 @@ LogicalType DBConfig::ParseLogicalType(const string &type) {
 	if (StringUtil::EndsWith(type, "]")) {
 		// array - recurse
 		auto bracket_open_idx = type.rfind('[');
-		if (bracket_open_idx == DConstants::INVALID_INDEX || bracket_open_idx == 0) {
+		if (bracket_open_idx == string::npos || bracket_open_idx == 0) {
 			throw InternalException("Ill formatted type: '%s'", type);
 		}
 		idx_t array_size = 0;
