@@ -1,0 +1,91 @@
+# name: test/optimizer/issue_20928.test
+# description: TopN window elimination should not crash with ORDER BY expression wrapping the payload column
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t (id VARCHAR, val VARCHAR)
+
+query TT
+SELECT id, val
+FROM t
+QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY val IS NOT NULL) = 1
+----
+
+statement ok
+CREATE TABLE t_constant (id VARCHAR, name VARCHAR, a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO t_constant VALUES
+	('x', 'n1', 1, 2),
+	('x', 'n2', 3, 4)
+
+query TTI
+WITH
+cte1 AS (
+	SELECT id, name, CEIL(1 / 2) AS score
+	FROM t_constant
+),
+cte2 AS (
+	SELECT id, name, score
+	FROM cte1
+	QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY score DESC) <= 10
+)
+SELECT id, name, CAST(score AS INTEGER)
+FROM cte2
+ORDER BY name
+----
+x	n1	1
+x	n2	1
+
+statement ok
+CREATE TABLE t_multi_ref (id VARCHAR, name VARCHAR, a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO t_multi_ref VALUES
+	('x', 'n1', 1, 10),
+	('x', 'n2', 9, 0),
+	('y', 'm1', 2, 2),
+	('y', 'm2', 1, 9)
+
+query I
+WITH
+cte1 AS (
+	SELECT id, name, (a + b) AS score
+	FROM t_multi_ref
+),
+cte2 AS (
+	SELECT id, name, score
+	FROM cte1
+	QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY score DESC) <= 1
+)
+SELECT sum(score) FROM cte2
+----
+21
+
+statement ok
+CREATE TABLE t_div (id VARCHAR, name VARCHAR, a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO t_div VALUES
+	('x', 'n1', 1, 3),
+	('x', 'n2', 5, 2),
+	('y', 'm1', 2, 2),
+	('y', 'm2', 7, 3)
+
+query TTI
+WITH
+cte1 AS (
+	SELECT id, name, CEIL(a / b) AS score
+	FROM t_div
+),
+cte2 AS (
+	SELECT id, name, score
+	FROM cte1
+	QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY score DESC) <= 1
+)
+SELECT id, name, CAST(score AS INTEGER)
+FROM cte2
+ORDER BY id
+----
+x	n2	3
+y	m2	3
