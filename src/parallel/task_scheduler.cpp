@@ -235,7 +235,7 @@ TaskScheduler::TaskScheduler(DatabaseInstance &db)
 TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
 	try {
-		RelaunchThreadsInternal(0);
+		RelaunchThreadsInternal(0, true);
 	} catch (...) {
 		// nothing we can do in the destructor if this fails
 	}
@@ -500,7 +500,7 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 void TaskScheduler::RelaunchThreads() {
 	lock_guard<mutex> t(thread_lock);
 	auto n = requested_thread_count.load();
-	RelaunchThreadsInternal(n);
+	RelaunchThreadsInternal(n, false);
 }
 
 #ifndef DUCKDB_NO_THREADS
@@ -517,15 +517,15 @@ static void SetThreadAffinity(thread &thread, const int &cpu_id) {
 }
 #endif
 
-void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
+void TaskScheduler::RelaunchThreadsInternal(int32_t n, bool destroy) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
 	auto new_thread_count = NumericCast<idx_t>(n);
 
 	idx_t external_threads = 0;
 	ThreadPinMode pin_thread_mode = ThreadPinMode::AUTO;
-	if (n != 0) {
-		// If n == 0, we are calling ~TaskScheduler, and we don't want to read the settings
+	if (!destroy) {
+		// If we are destroying, i.e., calling ~TaskScheduler, we don't want to read the settings
 		external_threads = Settings::Get<ExternalThreadsSetting>(config);
 		pin_thread_mode = Settings::Get<PinThreadsSetting>(db);
 	}
