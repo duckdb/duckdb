@@ -80,11 +80,19 @@ bool GlobalUserSettings::IsSet(idx_t setting_index) const {
 }
 
 SettingLookupResult GlobalUserSettings::TryGetSetting(idx_t setting_index, Value &result_value) const {
+#ifndef __MINGW32__
 	// look-up in global settings
 	const auto &cache = GetSettings();
 	if (cache.settings.TryGetSetting(setting_index, result_value)) {
 		return SettingLookupResult(SettingScope::GLOBAL);
 	}
+#else
+	lock_guard<mutex> guard(lock);
+	if (settings_map.TryGetSetting(setting_index, result_value)) {
+		return SettingLookupResult(SettingScope::GLOBAL);
+	}
+#endif
+
 	return SettingLookupResult();
 }
 
@@ -124,6 +132,7 @@ bool GlobalUserSettings::TryGetExtensionOption(const String &name, ExtensionOpti
 	return true;
 }
 
+#ifndef __MINGW32__
 CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
 	// Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
 	thread_local CachedGlobalSettings current_cache;
@@ -145,6 +154,7 @@ CachedGlobalSettings::CachedGlobalSettings(const GlobalUserSettings &global_user
                                            UserSettingsMap settings_p)
     : global_user_settings(global_user_settings_p), version(version), settings(std::move(settings_p)) {
 }
+#endif
 
 //===--------------------------------------------------------------------===//
 // LocalUserSettings

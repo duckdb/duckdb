@@ -35,6 +35,7 @@ private:
 	vector<GenericSetting> settings;
 };
 
+#ifndef __MINGW32__
 struct GlobalUserSettings;
 
 struct CachedGlobalSettings {
@@ -45,6 +46,7 @@ struct CachedGlobalSettings {
 	idx_t version;
 	UserSettingsMap settings;
 };
+#endif
 
 struct GlobalUserSettings {
 public:
@@ -61,7 +63,10 @@ public:
 	idx_t AddExtensionOption(const string &name, ExtensionOption extension_option);
 	case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
 	bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
+
+#ifndef __MINGW32__
 	CachedGlobalSettings &GetSettings() const;
+#endif
 
 private:
 	mutable mutex lock;
