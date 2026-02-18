@@ -29,13 +29,15 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		// FIXME: Do not bail out completely. Do not remove projections directly below these operators. Deeper layers of
+		// the plan should be able to be optimized further
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op->Cast<LogicalComparisonJoin>();
-		// FIXME: for now, skip pulling up projections through SEMI.
-		// Improvement: skip removing projections on the LHS of semi joins
+		// FIXME: For SEMI, we should be able to recurse into the LHS sub-tree with no problem. For the RHS, do not
+		// remove projections directly below it.
 		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI) {
 			break; // bail
 		}
@@ -109,11 +111,19 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 			}
 		}
 
-		// after the loop we figured out how far we can pull it up (under which parent should it be placed?)
-		// now do column binding replacement starting from root, stop_operator = proj.children[0]
-
+		// after the loop we figured out how far we can pull it up
 		// If we can pull up, replace bindings along parents and remove this projection
 		if (pull_up_to_here > 0 && all_column_refs) {
+			auto child_bindings = op->children[0]->GetColumnBindings();
+			// Do not remove projections above UNNEST. The projection above the unnest extracts just the required
+			// fields. Removing it forces all other operators to carry the full struct, eventually causing the memory
+			// blowup.
+			if (op->children[0]->type == LogicalOperatorType::LOGICAL_UNNEST) {
+				parents.push_back(*op);
+				Optimize(op->children[0]);
+				PopParents(*op);
+				return;
+			}
 			ColumnBindingReplacer replacer;
 			for (idx_t i = 0; i < proj.expressions.size(); i++) {
 				auto &colref = proj.expressions[i]->Cast<BoundColumnRefExpression>();
