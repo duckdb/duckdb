@@ -500,6 +500,13 @@
         "custom_implementation": true
     },
     {
+        "name": "enable_sample_estimation",
+        "description": "Use sample-based histogram estimation for filter cardinality (requires VACUUM ANALYZE)",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "internal_setting": "enable_sample_estimation"
+    },
+    {
         "name": "enable_view_dependencies",
         "description": "Enable created VIEWs to create dependencies on the referenced objects (such as tables)",
         "type": "BOOLEAN",

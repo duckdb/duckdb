@@ -132,6 +132,23 @@ Value EnableProgressBarSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Sample Estimation
+//===----------------------------------------------------------------------===//
+void EnableSampleEstimationSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_sample_estimation = input.GetValue<bool>();
+}
+
+void EnableSampleEstimationSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_sample_estimation = ClientConfig().enable_sample_estimation;
+}
+
+Value EnableSampleEstimationSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.enable_sample_estimation);
+}
+
+//===----------------------------------------------------------------------===//
 // Explain Output
 //===----------------------------------------------------------------------===//
 void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

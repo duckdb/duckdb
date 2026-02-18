@@ -759,6 +759,17 @@ struct EnableProgressBarPrintSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct EnableSampleEstimationSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_sample_estimation";
+	static constexpr const char *Description =
+	    "Use sample-based histogram estimation for filter cardinality (requires VACUUM ANALYZE)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableViewDependenciesSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_view_dependencies";

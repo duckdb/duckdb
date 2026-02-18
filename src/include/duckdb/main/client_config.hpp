@@ -102,6 +102,9 @@ struct ClientConfig {
 	//! Function that is used to create the result collector for a materialized result.
 	get_result_collector_t get_result_collector = nullptr;
 
+	//! If sample-based histogram estimation is enabled for filter cardinality
+	bool enable_sample_estimation = true;
+
 	//! If HTTP logging is enabled or not.
 	bool enable_http_logging = true;
 

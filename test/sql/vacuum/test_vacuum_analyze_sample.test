@@ -1,0 +1,114 @@
+# name: test/sql/vacuum/test_vacuum_analyze_sample.test
+# description: Test that VACUUM ANALYZE populates the table sample for histogram estimation
+# group: [vacuum]
+
+require skip_reload
+
+# Create table and verify no sample initially
+statement ok
+CREATE TABLE t(x INTEGER, y VARCHAR);
+
+statement ok
+INSERT INTO t SELECT range, 'val_' || (range % 100)::VARCHAR FROM range(50000);
+
+query I
+SELECT count(*) FROM duckdb_table_sample('t');
+----
+0
+
+# After VACUUM ANALYZE the sample should be populated
+statement ok
+VACUUM ANALYZE t;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t');
+----
+true
+
+# Sample should have at most 2048 rows
+query T
+SELECT count(*) <= 2048 FROM duckdb_table_sample('t');
+----
+true
+
+# DELETE should invalidate the sample
+statement ok
+DELETE FROM t WHERE x < 100;
+
+query I
+SELECT count(*) FROM duckdb_table_sample('t');
+----
+0
+
+# VACUUM ANALYZE rebuilds it
+statement ok
+VACUUM ANALYZE t;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t');
+----
+true
+
+# UPDATE should invalidate the sample
+statement ok
+UPDATE t SET x = x + 1 WHERE x < 200;
+
+query I
+SELECT count(*) FROM duckdb_table_sample('t');
+----
+0
+
+# Column-specific analyze works too
+statement ok
+VACUUM ANALYZE t(x);
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t');
+----
+true
+
+# Test with multiple data types
+statement ok
+CREATE TABLE t_types(
+    i INTEGER,
+    b BIGINT,
+    f FLOAT,
+    d DOUBLE,
+    v VARCHAR,
+    dt DATE,
+    ts TIMESTAMP
+);
+
+statement ok
+INSERT INTO t_types SELECT
+    range,
+    range * 1000,
+    range::FLOAT / 100.0,
+    range::DOUBLE / 1000.0,
+    'str_' || (range % 500)::VARCHAR,
+    DATE '2020-01-01' + INTERVAL (range % 3650) DAY,
+    TIMESTAMP '2020-01-01' + INTERVAL (range) SECOND
+FROM range(10000);
+
+statement ok
+VACUUM ANALYZE t_types;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_types');
+----
+true
+
+# Non-orderable types (BLOB) should not prevent sample from working
+statement ok
+CREATE TABLE t_blob(x INTEGER, b BLOB);
+
+statement ok
+INSERT INTO t_blob SELECT range, '\xDEADBEEF'::BLOB FROM range(5000);
+
+statement ok
+VACUUM ANALYZE t_blob;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_blob');
+----
+true

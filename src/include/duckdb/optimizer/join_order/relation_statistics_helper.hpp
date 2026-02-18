@@ -13,6 +13,8 @@
 namespace duckdb {
 
 class CardinalityEstimator;
+class ClientContext;
+class SampleStatisticsCache;
 
 struct DistinctCount {
 	idx_t distinct_count;
@@ -58,7 +60,9 @@ public:
 
 public:
 	static idx_t InspectTableFilter(idx_t cardinality, idx_t column_index, const TableFilter &filter,
-	                                BaseStatistics &base_stats);
+	                                BaseStatistics &base_stats,
+	                                optional_ptr<SampleStatisticsCache> sample_cache = nullptr,
+	                                optional_ptr<ClientContext> context = nullptr);
 	//	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
 	//	                                  BaseStatistics &base_stats);
 	//! Extract Statistics from a LogicalGet.

@@ -139,6 +139,7 @@ public:
 	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(const StorageIndex &column_id);
 	unique_ptr<BlockingSample> GetSample();
+	void SetTableSample(unique_ptr<BlockingSample> sample);
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 	AttachedDatabase &GetAttached();

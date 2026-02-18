@@ -1663,6 +1663,10 @@ unique_ptr<BlockingSample> DataTable::GetSample() {
 	return row_groups->GetSample();
 }
 
+void DataTable::SetTableSample(unique_ptr<BlockingSample> sample) {
+	row_groups->SetTableSample(std::move(sample));
+}
+
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
