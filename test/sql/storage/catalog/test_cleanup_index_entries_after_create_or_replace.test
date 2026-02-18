@@ -1,0 +1,51 @@
+# name: test/sql/storage/catalog/test_cleanup_index_entries_after_create_or_replace.test
+# description: Regression test: cleanup of index entries after the table has been dropped via CREATE OR REPLACE
+# group: [catalog]
+
+# Scenario:
+#   1. con3 starts a transaction and keeps it open. This ensures there are "other transactions"
+#      active when con2 commits, which forces the commit to write DELETED_ROWS_IN_USE entries
+#      (deferred cleanup) instead of cleaning up immediately.
+#   2. con2 deletes rows from a table with a PRIMARY KEY (autocommit). Because con3 is still
+#      active, the commit creates DELETED_ROWS_IN_USE entries for later cleanup.
+#   3. con1 executes CREATE OR REPLACE TABLE, which drops the old table (SetAsDropped).
+#   4. con3 commits, triggering cleanup of con2's undo buffer. Without the fix, this would
+#      hit D_ASSERT(IsMainTable()) in DataTable::RemoveFromIndexes because the old table
+#      has been marked as DROPPED.
+# Fix: CleanupState::CleanupDelete skips index cleanup for dropped/altered tables.
+
+statement ok
+CREATE TABLE t (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t SELECT i, i * 10 FROM range(1000) tbl(i)
+
+# con3: start a transaction and keep it open, so that con2's autocommit delete
+# is forced to write DELETED_ROWS_IN_USE entries instead of cleaning up immediately.
+statement ok con3
+BEGIN TRANSACTION
+
+query I con3
+SELECT COUNT(*) FROM t
+----
+1000
+
+# con2: delete rows in autocommit mode. Because con3 is still active, the commit
+# writes deferred DELETED_ROWS_IN_USE entries for the index.
+statement ok con2
+DELETE FROM t WHERE id < 500
+
+# con1: CREATE OR REPLACE TABLE drops the old table (SetAsDropped) and creates a new one.
+statement ok con1
+CREATE OR REPLACE TABLE t (id INTEGER PRIMARY KEY, val INTEGER)
+
+# con3: commit, which triggers cleanup of con2's undo buffer against the now-dropped table.
+# Without the fix, this crashes with D_ASSERT(IsMainTable()) in RemoveFromIndexes.
+statement ok con3
+COMMIT
+
+# The new table is empty (CREATE OR REPLACE created a fresh table).
+query I
+SELECT COUNT(*) FROM t
+----
+0
