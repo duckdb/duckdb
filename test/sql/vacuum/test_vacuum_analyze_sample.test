@@ -4,19 +4,20 @@
 
 require skip_reload
 
-# Create table and verify no sample initially
+# Create table - sample is auto-populated during INSERT
 statement ok
 CREATE TABLE t(x INTEGER, y VARCHAR);
 
 statement ok
 INSERT INTO t SELECT range, 'val_' || (range % 100)::VARCHAR FROM range(50000);
 
-query I
-SELECT count(*) FROM duckdb_table_sample('t');
+# Sample is already populated from the INSERT
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t');
 ----
-0
+true
 
-# After VACUUM ANALYZE the sample should be populated
+# VACUUM ANALYZE refreshes the sample
 statement ok
 VACUUM ANALYZE t;
 

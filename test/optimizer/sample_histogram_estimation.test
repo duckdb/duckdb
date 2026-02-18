@@ -2,24 +2,15 @@
 # description: Test sample-based histogram estimation for filter cardinality
 # group: [optimizer]
 
-# The sample-based estimation requires VACUUM ANALYZE to populate the sample.
+# Samples are automatically populated during Append, and can also be refreshed via VACUUM ANALYZE.
 
 require skip_reload
 
-# Test basic sample population via VACUUM ANALYZE
+# Test that sample is automatically populated during INSERT (no VACUUM ANALYZE needed)
 statement ok
 CREATE TABLE t AS SELECT range AS x FROM range(1000000);
 
-# No sample initially
-query I
-SELECT count(*) FROM duckdb_table_sample('t');
-----
-0
-
-statement ok
-VACUUM ANALYZE t;
-
-# Sample is populated
+# Sample is already populated from the INSERT
 query T
 SELECT count(*) > 0 FROM duckdb_table_sample('t');
 ----
@@ -28,6 +19,15 @@ true
 # Sample should have at most 2048 rows (FIXED_SAMPLE_SIZE)
 query T
 SELECT count(*) <= 2048 FROM duckdb_table_sample('t');
+----
+true
+
+# VACUUM ANALYZE still works to refresh the sample
+statement ok
+VACUUM ANALYZE t;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t');
 ----
 true
 
@@ -78,14 +78,14 @@ SELECT count(*) > 0 FROM duckdb_table_sample('t_date');
 ----
 true
 
-# Test that without VACUUM ANALYZE, no sample exists
+# Test that even without VACUUM ANALYZE, sample is populated from INSERT
 statement ok
 CREATE TABLE t_no_analyze AS SELECT range AS y FROM range(100000);
 
-query I
-SELECT count(*) FROM duckdb_table_sample('t_no_analyze');
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_no_analyze');
 ----
-0
+true
 
 # Test IN filter estimation
 statement ok
