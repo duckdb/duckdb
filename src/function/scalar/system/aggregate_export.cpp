@@ -235,13 +235,14 @@ void DeserializeStructFields(const AggregateStateLayout &layout, Vector &struct_
 	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
 		auto &field_type = layout.child_types->at(field_idx).second;
 		auto physical = field_type.InternalType();
-		idx_t field_size = GetTypeIdSize(physical);
+		idx_t field_size = GetRecursivePhysicalSize(field_type);
 		idx_t alignment = MinValue<idx_t>(field_size, 8);
 		offset_in_state = AlignValue(offset_in_state, alignment);
 
 		if (field_type.id() == LogicalTypeId::STRUCT) {
 			auto child_layout = AggregateStateLayout(field_type, field_size);
-			DeserializeStructFields(child_layout, struct_vec, state_data, count, dest_buffer + offset_in_state);
+			auto &struct_entries = StructVector::GetEntries(struct_vec);
+			DeserializeStructFields(child_layout, *struct_entries[field_idx], state_data, count, dest_buffer + offset_in_state);
 		} else {
 			TemplateDispatch<LoadFieldOp>(physical, layout, struct_vec, field_idx, state_data, count, dest_buffer,
 			                              offset_in_state);
