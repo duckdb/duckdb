@@ -122,3 +122,24 @@ select n from r(n) : range(1, 3)
 ----
 1
 2
+
+query I
+select x from t(x) : a
+----
+42
+
+query I
+select x from s(x) : (select i from a)
+----
+42
+
+statement ok
+create table c(i integer)
+
+statement ok
+insert into c values (42)
+
+query I
+select i from j(x) : (a join c using(i))
+----
+42
