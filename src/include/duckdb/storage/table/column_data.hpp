@@ -333,12 +333,11 @@ public:
 	static constexpr auto TYPE = ExtraPersistentColumnDataType::GEOMETRY;
 	GeometryPersistentColumnData() : ExtraPersistentColumnData(TYPE) {
 	}
-	GeometryPersistentColumnData(GeometryType type, VertexType vert)
-	    : ExtraPersistentColumnData(TYPE), geom_type(type), vert_type(vert) {
+	GeometryPersistentColumnData(GeometryStorageType storage_type)
+	    : ExtraPersistentColumnData(TYPE), storage_type(storage_type) {
 	}
 
-	GeometryType geom_type = GeometryType::INVALID;
-	VertexType vert_type = VertexType::XY;
+	GeometryStorageType storage_type;
 };
 
 struct PersistentColumnData {

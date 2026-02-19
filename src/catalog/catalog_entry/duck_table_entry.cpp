@@ -39,18 +39,37 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 	return index_info;
 }
 
-static void CheckTypeIsSupported(const LogicalType &logical_type, idx_t storage_version) {
+static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDatabase &db) {
 	TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
 		switch (type.id()) {
-		case LogicalTypeId::TYPE:
+		case LogicalTypeId::TYPE: {
 			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
-		case LogicalTypeId::GEOMETRY:
-		case LogicalTypeId::VARIANT:
-			if (storage_version < 68) {
-				throw InvalidInputException("%s columns are not supported in storage versions prior to v1.5.0",
-				                            type.ToString());
+		} break;
+		case LogicalTypeId::VARIANT: {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (storage_version < 7) {
+				auto required = GetStorageVersionName(7, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("VARIANT columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
 			}
-			break;
+		} break;
+		case LogicalTypeId::GEOMETRY: {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (GeoType::HasCRS(type) && storage_version < 7) {
+				auto required = GetStorageVersionName(7, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException(
+				    "GEOMETRY columns with coordinate reference system identifiers are not supported in storage "
+				    "versions prior %s (database \"%s\" is using storage version %s)",
+				    required, db.GetName(), current);
+			}
+		} break;
 		default:
 			break;
 		}
@@ -69,12 +88,10 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 		return;
 	}
 
-	auto storage_version = catalog.GetAttached().GetStorageManager().GetStorageVersion();
-
 	// create the physical storage
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
-		CheckTypeIsSupported(col_def.Type(), storage_version);
+		CheckTypeIsSupported(col_def.Type(), catalog.GetAttached());
 
 		column_defs.push_back(col_def.Copy());
 	}

@@ -201,6 +201,42 @@ public:
 	double m_max;
 };
 
+enum class GeometryStorageType : uint8_t {
+
+	SPATIAL = 0,
+	WKB = 100,
+
+	POINT_XY = 1,
+	POINT_XYZ = 2,
+	POINT_XYM = 3,
+	POINT_XYZM = 4,
+
+	LINESTRING_XY = 5,
+	LINESTRING_XYZ = 6,
+	LINESTRING_XYM = 7,
+	LINESTRING_XYZM = 8,
+
+	POLYGON_XY = 9,
+	POLYGON_XYZ = 10,
+	POLYGON_XYM = 11,
+	POLYGON_XYZM = 12,
+
+	MULTIPOINT_XY = 13,
+	MULTIPOINT_XYZ = 14,
+	MULTIPOINT_XYM = 15,
+	MULTIPOINT_XYZM = 16,
+
+	MULTILINESTRING_XY = 17,
+	MULTILINESTRING_XYZ = 18,
+	MULTILINESTRING_XYM = 19,
+	MULTILINESTRING_XYZM = 20,
+
+	MULTIPOLYGON_XY = 21,
+	MULTIPOLYGON_XYZ = 22,
+	MULTIPOLYGON_XYM = 23,
+	MULTIPOLYGON_XYZM = 24,
+};
+
 class Geometry {
 public:
 	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
@@ -228,12 +264,26 @@ public:
 	//! Convert to vectorized format
 	DUCKDB_API static void ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
 	                                          VertexType vert_type);
+	DUCKDB_API static void ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryStorageType type);
 	//! Convert from vectorized format
 	DUCKDB_API static void FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
 	                                            VertexType vert_type, idx_t result_offset);
+	DUCKDB_API static void FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryStorageType type,
+	                                            idx_t result_offset);
 
 	//! Get the vectorized logical type for a given geometry and vertex type
+	DUCKDB_API static LogicalType GetVectorizedType(GeometryStorageType type);
 	DUCKDB_API static LogicalType GetVectorizedType(GeometryType geom_type, VertexType vert_type);
+
+	DUCKDB_API static pair<GeometryType, VertexType> GetSpecializedType(GeometryStorageType type);
+
+	DUCKDB_API static void FromSpatialGeometry(const string_t &source, string_t &target, Vector &vector);
+	DUCKDB_API static void FromSpatialGeometry(Vector &source, Vector &target, idx_t count);
+	DUCKDB_API static void FromSpatialGeometry(const string_t &source, string &target);
+
+	DUCKDB_API static void ToSpatialGeometry(const string_t &source, string_t &target, Vector &vector);
+	DUCKDB_API static void ToSpatialGeometry(Vector &source, Vector &target, idx_t count);
+	DUCKDB_API static void ToSpatialGeometry(const string_t &source, string &target);
 };
 
 } // namespace duckdb

@@ -54,42 +54,38 @@ void GeoColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_i
 
 idx_t GeoColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                           idx_t target_count) {
-	auto &layout_type = base_column->GetType();
-
 	// Not a shredded column, so just emit the binary format immediately
-	if (layout_type.id() == LogicalTypeId::GEOMETRY) {
+	if (storage_type == GeometryStorageType::WKB) {
 		return base_column->Scan(transaction, vector_index, state, result, target_count);
 	}
 
 	// Setup an intermediate chunk to scan the actual data, based on how much we actually scanned
 	// TODO: Put this in a scan state?
 	DataChunk scan_chunk;
-	scan_chunk.Initialize(Allocator::DefaultAllocator(), {layout_type}, target_count);
+	scan_chunk.Initialize(Allocator::DefaultAllocator(), {base_column->GetType()}, target_count);
 
 	const auto scan_count = base_column->Scan(transaction, vector_index, state, scan_chunk.data[0], target_count);
 
 	// Now reassemble
-	Reassemble(scan_chunk.data[0], result, scan_count, geom_type, vert_type, 0);
+	Reassemble(scan_chunk.data[0], result, scan_count, storage_type, 0);
 	return scan_count;
 }
 
 idx_t GeoColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t target_count, idx_t result_offset) {
-	auto &layout_type = base_column->GetType();
-
 	// Not a shredded column, so just emit the binary format immediately
-	if (layout_type.id() == LogicalTypeId::GEOMETRY) {
+	if (storage_type == GeometryStorageType::WKB) {
 		return base_column->ScanCount(state, result, target_count, result_offset);
 	}
 
 	// Setup an intermediate chunk to scan the actual data, based on how much we actually scanned
 	// TODO: Put this in a scan state
 	DataChunk scan_chunk;
-	scan_chunk.Initialize(Allocator::DefaultAllocator(), {layout_type}, target_count);
+	scan_chunk.Initialize(Allocator::DefaultAllocator(), {base_column->GetType()}, target_count);
 
 	const auto scan_count = base_column->ScanCount(state, scan_chunk.data[0], target_count, 0);
 
 	// Now reassemble
-	Reassemble(scan_chunk.data[0], result, scan_count, geom_type, vert_type, result_offset);
+	Reassemble(scan_chunk.data[0], result, scan_count, storage_type, result_offset);
 	return scan_count;
 }
 
@@ -118,40 +114,38 @@ void GeoColumnData::RevertAppend(row_t new_count) {
 //----------------------------------------------------------------------------------------------------------------------
 
 idx_t GeoColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
-	auto &layout_type = base_column->GetType();
-
 	// Not a shredded column, so just emit the binary format immediately
-	if (layout_type.id() == LogicalTypeId::GEOMETRY) {
+	if (storage_type == GeometryStorageType::WKB) {
 		return base_column->Fetch(state, row_id, result);
 	}
 
 	// Otherwise, we need to fetch and reassemble
+	auto &layout_type = base_column->GetType();
+
 	DataChunk chunk;
 	chunk.Initialize(Allocator::DefaultAllocator(), {layout_type}, 1);
 
 	const auto fetch_count = base_column->Fetch(state, row_id, chunk.data[0]);
 
-	Reassemble(chunk.data[0], result, fetch_count, geom_type, vert_type, 0);
+	Reassemble(chunk.data[0], result, fetch_count, storage_type, 0);
 
 	return fetch_count;
 }
 
 void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
                              row_t row_id, Vector &result, idx_t result_idx) {
-	auto &layout_type = base_column->GetType();
-
 	// Not a shredded column, so just emit the binary format immediately
-	if (layout_type.id() == LogicalTypeId::GEOMETRY) {
+	if (storage_type == GeometryStorageType::WKB) {
 		return base_column->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
 	}
 
 	// Otherwise, we need to fetch and reassemble
 	DataChunk chunk;
-	chunk.Initialize(Allocator::DefaultAllocator(), {layout_type}, 1);
+	chunk.Initialize(Allocator::DefaultAllocator(), {base_column->GetType()}, 1);
 
 	base_column->FetchRow(transaction, state, storage_index, row_id, chunk.data[0], 0);
 
-	Reassemble(chunk.data[0], result, 1, geom_type, vert_type, result_idx);
+	Reassemble(chunk.data[0], result, 1, storage_type, result_idx);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -188,8 +182,7 @@ public:
 
 		// Also pass on the shredding state
 		const auto &geo_column = column_data.Cast<GeoColumnData>();
-		geom_type = geo_column.geom_type;
-		vert_type = geo_column.vert_type;
+		storage_type = geo_column.storage_type;
 	}
 
 	// Shared pointer to the new/old inner column.
@@ -200,8 +193,7 @@ public:
 	// The checkpoint state for the inner column.
 	unique_ptr<ColumnCheckpointState> inner_column_state;
 
-	GeometryType geom_type = GeometryType::INVALID;
-	VertexType vert_type = VertexType::XY;
+	GeometryStorageType storage_type = GeometryStorageType::WKB;
 
 	shared_ptr<ColumnData> CreateEmptyColumnData() override {
 		auto new_column = make_shared_ptr<GeoColumnData>(
@@ -222,8 +214,7 @@ public:
 		column_data.base_column = std::move(new_inner);
 
 		// Pass on the shredding state too
-		column_data.geom_type = geom_type;
-		column_data.vert_type = vert_type;
+		column_data.storage_type = storage_type;
 
 		return ColumnCheckpointState::GetFinalResult();
 	}
@@ -237,10 +228,9 @@ public:
 		auto inner_data = inner_column_state->ToPersistentData();
 
 		// If this is a shredded column, record it in the persistent data!
-		if (geom_type != GeometryType::INVALID) {
+		if (storage_type != GeometryStorageType::WKB && storage_type != GeometryStorageType::SPATIAL) {
 			auto extra_data = make_uniq<GeometryPersistentColumnData>();
-			extra_data->geom_type = geom_type;
-			extra_data->vert_type = vert_type;
+			extra_data->storage_type = storage_type;
 			inner_data.extra_data = std::move(extra_data);
 		}
 
@@ -251,6 +241,94 @@ public:
 unique_ptr<ColumnCheckpointState> GeoColumnData::CreateCheckpointState(const RowGroup &row_group,
                                                                        PartialBlockManager &partial_block_manager) {
 	return make_uniq<GeoColumnCheckpointState>(row_group, *this, partial_block_manager);
+}
+
+static GeometryStorageType GetStorageType(GeometryType geom_type, VertexType vert_type) {
+	switch (geom_type) {
+	case GeometryType::POINT:
+		switch (vert_type) {
+		case VertexType::XY:
+			return GeometryStorageType::POINT_XY;
+		case VertexType::XYZ:
+			return GeometryStorageType::POINT_XYZ;
+		case VertexType::XYM:
+			return GeometryStorageType::POINT_XYM;
+		case VertexType::XYZM:
+			return GeometryStorageType::POINT_XYZM;
+		default:
+			throw InternalException("Unsupported vertex type for POINT geometry");
+		}
+	case GeometryType::LINESTRING:
+		switch (vert_type) {
+		case VertexType::XY:
+			return GeometryStorageType::LINESTRING_XY;
+		case VertexType::XYZ:
+			return GeometryStorageType::LINESTRING_XYZ;
+		case VertexType::XYM:
+			return GeometryStorageType::LINESTRING_XYM;
+		case VertexType::XYZM:
+			return GeometryStorageType::LINESTRING_XYZM;
+		default:
+			throw InternalException("Unsupported vertex type for LINESTRING geometry");
+		}
+	case GeometryType::POLYGON:
+		switch (vert_type) {
+		case VertexType::XY:
+			return GeometryStorageType::POLYGON_XY;
+		case VertexType::XYZ:
+			return GeometryStorageType::POLYGON_XYZ;
+		case VertexType::XYM:
+			return GeometryStorageType::POLYGON_XYM;
+		case VertexType::XYZM:
+			return GeometryStorageType::POLYGON_XYZM;
+		default:
+			throw InternalException("Unsupported vertex type for POLYGON geometry");
+		}
+	case GeometryType::MULTIPOINT:
+		switch (vert_type) {
+		case VertexType::XY:
+			return GeometryStorageType::MULTIPOINT_XY;
+		case VertexType::XYZ:
+			return GeometryStorageType::MULTIPOINT_XYZ;
+		case VertexType::XYM:
+			return GeometryStorageType::MULTIPOINT_XYM;
+		case VertexType::XYZM:
+			return GeometryStorageType::MULTIPOINT_XYZM;
+		default:
+			throw InternalException("Unsupported vertex type for MULTIPOINT geometry");
+		}
+	case GeometryType::MULTILINESTRING:
+		switch (vert_type) {
+		case VertexType::XY:
+			return GeometryStorageType::MULTILINESTRING_XY;
+		case VertexType::XYZ:
+			return GeometryStorageType::MULTILINESTRING_XYZ;
+		case VertexType::XYM:
+			return GeometryStorageType::MULTILINESTRING_XYM;
+		case VertexType::XYZM:
+			return GeometryStorageType::MULTILINESTRING_XYZM;
+		default:
+			throw InternalException("Unsupported vertex type for MULTILINESTRING geometry");
+		}
+	case GeometryType::MULTIPOLYGON:
+		switch (vert_type) {
+		case VertexType::XY:
+			return GeometryStorageType::MULTIPOLYGON_XY;
+		case VertexType::XYZ:
+			return GeometryStorageType::MULTIPOLYGON_XYZ;
+		case VertexType::XYM:
+			return GeometryStorageType::MULTIPOLYGON_XYM;
+		case VertexType::XYZM:
+			return GeometryStorageType::MULTIPOLYGON_XYZM;
+		default:
+			throw InternalException("Unsupported vertex type for MULTIPOLYGON geometry");
+		}
+	case GeometryType::GEOMETRYCOLLECTION:
+	case GeometryType::INVALID:
+		// GEOMETRYCOLLECTION is not supported for shredding, but we still want to record the storage type for stats
+		// purposes
+		return GeometryStorageType::WKB;
+	}
 }
 
 unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
@@ -267,6 +345,63 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		checkpoint_state->inner_column = base_column;
 		checkpoint_state->inner_column_state =
 		    checkpoint_state->inner_column->Checkpoint(row_group, info, old_column_stats);
+		return std::move(checkpoint_state);
+	}
+
+	// Old storage version, write as old type
+	if (GetStorageManager().GetStorageVersion() < 7) {
+		auto legacy_type = LogicalType(LogicalTypeId::BLOB);
+		legacy_type.SetAlias("geometry");
+		auto new_column =
+		    CreateColumn(block_manager, this->info, base_column->column_index, legacy_type, GetDataType(), this);
+
+		// Setup scan from the old column
+		DataChunk scan_chunk;
+		ColumnScanState scan_state(nullptr);
+		scan_chunk.Initialize(Allocator::DefaultAllocator(), {base_column->type}, STANDARD_VECTOR_SIZE);
+		InitializeScan(scan_state);
+
+		// Setup append to the new column
+		DataChunk append_chunk;
+		ColumnAppendState append_state;
+		append_chunk.Initialize(Allocator::DefaultAllocator(), {new_column->type}, STANDARD_VECTOR_SIZE);
+		new_column->InitializeAppend(append_state);
+
+		idx_t total_count = count.load();
+		idx_t vector_index = 0;
+
+		// We need stats when appending
+		auto empty_stats = BaseStatistics::CreateEmpty(new_column->GetType());
+
+		for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
+			scan_chunk.Reset();
+
+			auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
+			Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
+
+			// Verify the scan chunk
+			scan_chunk.Verify();
+
+			append_chunk.Reset();
+			append_chunk.SetCardinality(to_scan);
+
+			// Make the split
+			Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, GeometryStorageType::SPATIAL);
+
+			// Append into the new specialized column
+			new_column->Append(empty_stats, append_state, append_chunk.data[0], to_scan);
+		}
+
+		// Move then new column into our checkpoint state
+		checkpoint_state->inner_column = new_column;
+		checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info, empty_stats);
+		checkpoint_state->storage_type = GeometryStorageType::SPATIAL;
+		checkpoint_state->global_stats = GeometryStats::CreateUnknown(type).ToUnique();
+
+		// Copy over the non-geometry stats from the old stats, since those are unaffected by the change in storage
+		// layout
+		checkpoint_state->global_stats->CopyBase(empty_stats);
+
 		return std::move(checkpoint_state);
 	}
 
@@ -287,12 +422,12 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		return std::move(checkpoint_state);
 	}
 
+	const auto &types = GeometryStats::GetTypes(old_stats);
+	const auto &flags = GeometryStats::GetFlags(old_stats);
+
 	// Figure out if this segment can use an alternative type layout
 	auto new_geom_type = GeometryType::POINT;
 	auto new_vert_type = VertexType::XY;
-
-	const auto &types = GeometryStats::GetTypes(old_stats);
-	const auto &flags = GeometryStats::GetFlags(old_stats);
 
 	auto has_mixed_type = !types.TryGetSingleType(new_geom_type, new_vert_type);
 	auto has_only_geometry_collection = new_geom_type == GeometryType::GEOMETRYCOLLECTION;
@@ -329,6 +464,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	idx_t total_count = count.load();
 	idx_t vector_index = 0;
 
+	auto dummy_stats = BaseStatistics::CreateEmpty(new_column->GetType());
+
 	for (idx_t scanned = 0; scanned < total_count; scanned += STANDARD_VECTOR_SIZE) {
 		scan_chunk.Reset();
 
@@ -342,15 +479,14 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		append_chunk.SetCardinality(to_scan);
 
 		// Make the split
-		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, new_geom_type, new_vert_type);
+		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, storage_type);
 
 		// Append into the new specialized column
-		auto dummy_stats = BaseStatistics::CreateEmpty(new_column->GetType());
 		new_column->Append(dummy_stats, append_state, append_chunk.data[0], to_scan);
-
-		// Merge the stats into the checkpoint state's global stats
-		InterpretStats(dummy_stats, *checkpoint_state->global_stats, new_geom_type, new_vert_type);
 	}
+
+	// Merge the stats into the checkpoint state's global stats
+	InterpretStats(dummy_stats, *checkpoint_state->global_stats, new_geom_type, new_vert_type);
 
 	// Move then new column into our checkpoint state
 	auto empty_stats = BaseStatistics::CreateEmpty(new_column->GetType());
@@ -358,8 +494,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info, empty_stats);
 
 	// Also set the shredding state
-	checkpoint_state->geom_type = new_geom_type;
-	checkpoint_state->vert_type = new_vert_type;
+	checkpoint_state->storage_type = GetStorageType(new_geom_type, new_vert_type);
 
 	return std::move(checkpoint_state);
 }
@@ -376,11 +511,11 @@ PersistentColumnData GeoColumnData::Serialize() {
 	// Serialize the inner column
 	auto inner_data = base_column->Serialize();
 
-	// If this is a shredded column, record it in the persistent data!
-	if (geom_type != GeometryType::INVALID) {
+	if (storage_type != GeometryStorageType::WKB && storage_type != GeometryStorageType::SPATIAL) {
+		D_ASSERT(GetStorageManager().GetStorageVersion() >= 7);
+
 		auto extra_data = make_uniq<GeometryPersistentColumnData>();
-		extra_data->geom_type = geom_type;
-		extra_data->vert_type = vert_type;
+		extra_data->storage_type = storage_type;
 		inner_data.extra_data = std::move(extra_data);
 	}
 
@@ -389,6 +524,11 @@ PersistentColumnData GeoColumnData::Serialize() {
 
 void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	if (!column_data.extra_data) {
+		// Old geometry segment
+		if (GetStorageManager().GetStorageVersion() < 7) {
+			storage_type = GeometryStorageType::SPATIAL;
+		}
+
 		// No shredding, just initialize normally
 		base_column->InitializeColumn(column_data, target_stats);
 		count = base_column->count.load();
@@ -398,11 +538,10 @@ void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStat
 	auto &geom_data = column_data.extra_data->Cast<GeometryPersistentColumnData>();
 
 	// Set the shredding state
-	vert_type = geom_data.vert_type;
-	geom_type = geom_data.geom_type;
+	storage_type = geom_data.storage_type;
 
 	// Else, this is a shredded point
-	const auto layout_type = Geometry::GetVectorizedType(geom_type, vert_type);
+	const auto layout_type = Geometry::GetVectorizedType(storage_type);
 	base_column = CreateColumn(block_manager, info, base_column->column_index, layout_type, GetDataType(), this);
 	D_ASSERT(base_column != nullptr);
 
@@ -411,7 +550,8 @@ void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStat
 	count = base_column->count.load();
 
 	// Interpret the stats
-	InterpretStats(dummy_stats, target_stats, geom_type, vert_type);
+	const auto types = Geometry::GetSpecializedType(storage_type);
+	InterpretStats(dummy_stats, target_stats, types.first, types.second);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -438,14 +578,13 @@ void GeoColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Specialize
 //----------------------------------------------------------------------------------------------------------------------
-void GeoColumnData::Specialize(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
-                               VertexType vert_type) {
-	Geometry::ToVectorizedFormat(source, target, count, geom_type, vert_type);
+void GeoColumnData::Specialize(Vector &source, Vector &target, idx_t count, GeometryStorageType type) {
+	Geometry::ToVectorizedFormat(source, target, count, type);
 }
 
-void GeoColumnData::Reassemble(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
-                               VertexType vert_type, idx_t result_offset) {
-	Geometry::FromVectorizedFormat(source, target, count, geom_type, vert_type, result_offset);
+void GeoColumnData::Reassemble(Vector &source, Vector &target, idx_t count, GeometryStorageType type,
+                               idx_t result_offset) {
+	Geometry::FromVectorizedFormat(source, target, count, type, result_offset);
 }
 
 static const BaseStatistics *GetVertexStats(BaseStatistics &stats, GeometryType geom_type) {

@@ -395,14 +395,64 @@ void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
+static bool KeyInputNeedConversion(const vector<LogicalType> &types, const AttachedDatabase &db) {
+	if (db.GetStorageManager().GetStorageVersion() < 7) {
+		// Old GEOMETRY columns had a different internal representation
+		for (auto &type : types) {
+			// ART does not support nested types, so we only need to check the top-level type.
+			if (type.id() == LogicalTypeId::GEOMETRY) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+static void ConverKeyInput(DataChunk &input, DataChunk &result) {
+	vector<LogicalType> new_types;
+
+	for (auto &type : input.GetTypes()) {
+		if (type.id() == LogicalTypeId::GEOMETRY) {
+			new_types.push_back(LogicalType::BLOB);
+		} else {
+			new_types.push_back(type);
+		}
+	}
+
+	// Initialize the result chunk with the new types
+	result.Initialize(Allocator::DefaultAllocator(), new_types, input.size());
+
+	// Reference or convert the input data into the result chunk
+	for (idx_t i = 0; i < input.ColumnCount(); i++) {
+		if (input.data[i].GetType().id() == LogicalTypeId::GEOMETRY) {
+			Geometry::ToSpatialGeometry(input.data[i], result.data[i], input.size());
+		} else {
+			result.data[i].Reference(input.data[i]);
+		}
+	}
+
+	result.SetCardinality(input.size());
+}
+
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
                              unsafe_vector<ARTKey> &row_id_keys) {
-	GenerateKeys<>(allocator, input, keys);
+	auto key_input = &input;
+
+	DataChunk converted_chunk;
+	// Do we need to convert the input first before generating keys?
+	if (KeyInputNeedConversion(input.GetTypes(), db)) {
+		ConverKeyInput(input, converted_chunk);
+		key_input = &converted_chunk;
+	}
+
+	GenerateKeys<>(allocator, *key_input, keys);
 
 	DataChunk row_id_chunk;
-	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, input.size());
+	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE},
+	                        key_input->size());
 	row_id_chunk.data[0].Reference(row_ids);
-	row_id_chunk.SetCardinality(input.size());
+	row_id_chunk.SetCardinality(key_input->size());
 	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
 }
 
@@ -705,7 +755,10 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	}
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
-	auto key = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[0]);
+	// TODO: check if scan_state.values is GEO and convert if so
+
+	const auto storage_version = db.GetStorageManager().GetStorageVersion();
+	auto key = ARTKey::CreateKey(arena_allocator, logical_types[0], scan_state.values[0], storage_version);
 
 	lock_guard<mutex> l(lock);
 	if (scan_state.values[1].IsNull()) {
@@ -728,7 +781,8 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 
 	// Two predicates.
 	D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
-	auto upper_bound = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[1]);
+
+	auto upper_bound = ARTKey::CreateKey(arena_allocator, logical_types[0], scan_state.values[1], storage_version);
 
 	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
