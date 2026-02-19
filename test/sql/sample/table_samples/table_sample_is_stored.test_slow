@@ -2,7 +2,7 @@
 # description: Test sampling of larger relations
 # group: [table_samples]
 
-mode skip
+# mode skip
 
 # required when testing table samples. See basic_sample_test.test
 require vector_size 2048
