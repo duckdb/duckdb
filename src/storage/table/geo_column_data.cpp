@@ -228,7 +228,7 @@ public:
 		auto inner_data = inner_column_state->ToPersistentData();
 
 		// If this is a shredded column, record it in the persistent data!
-		if (storage_type != GeometryStorageType::WKB && storage_type != GeometryStorageType::SPATIAL) {
+		if (storage_type != GeometryStorageType::SPATIAL) {
 			auto extra_data = make_uniq<GeometryPersistentColumnData>();
 			extra_data->storage_type = storage_type;
 			inner_data.extra_data = std::move(extra_data);
