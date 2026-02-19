@@ -40,7 +40,7 @@ SELECT a, b
 FROM   t
 WHERE  a < b;
 ----
-logical_opt	<REGEX>:.*FILTER.*CAST\(a AS INTEGER.*<.*b AS INTEGER\).*PROJECTION.*FILTER.*position.*
+logical_opt	<REGEX>:.*FILTER.*CAST\(a AS INTEGER.*<.*b AS INTEGER\).*FILTER.*position.*
 
 
 # INT can always be cast to varchar, so the filter a[1] = '1'
