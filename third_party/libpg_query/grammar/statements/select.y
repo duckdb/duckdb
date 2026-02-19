@@ -1100,6 +1100,10 @@ alias_column_prefix_clause:
                 auto alias = makeNode(PGAlias);
                 alias->aliasname = pstrdup(strVal(linitial(func->funcname)));
 
+                if (!func->args || list_length(func->args) == 0) {
+                    parser_yyerror("syntax error at or near \":\"");
+                }
+
                 PGList *colnames = NIL;
                 for (auto arg_cell = func->args ? func->args->head : nullptr; arg_cell != nullptr; arg_cell = arg_cell->next) {
                     auto arg = (PGNode *) arg_cell->data.ptr_value;
