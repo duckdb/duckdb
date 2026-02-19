@@ -117,3 +117,17 @@ query I
 select stats(g) from t_all_types limit 1
 ----
 [Extent: [X: [-inf, inf], Y: [-inf, inf], Z: [-inf, inf], M: [-inf, inf]], Types: [unknown, point, linestring, polygon, multipoint, multilinestring, multipolygon, geometrycollection, unknown_z, point_z, linestring_z, polygon_z, multipoint_z, multilinestring_z, multipolygon_z, geometrycollection_z, unknown_m, point_m, linestring_m, polygon_m, multipoint_m, multilinestring_m, multipolygon_m, geometrycollection_m, unknown_zm, point_zm, linestring_zm, polygon_zm, multipoint_zm, multilinestring_zm, multipolygon_zm, geometrycollection_zm], Flags: [Has Empty Geom: true, Has No Empty Geom: true, Has Empty Part: true, Has No Empty Part: true]][Has Null: false, Has No Null: true][Approx Unique: 29]
+
+# Now that we have a new storage version, once we checkpoint we will get a new geometry format written,
+# and stats should be properly populated!
+
+statement ok
+INSERT INTO t_all_types VALUES (30, 'POINT (4 4)');
+
+statement ok
+checkpoint;
+
+query I
+select stats(g) from t_all_types limit 1
+----
+[Extent: [X: [1.000000, 11.000000], Y: [2.000000, 12.000000], Z: [3.000000, 13.000000], M: [4.000000, 14.000000]], Types: [point, linestring, polygon, multipoint, multilinestring, multipolygon, geometrycollection, point_z, linestring_z, polygon_z, multipoint_z, multilinestring_z, multipolygon_z, geometrycollection_z, point_m, linestring_m, polygon_m, multipoint_m, multilinestring_m, multipolygon_m, geometrycollection_m, point_zm, linestring_zm, polygon_zm, multipoint_zm, multilinestring_zm, multipolygon_zm, geometrycollection_zm], Flags: [Has Empty Geom: false, Has No Empty Geom: true, Has Empty Part: false, Has No Empty Part: true]][Has Null: false, Has No Null: true][Approx Unique: 30]
