@@ -47,7 +47,9 @@ elseif(CYGWIN OR MINGW)
   # See https://stackoverflow.com/questions/38139631 for details.
   add_compile_options(-std=gnu++11)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  add_compile_options(-std=c++11)
+  if(NOT DEFINED MSVC_VERSION)
+    add_compile_options(-std=c++11)
+  endif()
 endif()
 
 add_definitions(-DRE2_ON_VALGRIND)
