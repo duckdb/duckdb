@@ -139,7 +139,8 @@ private:
 	unique_ptr<PrivateAllocatorData> private_data;
 
 	bool ShouldUseDebugInfo() const {
-		return private_data && private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE && private_data->debug_info;
+		return private_data && private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE &&
+		       private_data->debug_info;
 	}
 };
 
