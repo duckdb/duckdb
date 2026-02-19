@@ -13,8 +13,14 @@ TEST_CASE("Allocator handles nullptr debug_info gracefully", "[allocator]") {
 	auto private_data = make_uniq<PrivateAllocatorData>();
 	Allocator alloc(Allocator::DefaultAllocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
 	                std::move(private_data));
-	// release() instead of reset() because AllocatorDebugInfo is an incomplete type here.
-	(void)alloc.GetPrivateData()->debug_info.release();
+	// To make sure that debug_info is set to a nullptr we have to jump through a
+	// bit of a hoop. AllocatorDebugInfo is an incomplete type here, so we can't
+	// call reset(). So instead we create a tmp PrivateAllocatorData, swap
+	// debug_info into it, and let the destructor run. This way there's no leak.
+	{
+		auto tmp = make_uniq<PrivateAllocatorData>();
+		tmp->debug_info.swap(alloc.GetPrivateData()->debug_info);
+	}
 
 	SECTION("AllocateData with nullptr debug_info") {
 		data_ptr_t ptr = nullptr;
