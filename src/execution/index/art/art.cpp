@@ -755,7 +755,6 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	}
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
-	// TODO: check if scan_state.values is GEO and convert if so
 
 	const auto storage_version = db.GetStorageManager().GetStorageVersion();
 	auto key = ARTKey::CreateKey(arena_allocator, logical_types[0], scan_state.values[0], storage_version);

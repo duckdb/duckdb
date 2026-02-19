@@ -2515,6 +2515,8 @@ void Geometry::FromSpatialGeometry(const string_t &source, string &target) {
 	FromLegacyGeometryConversion(reader, writer);
 }
 
+namespace {
+
 struct ToSpatialGeometryState {
 	GeometryExtent extent = GeometryExtent::Empty();
 	BlobReader reader = BlobReader(nullptr, 0);
@@ -2524,6 +2526,8 @@ struct ToSpatialGeometryState {
 	bool root_bbox = false;
 	uint32_t required_size = 0;
 };
+
+} // namespace
 
 template <class V = VertexXY>
 static void ToSpatialGeometryAnalyzeInternal(GeometryType type, ToSpatialGeometryState &state) {
@@ -2672,6 +2676,12 @@ static void ToSpatialGeometryConvert(ToSpatialGeometryState &state, FixedSizeBlo
 
 	while (!reader.IsAtEnd()) {
 		const auto le = reader.Read<uint8_t>();
+
+		if (le != 1) {
+			throw InvalidInputException(
+			    "Only little-endian geometries are supported for conversion to spatial format!");
+		}
+
 		const auto type_id = reader.Read<uint32_t>();
 		const auto type = static_cast<GeometryType>(type_id % 1000);
 

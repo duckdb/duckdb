@@ -1,0 +1,50 @@
+# name: test/sql/types/geo/geometry_compatability.test
+# group: [geo]
+
+# Make a copy of the testing database so we can make modifications
+
+statement ok
+copy (select content from read_blob('{DATA_DIR}/storage/spatial_geo.db')) to '__TEST_DIR__/geo.db' (format BLOB);
+
+statement ok
+ATTACH '__TEST_DIR__/geo.db'
+
+statement ok
+USE geo;
+
+query I
+select tags.storage_version from duckdb_databases() where database_name = 'geo';
+----
+v1.0.0+
+
+query II
+select * from t_all_types order by id;
+----
+1	POINT (1 2)
+2	POINT Z (1 2 3)
+3	POINT M (1 2 4)
+4	POINT ZM (1 2 3 4)
+5	LINESTRING (1 2, 3 4)
+6	LINESTRING Z (1 2 3, 4 5 6)
+7	LINESTRING M (1 2 4, 4 5 7)
+8	LINESTRING ZM (1 2 3 4, 4 5 6 7)
+9	POLYGON ((1 2, 3 4, 5 6, 1 2))
+10	POLYGON Z ((1 2 3, 3 4 5, 5 6 7, 1 2 3))
+11	POLYGON M ((1 2 4, 3 4 6, 5 6 8, 1 2 4))
+12	POLYGON ZM ((1 2 3 4, 3 4 5 6, 5 6 7 8, 1 2 3 4))
+13	MULTIPOINT (1 2, 3 4, 5 6)
+14	MULTIPOINT Z (1 2 3, 3 4 5, 5 6 7)
+15	MULTIPOINT M (1 2 4, 3 4 6, 5 6 8)
+16	MULTIPOINT ZM (1 2 3 4, 3 4 5 6, 5 6 7 8)
+17	MULTILINESTRING ((1 2, 3 4), (5 6, 7 8))
+18	MULTILINESTRING Z ((1 2 3, 3 4 5), (5 6 7, 7 8 9))
+19	MULTILINESTRING M ((1 2 4, 3 4 6), (5 6 8, 7 8 10))
+20	MULTILINESTRING ZM ((1 2 3 4, 3 4 5 6), (5 6 7 8, 7 8 9 10))
+21	MULTIPOLYGON (((1 2, 3 4, 5 6, 1 2)), ((7 8, 9 10, 11 12, 7 8)))
+22	MULTIPOLYGON Z (((1 2 3, 3 4 5, 5 6 7, 1 2 3)), ((7 8 9, 9 10 11, 11 12 13, 7 8 9)))
+23	MULTIPOLYGON M (((1 2 4, 3 4 6, 5 6 8, 1 2 4)), ((7 8 10, 9 10 12, 11 12 14, 7 8 10)))
+24	MULTIPOLYGON ZM (((1 2 3 4, 3 4 5 6, 5 6 7 8, 1 2 3 4)), ((7 8 9 10, 9 10 11 12, 11 12 13 14, 7 8 9 10)))
+25	GEOMETRYCOLLECTION (POINT (1 2), LINESTRING (3 4, 5 6))
+26	GEOMETRYCOLLECTION Z (POINT Z (1 2 3), LINESTRING Z (3 4 5, 5 6 7))
+27	GEOMETRYCOLLECTION M (POINT M (1 2 4), LINESTRING M (3 4 6, 5 6 8))
+28	GEOMETRYCOLLECTION ZM (POINT ZM (1 2 3 4), LINESTRING ZM (3 4 5 6, 5 6 7 8))
