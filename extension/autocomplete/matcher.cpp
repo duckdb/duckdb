@@ -93,6 +93,7 @@ private:
 		if (StringUtil::CIEquals(keyword, token.text)) {
 			// move to the next token
 			state.token_index++;
+			state.UpdateMaxTokenIndex();
 			return true;
 		}
 		return false;
@@ -537,6 +538,7 @@ private:
 			return false;
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 
@@ -578,6 +580,7 @@ private:
 			return false;
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -651,6 +654,7 @@ private:
 
 		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
 			state.token_index++;
+			state.UpdateMaxTokenIndex();
 			return true;
 		}
 		return false;
@@ -717,6 +721,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -780,6 +785,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -835,6 +841,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
