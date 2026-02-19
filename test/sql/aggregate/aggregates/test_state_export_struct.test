@@ -23,13 +23,13 @@ SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, fi
 
 # grouped aggr
 
-# corr moved from opaque tests: struct-based state
 query I nosort res_corr0
 SELECT corr(d, d+1) FROM dummy;
 ----
 
 query I nosort res_corr0
 SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM dummy;
+
 ----
 query IIIIIIIII nosort res1
 SELECT g, sum(d), avg(d)::integer, count(d) FROM dummy GROUP BY g ORDER BY g;
