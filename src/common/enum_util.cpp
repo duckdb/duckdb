@@ -2319,6 +2319,7 @@ GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetGeometryStorageTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(GeometryStorageType::SPATIAL), "SPATIAL" },
 		{ static_cast<uint32_t>(GeometryStorageType::WKB), "WKB" },
 		{ static_cast<uint32_t>(GeometryStorageType::POINT_XY), "POINT_XY" },
 		{ static_cast<uint32_t>(GeometryStorageType::POINT_XYZ), "POINT_XYZ" },
@@ -2350,12 +2351,12 @@ const StringUtil::EnumStringLiteral *GetGeometryStorageTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<GeometryStorageType>(GeometryStorageType value) {
-	return StringUtil::EnumToString(GetGeometryStorageTypeValues(), 25, "GeometryStorageType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetGeometryStorageTypeValues(), 26, "GeometryStorageType", static_cast<uint32_t>(value));
 }
 
 template<>
 GeometryStorageType EnumUtil::FromString<GeometryStorageType>(const char *value) {
-	return static_cast<GeometryStorageType>(StringUtil::StringToEnum(GetGeometryStorageTypeValues(), 25, "GeometryStorageType", value));
+	return static_cast<GeometryStorageType>(StringUtil::StringToEnum(GetGeometryStorageTypeValues(), 26, "GeometryStorageType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetGeometryTypeValues() {
