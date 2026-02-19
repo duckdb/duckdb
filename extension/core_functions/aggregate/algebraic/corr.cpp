@@ -13,7 +13,7 @@ LogicalType GetCorrExportStateType(const AggregateFunction &function) {
 	covar_pop_children.emplace_back("count", LogicalType::UBIGINT);
 	covar_pop_children.emplace_back("mean_x", LogicalType::DOUBLE);
 	covar_pop_children.emplace_back("mean_y", LogicalType::DOUBLE);
-	covar_pop_children.emplace_back("co_moment,", LogicalType::DOUBLE);
+	covar_pop_children.emplace_back("co_moment", LogicalType::DOUBLE);
 	state_children.emplace_back("cov_pop", LogicalType::STRUCT(std::move(covar_pop_children)));
 
 	auto dev_pop_x_children = child_list_t<LogicalType> {};
