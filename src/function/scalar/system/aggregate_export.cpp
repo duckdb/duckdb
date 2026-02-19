@@ -136,8 +136,8 @@ struct AggregateStateLayout {
  */
 struct LoadFieldOp {
 	template <class T>
-	static void Operation(idx_t root_stride, Vector &struct_vec, idx_t field_idx,
-	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
+	static void Operation(idx_t root_stride, Vector &struct_vec, idx_t field_idx, const UnifiedVectorFormat &state_data,
+	                      idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
 		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 
@@ -244,7 +244,8 @@ void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stri
 		if (field_type.id() == LogicalTypeId::STRUCT) {
 			auto child_layout = AggregateStateLayout(field_type, field_size);
 			auto &struct_entries = StructVector::GetEntries(struct_vec);
-			DeserializeStructFields(child_layout, root_stride, *struct_entries[field_idx], state_data, count, dest_buffer + offset_in_state);
+			DeserializeStructFields(child_layout, root_stride, *struct_entries[field_idx], state_data, count,
+			                        dest_buffer + offset_in_state);
 		} else {
 			TemplateDispatch<LoadFieldOp>(physical, root_stride, struct_vec, field_idx, state_data, count, dest_buffer,
 			                              offset_in_state);
@@ -352,7 +353,8 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 			state_vec_ptr[i] = local_state.state_buffer.get() + i * layout.aligned_state_size;
 		}
 
-		DeserializeStructFields(layout, layout.aligned_state_size, input.data[0], state_data, input.size(), local_state.state_buffer.get());
+		DeserializeStructFields(layout, layout.aligned_state_size, input.data[0], state_data, input.size(),
+		                        local_state.state_buffer.get());
 	} else {
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto target_ptr = local_state.state_buffer.get() + layout.aligned_state_size * i;
