@@ -13,30 +13,30 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # ungrouped aggr
 
-query IIIIIII nosort res0
-SELECT sum(d), avg(d)::integer, count(d) FROM dummy;
+query IIIIIIIIIII nosort res0
+SELECT sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy;
 ----
 
-query IIIIIII nosort res0
-SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM dummy;
+query IIIIIIIIIII nosort res0
+SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy;
 ----
 
 # grouped aggr
-query IIIIIIIII nosort res1
-SELECT g, sum(d), avg(d)::integer, count(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIIIII nosort res1
+SELECT g, sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIIIIII nosort res1
-SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIIIII nosort res1
+SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 
 statement ok
-CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
 
-query IIIIIIIII nosort res1
-SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(count_state) FROM state ORDER BY g;
+query IIIIIIIIIIIII nosort res1
+SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state ORDER BY g;
 ----
 
 query II nosort res3
@@ -62,30 +62,30 @@ select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join sta
 ----
 
 # empty groups
-query IIIIIII nosort res4
-SELECT avg(d)::integer, count(d) FROM dummy WHERE FALSE;
+query IIIIIIIIIII nosort res4
+SELECT avg(d)::integer, count(d), first(d), last(d) FROM dummy WHERE FALSE;
 ----
 
-query IIIIIII nosort res4
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+query IIIIIIIIIII nosort res4
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy WHERE FALSE;
 ----
 
 # only null scanned
-query IIIIIII nosort res5
-SELECT avg(d)::integer, count(d) FROM (SELECT NULL::integer d);
+query IIIIIIIIIII nosort res5
+SELECT avg(d)::integer, count(d), first(d), last(d) FROM (SELECT NULL::integer d);
 ----
 
-query IIIIIII nosort res5
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+query IIIIIIIIIII nosort res5
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
 ----
 
 # only null scanned, but grouped
-query IIIIIII nosort res6
-SELECT avg(d)::integer, count(d) FROM (SELECT NULL::integer d, g FROM dummy);
+query IIIIIIIIIII nosort res6
+SELECT avg(d)::integer, count(d), first(d), last(d) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
-query IIIIIII nosort res6
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+query IIIIIIIIIII nosort res6
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 
@@ -170,21 +170,168 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
 
 statement ok
-CREATE VIEW state_view AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+CREATE VIEW state_view AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
 
 restart
 
-query IIIIIIIII nosort res10
-SELECT g, avg(d)::integer, count(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIIIII nosort res10
+SELECT g, avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIIIIII nosort res10
-SELECT g, finalize(avg_state)::integer, finalize(count_state) FROM state ORDER BY g;
+query IIIIIIIIIIIII nosort res10
+SELECT g, finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state ORDER BY g;
 ----
 
-query IIIIIIIII nosort res10
-SELECT g, finalize(avg_state)::integer, finalize(count_state) FROM state_view ORDER BY g;
+query IIIIIIIIIIIII nosort res10
+SELECT g, finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state_view ORDER BY g;
 ----
+
+# Tests with long strings (>12 bytes, non-inlined) to verify proper string data copying
+# This verifies that StoreFieldOp and StoreFieldForSelectedRowsOp correctly copy
+# string data instead of just pointers when using EXPORT_STATE with big strings
+
+statement ok
+CREATE TABLE big_string_test AS 
+SELECT 
+    'group_' || (range % 3)::VARCHAR as g,
+    'This is a very long string that exceeds the 12 byte inlining threshold for string_t' || range::VARCHAR as big_str,
+    range as r
+FROM range(20);
+
+# Test 1: Basic export and finalize with big strings
+query TTT nosort
+SELECT 
+    g,
+    first(big_str) as normal_first,
+    finalize(first(big_str) EXPORT_STATE) as exported_first
+FROM big_string_test 
+GROUP BY g 
+ORDER BY g;
+----
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t0	This is a very long string that exceeds the 12 byte inlining threshold for string_t0
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t1	This is a very long string that exceeds the 12 byte inlining threshold for string_t1
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t2	This is a very long string that exceeds the 12 byte inlining threshold for string_t2
+
+# Test 2: Store state and finalize later
+statement ok
+CREATE TABLE stored_big_string_state AS 
+SELECT 
+    g,
+    first(big_str) EXPORT_STATE as first_state
+FROM big_string_test 
+GROUP BY g;
+
+query TT nosort
+SELECT 
+    g,
+    first(big_str) as expected_value
+FROM big_string_test 
+GROUP BY g
+ORDER BY g;
+----
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t0
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t1
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t2
+
+query TT nosort
+SELECT 
+    g,
+    finalize(first_state) as finalized_from_stored
+FROM stored_big_string_state
+ORDER BY g;
+----
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t0
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t1
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t2
+
+# Test 3: Combine states with big strings (tests StoreFieldForSelectedRowsOp)
+query TT nosort
+WITH state1 AS (
+    SELECT g, first(big_str) EXPORT_STATE as state1
+    FROM big_string_test 
+    WHERE r < 10
+    GROUP BY g
+),
+state2 AS (
+    SELECT g, first(big_str) EXPORT_STATE as state2
+    FROM big_string_test 
+    WHERE r >= 10
+    GROUP BY g
+)
+SELECT 
+    COALESCE(s1.g, s2.g) as g,
+    finalize(COMBINE(s1.state1, s2.state2)) as combined_and_finalized
+FROM state1 s1
+FULL OUTER JOIN state2 s2 ON s1.g = s2.g
+ORDER BY g;
+----
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t12
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
+
+# Test 4: Store combined state and finalize
+statement ok
+CREATE TABLE combined_big_string_state AS
+WITH state1 AS (
+    SELECT g, first(big_str) EXPORT_STATE as state1
+    FROM big_string_test 
+    WHERE r < 10
+    GROUP BY g
+),
+state2 AS (
+    SELECT g, first(big_str) EXPORT_STATE as state2
+    FROM big_string_test 
+    WHERE r >= 10
+    GROUP BY g
+)
+SELECT 
+    COALESCE(s1.g, s2.g) as g,
+    COMBINE(s1.state1, s2.state2) as combined_state
+FROM state1 s1
+FULL OUTER JOIN state2 s2 ON s1.g = s2.g;
+
+query TT nosort
+SELECT 
+    g,
+    finalize(combined_state) as finalized_combined
+FROM combined_big_string_state
+ORDER BY g;
+----
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t12
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
+
+# Test 5: Multiple combine operations with big strings
+query TT nosort
+WITH state1 AS (
+    SELECT g, first(big_str) EXPORT_STATE as state1
+    FROM big_string_test 
+    WHERE r < 5
+    GROUP BY g
+),
+state2 AS (
+    SELECT g, first(big_str) EXPORT_STATE as state2
+    FROM big_string_test 
+    WHERE r >= 5 AND r < 10
+    GROUP BY g
+),
+state3 AS (
+    SELECT g, first(big_str) EXPORT_STATE as state3
+    FROM big_string_test 
+    WHERE r >= 10
+    GROUP BY g
+)
+SELECT 
+    COALESCE(COALESCE(s1.g, s2.g), s3.g) as g,
+    finalize(COMBINE(COMBINE(s1.state1, s2.state2), s3.state3)) as triple_combined
+FROM state1 s1
+FULL OUTER JOIN state2 s2 ON s1.g = s2.g
+FULL OUTER JOIN state3 s3 ON COALESCE(s1.g, s2.g) = s3.g
+ORDER BY g;
+----
+group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t12
+group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
+group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
