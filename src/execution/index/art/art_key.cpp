@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/common/types/geometry.hpp"
 
 namespace duckdb {
 
