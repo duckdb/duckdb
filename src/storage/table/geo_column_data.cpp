@@ -325,6 +325,7 @@ static GeometryStorageType GetStorageType(GeometryType geom_type, VertexType ver
 		}
 	case GeometryType::GEOMETRYCOLLECTION:
 	case GeometryType::INVALID:
+	default:
 		// GEOMETRYCOLLECTION is not supported for shredding, but we still want to record the storage type for stats
 		// purposes
 		return GeometryStorageType::WKB;
