@@ -2689,9 +2689,25 @@ static void ToSpatialGeometryConvert(ToSpatialGeometryState &state, FixedSizeBlo
 
 		switch (type) {
 		case GeometryType::POINT: {
-			writer.Write<uint32_t>(1); // point always has 1 vertex
 			const auto vert_data = reader.Reserve(vert_width);
-			writer.Write(vert_data, vert_width);
+
+			constexpr auto nan = std::numeric_limits<double>::quiet_NaN();
+			double empty[4] = {nan, nan, nan, nan};
+
+			memcpy(empty, vert_data, vert_width); // copy vertex data, will overwrite leading dimensions if present
+			auto is_empty = true;
+			for (auto &d : empty) {
+				if (!std::isnan(d)) {
+					is_empty = false;
+					break;
+				}
+			}
+			if (is_empty) {
+				writer.Write<uint32_t>(0); // empty point has 0 vertices
+			} else {
+				writer.Write<uint32_t>(1); // point always has 1 vertex
+				writer.Write(vert_data, vert_width);
+			}
 		} break;
 		case GeometryType::LINESTRING: {
 			const auto vert_count = reader.Read<uint32_t>();
