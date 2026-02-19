@@ -216,6 +216,17 @@ struct StoreFieldForSelectedRowsOp {
 	}
 };
 
+idx_t GetRecursivePhysicalSize(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return GetTypeIdSize(type.InternalType());
+	}
+	idx_t size = 0;
+	for (const auto &child : StructType::GetChildTypes(type)) {
+		size += GetRecursivePhysicalSize(child.second);
+	}
+	return size;
+}
+
 // Deserialize struct fields from a flattened struct vector into a state buffer.
 // Uses LoadFieldOp for tight SIMD-friendly loops
 void DeserializeStructFields(const AggregateStateLayout &layout, Vector &struct_vec,
@@ -228,8 +239,13 @@ void DeserializeStructFields(const AggregateStateLayout &layout, Vector &struct_
 		idx_t alignment = MinValue<idx_t>(field_size, 8);
 		offset_in_state = AlignValue(offset_in_state, alignment);
 
-		TemplateDispatch<LoadFieldOp>(physical, layout, struct_vec, field_idx, state_data, count, dest_buffer,
-		                              offset_in_state);
+		if (field_type.id() == LogicalTypeId::STRUCT) {
+			auto child_layout = AggregateStateLayout(field_type, field_size);
+			DeserializeStructFields(child_layout, struct_vec, state_data, count, dest_buffer + offset_in_state);
+		} else {
+			TemplateDispatch<LoadFieldOp>(physical, layout, struct_vec, field_idx, state_data, count, dest_buffer,
+			                              offset_in_state);
+		}
 
 		offset_in_state += field_size;
 	}
@@ -243,11 +259,17 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
 		auto &field_type = layout.child_types->at(field_idx).second;
 		auto physical = field_type.InternalType();
-		idx_t field_size = GetTypeIdSize(physical);
+		idx_t field_size = GetRecursivePhysicalSize(field_type);
 		idx_t alignment = MinValue<idx_t>(field_size, 8);
 		offset_in_state = AlignValue(offset_in_state, alignment);
 
-		TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
+		if (field_type.id() == LogicalTypeId::STRUCT) {
+			auto child_layout = AggregateStateLayout(field_type, field_size);
+			auto &struct_entries = StructVector::GetEntries(result);
+			SerializeStructFields(child_layout, *struct_entries.get(field_idx), count, addresses_ptrs);
+		} else {
+			TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
+		}
 
 		offset_in_state += field_size;
 	}
