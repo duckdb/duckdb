@@ -150,3 +150,4 @@ statement error
 select var_pop(a) from (values (1e301), (-1e301)) tbl(a)
 ----
 Out of Range Error: VARPOP is out of range
+

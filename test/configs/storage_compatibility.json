@@ -145,6 +145,8 @@
         "test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test",
         "test/sql/storage/compression/roaring/roaring_bool_uncompressed_under_v1_5_0.test",
         "test/sql/aggregate/aggregates/test_state_export_struct.test",
+        "test/sql/aggregate/aggregates/test_stddev_export_state.test",
+        "test/sql/aggregate/aggregates/test_covar_export_state.test",
         "test/sql/aggregate/aggregates/test_combine_aggr.test"
       ]
     },

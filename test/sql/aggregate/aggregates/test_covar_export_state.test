@@ -1,0 +1,23 @@
+# name: test/sql/aggregate/aggregates/test_covar_export_state.test
+# description: Test COVAR EXPORT_STATE
+# group: [aggregates]
+
+statement ok
+CREATE TABLE integers(x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (10,NULL), (10,11), (20,22), (25,NULL), (30,35)
+
+# test struct-based state export
+statement ok
+CREATE TABLE covar_state AS SELECT COVAR_POP(x,y) EXPORT_STATE pop_state, COVAR_SAMP(x, y) EXPORT_STATE samp_state FROM integers;
+
+query T
+SELECT pop_state::STRUCT(count UBIGINT, mean_x DECIMAL(18,2), mean_y DECIMAL(18,2), co_moment DOUBLE) FROM covar_state;
+----
+{'count': 3, 'mean_x': 22.67, 'mean_y': 20.00, 'co_moment': 240.0}
+
+query T
+SELECT samp_state::STRUCT(count UBIGINT, mean_x DECIMAL(18,2), mean_y DECIMAL(18,2), co_moment DOUBLE) FROM covar_state;
+----
+{'count': 3, 'mean_x': 22.67, 'mean_y': 20.00, 'co_moment': 240.0}
