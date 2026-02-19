@@ -105,10 +105,6 @@
     {
       "reason": "FIXME: CREATE SECRET not properly supported",
       "paths": ["test/sql/secrets/create_secret_expression.test"]
-    },
-    {
-      "reason": "FIXME: PEG parsing succeeds, but leads to wrong results",
-      "paths": ["test/sql/cte/warn_deprecated_union_in_using_key.test"]
     }
   ]
 }
