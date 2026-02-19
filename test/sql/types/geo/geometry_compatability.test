@@ -1,8 +1,12 @@
 # name: test/sql/types/geo/geometry_compatability.test
 # group: [geo]
 
-# Make a copy of the testing database so we can make modifications
+# This test opens a database created with DuckDB v1.4.3 using the spatial extension, which had a different internal
+# geometry representation than what we use in core. Once geometry was added to core in v1.5.0 we made the storage layer
+# automatically convert between old and new (and vice-versa) so that there is no percievable difference to both users
+# and the execution engine. This test ensures that we can deal with the old geometry format without any issues.
 
+# Make a copy of the testing database so we can make modifications
 statement ok
 copy (select content from read_blob('{DATA_DIR}/storage/spatial_geo.db')) to '__TEST_DIR__/geo.db' (format BLOB);
 
@@ -12,11 +16,13 @@ ATTACH '__TEST_DIR__/geo.db'
 statement ok
 USE geo;
 
+# Check that this is indeed an old format database, and that the storage version is correct.
 query I
 select tags.storage_version from duckdb_databases() where database_name = 'geo';
 ----
 v1.0.0+
 
+# Check that we can read (and cast to VARCHAR) the old geometries correctly.
 query II
 select * from t_all_types order by id;
 ----
@@ -48,3 +54,43 @@ select * from t_all_types order by id;
 26	GEOMETRYCOLLECTION Z (POINT Z (1 2 3), LINESTRING Z (3 4 5, 5 6 7))
 27	GEOMETRYCOLLECTION M (POINT M (1 2 4), LINESTRING M (3 4 6, 5 6 8))
 28	GEOMETRYCOLLECTION ZM (POINT ZM (1 2 3 4), LINESTRING ZM (3 4 5 6, 5 6 7 8))
+
+# Stats should be "Unknown" as the old format does not have geometry stats, but string stats (that we ignore)
+query I
+select stats(g) from t_all_types limit 1
+----
+[Extent: [X: [-inf, inf], Y: [-inf, inf], Z: [-inf, inf], M: [-inf, inf]], Types: [unknown, point, linestring, polygon, multipoint, multilinestring, multipolygon, geometrycollection, unknown_z, point_z, linestring_z, polygon_z, multipoint_z, multilinestring_z, multipolygon_z, geometrycollection_z, unknown_m, point_m, linestring_m, polygon_m, multipoint_m, multilinestring_m, multipolygon_m, geometrycollection_m, unknown_zm, point_zm, linestring_zm, polygon_zm, multipoint_zm, multilinestring_zm, multipolygon_zm, geometrycollection_zm], Flags: [Has Empty Geom: true, Has No Empty Geom: true, Has Empty Part: true, Has No Empty Part: true]][Has Null: false, Has No Null: true][Approx Unique: 28]
+
+# Additionally, there is an ART index on the geometry, so make sure we can use it and get the same results as a sequential scan.
+# (ART indexing geometries make little sense, but nevertheless its important that new geometries are converted to the same byte representation
+# as the old ones when scanning/inserting).
+
+# Check that we still get the index scan
+query II
+EXPLAIN ANALYZE SELECT id from t_all_types where g = 'MULTIPOINT Z (1 2 3, 3 4 5, 5 6 7)';
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# Check that we get the correct result when doing ART lookups on the geometry column.
+query I
+SELECT id from t_all_types where g = 'MULTIPOINT Z (1 2 3, 3 4 5, 5 6 7)';
+----
+14
+
+# Also constraint violations
+statement error
+INSERT INTO t_all_types VALUES (29, 'POINT (1 2)');
+----
+TransactionContext Error: Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key "POINT (1 2)"
+
+# But we can do other inserts
+statement ok
+INSERT INTO t_all_types VALUES (29, 'POINT (2 3)');
+
+query II
+select id, g from t_all_types where id = 29;
+----
+29	POINT (2 3)
+
+statement ok
+CHECKPOINT;
