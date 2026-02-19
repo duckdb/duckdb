@@ -88,7 +88,7 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 	const auto &data = GetDataUnsafe(stats);
 
 	// Write extent
-	serializer.WriteObject(300, "extent", [&](Serializer &extent) {
+	serializer.WriteObject(200, "extent", [&](Serializer &extent) {
 		extent.WriteProperty<double>(101, "x_min", data.extent.x_min);
 		extent.WriteProperty<double>(102, "x_max", data.extent.x_max);
 		extent.WriteProperty<double>(103, "y_min", data.extent.y_min);
@@ -100,7 +100,7 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 	});
 
 	// Write types
-	serializer.WriteObject(301, "types", [&](Serializer &types) {
+	serializer.WriteObject(201, "types", [&](Serializer &types) {
 		types.WriteProperty<uint8_t>(101, "types_xy", data.types.sets[0]);
 		types.WriteProperty<uint8_t>(102, "types_xyz", data.types.sets[1]);
 		types.WriteProperty<uint8_t>(103, "types_xym", data.types.sets[2]);

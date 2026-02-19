@@ -446,6 +446,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	}
 
 	auto new_type = Geometry::GetVectorizedType(new_geom_type, new_vert_type);
+	auto new_storage_type = GetStorageType(new_geom_type, new_vert_type);
 
 	auto new_column = CreateColumn(block_manager, this->info, base_column->column_index, new_type, GetDataType(), this);
 
@@ -479,7 +480,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		append_chunk.SetCardinality(to_scan);
 
 		// Make the split
-		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, storage_type);
+		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, new_storage_type);
 
 		// Append into the new specialized column
 		new_column->Append(dummy_stats, append_state, append_chunk.data[0], to_scan);
@@ -494,7 +495,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	checkpoint_state->inner_column_state = checkpoint_state->inner_column->Checkpoint(row_group, info, empty_stats);
 
 	// Also set the shredding state
-	checkpoint_state->storage_type = GetStorageType(new_geom_type, new_vert_type);
+	checkpoint_state->storage_type = new_storage_type;
 
 	return std::move(checkpoint_state);
 }
