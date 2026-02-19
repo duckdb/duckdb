@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 
 namespace duckdb {
 
@@ -246,7 +247,45 @@ void StoreFieldForSelectedRowsOp::Operation<string_t>(const AggregateStateLayout
 		idx_t row = sel.get_index(i);
 		auto src = base_ptr + i * layout.aligned_state_size + field_offset;
 		string_t source_str = *reinterpret_cast<string_t *>(src);
+		// AddStringOrBlob handles both inlined and non-inlined strings correctly
 		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
+	}
+}
+
+// Deserialize struct fields from a flattened struct vector into a state buffer.
+// Uses LoadFieldOp for tight SIMD-friendly loops
+void DeserializeStructFields(const AggregateStateLayout &layout, Vector &struct_vec,
+                             const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t dest_buffer) {
+	idx_t offset_in_state = 0;
+	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
+		auto &field_type = layout.child_types->at(field_idx).second;
+		auto physical = field_type.InternalType();
+		idx_t field_size = GetTypeIdSize(physical);
+		idx_t alignment = MinValue<idx_t>(field_size, 8);
+		offset_in_state = AlignValue(offset_in_state, alignment);
+
+		TemplateDispatch<LoadFieldOp>(physical, layout, struct_vec, field_idx, state_data, count, dest_buffer,
+		                              offset_in_state);
+
+		offset_in_state += field_size;
+	}
+}
+
+// Serialize packed binary states into a struct result vector.
+// Uses StoreFieldOp for tight SIMD-friendly loops
+void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, idx_t count,
+                           data_ptr_t *addresses_ptrs) {
+	idx_t offset_in_state = 0;
+	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
+		auto &field_type = layout.child_types->at(field_idx).second;
+		auto physical = field_type.InternalType();
+		idx_t field_size = GetTypeIdSize(physical);
+		idx_t alignment = MinValue<idx_t>(field_size, 8);
+		offset_in_state = AlignValue(offset_in_state, alignment);
+
+		TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
+
+		offset_in_state += field_size;
 	}
 }
 
@@ -316,23 +355,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 			state_vec_ptr[i] = local_state.state_buffer.get() + i * layout.aligned_state_size;
 		}
 
-		idx_t offset = 0;
-		for (idx_t f = 0; f < layout.child_types->size(); f++) {
-			auto type = layout.child_types->at(f).second;
-			idx_t field_size = GetTypeIdSize(type.InternalType());
-			idx_t alignment = MinValue<idx_t>(field_size, 8);
-			offset = AlignValue(offset, alignment);
-
-			auto &struct_vector = input.data[0];
-
-			// switch with templating since we want the compiler to optimize this when copying (reinterpret_cast)
-			// will internally use SIMD
-			auto physical = type.InternalType();
-			TemplateDispatch<LoadFieldOp>(physical, layout, struct_vector, f, state_data, input.size(),
-			                              local_state.state_buffer.get(), offset);
-
-			offset += field_size;
-		}
+		DeserializeStructFields(layout, input.data[0], state_data, input.size(), local_state.state_buffer.get());
 	} else {
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto target_ptr = local_state.state_buffer.get() + layout.aligned_state_size * i;
@@ -535,25 +558,19 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	}
 }
 
-unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
-	// grab the aggregate type and bind the aggregate again
-
-	// the aggregate name and types are in the logical type of the aggregate state, make sure its sane
+// Creates the bind data by resolving the underlying aggregate function from an AGGREGATE_STATE logical type.
+unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &context, SimpleFunction &function,
+                                                               vector<unique_ptr<Expression>> &arguments,
+                                                               bool allow_legacy) {
 	auto &arg_return_type = arguments[0]->return_type;
-	for (auto &arg_type : bound_function.arguments) {
+	for (auto &arg_type : function.arguments) {
 		arg_type = arg_return_type;
 	}
 
-	if (arg_return_type.id() != LogicalTypeId::LEGACY_AGGREGATE_STATE &&
-	    arg_return_type.id() != LogicalTypeId::AGGREGATE_STATE) {
-		throw BinderException("Can only FINALIZE aggregate state, not %s", arg_return_type.ToString());
-	}
-	// combine
-	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type &&
-	    arguments[1]->return_type.id() != LogicalTypeId::BLOB) {
-		throw BinderException("Cannot COMBINE aggregate states from different functions, %s <> %s",
-		                      arguments[0]->return_type.ToString(), arguments[1]->return_type.ToString());
+	if (arg_return_type.id() != LogicalTypeId::AGGREGATE_STATE &&
+	    (!allow_legacy || arg_return_type.id() != LogicalTypeId::LEGACY_AGGREGATE_STATE)) {
+		string allowed = allow_legacy ? "AGGREGATE_STATE or LEGACY_AGGREGATE_STATE" : "AGGREGATE_STATE";
+		throw BinderException("Can only %s %s, not %s", function.name, allowed, arg_return_type.ToString());
 	}
 
 	// following error states are only reachable when someone messes up creating the state_type
@@ -598,14 +615,28 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}
 
-	if (bound_function.name == "finalize") {
-		bound_function.SetReturnType(bound_aggr.GetReturnType());
-	} else {
-		D_ASSERT(bound_function.name == "combine");
-		bound_function.SetReturnType(arg_return_type);
+	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.GetStateSizeCallback()(bound_aggr));
+}
+
+unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFunction &bound_function,
+                                            vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindAggregateStateInternal(context, bound_function, arguments, true);
+
+	// combine
+	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type &&
+	    arguments[1]->return_type.id() != LogicalTypeId::BLOB) {
+		throw BinderException("Cannot COMBINE aggregate states from different functions, %s <> %s",
+		                      arguments[0]->return_type.ToString(), arguments[1]->return_type.ToString());
 	}
 
-	return make_uniq<ExportAggregateBindData>(bound_aggr, bound_aggr.GetStateSizeCallback()(bound_aggr));
+	if (bound_function.name == "finalize") {
+		bound_function.SetReturnType(bind_data->aggr.GetReturnType());
+	} else {
+		D_ASSERT(bound_function.name == "combine");
+		bound_function.SetReturnType(arguments[0]->return_type);
+	}
+
+	return std::move(bind_data);
 }
 
 void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
@@ -622,18 +653,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 		AggregateStateLayout layout(bind_data.aggregate->function.GetStateType(), state_size);
 
 		result.Flatten(count);
-		idx_t offset_in_state = 0;
-		for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
-			auto &field_type = layout.child_types->at(field_idx).second;
-			auto physical = field_type.InternalType();
-			idx_t field_size = GetTypeIdSize(physical);
-			idx_t alignment = MinValue<idx_t>(field_size, 8);
-			offset_in_state = AlignValue(offset_in_state, alignment);
-
-			TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
-
-			offset_in_state += field_size;
-		}
+		SerializeStructFields(layout, result, count, addresses_ptrs);
 		return;
 	}
 
@@ -660,6 +680,79 @@ void ExportStateScalarSerialize(Serializer &serializer, const optional_ptr<Funct
 
 unique_ptr<FunctionData> ExportStateScalarDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	throw NotImplementedException("FIXME: export state deserialize");
+}
+
+unique_ptr<FunctionData> CombineAggrBind(ClientContext &context, AggregateFunction &function,
+                                         vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindAggregateStateInternal(context, function, arguments, false);
+
+	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
+	function.state_size = bind_data->aggr.GetStateSizeCallback();
+	function.initialize = bind_data->aggr.GetStateInitCallback();
+	function.combine = bind_data->aggr.GetStateCombineCallback();
+
+	function.SetReturnType(arguments[0]->return_type);
+
+	return std::move(bind_data);
+}
+
+void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
+                       idx_t count) {
+	D_ASSERT(input_count == 1);
+
+	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
+	auto &underlying_aggr = bind_data.aggr;
+	auto state_size = bind_data.state_size;
+
+	AggregateStateLayout layout(inputs[0].GetType(), state_size);
+
+	UnifiedVectorFormat sdata;
+	states.ToUnifiedFormat(count, sdata);
+	auto state_ptrs = reinterpret_cast<data_ptr_t *>(sdata.data);
+
+	inputs[0].Flatten(count);
+
+	UnifiedVectorFormat input_data;
+	inputs[0].ToUnifiedFormat(count, input_data);
+
+	auto aligned_size = layout.aligned_state_size;
+	unsafe_unique_array<data_t> temp_state_buf = make_unsafe_uniq_array<data_t>(count * aligned_size);
+
+	// source_vec holds pointers to the binary states buffer (temp_state_buf) deserialized from the input states
+	Vector source_vec(LogicalType::POINTER);
+	auto source_ptrs = FlatVector::GetData<data_ptr_t>(source_vec);
+
+	// target_vec will hold pointers to the binary state buffer where the combined states should be stored, built by the
+	// underlying aggregate function's combine callback
+	Vector target_vec(LogicalType::POINTER);
+	auto target_ptrs = FlatVector::GetData<data_ptr_t>(target_vec);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto temp_ptr = temp_state_buf.get() + i * aligned_size;
+		underlying_aggr.GetStateInitCallback()(underlying_aggr, temp_ptr);
+		source_ptrs[i] = temp_ptr;
+		target_ptrs[i] = state_ptrs[sdata.sel->get_index(i)];
+	}
+
+	DeserializeStructFields(layout, inputs[0], input_data, count, temp_state_buf.get());
+
+	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	AggregateInputData combine_input(nullptr, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+	underlying_aggr.GetStateCombineCallback()(source_vec, target_vec, combine_input, count);
+}
+
+void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+                         idx_t offset) {
+	D_ASSERT(offset == 0);
+	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateBindData>();
+	auto &underlying_aggr = bind_data.aggr;
+	auto state_size = bind_data.state_size;
+	auto addresses_ptrs = FlatVector::GetData<data_ptr_t>(state);
+
+	AggregateStateLayout layout(underlying_aggr.GetStateType(), state_size);
+
+	result.Flatten(count);
+	SerializeStructFields(layout, result, count, addresses_ptrs);
 }
 
 } // namespace
@@ -771,6 +864,14 @@ ScalarFunctionSet CombineFun::GetFunctions() {
 	combine_set.AddFunction(struct_based_combine);
 
 	return combine_set;
+}
+
+AggregateFunction CombineAggrFun::GetFunction() {
+	auto function = AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE,
+	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr,
+	                                  CombineAggrBind, nullptr, nullptr, nullptr);
+	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	return function;
 }
 
 } // namespace duckdb
