@@ -206,7 +206,7 @@ SELECT finalize(combine(state, state)) FROM t3_product ORDER BY 1;
 query T
 SELECT (product(2.0) export_state)::struct(empty boolean, val double);
 ----
-{'empty': False, 'val': 2.0}
+{'empty': false, 'val': 2.0}
 
 # Test product with empty result (should be NULL when no rows)
 query T
