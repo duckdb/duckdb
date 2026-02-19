@@ -7,8 +7,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-#include <duckdb/storage/storage_manager.hpp>
-
 namespace duckdb {
 
 vector<string> GeometryTypeSet::ToString(bool snake_case) const {
@@ -88,7 +86,7 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 	const auto &data = GetDataUnsafe(stats);
 
 	// Write extent
-	serializer.WriteObject(200, "extent", [&](Serializer &extent) {
+	serializer.WriteObject(300, "extent", [&](Serializer &extent) {
 		extent.WriteProperty<double>(101, "x_min", data.extent.x_min);
 		extent.WriteProperty<double>(102, "x_max", data.extent.x_max);
 		extent.WriteProperty<double>(103, "y_min", data.extent.y_min);
@@ -100,7 +98,7 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 	});
 
 	// Write types
-	serializer.WriteObject(201, "types", [&](Serializer &types) {
+	serializer.WriteObject(301, "types", [&](Serializer &types) {
 		types.WriteProperty<uint8_t>(101, "types_xy", data.types.sets[0]);
 		types.WriteProperty<uint8_t>(102, "types_xyz", data.types.sets[1]);
 		types.WriteProperty<uint8_t>(103, "types_xym", data.types.sets[2]);
@@ -114,28 +112,15 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &data = GetDataUnsafe(base);
 
-	auto catalog = deserializer.TryGet<Catalog>();
-	if (catalog) {
-		auto &c = *catalog;
-		const auto storage_version = c.GetAttached().GetStorageManager().GetStorageVersion();
-		if (storage_version < 7) {
-			// Dummy string data
-			StringStatsData string_data;
-			deserializer.ReadProperty(200, "min", string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
-			deserializer.ReadProperty(201, "max", string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
-			deserializer.ReadProperty(202, "has_unicode", string_data.has_unicode);
-			deserializer.ReadProperty(203, "has_max_string_length", string_data.has_max_string_length);
-			deserializer.ReadProperty(204, "max_string_length", string_data.max_string_length);
-
-			data.extent = GeometryExtent::Unknown();
-			data.types = GeometryTypeSet::Unknown();
-			data.flags = GeometryStatsFlags::Unknown();
-			return;
-		}
+	// Read old garbage string stats if present, but ignore it since it is not relevant to geometry stats
+	if (deserializer.HasProperty(200, "min")) {
+		auto string_stats = StringStats::CreateEmpty(LogicalType::VARCHAR);
+		StringStats::Deserialize(deserializer, string_stats);
+		return;
 	}
 
 	// Read extent
-	deserializer.ReadObject(200, "extent", [&](Deserializer &extent) {
+	deserializer.ReadObject(300, "extent", [&](Deserializer &extent) {
 		extent.ReadProperty<double>(101, "x_min", data.extent.x_min);
 		extent.ReadProperty<double>(102, "x_max", data.extent.x_max);
 		extent.ReadProperty<double>(103, "y_min", data.extent.y_min);
@@ -147,7 +132,7 @@ void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base
 	});
 
 	// Read types
-	deserializer.ReadObject(201, "types", [&](Deserializer &types) {
+	deserializer.ReadObject(301, "types", [&](Deserializer &types) {
 		types.ReadProperty<uint8_t>(101, "types_xy", data.types.sets[0]);
 		types.ReadProperty<uint8_t>(102, "types_xyz", data.types.sets[1]);
 		types.ReadProperty<uint8_t>(103, "types_xym", data.types.sets[2]);

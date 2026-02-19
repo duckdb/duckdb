@@ -20,11 +20,9 @@ void TableDataReader::ReadTableData() {
 	// We stored the table statistics as a unit in FinalizeTable.
 	BinaryDeserializer stats_deserializer(reader);
 
-	stats_deserializer.Set<Catalog &>(info.schema.catalog);
 	stats_deserializer.Begin();
 	info.data->table_stats.Deserialize(stats_deserializer, columns);
 	stats_deserializer.End();
-	stats_deserializer.Unset<Catalog>();
 
 	// Deserialize the row group pointers (lazily, just set the count and the pointer to them for now)
 	info.data->row_group_count = reader.Read<uint64_t>();

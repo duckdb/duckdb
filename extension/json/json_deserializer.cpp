@@ -143,6 +143,11 @@ bool JsonDeserializer::OnNullableBegin() {
 void JsonDeserializer::OnNullableEnd() {
 }
 
+bool JsonDeserializer::HasProperty(const field_id_t, const char *tag) {
+	auto parent = Current();
+	return yyjson_obj_get(parent.val, tag) != nullptr;
+}
+
 //===--------------------------------------------------------------------===//
 // Primitive Types
 //===--------------------------------------------------------------------===//
