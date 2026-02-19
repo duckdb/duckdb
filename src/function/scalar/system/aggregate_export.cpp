@@ -136,7 +136,7 @@ struct AggregateStateLayout {
  */
 struct LoadFieldOp {
 	template <class T>
-	static void Operation(const AggregateStateLayout &layout, Vector &struct_vec, idx_t field_idx,
+	static void Operation(idx_t root_stride, Vector &struct_vec, idx_t field_idx,
 	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
 		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
@@ -147,7 +147,7 @@ struct LoadFieldOp {
 				continue;
 			}
 
-			auto dest = base_ptr + row * layout.aligned_state_size + field_offset;
+			auto dest = base_ptr + row * root_stride + field_offset;
 			*reinterpret_cast<T *>(dest) = child_data[row];
 		}
 	}
@@ -228,8 +228,10 @@ idx_t GetRecursivePhysicalSize(const LogicalType &type) {
 }
 
 // Deserialize struct fields from a flattened struct vector into a state buffer.
-// Uses LoadFieldOp for tight SIMD-friendly loops
-void DeserializeStructFields(const AggregateStateLayout &layout, Vector &struct_vec,
+// Uses LoadFieldOp for tight SIMD-friendly loops.
+// root_stride is the aligned size of the top-level state, used to stride between rows in the buffer (root-state's
+// size must be taken into account)
+void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stride, Vector &struct_vec,
                              const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t dest_buffer) {
 	idx_t offset_in_state = 0;
 	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
@@ -242,9 +244,9 @@ void DeserializeStructFields(const AggregateStateLayout &layout, Vector &struct_
 		if (field_type.id() == LogicalTypeId::STRUCT) {
 			auto child_layout = AggregateStateLayout(field_type, field_size);
 			auto &struct_entries = StructVector::GetEntries(struct_vec);
-			DeserializeStructFields(child_layout, *struct_entries[field_idx], state_data, count, dest_buffer + offset_in_state);
+			DeserializeStructFields(child_layout, root_stride, *struct_entries[field_idx], state_data, count, dest_buffer + offset_in_state);
 		} else {
-			TemplateDispatch<LoadFieldOp>(physical, layout, struct_vec, field_idx, state_data, count, dest_buffer,
+			TemplateDispatch<LoadFieldOp>(physical, root_stride, struct_vec, field_idx, state_data, count, dest_buffer,
 			                              offset_in_state);
 		}
 
@@ -350,7 +352,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 			state_vec_ptr[i] = local_state.state_buffer.get() + i * layout.aligned_state_size;
 		}
 
-		DeserializeStructFields(layout, input.data[0], state_data, input.size(), local_state.state_buffer.get());
+		DeserializeStructFields(layout, layout.aligned_state_size, input.data[0], state_data, input.size(), local_state.state_buffer.get());
 	} else {
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto target_ptr = local_state.state_buffer.get() + layout.aligned_state_size * i;
@@ -729,7 +731,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_ptrs[i] = state_ptrs[sdata.sel->get_index(i)];
 	}
 
-	DeserializeStructFields(layout, inputs[0], input_data, count, temp_state_buf.get());
+	DeserializeStructFields(layout, layout.aligned_state_size, inputs[0], input_data, count, temp_state_buf.get());
 
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	AggregateInputData combine_input(nullptr, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
