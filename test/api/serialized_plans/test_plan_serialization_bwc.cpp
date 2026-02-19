@@ -7,7 +7,6 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "test_helpers.hpp"
-#include "tpch_extension.hpp"
 
 #include <fstream>
 
