@@ -551,9 +551,10 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 	const auto &first_window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
-	if (!first_window_expr.partitions.empty() &&
-	    first_window_expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-		return false;
+	for (auto &partition : first_window_expr.partitions) {
+		if (partition->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return false;
+		}
 	}
 	if (window.expressions.size() != 1) {
 		for (idx_t i = 1; i < window.expressions.size(); ++i) {
