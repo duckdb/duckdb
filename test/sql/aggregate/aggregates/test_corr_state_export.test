@@ -10,7 +10,7 @@ SET storage_compatibility_version = 'latest';
 statement ok
 create table dummy as select range % 10 g, range d from range(100);
 
-# Test casting to struct
+# Test state export
 query T
 SELECT corr(d, d+1) export_state FROM dummy;
 ----
