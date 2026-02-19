@@ -266,8 +266,16 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 
 		if (field_type.id() == LogicalTypeId::STRUCT) {
 			auto child_layout = AggregateStateLayout(field_type, field_size);
+
+			// we need to write to the buffers with the current offset the child is pointing to in the state
+			Vector child_addresses(LogicalType::POINTER);
+			auto child_ptrs = FlatVector::GetData<data_ptr_t>(child_addresses);
+			for (idx_t row = 0; row < count; row++) {
+				child_ptrs[row] = addresses_ptrs[row] + offset_in_state;
+			}
+
 			auto &struct_entries = StructVector::GetEntries(result);
-			SerializeStructFields(child_layout, *struct_entries.get(field_idx), count, addresses_ptrs);
+			SerializeStructFields(child_layout, *struct_entries.get(field_idx), count, child_ptrs);
 		} else {
 			TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
 		}
