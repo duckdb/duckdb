@@ -1362,9 +1362,12 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			string blob;
 			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
 				auto idx = vdata.sel->get_index(i);
-				auto geom = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : geoms[idx];
-				Geometry::ToSpatialGeometry(geom, blob);
-				list.WriteElement(blob);
+				if (!vdata.validity.RowIsValid(idx)) {
+					list.WriteElement(NullValue<string_t>());
+				} else {
+					Geometry::ToSpatialGeometry(geoms[idx], blob);
+					list.WriteElement(blob);
+				}
 			});
 		} else {
 			// Serialize as WKB format
