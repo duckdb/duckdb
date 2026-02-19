@@ -77,6 +77,8 @@ BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
 }
 
 void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
+	// Should we serialize as old extension geometry type for backwards compatibility?
+	// (in that case, write unknown string stats)
 	if (!serializer.ShouldSerialize(7)) {
 		auto string_stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
 		StringStats::Serialize(string_stats, serializer);
@@ -116,6 +118,11 @@ void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base
 	if (deserializer.HasProperty(200, "min")) {
 		auto string_stats = StringStats::CreateEmpty(LogicalType::VARCHAR);
 		StringStats::Deserialize(deserializer, string_stats);
+
+		// We don't know how to interpret the old string stats, so we just set the geometry stats to unknown
+		data.extent = GeometryExtent::Unknown();
+		data.types = GeometryTypeSet::Unknown();
+		data.flags = GeometryStatsFlags::Unknown();
 		return;
 	}
 

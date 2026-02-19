@@ -94,3 +94,26 @@ select id, g from t_all_types where id = 29;
 
 statement ok
 CHECKPOINT;
+
+# Lets see if we attach with a newer storage version
+statement ok
+USE memory
+
+statement ok
+DETACH geo;
+
+statement ok
+ATTACH '__TEST_DIR__/geo.db' (STORAGE_VERSION 'v1.5.0');
+
+statement ok
+USE geo;
+
+query I
+select tags.storage_version from duckdb_databases() where database_name = 'geo';
+----
+v1.5.0+
+
+query I
+select stats(g) from t_all_types limit 1
+----
+[Extent: [X: [-inf, inf], Y: [-inf, inf], Z: [-inf, inf], M: [-inf, inf]], Types: [unknown, point, linestring, polygon, multipoint, multilinestring, multipolygon, geometrycollection, unknown_z, point_z, linestring_z, polygon_z, multipoint_z, multilinestring_z, multipolygon_z, geometrycollection_z, unknown_m, point_m, linestring_m, polygon_m, multipoint_m, multilinestring_m, multipolygon_m, geometrycollection_m, unknown_zm, point_zm, linestring_zm, polygon_zm, multipoint_zm, multilinestring_zm, multipolygon_zm, geometrycollection_zm], Flags: [Has Empty Geom: true, Has No Empty Geom: true, Has Empty Part: true, Has No Empty Part: true]][Has Null: false, Has No Null: true][Approx Unique: 29]

@@ -512,9 +512,8 @@ PersistentColumnData GeoColumnData::Serialize() {
 	// Serialize the inner column
 	auto inner_data = base_column->Serialize();
 
-	if (storage_type != GeometryStorageType::WKB && storage_type != GeometryStorageType::SPATIAL) {
-		D_ASSERT(GetStorageManager().GetStorageVersion() >= 7);
-
+	// Always store the format, except for the old spatial format, to avoid breaking compatibility with older versions
+	if (storage_type != GeometryStorageType::SPATIAL) {
 		auto extra_data = make_uniq<GeometryPersistentColumnData>();
 		extra_data->storage_type = storage_type;
 		inner_data.extra_data = std::move(extra_data);
@@ -526,9 +525,7 @@ PersistentColumnData GeoColumnData::Serialize() {
 void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) {
 	if (!column_data.extra_data) {
 		// Old geometry segment
-		if (GetStorageManager().GetStorageVersion() < 7) {
-			storage_type = GeometryStorageType::SPATIAL;
-		}
+		storage_type = GeometryStorageType::SPATIAL;
 
 		// No shredding, just initialize normally
 		base_column->InitializeColumn(column_data, target_stats);
