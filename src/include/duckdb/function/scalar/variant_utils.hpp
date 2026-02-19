@@ -102,6 +102,7 @@ struct VariantUtils {
 	                                           SelectionVector &sel, idx_t sel_size);
 	DUCKDB_API static void VariantExtract(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
 	                                      idx_t count);
+	DUCKDB_API static void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 };
 
 } // namespace duckdb

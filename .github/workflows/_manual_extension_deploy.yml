@@ -20,7 +20,7 @@ on:
         description: 'The extension-template version to use (empty for vx.y-codename)'
         type: string
         required: false
-        default: 'v1.4-andium'
+        default: 'main'
       extra_exclude_archs:
         description: 'Inject more architectures to skip (optional)'
         type: string
@@ -38,7 +38,7 @@ on:
         default: ""
 
 env:
-  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium"]' || ''}}
+  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
 
 jobs:
   load-extension-configs:

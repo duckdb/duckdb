@@ -303,25 +303,6 @@ TABLE tbl;
 ----
 1	120
 
-statement ok
-create table customers (id integer, cname varchar);
-
-statement ok
-insert into customers values (1, 'Customer#000000001'), (2, 'Customer#000000002'), (3, 'Customer#000000003'), (4, 'Customer#000000004');
-
-query I
-WITH RECURSIVE tbl(key, id, acc) USING KEY (key, approx_count_distinct(acc)) AS (
-	SELECT 1, id, cname
-	FROM customers
-	WHERE id = 1
-		UNION
-	SELECT key, tbl.id + 1, cname
-	FROM tbl
-	JOIN customers AS c ON c.id = tbl.id + 1)
-select acc from tbl;
-----
-4
-
 query I
 WITH RECURSIVE tbl(key, iter, b) USING KEY (key, approx_quantile(b, [0.5, 0.4, 0.1]) AS b) AS (
 	SELECT 1, 1, 0

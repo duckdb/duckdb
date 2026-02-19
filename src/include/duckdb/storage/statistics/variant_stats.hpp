@@ -58,7 +58,7 @@ public:
 public:
 	//! Stats related to the 'shredded' column, which holds all structured data created during shredding
 	//! Returns the LogicalType that represents the shredding as a single DuckDB LogicalType (i.e STRUCT(col1 VARCHAR))
-	DUCKDB_API LogicalType GetShreddedStructuredType(const BaseStatistics &stats);
+	DUCKDB_API static LogicalType GetShreddedStructuredType(const BaseStatistics &stats);
 	DUCKDB_API static void CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type);
 	DUCKDB_API static bool IsShredded(const BaseStatistics &stats);
 	DUCKDB_API static const BaseStatistics &GetShreddedStats(const BaseStatistics &stats);

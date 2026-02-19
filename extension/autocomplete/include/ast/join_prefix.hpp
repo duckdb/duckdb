@@ -5,6 +5,6 @@
 namespace duckdb {
 struct JoinPrefix {
 	JoinRefType ref_type;
-	JoinType join_type;
+	JoinType join_type = JoinType::INNER; // Inner is default, unless otherwise explicitly set
 };
 } // namespace duckdb

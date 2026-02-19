@@ -10,15 +10,15 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 class BlockManager;
+class BufferPool;
 class TemporaryMemoryManager;
 class DatabaseInstance;
 class TemporaryDirectoryHandle;
@@ -55,7 +55,7 @@ public:
 	idx_t GetBlockAllocSize() const final;
 	//! Returns the block size for buffer-managed blocks.
 	idx_t GetBlockSize() const final;
-	idx_t GetQueryMaxMemory() const final;
+	idx_t GetOperatorMemoryLimit() const final;
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
@@ -66,10 +66,7 @@ public:
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) final;
 
-	//! Reallocate an in-memory buffer that is pinned.
-	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
-
 	BufferHandle Pin(const QueryContext &context, shared_ptr<BlockHandle> &handle) final;
 
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
@@ -96,6 +93,9 @@ public:
 
 	DUCKDB_API Allocator &GetBufferAllocator() final;
 
+	const DatabaseInstance &GetDatabase() const override {
+		return db;
+	}
 	DatabaseInstance &GetDatabase() override {
 		return db;
 	}
@@ -143,7 +143,7 @@ protected:
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
-	void DeleteTemporaryFile(BlockHandle &block) final;
+	void DeleteTemporaryFile(BlockMemory &memory) final;
 
 	void RequireTemporaryDirectory();
 
