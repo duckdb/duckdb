@@ -1331,7 +1331,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 	}
 	ToUnifiedFormat(count, vdata);
 
-	if (logical_type.id() == LogicalTypeId::GEOMETRY && !serializer.ShouldSerialize(7)) {
+	if (logical_type.id() == LogicalTypeId::GEOMETRY && serializer.ShouldSerialize(7)) {
 		serializer.WriteProperty<GeometryStorageType>(99, "geometry_format", GeometryStorageType::WKB);
 	}
 

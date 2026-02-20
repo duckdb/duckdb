@@ -2269,9 +2269,7 @@ pair<GeometryType, VertexType> Geometry::GetSpecializedType(GeometryStorageType 
 }
 
 LogicalType Geometry::GetVectorizedType(GeometryStorageType type) {
-
 	if (type == GeometryStorageType::WKB) {
-		// WKB is just a string
 		return LogicalType::GEOMETRY();
 	}
 

@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/null_tests.test_slow
 # group: [variant]
 
-load __TEST_DIR__/variant_nulls.db
+load __TEST_DIR__/variant_nulls.db readwrite v1.5.0
 
 statement ok
 create table tbl(col VARIANT)
