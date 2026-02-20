@@ -111,11 +111,12 @@ bool EmitCompressionFunction(CompressionType type) {
 	}
 }
 
-vector<reference<CompressionFunction>> CompressionFunctionSet::GetCompressionFunctions(PhysicalType physical_type) {
+vector<reference<const CompressionFunction>>
+CompressionFunctionSet::GetCompressionFunctions(PhysicalType physical_type) {
 	LoadCompressionFunctions(physical_type);
 	auto index = GetCompressionIndex(physical_type);
 	auto &function_list = functions[index];
-	vector<reference<CompressionFunction>> result;
+	vector<reference<const CompressionFunction>> result;
 	for (auto &entry : function_list) {
 		auto compression_index = GetCompressionIndex(entry.type);
 		if (is_disabled[compression_index]) {
@@ -132,7 +133,6 @@ vector<reference<CompressionFunction>> CompressionFunctionSet::GetCompressionFun
 
 void CompressionFunctionSet::LoadCompressionFunctions(PhysicalType physical_type) {
 	auto index = GetCompressionIndex(physical_type);
-	auto &function_list = functions[index];
 	if (is_loaded[index]) {
 		return;
 	}
@@ -143,31 +143,21 @@ void CompressionFunctionSet::LoadCompressionFunctions(PhysicalType physical_type
 		return;
 	}
 	// actually perform the load
+	auto &function_list = functions[index];
 	for (idx_t i = 0; internal_compression_methods[i].get_function; i++) {
-		TryLoadCompression(internal_compression_methods[i].type, physical_type, function_list);
+		auto &method = internal_compression_methods[i];
+		if (!method.supports_type(physical_type)) {
+			// not supported for this type
+			continue;
+		}
+		// The type is supported. We create the function and insert it into the set of available functions.
+		function_list.push_back(method.get_function(physical_type));
 	}
 	is_loaded[index] = true;
 }
 
-void CompressionFunctionSet::TryLoadCompression(CompressionType type, PhysicalType physical_type,
-                                                vector<CompressionFunction> &result) {
-	for (idx_t i = 0; internal_compression_methods[i].get_function; i++) {
-		const auto &method = internal_compression_methods[i];
-		if (method.type == type) {
-			if (!method.supports_type(physical_type)) {
-				// not supported for this type
-				return;
-			}
-			// The type is supported. We create the function and insert it into the set of available functions.
-			result.push_back(method.get_function(physical_type));
-			return;
-		}
-	}
-	throw InternalException("Unsupported compression function type");
-}
-
-optional_ptr<CompressionFunction> CompressionFunctionSet::GetCompressionFunction(CompressionType type,
-                                                                                 const PhysicalType physical_type) {
+optional_ptr<const CompressionFunction>
+CompressionFunctionSet::GetCompressionFunction(CompressionType type, const PhysicalType physical_type) {
 	LoadCompressionFunctions(physical_type);
 
 	auto index = GetCompressionIndex(physical_type);
@@ -212,17 +202,17 @@ void CompressionFunctionSet::ResetDisabledMethods() {
 	}
 }
 
-vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(const PhysicalType physical_type) {
+vector<reference<const CompressionFunction>> DBConfig::GetCompressionFunctions(const PhysicalType physical_type) const {
 	return compression_functions->GetCompressionFunctions(physical_type);
 }
 
-optional_ptr<CompressionFunction> DBConfig::TryGetCompressionFunction(CompressionType type,
-                                                                      const PhysicalType physical_type) {
+optional_ptr<const CompressionFunction> DBConfig::TryGetCompressionFunction(CompressionType type,
+                                                                            const PhysicalType physical_type) const {
 	return compression_functions->GetCompressionFunction(type, physical_type);
 }
 
-reference<CompressionFunction> DBConfig::GetCompressionFunction(CompressionType type,
-                                                                const PhysicalType physical_type) {
+reference<const CompressionFunction> DBConfig::GetCompressionFunction(CompressionType type,
+                                                                      const PhysicalType physical_type) const {
 	auto result = TryGetCompressionFunction(type, physical_type);
 	if (!result) {
 		throw InternalException("Could not find compression function \"%s\" for physical type \"%s\"",
