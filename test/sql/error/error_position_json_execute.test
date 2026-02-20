@@ -1,7 +1,5 @@
 # name: test/sql/error/error_position_json_execute.test
-# description: Error position from inside json_execute_serialized_sql must reflect the
-#              location of the error within the inner (serialized) SQL, not the call
-#              site of json_execute_serialized_sql in the outer query (#19512)
+# description: Error position reported by json_execute_serialized_sql must reflect the location of the error within the inner SQL, not the call site (#19512)
 # group: [error]
 
 require json
