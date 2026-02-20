@@ -550,9 +550,15 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (window.window_index != filter_col_idx) {
 		return false;
 	}
+	const auto &first_window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	for (auto &partition : first_window_expr.partitions) {
+		if (partition->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return false;
+		}
+	}
 	if (window.expressions.size() != 1) {
 		for (idx_t i = 1; i < window.expressions.size(); ++i) {
-			if (!window.expressions[i]->Equals(*window.expressions[0])) {
+			if (!window.expressions[i]->Equals(first_window_expr)) {
 				return false;
 			}
 		}
