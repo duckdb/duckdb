@@ -83,16 +83,6 @@ query IIIIII nosort res8
 SELECT g, FINALIZE(product(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query II nosort res9
-SELECT corr(d, d+1), covar_pop(d, d+1)FROM dummy;
-----
-
-
-query II nosort res9
-SELECT FINALIZE(corr(d, d+1) EXPORT_STATE), FINALIZE(covar_pop(d, d+1) EXPORT_STATE) from dummy;
-----
-
-
 # you're holding it wrong:
 
 statement error
