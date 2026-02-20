@@ -605,6 +605,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// cross product
 		// push into both sides of the plan
+		D_ASSERT(has_correlated_expressions.find(*plan->children[0]) != has_correlated_expressions.end());
+		D_ASSERT(has_correlated_expressions.find(*plan->children[1]) != has_correlated_expressions.end());
 		bool left_has_correlation = has_correlated_expressions.find(*plan->children[0])->second;
 		bool right_has_correlation = has_correlated_expressions.find(*plan->children[1])->second;
 		if (!right_has_correlation) {
