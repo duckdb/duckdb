@@ -548,7 +548,7 @@ TableAlias PEGTransformerFactory::TransformColumnAliasPrefixClause(PEGTransforme
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixTableRef(PEGTransformer &transformer,
-                                                                                optional_ptr<ParseResult> parse_result) {
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto table_alias = transformer.Transform<TableAlias>(list_pr.Child<ListParseResult>(0));
 	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(1));
@@ -558,13 +558,13 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixTableRef(P
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixTarget(PEGTransformer &transformer,
-                                                                              optional_ptr<ParseResult> parse_result) {
+                                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixFunction(PEGTransformer &transformer,
-                                                                                optional_ptr<ParseResult> parse_result) {
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(0));
 	auto table_function_arguments =
@@ -579,8 +579,9 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixFunction(P
 	return std::move(result);
 }
 
-unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixBaseTable(PEGTransformer &transformer,
-                                                                                 optional_ptr<ParseResult> parse_result) {
+unique_ptr<TableRef>
+PEGTransformerFactory::TransformColumnAliasPrefixBaseTable(PEGTransformer &transformer,
+                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<unique_ptr<AtClause>>(list_pr, 1, result->at_clause);
@@ -589,15 +590,16 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixBaseTable(
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixSubquery(PEGTransformer &transformer,
-                                                                                optional_ptr<ParseResult> parse_result) {
+                                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 1, subquery_reference->sample);
 	return subquery_reference;
 }
 
-unique_ptr<TableRef> PEGTransformerFactory::TransformColumnAliasPrefixParensTable(
-    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<TableRef>
+PEGTransformerFactory::TransformColumnAliasPrefixParensTable(PEGTransformer &transformer,
+                                                             optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(extract_parens);
