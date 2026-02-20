@@ -11,6 +11,18 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT * FROM foo: tablefunction()$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$from r(n) : range(1)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select x from t(x) : a$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select x from s(x) : (select i from a)$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select i from j(x) : (a join c using(i))$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$with cte1 as MATERIALIZED (Select i as j from a) select x from cte1 t1(x);$TEST_PEG_PARSER$);
 
 statement ok
