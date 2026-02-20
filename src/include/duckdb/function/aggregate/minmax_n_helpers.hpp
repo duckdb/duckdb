@@ -961,7 +961,7 @@ struct ArgMinMaxRankHelper {
 		struct_children.emplace_back("arg", type);
 		struct_children.emplace_back("rank", LogicalType::BIGINT);
 		auto struct_type = LogicalType::STRUCT(std::move(struct_children));
-		auto return_type = LogicalType::LIST(std::move(struct_type));
+		auto return_type = LogicalType::LIST(struct_type);
 
 		AggregateFunction func(name, {type, by_type, LogicalType::BIGINT}, return_type, nullptr, nullptr, nullptr,
 		                       nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING);
