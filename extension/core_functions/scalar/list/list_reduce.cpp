@@ -43,13 +43,15 @@ struct ReduceExecuteInfo {
 		}
 		left_slice->Slice(left_vector, reduced_row_idx);
 
-		input_types.push_back(left_slice->GetType());
-		input_types.push_back(left_slice->GetType());
+		// input_types layout: [accumulator (S), element (T), optional index, captured args...]
+		input_types.push_back(info.lambda_expr->return_type);
+		input_types.push_back(info.child_vector->GetType());
 
 		if (info.has_index) {
 			input_types.push_back(LogicalType::BIGINT);
 		}
 
+		// info.column_infos includes the list column plus captured args (and the initial value if present).
 		// skip the first entry if there is an initial value
 		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
@@ -178,6 +180,26 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	return false;
 }
 
+LogicalType ResolveReduceAccumulatorType(ClientContext &context, const LogicalType &list_child_type,
+                                         const LogicalType &initial_type) {
+	if (initial_type.id() == LogicalTypeId::SQLNULL || initial_type.id() == LogicalTypeId::UNKNOWN) {
+		return list_child_type;
+	}
+	if (initial_type.id() == LogicalTypeId::LIST) {
+		auto initial_child = ListType::GetChildType(initial_type);
+		if (initial_child.id() == LogicalTypeId::SQLNULL || initial_child.id() == LogicalTypeId::UNKNOWN) {
+			return LogicalType::LIST(list_child_type);
+		}
+	}
+	if (initial_type.IsNumeric() && list_child_type.IsNumeric()) {
+		LogicalType max_logical_type;
+		if (LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_type, max_logical_type)) {
+			return max_logical_type;
+		}
+	}
+	return initial_type;
+}
+
 unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	// the list column and the bound lambda expression
@@ -193,27 +215,14 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 		return bind_data;
 	}
 
-	auto list_child_type = arguments[0]->return_type;
-	list_child_type = ListType::GetChildType(list_child_type);
+	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
 
 	bool has_initial = arguments.size() == 3;
+	LogicalType accumulator_type = list_child_type;
 	if (has_initial) {
 		const auto initial_value_type = arguments[2]->return_type;
-		// Check if the initial value type is the same as the return type of the lambda expression
-		if (list_child_type != initial_value_type) {
-			LogicalType max_logical_type;
-			const auto has_max_logical_type =
-			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
-			if (!has_max_logical_type) {
-				throw BinderException(
-				    "The initial value type must be the same as the list child type or a common super type");
-			}
-
-			list_child_type = max_logical_type;
-			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]),
-			                                                  LogicalType::LIST(max_logical_type));
-			arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), max_logical_type);
-		}
+		accumulator_type = ResolveReduceAccumulatorType(context, list_child_type, initial_value_type);
+		arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), accumulator_type);
 	}
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
@@ -223,9 +232,9 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 	auto has_index = bound_lambda_expr.parameter_count == 3;
 
 	auto cast_lambda_expr =
-	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), list_child_type);
+	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), accumulator_type);
 	if (!cast_lambda_expr) {
-		throw BinderException("Could not cast lambda expression to list child type");
+		throw BinderException("Could not cast lambda expression to accumulator type");
 	}
 	bound_function.SetReturnType(cast_lambda_expr->return_type);
 	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(cast_lambda_expr), has_index,
@@ -235,30 +244,16 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType> &function_child_types,
                                const idx_t parameter_idx) {
 	auto list_child_type = LambdaFunctions::DetermineListChildType(function_child_types[0]);
-
-	// if there is an initial value, find the max logical type
+	LogicalType accumulator_type = list_child_type;
 	if (function_child_types.size() == 3) {
-		// the initial value is the third child
 		constexpr idx_t initial_idx = 2;
-
-		const LogicalType initial_value_type = function_child_types[initial_idx];
-		if (initial_value_type != list_child_type) {
-			// we need to check if the initial value type is the same as the return type of the lambda expression
-			LogicalType max_logical_type;
-			const auto has_max_logical_type =
-			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
-			if (!has_max_logical_type) {
-				throw BinderException(
-				    "The initial value type must be the same as the list child type or a common super type");
-			}
-
-			list_child_type = max_logical_type;
-		}
+		const LogicalType &initial_value_type = function_child_types[initial_idx];
+		accumulator_type = ResolveReduceAccumulatorType(context, list_child_type, initial_value_type);
 	}
 
 	switch (parameter_idx) {
 	case 0:
-		return list_child_type;
+		return accumulator_type;
 	case 1:
 		return list_child_type;
 	case 2:
