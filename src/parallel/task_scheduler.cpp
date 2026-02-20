@@ -235,7 +235,7 @@ TaskScheduler::TaskScheduler(DatabaseInstance &db)
 TaskScheduler::~TaskScheduler() {
 #ifndef DUCKDB_NO_THREADS
 	try {
-		RelaunchThreadsInternal(0);
+		RelaunchThreadsInternal(0, true);
 	} catch (...) {
 		// nothing we can do in the destructor if this fails
 	}
@@ -500,7 +500,7 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 void TaskScheduler::RelaunchThreads() {
 	lock_guard<mutex> t(thread_lock);
 	auto n = requested_thread_count.load();
-	RelaunchThreadsInternal(n);
+	RelaunchThreadsInternal(n, false);
 }
 
 #ifndef DUCKDB_NO_THREADS
@@ -539,12 +539,20 @@ static void SetThreadAffinity(thread &thread, const vector<int> &available_cpus,
 }
 #endif
 
-void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
+void TaskScheduler::RelaunchThreadsInternal(int32_t n, bool destroy) {
 #ifndef DUCKDB_NO_THREADS
 	auto &config = DBConfig::GetConfig(db);
 	auto new_thread_count = NumericCast<idx_t>(n);
+
+	idx_t external_threads = 0;
+	ThreadPinMode pin_thread_mode = ThreadPinMode::AUTO;
+	if (!destroy) {
+		// If we are destroying, i.e., calling ~TaskScheduler, we don't want to read the settings
+		external_threads = Settings::Get<ExternalThreadsSetting>(config);
+		pin_thread_mode = Settings::Get<PinThreadsSetting>(db);
+	}
+
 	if (threads.size() == new_thread_count) {
-		auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
 		current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 		return;
 	}
@@ -570,7 +578,6 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 
 		// Whether to pin threads to cores
 		static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
-		auto pin_thread_mode = Settings::Get<PinThreadsSetting>(db);
 		const auto pin_threads =
 		    pin_thread_mode == ThreadPinMode::ON ||
 		    (pin_thread_mode == ThreadPinMode::AUTO && std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
@@ -597,7 +604,6 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n) {
 			markers.push_back(std::move(marker));
 		}
 	}
-	auto external_threads = Settings::Get<ExternalThreadsSetting>(config);
 	current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 	BlockAllocator::Get(db).FlushAll();
 #endif

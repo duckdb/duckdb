@@ -616,7 +616,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
-	MatchState state(tokens, suggestions, parse_allocator);
+	idx_t max_token_index = 0;
+	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
@@ -851,7 +852,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		}
 		vector<MatcherSuggestion> suggestions;
 		ParseResultAllocator parse_allocator;
-		MatchState state(tokens, suggestions, parse_allocator);
+		idx_t max_token_index = 0;
+		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
 		MatcherAllocator allocator;
 		auto &matcher = Matcher::RootMatcher(allocator);
@@ -929,6 +931,24 @@ public:
 	}
 };
 
+static void EnablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &db_config = DBConfig::GetConfig(context);
+	db_config.SetOptionByName("allow_parser_override_extension", Value("strict"));
+}
+
+static void DisablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &db_config = DBConfig::GetConfig(context);
+	db_config.SetOptionByName("allow_parser_override_extension", Value("default"));
+}
+
+static duckdb::unique_ptr<FunctionData> EnablePEGParserBind(ClientContext &context, TableFunctionBindInput &input,
+                                                            vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("success");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	return nullptr;
+}
+
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
@@ -941,8 +961,15 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
 
+	TableFunction enable_peg_parser("enable_peg_parser", {}, EnablePEGParserFunction, EnablePEGParserBind, nullptr);
+	loader.RegisterFunction(enable_peg_parser);
+
+	TableFunction disable_peg_parser("disable_peg_parser", {}, DisablePEGParserFunction, EnablePEGParserBind, nullptr);
+	loader.RegisterFunction(disable_peg_parser);
+
 	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind,
 	                           SQLTokenizeInit);
+
 	loader.RegisterFunction(tokenize_fun);
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	ParserExtension::Register(config, PEGParserExtension());

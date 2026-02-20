@@ -156,6 +156,10 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 	}
 }
 
+void VariantShredding::WriteMissingField(Vector &vector, idx_t index) {
+	FlatVector::GetData<uint32_t>(vector)[index] = 0;
+}
+
 void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &result,
                                               const SelectionVector &sel, const SelectionVector &value_index_sel,
                                               const SelectionVector &result_sel, idx_t count) {
@@ -209,10 +213,10 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 			idx_t child_count = 0;
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
-					//! The field is missing, set it to null
-					FlatVector::SetNull(*child_variant_vectors[0], result_sel[i], true);
+					//! The field is missing, set the untyped value index to 0
+					WriteMissingField(*child_variant_vectors[untyped_value_index], result_sel[i]);
 					if (child_variant_vectors.size() >= 2) {
-						FlatVector::SetNull(*child_variant_vectors[1], result_sel[i], true);
+						FlatVector::SetNull(*child_variant_vectors[typed_value_index], result_sel[i], true);
 					}
 					continue;
 				}

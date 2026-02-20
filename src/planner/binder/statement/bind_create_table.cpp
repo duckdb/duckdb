@@ -68,7 +68,7 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			continue;
 		}
-		auto compression_method = config.GetCompressionFunction(compression_type, physical_type);
+		auto compression_method = config.TryGetCompressionFunction(compression_type, physical_type);
 		if (!compression_method) {
 			throw BinderException(
 			    "Can't compress column \"%s\" with type '%s' (physical: %s) using compression type '%s'", col.Name(),
@@ -562,6 +562,7 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		}
 
 		auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
+		fk.info.schema = pk_table_entry_ptr.schema.name;
 		if (&pk_table_entry_ptr.schema != &schema) {
 			throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
 		}
