@@ -239,7 +239,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Add bindings of left side to temporary CTE bindings context
 	BindingAlias cte_alias(statement.ctename);
-	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, result.types);
+	right_binder->bind_context.AddCTEBinding(setop_index, std::move(cte_alias), result.names, internal_types);
 
 	BindingAlias recurring_alias("recurring", statement.ctename);
 	right_binder->bind_context.AddCTEBinding(setop_index, std::move(recurring_alias), result.names, result.types);

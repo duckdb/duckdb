@@ -363,9 +363,6 @@ static Value GetShreddedStatsStruct(const BaseStatistics &stats, bool fully_shre
 		return Value();
 	}
 
-	string result;
-	result = StringUtil::Format("fully_shredded: %s", VariantShreddedStats::IsFullyShredded(stats) ? "true" : "false");
-
 	auto &typed_value = StructStats::GetChildStats(stats, VariantStats::TYPED_VALUE_INDEX);
 	auto type_id = typed_value.GetType().id();
 	if (type_id == LogicalTypeId::LIST) {

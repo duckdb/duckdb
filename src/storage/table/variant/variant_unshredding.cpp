@@ -146,7 +146,7 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 	for (uint32_t i = 0; i < count; i++) {
 		auto list_idx = vector_format.sel->get_index(i);
 		if (!typed_value_validity.RowIsValid(list_idx)) {
-			res[list_idx] = VariantValue(Value(LogicalType::SQLNULL));
+			res[i] = VariantValue(Value(LogicalType::SQLNULL));
 			continue;
 		}
 		auto row = row_sel ? static_cast<uint32_t>(row_sel->get_index(i)) : i;
@@ -157,11 +157,10 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 	}
 	auto child_values = Unshred(variant, child_vector, child_size, child_sel);
 
-	vector<VariantValue> res(count);
 	current_offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto list_idx = vector_format.sel->get_index(i);
-		if (res[list_idx].IsNull()) {
+		if (!typed_value_validity.RowIsValid(list_idx)) {
 			continue;
 		}
 		auto &list_entry = list_data[list_idx];
