@@ -16,6 +16,7 @@ add_library_unity(
   in_clause_simplification_rule.cpp
   join_dependent_filter.cpp
   like_optimizations.cpp
+  list_comprehension_rewrite.cpp
   move_constants.cpp
   ordered_aggregate_optimizer.cpp
   regex_optimizations.cpp

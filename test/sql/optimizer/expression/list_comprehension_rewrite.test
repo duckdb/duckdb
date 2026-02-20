@@ -1,0 +1,109 @@
+# name: test/sql/optimizer/expression/list_comprehension_rewrite.test
+# description: Test conditional list comprehension rewriting
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output='OPTIMIZED_ONLY'
+
+statement ok
+CREATE TABLE t(l INTEGER[]);
+
+statement ok
+INSERT INTO t VALUES ([10, 9, 8, 7, 6]);
+
+query II
+EXPLAIN SELECT [i + 5 FOR x, i IN l IF i > 2] FROM t;
+----
+logical_opt	<REGEX>:.*list_apply.*list_filter.*list_apply.*
+
+query II
+EXPLAIN SELECT [i + 5 FOR x, i IN l IF x > 8] FROM t;
+----
+logical_opt	<REGEX>:.*list_apply.*list_filter.*list_apply.*
+
+query II
+EXPLAIN SELECT [x + 5 FOR x, i IN l IF i > 2] FROM t;
+----
+logical_opt	<!REGEX>:.*list_apply.*list_filter.*list_apply.*
+
+query II
+EXPLAIN SELECT [x + 5 FOR x, i IN l IF x > 8] FROM t;
+----
+logical_opt	<!REGEX>:.*list_apply.*list_filter.*list_apply.*
+
+query I
+SELECT [i + 5 FOR x, i IN l IF i > 2] FROM t;
+----
+[8, 9, 10]
+
+query I
+SELECT [i + 5 FOR x, i IN l IF x > 8] FROM t;
+----
+[6, 7]
+
+query I
+SELECT [x + 5 FOR x, i IN l IF i > 2] FROM t;
+----
+[13, 12, 11]
+
+query I
+SELECT [x + 5 FOR x, i IN l IF x > 8] FROM t;
+----
+[15, 14]
+
+# Alias tests for list_transform/list_filter
+foreach t list_transform apply array_apply array_transform list_transform
+
+foreach f list_filter array_filter filter
+
+# Test the number of functions with the number of round brackets as there is no ${...} string replacement in the results
+query II
+EXPLAIN SELECT ${t}(${f}(${t}(l, lambda x, i: struct_pack(filter := i > 2, result := i + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
+----
+logical_opt	<REGEX>:.*PROJECTION.*Expressions:.*\(.*\(.*\(.*l.*\).*\).*\).*SCAN.*
+
+query II
+EXPLAIN SELECT ${t}(${f}(${t}(l, lambda x, i: struct_pack(filter := i > 2, result := x + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
+----
+logical_opt	<REGEX>:.*PROJECTION.*Expressions:.*\(.*\(.*l.*\).*\).*SCAN.*
+
+query I
+SELECT ${t}(${f}(${t}(l, lambda x, i: struct_pack(filter := i > 2, result := i + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
+----
+[8, 9, 10]
+
+query I
+SELECT ${t}(${f}(${t}(l, lambda x, i: struct_pack(filter := i > 2, result := x + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
+----
+[13, 12, 11]
+
+endloop
+
+endloop
+
+# Non-comprehension nested list lambda should not be rewritten.
+query I
+SELECT list_transform(
+	list_filter(
+		list_transform(l, lambda x: struct_pack(filter := x > 8, result := x + 5)),
+		lambda s: NOT s.filter
+	),
+	lambda s: s.result
+) FROM t;
+----
+[13, 12, 11]
+
+# Captured values add extra children to list_transform/list_filter/list_apply. Ensure rewrite stays safe.
+statement ok
+CREATE TABLE capture_t(l INTEGER[], c INTEGER);
+
+statement ok
+INSERT INTO capture_t VALUES ([10, 9, 8, 7, 6], 8);
+
+query I
+SELECT [x + c FOR x IN l IF x > c] FROM capture_t;
+----
+[18, 17]
