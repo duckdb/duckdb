@@ -95,3 +95,15 @@ SELECT list_transform(
 ) FROM t;
 ----
 [13, 12, 11]
+
+# Captured values add extra children to list_transform/list_filter/list_apply. Ensure rewrite stays safe.
+statement ok
+CREATE TABLE capture_t(l INTEGER[], c INTEGER);
+
+statement ok
+INSERT INTO capture_t VALUES ([10, 9, 8, 7, 6], 8);
+
+query I
+SELECT [x + c FOR x IN l IF x > c] FROM capture_t;
+----
+[18, 17]

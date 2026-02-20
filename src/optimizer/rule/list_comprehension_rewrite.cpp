@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -110,16 +109,27 @@ bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
 	return StringValue::Get(field_constant.value) == field_name;
 }
 
-} // namespace
+struct ListComprehensionMatch {
+	optional_ptr<BoundFunctionExpression> root;
+	optional_ptr<BoundFunctionExpression> list_filter_expr;
+	optional_ptr<BoundFunctionExpression> inner_apply;
+	optional_ptr<ListLambdaBindData> inner_bind;
+	optional_ptr<Expression> filter_expr;
+	optional_ptr<Expression> result_expr;
+	vector<unique_ptr<Expression>> captured_children;
+};
 
-ListComprehensionRewriteRule::ListComprehensionRewriteRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	root = make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_FUNCTION);
+vector<unique_ptr<Expression>> CopyCapturedChildren(BoundFunctionExpression &inner_apply) {
+	vector<unique_ptr<Expression>> captured_children;
+	captured_children.reserve(inner_apply.children.size() > 0 ? inner_apply.children.size() - 1 : 0);
+	for (idx_t i = 1; i < inner_apply.children.size(); i++) {
+		captured_children.push_back(inner_apply.children[i]->Copy());
+	}
+	return captured_children;
 }
 
-unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, vector<reference<Expression>> &bindings,
-                                                           bool &, bool) {
-	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
-	auto &context = GetContext();
+unique_ptr<ListComprehensionMatch> MatchListComprehensionRewrite(ClientContext &context,
+                                                                 BoundFunctionExpression &root) {
 	// Check if expression has a list_transform -> list_filter -> list_transform pattern from list comprehension
 	if (!IsTargetListFunction(context, root, "list_transform")) {
 		return nullptr;
@@ -127,7 +137,6 @@ unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, ve
 	if (root.children.empty()) {
 		return nullptr;
 	}
-
 	if (root.children[0]->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return nullptr;
 	}
@@ -150,7 +159,6 @@ unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, ve
 	if (list_filter_expr.children.empty()) {
 		return nullptr;
 	}
-
 	if (list_filter_expr.children[0]->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return nullptr;
 	}
@@ -170,19 +178,36 @@ unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, ve
 	if (!IsStructPack(struct_pack)) {
 		return nullptr;
 	}
-
 	auto filter_expr = FindStructPackChildByName(struct_pack, "filter");
 	auto result_expr = FindStructPackChildByName(struct_pack, "result");
 	if (!filter_expr || !result_expr) {
 		return nullptr;
 	}
-
 	if (inner_bind.has_index && UsesIndexParameter(*result_expr)) {
 		return nullptr;
 	}
 	if (result_expr->IsVolatile()) {
 		return nullptr;
 	}
+
+	auto match = make_uniq<ListComprehensionMatch>();
+	match->root = root;
+	match->list_filter_expr = list_filter_expr;
+	match->inner_apply = inner_apply;
+	match->inner_bind = inner_bind;
+	match->filter_expr = filter_expr;
+	match->result_expr = result_expr;
+	match->captured_children = CopyCapturedChildren(inner_apply);
+	return match;
+}
+
+unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &match) {
+	auto &inner_apply = *match.inner_apply;
+	auto &list_filter_expr = *match.list_filter_expr;
+	auto &root = *match.root;
+	auto &inner_bind = *match.inner_bind;
+	auto &filter_expr = *match.filter_expr;
+	auto &result_expr = *match.result_expr;
 
 	// Build list_filter(list, lambda filter_expr)
 	vector<unique_ptr<Expression>> filter_children;
@@ -192,8 +217,7 @@ unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, ve
 	}
 
 	auto filter_return_type = filter_children[0]->return_type;
-	auto filter_bind_info =
-	    make_uniq<ListLambdaBindData>(filter_return_type, filter_expr->Copy(), inner_bind.has_index);
+	auto filter_bind_info = make_uniq<ListLambdaBindData>(filter_return_type, filter_expr.Copy(), inner_bind.has_index);
 	auto new_filter =
 	    make_uniq<BoundFunctionExpression>(filter_return_type, list_filter_expr.function, std::move(filter_children),
 	                                       std::move(filter_bind_info), list_filter_expr.is_operator);
@@ -202,15 +226,30 @@ unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, ve
 	vector<unique_ptr<Expression>> apply_children;
 	apply_children.reserve(inner_apply.children.size());
 	apply_children.push_back(std::move(new_filter));
-	for (idx_t i = 1; i < inner_apply.children.size(); i++) {
-		apply_children.push_back(inner_apply.children[i]->Copy());
+	for (auto &captured_child : match.captured_children) {
+		apply_children.push_back(std::move(captured_child));
 	}
 
-	auto apply_return_type = LogicalType::LIST(result_expr->return_type);
-	auto apply_bind_info = make_uniq<ListLambdaBindData>(apply_return_type, result_expr->Copy(), inner_bind.has_index);
-	auto new_apply = make_uniq<BoundFunctionExpression>(apply_return_type, root.function, std::move(apply_children),
-	                                                    std::move(apply_bind_info), root.is_operator);
-	return std::move(new_apply);
+	auto apply_return_type = LogicalType::LIST(result_expr.return_type);
+	auto apply_bind_info = make_uniq<ListLambdaBindData>(apply_return_type, result_expr.Copy(), inner_bind.has_index);
+	return make_uniq<BoundFunctionExpression>(apply_return_type, root.function, std::move(apply_children),
+	                                          std::move(apply_bind_info), root.is_operator);
+}
+
+} // namespace
+
+ListComprehensionRewriteRule::ListComprehensionRewriteRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	root = make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_FUNCTION);
+}
+
+unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, vector<reference<Expression>> &bindings,
+                                                           bool &, bool) {
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto match = MatchListComprehensionRewrite(GetContext(), root);
+	if (!match) {
+		return nullptr;
+	}
+	return BuildListComprehensionRewrite(*match);
 }
 
 } // namespace duckdb
