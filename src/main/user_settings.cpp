@@ -80,11 +80,20 @@ bool GlobalUserSettings::IsSet(idx_t setting_index) const {
 }
 
 SettingLookupResult GlobalUserSettings::TryGetSetting(idx_t setting_index, Value &result_value) const {
-	lock_guard<mutex> guard(lock);
-	if (!settings_map.TryGetSetting(setting_index, result_value)) {
-		return SettingLookupResult();
+#ifndef __MINGW32__
+	// look-up in global settings
+	const auto &cache = GetSettings();
+	if (cache.settings.TryGetSetting(setting_index, result_value)) {
+		return SettingLookupResult(SettingScope::GLOBAL);
 	}
-	return SettingLookupResult(SettingScope::GLOBAL);
+#else
+	lock_guard<mutex> guard(lock);
+	if (settings_map.TryGetSetting(setting_index, result_value)) {
+		return SettingLookupResult(SettingScope::GLOBAL);
+	}
+#endif
+
+	return SettingLookupResult();
 }
 
 bool GlobalUserSettings::HasExtensionOption(const string &name) const {
@@ -94,9 +103,16 @@ bool GlobalUserSettings::HasExtensionOption(const string &name) const {
 
 idx_t GlobalUserSettings::AddExtensionOption(const string &name, ExtensionOption extension_option) {
 	lock_guard<mutex> l(lock);
-	auto setting_index = GeneratedSettingInfo::MaxSettingIndex + extension_parameters.size();
-	extension_option.setting_index = setting_index;
-	extension_parameters.insert(make_pair(name, std::move(extension_option)));
+	const auto new_option = extension_parameters.emplace(make_pair(name, std::move(extension_option)));
+	const auto did_insert = new_option.second;
+	auto &option = new_option.first->second;
+
+	if (!did_insert) {
+		return option.setting_index.GetIndex();
+	}
+
+	auto setting_index = GeneratedSettingInfo::MaxSettingIndex + extension_parameters.size() - 1;
+	option.setting_index = setting_index;
 	++settings_version;
 	return setting_index;
 }
@@ -116,27 +132,29 @@ bool GlobalUserSettings::TryGetExtensionOption(const String &name, ExtensionOpti
 	return true;
 }
 
-shared_ptr<CachedGlobalSettings> GlobalUserSettings::GetSettings(shared_ptr<CachedGlobalSettings> &cache) const {
-	auto current_cache = cache.atomic_load(std::memory_order_relaxed);
-	auto current_version = settings_version.load(std::memory_order_relaxed);
-	if (current_cache && current_cache->version == current_version) {
-		// we have a cached version and it is up to date - done
-		return current_cache;
+#ifndef __MINGW32__
+CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
+	// Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
+	thread_local CachedGlobalSettings current_cache;
+
+	const auto current_version = settings_version.load(std::memory_order_relaxed);
+	if (!current_cache.global_user_settings || this != current_cache.global_user_settings.get() ||
+	    current_cache.version != current_version) {
+		// out-of-date, refresh the cache
+		lock_guard<mutex> guard(lock);
+		current_cache = CachedGlobalSettings(*this, settings_version, settings_map);
 	}
-	lock_guard<mutex> guard(lock);
-	// check if another thread updated the cache while we were waiting for the lock
-	if (cache && current_version == cache->version) {
-		// already written - load
-		return cache;
-	}
-	auto new_cache = make_shared_ptr<CachedGlobalSettings>(settings_version, settings_map);
-	cache.atomic_store(new_cache);
-	return new_cache;
+	return current_cache;
 }
 
-CachedGlobalSettings::CachedGlobalSettings(idx_t version, UserSettingsMap settings_p)
-    : version(version), settings(std::move(settings_p)) {
+CachedGlobalSettings::CachedGlobalSettings() : version(0) {
 }
+
+CachedGlobalSettings::CachedGlobalSettings(const GlobalUserSettings &global_user_settings_p, idx_t version,
+                                           UserSettingsMap settings_p)
+    : global_user_settings(global_user_settings_p), version(version), settings(std::move(settings_p)) {
+}
+#endif
 
 //===--------------------------------------------------------------------===//
 // LocalUserSettings
@@ -162,11 +180,7 @@ SettingLookupResult LocalUserSettings::TryGetSetting(const GlobalUserSettings &g
 		return SettingLookupResult(SettingScope::LOCAL);
 	}
 	// look-up in global settings
-	auto cache = global_settings.GetSettings(global_settings_cache);
-	if (cache->settings.TryGetSetting(setting_index, result_value)) {
-		return SettingLookupResult(SettingScope::GLOBAL);
-	}
-	return SettingLookupResult();
+	return global_settings.TryGetSetting(setting_index, result_value);
 }
 
 } // namespace duckdb

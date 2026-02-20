@@ -35,12 +35,18 @@ private:
 	vector<GenericSetting> settings;
 };
 
-struct CachedGlobalSettings {
-	CachedGlobalSettings(idx_t version, UserSettingsMap settings);
+#ifndef __MINGW32__
+struct GlobalUserSettings;
 
+struct CachedGlobalSettings {
+	CachedGlobalSettings();
+	CachedGlobalSettings(const GlobalUserSettings &global_user_settings, idx_t version, UserSettingsMap settings);
+
+	optional_ptr<const GlobalUserSettings> global_user_settings;
 	idx_t version;
 	UserSettingsMap settings;
 };
+#endif
 
 struct GlobalUserSettings {
 public:
@@ -57,7 +63,10 @@ public:
 	idx_t AddExtensionOption(const string &name, ExtensionOption extension_option);
 	case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
 	bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
-	shared_ptr<CachedGlobalSettings> GetSettings(shared_ptr<CachedGlobalSettings> &cache) const;
+
+#ifndef __MINGW32__
+	CachedGlobalSettings &GetSettings() const;
+#endif
 
 private:
 	mutable mutex lock;
@@ -82,7 +91,5 @@ public:
 private:
 	//! Client-local settings
 	UserSettingsMap settings_map;
-	//! Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
-	mutable shared_ptr<CachedGlobalSettings> global_settings_cache;
 };
 } // namespace duckdb

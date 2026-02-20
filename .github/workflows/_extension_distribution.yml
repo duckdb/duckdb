@@ -40,7 +40,7 @@ on:
 jobs:
   build:
     name: Build
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
     with:
       # We piggy-back extension-template to build the extensions in extension_config, it's hacky, but it works ¯\_(ツ)_/¯
       override_repository: duckdb/extension-template
@@ -54,9 +54,9 @@ jobs:
       set_caller_as_duckdb: true
       duckdb_version: ${{ inputs.override_duckdb_version != '' && inputs.override_duckdb_version || github.sha }}
 
-      # CI tools is pinned to main
+      # CI tools is pinned to v1.5-variegata
       override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
+      ci_tools_version: v1.5-variegata
 
       exclude_archs: ${{ inputs.exclude_archs }}
       opt_in_archs: ${{ inputs.opt_in_archs }}

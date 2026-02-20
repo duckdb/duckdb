@@ -91,6 +91,11 @@ static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionIn
 
 static unique_ptr<FunctionData> BindCRSFunction(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+		// parameter - unknown return type
+		return nullptr;
+	}
+
 	// Check if the CRS is set in the first argument
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;

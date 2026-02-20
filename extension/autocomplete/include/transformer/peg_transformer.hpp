@@ -186,8 +186,8 @@ public:
 	                                                      optional_ptr<ParseResult> group_by_expr,
 	                                                      GroupingExpressionMap &map, GroupByNode &result);
 	static unique_ptr<ResultModifier> VerifyLimitOffset(LimitPercentResult &limit, LimitPercentResult &offset);
-	static unique_ptr<QueryNode> ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name,
-	                                            vector<string> &aliases);
+	static unique_ptr<QueryNode> ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name, vector<string> &aliases,
+	                                            vector<unique_ptr<ParsedExpression>> &key_targets);
 	static void WrapRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> inner_node);
 	static void ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node);
 	static void VerifyColumnRefs(const ParsedExpression &expr);
@@ -196,6 +196,7 @@ public:
 	static bool TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry);
 	static void AddPivotEntry(PEGTransformer &transformer, string enum_name, unique_ptr<SelectNode> base,
 	                          unique_ptr<ParsedExpression> column, unique_ptr<QueryNode> subquery, bool has_parameters);
+	static Value GetConstantExpressionValue(unique_ptr<ParsedExpression> &expr);
 
 	// Registration methods
 	void RegisterAlter();
@@ -605,6 +606,8 @@ private:
 	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
 	                                                              optional_ptr<ParseResult> parse_result);
 	static unique_ptr<QueryNode> TransformShowSelect(PEGTransformer &transformer,
+	                                                 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<QueryNode> TransformShowTables(PEGTransformer &transformer,
 	                                                 optional_ptr<ParseResult> parse_result);
 	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer,
 	                                                    optional_ptr<ParseResult> parse_result);

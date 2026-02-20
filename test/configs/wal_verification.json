@@ -35,6 +35,12 @@
       ]
     },
     {
+      "reason": "Logging setting doesn't survive restarts",
+      "paths": [
+        "test/logging/warnings_as_errors.test"
+      ]
+    },
+    {
       "reason": "FIXME: Unexpected (?) binder error.",
       "paths": [
         "test/fuzzer/pedro/index_generated_column.test",
