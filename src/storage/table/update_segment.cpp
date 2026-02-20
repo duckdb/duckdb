@@ -418,13 +418,17 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo &current) {
 		auto info_data = current.GetData<bool>();
 		auto tuples = current.GetTuples();
-		// FIXME: we could do a binary search in here
-		for (idx_t i = 0; i < current.N; i++) {
-			if (tuples[i] == row_idx) {
-				result_mask.Set(result_idx, info_data[i]);
-				break;
-			} else if (tuples[i] > row_idx) {
-				break;
+		idx_t left = 0;
+		idx_t right = current.N - 1;
+		while (left <= right) {
+			idx_t mid = left + (right - left) / 2;
+			if (tuples[mid] == row_idx) {
+				result_mask.Set(result_idx, info_data[mid]);
+				return;
+			} else if (tuples[mid] < row_idx) {
+				left = mid + 1;
+			} else {
+				right = mid - 1;
 			}
 		}
 	});
