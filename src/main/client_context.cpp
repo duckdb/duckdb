@@ -42,7 +42,10 @@
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -421,6 +424,55 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	result->properties = logical_planner.properties;
 	result->names = logical_planner.names;
 	result->types = logical_planner.types;
+
+	// Extract column origin table names from the logical plan
+	result->column_origin_tables.resize(result->names.size());
+	if (logical_plan && logical_plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+		auto &projection = logical_plan->Cast<LogicalProjection>();
+		auto &bindings_list = logical_planner.binder->bind_context.GetBindingsList();
+
+		for (idx_t i = 0; i < projection.expressions.size() && i < result->names.size(); i++) {
+			auto &expr = *projection.expressions[i];
+
+			// Collect all BoundColumnRefExpression bindings from this expression
+			vector<ColumnBinding> col_bindings;
+			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+			    expr, [&](const BoundColumnRefExpression &bound_ref) { col_bindings.push_back(bound_ref.binding); });
+
+			if (col_bindings.empty()) {
+				continue;
+			}
+
+			// Check if all column refs share the same table_index
+			bool same_table = true;
+			idx_t table_index = col_bindings[0].table_index;
+			for (idx_t j = 1; j < col_bindings.size(); j++) {
+				if (col_bindings[j].table_index != table_index) {
+					same_table = false;
+					break;
+				}
+			}
+			if (!same_table) {
+				continue;
+			}
+
+			// Look up the fully qualified table name from the BindContext
+			for (auto &binding : bindings_list) {
+				if (binding->GetIndex() != table_index) {
+					continue;
+				}
+				auto entry = binding->GetStandardEntry();
+				if (entry) {
+					auto &catalog_name = entry->ParentCatalog().GetName();
+					auto &schema_name = entry->ParentSchema().name;
+					auto &table_name = entry->name;
+					result->column_origin_tables[i] = catalog_name + "." + schema_name + "." + table_name;
+				}
+				break;
+			}
+		}
+	}
+
 	result->value_map = std::move(logical_planner.value_map);
 	if (!logical_planner.properties.bound_all_parameters) {
 		return result;

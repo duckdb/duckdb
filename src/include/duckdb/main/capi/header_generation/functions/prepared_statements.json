@@ -255,6 +255,28 @@
                 },
                 "return_value": "The type of the specified column."
             }
+        },
+        {
+            "name": "duckdb_prepared_column_origin_table",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_prepared_statement",
+                    "name": "prepared_statement"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "col_idx"
+                }
+            ],
+            "comment": {
+                "description": "Returns the fully qualified origin table name for the column at the given index.\nThe format is \"catalog.schema.table_name\".\nReturns an empty string if the column has no single-table origin.\nReturns nullptr on error.\nThe result must be freed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "prepared_statement": "The prepared statement.",
+                    "col_idx": "The column index."
+                },
+                "return_value": "The fully qualified origin table name, or nullptr on error."
+            }
         }
     ]
 }
