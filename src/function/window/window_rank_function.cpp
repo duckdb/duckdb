@@ -116,16 +116,39 @@ unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobalState(ClientContext &cl
 	return make_uniq<WindowPeerGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<LocalSinkState> WindowPeerExecutor::GetLocalState(ExecutionContext &context,
-                                                             const GlobalSinkState &gstate) const {
-	return make_uniq<WindowPeerLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
-}
-
 //===--------------------------------------------------------------------===//
 // WindowRankExecutor
 //===--------------------------------------------------------------------===//
+class WindowRankLocalState : public WindowPeerLocalState {
+public:
+	WindowRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
+	    : WindowPeerLocalState(context, gpstate) {
+		const auto &wexpr = gpstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		if (wexpr.arg_orders.empty()) {
+			required.insert(PARTITION_BEGIN);
+			required.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			required.insert(FRAME_BEGIN);
+			required.insert(FRAME_END);
+			required.insert(PEER_BEGIN);
+		}
+
+		WindowBoundariesState::AddImpliedBounds(required, wexpr);
+	}
+};
+
 WindowRankExecutor::WindowRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowPeerExecutor(wexpr, shared) {
+}
+
+unique_ptr<LocalSinkState> WindowRankExecutor::GetLocalState(ExecutionContext &context,
+                                                             const GlobalSinkState &gstate) const {
+	return make_uniq<WindowRankLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
 void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count,
@@ -167,8 +190,28 @@ void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 //===--------------------------------------------------------------------===//
 // WindowDenseRankExecutor
 //===--------------------------------------------------------------------===//
+class WindowDenseRankLocalState : public WindowPeerLocalState {
+public:
+	WindowDenseRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
+	    : WindowPeerLocalState(context, gpstate) {
+		const auto &wexpr = gpstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		required.insert(PARTITION_BEGIN);
+		required.insert(PEER_BEGIN);
+
+		WindowBoundariesState::AddImpliedBounds(required, wexpr);
+	}
+};
 WindowDenseRankExecutor::WindowDenseRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowPeerExecutor(wexpr, shared) {
+}
+
+unique_ptr<LocalSinkState> WindowDenseRankExecutor::GetLocalState(ExecutionContext &context,
+                                                                  const GlobalSinkState &gstate) const {
+	return make_uniq<WindowDenseRankLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
 void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
@@ -238,8 +281,37 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 //===--------------------------------------------------------------------===//
 // WindowPercentRankExecutor
 //===--------------------------------------------------------------------===//
+class WindowPercentRankLocalState : public WindowPeerLocalState {
+public:
+	WindowPercentRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
+	    : WindowPeerLocalState(context, gpstate) {
+		const auto &wexpr = gpstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		if (wexpr.arg_orders.empty()) {
+			required.insert(PARTITION_BEGIN);
+			required.insert(PARTITION_END);
+			required.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			required.insert(FRAME_BEGIN);
+			required.insert(FRAME_END);
+			required.insert(PEER_BEGIN);
+		}
+
+		WindowBoundariesState::AddImpliedBounds(required, wexpr);
+	}
+};
+
 WindowPercentRankExecutor::WindowPercentRankExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowPeerExecutor(wexpr, shared) {
+}
+
+unique_ptr<LocalSinkState> WindowPercentRankExecutor::GetLocalState(ExecutionContext &context,
+                                                                    const GlobalSinkState &gstate) const {
+	return make_uniq<WindowPercentRankLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
 static inline double PercentRank(const idx_t begin, const idx_t end, const uint64_t rank) {
@@ -289,8 +361,37 @@ void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, Data
 //===--------------------------------------------------------------------===//
 // WindowCumeDistExecutor
 //===--------------------------------------------------------------------===//
+class WindowCumeDistLocalState : public WindowPeerLocalState {
+public:
+	WindowCumeDistLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
+	    : WindowPeerLocalState(context, gpstate) {
+		const auto &wexpr = gpstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		if (wexpr.arg_orders.empty()) {
+			required.insert(PARTITION_BEGIN);
+			required.insert(PARTITION_END);
+			required.insert(PEER_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			required.insert(FRAME_BEGIN);
+			required.insert(FRAME_END);
+			required.insert(PEER_END);
+		}
+
+		WindowBoundariesState::AddImpliedBounds(required, wexpr);
+	}
+};
+
 WindowCumeDistExecutor::WindowCumeDistExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowPeerExecutor(wexpr, shared) {
+}
+
+unique_ptr<LocalSinkState> WindowCumeDistExecutor::GetLocalState(ExecutionContext &context,
+                                                                 const GlobalSinkState &gstate) const {
+	return make_uniq<WindowCumeDistLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
 static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t peer_end) {
