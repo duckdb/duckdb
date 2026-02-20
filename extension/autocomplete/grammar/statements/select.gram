@@ -34,18 +34,27 @@ Recursive <- 'RECURSIVE'
 SelectClause <- 'SELECT' DistinctClause? TargetList
 TargetList <- List(AliasedExpression)
 ColumnAliases <- Parens(List(ColIdOrString))
+ColumnAliasPrefixClause <- ColIdOrString ColumnAliases ':'
 
 DistinctClause <- DistinctOn / DistinctAll
 DistinctAll <- 'ALL'
 DistinctOn <- 'DISTINCT' DistinctOnTargets?
 DistinctOnTargets <- 'ON' Parens(List(Expression))
 
-InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
+InnerTableRef <- ColumnAliasPrefixTableRef / ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
+ColumnAliasPrefixTableRef <- ColumnAliasPrefixClause ColumnAliasPrefixTarget
+ColumnAliasPrefixTarget <- ColumnAliasPrefixFunction / ColumnAliasPrefixBaseTable / ColumnAliasPrefixSubquery / ColumnAliasPrefixParensTable
+ColumnAliasPrefixFunction <- QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
+ColumnAliasPrefixBaseTable <- BaseTableName AtClause? SampleClause?
+ColumnAliasPrefixSubquery <- SubqueryReference SampleClause?
+ColumnAliasPrefixParensTable <- Parens(TableRef) SampleClause?
 
 TableRef <- InnerTableRef JoinOrPivot* TableAlias?
-TableSubquery <- Lateral? SubqueryReference TableAlias?
+TableSubquery <- TableSubqueryLateralOpt / TableSubqueryAliasColon
+TableSubqueryLateralOpt <- Lateral? SubqueryReference TableAlias?
+TableSubqueryAliasColon <- TableAliasColon SubqueryReference SampleClause?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
-TableAliasColon <- ColIdOrString ':'
+TableAliasColon <- ColIdOrString ColumnAliases? ':'
 ValuesRef <- ValuesClause TableAlias?
 ParensTableRef <- TableAliasColon? Parens(TableRef) SampleClause?
 

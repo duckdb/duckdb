@@ -680,6 +680,13 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformExpressionOptIdentifier);
 	REGISTER_TRANSFORM(TransformTableAlias);
 	REGISTER_TRANSFORM(TransformColumnAliases);
+	REGISTER_TRANSFORM(TransformColumnAliasPrefixClause);
+	REGISTER_TRANSFORM(TransformColumnAliasPrefixTableRef);
+	REGISTER_TRANSFORM(TransformColumnAliasPrefixTarget);
+	REGISTER_TRANSFORM(TransformColumnAliasPrefixFunction);
+	REGISTER_TRANSFORM(TransformColumnAliasPrefixBaseTable);
+	REGISTER_TRANSFORM(TransformColumnAliasPrefixSubquery);
+	REGISTER_TRANSFORM(TransformColumnAliasPrefixParensTable);
 	REGISTER_TRANSFORM(TransformNamedParameter);
 	REGISTER_TRANSFORM(TransformTableRef);
 
@@ -720,6 +727,8 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformTableAliasColon);
 	REGISTER_TRANSFORM(TransformQualifiedTableFunction);
 	REGISTER_TRANSFORM(TransformTableSubquery);
+	REGISTER_TRANSFORM(TransformTableSubqueryLateralOpt);
+	REGISTER_TRANSFORM(TransformTableSubqueryAliasColon);
 	REGISTER_TRANSFORM(TransformSubqueryReference);
 	REGISTER_TRANSFORM(TransformBaseTableRef);
 	REGISTER_TRANSFORM(TransformAtClause);
