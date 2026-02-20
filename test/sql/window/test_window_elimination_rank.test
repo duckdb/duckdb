@@ -1,4 +1,4 @@
-# name: test/sql/window/topn_window_elimination_rank.test
+# name: test/sql/window/test_window_elimination_rank.test
 # description: Test TopN Window Elimination optimization for RANK
 # group: [window]
 
@@ -278,6 +278,18 @@ logical_opt	<REGEX>:.*UNNEST.*
 
 statement ok
 DROP TABLE test_multi_part;
+
+# No-payload: only partition key
+query I rowsort
+SELECT grp FROM (
+    SELECT grp, RANK() OVER (PARTITION BY grp ORDER BY sum(val) DESC) AS ranking
+    FROM test
+    GROUP BY grp
+) WHERE ranking <= 5;
+----
+0
+1
+2
 
 # Test: ties with a better value arriving - evicted element should be preserved
 # When all heap and ties values share the same key, inserting a better key

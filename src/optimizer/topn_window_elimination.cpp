@@ -238,6 +238,11 @@ TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> 
 		// RANK: directly construct BoundAggregateExpression bypassing bind, because
 		// __internal_arg_min_rank()/__internal_arg_max_rank() are internal-only functions whose bind throws an error to
 		// prevent user access
+		if (!requires_arg) {
+			// No payload: insert a copy of ORDER_BY_KEY at position 0 as a proxy val so the 3-arg function gets correct
+			// arguments.
+			aggregate_params.insert(aggregate_params.begin(), aggregate_params[0]->Copy());
+		}
 		auto type = aggregate_params[0]->return_type;
 		auto by_type = aggregate_params[1]->return_type;
 
