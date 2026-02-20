@@ -35,6 +35,11 @@ void IndexDataRemover::PushDelete(DeleteInfo &info) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}
+	if (!version_table.IsMainTable()) {
+		// the table has been dropped or altered - no need to clean up index entries
+		// as the indexes are going away with the table
+		return;
+	}
 
 	idx_t count = 0;
 	row_t row_numbers[STANDARD_VECTOR_SIZE];
