@@ -7,6 +7,9 @@ import tempfile
 import os
 import shutil
 import re
+import json
+import atexit
+import platform
 
 
 class ErrorContainer:
@@ -64,6 +67,7 @@ parser.add_argument(
 )
 parser.add_argument('--valgrind', action='store_true', help='Run the tests with valgrind', default=False)
 parser.add_argument("--test-config", action='store', help='Path to the test configuration file', default=None)
+parser.add_argument('--rss-output', action='store', help='Write peak subprocess RSS measurements (bytes) to this JSON file', default=None)
 
 args, extra_args = parser.parse_known_args()
 
@@ -85,6 +89,11 @@ profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
+
+is_windows = os.name == 'nt'
+rss_tracking_enabled = args.rss_output is not None and not is_windows
+if args.rss_output is not None and is_windows:
+    print('RSS tracking disabled on Windows: wait4 is unavailable.')
 
 summarize_failures = args.summarize_failures
 if summarize_failures is None:
@@ -126,6 +135,7 @@ if args.list:
         print(print(f"[{test_number}/{test_count}]: {test_case}"))
 
 all_passed = True
+rss_measurements = []
 
 
 def fail():
@@ -175,6 +185,98 @@ def print_interval_background(interval):
             current_ticker = 0
 
 
+def ru_maxrss_to_bytes(ru_maxrss):
+    if platform.system() == 'Darwin':
+        # Darwin reports bytes.
+        return int(ru_maxrss)
+    # Linux and most other Unix variants report KiB.
+    return int(ru_maxrss) * 1024
+
+
+def run_subprocess_and_measure_rss(test_cmd, unittest_stdout, unittest_stderr, timeout, env):
+    if not rss_tracking_enabled:
+        return subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env=env), None
+
+    capture_stdout = unittest_stdout == subprocess.PIPE
+    capture_stderr = unittest_stderr == subprocess.PIPE
+
+    with tempfile.TemporaryFile() as stdout_tmp, tempfile.TemporaryFile() as stderr_tmp:
+        popen_stdout = stdout_tmp if capture_stdout else unittest_stdout
+        popen_stderr = stderr_tmp if capture_stderr else unittest_stderr
+        process = subprocess.Popen(test_cmd, stdout=popen_stdout, stderr=popen_stderr, env=env)
+
+        start_time = time.time()
+        wait_status = None
+        wait_rusage = None
+        timed_out = False
+        wait4_poll_interval_s = 0.01
+
+        try:
+            while True:
+                waited_pid, status, rusage = os.wait4(process.pid, os.WNOHANG)
+                if waited_pid == process.pid:
+                    wait_status = status
+                    wait_rusage = rusage
+                    break
+                if time.time() - start_time > timeout:
+                    timed_out = True
+                    break
+                time.sleep(wait4_poll_interval_s)
+
+            if timed_out:
+                process.kill()
+                _, wait_status, wait_rusage = os.wait4(process.pid, 0)
+                stdout_data = b''
+                stderr_data = b''
+                if capture_stdout:
+                    stdout_tmp.seek(0)
+                    stdout_data = stdout_tmp.read()
+                if capture_stderr:
+                    stderr_tmp.seek(0)
+                    stderr_data = stderr_tmp.read()
+                timeout_error = subprocess.TimeoutExpired(test_cmd, timeout, output=stdout_data, stderr=stderr_data)
+                timeout_error.peak_rss_bytes = ru_maxrss_to_bytes(wait_rusage.ru_maxrss)
+                raise timeout_error
+        except Exception:
+            if process.poll() is None:
+                try:
+                    process.kill()
+                    os.wait4(process.pid, 0)
+                except Exception:
+                    pass
+            raise
+
+        if os.WIFEXITED(wait_status):
+            returncode = os.WEXITSTATUS(wait_status)
+        elif os.WIFSIGNALED(wait_status):
+            returncode = -os.WTERMSIG(wait_status)
+        else:
+            returncode = process.returncode if process.returncode is not None else 1
+
+        stdout_data = b''
+        stderr_data = b''
+        if capture_stdout:
+            stdout_tmp.seek(0)
+            stdout_data = stdout_tmp.read()
+        if capture_stderr:
+            stderr_tmp.seek(0)
+            stderr_data = stderr_tmp.read()
+
+        return subprocess.CompletedProcess(test_cmd, returncode, stdout_data, stderr_data), ru_maxrss_to_bytes(wait_rusage.ru_maxrss)
+
+
+def append_rss_measurement(test_name, test_cmd, peak_rss_bytes):
+    if not rss_tracking_enabled:
+        return
+    rss_measurements.append(
+        {
+            'test': test_name,
+            'command': test_cmd,
+            'peak_rss_bytes': int(peak_rss_bytes or 0),
+        }
+    )
+
+
 def launch_test(test, list_of_tests=False):
     global is_active
     # start the background thread
@@ -200,21 +302,29 @@ def launch_test(test, list_of_tests=False):
             env['SUMMARIZE_FAILURES'] = '0'
         if args.test_config:
             test_cmd = test_cmd + ['--test-config', args.test_config]
-        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env=env)
+        res, peak_rss_bytes = run_subprocess_and_measure_rss(
+            test_cmd, unittest_stdout, unittest_stderr, timeout=timeout, env=env
+        )
     except subprocess.TimeoutExpired as e:
         if list_of_tests:
             print("[TIMED OUT]", flush=True)
         else:
             print(" (TIMED OUT)", flush=True)
         test_name = test[0] if not list_of_tests else str(test)
+        peak_rss_bytes = getattr(e, 'peak_rss_bytes', None)
+        append_rss_measurement(test_name, ' '.join(test_cmd), peak_rss_bytes)
         error_msg = f'TIMEOUT - exceeded specified timeout of {timeout} seconds'
         new_data = {"test": test_name, "return_code": 1, "stdout": '', "stderr": error_msg}
         error_container.append(new_data)
         fail()
+        is_active = False
+        background_print_thread.join()
         return
 
     stdout = res.stdout.decode('utf8') if not list_of_tests else ''
     stderr = res.stderr.decode('utf8')
+    test_name = test[0] if not list_of_tests else ' '.join(test)
+    append_rss_measurement(test_name, ' '.join(test_cmd), peak_rss_bytes)
 
     if len(stderr) > 0:
         # when list_of_tests test name gets transformed, but we can get it from stderr
@@ -234,6 +344,9 @@ def launch_test(test, list_of_tests=False):
         additional_data += " (" + parse_assertions(stdout) + ")"
     if args.time_execution:
         additional_data += f" (Time: {end - start:.4f} seconds)"
+    if rss_tracking_enabled:
+        peak_rss_mib = float(int(peak_rss_bytes or 0)) / (1024.0 * 1024.0)
+        additional_data += f" (Peak RSS: {peak_rss_mib:.1f} MiB)"
     print(additional_data, flush=True)
     if profile:
         print(f'{test_case}	{end - start}')
@@ -297,6 +410,20 @@ def run_tests_batched(batch_count):
 
         launch_test(['-f', tmp.name, '--start-offset', str(test_number), '--end-offset', str(next_entry)], True)
         test_number = next_entry
+
+
+def write_rss_output():
+    if args.rss_output is None:
+        return
+    output_dir = os.path.dirname(args.rss_output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    with open(args.rss_output, 'w') as f:
+        json.dump({'measurements': rss_measurements}, f, indent=2)
+
+
+if args.rss_output is not None:
+    atexit.register(write_rss_output)
 
 
 if args.tests_per_invocation == 1:
