@@ -2195,12 +2195,14 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 		} else if (type_.id() == LogicalTypeId::GEOMETRY) {
 			if (!serializer.ShouldSerialize(7)) {
 				// Write as old-style SPATIAL format
-				string buffer;
-				Geometry::ToSpatialGeometry(StringValue::Get(*this), buffer);
-				serializer.WriteProperty(102, "value", buffer);
+				string blob;
+				Geometry::ToSpatialGeometry(StringValue::Get(*this), blob);
+				auto text = Blob::ToString(blob);
+				serializer.WriteProperty(102, "value", text);
 			} else {
 				// Otherwise, write as WKB with an explicit format property so that we recognize during deserialization.
-				serializer.WriteProperty(102, "value", StringValue::Get(*this));
+				auto text = Blob::ToString(StringValue::Get(*this));
+				serializer.WriteProperty(102, "value", text);
 				serializer.WriteProperty(103, "geometry_format", GeometryStorageType::WKB);
 			}
 		} else {
@@ -2294,9 +2296,11 @@ Value Value::Deserialize(Deserializer &deserializer) {
 			auto str = deserializer.ReadProperty<string>(102, "value");
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(str));
 		} else if (type.id() == LogicalTypeId::GEOMETRY) {
-			auto blob = deserializer.ReadProperty<string>(102, "value");
+			auto text = deserializer.ReadProperty<string>(102, "value");
 			auto type = deserializer.ReadPropertyWithExplicitDefault<GeometryStorageType>(103, "geometry_format",
 			                                                                              GeometryStorageType::SPATIAL);
+
+			auto blob = Blob::ToBlob(text);
 			if (type == GeometryStorageType::WKB) {
 				new_value.value_info_ = make_shared_ptr<StringValueInfo>(std::move(blob));
 			} else if (type == GeometryStorageType::SPATIAL) {
