@@ -121,7 +121,7 @@ struct ListComprehensionMatch {
 
 vector<unique_ptr<Expression>> CopyCapturedChildren(BoundFunctionExpression &inner_apply) {
 	vector<unique_ptr<Expression>> captured_children;
-	captured_children.reserve(inner_apply.children.size() > 0 ? inner_apply.children.size() - 1 : 0);
+	captured_children.reserve(inner_apply.children.empty() ? 0 : inner_apply.children.size() - 1);
 	for (idx_t i = 1; i < inner_apply.children.size(); i++) {
 		captured_children.push_back(inner_apply.children[i]->Copy());
 	}
