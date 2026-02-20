@@ -41,6 +41,8 @@ add_library_unity(
   topn_window_elimination.cpp
   unnest_rewriter.cpp
   window_self_join.cpp
+  sample_histogram.cpp
+  sample_statistics_cache.cpp
   sampling_pushdown.cpp
   sum_rewriter.cpp
   projection_pullup.cpp)

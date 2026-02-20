@@ -1,0 +1,49 @@
+# name: test/optimizer/sample_reservoir_copy_merge_regression.test
+# description: Regression for single-row sample copy/merge path (BLOB/BIT) after CHECKPOINT
+# group: [optimizer]
+
+# BLOB single-row path: checkpoint can serialize/copy a one-row sample, then next append merges into it
+statement ok
+CREATE TABLE t_oob_blob(c0 BLOB);
+
+statement ok
+INSERT INTO t_oob_blob VALUES (X'41');
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t_oob_blob VALUES (X'42');
+
+query I
+SELECT count(*) FROM t_oob_blob;
+----
+2
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_oob_blob');
+----
+true
+
+# BIT single-row path: same regression scenario for non-numeric bit type
+statement ok
+CREATE TABLE t_oob_bit(c0 BIT);
+
+statement ok
+INSERT INTO t_oob_bit VALUES (0);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t_oob_bit VALUES (1);
+
+query I
+SELECT count(*) FROM t_oob_bit;
+----
+2
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_oob_bit');
+----
+true

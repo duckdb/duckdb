@@ -4,6 +4,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
 
 namespace duckdb {
 
@@ -16,7 +17,9 @@ PhysicalVacuum::PhysicalVacuum(PhysicalPlan &physical_plan, unique_ptr<VacuumInf
 
 class VacuumLocalSinkState : public LocalSinkState {
 public:
-	explicit VacuumLocalSinkState(VacuumInfo &info, optional_ptr<TableCatalogEntry> table) : hashes(LogicalType::HASH) {
+	VacuumLocalSinkState(VacuumInfo &info, optional_ptr<TableCatalogEntry> table, Allocator &allocator)
+	    : hashes(LogicalType::HASH),
+	      local_sample(make_uniq<ReservoirSample>(allocator, static_cast<idx_t>(FIXED_SAMPLE_SIZE), 1)) {
 		for (const auto &column_name : info.columns) {
 			auto &column = table->GetColumn(column_name);
 			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
@@ -29,15 +32,17 @@ public:
 
 	vector<unique_ptr<DistinctStatistics>> column_distinct_stats;
 	Vector hashes;
+	unique_ptr<ReservoirSample> local_sample;
 };
 
 unique_ptr<LocalSinkState> PhysicalVacuum::GetLocalSinkState(ExecutionContext &context) const {
-	return make_uniq<VacuumLocalSinkState>(*info, table);
+	return make_uniq<VacuumLocalSinkState>(*info, table, BufferAllocator::Get(context.client));
 }
 
 class VacuumGlobalSinkState : public GlobalSinkState {
 public:
-	explicit VacuumGlobalSinkState(VacuumInfo &info, optional_ptr<TableCatalogEntry> table) {
+	VacuumGlobalSinkState(VacuumInfo &info, optional_ptr<TableCatalogEntry> table, Allocator &allocator)
+	    : table_sample(make_uniq<ReservoirSample>(allocator, static_cast<idx_t>(FIXED_SAMPLE_SIZE), 1)) {
 		for (const auto &column_name : info.columns) {
 			auto &column = table->GetColumn(column_name);
 			if (DistinctStatistics::TypeIsSupported(column.GetType())) {
@@ -50,10 +55,11 @@ public:
 
 	mutex stats_lock;
 	vector<unique_ptr<DistinctStatistics>> column_distinct_stats;
+	unique_ptr<ReservoirSample> table_sample;
 };
 
 unique_ptr<GlobalSinkState> PhysicalVacuum::GetGlobalSinkState(ClientContext &context) const {
-	return make_uniq<VacuumGlobalSinkState>(*info, table);
+	return make_uniq<VacuumGlobalSinkState>(*info, table, BufferAllocator::Get(context));
 }
 
 SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -66,6 +72,9 @@ SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, DataChunk &chunk,
 		}
 		lstate.column_distinct_stats[col_idx]->Update(chunk.data[col_idx], chunk.size(), lstate.hashes);
 	}
+
+	// Feed the local reservoir sample
+	lstate.local_sample->AddToReservoir(chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -84,6 +93,9 @@ SinkCombineResultType PhysicalVacuum::Combine(ExecutionContext &context, Operato
 		}
 	}
 
+	// Merge local sample into global sample
+	g_state.table_sample->Merge(std::move(l_state.local_sample));
+
 	return SinkCombineResultType::FINISHED;
 }
 
@@ -98,6 +110,10 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
 		tbl->GetStorage().SetDistinct(column_id_map.at(col_idx), std::move(sink.column_distinct_stats[col_idx]));
 	}
+
+	// Set the rebuilt table sample
+	tbl->GetStorage().SetTableSample(std::move(sink.table_sample));
+
 	if (tbl) {
 		tbl->GetStorage().VacuumIndexes();
 	}

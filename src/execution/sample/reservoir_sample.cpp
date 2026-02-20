@@ -50,7 +50,7 @@ ReservoirSample::ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk> 
 	if (reservoir_chunk) {
 		this->reservoir_chunk = std::move(reservoir_chunk);
 		sel_size = this->reservoir_chunk->chunk.size();
-		sel = SelectionVector(FIXED_SAMPLE_SIZE);
+		sel = SelectionVector(sample_count);
 		for (idx_t i = 0; i < sel_size; i++) {
 			sel.set_index(i, i);
 		}
@@ -153,14 +153,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const {
 	auto new_sample_chunk = make_uniq<ReservoirChunk>();
 	new_sample_chunk->chunk.Initialize(Allocator::DefaultAllocator(), types, size);
-
-	// set the NULL columns correctly
-	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		if (!ValidSampleType(types[col_idx]) && stats_sample) {
-			new_sample_chunk->chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(new_sample_chunk->chunk.data[col_idx], true);
-		}
-	}
 	return new_sample_chunk;
 }
 
@@ -213,7 +205,7 @@ unique_ptr<BlockingSample> ReservoirSample::Copy() const {
 
 	ret->reservoir_chunk = std::move(new_sample_chunk);
 	ret->UpdateSampleAppend(ret->reservoir_chunk->chunk, reservoir_chunk->chunk, sel_copy, values_to_copy);
-	ret->sel = SelectionVector(values_to_copy);
+	ret->sel = SelectionVector(sample_count);
 	for (idx_t i = 0; i < values_to_copy; i++) {
 		ret->sel.set_index(i, i);
 	}
@@ -259,8 +251,12 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 	}
 
 	if (GetActiveSampleCount() == 0 && GetTuplesSeen() == 0) {
-		sel = SelectionVector(other.sel);
+		// Deep copy the selection vector to avoid use-after-free
+		sel = SelectionVector(sample_count);
 		sel_size = other.sel_size;
+		for (idx_t i = 0; i < sel_size; i++) {
+			sel.set_index(i, other.sel.get_index(i));
+		}
 		base_reservoir_sample->num_entries_seen_total = other.GetTuplesSeen();
 		return;
 	}
@@ -280,7 +276,6 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 
 	idx_t keep_from_this = 0;
 	idx_t keep_from_other = 0;
-	D_ASSERT(stats_sample);
 	D_ASSERT(sample_count == FIXED_SAMPLE_SIZE);
 	D_ASSERT(sample_count == other.sample_count);
 	auto sample_count_double = static_cast<double>(sample_count);
@@ -431,8 +426,12 @@ void ReservoirSample::Merge(unique_ptr<BlockingSample> other) {
 	if (!reservoir_chunk || reservoir_chunk->chunk.size() == 0) {
 		base_reservoir_sample = std::move(other->base_reservoir_sample);
 		reservoir_chunk = std::move(other_sample.reservoir_chunk);
-		sel = SelectionVector(other_sample.sel);
+		// Deep copy the selection vector to avoid use-after-free when other is destroyed
+		sel = SelectionVector(sample_count);
 		sel_size = other_sample.sel_size;
+		for (idx_t i = 0; i < sel_size; i++) {
+			sel.set_index(i, other_sample.sel.get_index(i));
+		}
 		Verify();
 		return;
 	}
@@ -509,7 +508,6 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	// create a new sample chunk to store new samples
 	auto types = reservoir_chunk->chunk.GetTypes();
 	D_ASSERT(num_samples_to_keep <= sample_count);
-	D_ASSERT(stats_sample);
 	D_ASSERT(sample_count == FIXED_SAMPLE_SIZE);
 	auto new_reservoir_chunk = CreateNewSampleChunk(types, sample_count);
 
@@ -700,14 +698,10 @@ void ReservoirSample::UpdateSampleAppend(DataChunk &this_, DataChunk &other, Sel
 		return;
 	}
 	D_ASSERT(this_.GetTypes() == other.GetTypes());
-	auto types = reservoir_chunk->chunk.GetTypes();
 
 	for (idx_t i = 0; i < reservoir_chunk->chunk.ColumnCount(); i++) {
-		auto col_type = types[i];
-		if (ValidSampleType(col_type) || !stats_sample) {
-			D_ASSERT(this_.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-			VectorOperations::Copy(other.data[i], this_.data[i], other_sel, append_count, 0, this_.size());
-		}
+		D_ASSERT(this_.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		VectorOperations::Copy(other.data[i], this_.data[i], other_sel, append_count, 0, this_.size());
 	}
 	this_.SetCardinality(new_size);
 }

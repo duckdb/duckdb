@@ -1,0 +1,183 @@
+# name: test/optimizer/sample_histogram_estimation.test
+# description: Test sample-based histogram estimation for filter cardinality
+# group: [optimizer]
+
+# Samples are automatically populated during Append, and can also be refreshed via VACUUM ANALYZE.
+
+require skip_reload
+
+# Test that sample is automatically populated during INSERT (no VACUUM ANALYZE needed)
+statement ok
+CREATE TABLE t AS SELECT range AS x FROM range(1000000);
+
+# Sample is already populated from the INSERT
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t');
+----
+true
+
+# Sample should have at most 2048 rows (FIXED_SAMPLE_SIZE)
+query T
+SELECT count(*) <= 2048 FROM duckdb_table_sample('t');
+----
+true
+
+# VACUUM ANALYZE still works to refresh the sample
+statement ok
+VACUUM ANALYZE t;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t');
+----
+true
+
+# Verify the enable_sample_estimation setting exists and can be toggled
+query I
+SELECT current_setting('enable_sample_estimation');
+----
+true
+
+statement ok
+SET enable_sample_estimation = false;
+
+query I
+SELECT current_setting('enable_sample_estimation');
+----
+false
+
+statement ok
+SET enable_sample_estimation = true;
+
+# Test CONSTANT_COMPARISON range estimation (non-equality histogram path)
+statement ok
+CREATE TABLE t_range AS SELECT range AS x FROM range(100000);
+
+# With sample estimation enabled, a very selective range should estimate to a small cardinality.
+query II
+EXPLAIN SELECT * FROM t_range WHERE x < 10;
+----
+physical_plan	<REGEX>:.*~[0-9]{1,3} rows?.*
+
+statement ok
+SET enable_sample_estimation = false;
+
+# With sample estimation disabled, non-equality falls back to default selectivity (20000 rows).
+query II
+EXPLAIN SELECT * FROM t_range WHERE x < 10;
+----
+physical_plan	<REGEX>:.*~20,000 rows.*
+
+statement ok
+SET enable_sample_estimation = true;
+
+# Test IN filter estimation path
+query II
+EXPLAIN SELECT * FROM t_range WHERE x IN (9000, 9001, 9002, 9003, 9004);
+----
+physical_plan	<REGEX>:.*~20,[0-9]{3} rows.*
+
+statement ok
+SET enable_sample_estimation = false;
+
+# Current IN planning path still yields the default estimate when sample estimation is disabled.
+query II
+EXPLAIN SELECT * FROM t_range WHERE x IN (9000, 9001, 9002, 9003, 9004);
+----
+physical_plan	<REGEX>:.*~20,000 rows.*
+
+statement ok
+SET enable_sample_estimation = true;
+
+# Test with VARCHAR column
+statement ok
+CREATE TABLE t_str(s VARCHAR);
+
+statement ok
+INSERT INTO t_str SELECT chr((65 + (range % 26))::INTEGER) FROM range(100000);
+
+statement ok
+VACUUM ANALYZE t_str;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_str');
+----
+true
+
+# Test with DATE column
+statement ok
+CREATE TABLE t_date(d DATE);
+
+statement ok
+INSERT INTO t_date SELECT DATE '2020-01-01' + INTERVAL (range) DAY FROM range(10000);
+
+statement ok
+VACUUM ANALYZE t_date;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_date');
+----
+true
+
+# Test that even without VACUUM ANALYZE, sample is populated from INSERT
+statement ok
+CREATE TABLE t_no_analyze AS SELECT range AS y FROM range(100000);
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_no_analyze');
+----
+true
+
+# Test IN filter estimation
+statement ok
+CREATE TABLE t_in AS SELECT range AS x FROM range(10000);
+
+statement ok
+VACUUM ANALYZE t_in;
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_in');
+----
+true
+
+# Test with multiple columns including non-orderable types
+statement ok
+CREATE TABLE t_multi(i INTEGER, v VARCHAR, b BLOB, d DATE);
+
+statement ok
+INSERT INTO t_multi SELECT range, 'val_' || range::VARCHAR, '\xDEAD'::BLOB, DATE '2020-01-01' + INTERVAL (range) DAY FROM range(5000);
+
+statement ok
+VACUUM ANALYZE t_multi;
+
+# Sample should be populated even with non-orderable columns
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_multi');
+----
+true
+
+# Test EXPRESSION_FILTER probing via SIMILAR TO (produces ExpressionFilter)
+statement ok
+CREATE TABLE t_expr AS SELECT range AS x FROM range(100000);
+
+statement ok
+VACUUM ANALYZE t_expr;
+
+# With sample estimation, the expression is probed against the sample for a data-driven estimate.
+# x::VARCHAR SIMILAR TO '999[0-9]*' matches ~110 values out of 100000.
+# The sample-based estimate should be a small number (not the 20000 default).
+query II
+EXPLAIN SELECT * FROM t_expr WHERE x::VARCHAR SIMILAR TO '999[0-9]*';
+----
+physical_plan	<REGEX>:.*~[0-9]{1,3} rows.*
+
+# With sample estimation disabled, it should fall back to default selectivity (20000 rows)
+statement ok
+SET enable_sample_estimation = false;
+
+query II
+EXPLAIN SELECT * FROM t_expr WHERE x::VARCHAR SIMILAR TO '999[0-9]*';
+----
+physical_plan	<REGEX>:.*~20,000 rows.*
+
+statement ok
+SET enable_sample_estimation = true;

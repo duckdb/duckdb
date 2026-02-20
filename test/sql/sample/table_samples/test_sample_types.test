@@ -2,9 +2,8 @@
 # description: Test sampling of larger relations
 # group: [table_samples]
 
-mode skip
 
-# test valid sampling types (for now only integral types)
+# all column types are sampled (not just numeric)
 
 statement ok
 pragma enable_verification;
@@ -13,7 +12,7 @@ statement ok
 create table string_samples as select range::Varchar a from range(204800);
 
 query I
-select count(*) from duckdb_table_sample('string_samples') where a is NULL;
+select count(*) from duckdb_table_sample('string_samples') where a is NOT NULL;
 ----
 2048
 
@@ -21,7 +20,7 @@ statement ok
 create table struct_samples as select {'key1': 'quack-a-lack', 'key2': range} a from range(204800);
 
 query I
-select count(*) from duckdb_table_sample('struct_samples') where a is null;
+select count(*) from duckdb_table_sample('struct_samples') where a is NOT null;
 ----
 2048
 
@@ -29,7 +28,7 @@ statement ok
 create table blob_samples as select '\xAA\xAB\xAC'::BLOB a from range(204800);
 
 query I
-select count(*) from duckdb_table_sample('blob_samples') where a is NULL;
+select count(*) from duckdb_table_sample('blob_samples') where a is NOT NULL;
 ----
 2048
 
@@ -57,7 +56,7 @@ select count(*) from duckdb_table_sample('integral_samples') where d NOT null;
 2048
 
 query I
-select count(*) from duckdb_table_sample('integral_samples') where e IS null;
+select count(*) from duckdb_table_sample('integral_samples') where e is NOT null;
 ----
 2048
 
@@ -65,16 +64,16 @@ statement ok
 CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_timestamp() d from range(1000000);
 
 query I
-select count(*) from duckdb_table_sample('t1') where b is null;
+select count(*) from duckdb_table_sample('t1') where b is NOT null;
 ----
 2048
 
 query I
-select count(*) from duckdb_table_sample('t1') where c is null;
+select count(*) from duckdb_table_sample('t1') where c is NOT null;
 ----
 2048
 
 query I
-select count(*) from duckdb_table_sample('t1') where d is null;
+select count(*) from duckdb_table_sample('t1') where d is NOT null;
 ----
 2048

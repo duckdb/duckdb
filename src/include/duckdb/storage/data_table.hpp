@@ -229,6 +229,8 @@ public:
 
 	//! Get table sample
 	unique_ptr<BlockingSample> GetSample();
+	//! Set the table sample (used by VACUUM ANALYZE)
+	void SetTableSample(unique_ptr<BlockingSample> sample);
 	//! Sets statistics of a physical column within the table
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 

@@ -2,7 +2,6 @@
 # description: Test sampling of larger relations
 # group: [table_samples]
 
-mode skip
 
 # required when testing table samples. See basic_sample_test.test
 require vector_size 2048
@@ -12,11 +11,11 @@ load __TEST_DIR__/test_sample_is_destroyed_on_update.db
 statement ok
 create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
-# no sample collected yet. There are only 5
+# sample is populated immediately (fills to FIXED_SAMPLE_SIZE=2048)
 query I
 select count(*) from duckdb_table_sample('integers_1') order by all;
 ----
-1024
+2048
 
 statement ok
 delete from integers_1 where a = 3;
@@ -33,7 +32,7 @@ create or replace table integers_1 as select range a, range+1 b  from range(1024
 query I
 select count(*) from duckdb_table_sample('integers_1');
 ----
-1024
+2048
 
 statement ok
 update integers_1 set a = 5 where a = 1;
@@ -63,12 +62,10 @@ select * from duckdb_table_sample('integers_1');
 statement ok
 create or replace table integers_1 as select range a, range+1 b  from range(102400);
 
-
-# don't have enough smaples yet.
 query I
 select count(*) from duckdb_table_sample('integers_1');
 ----
-1024
+2048
 
 statement ok
 Alter table integers_1 alter b TYPE VARCHAR
@@ -84,7 +81,7 @@ create or replace table integers_1 as select range a, range+1 b  from range(1024
 query I
 select count(*) from duckdb_table_sample('integers_1');
 ----
-1024
+2048
 
 statement ok
 Alter table integers_1 drop b;
@@ -100,7 +97,7 @@ create or replace table integers_1 as select range a, range+1 b  from range(500)
 query I
 select count(*) from duckdb_table_sample('integers_1');
 ----
-5
+500
 
 statement ok
 Alter table integers_1 drop b;
@@ -119,7 +116,3 @@ insert into integers_1 select range a from range(500);
 query I
 select * from duckdb_table_sample('integers_1');
 ----
-
-
-
-

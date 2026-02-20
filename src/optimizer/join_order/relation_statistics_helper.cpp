@@ -2,12 +2,18 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/optimizer/sample_statistics_cache.hpp"
+#include "duckdb/optimizer/sample_histogram.hpp"
+#include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include <math.h>
 
@@ -119,6 +125,24 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	if (!get.table_filters.filters.empty()) {
 		column_statistics = nullptr;
 		bool has_non_optional_filters = false;
+
+		// Try to obtain the table sample and build histograms for better filter estimation
+		unique_ptr<SampleStatisticsCache> sample_cache_owner;
+		optional_ptr<SampleStatisticsCache> sample_cache;
+		auto &client_config = ClientConfig::GetConfig(context);
+		if (client_config.enable_sample_estimation && catalog_table && catalog_table->IsDuckTable()) {
+			auto &storage = catalog_table->GetStorage();
+			auto sample = storage.GetSample();
+			if (sample && !sample->destroyed) {
+				// Use the full table types (not projected types) since the sample contains all columns
+				// and table_filters use table-level column indices
+				auto table_types = catalog_table->GetTypes();
+				sample_cache_owner = make_uniq<SampleStatisticsCache>();
+				sample_cache_owner->BuildFromSample(sample->Cast<ReservoirSample>(), table_types);
+				sample_cache = sample_cache_owner.get();
+			}
+		}
+
 		for (auto &it : get.table_filters.filters) {
 			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
 				if (get.function.statistics_extended) {
@@ -132,8 +156,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			}
 
 			if (column_statistics) {
-				idx_t cardinality_with_filter =
-				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
+				idx_t cardinality_with_filter = InspectTableFilter(base_table_cardinality, it.first, *it.second,
+				                                                   *column_statistics, sample_cache, context);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
@@ -143,8 +167,10 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		}
 		// if the above code didn't find an equality filter (i.e country_code = "[us]")
 		// and there are other table filters (i.e cost > 50), use default selectivity.
-		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
-		if (!has_equality_filter && has_non_optional_filters) {
+		// However, if we have sample-based histogram estimates, those already provide accurate
+		// selectivity for range filters, so we skip the fallback in that case.
+		bool has_filter_estimate = (cardinality_after_filters != base_table_cardinality);
+		if (!has_filter_estimate && !sample_cache && has_non_optional_filters) {
 			cardinality_after_filters = MaxValue<idx_t>(
 			    LossyNumericCast<idx_t>(double(base_table_cardinality) * RelationStatisticsHelper::DEFAULT_SELECTIVITY),
 			    1U);
@@ -444,27 +470,75 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 }
 
 idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t column_index, const TableFilter &filter,
-                                                   BaseStatistics &base_stats) {
+                                                   BaseStatistics &base_stats,
+                                                   optional_ptr<SampleStatisticsCache> sample_cache,
+                                                   optional_ptr<ClientContext> context) {
 	auto cardinality_after_filters = cardinality;
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : and_filter.child_filters) {
-			cardinality_after_filters = MinValue(
-			    cardinality_after_filters, InspectTableFilter(cardinality, column_index, *child_filter, base_stats));
+			cardinality_after_filters =
+			    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, column_index, *child_filter,
+			                                                           base_stats, sample_cache, context));
+		}
+		return cardinality_after_filters;
+	}
+	case TableFilterType::EXPRESSION_FILTER: {
+		if (sample_cache && context) {
+			auto &expr_filter = filter.Cast<ExpressionFilter>();
+			auto result = sample_cache->ProbeExpressionFilter(*context, expr_filter, column_index, cardinality);
+			if (result > 0) {
+				return result;
+			}
 		}
 		return cardinality_after_filters;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &comparison_filter = filter.Cast<ConstantFilter>();
-		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
+		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
+			auto column_count = base_stats.GetDistinctCount();
+			// column_count = 0 when there is no column count (i.e parquet scans)
+			if (column_count > 0) {
+				// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
+				cardinality_after_filters = (cardinality + column_count - 1) / column_count;
+			}
 			return cardinality_after_filters;
 		}
+		// For non-equality comparisons (<, >, <=, >=), use histogram from the sample
+		if (sample_cache) {
+			auto histogram = sample_cache->GetHistogram(column_index);
+			if (histogram && histogram->IsValid()) {
+				double selectivity =
+				    histogram->EstimateSelectivity(comparison_filter.comparison_type, comparison_filter.constant);
+				if (selectivity >= 0.0) {
+					cardinality_after_filters =
+					    MaxValue<idx_t>(LossyNumericCast<idx_t>(static_cast<double>(cardinality) * selectivity), 1U);
+					return cardinality_after_filters;
+				}
+			}
+		}
+		return cardinality_after_filters;
+	}
+	case TableFilterType::IN_FILTER: {
+		auto &in_filter = filter.Cast<InFilter>();
+		// Try histogram-based estimation first
+		if (sample_cache) {
+			auto histogram = sample_cache->GetHistogram(column_index);
+			if (histogram && histogram->IsValid()) {
+				double selectivity = histogram->EstimateInSelectivity(in_filter.values);
+				if (selectivity >= 0.0) {
+					return MaxValue<idx_t>(LossyNumericCast<idx_t>(static_cast<double>(cardinality) * selectivity), 1U);
+				}
+			}
+		}
+		// Fallback: treat as OR of equalities using distinct count
 		auto column_count = base_stats.GetDistinctCount();
-		// column_count = 0 when there is no column count (i.e parquet scans)
 		if (column_count > 0) {
-			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
-			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
+			idx_t values_count = in_filter.values.size();
+			cardinality_after_filters =
+			    MaxValue<idx_t>((cardinality * values_count + column_count - 1) / column_count, 1U);
+			return MinValue(cardinality_after_filters, cardinality);
 		}
 		return cardinality_after_filters;
 	}

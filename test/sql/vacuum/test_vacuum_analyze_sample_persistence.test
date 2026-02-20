@@ -1,0 +1,45 @@
+# name: test/sql/vacuum/test_vacuum_analyze_sample_persistence.test
+# description: Verify table sample persistence across checkpoint/restart and post-restart appends
+# group: [vacuum]
+
+load __TEST_DIR__/test_vacuum_analyze_sample_persistence.db
+
+statement ok
+CREATE TABLE t_persist(i INTEGER, b BLOB);
+
+statement ok
+INSERT INTO t_persist SELECT range, '\xDEADBEEF'::BLOB FROM range(5000);
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_persist');
+----
+true
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(*) FROM t_persist;
+----
+5000
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_persist');
+----
+true
+
+# Append after restart to exercise merge with a restored global sample
+statement ok
+INSERT INTO t_persist VALUES (5001, X'41');
+
+query I
+SELECT count(*) FROM t_persist;
+----
+5001
+
+query T
+SELECT count(*) > 0 FROM duckdb_table_sample('t_persist');
+----
+true
