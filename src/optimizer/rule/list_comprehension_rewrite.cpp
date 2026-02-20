@@ -2,11 +2,13 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -42,16 +44,9 @@ optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
 }
 
 optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &struct_pack, const string &name) {
-	if (struct_pack.return_type.id() == LogicalTypeId::STRUCT) {
-		auto &child_types = StructType::GetChildTypes(struct_pack.return_type);
-		for (idx_t i = 0; i < child_types.size(); i++) {
-			if (StringUtil::CIEquals(child_types[i].first, name)) {
-				return struct_pack.children[i].get();
-			}
-		}
-	}
+	D_ASSERT(struct_pack.return_type == LogicalTypeId::STRUCT);
 	for (auto &child : struct_pack.children) {
-		if (StringUtil::CIEquals(child->GetAlias(), name)) {
+		if (child->GetAlias() == name) {
 			return child.get();
 		}
 	}
@@ -84,6 +79,37 @@ bool UsesIndexParameter(Expression &expr) {
 	return uses_index;
 }
 
+bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
+	auto base = UnwrapCasts(expr);
+	if (base->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &extract_expr = base->Cast<BoundFunctionExpression>();
+	if (extract_expr.function.name != "struct_extract" || extract_expr.children.size() != 2) {
+		return false;
+	}
+
+	auto struct_arg = UnwrapCasts(*extract_expr.children[0]);
+	if (struct_arg->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		return false;
+	}
+	auto &struct_ref = struct_arg->Cast<BoundReferenceExpression>();
+	if (struct_ref.index != 0) {
+		return false;
+	}
+
+	auto field_arg = UnwrapCasts(*extract_expr.children[1]);
+	if (field_arg->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+	auto &field_constant = field_arg->Cast<BoundConstantExpression>();
+	if (field_constant.value.IsNull() || field_constant.value.type() != LogicalTypeId::VARCHAR) {
+		return false;
+	}
+
+	return StringValue::Get(field_constant.value) == field_name;
+}
+
 } // namespace
 
 ListComprehensionRewriteRule::ListComprehensionRewriteRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -107,6 +133,18 @@ unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, ve
 	}
 	auto &list_filter_expr = root.children[0]->Cast<BoundFunctionExpression>();
 	if (!IsTargetListFunction(context, list_filter_expr, "list_filter")) {
+		return nullptr;
+	}
+	if (!list_filter_expr.bind_info || !root.bind_info) {
+		return nullptr;
+	}
+	auto &list_filter_bind = list_filter_expr.bind_info->Cast<ListLambdaBindData>();
+	auto &root_bind = root.bind_info->Cast<ListLambdaBindData>();
+	if (!list_filter_bind.lambda_expr || !root_bind.lambda_expr) {
+		return nullptr;
+	}
+	if (!MatchesStructFieldProjection(*list_filter_bind.lambda_expr, "filter") ||
+	    !MatchesStructFieldProjection(*root_bind.lambda_expr, "result")) {
 		return nullptr;
 	}
 	if (list_filter_expr.children.empty()) {

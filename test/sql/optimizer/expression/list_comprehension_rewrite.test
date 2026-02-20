@@ -84,3 +84,14 @@ endloop
 
 endloop
 
+# Non-comprehension nested list lambda should not be rewritten.
+query I
+SELECT list_transform(
+	list_filter(
+		list_transform(l, lambda x: struct_pack(filter := x > 8, result := x + 5)),
+		lambda s: NOT s.filter
+	),
+	lambda s: s.result
+) FROM t;
+----
+[13, 12, 11]
