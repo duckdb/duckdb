@@ -16,6 +16,7 @@ namespace duckdb {
 namespace {
 
 bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression &expr, const string &target_name) {
+	// Compare function name with catalog to recognize aliases
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, expr.function.name,
 	                                                          OnEntryNotFound::RETURN_NULL);
@@ -146,7 +147,6 @@ unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, ve
 	}
 
 	// Build list_filter(list, lambda filter_expr)
-	// TODO: Make changes to existing list_filter instead of creating a new one?
 	vector<unique_ptr<Expression>> filter_children;
 	filter_children.reserve(inner_apply.children.size());
 	for (idx_t i = 0; i < inner_apply.children.size(); i++) {

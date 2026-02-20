@@ -54,3 +54,33 @@ SELECT [x + 5 FOR x, i IN l IF x > 8] FROM t;
 ----
 [15, 14]
 
+# Alias tests for list_transform/list_filter
+foreach t list_transform apply array_apply array_transform list_transform
+
+foreach f list_filter array_filter filter
+
+# Test the number of functions with the number of round brackets as there is no ${...} string replacement in the results
+query II
+EXPLAIN SELECT ${t}(${f}(${t}(l, lambda x, i: struct_pack(filter := i > 2, result := i + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
+----
+logical_opt	<REGEX>:.*PROJECTION.*Expressions:.*\(.*\(.*\(.*l.*\).*\).*\).*SCAN.*
+
+query II
+EXPLAIN SELECT ${t}(${f}(${t}(l, lambda x, i: struct_pack(filter := i > 2, result := x + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
+----
+logical_opt	<REGEX>:.*PROJECTION.*Expressions:.*\(.*\(.*l.*\).*\).*SCAN.*
+
+query I
+SELECT ${t}(${f}(${t}(l, lambda x, i: struct_pack(filter := i > 2, result := i + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
+----
+[8, 9, 10]
+
+query I
+SELECT ${t}(${f}(${t}(l, lambda x, i: struct_pack(filter := i > 2, result := x + 5)), lambda s: s.filter), lambda s: s.result) FROM t;
+----
+[13, 12, 11]
+
+endloop
+
+endloop
+
