@@ -604,7 +604,7 @@ public:
 	unique_ptr<ZSTDAnalyzeState> analyze_state;
 	ColumnDataCheckpointData &checkpoint_data;
 	PartialBlockManager &partial_block_manager;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 
 	//! --- Analyzed Data ---
 	//! The amount of tuples we're writing
