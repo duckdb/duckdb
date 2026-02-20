@@ -1,7 +1,7 @@
 # name: test/sql/function/variant/variant_shredded_extract_nested.test
 # group: [variant]
 
-load __TEST_DIR__/nested_types.db
+load __TEST_DIR__/nested_types.db readwrite v1.5.0
 
 statement ok
 SET variant_minimum_shredding_size = 0;

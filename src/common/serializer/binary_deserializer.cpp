@@ -55,6 +55,11 @@ bool BinaryDeserializer::OnNullableBegin() {
 void BinaryDeserializer::OnNullableEnd() {
 }
 
+bool BinaryDeserializer::HasProperty(const field_id_t field_id, const char *tag) {
+	auto next_field = PeekField();
+	return next_field == field_id;
+}
+
 //-------------------------------------------------------------------------
 // Primitive Types
 //-------------------------------------------------------------------------

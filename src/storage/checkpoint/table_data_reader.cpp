@@ -19,6 +19,7 @@ void TableDataReader::ReadTableData() {
 
 	// We stored the table statistics as a unit in FinalizeTable.
 	BinaryDeserializer stats_deserializer(reader);
+
 	stats_deserializer.Begin();
 	info.data->table_stats.Deserialize(stats_deserializer, columns);
 	stats_deserializer.End();

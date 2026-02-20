@@ -39,6 +39,44 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 	return index_info;
 }
 
+static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDatabase &db) {
+	TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
+		switch (type.id()) {
+		case LogicalTypeId::TYPE: {
+			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
+		} break;
+		case LogicalTypeId::VARIANT: {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (storage_version < 7) {
+				auto required = GetStorageVersionName(7, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("VARIANT columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
+		} break;
+		case LogicalTypeId::GEOMETRY: {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (GeoType::HasCRS(type) && storage_version < 7) {
+				auto required = GetStorageVersionName(7, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException(
+				    "GEOMETRY columns with coordinate reference system identifiers are not supported in storage "
+				    "versions prior %s (database \"%s\" is using storage version %s)",
+				    required, db.GetName(), current);
+			}
+		} break;
+		default:
+			break;
+		}
+		return false;
+	});
+}
+
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
@@ -53,9 +91,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	// create the physical storage
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
-		if (TypeVisitor::Contains(col_def.Type(), LogicalTypeId::TYPE)) {
-			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
-		}
+		CheckTypeIsSupported(col_def.Type(), catalog.GetAttached());
 
 		column_defs.push_back(col_def.Copy());
 	}

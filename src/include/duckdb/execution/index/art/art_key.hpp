@@ -56,7 +56,7 @@ public:
 		return ARTKey(new_data, len);
 	}
 
-	static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value);
+	static ARTKey CreateKey(ArenaAllocator &allocator, Value &value, optional_idx storage_version);
 
 public:
 	data_t &operator[](idx_t i) {

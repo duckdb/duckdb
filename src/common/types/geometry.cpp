@@ -10,6 +10,38 @@
 //----------------------------------------------------------------------------------------------------------------------
 namespace duckdb {
 
+static inline VertexXY BSwap(const VertexXY &v) {
+	VertexXY result;
+	result.x = BSwap(v.x);
+	result.y = BSwap(v.y);
+	return result;
+}
+
+static inline VertexXYZ BSwap(const VertexXYZ &v) {
+	VertexXYZ result;
+	result.x = BSwap(v.x);
+	result.y = BSwap(v.y);
+	result.z = BSwap(v.z);
+	return result;
+}
+
+static inline VertexXYM BSwap(const VertexXYM &v) {
+	VertexXYM result;
+	result.x = BSwap(v.x);
+	result.y = BSwap(v.y);
+	result.m = BSwap(v.m);
+	return result;
+}
+
+static inline VertexXYZM BSwap(const VertexXYZM &v) {
+	VertexXYZM result;
+	result.x = BSwap(v.x);
+	result.y = BSwap(v.y);
+	result.z = BSwap(v.z);
+	result.m = BSwap(v.m);
+	return result;
+}
+
 namespace {
 
 class BlobWriter {
@@ -70,6 +102,24 @@ public:
 		auto le_value = BSwapIfBE(value);
 		memcpy(pos, &le_value, sizeof(T));
 		pos += sizeof(T);
+	}
+
+	void Write(const char *data, size_t size) {
+		if (size == 0) {
+			return; // nothing to write
+		}
+		if (pos + size > end) {
+			throw InvalidInputException("Writing beyond end of binary data at position %zu", pos - beg);
+		}
+		memcpy(pos, data, size);
+		pos += size;
+	}
+
+	void Skip(size_t size) {
+		if (pos + size > end) {
+			throw InvalidInputException("Skipping beyond end of binary data at position %zu", pos - beg);
+		}
+		pos += size;
 	}
 
 	size_t GetPosition() const {
@@ -2163,6 +2213,77 @@ static LogicalType GetVectorizedTypeInternal(GeometryType geom_type, LogicalType
 	}
 }
 
+pair<GeometryType, VertexType> Geometry::GetSpecializedType(GeometryStorageType type) {
+	switch (type) {
+	case GeometryStorageType::POINT_XY:
+		return {GeometryType::POINT, VertexType::XY};
+	case GeometryStorageType::POINT_XYZ:
+		return {GeometryType::POINT, VertexType::XYZ};
+	case GeometryStorageType::POINT_XYM:
+		return {GeometryType::POINT, VertexType::XYM};
+	case GeometryStorageType::POINT_XYZM:
+		return {GeometryType::POINT, VertexType::XYZM};
+	case GeometryStorageType::LINESTRING_XY:
+		return {GeometryType::LINESTRING, VertexType::XY};
+	case GeometryStorageType::LINESTRING_XYZ:
+		return {GeometryType::LINESTRING, VertexType::XYZ};
+	case GeometryStorageType::LINESTRING_XYM:
+		return {GeometryType::LINESTRING, VertexType::XYM};
+	case GeometryStorageType::LINESTRING_XYZM:
+		return {GeometryType::LINESTRING, VertexType::XYZM};
+	case GeometryStorageType::POLYGON_XY:
+		return {GeometryType::POLYGON, VertexType::XY};
+	case GeometryStorageType::POLYGON_XYZ:
+		return {GeometryType::POLYGON, VertexType::XYZ};
+	case GeometryStorageType::POLYGON_XYM:
+		return {GeometryType::POLYGON, VertexType::XYM};
+	case GeometryStorageType::POLYGON_XYZM:
+		return {GeometryType::POLYGON, VertexType::XYZM};
+	case GeometryStorageType::MULTIPOINT_XY:
+		return {GeometryType::MULTIPOINT, VertexType::XY};
+	case GeometryStorageType::MULTIPOINT_XYZ:
+		return {GeometryType::MULTIPOINT, VertexType::XYZ};
+	case GeometryStorageType::MULTIPOINT_XYM:
+		return {GeometryType::MULTIPOINT, VertexType::XYM};
+	case GeometryStorageType::MULTIPOINT_XYZM:
+		return {GeometryType::MULTIPOINT, VertexType::XYZM};
+	case GeometryStorageType::MULTILINESTRING_XY:
+		return {GeometryType::MULTILINESTRING, VertexType::XY};
+	case GeometryStorageType::MULTILINESTRING_XYZ:
+		return {GeometryType::MULTILINESTRING, VertexType::XYZ};
+	case GeometryStorageType::MULTILINESTRING_XYM:
+		return {GeometryType::MULTILINESTRING, VertexType::XYM};
+	case GeometryStorageType::MULTILINESTRING_XYZM:
+		return {GeometryType::MULTILINESTRING, VertexType::XYZM};
+	case GeometryStorageType::MULTIPOLYGON_XY:
+		return {GeometryType::MULTIPOLYGON, VertexType::XY};
+	case GeometryStorageType::MULTIPOLYGON_XYZ:
+		return {GeometryType::MULTIPOLYGON, VertexType::XYZ};
+	case GeometryStorageType::MULTIPOLYGON_XYM:
+		return {GeometryType::MULTIPOLYGON, VertexType::XYM};
+	case GeometryStorageType::MULTIPOLYGON_XYZM:
+		return {GeometryType::MULTIPOLYGON, VertexType::XYZM};
+	default:
+		throw InvalidInputException("Unsupported GeometryStorageType %d", static_cast<int>(type));
+	}
+}
+
+LogicalType Geometry::GetVectorizedType(GeometryStorageType type) {
+	if (type == GeometryStorageType::WKB) {
+		return LogicalType::GEOMETRY();
+	}
+
+	if (type == GeometryStorageType::SPATIAL) {
+		auto blob_type = LogicalType(LogicalTypeId::BLOB);
+		blob_type.SetAlias("geometry");
+		return blob_type;
+	}
+
+	const auto types = GetSpecializedType(type);
+
+	return GetVectorizedType(types.first, types.second);
+}
+
 LogicalType Geometry::GetVectorizedType(GeometryType geom_type, VertexType vert_type) {
 	switch (vert_type) {
 	case VertexType::XY: {
@@ -2189,6 +2310,500 @@ LogicalType Geometry::GetVectorizedType(GeometryType geom_type, VertexType vert_
 	default:
 		throw InvalidInputException("Unsupported vertex type %d", static_cast<int>(vert_type));
 	}
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// LEGACY GEOMETRY CONVERSION
+//----------------------------------------------------------------------------------------------------------------------
+
+static uint32_t FromLegacyGeometryRequiredSize(BlobReader &reader) {
+	reader.Skip(sizeof(uint8_t)); // type
+	const auto flags = reader.Read<uint8_t>();
+	reader.Skip(sizeof(uint16_t));
+	reader.Skip(sizeof(uint32_t)); // padding
+
+	// Parse flags
+	const auto has_z = (flags & 0x01) != 0;
+	const auto has_m = (flags & 0x02) != 0;
+	const auto has_bbox = (flags & 0x04) != 0;
+
+	const auto format_v1 = (flags & 0x40) != 0;
+	const auto format_v0 = (flags & 0x80) != 0;
+
+	if (format_v1 || format_v0) {
+		// Unsupported version, throw an error
+		throw InvalidInputException("Cannot import an unknown version of the spatial geometry format!");
+	}
+
+	if (has_bbox) {
+		// Skip past bbox if present
+		reader.Skip(sizeof(float) * 2 * (2 + has_z + has_m));
+	}
+
+	// Create root geometry
+	const auto vert_width = (2 + has_z + has_m) * sizeof(double);
+
+	uint32_t total_size = 0;
+	while (!reader.IsAtEnd()) {
+		const auto type = static_cast<GeometryType>(reader.Read<uint32_t>() + 1);
+		const auto size = reader.Read<uint32_t>();
+
+		// Endianness + type
+		total_size += sizeof(uint8_t) + sizeof(uint32_t);
+
+		switch (type) {
+		case GeometryType::POINT: {
+			// Points have a fixed size
+			reader.Skip(size * vert_width);
+			total_size += vert_width;
+		} break;
+		case GeometryType::LINESTRING: {
+			reader.Skip(size * vert_width);
+			total_size += sizeof(uint32_t) + (size * vert_width);
+		} break;
+		case GeometryType::POLYGON: {
+			total_size += sizeof(uint32_t); // ring count
+			auto ring_reader = reader;
+			reader.Skip(size * sizeof(uint32_t) + (size % 2) * sizeof(uint32_t));
+			for (uint32_t ring_idx = 0; ring_idx < size; ring_idx++) {
+				const auto ring_size = ring_reader.Read<uint32_t>();
+				reader.Skip(vert_width * ring_size);
+				total_size += sizeof(uint32_t) + ring_size * vert_width;
+			}
+		} break;
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			total_size += sizeof(uint32_t); // item count
+		} break;
+		default:
+			throw InvalidInputException("Unsupported geometry type in legacy geometry!");
+		}
+	}
+	return total_size;
+}
+
+static void FromLegacyGeometryConversion(BlobReader &reader, FixedSizeBlobWriter &writer) {
+	reader.Skip(sizeof(uint8_t)); // type
+	const auto flags = reader.Read<uint8_t>();
+	reader.Skip(sizeof(uint16_t));
+	reader.Skip(sizeof(uint32_t)); // padding
+
+	// Parse flags
+	const auto has_z = (flags & 0x01) != 0;
+	const auto has_m = (flags & 0x02) != 0;
+	const auto has_bbox = (flags & 0x04) != 0;
+
+	const auto format_v1 = (flags & 0x40) != 0;
+	const auto format_v0 = (flags & 0x80) != 0;
+
+	if (format_v1 || format_v0) {
+		// Unsupported version, throw an error
+		throw InvalidInputException("Cannot import an unknown version of the spatial geometry format!");
+	}
+
+	if (has_bbox) {
+		// Skip past bbox if present
+		reader.Skip(sizeof(float) * 2 * (2 + has_z + has_m));
+	}
+
+	// Create root geometry
+	const auto vert_width = (2 + has_z + has_m) * sizeof(double);
+
+	while (!reader.IsAtEnd()) {
+		const auto type = static_cast<GeometryType>(reader.Read<uint32_t>() + 1);
+		const auto size = reader.Read<uint32_t>();
+
+		// Write endianness + type
+		const auto meta = static_cast<uint32_t>(type) + (has_z ? 1 : 0) * 1000 + (has_m ? 2 : 0) * 1000;
+
+		writer.Write<uint8_t>(1); // little endian
+		writer.Write<uint32_t>(meta);
+
+		switch (type) {
+		case GeometryType::POINT: {
+			if (size == 0) {
+				constexpr auto nan = std::numeric_limits<double>::quiet_NaN();
+				constexpr double empty[4] = {nan, nan, nan, nan};
+				writer.Write(reinterpret_cast<const char *>(empty), vert_width);
+			} else {
+				const auto vert_data = reader.Reserve(vert_width);
+				writer.Write(vert_data, vert_width);
+			}
+		} break;
+		case GeometryType::LINESTRING: {
+			writer.Write<uint32_t>(size);
+
+			const auto vert_size = vert_width * size;
+			const auto vert_data = reader.Reserve(vert_size);
+			writer.Write(vert_data, vert_size);
+		} break;
+		case GeometryType::POLYGON: {
+			writer.Write<uint32_t>(size); // ring count
+			auto ring_reader = reader;
+			reader.Skip(size * sizeof(uint32_t) + (size % 2) * sizeof(uint32_t));
+			for (uint32_t ring_idx = 0; ring_idx < size; ring_idx++) {
+				const auto ring_size = ring_reader.Read<uint32_t>();
+				writer.Write<uint32_t>(ring_size);
+
+				const auto vert_size = vert_width * ring_size;
+				const auto vert_data = reader.Reserve(vert_size);
+
+				writer.Write(vert_data, vert_size);
+			}
+		} break;
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			writer.Write<uint32_t>(size); // item count
+		} break;
+		default:
+			throw InvalidInputException("Unsupported geometry type in legacy geometry!");
+		}
+	}
+}
+
+void Geometry::FromSpatialGeometry(const string_t &source, string_t &target, Vector &vector) {
+	BlobReader reader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
+	const auto required_size = FromLegacyGeometryRequiredSize(reader);
+
+	reader.Reset();
+
+	auto blob = StringVector::EmptyString(vector, required_size);
+	const auto blob_data = blob.GetDataWriteable();
+	FixedSizeBlobWriter writer(blob_data, required_size);
+
+	FromLegacyGeometryConversion(reader, writer);
+
+	blob.Finalize();
+	target = blob;
+}
+
+void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t count) {
+	UnaryExecutor::Execute<string_t, string_t>(source_vec, target_vec, count, [&](const string_t &source) {
+		BlobReader reader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
+		const auto required_size = FromLegacyGeometryRequiredSize(reader);
+
+		reader.Reset();
+
+		auto blob = StringVector::EmptyString(target_vec, required_size);
+		const auto blob_data = blob.GetDataWriteable();
+		FixedSizeBlobWriter writer(blob_data, required_size);
+
+		FromLegacyGeometryConversion(reader, writer);
+
+		blob.Finalize();
+		return blob;
+	});
+}
+
+void Geometry::FromSpatialGeometry(const string_t &source, string &target) {
+	BlobReader reader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
+	const auto required_size = FromLegacyGeometryRequiredSize(reader);
+
+	reader.Reset();
+
+	target.resize(required_size);
+	FixedSizeBlobWriter writer(&target[0], required_size);
+
+	FromLegacyGeometryConversion(reader, writer);
+}
+
+namespace {
+
+struct ToSpatialGeometryState {
+	GeometryExtent extent = GeometryExtent::Empty();
+	BlobReader reader = BlobReader(nullptr, 0);
+	GeometryType root_type = GeometryType::INVALID;
+	bool root_hasz = false;
+	bool root_hasm = false;
+	bool root_bbox = false;
+	uint32_t required_size = 0;
+};
+
+} // namespace
+
+template <class V = VertexXY>
+static void ToSpatialGeometryAnalyzeInternal(GeometryType type, ToSpatialGeometryState &state) {
+	state.required_size += sizeof(uint32_t) + sizeof(uint32_t); // type + size
+
+	switch (type) {
+	case GeometryType::POINT: {
+		auto vert = state.reader.Read<V>();
+		if (vert.AllNan()) {
+			// Empty point, skip
+			return;
+		}
+
+		state.extent.Extend(vert);
+		state.required_size += sizeof(V);
+
+	} break;
+	case GeometryType::LINESTRING: {
+		const auto vert_count = state.reader.Read<uint32_t>();
+		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+			auto vert = state.reader.Read<V>();
+
+			state.extent.Extend(vert);
+			state.required_size += sizeof(V);
+		}
+
+	} break;
+	case GeometryType::POLYGON: {
+		const auto ring_count = state.reader.Read<uint32_t>();
+		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+			state.required_size += sizeof(uint32_t); // ring count
+
+			const auto vert_count = state.reader.Read<uint32_t>();
+			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
+				auto vert = state.reader.Read<V>();
+
+				state.extent.Extend(vert);
+				state.required_size += sizeof(V);
+			}
+		}
+
+		if (ring_count % 2 == 1) {
+			state.required_size += sizeof(uint32_t); // padding for odd ring count
+		}
+
+	} break;
+	case GeometryType::MULTIPOINT:
+	case GeometryType::MULTILINESTRING:
+	case GeometryType::MULTIPOLYGON:
+	case GeometryType::GEOMETRYCOLLECTION: {
+		state.reader.Skip(sizeof(uint32_t)); // item count
+	} break;
+	default:
+		throw InvalidInputException("Unsupported geometry type in legacy geometry!");
+	}
+}
+
+static void ToSpatialGeometryAnalyze(ToSpatialGeometryState &state) {
+	auto &reader = state.reader;
+
+	while (!reader.IsAtEnd()) {
+		const auto le = reader.Read<uint8_t>();
+		if (le != 1) {
+			throw InvalidInputException(
+			    "Only little-endian legacy geometries are supported for conversion to spatial format!");
+		}
+
+		const auto type_id = reader.Read<uint32_t>();
+		const auto flag = type_id / 1000;
+		const auto type = static_cast<GeometryType>(type_id % 1000);
+		const auto has_z = (flag & 0x01) != 0;
+		const auto has_m = (flag & 0x02) != 0;
+
+		if (state.root_type == GeometryType::INVALID) {
+			state.root_type = type;
+			state.root_hasz = has_z;
+			state.root_hasm = has_m;
+		} else {
+			if (state.root_hasz != has_z) {
+				throw InvalidInputException("All geometries in a spatial blob must have the same Z presence");
+			}
+			if (state.root_hasm != has_m) {
+				throw InvalidInputException("All geometries in a spatial blob must have the same M presence");
+			}
+		}
+
+		if (has_z && has_m) {
+			ToSpatialGeometryAnalyzeInternal<VertexXYZM>(type, state);
+		} else if (has_z) {
+			ToSpatialGeometryAnalyzeInternal<VertexXYZ>(type, state);
+		} else if (has_m) {
+			ToSpatialGeometryAnalyzeInternal<VertexXYM>(type, state);
+		} else {
+			ToSpatialGeometryAnalyzeInternal<VertexXY>(type, state);
+		}
+	}
+
+	// Always require 8 bytes for header
+	state.required_size += sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint32_t);
+
+	if (state.root_type != GeometryType::POINT) {
+		state.root_bbox = true;
+		state.required_size += sizeof(float) * (2 + state.root_hasz + state.root_hasm) * 2; // bbox size
+	} else {
+		state.root_bbox = false;
+	}
+}
+
+static void ToSpatialGeometryConvert(ToSpatialGeometryState &state, FixedSizeBlobWriter &writer) {
+	auto &reader = state.reader;
+
+	uint8_t flags = 0;
+	if (state.root_hasz) {
+		flags |= 0x01;
+	}
+	if (state.root_hasm) {
+		flags |= 0x02;
+	}
+	if (state.root_bbox) {
+		flags |= 0x04;
+	}
+
+	writer.Write<uint8_t>(static_cast<uint8_t>(state.root_type) - 1); // legacy format is 0-based, subtract 1
+	writer.Write<uint8_t>(flags);
+	writer.Write<uint16_t>(0); // reserved
+	writer.Write<uint32_t>(0); // padding
+
+	if (state.root_bbox) {
+		// Write bbox
+		writer.Write<float>(state.extent.x_min);
+		writer.Write<float>(state.extent.y_min);
+		writer.Write<float>(state.extent.x_max);
+		writer.Write<float>(state.extent.y_max);
+
+		if (state.root_hasz) {
+			writer.Write<float>(state.extent.z_min);
+			writer.Write<float>(state.extent.z_max);
+		}
+		if (state.root_hasm) {
+			writer.Write<float>(state.extent.m_min);
+			writer.Write<float>(state.extent.m_max);
+		}
+	}
+
+	const auto vert_width = (2 + state.root_hasz + state.root_hasm) * sizeof(double);
+
+	while (!reader.IsAtEnd()) {
+		const auto le = reader.Read<uint8_t>();
+
+		if (le != 1) {
+			throw InvalidInputException(
+			    "Only little-endian geometries are supported for conversion to spatial format!");
+		}
+
+		const auto type_id = reader.Read<uint32_t>();
+		const auto type = static_cast<GeometryType>(type_id % 1000);
+
+		writer.Write<uint32_t>(static_cast<uint32_t>(type) - 1); // spatial format is 0-based, subtract 1
+
+		switch (type) {
+		case GeometryType::POINT: {
+			const auto vert_data = reader.Reserve(vert_width);
+
+			constexpr auto nan = std::numeric_limits<double>::quiet_NaN();
+			double empty[4] = {nan, nan, nan, nan};
+
+			memcpy(empty, vert_data, vert_width); // copy vertex data, will overwrite leading dimensions if present
+			auto is_empty = true;
+			for (auto &d : empty) {
+				if (!std::isnan(d)) {
+					is_empty = false;
+					break;
+				}
+			}
+			if (is_empty) {
+				writer.Write<uint32_t>(0); // empty point has 0 vertices
+			} else {
+				writer.Write<uint32_t>(1); // point always has 1 vertex
+				writer.Write(vert_data, vert_width);
+			}
+		} break;
+		case GeometryType::LINESTRING: {
+			const auto vert_count = reader.Read<uint32_t>();
+			writer.Write<uint32_t>(vert_count);
+
+			const auto vert_size = vert_width * vert_count;
+			const auto vert_data = reader.Reserve(vert_size);
+			writer.Write(vert_data, vert_size);
+		} break;
+		case GeometryType::POLYGON: {
+			const auto ring_count = reader.Read<uint32_t>();
+			writer.Write<uint32_t>(ring_count); // ring count
+			auto ring_writer = writer;
+			writer.Skip(ring_count * sizeof(uint32_t) + (ring_count % 2) * sizeof(uint32_t));
+
+			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+				const auto ring_size = reader.Read<uint32_t>();
+				ring_writer.Write<uint32_t>(ring_size);
+
+				const auto vert_size = vert_width * ring_size;
+				const auto vert_data = reader.Reserve(vert_size);
+				writer.Write(vert_data, vert_size);
+			}
+
+			if (ring_count % 2 == 1) {
+				ring_writer.Write<uint32_t>(0); // padding for odd ring count
+			}
+		} break;
+		case GeometryType::MULTIPOINT:
+		case GeometryType::MULTILINESTRING:
+		case GeometryType::MULTIPOLYGON:
+		case GeometryType::GEOMETRYCOLLECTION: {
+			const auto item_count = reader.Read<uint32_t>();
+			writer.Write<uint32_t>(item_count); // item count
+		} break;
+		case GeometryType::INVALID:
+			throw InvalidInputException("Unsupported geometry type in legacy geometry!");
+		}
+	}
+}
+
+void Geometry::ToSpatialGeometry(const string_t &source, string_t &target, Vector &vector) {
+	ToSpatialGeometryState state;
+	state.reader = BlobReader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
+
+	ToSpatialGeometryAnalyze(state);
+
+	state.reader.Reset();
+
+	auto blob = StringVector::EmptyString(vector, state.required_size);
+	const auto blob_data = blob.GetDataWriteable();
+	FixedSizeBlobWriter writer(blob_data, state.required_size);
+
+	ToSpatialGeometryConvert(state, writer);
+
+	blob.Finalize();
+	target = blob;
+}
+
+void Geometry::ToSpatialGeometry(Vector &source, Vector &target, idx_t count) {
+	UnaryExecutor::Execute<string_t, string_t>(source, target, count, [&](const string_t &source) {
+		string_t result;
+		ToSpatialGeometry(source, result, target);
+		return result;
+	});
+}
+
+void Geometry::ToSpatialGeometry(const string_t &source, string &target) {
+	ToSpatialGeometryState state;
+	state.reader = BlobReader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
+
+	ToSpatialGeometryAnalyze(state);
+
+	state.reader.Reset();
+
+	target.resize(state.required_size);
+	FixedSizeBlobWriter writer(&target[0], state.required_size);
+
+	ToSpatialGeometryConvert(state, writer);
+}
+
+void Geometry::ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryStorageType type) {
+	if (type == GeometryStorageType::SPATIAL) {
+		ToSpatialGeometry(source, target, count);
+		return;
+	}
+
+	const auto types = GetSpecializedType(type);
+	ToVectorizedFormat(source, target, count, types.first, types.second);
+}
+
+void Geometry::FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryStorageType type,
+                                    idx_t result_offset) {
+	if (type == GeometryStorageType::SPATIAL) {
+		FromSpatialGeometry(source, target, count);
+		return;
+	}
+
+	const auto types = GetSpecializedType(type);
+	FromVectorizedFormat(source, target, count, types.first, types.second, result_offset);
 }
 
 } // namespace duckdb

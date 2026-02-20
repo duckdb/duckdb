@@ -1,0 +1,12 @@
+# name: test/sql/types/geo/geometry_storage_version.test
+# group: [geo]
+
+statement ok
+attach '__TEST_DIR__/variant.db' (STORAGE_VERSION 'v1.4.4');
+
+statement ok
+use variant;
+
+# We write as old-style spatial GEOMETRY type
+statement ok
+create table t1 (g STRUCT(a GEOMETRY[]));

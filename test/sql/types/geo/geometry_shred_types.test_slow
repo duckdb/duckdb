@@ -1,7 +1,7 @@
 # name: test/sql/types/geo/geometry_shred_types.test_slow
 # group: [geo]
 
-load __TEST_DIR__/test_shred_types.db
+load __TEST_DIR__/test_shred_types.db readwrite v1.5.0
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';

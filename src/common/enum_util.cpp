@@ -2317,6 +2317,48 @@ GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
 	return static_cast<GateStatus>(StringUtil::StringToEnum(GetGateStatusValues(), 2, "GateStatus", value));
 }
 
+const StringUtil::EnumStringLiteral *GetGeometryStorageTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(GeometryStorageType::SPATIAL), "SPATIAL" },
+		{ static_cast<uint32_t>(GeometryStorageType::WKB), "WKB" },
+		{ static_cast<uint32_t>(GeometryStorageType::POINT_XY), "POINT_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::POINT_XYZ), "POINT_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::POINT_XYM), "POINT_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::POINT_XYZM), "POINT_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::LINESTRING_XY), "LINESTRING_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::LINESTRING_XYZ), "LINESTRING_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::LINESTRING_XYM), "LINESTRING_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::LINESTRING_XYZM), "LINESTRING_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::POLYGON_XY), "POLYGON_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::POLYGON_XYZ), "POLYGON_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::POLYGON_XYM), "POLYGON_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::POLYGON_XYZM), "POLYGON_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOINT_XY), "MULTIPOINT_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOINT_XYZ), "MULTIPOINT_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOINT_XYM), "MULTIPOINT_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOINT_XYZM), "MULTIPOINT_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTILINESTRING_XY), "MULTILINESTRING_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTILINESTRING_XYZ), "MULTILINESTRING_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTILINESTRING_XYM), "MULTILINESTRING_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTILINESTRING_XYZM), "MULTILINESTRING_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOLYGON_XY), "MULTIPOLYGON_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOLYGON_XYZ), "MULTIPOLYGON_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOLYGON_XYM), "MULTIPOLYGON_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOLYGON_XYZM), "MULTIPOLYGON_XYZM" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<GeometryStorageType>(GeometryStorageType value) {
+	return StringUtil::EnumToString(GetGeometryStorageTypeValues(), 26, "GeometryStorageType", static_cast<uint32_t>(value));
+}
+
+template<>
+GeometryStorageType EnumUtil::FromString<GeometryStorageType>(const char *value) {
+	return static_cast<GeometryStorageType>(StringUtil::StringToEnum(GetGeometryStorageTypeValues(), 26, "GeometryStorageType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetGeometryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(GeometryType::INVALID), "INVALID" },

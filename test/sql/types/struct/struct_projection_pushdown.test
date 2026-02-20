@@ -2,7 +2,7 @@
 # description: Test struct projection pushdown
 # group: [struct]
 
-load __TEST_DIR__/struct_projection_pushdown.db
+load __TEST_DIR__/struct_projection_pushdown.db readwrite v1.5.0
 
 require parquet
 
