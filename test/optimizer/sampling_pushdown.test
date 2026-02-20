@@ -50,3 +50,21 @@ query II
 EXPLAIN SELECT * FROM integers1, integers2 where integers1.i = integers2.i USING SAMPLE SYSTEM(25%)
 ----
 physical_plan	<REGEX>:.*System.*SEQ_SCAN.*
+
+# system sampling with row count: pushdown is supported
+query II
+EXPLAIN SELECT i FROM integers1 USING SAMPLE 2 ROWS (system)
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 2 rows.*
+
+# system sampling with row count using explicit method syntax: pushdown is supported
+query II
+EXPLAIN SELECT i FROM integers1 USING SAMPLE system(2 ROWS)
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 2 rows.*
+
+# system sampling with row count and REPEATABLE: pushdown is supported
+query II
+EXPLAIN SELECT i FROM integers1 USING SAMPLE 2 ROWS (system, 42)
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 2 rows.*

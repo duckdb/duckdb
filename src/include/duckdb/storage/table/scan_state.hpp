@@ -268,8 +268,12 @@ private:
 struct ScanSamplingInfo {
 	//! Whether or not to do a system sample during scanning
 	bool do_system_sample = false;
-	//! The sampling rate to use
+	//! The sampling rate to use (for percentage-based sampling)
 	double sample_rate;
+	//! Whether the sampling is row-count based or percentage-based
+	bool is_percentage = false;
+	//! Target number of rows to sample (for row-count based sampling)
+	idx_t target_sample_rows = 0;
 };
 
 struct TableScanOptions {
@@ -307,7 +311,7 @@ public:
 public:
 	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
 	                optional_ptr<TableFilterSet> table_filters = nullptr,
-	                optional_ptr<SampleOptions> table_sampling = nullptr);
+	                optional_ptr<SampleOptions> table_sampling = nullptr, idx_t estimated_table_row_count = 0);
 
 	const vector<StorageIndex> &GetColumnIds();
 

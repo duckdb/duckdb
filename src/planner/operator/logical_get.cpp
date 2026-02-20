@@ -50,7 +50,11 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	result["Filters"] = filters_info;
 
 	if (extra_info.sample_options) {
-		result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+		if (extra_info.sample_options->is_percentage) {
+			result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + "%";
+		} else {
+			result["Sample Method"] = "System: " + extra_info.sample_options->sample_size.ToString() + " rows";
+		}
 	}
 
 	if (!extra_info.file_filters.empty()) {

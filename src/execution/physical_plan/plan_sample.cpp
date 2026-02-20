@@ -1,3 +1,4 @@
+#include "duckdb/execution/operator/helper/physical_limit.hpp"
 #include "duckdb/execution/operator/helper/physical_reservoir_sample.hpp"
 #include "duckdb/execution/operator/helper/physical_streaming_sample.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -11,6 +12,15 @@ namespace duckdb {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 	D_ASSERT(op.children.size() == 1);
 
+	// For SYSTEM_SAMPLE with row count, we need to get the child's estimated cardinality
+	// BEFORE calling CreatePlan (which consumes the child).
+	idx_t child_cardinality = 0;
+	if (op.sample_options->method == SampleMethod::SYSTEM_SAMPLE && !op.sample_options->is_percentage) {
+		auto &first_child = *op.children[0];
+		child_cardinality = first_child.has_estimated_cardinality ? first_child.estimated_cardinality
+		                                                          : first_child.EstimateCardinality(context);
+	}
+
 	auto &plan = CreatePlan(*op.children[0]);
 	if (!op.sample_options->seed.IsValid()) {
 		auto &random_engine = RandomEngine::Get(context);
@@ -23,7 +33,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 		sample.children.push_back(plan);
 		return sample;
 	}
-	case SampleMethod::SYSTEM_SAMPLE:
 	case SampleMethod::BERNOULLI_SAMPLE: {
 		if (!op.sample_options->is_percentage) {
 			throw ParserException("Sample method %s cannot be used with a discrete sample count, either switch to "
@@ -32,6 +41,34 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSample &op) {
 		}
 		auto &sample = Make<PhysicalStreamingSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
 		sample.children.push_back(plan);
+		return sample;
+	}
+	case SampleMethod::SYSTEM_SAMPLE: {
+		const bool is_percentage = op.sample_options->is_percentage;
+		int64_t rows = 0;
+		if (!is_percentage) {
+			rows = op.sample_options->sample_size.GetValue<int64_t>();
+			// To ensure consistency between optimized and unoptimized paths,
+			// we calculate the rate based on the estimated cardinality of the child.
+			if (child_cardinality > 0) {
+				op.sample_options->sample_rate = static_cast<double>(rows) / static_cast<double>(child_cardinality);
+			} else {
+				op.sample_options->sample_rate = 1.0;
+			}
+		}
+
+		auto &sample = Make<PhysicalStreamingSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
+		sample.children.push_back(plan);
+
+		if (!is_percentage) {
+			// As the sampling operator uses a distributed chunk-based approach it may
+			// oversample, so we wrap it with a LIMIT to ensure we stop as soon as the target is reached
+			// This also happens when no estimated cardinality is available.
+			auto &limit = Make<PhysicalLimit>(op.types, BoundLimitNode::ConstantValue(rows), BoundLimitNode(),
+			                                  op.estimated_cardinality);
+			limit.children.push_back(sample);
+			return limit;
+		}
 		return sample;
 	}
 	default:

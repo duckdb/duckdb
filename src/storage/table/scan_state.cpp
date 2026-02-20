@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -16,15 +17,35 @@ TableScanState::~TableScanState() {
 }
 
 void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<ClientContext> context,
-                                optional_ptr<TableFilterSet> table_filters,
-                                optional_ptr<SampleOptions> table_sampling) {
+                                optional_ptr<TableFilterSet> table_filters, optional_ptr<SampleOptions> table_sampling,
+                                idx_t estimated_table_row_count) {
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {
 		filters.Initialize(*context, *table_filters, column_ids);
 	}
 	if (table_sampling) {
 		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
-		sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
+		if (table_sampling->is_percentage) {
+			// Percentage-based system sampling
+			sampling_info.is_percentage = true;
+			sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
+		} else {
+			// Row-count based system sampling: convert target row count to approximate rate.
+			// Prefer the pre-calculated sample_rate from the optimizer if available,
+			// otherwise derive from estimated_table_row_count.
+			sampling_info.is_percentage = false;
+			sampling_info.target_sample_rows = NumericCast<idx_t>(table_sampling->sample_size.GetValue<int64_t>());
+			if (table_sampling->sample_rate > 0) {
+				sampling_info.sample_rate = table_sampling->sample_rate;
+			} else if (estimated_table_row_count > 0) {
+				sampling_info.sample_rate = static_cast<double>(sampling_info.target_sample_rows) /
+				                            static_cast<double>(estimated_table_row_count);
+				sampling_info.sample_rate = MinValue(1.0, MaxValue(0.0, sampling_info.sample_rate));
+			} else {
+				// No estimate available, use a conservative rate
+				sampling_info.sample_rate = 1.0;
+			}
+		}
 		if (table_sampling->seed.IsValid()) {
 			table_state.random.SetSeed(table_sampling->seed.GetIndex());
 		}
