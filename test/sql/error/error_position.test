@@ -9,5 +9,5 @@ set errors_as_json=true;
 statement error
 create macro checksum(x) as table SELECT bit_xor(md5_number(CAST(COLUMNS(*) AS VARCHAR))) FROM query_table(table_name);
 ----
-<REGEX>:.*"position".*:.*"95".*
+<REGEX>:.*"position".*:.*"5".*
 
