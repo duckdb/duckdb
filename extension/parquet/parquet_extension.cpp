@@ -613,9 +613,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.string_dictionary_page_size_limit);
 	serializer.WritePropertyWithDefault(116, "geoparquet_version", bind_data.geoparquet_version,
 	                                    default_value.geoparquet_version);
-	if (serializer.ShouldSerialize(7) && bind_data.shredding_types.set) {
-		serializer.WriteProperty(117, "shredding_types", bind_data.shredding_types);
-	}
+	serializer.WritePropertyWithDefault<ShreddingType>(117, "shredding_types", bind_data.shredding_types,
+	                                                   default_value.shredding_types);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
