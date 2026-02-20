@@ -536,6 +536,14 @@ void GeoColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStat
 
 	auto &geom_data = column_data.extra_data->Cast<GeometryPersistentColumnData>();
 
+	if (geom_data.storage_type == GeometryStorageType::WKB) {
+		// Standard WKB column, just initialize normally
+		storage_type = geom_data.storage_type;
+		base_column->InitializeColumn(column_data, target_stats);
+		count = base_column->count.load();
+		return;
+	}
+
 	// Set the shredding state
 	storage_type = geom_data.storage_type;
 

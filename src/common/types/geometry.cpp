@@ -2269,17 +2269,19 @@ pair<GeometryType, VertexType> Geometry::GetSpecializedType(GeometryStorageType 
 }
 
 LogicalType Geometry::GetVectorizedType(GeometryStorageType type) {
-	const auto types = GetSpecializedType(type);
 
 	if (type == GeometryStorageType::WKB) {
 		// WKB is just a string
-		return LogicalType::VARCHAR;
+		return LogicalType::GEOMETRY();
 	}
 
 	if (type == GeometryStorageType::SPATIAL) {
-		// WKT is just a string
-		return LogicalType::VARCHAR;
+		auto blob_type = LogicalType(LogicalTypeId::BLOB);
+		blob_type.SetAlias("geometry");
+		return blob_type;
 	}
+
+	const auto types = GetSpecializedType(type);
 
 	return GetVectorizedType(types.first, types.second);
 }
