@@ -7,8 +7,12 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -240,6 +244,121 @@ private:
 	idx_t capacity;
 	STORAGE_TYPE *heap;
 	idx_t size;
+};
+
+//------------------------------------------------------------------------------
+// BinaryAggregateHeapWithTies: extends BinaryAggregateHeap to track ties at the boundary
+//------------------------------------------------------------------------------
+enum class RankType : uint8_t { RANK };
+
+template <class K, class V, class K_COMPARATOR>
+class BinaryAggregateHeapWithTies {
+	using STORAGE_TYPE = pair<HeapEntry<K>, HeapEntry<V>>;
+
+public:
+	BinaryAggregateHeapWithTies() = default;
+
+	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
+		capacity = capacity_p;
+		auto ptr = allocator.AllocateAligned(capacity * sizeof(STORAGE_TYPE));
+		memset(ptr, 0, capacity * sizeof(STORAGE_TYPE));
+		heap = reinterpret_cast<STORAGE_TYPE *>(ptr);
+		heap_size = 0;
+	}
+
+	bool IsEmpty() const {
+		return heap_size == 0;
+	}
+
+	idx_t GetHeapSize() const {
+		return heap_size;
+	}
+
+	idx_t Size() const {
+		return heap_size + ties.size();
+	}
+
+	idx_t Capacity() const {
+		return capacity;
+	}
+
+	void Insert(ArenaAllocator &allocator, const K &key, const V &value) {
+		D_ASSERT(capacity != 0);
+
+		if (heap_size < capacity) {
+			// Heap not full yet, just insert
+			heap[heap_size].first.Assign(allocator, key);
+			heap[heap_size].second.Assign(allocator, value);
+			heap_size++;
+			std::push_heap(heap, heap + heap_size, Compare);
+
+		} else if (KeyEquals(key, heap[0].first.value)) {
+			// Key equals boundary
+			STORAGE_TYPE entry;
+			entry.first.Assign(allocator, key);
+			entry.second.Assign(allocator, value);
+			ties.push_back(std::move(entry));
+		} else if (K_COMPARATOR::Operation(key, heap[0].first.value)) {
+			// Key is better than boundary
+			std::pop_heap(heap, heap + heap_size, Compare);
+			STORAGE_TYPE evicted;
+			evicted.first.Assign(allocator, heap[heap_size - 1].first.value);
+			evicted.second.Assign(allocator, heap[heap_size - 1].second.value);
+
+			heap[heap_size - 1].first.Assign(allocator, key);
+			heap[heap_size - 1].second.Assign(allocator, value);
+			std::push_heap(heap, heap + heap_size, Compare);
+
+			if (KeyEquals(evicted.first.value, heap[0].first.value)) {
+				// Boundary unchanged, evicted element is a tie
+				ties.push_back(std::move(evicted));
+			} else {
+				// Boundary changed, old ties no longer match
+				ties.clear();
+			}
+		}
+		// Otherwise key is worse than boundary, ignore
+	}
+
+	void Insert(ArenaAllocator &allocator, const BinaryAggregateHeapWithTies &other) {
+		for (idx_t slot = other.heap_size; slot > 0; slot--) {
+			Insert(allocator, other.heap[slot - 1].first.value, other.heap[slot - 1].second.value);
+		}
+		for (idx_t slot = 0; slot < other.ties.size(); slot++) {
+			Insert(allocator, other.ties[slot].first.value, other.ties[slot].second.value);
+		}
+	}
+
+	STORAGE_TYPE *SortAndGetHeap() {
+		std::sort_heap(heap, heap + heap_size, Compare);
+		return heap;
+	}
+
+	const vector<STORAGE_TYPE> &GetTies() const {
+		return ties;
+	}
+
+	static const V &GetValue(const STORAGE_TYPE &slot) {
+		return slot.second.value;
+	}
+
+	static const K &GetKey(const STORAGE_TYPE &slot) {
+		return slot.first.value;
+	}
+
+private:
+	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
+		return K_COMPARATOR::Operation(left.first.value, right.first.value);
+	}
+
+	static bool KeyEquals(const K &a, const K &b) {
+		return !K_COMPARATOR::Operation(a, b) && !K_COMPARATOR::Operation(b, a);
+	}
+
+	idx_t capacity;
+	STORAGE_TYPE *heap;
+	idx_t heap_size;
+	vector<STORAGE_TYPE> ties;
 };
 
 enum class ArgMinMaxNullHandling { IGNORE_ANY_NULL, HANDLE_ARG_NULL, HANDLE_ANY_NULL };
@@ -481,6 +600,397 @@ struct MinMaxNOperation {
 
 	static bool IgnoreNull() {
 		return true;
+	}
+};
+
+//------------------------------------------------------------------------------
+// MinMaxNWithTiesOperation: Finalize produces LIST<STRUCT(arg, rank)>
+//------------------------------------------------------------------------------
+struct MinMaxNWithTiesOperation {
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		new (&state) STATE();
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input) {
+		if (!source.is_initialized) {
+			return;
+		}
+
+		if (!target.is_initialized) {
+			target.Initialize(aggr_input.allocator, source.heap.Capacity());
+		} else if (source.heap.Capacity() != target.heap.Capacity()) {
+			throw InvalidInputException("Mismatched n values in __internal_arg_min_rank/__internal_arg_max_rank");
+		}
+
+		target.heap.Insert(aggr_input.allocator, source.heap);
+	}
+
+	template <class STATE>
+	static void Finalize(Vector &state_vector, AggregateInputData &input_data, Vector &result, idx_t count,
+	                     idx_t offset) {
+		const bool nulls_last = !input_data.bind_data || input_data.bind_data->Cast<ArgMinMaxFunctionData>().nulls_last;
+
+		UnifiedVectorFormat state_format;
+		state_vector.ToUnifiedFormat(count, state_format);
+
+		const auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
+		auto &mask = FlatVector::Validity(result);
+
+		const auto old_len = ListVector::GetListSize(result);
+
+		// Count the total number of entries (heap + ties)
+		idx_t new_entries = 0;
+		for (idx_t i = 0; i < count; i++) {
+			const auto state_idx = state_format.sel->get_index(i);
+			auto &state = *states[state_idx];
+			new_entries += state.heap.Size();
+		}
+
+		ListVector::Reserve(result, old_len + new_entries);
+
+		const auto list_entries = FlatVector::GetData<list_entry_t>(result);
+		auto &child_data = ListVector::GetEntry(result);
+
+		// child_data is a STRUCT vector with children: "arg" and "rank"
+		auto &struct_entries = StructVector::GetEntries(child_data);
+		D_ASSERT(struct_entries.size() == 2);
+		auto &arg_vector = *struct_entries[0];
+		auto &rank_vector = *struct_entries[1];
+
+		idx_t current_offset = old_len;
+		for (idx_t i = 0; i < count; i++) {
+			const auto rid = i + offset;
+			const auto state_idx = state_format.sel->get_index(i);
+			auto &state = *states[state_idx];
+
+			if (!state.is_initialized || state.heap.IsEmpty()) {
+				mask.SetInvalid(rid);
+				continue;
+			}
+
+			auto heap_size = state.heap.GetHeapSize();
+			auto &ties = state.heap.GetTies();
+			idx_t total_entries = state.heap.Size();
+
+			auto &list_entry = list_entries[rid];
+			list_entry.offset = current_offset;
+			list_entry.length = total_entries;
+
+			// Sort the heap entries
+			auto heap = state.heap.SortAndGetHeap();
+
+			// First: assign heap entries
+			for (idx_t slot = 0; slot < heap_size; slot++) {
+				STATE::VAL_TYPE::Assign(arg_vector, current_offset + slot, state.heap.GetValue(heap[slot]), nulls_last);
+			}
+			// Then: assign ties entries
+			for (idx_t slot = 0; slot < ties.size(); slot++) {
+				STATE::VAL_TYPE::Assign(arg_vector, current_offset + heap_size + slot, state.heap.GetValue(ties[slot]),
+				                        nulls_last);
+			}
+
+			// Now compute rank values
+			auto rank_data = FlatVector::GetData<int64_t>(rank_vector);
+			int64_t current_rank = 1;
+			int64_t row_number = 1;
+			bool first = true;
+
+			auto get_key = [&](idx_t idx) -> const typename STATE::ARG_TYPE::TYPE & {
+				if (idx < heap_size) {
+					return state.heap.GetKey(heap[idx]);
+				}
+				return state.heap.GetKey(ties[idx - heap_size]);
+			};
+
+			for (idx_t slot = 0; slot < total_entries; slot++) {
+				if (first) {
+					rank_data[current_offset + slot] = 1;
+					first = false;
+				} else {
+					auto &prev_key = get_key(slot - 1);
+					auto &curr_key = get_key(slot);
+					bool is_tie = STATE::KeyEquals(prev_key, curr_key);
+
+					if (is_tie) {
+						rank_data[current_offset + slot] = current_rank;
+					} else {
+						current_rank = row_number;
+						rank_data[current_offset + slot] = current_rank;
+					}
+				}
+				row_number++;
+			}
+
+			current_offset += total_entries;
+		}
+
+		D_ASSERT(current_offset == old_len + new_entries);
+		ListVector::SetListSize(result, current_offset);
+		result.Verify(count);
+	}
+
+	template <class STATE>
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		state.~STATE();
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+//------------------------------------------------------------------------------
+// ArgMinMaxWithTies: FunctionData, State, Update, and Specialize
+// Used by TopNWindowElimination optimizer to directly construct BoundAggregateExpression
+//------------------------------------------------------------------------------
+
+struct ArgMinMaxWithTiesFunctionData : public ArgMinMaxFunctionData {
+	explicit ArgMinMaxWithTiesFunctionData(
+	    RankType rank_type_p = RankType::RANK,
+	    ArgMinMaxNullHandling null_handling_p = ArgMinMaxNullHandling::IGNORE_ANY_NULL, bool nulls_last_p = true)
+	    : ArgMinMaxFunctionData(null_handling_p, nulls_last_p), rank_type(rank_type_p) {
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto copy = make_uniq<ArgMinMaxWithTiesFunctionData>(rank_type, null_handling, nulls_last);
+		return std::move(copy);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<ArgMinMaxWithTiesFunctionData>();
+		return other.null_handling == null_handling && other.nulls_last == nulls_last && other.rank_type == rank_type;
+	}
+
+	RankType rank_type;
+};
+
+template <class A, class B, class COMPARATOR>
+class ArgMinMaxNWithTiesState {
+public:
+	using VAL_TYPE = A;
+	using ARG_TYPE = B;
+
+	using V = typename VAL_TYPE::TYPE;
+	using K = typename ARG_TYPE::TYPE;
+
+	BinaryAggregateHeapWithTies<K, V, COMPARATOR> heap;
+
+	bool is_initialized = false;
+	void Initialize(ArenaAllocator &allocator, idx_t nval) {
+		heap.Initialize(allocator, nval);
+		is_initialized = true;
+	}
+
+	static bool KeyEquals(const K &a, const K &b) {
+		return !COMPARATOR::Operation(a, b) && !COMPARATOR::Operation(b, a);
+	}
+};
+
+template <class STATE>
+inline void ArgMinMaxNWithTiesUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count,
+                                     Vector &state_vector, idx_t count) {
+	D_ASSERT(aggr_input.bind_data);
+	const auto &bind_data = aggr_input.bind_data->Cast<ArgMinMaxWithTiesFunctionData>();
+
+	auto &val_vector = inputs[0];
+	auto &arg_vector = inputs[1];
+	auto &n_vector = inputs[2];
+
+	UnifiedVectorFormat val_format;
+	UnifiedVectorFormat arg_format;
+	UnifiedVectorFormat n_format;
+	UnifiedVectorFormat state_format;
+
+	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
+	auto arg_extra_state = STATE::ARG_TYPE::CreateExtraState(arg_vector, count);
+
+	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format, bind_data.nulls_last);
+	STATE::ARG_TYPE::PrepareData(arg_vector, count, arg_extra_state, arg_format, bind_data.nulls_last);
+
+	n_vector.ToUnifiedFormat(count, n_format);
+	state_vector.ToUnifiedFormat(count, state_format);
+
+	auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
+
+	for (idx_t i = 0; i < count; i++) {
+		const auto arg_idx = arg_format.sel->get_index(i);
+		const auto val_idx = val_format.sel->get_index(i);
+
+		const auto state_idx = state_format.sel->get_index(i);
+		auto &state = *states[state_idx];
+
+		if (!state.is_initialized) {
+			static constexpr int64_t MAX_N = 1000000;
+			const auto nidx = n_format.sel->get_index(i);
+			if (!n_format.validity.RowIsValid(nidx)) {
+				throw InvalidInputException(
+				    "Invalid input for __internal_arg_min/__internal_arg_max_rank: n value cannot be NULL");
+			}
+			const auto nval = UnifiedVectorFormat::GetData<int64_t>(n_format)[nidx];
+			if (nval <= 0) {
+				throw InvalidInputException(
+				    "Invalid input for __internal_arg_min/__internal_arg_max_rank: n value must be > 0");
+			}
+			if (nval >= MAX_N) {
+				throw InvalidInputException(
+				    "Invalid input for __internal_arg_min/__internal_arg_max_rank: n value must be < %d", MAX_N);
+			}
+			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
+		}
+
+		auto arg_val = STATE::ARG_TYPE::Create(arg_format, arg_idx);
+		auto val_val = STATE::VAL_TYPE::Create(val_format, val_idx);
+
+		state.heap.Insert(aggr_input.allocator, arg_val, val_val);
+	}
+}
+
+template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
+inline void SpecializeArgMinMaxNWithTiesNullFunction(AggregateFunction &function) {
+	using STATE = ArgMinMaxNWithTiesState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
+	using OP = MinMaxNWithTiesOperation;
+	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
+	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
+	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
+	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
+	function.SetStateFinalizeCallback(MinMaxNWithTiesOperation::Finalize<STATE>);
+	function.SetStateUpdateCallback(ArgMinMaxNWithTiesUpdate<STATE>);
+}
+
+template <class VAL_TYPE, bool NULLS_LAST, class COMPARATOR>
+inline void SpecializeArgMinMaxNWithTiesNullFunction(PhysicalType arg_type, AggregateFunction &function) {
+	switch (arg_type) {
+#ifndef DUCKDB_SMALLER_BINARY
+	case PhysicalType::VARCHAR:
+		SpecializeArgMinMaxNWithTiesNullFunction<VAL_TYPE, MinMaxFallbackValue, COMPARATOR>(function);
+		break;
+	case PhysicalType::INT32:
+		SpecializeArgMinMaxNWithTiesNullFunction<VAL_TYPE, MinMaxFixedValueOrNull<int32_t, NULLS_LAST>, COMPARATOR>(
+		    function);
+		break;
+	case PhysicalType::INT64:
+		SpecializeArgMinMaxNWithTiesNullFunction<VAL_TYPE, MinMaxFixedValueOrNull<int64_t, NULLS_LAST>, COMPARATOR>(
+		    function);
+		break;
+	case PhysicalType::FLOAT:
+		SpecializeArgMinMaxNWithTiesNullFunction<VAL_TYPE, MinMaxFixedValueOrNull<float, NULLS_LAST>, COMPARATOR>(
+		    function);
+		break;
+	case PhysicalType::DOUBLE:
+		SpecializeArgMinMaxNWithTiesNullFunction<VAL_TYPE, MinMaxFixedValueOrNull<double, NULLS_LAST>, COMPARATOR>(
+		    function);
+		break;
+#endif
+	default:
+		SpecializeArgMinMaxNWithTiesNullFunction<VAL_TYPE, MinMaxFallbackValue, COMPARATOR>(function);
+		break;
+	}
+}
+
+template <bool NULLS_LAST, class COMPARATOR>
+inline void SpecializeArgMinMaxNWithTiesNullFunction(PhysicalType val_type, PhysicalType arg_type,
+                                                     AggregateFunction &function) {
+	switch (val_type) {
+#ifndef DUCKDB_SMALLER_BINARY
+	case PhysicalType::VARCHAR:
+		SpecializeArgMinMaxNWithTiesNullFunction<MinMaxFallbackValue, NULLS_LAST, COMPARATOR>(arg_type, function);
+		break;
+	case PhysicalType::INT32:
+		SpecializeArgMinMaxNWithTiesNullFunction<MinMaxFixedValueOrNull<int32_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    arg_type, function);
+		break;
+	case PhysicalType::INT64:
+		SpecializeArgMinMaxNWithTiesNullFunction<MinMaxFixedValueOrNull<int64_t, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    arg_type, function);
+		break;
+	case PhysicalType::FLOAT:
+		SpecializeArgMinMaxNWithTiesNullFunction<MinMaxFixedValueOrNull<float, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    arg_type, function);
+		break;
+	case PhysicalType::DOUBLE:
+		SpecializeArgMinMaxNWithTiesNullFunction<MinMaxFixedValueOrNull<double, NULLS_LAST>, NULLS_LAST, COMPARATOR>(
+		    arg_type, function);
+		break;
+#endif
+	default:
+		SpecializeArgMinMaxNWithTiesNullFunction<MinMaxFallbackValue, NULLS_LAST, COMPARATOR>(arg_type, function);
+		break;
+	}
+}
+
+//------------------------------------------------------------------------------
+// ArgMinMaxRankHelper: directly construct bound aggregate functions for internal use
+//------------------------------------------------------------------------------
+struct ArgMinMaxRankHelper {
+	static inline void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                             const AggregateFunction &function) {
+		serializer.WriteProperty(100, "arguments", function.arguments);
+		serializer.WriteProperty(101, "return_type", function.GetReturnType());
+		auto &data = bind_data->Cast<ArgMinMaxWithTiesFunctionData>();
+		serializer.WriteProperty(102, "rank_type", static_cast<uint8_t>(data.rank_type));
+	}
+
+	static inline unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+		function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
+		auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
+		auto rank_type_val = deserializer.ReadProperty<uint8_t>(102, "rank_type");
+		auto rank_type = static_cast<RankType>(rank_type_val);
+
+		function.SetReturnType(std::move(return_type));
+
+		auto type = function.arguments[0].InternalType();
+		auto by_type = function.arguments[1].InternalType();
+
+		if (StringUtil::StartsWith(function.name, "__internal_arg_min")) {
+			SpecializeArgMinMaxNWithTiesNullFunction<true, LessThan>(type, by_type, function);
+			return make_uniq<ArgMinMaxWithTiesFunctionData>(rank_type, ArgMinMaxNullHandling::HANDLE_ANY_NULL, true);
+		} else {
+			SpecializeArgMinMaxNWithTiesNullFunction<false, GreaterThan>(type, by_type, function);
+			return make_uniq<ArgMinMaxWithTiesFunctionData>(rank_type, ArgMinMaxNullHandling::HANDLE_ANY_NULL, false);
+		}
+	}
+
+	template <bool NULLS_LAST, class COMPARATOR>
+	static inline AggregateFunction GetBoundFunctionInternal(const string &name, const LogicalType &type,
+	                                                         const LogicalType &by_type, RankType rank_type,
+	                                                         unique_ptr<FunctionData> &bind_data) {
+		// Return type: LIST<STRUCT(arg: type, rank: BIGINT)>
+		child_list_t<LogicalType> struct_children;
+		struct_children.emplace_back("arg", type);
+		struct_children.emplace_back("rank", LogicalType::BIGINT);
+		auto struct_type = LogicalType::STRUCT(std::move(struct_children));
+		auto return_type = LogicalType::LIST(struct_type);
+
+		AggregateFunction func(name, {type, by_type, LogicalType::BIGINT}, return_type, nullptr, nullptr, nullptr,
+		                       nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING);
+
+		// Specialize with null-aware callbacks: MinMaxFixedValueOrNull handles NULL ORDER BY values correctly.
+		SpecializeArgMinMaxNWithTiesNullFunction<NULLS_LAST, COMPARATOR>(type.InternalType(), by_type.InternalType(),
+		                                                                 func);
+
+		// Set serialization callbacks to bypass bind during deserialization
+		func.SetSerializeCallback(ArgMinMaxRankHelper::Serialize);
+		func.SetDeserializeCallback(ArgMinMaxRankHelper::Deserialize);
+
+		// Create bind data with null-aware handling
+		bind_data =
+		    make_uniq<ArgMinMaxWithTiesFunctionData>(rank_type, ArgMinMaxNullHandling::HANDLE_ANY_NULL, NULLS_LAST);
+
+		return func;
+	}
+
+	static inline AggregateFunction GetInternalArgMinRank(const LogicalType &type, const LogicalType &by_type,
+	                                                      unique_ptr<FunctionData> &bind_data) {
+		return GetBoundFunctionInternal<true, LessThan>("__internal_arg_min_rank_nulls_last", type, by_type,
+		                                                RankType::RANK, bind_data);
+	}
+
+	static inline AggregateFunction GetInternalArgMaxRank(const LogicalType &type, const LogicalType &by_type,
+	                                                      unique_ptr<FunctionData> &bind_data) {
+		return GetBoundFunctionInternal<false, GreaterThan>("__internal_arg_max_rank_nulls_last", type, by_type,
+		                                                    RankType::RANK, bind_data);
 	}
 };
 

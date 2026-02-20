@@ -1,0 +1,404 @@
+# name: test/sql/window/test_window_elimination_rank.test
+# description: Test TopN Window Elimination optimization for RANK
+# group: [window]
+
+require core_functions
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET explain_output='optimized_only'
+
+# Create test table
+statement ok
+CREATE TABLE test AS SELECT i % 3 as grp, i as val, 'name_' || i as name
+FROM range(100) t(i);
+
+# Test: Basic RANK optimization with <= filter
+query III rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val
+    FROM test
+) WHERE rk <= 3;
+----
+1	0	99
+1	1	97
+1	2	98
+2	0	96
+2	1	94
+2	2	95
+3	0	93
+3	1	91
+3	2	92
+
+# Test: RANK with < filter
+query III rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val
+    FROM test
+) WHERE rk < 3;
+----
+1	0	99
+1	1	97
+1	2	98
+2	0	96
+2	1	94
+2	2	95
+
+# Test RANK = 1 (should optimize, equivalent to RANK <= 1)
+query III rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+    FROM test
+) WHERE rk = 1;
+----
+1	0	99
+1	1	97
+1	2	98
+
+# Verify RANK = 1 optimizes (no WINDOW)
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+    FROM test
+) WHERE rk = 1;
+----
+logical_opt	<!REGEX>:.*WINDOW.*
+
+# Verify RANK = 2 does NOT optimize (uses WINDOW)
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+    FROM test
+) WHERE rk = 2;
+----
+logical_opt	<REGEX>:.*WINDOW.*
+
+# Verify RANK <= N optimizes (uses HASH_GROUP_BY + UNNEST, no WINDOW)
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+    FROM test
+) WHERE rk <= 3;
+----
+logical_opt	<REGEX>:.*UNNEST.*
+
+# Test: RANK with all columns including name
+query IIII rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val, name
+    FROM test
+) WHERE rk <= 2;
+----
+1	0	99	name_99
+1	1	97	name_97
+1	2	98	name_98
+2	0	96	name_96
+2	1	94	name_94
+2	2	95	name_95
+
+# Internal functions should not be callable directly by users
+statement error
+SELECT __internal_arg_max_rank_nulls_last(name, val, 3) FROM test GROUP BY grp ORDER BY grp;
+----
+__internal_arg_max_rank_nulls_last is for internal use only!
+
+statement error
+SELECT __internal_arg_min_rank_nulls_last(name, val, 3) FROM test GROUP BY grp ORDER BY grp;
+----
+__internal_arg_min_rank_nulls_last is for internal use only!
+
+# Test with ties in data
+statement ok
+CREATE TABLE ties_test AS
+SELECT i % 3 as grp, i % 5 as val, i as id FROM range(30) t(i);
+
+# Test RANK with actual ties
+statement ok
+CREATE TABLE rank_ties AS VALUES
+(0, 99, 'a'), (0, 99, 'b'), (0, 93, 'c'), (0, 90, 'd'),
+(1, 80, 'e'), (1, 80, 'f'), (1, 70, 'g'), (1, 60, 'h');
+
+statement ok
+ALTER TABLE rank_ties RENAME COLUMN col0 TO grp;
+
+statement ok
+ALTER TABLE rank_ties RENAME COLUMN col1 TO val;
+
+statement ok
+ALTER TABLE rank_ties RENAME COLUMN col2 TO name;
+
+# RANK <= 3 with ties: grp 0 has val=99 twice (rank 1,1), val=93 is rank 3
+query IIII rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val, name
+    FROM rank_ties
+) WHERE rk <= 3;
+----
+1	0	99	a
+1	0	99	b
+1	1	80	e
+1	1	80	f
+3	0	93	c
+3	1	70	g
+
+# RANK = 1 with ties: should return all tied first-place rows
+query IIII rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val, name
+    FROM rank_ties
+) WHERE rk = 1;
+----
+1	0	99	a
+1	0	99	b
+1	1	80	e
+1	1	80	f
+
+# =============================================
+# Late Materialization Tests for RANK
+# =============================================
+
+# When projecting many columns (grp, val, name), late materialization should kick in
+# and use a HASH_JOIN to avoid struct_packing all columns
+# RANK with multiple columns should use late materialization (COMPARISON_JOIN)
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val, name
+    FROM test
+) WHERE rk <= 3;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+
+# RANK with few columns (no struct_pack needed) should NOT use late mat
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk, grp, val
+    FROM test
+) WHERE rk <= 3;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# Correctness: RANK with late mat and rank column referenced
+query IIII rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val, name
+    FROM test
+) WHERE rk <= 3;
+----
+1	0	99	name_99
+1	1	97	name_97
+1	2	98	name_98
+2	0	96	name_96
+2	1	94	name_94
+2	2	95	name_95
+3	0	93	name_93
+3	1	91	name_91
+3	2	92	name_92
+
+# =============================================
+# End Late Materialization Tests
+# =============================================
+
+# Test RANK with ASC order
+query III rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val ASC) as rk,
+           grp, val
+    FROM test
+) WHERE rk <= 2;
+----
+1	0	0
+1	1	1
+1	2	2
+2	0	3
+2	1	4
+2	2	5
+
+# RANK with no partition, projecting val and name (aggregate_args size > 1)
+query III rowsort
+SELECT * FROM (
+    SELECT rank() OVER (ORDER BY val DESC) as rk, val, name
+    FROM test
+) WHERE rk <= 3;
+----
+1	99	name_99
+2	98	name_98
+3	97	name_97
+
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (ORDER BY val DESC) as rk, val, name
+    FROM test
+) WHERE rk <= 3;
+----
+logical_opt	<!REGEX>:.*WINDOW.*
+
+# RANK with two partition columns
+statement ok
+CREATE TABLE test_multi_part AS SELECT i % 3 as grp1, i % 2 as grp2, i as val, 'name_' || i as name
+FROM range(60) t(i);
+
+query IIII rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp1, grp2 ORDER BY val DESC) as rk,
+           grp1, grp2, val
+    FROM test_multi_part
+) WHERE rk <= 2;
+----
+1	0	0	54
+1	0	1	57
+1	1	0	58
+1	1	1	55
+1	2	0	56
+1	2	1	59
+2	0	0	48
+2	0	1	51
+2	1	0	52
+2	1	1	49
+2	2	0	50
+2	2	1	53
+
+# Verify two partition columns optimization uses UNNEST (no WINDOW)
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp1, grp2 ORDER BY val DESC) as rk,
+           grp1, grp2, val
+    FROM test_multi_part
+) WHERE rk <= 2;
+----
+logical_opt	<REGEX>:.*UNNEST.*
+
+statement ok
+DROP TABLE test_multi_part;
+
+# No-payload: only partition key
+query I rowsort
+SELECT grp FROM (
+    SELECT grp, RANK() OVER (PARTITION BY grp ORDER BY sum(val) DESC) AS ranking
+    FROM test
+    GROUP BY grp
+) WHERE ranking <= 5;
+----
+0
+1
+2
+
+# Test: ties with a better value arriving - evicted element should be preserved
+# When all heap and ties values share the same key, inserting a better key
+# should preserve the evicted element in ties instead of dropping it.
+statement ok
+CREATE TABLE ties_boundary AS
+SELECT 1 as grp, 10 as val, 'same_' || i as name FROM range(10) t(i)
+UNION ALL
+SELECT 1 as grp, 5 as val, 'better' as name;
+
+# Verify the optimization is applied
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val ASC) as rk, grp, val, name
+    FROM ties_boundary
+) WHERE rk <= 3;
+----
+logical_opt	<!REGEX>:.*WINDOW.*
+
+query IIII rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val ASC) as rk, grp, val, name
+    FROM ties_boundary
+) WHERE rk <= 3;
+----
+1	1	5	better
+2	1	10	same_0
+2	1	10	same_1
+2	1	10	same_2
+2	1	10	same_3
+2	1	10	same_4
+2	1	10	same_5
+2	1	10	same_6
+2	1	10	same_7
+2	1	10	same_8
+2	1	10	same_9
+
+statement ok
+DROP TABLE ties_boundary;
+
+# Cleanup
+statement ok
+DROP TABLE test;
+
+statement ok
+DROP TABLE ties_test;
+
+statement ok
+DROP TABLE rank_ties;
+
+# Test: RANK() with NULL values in ORDER BY column (ASC NULLS LAST)
+# Verifies that NULL ORDER BY values participate in ranking with correct NULLS LAST semantics.
+statement ok
+CREATE TABLE test_rank_null(grp INT, val INT)
+
+statement ok
+INSERT INTO test_rank_null VALUES
+    (1, 3), (1, 1), (1, NULL), (1, 2),
+    (2, NULL), (2, 5), (2, NULL)
+
+# grp=1: val ranked ASC NULLS LAST -> 1(rk1), 2(rk2), 3(rk3), NULL(rk4)
+# grp=2: val ranked ASC NULLS LAST -> 5(rk1), NULL(rk2), NULL(rk2)
+# WHERE rk <= 4 should include all rows, including NULLs
+query III rowsort
+SELECT rk, grp, val FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val NULLS LAST) as rk,
+           grp, val
+    FROM test_rank_null
+) WHERE rk <= 4
+----
+1	1	1
+1	2	5
+2	1	2
+2	2	NULL
+2	2	NULL
+3	1	3
+4	1	NULL
+
+# WHERE rk <= 2 should include NULL rows from grp=2 (rank 2) but not grp=1's NULL (rank 4)
+query III rowsort
+SELECT rk, grp, val FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val NULLS LAST) as rk,
+           grp, val
+    FROM test_rank_null
+) WHERE rk <= 2
+----
+1	1	1
+1	2	5
+2	1	2
+2	2	NULL
+2	2	NULL
+
+# Test: RANK() with NULL values in ORDER BY column (DESC NULLS LAST)
+# grp=1: val ranked DESC NULLS LAST -> 3(rk1), 2(rk2), 1(rk3), NULL(rk4)
+# grp=2: val ranked DESC NULLS LAST -> 5(rk1), NULL(rk2), NULL(rk2)
+query III rowsort
+SELECT rk, grp, val FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC NULLS LAST) as rk,
+           grp, val
+    FROM test_rank_null
+) WHERE rk <= 4
+----
+1	1	3
+1	2	5
+2	1	2
+2	2	NULL
+2	2	NULL
+3	1	1
+4	1	NULL
+
+statement ok
+DROP TABLE test_rank_null

@@ -113,6 +113,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
+#include "duckdb/function/aggregate/minmax_n_helpers.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/copy_function.hpp"
@@ -4075,6 +4076,23 @@ const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value) {
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	return static_cast<QueryResultType>(StringUtil::StringToEnum(GetQueryResultTypeValues(), 4, "QueryResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRankTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RankType::RANK), "RANK" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RankType>(RankType value) {
+	return StringUtil::EnumToString(GetRankTypeValues(), 1, "RankType", static_cast<uint32_t>(value));
+}
+
+template<>
+RankType EnumUtil::FromString<RankType>(const char *value) {
+	return static_cast<RankType>(StringUtil::StringToEnum(GetRankTypeValues(), 1, "RankType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRecoveryModeValues() {

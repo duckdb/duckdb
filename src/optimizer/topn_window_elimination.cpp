@@ -22,6 +22,7 @@
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/aggregate/minmax_n_helpers.hpp"
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
@@ -233,6 +234,27 @@ unique_ptr<Expression>
 TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params,
                                                  const bool requires_arg,
                                                  const TopNWindowEliminationParameters &params) const {
+	if (params.IncludeTies()) {
+		// RANK: directly construct BoundAggregateExpression bypassing bind, because
+		// __internal_arg_min_rank()/__internal_arg_max_rank() are internal-only functions whose bind throws an error to
+		// prevent user access
+		if (!requires_arg) {
+			// No payload: insert a copy of ORDER_BY_KEY at position 0 as a proxy val so the 3-arg function gets correct
+			// arguments.
+			aggregate_params.insert(aggregate_params.begin(), aggregate_params[0]->Copy());
+		}
+		auto type = aggregate_params[0]->return_type;
+		auto by_type = aggregate_params[1]->return_type;
+
+		unique_ptr<FunctionData> bind_data;
+		auto func = params.order_type == OrderType::ASCENDING
+		                ? ArgMinMaxRankHelper::GetInternalArgMinRank(type, by_type, bind_data)
+		                : ArgMinMaxRankHelper::GetInternalArgMaxRank(type, by_type, bind_data);
+
+		return make_uniq<BoundAggregateExpression>(std::move(func), std::move(aggregate_params), nullptr,
+		                                           std::move(bind_data), AggregateType::NON_DISTINCT);
+	}
+
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	FunctionBinder function_binder(context);
 
@@ -277,7 +299,7 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	}
 
 	aggregate_params.push_back(std::move(window_expr.orders[0].expression));
-	if (params.limit > 1) {
+	if (params.limit > 1 || params.IncludeTies()) {
 		aggregate_params.push_back(std::move(make_uniq<BoundConstantExpression>(Value::BIGINT(params.limit))));
 	}
 
@@ -358,8 +380,8 @@ TopNWindowElimination::TryCreateUnnestOperator(unique_ptr<LogicalOperator> op,
 	const idx_t aggregate_column_idx = logical_aggregate.groups.size();
 	LogicalType aggregate_type = logical_aggregate.types[aggregate_column_idx];
 
-	if (params.limit <= 1) {
-		// LIMIT 1 -> we do not need to unnest
+	if (params.limit <= 1 && !params.IncludeTies()) {
+		// LIMIT 1 without ties -> we do not need to unnest
 		return op;
 	}
 
@@ -374,8 +396,9 @@ TopNWindowElimination::TryCreateUnnestOperator(unique_ptr<LogicalOperator> op,
 	unnest_aggregate->child = aggregate_column_ref->Copy();
 	unnest_exprs.push_back(std::move(unnest_aggregate));
 
-	if (params.include_row_number) {
-		// Create row number expression
+	if (params.include_window_column && !params.IncludeTies()) {
+		// For ROW_NUMBER: generate row numbers using generate_series
+		// For RANK: rank is already in the STRUCT, no need for generate_series
 		unnest_exprs.push_back(CreateRowNumberGenerator(std::move(aggregate_column_ref)));
 	}
 
@@ -387,9 +410,9 @@ TopNWindowElimination::TryCreateUnnestOperator(unique_ptr<LogicalOperator> op,
 	return unique_ptr<LogicalOperator>(std::move(unnest));
 }
 
-void TopNWindowElimination::AddStructExtractExprs(
-    vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
-    const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const {
+unique_ptr<Expression> TopNWindowElimination::CreateStructExtractExpr(const Expression &source_expr,
+                                                                      const LogicalType &struct_type,
+                                                                      const string &field_name) const {
 	FunctionBinder function_binder(context);
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &struct_extract_entry =
@@ -397,17 +420,38 @@ void TopNWindowElimination::AddStructExtractExprs(
 	const auto struct_extract_fun =
 	    struct_extract_entry.functions.GetFunctionByArguments(context, {struct_type, LogicalType::VARCHAR});
 
+	vector<unique_ptr<Expression>> args(2);
+	args[0] = source_expr.Copy();
+	args[1] = make_uniq<BoundConstantExpression>(Value(field_name));
+	auto result = function_binder.BindScalarFunction(struct_extract_fun, std::move(args));
+	result->alias = field_name;
+	return result;
+}
+
+void TopNWindowElimination::AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
+                                                  const Expression &source_expr) const {
 	const auto &child_types = StructType::GetChildTypes(struct_type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		const auto &alias = child_types[i].first;
+		exprs.push_back(CreateStructExtractExpr(source_expr, struct_type, child_types[i].first));
+	}
+}
 
-		vector<unique_ptr<Expression>> fun_args(2);
-		fun_args[0] = aggregate_column_ref->Copy();
-		fun_args[1] = make_uniq<BoundConstantExpression>(alias);
-
-		auto bound_function = function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args));
-		bound_function->alias = alias;
-		exprs.push_back(std::move(bound_function));
+void TopNWindowElimination::AddWindowColumnExpr(vector<unique_ptr<Expression>> &exprs,
+                                                const TopNWindowEliminationParameters &params,
+                                                const unique_ptr<LogicalOperator> &op,
+                                                const LogicalType &aggregate_type,
+                                                const Expression &aggregate_column_ref) const {
+	if (params.IncludeTies()) {
+		// RANK: extract "rank" field from STRUCT(arg: T, rank: BIGINT)
+		exprs.push_back(CreateStructExtractExpr(aggregate_column_ref, aggregate_type, "rank"));
+	} else if (op->type == LogicalOperatorType::LOGICAL_UNNEST) {
+		// ROW_NUMBER with N > 1: reference the generate_series column
+		auto row_number_column_binding = GetRowNumberColumnBinding(op);
+		exprs.push_back(
+		    make_uniq<BoundColumnRefExpression>("row_number", LogicalType::BIGINT, row_number_column_binding));
+	} else {
+		// ROW_NUMBER with N = 1: row number is always 1
+		exprs.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(1)));
 	}
 }
 
@@ -435,22 +479,29 @@ TopNWindowElimination::CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	auto aggregate_column_ref =
 	    make_uniq<BoundColumnRefExpression>(aggregate_type, ColumnBinding(aggregate_table_idx, 0));
 
-	if (params.payload_type == TopNPayloadType::STRUCT_PACK) {
-		AddStructExtractExprs(proj_exprs, aggregate_type, aggregate_column_ref);
+	// Step 1: Determine payload expression and its type
+	// For RANK: aggregate is STRUCT(arg: T, rank: BIGINT), extract "arg" to get the actual payload
+	// For ROW_NUMBER: aggregate result is the payload directly
+	unique_ptr<Expression> payload_expr;
+	LogicalType payload_type;
+	if (params.IncludeTies()) {
+		payload_type = StructType::GetChildType(aggregate_type, 0);
+		payload_expr = CreateStructExtractExpr(*aggregate_column_ref, aggregate_type, "arg");
 	} else {
-		// No need for struct_unpack! Just reference the aggregate column
-		proj_exprs.push_back(std::move(aggregate_column_ref));
+		payload_type = aggregate_type;
+		payload_expr = aggregate_column_ref->Copy();
 	}
 
-	if (params.include_row_number) {
-		// If aggregate (i.e., limit 1): constant, if unnest: expect there to be a second column
-		if (op->type == LogicalOperatorType::LOGICAL_UNNEST) {
-			auto row_number_column_binding = GetRowNumberColumnBinding(op);
-			proj_exprs.push_back(
-			    make_uniq<BoundColumnRefExpression>("row_number", LogicalType::BIGINT, row_number_column_binding));
-		} else {
-			proj_exprs.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(1)));
-		}
+	// Step 2: Add payload columns
+	if (params.payload_type == TopNPayloadType::STRUCT_PACK) {
+		AddStructExtractExprs(proj_exprs, payload_type, *payload_expr);
+	} else {
+		proj_exprs.push_back(std::move(payload_expr));
+	}
+
+	// Step 3: Add window column expression
+	if (params.include_window_column) {
+		AddWindowColumnExpr(proj_exprs, params, op, aggregate_type, *aggregate_column_ref);
 	}
 
 	auto logical_projection =
@@ -493,15 +544,19 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
+	// MAX_N must match the limit enforced in MinMaxNState::Initialize, which rejects n >= 1000000 at execution time.
+	// Skip optimization for out-of-range values so the query falls back to the standard window execution path instead
+	// of throwing.
+	static constexpr int64_t MAX_N = 1000000;
 	const auto bigint_value = filter_value.value.GetValue<int64_t>();
 	switch (comparison) {
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		if (bigint_value < 1) {
+		if (bigint_value < 1 || bigint_value >= MAX_N) {
 			return false;
 		}
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		if (bigint_value < 2) {
+		if (bigint_value < 2 || bigint_value > MAX_N) {
 			return false;
 		}
 		break;
@@ -557,7 +612,13 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 			}
 		}
 	}
-	if (window.expressions[0]->type != ExpressionType::WINDOW_ROW_NUMBER) {
+	auto window_func_type = window.expressions[0]->type;
+	switch (window_func_type) {
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		break;
+	case ExpressionType::WINDOW_RANK:
+		break;
+	default:
 		return false;
 	}
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
@@ -623,12 +684,14 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 	}
 
 	if (aggregate_args.size() == 1) {
-		// If we only project the aggregate value itself, we do not need it as an arg
+		// If we only project the aggregate value itself, we do not need it as an arg.
+		// Exception: RANK always needs an arg because __internal_arg_min_rank/__internal_arg_max_rank requires it.
 		VisitExpression(&window_expr.orders[0].expression);
 		const auto aggregate_value_binding = column_references.begin()->first;
 		column_references.clear();
 
-		if (window_expr.orders[0].expression->type == ExpressionType::BOUND_COLUMN_REF &&
+		bool is_rank = window.expressions[0]->type == ExpressionType::WINDOW_RANK;
+		if (!is_rank && window_expr.orders[0].expression->type == ExpressionType::BOUND_COLUMN_REF &&
 		    aggregate_args[0]->Cast<BoundColumnRefExpression>().binding == aggregate_value_binding) {
 			return {};
 		}
@@ -727,7 +790,7 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 	if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
 		--params.limit;
 	}
-	params.include_row_number = BindingsReferenceRowNumber(bindings, window);
+	params.include_window_column = BindingsReferenceRowNumber(bindings, window);
 	params.payload_type = aggregate_payload.size() > 1 ? TopNPayloadType::STRUCT_PACK : TopNPayloadType::SINGLE_COLUMN;
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
 	params.order_type = window_expr.orders[0].type;
@@ -743,7 +806,7 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 		}
 	}
 	column_references.clear();
-
+	params.window_function_type = window.expressions[0]->type;
 	return params;
 }
 
@@ -1014,8 +1077,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
                                                                  const TopNWindowEliminationParameters &params) {
 	lhs->ResolveOperatorTypes();
 
-	const idx_t rowid_column_count =
-	    params.include_row_number ? rhs->types.size() - (aggregate_offset + 1) : rhs->types.size() - aggregate_offset;
+	const idx_t rowid_column_count = params.include_window_column ? rhs->types.size() - (aggregate_offset + 1)
+	                                                              : rhs->types.size() - aggregate_offset;
 	const idx_t rhs_binding_offset =
 	    rhs->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ? 0 : aggregate_offset;
 
@@ -1033,7 +1096,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructJoin(unique_ptr<Logi
 		join->conditions.push_back(std::move(condition));
 	}
 
-	if (params.include_row_number) {
+	if (params.include_window_column) {
 		// Add row_number to join result
 		join->join_type = JoinType::INNER;
 		join->right_projection_map.push_back(rhs->types.size() - 1);
