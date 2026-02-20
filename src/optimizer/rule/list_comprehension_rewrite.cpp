@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/lambda_functions.hpp"
@@ -42,9 +43,7 @@ optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
 }
 
 optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &struct_pack, const string &name) {
-	if (struct_pack.return_type != LogicalTypeId::STRUCT) {
-		return nullptr;
-	}
+	D_ASSERT(struct_pack.return_type.id() == LogicalTypeId::STRUCT);
 	for (auto &child : struct_pack.children) {
 		if (child->GetAlias() == name) {
 			return child.get();
