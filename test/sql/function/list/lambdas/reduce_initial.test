@@ -41,6 +41,11 @@ SELECT list_reduce([1, 2, 3], lambda x, y: x + y, NULL);
 NULL
 
 query I
+SELECT list_reduce(['1', '2', '3'], lambda acc, x: acc + x::INTEGER, 0);
+----
+6
+
+query I
 SELECT list_reduce([NULL], lambda x, y, i: x + y + i, 100);
 ----
 NULL
@@ -61,6 +66,11 @@ SELECT list_reduce([], lambda x, y: x + y, 100);
 100
 
 query I
+SELECT list_reduce([1], lambda acc, x: acc || [x], []);
+----
+[1]
+
+query I
 SELECT list_reduce(['a', 'b', 'c'], lambda x, y: x || y, NULL);
 ----
 NULL
@@ -70,6 +80,11 @@ statement error
 SELECT list_reduce([1, 2, 3], lambda x, y: (x * y), 'i dare you to cast me');
 ----
 Binder Error
+
+query I
+SELECT list_reduce([0], lambda acc, x: if(len(acc::VARCHAR) - 1, true, false), false);
+----
+true
 
 statement error
 SELECT list_reduce([1, 2], lambda x: x, 100);
@@ -486,6 +501,26 @@ SELECT list_reduce([1, 2, 3], lambda x, y: x * y, 2.5);
 ----
 15.0
 
+query I
+SELECT list_reduce([1, 2], lambda acc, x: acc || [x], []::INTEGER[]);
+----
+[1, 2]
+
+query I
+SELECT list_reduce([1, 2], lambda acc, x: struct_pack(a:=acc.a + x, b:=acc.b), struct_pack(a:=0, b:='s'));
+----
+{'a': 3, 'b': s}
+
+query I
+SELECT list_reduce([2147483647, 1]::INTEGER[], lambda acc, x: acc + x, 0::BIGINT);
+----
+2147483648
+
+query I
+SELECT list_reduce([1, 2, 3], lambda acc, x: acc + x, NULL::DOUBLE);
+----
+NULL
+
 statement ok
 CREATE TABLE cast_test (l int[], initial float);
 
@@ -518,12 +553,17 @@ SELECT list_reduce(l, lambda x, y: x * y, initial) FROM cast_test;
 statement error
 SELECT list_reduce([1, 2, 3], lambda x, y: x + y, [1, 2]);
 ----
-The initial value type must be the same as the list child type or a common super type
+No function matches the given name and argument types '+(INTEGER[], INTEGER)'
 
 statement error
+SELECT list_reduce([1], lambda acc, x: 'bad', 0);
+----
+Conversion Error
+
+query I
 SELECT list_reduce([BLOB 'hello'], lambda x, y: x, 'text');
 ----
-The initial value type must be the same as the list child type or a common super type
+text
 
 query I
 SELECT list_reduce([NULL, NULL]::INTEGER[], lambda x, y: x + y, 3.14);
