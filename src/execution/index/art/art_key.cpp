@@ -63,7 +63,8 @@ void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, const char *va
 	ARTKey::CreateARTKey(allocator, key, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
 }
 
-ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, const LogicalType &type, Value &value, idx_t storage_version) {
+ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, Value &value, idx_t storage_version) {
+	const auto &type = value.type();
 	D_ASSERT(type.InternalType() == value.type().InternalType());
 
 	if (type.id() == LogicalTypeId::GEOMETRY && storage_version < 7) {

@@ -769,8 +769,7 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
 
-	const auto storage_version = db.GetStorageManager().GetStorageVersion();
-	auto key = ARTKey::CreateKey(arena_allocator, logical_types[0], scan_state.values[0], storage_version);
+	auto key = ARTKey::CreateKey(arena_allocator, scan_state.values[0], storage_version);
 
 	lock_guard<mutex> l(lock);
 	if (scan_state.values[1].IsNull()) {
@@ -794,7 +793,7 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	// Two predicates.
 	D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
 
-	auto upper_bound = ARTKey::CreateKey(arena_allocator, logical_types[0], scan_state.values[1], storage_version);
+	auto upper_bound = ARTKey::CreateKey(arena_allocator, scan_state.values[1], storage_version);
 
 	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
