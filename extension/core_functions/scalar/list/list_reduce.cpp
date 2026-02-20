@@ -43,6 +43,7 @@ struct ReduceExecuteInfo {
 		}
 		left_slice->Slice(left_vector, reduced_row_idx);
 
+		// input_types layout: [accumulator (S), element (T), optional index, captured args...]
 		input_types.push_back(info.lambda_expr->return_type);
 		input_types.push_back(info.child_vector->GetType());
 
@@ -50,6 +51,7 @@ struct ReduceExecuteInfo {
 			input_types.push_back(LogicalType::BIGINT);
 		}
 
+		// info.column_infos includes the list column plus captured args (and the initial value if present).
 		// skip the first entry if there is an initial value
 		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
