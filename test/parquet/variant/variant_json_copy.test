@@ -1,0 +1,46 @@
+# name: test/parquet/variant/variant_json_copy.test
+# group: [variant]
+
+require parquet
+
+require json
+
+statement ok
+CREATE TABLE json_data AS SELECT
+	i AS id,
+	to_json({
+		a: i,
+		b: 'hello'
+	})::VARIANT AS data
+FROM
+	generate_series(0, 4) t(i);
+
+# UINT64 is not something that Parquet's VARIANT can handle, so it fails
+statement error
+COPY json_data TO '__TEST_DIR__/json_variant.parquet' (FORMAT PARQUET);
+----
+Invalid Input Error: Can't convert VARIANT of type 'UINT64' to Parquet VARIANT
+
+# FIXME: 'to_json' will convert to unsigned types if values are positive
+# Parquet's VARIANT doesn't handle unsigned types.
+statement ok
+CREATE OR REPLACE TABLE json_data AS SELECT
+	(i - 5)::BIGINT AS id,
+	to_json({
+		a: (i - 5)::BIGINT,
+		b: 'hello'
+	})::VARIANT AS data
+FROM
+	generate_series(0, 4) t(i);
+
+statement ok
+COPY json_data TO '__TEST_DIR__/json_variant.parquet' (FORMAT PARQUET);
+
+query II
+select * from '__TEST_DIR__/json_variant.parquet';
+----
+-5	{'a': -5, 'b': hello}
+-4	{'a': -4, 'b': hello}
+-3	{'a': -3, 'b': hello}
+-2	{'a': -2, 'b': hello}
+-1	{'a': -1, 'b': hello}
