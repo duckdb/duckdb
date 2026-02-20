@@ -51,6 +51,20 @@
         "type": "aggregate_function_set"
     },
     {
+        "name": "__internal_arg_min_rank_nulls_last",
+        "parameters": "arg,val,N",
+        "description": "Internal only. Finds the rows with N minimum vals including ties and nulls. Returns LIST of STRUCT(arg, rank).",
+        "example": "__internal_arg_min_rank_nulls_last(A, B, N)",
+        "type": "aggregate_function_set"
+    },
+    {
+        "name": "__internal_arg_max_rank_nulls_last",
+        "parameters": "arg,val,N",
+        "description": "Internal only. Finds the rows with N maximum vals including ties and nulls. Returns LIST of STRUCT(arg, rank).",
+        "example": "__internal_arg_max_rank_nulls_last(A, B, N)",
+        "type": "aggregate_function_set"
+    },
+    {
         "name": "bit_and",
         "parameters": "arg",
         "description": "Returns the bitwise AND of all bits in a given expression.",

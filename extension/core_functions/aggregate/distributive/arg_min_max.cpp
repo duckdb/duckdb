@@ -9,6 +9,8 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/aggregate/minmax_n_helpers.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -880,6 +882,30 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 	return set.AddFunction(function);
 }
 
+//------------------------------------------------------------------------------
+// ArgMinMaxRank Function
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Bind
+//------------------------------------------------------------------------------
+unique_ptr<FunctionData> ArgMinMaxRankBind(ClientContext &context, AggregateFunction &function,
+                                           vector<unique_ptr<Expression>> &arguments) {
+	throw BinderException("%s is for internal use only!", function.name);
+}
+
+template <ArgMinMaxNullHandling NULL_HANDLING, bool NULLS_LAST, class COMPARATOR>
+void AddArgMinMaxRankFunction(AggregateFunctionSet &set) {
+	// Bind throws BinderException - optimizer bypasses bind via direct BoundAggregateExpression construction
+	// Serialize/deserialize callbacks allow plan serialization to work without calling bind
+	AggregateFunction function({LogicalTypeId::ANY, LogicalTypeId::ANY, LogicalType::BIGINT},
+	                           LogicalType::LIST(LogicalType::ANY), nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           nullptr, ArgMinMaxRankBind);
+	function.SetSerializeCallback(ArgMinMaxRankHelper::Serialize);
+	function.SetDeserializeCallback(ArgMinMaxRankHelper::Deserialize);
+	set.AddFunction(function);
+}
+
 } // namespace
 
 //------------------------------------------------------------------------------
@@ -923,6 +949,18 @@ AggregateFunctionSet ArgMaxNullsLastFun::GetFunctions() {
 	AggregateFunctionSet fun;
 	AddArgMinMaxFunctions<GreaterThan, OrderType::DESCENDING>(fun, ArgMinMaxNullHandling::HANDLE_ANY_NULL);
 	AddArgMinMaxNFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, false, GreaterThan>(fun);
+	return fun;
+}
+
+AggregateFunctionSet InternalArgMinRankNullsLastFun::GetFunctions() {
+	AggregateFunctionSet fun;
+	AddArgMinMaxRankFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, true, LessThan>(fun);
+	return fun;
+}
+
+AggregateFunctionSet InternalArgMaxRankNullsLastFun::GetFunctions() {
+	AggregateFunctionSet fun;
+	AddArgMinMaxRankFunction<ArgMinMaxNullHandling::HANDLE_ANY_NULL, false, GreaterThan>(fun);
 	return fun;
 }
 
