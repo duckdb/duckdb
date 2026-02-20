@@ -98,6 +98,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 
 	if (!info.IsValid()) {
 		// We create a new ART.
+		storage_version = db.GetStorageManager().GetStorageVersion();
 		return;
 	}
 
@@ -110,6 +111,18 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	// Set the root node and initialize the allocators.
 	tree.Set(info.root);
 	InitAllocators(info);
+
+	// Set the storage version of the ART
+	auto it = info.options.find("storage_version");
+	if (it != info.options.end()) {
+		// If this is an old index with a saved storage version, use it.
+		storage_version = it->second.GetValue<idx_t>();
+	} else {
+		// Otherwise, this must be an old index without a saved storage version.
+		// We started saving the storage version in v1.5.0, so we have to assume that the storage version is what
+		// the default was in v1.4.4, which was 1
+		storage_version = 1;
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -395,8 +408,8 @@ void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
-static bool KeyInputNeedConversion(const vector<LogicalType> &types, const AttachedDatabase &db) {
-	if (db.GetStorageManager().GetStorageVersion() < 7) {
+static bool KeyInputNeedConversion(const vector<LogicalType> &types, idx_t storage_version) {
+	if (storage_version < 7) {
 		// Old GEOMETRY columns had a different internal representation
 		for (auto &type : types) {
 			// ART does not support nested types, so we only need to check the top-level type.
@@ -409,7 +422,7 @@ static bool KeyInputNeedConversion(const vector<LogicalType> &types, const Attac
 	return false;
 }
 
-static void ConverKeyInput(DataChunk &input, DataChunk &result) {
+static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
 	vector<LogicalType> new_types;
 
 	for (auto &type : input.GetTypes()) {
@@ -441,8 +454,8 @@ void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector
 
 	DataChunk converted_chunk;
 	// Do we need to convert the input first before generating keys?
-	if (KeyInputNeedConversion(input.GetTypes(), db)) {
-		ConverKeyInput(input, converted_chunk);
+	if (KeyInputNeedConversion(input.GetTypes(), storage_version)) {
+		ConvertKeyInput(input, converted_chunk);
 		key_input = &converted_chunk;
 	}
 
@@ -996,6 +1009,9 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	IndexStorageInfo info(name);
 	info.root = tree.Get();
 	info.options = options;
+
+	// It never hurts to serialize the storage version, even to older formats
+	info.options["storage_version"] = Value::UBIGINT(storage_version);
 
 	for (auto &allocator : *allocators) {
 		allocator->RemoveEmptyBuffers();
