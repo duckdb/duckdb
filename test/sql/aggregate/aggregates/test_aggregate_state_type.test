@@ -162,3 +162,54 @@ query T
 SELECT (any_value(42) export_state)::struct("value" integer, is_set boolean, is_null boolean);
 ----
 {'value': 42, 'is_set': true, 'is_null': false}
+
+# product() has the new get_state_type callback
+query T
+SELECT typeof(product(1.0::DOUBLE) EXPORT_STATE) = 'AGGREGATE_STATE<product(DOUBLE)::DOUBLE, STRUCT(empty BOOLEAN, val DOUBLE)>';
+----
+true
+
+# Works in a table
+statement ok
+CREATE TABLE t3_product AS SELECT product(range::DOUBLE) EXPORT_STATE as state FROM range(1, 6);
+
+# Test reading from the table
+query T
+SELECT column_type='AGGREGATE_STATE<product(DOUBLE)::DOUBLE, STRUCT(empty BOOLEAN, val DOUBLE)>' FROM (DESCRIBE t3_product) WHERE column_name = 'state';
+----
+true
+
+# Test combine and finalize
+query R
+SELECT finalize(combine(state, state)) FROM t3_product;
+----
+14400.000000
+
+# Test that state typing is independent of input expressions
+statement ok
+INSERT INTO t3_product SELECT product((range::DOUBLE + 10.0)::DOUBLE) EXPORT_STATE FROM range(1, 6);
+
+query R
+SELECT finalize(state) FROM t3_product ORDER BY 1;
+----
+120.000000
+360360.000000
+
+# Test combine with multiple states
+query R
+SELECT finalize(combine(state, state)) FROM t3_product ORDER BY 1;
+----
+14400.000000
+129859329600.000000
+
+# Casting product state to struct should work
+query T
+SELECT (product(2.0) export_state)::struct(empty boolean, val double);
+----
+{'empty': false, 'val': 2.0}
+
+# Test product with empty result (should be NULL when no rows)
+query T
+SELECT finalize(product(1.0::DOUBLE) EXPORT_STATE) IS NULL FROM (SELECT 1 WHERE FALSE);
+----
+true
