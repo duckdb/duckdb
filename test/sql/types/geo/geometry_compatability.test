@@ -6,6 +6,9 @@
 # automatically convert between old and new (and vice-versa) so that there is no percievable difference to both users
 # and the execution engine. This test ensures that we can deal with the old geometry format without any issues.
 
+# These files were created with vector-size 2048
+require vector_size 2048
+
 # Make a copy of the testing database so we can make modifications
 statement ok
 copy (select content from read_blob('{DATA_DIR}/storage/spatial_geo.db')) to '__TEST_DIR__/geo.db' (format BLOB);

@@ -2332,9 +2332,7 @@ static uint32_t FromLegacyGeometryRequiredSize(BlobReader &reader) {
 
 	if (format_v1 || format_v0) {
 		// Unsupported version, throw an error
-		throw NotImplementedException(
-		    "This geometry seems to be written with a newer version of the DuckDB spatial library that is not "
-		    "compatible with this version. Please upgrade your DuckDB installation.");
+		throw InvalidInputException("Cannot import an unknown version of the spatial geometry format!");
 	}
 
 	if (has_bbox) {
@@ -2402,9 +2400,7 @@ static void FromLegacyGeometryConversion(BlobReader &reader, FixedSizeBlobWriter
 
 	if (format_v1 || format_v0) {
 		// Unsupported version, throw an error
-		throw NotImplementedException(
-		    "This geometry seems to be written with a newer version of the DuckDB spatial library that is not "
-		    "compatible with this version. Please upgrade your DuckDB installation.");
+		throw InvalidInputException("Cannot import an unknown version of the spatial geometry format!");
 	}
 
 	if (has_bbox) {
