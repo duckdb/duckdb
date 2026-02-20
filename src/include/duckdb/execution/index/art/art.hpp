@@ -69,7 +69,7 @@ public:
 	//! True, if the ART owns its data.
 	bool owns_data;
 	//! Storage version that the ART was created in, used for backwards compatible key generation
-	idx_t storage_version;
+	optional_idx storage_version;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
