@@ -397,7 +397,7 @@ unittest_release: release
 	build/release/test/unittest
 
 unittestci:
-	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
+	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution --rss-output=/tmp/unittest-rss.json
 
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
