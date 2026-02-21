@@ -1,0 +1,56 @@
+# name: test/sql/function/string/test_ilike_any.test
+# description: Test ILIKE ANY with list of patterns (case-insensitive)
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# ILIKE ANY case-insensitive with constants (ARRAY literal)
+query T
+SELECT 'AbC' ILIKE ANY (ARRAY['a%', '%C'])
+----
+1
+
+# single-element list behaves like regular ILIKE
+query T
+SELECT 'foo' ILIKE ANY (ARRAY['F%'])
+----
+1
+
+# case-insensitivity: ILIKE ANY should match regardless of input/pattern case
+query T
+SELECT 'AbC' ILIKE ANY (ARRAY['A%', '%c'])
+----
+1
+
+query T
+SELECT 'abc' ILIKE ANY (ARRAY['A%', '%C'])
+----
+1
+
+# end-to-end WHERE clause usage with ILIKE ANY
+statement ok
+CREATE OR REPLACE TABLE ilike_any_smoke(s VARCHAR)
+
+statement ok
+INSERT INTO ilike_any_smoke VALUES ('abc'), ('def'), ('a_c'), ('xzz'), ('AbC'), ('zzz')
+
+query I
+SELECT s FROM ilike_any_smoke WHERE s ILIKE ANY (ARRAY['ab%', '%C']) ORDER BY s
+----
+AbC
+a_c
+abc
+
+# WHERE clause with additional non-LIKE filters
+statement ok
+CREATE OR REPLACE TABLE ilike_any_filters(s VARCHAR, grp INTEGER)
+
+statement ok
+INSERT INTO ilike_any_filters VALUES ('abc', 1), ('AbC', 1), ('def', 1), ('xzz', 2), ('zzz', 2), ('a_c', 2)
+
+query I
+SELECT s FROM ilike_any_filters WHERE grp = 1 AND s ILIKE ANY (ARRAY['a%', '%ZZ']) ORDER BY s
+----
+AbC
+abc

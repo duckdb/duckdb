@@ -1,0 +1,81 @@
+# name: test/sql/function/string/test_like_any.test
+# description: Test LIKE ANY with list of patterns
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# basic LIKE ANY with constants (ARRAY literal)
+query T
+SELECT 'abc' LIKE ANY (ARRAY['a%', '%d'])
+----
+1
+
+query T
+SELECT 'xyz' LIKE ANY (ARRAY['a%', '%d'])
+----
+0
+
+# multiple patterns including underscores
+query T
+SELECT 'a_c' LIKE ANY (ARRAY['a_c', 'b_c'])
+----
+1
+
+# single-element list behaves like regular LIKE/ILIKE
+query T
+SELECT 'foo' LIKE ANY (ARRAY['f%'])
+----
+1
+
+# mixing success and failure patterns
+query T
+SELECT 'bar' LIKE ANY (ARRAY['x%', '%z', 'b__'])
+----
+1
+
+# case sensitivity: LIKE ANY is case-sensitive (patterns only match exact case)
+query T
+SELECT 'AbC' LIKE ANY (ARRAY['a%', '%c'])
+----
+0
+
+query T
+SELECT 'abc' LIKE ANY (ARRAY['A%', '%C'])
+----
+0
+
+# error on empty array
+statement error
+SELECT 'abc' LIKE ANY (ARRAY[]::VARCHAR[])
+----
+LIKE ANY() requires at least one pattern
+
+# end-to-end WHERE clause usage
+statement ok
+CREATE OR REPLACE TABLE like_any_smoke(s VARCHAR)
+
+statement ok
+INSERT INTO like_any_smoke VALUES ('abc'), ('def'), ('a_c'), ('xzz'), ('AbC'), ('zzz')
+
+query I
+SELECT s FROM like_any_smoke WHERE s LIKE ANY (ARRAY['a%', '%zz']) ORDER BY s
+----
+a_c
+abc
+xzz
+zzz
+
+# WHERE clause with additional non-LIKE filters
+statement ok
+CREATE OR REPLACE TABLE like_any_filters(s VARCHAR, grp INTEGER)
+
+statement ok
+INSERT INTO like_any_filters VALUES ('abc', 1), ('AbC', 1), ('def', 1), ('xzz', 2), ('zzz', 2), ('a_c', 2)
+
+query I
+SELECT s FROM like_any_filters WHERE grp = 1 AND s LIKE ANY (ARRAY['a%', '%zz']) ORDER BY s
+----
+abc
+
+
