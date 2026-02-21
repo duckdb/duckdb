@@ -450,21 +450,21 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 }
 
 // ------------------------------------------------------------------------------------------------
-// ParsedPath struct tests (ported from playground/test-playground.cpp)
+// Path struct tests (ported from playground/test-playground.cpp)
 // ------------------------------------------------------------------------------------------------
 
-TEST_CASE("ParsedPath parses and correctly structures fields", "[file_system]") {
-	ParsedPath output;
+TEST_CASE("Path parses and correctly structures fields", "[file_system]") {
+	Path output;
 
 	SECTION("local files") {
-		output = ParsedPath::FromString("a/b");
+		output = Path::FromString("a/b");
 		CHECK(output.scheme == "");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "");
 		CHECK(output.is_absolute == false);
 		CHECK(output.path == "a/b");
 
-		output = ParsedPath::FromString("/..////a/./b/../c");
+		output = Path::FromString("/..////a/./b/../c");
 		CHECK(output.scheme == "");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "/");
@@ -473,42 +473,42 @@ TEST_CASE("ParsedPath parses and correctly structures fields", "[file_system]") 
 	}
 
 	SECTION("file schemes") {
-		output = ParsedPath::FromString("file:/a/b");
+		output = Path::FromString("file:/a/b");
 		CHECK(output.scheme == "file:");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "/");
 		CHECK(output.is_absolute == true);
 		CHECK(output.path == "a/b");
 
-		output = ParsedPath::FromString("file://localhost/a/b");
+		output = Path::FromString("file://localhost/a/b");
 		CHECK(output.scheme == "file://");
 		CHECK(output.authority == "localhost");
 		CHECK(output.anchor == "/");
 		CHECK(output.is_absolute == true);
 		CHECK(output.path == "a/b");
 
-		output = ParsedPath::FromString("file:///a/b");
+		output = Path::FromString("file:///a/b");
 		CHECK(output.scheme == "file://");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "/");
 		CHECK(output.is_absolute == true);
 		CHECK(output.path == "a/b");
 
-		output = ParsedPath::FromString("file://LOCALHOST/a/b");
+		output = Path::FromString("file://LOCALHOST/a/b");
 		CHECK(output.scheme == "file://");
 		CHECK(output.authority == "LOCALHOST");
 		CHECK(output.anchor == "/");
 		CHECK(output.path == "a/b");
 
 #if defined(_WIN32)
-		output = ParsedPath::FromString(R"(c:..\foo)");
+		output = Path::FromString(R"(c:..\foo)");
 		CHECK(output.scheme == "");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "C:");
 		CHECK(output.is_absolute == false);
 		CHECK(output.path == R"(..\foo)");
 
-		output = ParsedPath::FromString(R"(c:\..\foo)");
+		output = Path::FromString(R"(c:\..\foo)");
 		CHECK(output.scheme == "");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == R"(C:\)");
@@ -518,7 +518,7 @@ TEST_CASE("ParsedPath parses and correctly structures fields", "[file_system]") 
 	}
 
 	SECTION("URI schemes") {
-		output = ParsedPath::FromString("az://container/b/c");
+		output = Path::FromString("az://container/b/c");
 		CHECK(output.scheme == "az://");
 		CHECK(output.authority == "container");
 		CHECK(output.anchor == "/");
@@ -528,20 +528,20 @@ TEST_CASE("ParsedPath parses and correctly structures fields", "[file_system]") 
 
 #if defined(_WIN32)
 	SECTION("UNC schemes") {
-		output = ParsedPath::FromString(R"(\\foo\bar)");
+		output = Path::FromString(R"(\\foo\bar)");
 		CHECK(output.scheme == R"(\\)");
 		CHECK(output.authority == R"(foo\bar)");
 		CHECK(output.anchor == R"(\)");
 		CHECK(output.path.empty());
 
-		CHECK_THROWS(ParsedPath::FromString(R"(\\\\ab)"));
-		CHECK_THROWS(ParsedPath::FromString(R"(\\foo\)"));
-		CHECK_THROWS(ParsedPath::FromString(R"(\\foo\\)"));
+		CHECK_THROWS(Path::FromString(R"(\\\\ab)"));
+		CHECK_THROWS(Path::FromString(R"(\\foo\)"));
+		CHECK_THROWS(Path::FromString(R"(\\foo\\)"));
 	}
 #endif
 }
 
-TEST_CASE("ParsedPath::FromString/ToString round-trips", "[file_system]") {
+TEST_CASE("Path::FromString/ToString round-trips", "[file_system]") {
 	using std::make_tuple;
 
 	enum ResultType { ERR = false, OK_ = true };
@@ -633,13 +633,13 @@ TEST_CASE("ParsedPath::FromString/ToString round-trips", "[file_system]") {
 
 	CAPTURE(input);
 	if (return_exp == OK_) {
-		CHECK(L(ParsedPath::FromString(input).ToString()) == L(output_exp));
+		CHECK(L(Path::FromString(input).ToString()) == L(output_exp));
 	} else {
-		CHECK_THROWS(ParsedPath::FromString(input).ToString());
+		CHECK_THROWS(Path::FromString(input).ToString());
 	}
 }
 
-TEST_CASE("ParsedPath::JoinPath table-based tests", "[file_system]") {
+TEST_CASE("Path::JoinPath table-based tests", "[file_system]") {
 	using std::make_tuple;
 
 	enum ResultType { ERR = false, OK_ = true };
@@ -658,8 +658,8 @@ TEST_CASE("ParsedPath::JoinPath table-based tests", "[file_system]") {
 	};
 
 	auto do_join = [](const string &a, const string &b) {
-		auto lhs_p = ParsedPath::FromString(a);
-		auto rhs_p = ParsedPath::FromString(b);
+		auto lhs_p = Path::FromString(a);
+		auto rhs_p = Path::FromString(b);
 		lhs_p.Join(rhs_p);
 		return lhs_p.ToString();
 	};

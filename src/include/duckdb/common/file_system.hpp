@@ -156,7 +156,7 @@ public:
 //   "\\?\UNC\server\share" (win)  "\\?\UNC\"    "server\share" "\"      ""            true
 //   "\\?\C:\foo" (win)            "\\?"         ""             "C:\"    "foo"         true
 //
-struct ParsedPath {
+struct Path {
 	string scheme;    // e.g. "s3://", "file://", "" — normalized lowercase
 	string authority; // e.g. "bucket", "localhost", ""
 	string anchor;    // e.g. "/", "C:/", "C:\\", "\\"
@@ -164,9 +164,9 @@ struct ParsedPath {
 	char separator = '/';
 	bool is_absolute = false;
 
-	static ParsedPath FromString(const string &raw);
+	static Path FromString(const string &raw);
 	string ToString() const;
-	void Join(const ParsedPath &rhs);
+	void Join(const Path &rhs);
 
 	bool HasScheme() const {
 		return !scheme.empty();

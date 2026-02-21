@@ -1491,20 +1491,20 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 		return vector<OpenFileInfo>();
 	}
 	// split up the path into separate chunks
-	const auto parsed_path = ParsedPath::FromString(path);
-	vector<string> splits = parsed_path.GetPathSegments();
-	if (parsed_path.is_absolute) {
-		if (parsed_path.HasScheme()) {
-			splits.insert(splits.begin(), parsed_path.scheme + parsed_path.authority + parsed_path.anchor);
-		} else if (parsed_path.HasDrive()) {
-			splits.insert(splits.begin(), parsed_path.anchor);
+	const auto parsed = Path::FromString(path);
+	vector<string> splits = parsed.GetPathSegments();
+	if (parsed.is_absolute) {
+		if (parsed.HasScheme()) {
+			splits.insert(splits.begin(), parsed.scheme + parsed.authority + parsed.anchor);
+		} else if (parsed.HasDrive()) {
+			splits.insert(splits.begin(), parsed.anchor);
 		} else {
 			splits.insert(splits.begin(), "/");
 		}
 	}
 
 	// handle absolute paths
-	bool absolute_path = parsed_path.is_absolute;
+	bool absolute_path = parsed.is_absolute;
 	if (IsPathAbsolute(path)) {
 		// first character is a slash -  unix absolute path
 		absolute_path = true;
@@ -1549,7 +1549,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 	}
 
 	idx_t start_index;
-	if (parsed_path.HasScheme()) {
+	if (parsed.HasScheme()) {
 		start_index = 1;
 	} else if (absolute_path) {
 		start_index = 1;

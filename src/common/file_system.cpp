@@ -307,7 +307,7 @@ static inline bool IsPathSeparator(char c) {
 // - All URI paths are absolute, and URIs of the form proto://authority will be assigned path="/"
 // - Not full URI parsing, only for URI paths (e.g., no query, fragment, etc.)
 //
-static void ParseURIScheme(const string &input, struct ParsedPath &parsed) {
+static void ParseURIScheme(const string &input, struct Path &parsed) {
 	parsed.is_absolute = true;
 
 	const size_t auth_begin = input.find("://") + 3;
@@ -323,7 +323,7 @@ static void ParseURIScheme(const string &input, struct ParsedPath &parsed) {
 	}
 }
 
-static void ParseFilePathTail(const string &input, struct ParsedPath &parsed) {
+static void ParseFilePathTail(const string &input, struct Path &parsed) {
 	size_t pos = 0;
 
 #if defined(_WIN32)
@@ -349,7 +349,7 @@ static void ParseFilePathTail(const string &input, struct ParsedPath &parsed) {
 // - anchor = \
 // - path = < the rest >
 //
-static void ParseUNCScheme(const string &input, struct ParsedPath &parsed) {
+static void ParseUNCScheme(const string &input, struct Path &parsed) {
 	D_ASSERT(input.size() >= 4 && input[0] == '\\' && input[1] == '\\');
 
 	static const char extended_prefix[] = R"(\\?\)";
@@ -371,7 +371,7 @@ static void ParseUNCScheme(const string &input, struct ParsedPath &parsed) {
 	auto pos = input.find_first_of("/\\", share_begin);
 	const auto share_len = (pos == string::npos ? input.size() : pos) - share_begin;
 	if (share_begin - server_begin <= 1 || share_len == 0) {
-		throw InvalidInputException(R"(FileSystem: UNC scheme missing `server\share`)");
+		throw InvalidInputException("Path: UNC path missing server\\share: %s", input);
 	}
 
 	parsed.scheme = extended_unc ? extended_unc_prefix : R"(\\)";
@@ -400,7 +400,7 @@ static void ParseUNCScheme(const string &input, struct ParsedPath &parsed) {
 //
 // Additionally, the file: protocol currently does not support remote (non-localhost) hosts.
 //
-static void ParseFileSchemes(const string &input, struct ParsedPath &parsed) {
+static void ParseFileSchemes(const string &input, struct Path &parsed) {
 	parsed.is_absolute = true;
 
 	size_t input_len = input.size();
@@ -414,8 +414,8 @@ static void ParseFileSchemes(const string &input, struct ParsedPath &parsed) {
 	} else if (/* file:// */ input_len >= 7 && input[6] == '/') {
 		ParseURIScheme(input, parsed);
 		if (StringUtil::Lower(parsed.authority) != "localhost") {
-			throw InvalidInputException("FileSystem: file://authority/path scheme "
-			                            "only supported with authority=localhost");
+			throw InvalidInputException("Path: file:// scheme only supports localhost authority, got: %s",
+			                            parsed.authority);
 		}
 		path_begin = parsed.scheme.size() + parsed.authority.size() + parsed.anchor.size();
 	} else /* file:/ */ {
@@ -452,12 +452,12 @@ static void SegmentAndNormalizePath(const string &path, vector<string> &segments
 	MaybeAppendSegment(segments, prev_pos, path.end());
 }
 
-string ParsedPath::ToString() const {
+string Path::ToString() const {
 	return scheme + authority + anchor + path;
 }
 
-ParsedPath ParsedPath::FromString(const string &raw) {
-	ParsedPath parsed;
+Path Path::FromString(const string &raw) {
+	Path parsed;
 	const auto first_slash_pos = raw.find_first_of(R"(/\)");
 	const auto scheme_pos = raw.find("://");
 	const auto drive_leads = (false
@@ -487,11 +487,11 @@ ParsedPath ParsedPath::FromString(const string &raw) {
 	return parsed;
 }
 
-bool ParsedPath::HasDrive() const {
+bool Path::HasDrive() const {
 	return GetDriveChar() != 0;
 }
 
-char ParsedPath::GetDriveChar() const {
+char Path::GetDriveChar() const {
 	const auto size = anchor.size();
 	D_ASSERT(size <= 4);
 	if (size == 2) {
@@ -504,13 +504,13 @@ char ParsedPath::GetDriveChar() const {
 	return 0;
 }
 
-vector<string> ParsedPath::GetPathSegments() const {
+vector<string> Path::GetPathSegments() const {
 	vector<string> segments;
 	SegmentAndNormalizePath(path, segments);
 	return segments;
 }
 
-void ParsedPath::NormalizeSegments() {
+void Path::NormalizeSegments() {
 	// normalize URI schemes to lowercase; UNC prefixes (\\, \\?, \\?\UNC\) are not URI schemes
 	if (!scheme.empty() && !IsPathSeparator(scheme[0])) {
 		scheme = StringUtil::Lower(scheme);
@@ -550,7 +550,7 @@ void ParsedPath::NormalizeSegments() {
 	}
 }
 
-void ParsedPath::Join(const ParsedPath &rhs) {
+void Path::Join(const Path &rhs) {
 	auto &lhs = *this;
 #if defined(_WIN32)
 	const bool win_local = (lhs.separator == '\\') || lhs.HasDrive();
@@ -571,13 +571,14 @@ void ParsedPath::Join(const ParsedPath &rhs) {
 			lhs.path = rhs.path;
 		}
 	} else {
-		throw InvalidInputException("FileSystem: absolute RHS \"%s\" is not compatible with LHS", rhs.ToString());
+		throw InvalidInputException("Path: cannot join incompatible paths: \"%s\" onto \"%s\"", rhs.ToString(),
+		                            lhs.ToString());
 	}
 }
 
 string FileSystem::JoinPath(const string &a, const string &b) {
-	auto lhs = ParsedPath::FromString(a);
-	auto rhs = ParsedPath::FromString(b);
+	auto lhs = Path::FromString(a);
+	auto rhs = Path::FromString(b);
 	lhs.Join(rhs);
 	return lhs.ToString();
 }
