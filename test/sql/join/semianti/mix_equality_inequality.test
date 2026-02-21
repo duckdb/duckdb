@@ -47,3 +47,43 @@ FROM
     AND cte1.col2 > cte2.col2;
 ----
 col1	2025-01-01 00:00:41+00
+
+query II
+WITH cte1 AS MATERIALIZED (
+    SELECT
+        'col1' AS col1,
+        UNNEST([11, 41]) AS col2
+),
+cte2 AS (
+    SELECT
+        'col1' AS col1,
+        40 AS col2,
+        'col3' AS col3
+)
+SELECT *
+FROM cte1
+ANTI JOIN cte2
+    ON cte1.col1 = cte2.col1
+   AND cte2.col2 - cte1.col2 < 0;
+----
+col1	11
+
+query II
+WITH cte1 AS MATERIALIZED (
+    SELECT
+        'col1' AS col1,
+        UNNEST([11, 41]) AS col2
+),
+cte2 AS (
+    SELECT
+        'col1' AS col1,
+        40 AS col2,
+        'col3' AS col3
+)
+SELECT *
+FROM cte1
+SEMI JOIN cte2
+    ON cte1.col1 = cte2.col1
+   AND cte2.col2 - cte1.col2 < 0;
+----
+col1	41
