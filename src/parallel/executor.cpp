@@ -464,7 +464,7 @@ void Executor::WaitForTask() {
 #ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::microseconds WAIT_TIME_MS = std::chrono::microseconds(WAIT_TIME * 1000);
 	auto begin = std::chrono::high_resolution_clock::now();
-	std::unique_lock<mutex> l(executor_lock);
+	unique_lock<mutex> l(executor_lock);
 	auto end = std::chrono::high_resolution_clock::now();
 	auto dur = end - begin;
 	auto ms = NumericCast<idx_t>(std::chrono::duration_cast<std::chrono::microseconds>(dur).count());

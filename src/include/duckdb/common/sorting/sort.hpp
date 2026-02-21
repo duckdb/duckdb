@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/execution/progress_data.hpp"
 #include "duckdb/common/sorting/sort_projection_column.hpp"
@@ -77,7 +78,8 @@ public:
 	//===--------------------------------------------------------------------===//
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
-	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk,
+	                    OperatorSinkInput &input) const DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	SinkFinalizeType Finalize(ClientContext &context, OperatorSinkFinalizeInput &input) const;
 	ProgressData GetSinkProgress(ClientContext &context, GlobalSinkState &gstate,

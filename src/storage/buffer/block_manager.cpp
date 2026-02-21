@@ -15,7 +15,7 @@ BlockManager::BlockManager(BufferManager &buffer_manager, const optional_idx blo
 }
 
 bool BlockManager::BlockIsRegistered(block_id_t block_id) {
-	lock_guard<mutex> lock(blocks_lock);
+	const lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {

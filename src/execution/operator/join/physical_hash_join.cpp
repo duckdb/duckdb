@@ -514,7 +514,7 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
 
 	lstate.hash_table->GetSinkCollection().FlushAppendState(lstate.append_state);
-	auto guard = gstate.Lock();
+	const lock_guard<mutex> guard {gstate.lock};
 	gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
 	if (gstate.local_hash_tables.size() == gstate.active_local_states) {
 		// Set to 0 until PrepareFinalize
@@ -756,7 +756,7 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 }
 
 void HashJoinGlobalSinkState::InitializeProbeSpill() {
-	auto guard = Lock();
+	const lock_guard<mutex> guard {lock};
 	if (!probe_spill) {
 		probe_spill = make_uniq<JoinHashTable::ProbeSpill>(*hash_table, context, probe_types);
 	}
@@ -1391,7 +1391,7 @@ HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op,
 }
 
 void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
-	auto guard = Lock();
+	const lock_guard<mutex> guard {lock};
 	if (global_stage != HashJoinSourceStage::INIT) {
 		// Another thread initialized
 		return;
@@ -1514,7 +1514,7 @@ void HashJoinGlobalSourceState::PrepareScanHT(HashJoinGlobalSinkState &sink) {
 bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJoinLocalSourceState &lstate) {
 	D_ASSERT(lstate.TaskFinished());
 
-	auto guard = Lock();
+	const lock_guard<mutex> guard {lock};
 	switch (global_stage.load()) {
 	case HashJoinSourceStage::BUILD:
 		if (build_chunk_idx != build_chunk_count) {
@@ -1607,7 +1607,7 @@ void HashJoinLocalSourceState::ExternalBuild(HashJoinGlobalSinkState &sink, Hash
 	auto &ht = *sink.hash_table;
 	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true);
 
-	auto guard = gstate.Lock();
+	const lock_guard<mutex> guard {gstate.lock};
 	gstate.build_chunk_done += build_chunk_idx_to - build_chunk_idx_from;
 }
 
@@ -1627,7 +1627,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 		scan_structure.is_null = true;
 		empty_ht_probe_in_progress = false;
 		sink.probe_spill->consumer->FinishChunk(probe_local_scan);
-		auto guard = gstate.Lock();
+		const lock_guard<mutex> guard {gstate.lock};
 		gstate.probe_chunk_done++;
 		return;
 	}
@@ -1669,7 +1669,7 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 
 	if (chunk.size() == 0) {
 		full_outer_scan_state = nullptr;
-		auto guard = gstate.Lock();
+		const lock_guard<mutex> guard {gstate.lock};
 		gstate.full_outer_chunk_done += full_outer_chunk_idx_to - full_outer_chunk_idx_from;
 	}
 }
@@ -1682,7 +1682,7 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 	sink.scanned_data = true;
 
 	if (!sink.external && !PropagatesBuildSide(join_type)) {
-		auto guard = gstate.Lock();
+		const lock_guard<mutex> guard {gstate.lock};
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
 			sink.hash_table->Reset();
@@ -1701,11 +1701,11 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 		if (!lstate.TaskFinished() || gstate.AssignTask(sink, lstate)) {
 			lstate.ExecuteTask(sink, gstate, chunk);
 		} else {
-			auto guard = gstate.Lock();
+			const lock_guard<mutex> guard {gstate.lock};
 			if (gstate.TryPrepareNextStage(sink) || gstate.global_stage == HashJoinSourceStage::DONE) {
-				gstate.UnblockTasks(guard);
+				gstate.UnblockTasks();
 			} else {
-				return gstate.BlockSource(guard, input.interrupt_state);
+				return gstate.BlockSource(input.interrupt_state);
 			}
 		}
 	}

@@ -1452,7 +1452,7 @@ bool AsOfLocalSourceState::TryAssignTask() {
 }
 
 bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	auto guard = Lock();
+	const lock_guard<mutex> guard {lock};
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1464,7 +1464,7 @@ bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	for (const auto &group_idx : active_groups) {
 		auto &asof_group = asof_groups[group_idx];
 		if (asof_group->TryPrepareNextStage()) {
-			UnblockTasks(guard);
+			UnblockTasks();
 		}
 		if (asof_group->TryNextTask(task_local)) {
 			task = task_local;
@@ -1480,7 +1480,7 @@ bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 
 		auto &asof_group = asof_groups[group_idx];
 		if (asof_group->TryPrepareNextStage()) {
-			UnblockTasks(guard);
+			UnblockTasks();
 		}
 		if (!asof_group->TryNextTask(task_local)) {
 			//	Group has no tasks (empty?)
@@ -1592,13 +1592,13 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 				throw;
 			}
 		} else {
-			auto guard = gsource.Lock();
+			const lock_guard<mutex> guard {gsource.lock};
 			if (!gsource.HasMoreTasks()) {
-				gsource.UnblockTasks(guard);
+				gsource.UnblockTasks();
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source
-				return gsource.BlockSource(guard, input.interrupt_state);
+				return gsource.BlockSource(input.interrupt_state);
 			}
 		}
 	}

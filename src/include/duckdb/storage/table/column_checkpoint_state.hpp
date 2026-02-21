@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -46,7 +47,8 @@ public:
 
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
-	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);
+	virtual void FlushSegmentInternal(unique_ptr<ColumnSegment> segment,
+	                                  idx_t segment_size) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size);
 	virtual PersistentColumnData ToPersistentData();
 

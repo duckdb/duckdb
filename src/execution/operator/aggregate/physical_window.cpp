@@ -881,7 +881,7 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	auto guard = Lock();
+	unique_lock<mutex> guard {lock};
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -893,7 +893,7 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	for (const auto &group_idx : active_groups) {
 		auto &window_hash_group = window_hash_groups[group_idx];
 		if (window_hash_group->TryPrepareNextStage()) {
-			UnblockTasks(guard);
+			UnblockTasks();
 		}
 		if (window_hash_group->TryNextTask(task_local)) {
 			task = task_local;
@@ -909,7 +909,7 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 
 		auto &window_hash_group = window_hash_groups[group_idx];
 		if (window_hash_group->TryPrepareNextStage()) {
-			UnblockTasks(guard);
+			UnblockTasks();
 		}
 		if (!window_hash_group->TryNextTask(task_local)) {
 			//	Group has no tasks (empty?)
@@ -1120,15 +1120,15 @@ SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, Data
 				throw;
 			}
 		} else {
-			auto guard = gsource.Lock();
+			const lock_guard<mutex> guard {gsource.lock};
 			if (!gsource.HasMoreTasks()) {
 				// no more tasks - exit
-				gsource.UnblockTasks(guard);
+				gsource.UnblockTasks();
 				break;
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source
-				return gsource.BlockSource(guard, source.interrupt_state);
+				return gsource.BlockSource(source.interrupt_state);
 			}
 		}
 	}
