@@ -1491,12 +1491,13 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 		return vector<OpenFileInfo>();
 	}
 	// split up the path into separate chunks
-	const auto parsed_path = ParsedPath(path);
-	const auto local_path = parsed_path.path;
-	vector<string> splits = parsed_path.GetSegments();
+	const auto parsed_path = ParsedPath::FromString(path);
+	vector<string> splits = parsed_path.GetPathSegments();
 	if (parsed_path.is_absolute) {
-		if (parsed_path.has_drive) {
-			splits.insert(splits.begin(), local_path.substr(0, 3));
+		if (parsed_path.HasScheme()) {
+			splits.insert(splits.begin(), parsed_path.scheme + parsed_path.authority + parsed_path.anchor);
+		} else if (parsed_path.HasDrive()) {
+			splits.insert(splits.begin(), parsed_path.anchor);
 		} else {
 			splits.insert(splits.begin(), "/");
 		}
@@ -1548,7 +1549,7 @@ vector<OpenFileInfo> LocalFileSystem::Glob(const string &path, FileOpener *opene
 	}
 
 	idx_t start_index;
-	if (parsed_path.has_scheme) {
+	if (parsed_path.HasScheme()) {
 		start_index = 1;
 	} else if (absolute_path) {
 		start_index = 1;

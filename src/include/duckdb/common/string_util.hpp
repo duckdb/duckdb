@@ -225,6 +225,9 @@ public:
 	//! Case insensitive equals (null-terminated strings)
 	DUCKDB_API static bool CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size);
 
+	//! Case insensitive starts-with
+	DUCKDB_API static bool CIStartsWith(const string &str, const string &prefix);
+
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 

@@ -297,29 +297,95 @@ string FileSystem::GetWorkingDirectory() {
 
 #endif
 
-// Parse path (only) proto://authority/path/to/file.txt
-// All URI paths are absoluate, and URIs of the form proto://authority will be assigned path="/"
-// NOTE: not full URI parsing, only for URI paths (e.g., no query, fragment, etc.)
-static void ParseUriScheme(const string &input, struct ParsedPath &parsed) {
-	// these are constant for URI paths
-	parsed.has_scheme = true;
-	parsed.has_authority = true;
-	parsed.is_absolute = true;
-
-	const size_t auth_offset = input.find("://") + 3;
-	D_ASSERT(auth_offset >= 4); // non-empty protocol
-	// D_ASSERT(input.find("/") == auth_offset + 1); // no early slashes
-	parsed.scheme = input.substr(0, auth_offset);
-
-	const size_t path_offset = input.find("/", auth_offset);
-	D_ASSERT(path_offset > auth_offset); // non-empty path
-	parsed.authority = input.substr(auth_offset, (path_offset - auth_offset));
-	parsed.path = path_offset == input.size() ? "/" : input.substr(path_offset);
+// Handle both forward & backward slashes in 1 func, hiding the _WIN32 #def
+static inline bool IsPathSeparator(char c) {
+	return (c == '/' || c == '\\');
 }
 
 //
-// Parse and normalize file:/{1,3} schemes. See https://en.wikipedia.org/wiki/File_URI_scheme and our docs below:
-// Output is normalized to the file:///path/file form.
+// Parse path (only) proto://authority/path/to/file.txt
+// - All URI paths are absolute, and URIs of the form proto://authority will be assigned path="/"
+// - Not full URI parsing, only for URI paths (e.g., no query, fragment, etc.)
+//
+static void ParseURIScheme(const string &input, struct ParsedPath &parsed) {
+	parsed.is_absolute = true;
+
+	const size_t auth_begin = input.find("://") + 3;
+	D_ASSERT(auth_begin >= 4); // non-empty protocol
+	parsed.scheme = input.substr(0, auth_begin);
+
+	const size_t path_begin = input.find('/', auth_begin);
+	D_ASSERT(path_begin == string::npos || path_begin > auth_begin);
+	parsed.authority = input.substr(auth_begin, (path_begin - auth_begin));
+	parsed.anchor = '/';
+	if (path_begin != string::npos) {
+		parsed.path = input.substr(path_begin + 1);
+	}
+}
+
+static void ParseFilePathTail(const string &input, struct ParsedPath &parsed) {
+	size_t pos = 0;
+
+#if defined(_WIN32)
+	if (input.size() >= 2 && input[1] == ':' && StringUtil::CharacterIsAlpha(input[0])) {
+		parsed.anchor.append(1, input[0]);
+		parsed.anchor.append(1, ':');
+		pos = 2;
+	}
+#endif
+
+	if (input.size() > pos && IsPathSeparator(input[pos])) {
+		parsed.anchor.append(1, parsed.separator);
+		parsed.is_absolute = true;
+		pos += 1;
+	}
+	parsed.path = input.substr(pos);
+}
+
+//
+// UNC Scheme as we handle it:
+// - scheme = \\
+// - authority = server\share
+// - anchor = \
+// - path = < the rest >
+//
+static void ParseUNCScheme(const string &input, struct ParsedPath &parsed) {
+	D_ASSERT(input.size() >= 4 && input[0] == '\\' && input[1] == '\\');
+
+	static const char extended_prefix[] = R"(\\?\)";
+	static const char extended_unc_prefix[] = R"(\\?\UNC\)";
+	const bool extended = StringUtil::StartsWith(input, extended_prefix);
+	const bool extended_unc = extended && StringUtil::StartsWith(input, extended_unc_prefix);
+
+	parsed.separator = '\\';
+
+	if (extended && !extended_unc) {
+		parsed.anchor = '\\';
+		ParseFilePathTail(input.substr(4), parsed);
+		parsed.scheme = R"(\\?)";
+		return;
+	}
+
+	const auto server_begin = extended_unc ? sizeof(extended_unc_prefix) - 1 : 2;
+	const auto share_begin = input.find_first_of('\\', server_begin) + 1;
+	auto pos = input.find_first_of("/\\", share_begin);
+	const auto share_len = (pos == string::npos ? input.size() : pos) - share_begin;
+	if (share_begin - server_begin <= 1 || share_len == 0) {
+		throw InvalidInputException(R"(FileSystem: UNC scheme missing `server\share`)");
+	}
+
+	parsed.scheme = extended_unc ? extended_unc_prefix : R"(\\)";
+	parsed.authority = input.substr(server_begin, share_begin + share_len + -server_begin);
+	parsed.anchor = '\\';
+	if (pos != string::npos && (pos + 1) < input.size()) {
+		parsed.path = input.substr(pos + 1);
+	}
+	parsed.is_absolute = true;
+}
+
+//
+// Parse and normalize file:/{1,3} schemes. See
+// https://en.wikipedia.org/wiki/File_URI_scheme and our docs below.
 //
 // DuckDB supports using the file: protocol. It currently supports the following formats:
 //
@@ -335,351 +401,185 @@ static void ParseUriScheme(const string &input, struct ParsedPath &parsed) {
 // Additionally, the file: protocol currently does not support remote (non-localhost) hosts.
 //
 static void ParseFileSchemes(const string &input, struct ParsedPath &parsed) {
-	// these are constant for file schemes
-	parsed.scheme = "file://";
-	parsed.has_scheme = true;
-	parsed.has_authority = false;
 	parsed.is_absolute = true;
 
-	// must have min `file:/` to get here
 	size_t input_len = input.size();
+	size_t path_begin = string::npos;
 	D_ASSERT(input_len >= 6 && StringUtil::StartsWith(input, "file:/"));
 
 	if (/* file:/// */ input_len >= 8 && input[6] == '/' && input[7] == '/') {
-		parsed.path = input.substr(7);
+		parsed.scheme = "file://";
+		parsed.anchor = "/";
+		path_begin = 8;
 	} else if (/* file:// */ input_len >= 7 && input[6] == '/') {
-		// parse as normal URI, check authority after
-		ParseUriScheme(input, parsed);
+		ParseURIScheme(input, parsed);
 		if (StringUtil::Lower(parsed.authority) != "localhost") {
-			throw InvalidInputException(
-			    "FileSystem: file://authority/path scheme only supported with authority=localhost");
+			throw InvalidInputException("FileSystem: file://authority/path scheme "
+			                            "only supported with authority=localhost");
 		}
-		parsed.authority = "";
-		parsed.has_authority = false;
-	} else /* file:/ -- input_len >= 6 -- already required to get here */ {
-		parsed.path = input.substr(5);
+		path_begin = parsed.scheme.size() + parsed.authority.size() + parsed.anchor.size();
+	} else /* file:/ */ {
+		parsed.scheme = "file:";
+		parsed.anchor = "/";
+		path_begin = 6;
 	}
+	ParseFilePathTail(input.substr(path_begin), parsed);
 
-	// XXX: drive check
-	// bool drive_root_path = path.size() >= drive_root_offset + 3 &&
-	//                        StringUtil::CharacterIsAlpha(path[drive_root_offset]) &&
-	//                        path[drive_root_offset + 1] == ':' &&
-	//                        (path[drive_root_offset + 2] == '\\' || path[drive_root_offset + 2] == '/');
-	D_ASSERT(!parsed.path.empty() && parsed.path[0] == '/');
+	D_ASSERT(parsed.scheme == "file:" || parsed.scheme == "file://");
+	D_ASSERT(parsed.scheme == "file://" || !parsed.HasAuthority());
 }
 
-ParsedPath::ParsedPath(const string &raw) {
-	if (raw.empty()) {
+static void MaybeAppendSegment(vector<string> &segments, string::const_iterator begin, string::const_iterator end) {
+	if (end == begin || (end == begin + 1 && *begin == '.')) {
 		return;
 	}
+	const string segment(begin, end);
+	if (segment == ".." && !segments.empty() && segments.back() != "..") {
+		segments.pop_back();
+	} else {
+		segments.push_back(segment);
+	}
+}
+
+static void SegmentAndNormalizePath(const string &path, vector<string> &segments) {
+	auto prev_pos = path.begin();
+	for (auto pos = prev_pos; pos != path.end(); pos++) {
+		if (IsPathSeparator(*pos)) {
+			MaybeAppendSegment(segments, prev_pos, pos);
+			prev_pos = pos + 1;
+		}
+	}
+	MaybeAppendSegment(segments, prev_pos, path.end());
+}
+
+string ParsedPath::ToString() const {
+	return scheme + authority + anchor + path;
+}
+
+ParsedPath ParsedPath::FromString(const string &raw) {
+	ParsedPath parsed;
+	const auto first_slash_pos = raw.find_first_of(R"(/\)");
+	const auto scheme_pos = raw.find("://");
+	const auto drive_leads = (false
+#if defined(_WIN32)
+	                          || (first_slash_pos == 1 && StringUtil::CharacterIsAlpha(raw[0]))
+#endif
+	);
+	parsed.separator = first_slash_pos == string::npos ? '/' : raw[first_slash_pos];
+
 	if (StringUtil::StartsWith(raw, "file:/")) {
-		ParseFileSchemes(raw, *this);
-		return;
+		ParseFileSchemes(raw, parsed);
 	}
-	path = raw;
-}
-
-static void AppendPathSegments(vector<string> &segments, const string &path) {
-	idx_t last_pos = 0;
-	for (idx_t pos = 0; pos < path.size(); pos++) {
-		if (path[pos] == '/') {
-			// FIXME: remove this, already normalized
-			if (pos == last_pos) {
-				// empty: skip this position
-				last_pos = pos + 1;
-				continue;
-			}
-			segments.push_back(path.substr(last_pos, pos - last_pos));
-			last_pos = pos + 1;
-		}
-	}
-	segments.push_back(path.substr(last_pos, path.size() - last_pos));
-}
-
-vector<string> ParsedPath::GetSegments() const {
-	vector<string> rv;
-	AppendPathSegments(rv, path);
-	return rv;
-}
-
-ParsedPath ParsePathWithScheme(const string &input) {
-	ParsedPath result;
-	result.path = input;
-	if (input.empty()) {
-		return result;
-	}
-	if (StringUtil::StartsWith(input, "file:/")) {
-		ParseFileSchemes(input, result);
-		return result;
-	}
-#if 0
-	// XXX: killme after finding DuckDB docs
-	if (StringUtil::StartsWith(input, "file:")) {
-		result.scheme = "file:";
-		result.path = input.substr(5);
-		result.has_scheme = true;
-		return result;
+#if defined(_WIN32)
+	else if (raw.size() >= 5 && StringUtil::StartsWith(raw, R"(\\)") && raw.find_first_of('\\', 3) != string::npos) {
+		ParseUNCScheme(raw, parsed);
 	}
 #endif
-	auto scheme_pos = input.find("://");
-	if (scheme_pos == string::npos) {
-		return result;
+	else if (scheme_pos != string::npos && scheme_pos > 1 && scheme_pos < first_slash_pos && !drive_leads) {
+		ParseURIScheme(raw, parsed);
+	} else {
+		ParseFilePathTail(raw, parsed);
 	}
-	// avoid treating a Windows drive ("C:\") as a scheme
-	if (scheme_pos == 1 && StringUtil::CharacterIsAlpha(input[0])) {
-		return result;
-	}
-
-	// avoid exceptional case of foo/bar/scheme:// (which should normalize to foo/bar/scheme:)
-	if (input.find('/') < scheme_pos || input.find('\\') < scheme_pos) {
-		return result;
-	}
-
-	result.scheme = input.substr(0, scheme_pos + 3);
-	result.path = input.substr(scheme_pos + 3);
-	result.has_scheme = true;
-	return result;
+	parsed.NormalizeSegments();
+	D_ASSERT(parsed.HasScheme() || !parsed.HasAuthority());
+	D_ASSERT(parsed.anchor.size() <= 4);
+	D_ASSERT(parsed.anchor.size() + parsed.path.size() > 0);
+	return parsed;
 }
 
-string NormalizeSegments(const string &path, const string &separator, bool is_absolute) {
-	if (path.empty()) {
-		return path;
-	}
-	string prefix;
+bool ParsedPath::HasDrive() const {
+	return GetDriveChar() != 0;
+}
 
-#ifdef _WIN32
-	string working_path = path;
-	// Preserve UNC/long-path prefixes so we don't collapse leading separators
-	if (separator == "\\" || separator == "/") {
-		if (StringUtil::StartsWith(working_path, "\\\\?\\")) {
-			prefix = "\\\\?\\";
-			working_path = working_path.substr(4);
-			if (StringUtil::StartsWith(working_path, "UNC\\")) {
-				prefix += "UNC\\";
-				working_path = working_path.substr(4);
-			}
-		} else if (StringUtil::StartsWith(working_path, "\\\\")) {
-			prefix = "\\\\";
-			working_path = working_path.substr(2);
-		}
+char ParsedPath::GetDriveChar() const {
+	const auto size = anchor.size();
+	D_ASSERT(size <= 4);
+	if (size == 2) {
+		return anchor[0];
+	} else if (size == 3) {
+		return anchor[anchor[1] == ':' ? 0 : 1];
+	} else if (size == 4) {
+		return anchor[1];
 	}
+	return 0;
+}
+
+vector<string> ParsedPath::GetPathSegments() const {
+	vector<string> segments;
+	SegmentAndNormalizePath(path, segments);
+	return segments;
+}
+
+void ParsedPath::NormalizeSegments() {
+	// normalize URI schemes to lowercase; UNC prefixes (\\, \\?, \\?\UNC\) are not URI schemes
+	if (!scheme.empty() && !IsPathSeparator(scheme[0])) {
+		scheme = StringUtil::Lower(scheme);
+	}
+
+	if (HasAnchor()) {
+		string normal;
+		if (IsPathSeparator(anchor[0])) {
+			normal.append(1, separator);
+		}
+		auto drive_char = std::find_if_not(anchor.begin(), anchor.end(), IsPathSeparator);
+		if (drive_char != anchor.end()) {
+			normal.append(1, StringUtil::CharacterToUpper(*drive_char));
+			normal.append(1, ':');
+			if (IsPathSeparator(anchor.back())) {
+				normal.append(1, separator);
+			}
+		}
+		anchor = normal;
+	}
+
+	vector<string> segments;
+	SegmentAndNormalizePath(path, segments);
+
+	path.clear();
+	for (const auto &segment : segments) {
+		if (is_absolute && path.empty() && segment == "..") {
+			continue;
+		}
+		if (!path.empty()) {
+			path += this->separator;
+		}
+		path += segment;
+	}
+	if (scheme.empty() && anchor.empty() && path.empty()) {
+		path = '.';
+	}
+}
+
+void ParsedPath::Join(const ParsedPath &rhs) {
+	auto &lhs = *this;
+#if defined(_WIN32)
+	const bool win_local = (lhs.separator == '\\') || lhs.HasDrive();
+	const auto auth_is_eq =
+	    win_local ? StringUtil::CIEquals(lhs.authority, rhs.authority) : (lhs.authority == rhs.authority);
+	const auto path_is_prefix =
+	    win_local ? StringUtil::CIStartsWith(rhs.path, lhs.path) : StringUtil::StartsWith(rhs.path, lhs.path);
 #else
-	const string &working_path = path;
+	const auto auth_is_eq = (lhs.authority == rhs.authority);
+	const auto path_is_prefix = StringUtil::StartsWith(rhs.path, lhs.path);
 #endif
-
-	auto parts = StringUtil::Split(working_path, separator);
-
-	string drive_prefix;
-#ifdef _WIN32
-	// Extract drive designator on Windows (e.g., "C:") before normalization
-	if (!parts.empty()) {
-		auto colon_pos = parts[0].find(':');
-		if (colon_pos == 1 && StringUtil::CharacterIsAlpha(parts[0][0])) {
-			// Preserve drive designator on Windows (e.g., "C:")
-			drive_prefix = parts[0].substr(0, colon_pos + 1);
-			auto remainder = parts[0].substr(colon_pos + 1);
-			if (remainder.empty()) {
-				parts.erase(parts.begin());
-			} else {
-				parts[0] = remainder;
-			}
+	if (!rhs.is_absolute && !rhs.HasDrive()) {
+		lhs.path = lhs.path + lhs.separator + rhs.path;
+		lhs.NormalizeSegments();
+	} else if (auth_is_eq && path_is_prefix && lhs.scheme == rhs.scheme && lhs.anchor == rhs.anchor &&
+	           (lhs.path.empty() || lhs.path.size() == rhs.path.size() || IsPathSeparator(rhs.path[lhs.path.size()]))) {
+		if (lhs.path.size() < rhs.path.size()) {
+			lhs.path = rhs.path;
 		}
+	} else {
+		throw InvalidInputException("FileSystem: absolute RHS \"%s\" is not compatible with LHS", rhs.ToString());
 	}
-#endif
-
-	bool drive_root = !drive_prefix.empty() && working_path.size() > drive_prefix.size() &&
-	                  working_path[drive_prefix.size()] == separator[0];
-	bool clamp_to_root = is_absolute || drive_root || !prefix.empty();
-	vector<string> stack;
-	for (auto &part : parts) {
-		if (part.empty() || part == ".") {
-			continue;
-		}
-		if (part == "..") {
-			if (!stack.empty() && stack.back() != "..") {
-				stack.pop_back();
-			} else if (!clamp_to_root) {
-				stack.push_back(part);
-			}
-			continue;
-		}
-		stack.push_back(part);
-	}
-
-	string result = prefix;
-	if (!drive_prefix.empty()) {
-		if (result.empty()) {
-			result = drive_prefix;
-		} else if (result.back() != separator[0]) {
-			result += separator;
-			result += drive_prefix;
-		} else {
-			result += drive_prefix;
-		}
-	}
-	if (clamp_to_root) {
-		if (result.empty()) {
-			result = separator;
-		} else if (result.back() != separator[0]) {
-			result += separator;
-		}
-	}
-
-	for (idx_t i = 0; i < stack.size(); i++) {
-		bool need_separator = !result.empty() && result.back() != separator[0];
-		if (!clamp_to_root && !drive_root && !drive_prefix.empty() && result == drive_prefix) {
-			// drive-relative path keeps the drive prefix without an extra separator
-			need_separator = false;
-		}
-		if (need_separator) {
-			result += separator;
-		}
-		result += stack[i];
-	}
-
-	if (result.empty()) {
-		if (!drive_prefix.empty()) {
-			result = drive_prefix;
-			if (clamp_to_root) {
-				result += separator;
-			}
-			return result;
-		}
-		if (!prefix.empty()) {
-			return prefix;
-		}
-		if (clamp_to_root) {
-			return separator;
-		}
-		return ".";
-	}
-	return result;
 }
 
 string FileSystem::JoinPath(const string &a, const string &b) {
-	auto lhs_parsed = ParsePathWithScheme(a);
-	auto rhs_parsed = ParsePathWithScheme(b);
-	auto separator = (lhs_parsed.has_scheme || rhs_parsed.has_scheme) ? string("/") : PathSeparator(!a.empty() ? a : b);
-	auto separator_char = separator[0];
-
-	bool force_forward_slash = separator_char == '/' || lhs_parsed.has_scheme || rhs_parsed.has_scheme;
-	auto normalize_scheme_path = [&](const ParsedPath &parsed) {
-		if (parsed.has_scheme || force_forward_slash) {
-			// keep URI semantics (and file:) using forward slashes to allow dot-segment folding
-			return StringUtil::Replace(parsed.path, "\\", "/");
-		}
-		return ConvertSeparators(parsed.path);
-	};
-
-	auto lhs = normalize_scheme_path(lhs_parsed);
-	auto rhs = normalize_scheme_path(rhs_parsed);
-	bool lhs_is_file_scheme = lhs_parsed.scheme == "file://" || lhs_parsed.scheme == "file:";
-	bool rhs_is_file_scheme = rhs_parsed.scheme == "file://" || rhs_parsed.scheme == "file:";
-	auto lhs_scheme_absolute =
-	    lhs_parsed.has_scheme && (lhs_is_file_scheme || (!lhs.empty() && lhs[0] == separator_char));
-	auto rhs_scheme_absolute =
-	    rhs_parsed.has_scheme && (rhs_is_file_scheme || (!rhs.empty() && rhs[0] == separator_char));
-	auto lhs_normalize_absolute = lhs_parsed.has_scheme || (!lhs_parsed.has_scheme && IsPathAbsolute(lhs)) ||
-	                              lhs_scheme_absolute || lhs_is_file_scheme;
-	auto rhs_normalize_absolute = rhs_parsed.has_scheme || (!rhs_parsed.has_scheme && IsPathAbsolute(rhs)) ||
-	                              rhs_scheme_absolute || rhs_is_file_scheme;
-	auto lhs_absolute = lhs_parsed.has_scheme || lhs_normalize_absolute;
-	auto rhs_absolute = rhs_parsed.has_scheme || rhs_normalize_absolute;
-
-	auto lhs_is_naked_drive = false;
-#ifdef _WIN32
-	lhs_is_naked_drive = lhs.size() == 2 && lhs[1] == ':' && StringUtil::CharacterIsAlpha(lhs[0]);
-#endif
-
-	auto strip_leading = [](string &value, const string &chars) {
-		auto pos = value.find_first_not_of(chars);
-		if (pos == string::npos) {
-			value.clear();
-		} else if (pos > 0) {
-			value.erase(0, pos);
-		}
-	};
-
-	auto attach_scheme = [&](const ParsedPath &parsed, string normalized, bool scheme_absolute) {
-		if (!parsed.has_scheme) {
-			return normalized;
-		}
-		bool is_file_scheme = parsed.scheme == "file://" || parsed.scheme == "file:";
-		if (is_file_scheme) {
-			// ensure a single leading separator on the path portion
-			strip_leading(normalized, "/\\");
-			normalized = separator + normalized;
-			if (parsed.scheme == "file://") {
-				if (!parsed.authority.empty()) {
-					// file://host + /abs -> file://host/abs
-					return string("file://") + parsed.authority + normalized;
-				}
-				// file:// + /abs -> file:///abs
-				return string("file://") + normalized;
-			}
-			// file:/ + /abs -> file:/abs
-			return string("file:") + normalized;
-		}
-		if (!scheme_absolute) {
-			strip_leading(normalized, string(1, separator_char));
-		}
-		return parsed.scheme + normalized;
-	};
-
-	if (lhs_parsed.has_scheme && rhs_parsed.has_scheme && lhs_parsed.scheme != rhs_parsed.scheme) {
-		throw InvalidInputException("JoinPath: incompatible URI schemes \"%s\" and \"%s\"", lhs_parsed.scheme,
-		                            rhs_parsed.scheme);
-	}
-	if (lhs_parsed.has_scheme != rhs_parsed.has_scheme && rhs_parsed.has_scheme && lhs_absolute) {
-		throw InvalidInputException("JoinPath: cannot join absolute URI \"%s\" onto local path \"%s\"", b, a);
-	}
-
-	if (lhs.empty() && !lhs_parsed.has_scheme) {
-		auto normalized_rhs = NormalizeSegments(rhs, separator, rhs_normalize_absolute);
-		return attach_scheme(rhs_parsed, normalized_rhs, rhs_scheme_absolute);
-	}
-	if (rhs.empty()) {
-		auto normalized_lhs = NormalizeSegments(lhs, separator, lhs_normalize_absolute);
-		return attach_scheme(lhs_parsed, normalized_lhs, lhs_scheme_absolute);
-	}
-
-	if (rhs_absolute) {
-		if (lhs_parsed.has_scheme && !lhs_is_file_scheme && !rhs_parsed.has_scheme) {
-			throw InvalidInputException("JoinPath: absolute RHS \"%s\" is not compatible with LHS \"%s\"", b, a);
-		}
-		auto normalized_rhs = NormalizeSegments(rhs, separator, rhs_normalize_absolute);
-		auto normalized_lhs = NormalizeSegments(lhs, separator, lhs_normalize_absolute);
-		if (!normalized_lhs.empty()) {
-			bool prefix = false;
-			bool separator_ok = normalized_rhs.size() == normalized_lhs.size() ||
-			                    normalized_rhs[normalized_lhs.size()] == separator_char;
-#ifdef _WIN32
-			// Windows paths are case-insensitive, so compare prefixes in lower-case form
-			auto lhs_ci = StringUtil::Lower(normalized_lhs);
-			auto rhs_ci = StringUtil::Lower(normalized_rhs);
-			prefix = StringUtil::StartsWith(rhs_ci, lhs_ci);
-#else
-			prefix = StringUtil::StartsWith(normalized_rhs, normalized_lhs);
-#endif
-			if (!prefix || !separator_ok) {
-				throw InvalidInputException("JoinPath: absolute RHS \"%s\" is not compatible with LHS \"%s\"", b, a);
-			}
-		}
-		if (lhs_is_file_scheme && !rhs_parsed.has_scheme) {
-			return attach_scheme(lhs_parsed, normalized_rhs, true);
-		}
-		return attach_scheme(rhs_parsed, normalized_rhs, rhs_scheme_absolute);
-	}
-
-	while (lhs.size() > 1 && lhs.back() == separator_char) {
-		lhs.pop_back();
-	}
-	strip_leading(rhs, string(1, separator_char));
-
-	// Avoid introducing a second leading separator when lhs is already the root
-	auto combined = (lhs == separator || lhs_is_naked_drive) ? lhs + rhs : lhs + separator + rhs;
-	auto normalized = NormalizeSegments(combined, separator, lhs_normalize_absolute);
-	return attach_scheme(lhs_parsed, normalized, lhs_scheme_absolute);
+	auto lhs = ParsedPath::FromString(a);
+	auto rhs = ParsedPath::FromString(b);
+	lhs.Join(rhs);
+	return lhs.ToString();
 }
 
 string FileSystem::ConvertSeparators(const string &path) {

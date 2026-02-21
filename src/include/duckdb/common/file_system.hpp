@@ -133,20 +133,57 @@ public:
 	shared_ptr<Logger> logger;
 };
 
+// Parsed representation of a path string, covering posix, windows, URI, and UNC forms.
+//
+// FromString(raw) parses and normalizes the input; ToString() reconstructs it as
+// scheme + authority + anchor + path (simple concatenation).
+//
+// Supported input forms and their parsed fields:
+//
+//   Input                         scheme        authority      anchor   path          is_absolute
+//   ----------------------------  ------------  -----------    -------  ------------  -----------
+//   "a/b"                         ""            ""             ""       "a/b"         false
+//   ""  (empty)                   ""            ""             ""       "."           false
+//   "/"                           ""            ""             "/"      ""            true
+//   "/a/b"                        ""            ""             "/"      "a/b"         true
+//   "file:/a/b"                   "file:"       ""             "/"      "a/b"         true
+//   "file:///a/b"                 "file://"     ""             "/"      "a/b"         true
+//   "file://localhost/a/b"        "file://"     "localhost"    "/"      "a/b"         true
+//   "s3://bucket/bar/baz"         "s3://"       "bucket"       "/"      "bar/baz"     true
+//   "C:\foo" (win)                ""            ""             "C:\"    "foo"         true
+//   "C:relpath" (win)             ""            ""             "C:"     "relpath"     false
+//   "\\server\share\p" (win)      "\\"          "server\share" "\"      "p"           true
+//   "\\?\UNC\server\share" (win)  "\\?\UNC\"    "server\share" "\"      ""            true
+//   "\\?\C:\foo" (win)            "\\?"         ""             "C:\"    "foo"         true
+//
 struct ParsedPath {
-	string scheme;
-	string authority;
-	string path;
-	bool has_scheme = false;
-	bool has_authority = false;
-	bool has_drive = false; // win only: implies path ~= "c:/path/to/file.txt"
+	string scheme;    // e.g. "s3://", "file://", "" — normalized lowercase
+	string authority; // e.g. "bucket", "localhost", ""
+	string anchor;    // e.g. "/", "C:/", "C:\\", "\\"
+	string path;      // normalized segments, no leading separator
+	char separator = '/';
 	bool is_absolute = false;
 
-	ParsedPath() {
-	}
-	ParsedPath(const string &raw);
+	static ParsedPath FromString(const string &raw);
+	string ToString() const;
+	void Join(const ParsedPath &rhs);
 
-	vector<string> GetSegments() const;
+	bool HasScheme() const {
+		return !scheme.empty();
+	}
+	bool HasAuthority() const {
+		return !authority.empty();
+	}
+	bool HasAnchor() const {
+		return !anchor.empty();
+	}
+	bool HasDrive() const;
+	char GetDriveChar() const;
+
+	vector<string> GetPathSegments() const;
+
+private:
+	void NormalizeSegments();
 };
 
 class FileSystem {

@@ -54,12 +54,12 @@ s3://foo/bar/baz
 query I
 SELECT path_join('s3://foo', '..');
 ----
-s3://
+s3://foo/
 
 query I
 SELECT path_join('s3://foo', '../..');
 ----
-s3://
+s3://foo/
 
 statement error
 SELECT path_join('s3://foo', '/foo');
@@ -69,12 +69,12 @@ absolute RHS
 statement error
 SELECT path_join('/foo', 's3://foo');
 ----
-cannot join absolute URI
+absolute RHS
 
 statement error
 SELECT path_join('s3://foo', 'az://foo');
 ----
-incompatible URI schemes
+absolute RHS
 
 statement error
 SELECT path_join('dir', '/abs/path');
