@@ -41,8 +41,9 @@ hash_t CombineHashScalar(hash_t a, hash_t b) {
 }
 
 template <bool HAS_RSEL, bool HAS_SEL_VECTOR, class T, bool INPUT_IS_ALREADY_HASH>
-void TightLoopHash(const T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel, idx_t count,
-                   const SelectionVector *__restrict sel_vector, const ValidityMask &mask) {
+AUTO_VEC_DISPATCH void TightLoopHash(const T *__restrict ldata, hash_t *__restrict result_data,
+                                     const SelectionVector *rsel, idx_t count,
+                                     const SelectionVector *__restrict sel_vector, const ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index_unsafe(i) : i;
@@ -340,9 +341,10 @@ void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, 
 }
 
 template <bool HAS_RSEL, class T, bool INPUT_IS_ALREADY_HASH>
-void TightLoopCombineHashConstant(const T *__restrict ldata, hash_t constant_hash, hash_t *__restrict hash_data,
-                                  const SelectionVector *rsel, idx_t count,
-                                  const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
+AUTO_VEC_DISPATCH void TightLoopCombineHashConstant(const T *__restrict ldata, hash_t constant_hash,
+                                                    hash_t *__restrict hash_data, const SelectionVector *rsel,
+                                                    idx_t count, const SelectionVector *__restrict sel_vector,
+                                                    ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
@@ -362,9 +364,10 @@ void TightLoopCombineHashConstant(const T *__restrict ldata, hash_t constant_has
 }
 
 template <bool HAS_RSEL, bool HAS_SEL, class T, bool INPUT_IS_ALREADY_HASH>
-static inline void TightLoopCombineHash(const T *__restrict ldata, hash_t *__restrict const hash_data,
-                                        const SelectionVector *__restrict const rsel, const idx_t count,
-                                        const SelectionVector *__restrict const sel_vector, const ValidityMask &mask) {
+AUTO_VEC_DISPATCH static inline void
+TightLoopCombineHash(const T *__restrict ldata, hash_t *__restrict const hash_data,
+                     const SelectionVector *__restrict const rsel, const idx_t count,
+                     const SelectionVector *__restrict const sel_vector, const ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index_unsafe(i) : i;

@@ -71,8 +71,9 @@ struct BinaryExecutor {
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static void ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                            RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask, FUNC fun) {
+	AUTO_VEC_DISPATCH static void ExecuteFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                                              RESULT_TYPE *__restrict result_data, idx_t count, ValidityMask &mask,
+	                                              FUNC fun) {
 		if (!LEFT_CONSTANT) {
 			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 		}
@@ -188,10 +189,11 @@ struct BinaryExecutor {
 #endif
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
-	static void ExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                               RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
-	                               const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lvalidity,
-	                               ValidityMask &rvalidity, ValidityMask &result_validity, FUNC fun) {
+	AUTO_VEC_DISPATCH static void
+	ExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                   RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
+	                   const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lvalidity,
+	                   ValidityMask &rvalidity, ValidityMask &result_validity, FUNC fun) {
 		if (!lvalidity.AllValid() || !rvalidity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto lindex = lsel->get_index(i);
@@ -308,9 +310,9 @@ public:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool HAS_TRUE_SEL,
 	          bool HAS_FALSE_SEL>
-	static inline idx_t SelectFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                                   const SelectionVector *sel, idx_t count, ValidityMask &validity_mask,
-	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+	AUTO_VEC_DISPATCH static inline idx_t
+	SelectFlatLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata, const SelectionVector *sel,
+	               idx_t count, ValidityMask &validity_mask, SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		idx_t base_idx = 0;
 		auto entry_count = ValidityMask::EntryCount(count);
@@ -372,9 +374,10 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static inline idx_t SelectFlatLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                                         const SelectionVector *sel, idx_t count, ValidityMask &mask,
-	                                         SelectionVector *true_sel, SelectionVector *false_sel) {
+	AUTO_VEC_DISPATCH static inline idx_t
+	SelectFlatLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
+	                     const SelectionVector *sel, idx_t count, ValidityMask &mask, SelectionVector *true_sel,
+	                     SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
 			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, true, true>(
 			    ldata, rdata, sel, count, mask, true_sel, false_sel);
@@ -431,11 +434,10 @@ public:
 #else
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 #endif
-	static inline idx_t
-	SelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                  const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
-	                  const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
-	                  ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+	static inline idx_t AUTO_VEC_DISPATCH SelectGenericLoop(
+	    const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata, const SelectionVector *__restrict lsel,
+	    const SelectionVector *__restrict rsel, const SelectionVector *__restrict result_sel, idx_t count,
+	    ValidityMask &lvalidity, ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 #ifdef DUCKDB_SMALLER_BINARY
 		const bool HAS_TRUE_SEL = true_sel;
@@ -466,11 +468,10 @@ public:
 
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
-	static inline idx_t
-	SelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
-	                           const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
-	                           const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,
-	                           ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
+	static inline idx_t AUTO_VEC_DISPATCH SelectGenericLoopSelSwitch(
+	    const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata, const SelectionVector *__restrict lsel,
+	    const SelectionVector *__restrict rsel, const SelectionVector *__restrict result_sel, idx_t count,
+	    ValidityMask &lvalidity, ValidityMask &rvalidity, SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
 			return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP, NO_NULL, true, true>(
 			    ldata, rdata, lsel, rsel, result_sel, count, lvalidity, rvalidity, true_sel, false_sel);
@@ -486,7 +487,7 @@ public:
 #endif
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static inline idx_t
+	AUTO_VEC_DISPATCH static inline idx_t
 	SelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
 	                        const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
 	                        const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lvalidity,

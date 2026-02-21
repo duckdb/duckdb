@@ -33,8 +33,8 @@ class AggregateExecutor {
 private:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class OP>
-	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
-	                                   idx_t count) {
+	AUTO_VEC_DISPATCH static inline void NullaryFlatLoop(STATE_TYPE **__restrict states,
+	                                                     AggregateInputData &aggr_input_data, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			OP::template Operation<STATE_TYPE, OP>(*states[i], aggr_input_data, i);
 		}
@@ -42,9 +42,9 @@ private:
 #endif
 
 	template <class STATE_TYPE, class OP>
-	static inline void NullaryScatterLoop(STATE_TYPE *__restrict const *__restrict const states,
-	                                      AggregateInputData &aggr_input_data, const SelectionVector &ssel,
-	                                      const idx_t count) {
+	AUTO_VEC_DISPATCH static inline void NullaryScatterLoop(STATE_TYPE *__restrict const *__restrict const states,
+	                                                        AggregateInputData &aggr_input_data,
+	                                                        const SelectionVector &ssel, const idx_t count) {
 		if (ssel.IsSet()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto sidx = ssel.get_index_unsafe(i);
@@ -59,8 +59,9 @@ private:
 
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
-	                                 STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
+	AUTO_VEC_DISPATCH static inline void
+	UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	              STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
 		if (OP::IgnoreNull() && !mask.AllValid()) {
 			AggregateUnaryInput input(aggr_input_data, mask);
 			auto &base_idx = input.input_idx;
@@ -104,9 +105,10 @@ private:
 #else
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 #endif
-	static inline void UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
-	                                    STATE_TYPE **__restrict states, const SelectionVector &isel,
-	                                    const SelectionVector &ssel, ValidityMask &mask, idx_t count) {
+	AUTO_VEC_DISPATCH static inline void
+	UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	                 STATE_TYPE **__restrict states, const SelectionVector &isel, const SelectionVector &ssel,
+	                 ValidityMask &mask, idx_t count) {
 #ifdef DUCKDB_SMALLER_BINARY
 		const auto HAS_ISEL = isel.IsSet();
 		const auto HAS_SSEL = ssel.IsSet();
@@ -134,8 +136,9 @@ private:
 
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
-	                                       STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
+	AUTO_VEC_DISPATCH static inline void
+	UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	                    STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
 		AggregateUnaryInput input(aggr_input_data, mask);
 		auto &base_idx = input.input_idx;
 		base_idx = 0;
@@ -166,9 +169,10 @@ private:
 #endif
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
-	                                   STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask,
-	                                   const SelectionVector &__restrict sel_vector) {
+	AUTO_VEC_DISPATCH static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata,
+	                                                     AggregateInputData &aggr_input_data,
+	                                                     STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask,
+	                                                     const SelectionVector &__restrict sel_vector) {
 		AggregateUnaryInput input(aggr_input_data, mask);
 		if (OP::IgnoreNull() && !mask.AllValid()) {
 			// potential NULL values and NULL values are ignored
@@ -188,11 +192,11 @@ private:
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryScatterLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
-	                                     const B_TYPE *__restrict bdata, STATE_TYPE **__restrict states, idx_t count,
-	                                     const SelectionVector &asel, const SelectionVector &bsel,
-	                                     const SelectionVector &ssel, ValidityMask &avalidity,
-	                                     ValidityMask &bvalidity) {
+	AUTO_VEC_DISPATCH static inline void
+	BinaryScatterLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
+	                  const B_TYPE *__restrict bdata, STATE_TYPE **__restrict states, idx_t count,
+	                  const SelectionVector &asel, const SelectionVector &bsel, const SelectionVector &ssel,
+	                  ValidityMask &avalidity, ValidityMask &bvalidity) {
 		AggregateBinaryInput input(aggr_input_data, avalidity, bvalidity);
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
 			// potential NULL values and NULL values are ignored
@@ -218,10 +222,11 @@ private:
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryUpdateLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
-	                                    const B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
-	                                    const SelectionVector &asel, const SelectionVector &bsel,
-	                                    ValidityMask &avalidity, ValidityMask &bvalidity) {
+	AUTO_VEC_DISPATCH static inline void
+	BinaryUpdateLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
+	                 const B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
+	                 const SelectionVector &asel, const SelectionVector &bsel, ValidityMask &avalidity,
+	                 ValidityMask &bvalidity) {
 		AggregateBinaryInput input(aggr_input_data, avalidity, bvalidity);
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
 			// potential NULL values and NULL values are ignored
