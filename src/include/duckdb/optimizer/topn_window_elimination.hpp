@@ -51,8 +51,9 @@ private:
 
 	vector<unique_ptr<Expression>> GenerateAggregatePayload(const vector<ColumnBinding> &bindings,
 	                                                        const LogicalWindow &window, map<idx_t, idx_t> &group_idxs);
-	vector<ColumnBinding> TraverseProjectionBindings(const std::vector<ColumnBinding> &old_bindings,
-	                                                 reference<LogicalOperator> &op);
+	vector<ColumnBinding>
+	TraverseProjectionBindings(std::vector<ColumnBinding> &topmost_bindings, reference<LogicalOperator> &op,
+	                           vector<pair<ColumnBinding, unique_ptr<Expression>>> &constant_bindings);
 	unique_ptr<Expression> CreateAggregateExpression(vector<unique_ptr<Expression>> aggregate_params, bool requires_arg,
 	                                                 const TopNWindowEliminationParameters &params) const;
 	unique_ptr<Expression> CreateRowNumberGenerator(unique_ptr<Expression> aggregate_column_ref) const;
