@@ -150,8 +150,16 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 }
 
+bool ParquetWriter::TimestampIsAdjustedToUTCEnabled(ClientContext &context) {
+	Value parquet_timestamp_is_adjusted_to_utc = false;
+	context.TryGetCurrentSetting("parquet_timestamp_is_adjusted_to_utc", parquet_timestamp_is_adjusted_to_utc);
+	return parquet_timestamp_is_adjusted_to_utc.GetValue<bool>();
+}
+
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
                                         bool allow_geometry, ClientContext &context) {
+	const bool parquet_timestamp_is_adjusted_to_utc = TimestampIsAdjustedToUTCEnabled(context);
+
 	if (duckdb_type.IsJSONType()) {
 		schema_ele.converted_type = ConvertedType::JSON;
 		schema_ele.__isset.converted_type = true;
@@ -212,14 +220,15 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
-		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIMESTAMP_TZ);
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC =
+		    (duckdb_type.id() == LogicalTypeId::TIMESTAMP_TZ) ? true : parquet_timestamp_is_adjusted_to_utc;
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
 		schema_ele.__isset.converted_type = false;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
-		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = parquet_timestamp_is_adjusted_to_utc;
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -227,7 +236,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
-		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = parquet_timestamp_is_adjusted_to_utc;
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS = true;
 		break;
 	case LogicalTypeId::ENUM:
