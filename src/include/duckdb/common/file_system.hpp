@@ -138,6 +138,9 @@ public:
 // FromString(raw) parses and normalizes the input; ToString() reconstructs it as
 // scheme + authority + anchor + path (simple concatenation).
 //
+// Treat as immutable once constructed: fields are public for convenient read access
+// but should not be modified directly. Use Join() and Parent() to derive new paths.
+//
 // Supported input forms and their parsed fields:
 //
 //   Input                         scheme        authority      anchor   path          is_absolute
@@ -157,16 +160,20 @@ public:
 //   "\\?\C:\foo" (win)            "\\?"         ""             "C:\"    "foo"         true
 //
 struct Path {
-	string scheme;    // e.g. "s3://", "file://", "" — normalized lowercase
-	string authority; // e.g. "bucket", "localhost", ""
-	string anchor;    // e.g. "/", "C:/", "C:\\", "\\"
-	string path;      // normalized segments, no leading separator
+	string scheme;           // e.g. "s3://", "file://", "" — normalized lowercase
+	string authority;        // e.g. "bucket", "localhost", ""
+	string anchor;           // e.g. "/", "C:/", "C:\\", "\\"
+	vector<string> segments; // normalized path components; empty = bare anchor or "."
 	char separator = '/';
 	bool is_absolute = false;
 
 	static Path FromString(const string &raw);
 	string ToString() const;
-	void Join(const Path &rhs);
+	string GetPath() const; // join(segments, sep), or "." for empty relative
+
+	Path Join(const Path &rhs) const;
+	Path Join(const string &rhs) const;
+	Path Parent(int n = 1) const;
 
 	bool HasScheme() const {
 		return !scheme.empty();
@@ -180,10 +187,12 @@ struct Path {
 	bool HasDrive() const;
 	char GetDriveChar() const;
 
-	vector<string> GetPathSegments() const;
+	const vector<string> &GetPathSegments() const {
+		return segments;
+	}
 
 private:
-	void NormalizeSegments();
+	void NormalizeSegments(const string &raw, size_t path_offset);
 };
 
 class FileSystem {

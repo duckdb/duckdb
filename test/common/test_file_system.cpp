@@ -462,13 +462,13 @@ TEST_CASE("Path parses and correctly structures fields", "[file_system]") {
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "");
 		CHECK(output.is_absolute == false);
-		CHECK(output.path == "a/b");
+		CHECK(output.GetPath() == "a/b");
 
 		output = Path::FromString("/..////a/./b/../c");
 		CHECK(output.scheme == "");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "/");
-		CHECK(output.path == "a/c");
+		CHECK(output.GetPath() == "a/c");
 		CHECK(output.is_absolute == true);
 	}
 
@@ -478,27 +478,27 @@ TEST_CASE("Path parses and correctly structures fields", "[file_system]") {
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "/");
 		CHECK(output.is_absolute == true);
-		CHECK(output.path == "a/b");
+		CHECK(output.GetPath() == "a/b");
 
 		output = Path::FromString("file://localhost/a/b");
 		CHECK(output.scheme == "file://");
 		CHECK(output.authority == "localhost");
 		CHECK(output.anchor == "/");
 		CHECK(output.is_absolute == true);
-		CHECK(output.path == "a/b");
+		CHECK(output.GetPath() == "a/b");
 
 		output = Path::FromString("file:///a/b");
 		CHECK(output.scheme == "file://");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "/");
 		CHECK(output.is_absolute == true);
-		CHECK(output.path == "a/b");
+		CHECK(output.GetPath() == "a/b");
 
 		output = Path::FromString("file://LOCALHOST/a/b");
 		CHECK(output.scheme == "file://");
 		CHECK(output.authority == "LOCALHOST");
 		CHECK(output.anchor == "/");
-		CHECK(output.path == "a/b");
+		CHECK(output.GetPath() == "a/b");
 
 #if defined(_WIN32)
 		output = Path::FromString(R"(c:..\foo)");
@@ -506,14 +506,14 @@ TEST_CASE("Path parses and correctly structures fields", "[file_system]") {
 		CHECK(output.authority == "");
 		CHECK(output.anchor == "C:");
 		CHECK(output.is_absolute == false);
-		CHECK(output.path == R"(..\foo)");
+		CHECK(output.GetPath() == R"(..\foo)");
 
 		output = Path::FromString(R"(c:\..\foo)");
 		CHECK(output.scheme == "");
 		CHECK(output.authority == "");
 		CHECK(output.anchor == R"(C:\)");
 		CHECK(output.is_absolute == true);
-		CHECK(output.path == "foo");
+		CHECK(output.GetPath() == "foo");
 #endif
 	}
 
@@ -523,7 +523,7 @@ TEST_CASE("Path parses and correctly structures fields", "[file_system]") {
 		CHECK(output.authority == "container");
 		CHECK(output.anchor == "/");
 		CHECK(output.is_absolute);
-		CHECK(output.path == "b/c");
+		CHECK(output.GetPath() == "b/c");
 	}
 
 #if defined(_WIN32)
@@ -532,7 +532,7 @@ TEST_CASE("Path parses and correctly structures fields", "[file_system]") {
 		CHECK(output.scheme == R"(\\)");
 		CHECK(output.authority == R"(foo\bar)");
 		CHECK(output.anchor == R"(\)");
-		CHECK(output.path.empty());
+		CHECK(output.GetPath().empty());
 
 		CHECK_THROWS(Path::FromString(R"(\\\\ab)"));
 		CHECK_THROWS(Path::FromString(R"(\\foo\)"));
@@ -658,10 +658,7 @@ TEST_CASE("Path::JoinPath table-based tests", "[file_system]") {
 	};
 
 	auto do_join = [](const string &a, const string &b) {
-		auto lhs_p = Path::FromString(a);
-		auto rhs_p = Path::FromString(b);
-		lhs_p.Join(rhs_p);
-		return lhs_p.ToString();
+		return Path::FromString(a).Join(b).ToString();
 	};
 
 	// clang-format off

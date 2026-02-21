@@ -307,7 +307,7 @@ static inline bool IsPathSeparator(char c) {
 // - All URI paths are absolute, and URIs of the form proto://authority will be assigned path="/"
 // - Not full URI parsing, only for URI paths (e.g., no query, fragment, etc.)
 //
-static void ParseURIScheme(const string &input, struct Path &parsed) {
+static size_t ParseURIScheme(const string &input, struct Path &parsed) {
 	parsed.is_absolute = true;
 
 	const size_t auth_begin = input.find("://") + 3;
@@ -318,19 +318,17 @@ static void ParseURIScheme(const string &input, struct Path &parsed) {
 	D_ASSERT(path_begin == string::npos || path_begin > auth_begin);
 	parsed.authority = input.substr(auth_begin, (path_begin - auth_begin));
 	parsed.anchor = '/';
-	if (path_begin != string::npos) {
-		parsed.path = input.substr(path_begin + 1);
-	}
+	return path_begin == string::npos ? input.size() : path_begin + 1;
 }
 
-static void ParseFilePathTail(const string &input, struct Path &parsed) {
-	size_t pos = 0;
+static size_t ParseFilePathTail(const string &input, size_t start, struct Path &parsed) {
+	size_t pos = start;
 
 #if defined(_WIN32)
-	if (input.size() >= 2 && input[1] == ':' && StringUtil::CharacterIsAlpha(input[0])) {
-		parsed.anchor.append(1, input[0]);
+	if (input.size() >= pos + 2 && input[pos + 1] == ':' && StringUtil::CharacterIsAlpha(input[pos])) {
+		parsed.anchor.append(1, input[pos]);
 		parsed.anchor.append(1, ':');
-		pos = 2;
+		pos += 2;
 	}
 #endif
 
@@ -339,7 +337,7 @@ static void ParseFilePathTail(const string &input, struct Path &parsed) {
 		parsed.is_absolute = true;
 		pos += 1;
 	}
-	parsed.path = input.substr(pos);
+	return pos;
 }
 
 //
@@ -349,7 +347,7 @@ static void ParseFilePathTail(const string &input, struct Path &parsed) {
 // - anchor = \
 // - path = < the rest >
 //
-static void ParseUNCScheme(const string &input, struct Path &parsed) {
+static size_t ParseUNCScheme(const string &input, struct Path &parsed) {
 	D_ASSERT(input.size() >= 4 && input[0] == '\\' && input[1] == '\\');
 
 	static const char extended_prefix[] = R"(\\?\)";
@@ -361,9 +359,8 @@ static void ParseUNCScheme(const string &input, struct Path &parsed) {
 
 	if (extended && !extended_unc) {
 		parsed.anchor = '\\';
-		ParseFilePathTail(input.substr(4), parsed);
 		parsed.scheme = R"(\\?)";
-		return;
+		return ParseFilePathTail(input, 4, parsed);
 	}
 
 	const auto server_begin = extended_unc ? sizeof(extended_unc_prefix) - 1 : 2;
@@ -377,10 +374,8 @@ static void ParseUNCScheme(const string &input, struct Path &parsed) {
 	parsed.scheme = extended_unc ? extended_unc_prefix : R"(\\)";
 	parsed.authority = input.substr(server_begin, share_begin + share_len + -server_begin);
 	parsed.anchor = '\\';
-	if (pos != string::npos && (pos + 1) < input.size()) {
-		parsed.path = input.substr(pos + 1);
-	}
 	parsed.is_absolute = true;
+	return (pos == string::npos || pos + 1 >= input.size()) ? input.size() : pos + 1;
 }
 
 //
@@ -400,7 +395,7 @@ static void ParseUNCScheme(const string &input, struct Path &parsed) {
 //
 // Additionally, the file: protocol currently does not support remote (non-localhost) hosts.
 //
-static void ParseFileSchemes(const string &input, struct Path &parsed) {
+static size_t ParseFileSchemes(const string &input, struct Path &parsed) {
 	parsed.is_absolute = true;
 
 	size_t input_len = input.size();
@@ -423,10 +418,10 @@ static void ParseFileSchemes(const string &input, struct Path &parsed) {
 		parsed.anchor = "/";
 		path_begin = 6;
 	}
-	ParseFilePathTail(input.substr(path_begin), parsed);
 
 	D_ASSERT(parsed.scheme == "file:" || parsed.scheme == "file://");
 	D_ASSERT(parsed.scheme == "file://" || !parsed.HasAuthority());
+	return ParseFilePathTail(input, path_begin, parsed);
 }
 
 static void MaybeAppendSegment(vector<string> &segments, string::const_iterator begin, string::const_iterator end) {
@@ -441,19 +436,44 @@ static void MaybeAppendSegment(vector<string> &segments, string::const_iterator 
 	}
 }
 
-static void SegmentAndNormalizePath(const string &path, vector<string> &segments) {
-	auto prev_pos = path.begin();
-	for (auto pos = prev_pos; pos != path.end(); pos++) {
+static void SegmentAndNormalizePath(string::const_iterator begin, string::const_iterator end,
+                                    vector<string> &segments) {
+	auto prev_pos = begin;
+	for (auto pos = prev_pos; pos != end; pos++) {
 		if (IsPathSeparator(*pos)) {
 			MaybeAppendSegment(segments, prev_pos, pos);
 			prev_pos = pos + 1;
 		}
 	}
-	MaybeAppendSegment(segments, prev_pos, path.end());
+	MaybeAppendSegment(segments, prev_pos, end);
 }
 
 string Path::ToString() const {
-	return scheme + authority + anchor + path;
+	string result = scheme + authority + anchor;
+	for (size_t i = 0; i < segments.size(); i++) {
+		if (i) {
+			result += separator;
+		}
+		result += segments[i];
+	}
+	if (result.empty()) {
+		result = '.';
+	}
+	return result;
+}
+
+string Path::GetPath() const {
+	if (segments.empty()) {
+		return (scheme.empty() && anchor.empty()) ? "." : "";
+	}
+	string result;
+	for (size_t i = 0; i < segments.size(); i++) {
+		if (i) {
+			result += separator;
+		}
+		result += segments[i];
+	}
+	return result;
 }
 
 Path Path::FromString(const string &raw) {
@@ -467,23 +487,23 @@ Path Path::FromString(const string &raw) {
 	);
 	parsed.separator = first_slash_pos == string::npos ? '/' : raw[first_slash_pos];
 
+	size_t path_offset;
 	if (StringUtil::StartsWith(raw, "file:/")) {
-		ParseFileSchemes(raw, parsed);
+		path_offset = ParseFileSchemes(raw, parsed);
 	}
 #if defined(_WIN32)
 	else if (raw.size() >= 5 && StringUtil::StartsWith(raw, R"(\\)") && raw.find_first_of('\\', 3) != string::npos) {
-		ParseUNCScheme(raw, parsed);
+		path_offset = ParseUNCScheme(raw, parsed);
 	}
 #endif
 	else if (scheme_pos != string::npos && scheme_pos > 1 && scheme_pos < first_slash_pos && !drive_leads) {
-		ParseURIScheme(raw, parsed);
+		path_offset = ParseURIScheme(raw, parsed);
 	} else {
-		ParseFilePathTail(raw, parsed);
+		path_offset = ParseFilePathTail(raw, 0, parsed);
 	}
-	parsed.NormalizeSegments();
+	parsed.NormalizeSegments(raw, path_offset);
 	D_ASSERT(parsed.HasScheme() || !parsed.HasAuthority());
 	D_ASSERT(parsed.anchor.size() <= 4);
-	D_ASSERT(parsed.anchor.size() + parsed.path.size() > 0);
 	return parsed;
 }
 
@@ -504,13 +524,7 @@ char Path::GetDriveChar() const {
 	return 0;
 }
 
-vector<string> Path::GetPathSegments() const {
-	vector<string> segments;
-	SegmentAndNormalizePath(path, segments);
-	return segments;
-}
-
-void Path::NormalizeSegments() {
+void Path::NormalizeSegments(const string &raw, size_t path_offset) {
 	// normalize URI schemes to lowercase; UNC prefixes (\\, \\?, \\?\UNC\) are not URI schemes
 	if (!scheme.empty() && !IsPathSeparator(scheme[0])) {
 		scheme = StringUtil::Lower(scheme);
@@ -532,55 +546,77 @@ void Path::NormalizeSegments() {
 		anchor = normal;
 	}
 
-	vector<string> segments;
-	SegmentAndNormalizePath(path, segments);
-
-	path.clear();
-	for (const auto &segment : segments) {
-		if (is_absolute && path.empty() && segment == "..") {
-			continue;
+	vector<string> raw_segs;
+	SegmentAndNormalizePath(raw.begin() + static_cast<string::difference_type>(path_offset), raw.end(), raw_segs);
+	segments.clear();
+	for (auto &seg : raw_segs) {
+		if (is_absolute && segments.empty() && seg == "..") {
+			continue; // drop leading ".." on absolute paths (can't go above root)
 		}
-		if (!path.empty()) {
-			path += this->separator;
-		}
-		path += segment;
-	}
-	if (scheme.empty() && anchor.empty() && path.empty()) {
-		path = '.';
+		segments.push_back(std::move(seg));
 	}
 }
 
-void Path::Join(const Path &rhs) {
-	auto &lhs = *this;
+Path Path::Join(const Path &rhs) const {
+	Path lhs = *this;
 #if defined(_WIN32)
 	const bool win_local = (lhs.separator == '\\') || lhs.HasDrive();
 	const auto auth_is_eq =
 	    win_local ? StringUtil::CIEquals(lhs.authority, rhs.authority) : (lhs.authority == rhs.authority);
-	const auto path_is_prefix =
-	    win_local ? StringUtil::CIStartsWith(rhs.path, lhs.path) : StringUtil::StartsWith(rhs.path, lhs.path);
+	const auto seg_prefix =
+	    win_local ? (rhs.segments.size() >= lhs.segments.size() &&
+	                 std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin(),
+	                            [](const string &a, const string &b) { return StringUtil::CIEquals(a, b); }))
+	              : (rhs.segments.size() >= lhs.segments.size() &&
+	                 std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin()));
 #else
 	const auto auth_is_eq = (lhs.authority == rhs.authority);
-	const auto path_is_prefix = StringUtil::StartsWith(rhs.path, lhs.path);
+	const auto seg_prefix = (rhs.segments.size() >= lhs.segments.size() &&
+	                         std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin()));
 #endif
 	if (!rhs.is_absolute && !rhs.HasDrive()) {
-		lhs.path = lhs.path + lhs.separator + rhs.path;
-		lhs.NormalizeSegments();
-	} else if (auth_is_eq && path_is_prefix && lhs.scheme == rhs.scheme && lhs.anchor == rhs.anchor &&
-	           (lhs.path.empty() || lhs.path.size() == rhs.path.size() || IsPathSeparator(rhs.path[lhs.path.size()]))) {
-		if (lhs.path.size() < rhs.path.size()) {
-			lhs.path = rhs.path;
+		lhs.segments.insert(lhs.segments.end(), rhs.segments.begin(), rhs.segments.end());
+		vector<string> result;
+		result.reserve(lhs.segments.size());
+		for (auto &seg : lhs.segments) {
+			if (seg == ".." && !result.empty() && result.back() != "..") {
+				result.pop_back();
+			} else {
+				result.push_back(std::move(seg));
+			}
+		}
+		while (lhs.is_absolute && !result.empty() && result.front() == "..") {
+			result.erase(result.begin());
+		}
+		lhs.segments = std::move(result);
+	} else if (auth_is_eq && seg_prefix && lhs.scheme == rhs.scheme && lhs.anchor == rhs.anchor) {
+		if (lhs.segments.size() < rhs.segments.size()) {
+			lhs.segments = rhs.segments;
 		}
 	} else {
 		throw InvalidInputException("Path: cannot join incompatible paths: \"%s\" onto \"%s\"", rhs.ToString(),
 		                            lhs.ToString());
 	}
+	return lhs;
+}
+
+Path Path::Join(const string &rhs) const {
+	return Join(Path::FromString(rhs));
+}
+
+Path Path::Parent(int n) const {
+	if (n <= 0) {
+		return *this;
+	}
+	string dots = "..";
+	for (int i = 1; i < n; i++) {
+		dots += "/..";
+	}
+	return Join(dots);
 }
 
 string FileSystem::JoinPath(const string &a, const string &b) {
-	auto lhs = Path::FromString(a);
-	auto rhs = Path::FromString(b);
-	lhs.Join(rhs);
-	return lhs.ToString();
+	return Path::FromString(a).Join(b).ToString();
 }
 
 string FileSystem::ConvertSeparators(const string &path) {
