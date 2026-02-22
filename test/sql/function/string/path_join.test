@@ -14,7 +14,7 @@ dir/sibling
 statement error
 SELECT replace(path_join('dir', '/abs/path'), chr(92), '/');
 ----
-JoinPath: absolute RHS
+incompatible paths
 
 query I
 SELECT replace(path_join('dir///', 'nested///child'), chr(92), '/');
@@ -54,27 +54,32 @@ s3://foo/bar/baz
 query I
 SELECT path_join('s3://foo', '..');
 ----
-s3://
+s3://foo/
 
 query I
 SELECT path_join('s3://foo', '../..');
 ----
-s3://
+s3://foo/
+
+statement error
+SELECT path_join('s3://foo', '/foo');
+----
+incompatible paths
+
+statement error
+SELECT path_join('/foo', 's3://foo');
+----
+incompatible paths
 
 statement error
 SELECT path_join('s3://foo', 'az://foo');
 ----
-incompatible URI schemes
-
-statement error
-SELECT path_join('/usr/local', 's3://foo');
-----
-cannot join absolute URI
+incompatible paths
 
 statement error
 SELECT path_join('dir', '/abs/path');
 ----
-absolute RHS
+incompatible paths
 
 query I
 SELECT path_join(NULL, 'dir');
@@ -83,5 +88,10 @@ NULL
 
 query I
 SELECT path_join('dir', NULL);
+----
+NULL
+
+query I
+SELECT path_join('base', NULL, 'dir');
 ----
 NULL

@@ -135,6 +135,77 @@ public:
 	shared_ptr<Logger> logger;
 };
 
+// Parsed representation of a path string, covering posix, windows, URI, and UNC forms.
+//
+// FromString(raw) parses and normalizes the input; ToString() reconstructs it as
+// scheme + authority + anchor + path (simple concatenation).
+//
+// Treat as immutable once constructed: fields are public for convenient read access
+// but should not be modified directly. Use Join() and Parent() to derive new paths.
+//
+// Supported input forms and their parsed fields:
+//
+//   Input                         scheme        authority      anchor   path          is_absolute
+//   ----------------------------  ------------  -----------    -------  ------------  -----------
+//   "a/b"                         ""            ""             ""       "a/b"         false
+//   ""  (empty)                   ""            ""             ""       "."           false
+//   "/"                           ""            ""             "/"      ""            true
+//   "/a/b"                        ""            ""             "/"      "a/b"         true
+//   "file:/a/b"                   "file:"       ""             "/"      "a/b"         true
+//   "file:///a/b"                 "file://"     ""             "/"      "a/b"         true
+//   "file://localhost/a/b"        "file://"     "localhost"    "/"      "a/b"         true
+//   "s3://bucket/bar/baz"         "s3://"       "bucket"       "/"      "bar/baz"     true
+//   "C:\foo" (win)                ""            ""             "C:\"    "foo"         true
+//   "C:relpath" (win)             ""            ""             "C:"     "relpath"     false
+//   "\\server\share\p" (win)      "\\"          "server\share" "\"      "p"           true
+//   "\\?\UNC\server\share" (win)  "\\?\UNC\"    "server\share" "\"      ""            true
+//   "\\?\C:\foo" (win)            "\\?"         ""             "C:\"    "foo"         true
+//
+struct Path {
+	string scheme;           // e.g. "s3://", "file://", "" — normalized lowercase
+	string authority;        // e.g. "bucket", "localhost", ""
+	string anchor;           // e.g. "/", "C:/", "C:\\", "\\"
+	vector<string> segments; // normalized path components; empty = bare anchor or "."
+	char separator = '/';
+	bool is_absolute = false;
+
+	static Path FromString(const string &raw);
+	string ToString() const;
+	string GetPath() const; // join(segments, sep), or "." for empty relative
+
+	Path Join(const Path &rhs) const;
+	Path Join(const string &rhs) const;
+	Path Parent(int n = 1) const;
+
+	bool HasScheme() const {
+		return !scheme.empty();
+	}
+	bool HasAuthority() const {
+		return !authority.empty();
+	}
+	bool HasAnchor() const {
+		return !anchor.empty();
+	}
+	bool HasDrive() const;
+	char GetDriveChar() const;
+
+	bool IsAbsolute() const {
+		return is_absolute;
+	}
+
+	// true for /* c:/* (not c:foo) file:/* \\?\C:\*
+	bool IsLocal() const {
+		return (!IsAbsolute() || !HasScheme() || HasDrive() || StringUtil::StartsWith(scheme, "file:"));
+	};
+
+	const vector<string> &GetPathSegments() const {
+		return segments;
+	}
+
+private:
+	void NormalizeSegments(const string &raw, size_t path_offset);
+};
+
 class FileSystem {
 public:
 	DUCKDB_API virtual ~FileSystem();

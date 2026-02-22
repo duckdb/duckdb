@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
+#include <type_traits>
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -812,7 +813,8 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 
 string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
 	auto path = ExpandPath(path_p, opener);
-	if (!IsPathAbsolute(path)) {
+	auto parsed = Path::FromString(path);
+	if (!parsed.IsAbsolute() && !IsPathAbsolute(path)) {
 		// path is not absolute - join with working directory
 		return JoinPath(GetWorkingDirectory(), path);
 	} else {
