@@ -143,7 +143,7 @@ statement ok
 CREATE TABLE state AS SELECT g, bit_xor(d) EXPORT_STATE xor_state FROM dummy GROUP BY g ORDER BY g;
 
 statement ok
-CREATE VIEW state_view AS SELECT g, bot_xor(d) EXPORT_STATE xor_state FROM dummy GROUP BY g ORDER BY g;
+CREATE VIEW state_view AS SELECT g, bit_xor(d) EXPORT_STATE xor_state FROM dummy GROUP BY g ORDER BY g;
 
 restart
 
