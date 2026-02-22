@@ -152,7 +152,7 @@ SELECT g, bit_xor(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIII nosort res10
-SELECT g, finalize(xor_state_state) FROM state ORDER BY g;
+SELECT g, finalize(xor_state) FROM state ORDER BY g;
 ----
 
 query IIIII nosort res10
