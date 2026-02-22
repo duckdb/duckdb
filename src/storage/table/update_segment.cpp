@@ -1038,17 +1038,13 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update, idx_t count,
                              SelectionVector &sel) {
-	auto update_data = update.GetDataNoConst<string_t>(update);
+	auto update_data = update.GetData<string_t>(update);
 	auto &mask = update.validity;
 	if (mask.AllValid()) {
 		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
-			auto &str = update_data[idx];
-			StringStats::Update(stats.statistics, str);
-			if (!str.IsInlined()) {
-				update_data[idx] = segment->GetStringHeap().AddBlob(str);
-			}
+			StringStats::Update(stats.statistics, update_data[idx]);
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -1060,11 +1056,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 			if (mask.RowIsValid(idx)) {
 				stats.statistics.SetHasNoNullFast();
 				sel.set_index(not_null_count++, i);
-				auto &str = update_data[idx];
-				StringStats::Update(stats.statistics, str);
-				if (!str.IsInlined()) {
-					update_data[idx] = segment->GetStringHeap().AddBlob(str);
-				}
+				StringStats::Update(stats.statistics, update_data[idx]);
 			} else {
 				stats.statistics.SetHasNullFast();
 			}
@@ -1313,6 +1305,18 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		count = get_effective_updates(update_format, ids, count, sel, base_data, vector_offset);
 		if (count == 0) {
 			return;
+		}
+	}
+
+	// for VARCHAR columns, copy non-inlined strings to the heap for long-term storage
+	if (column_data.type.InternalType() == PhysicalType::VARCHAR) {
+		auto update_data = update_format.GetDataNoConst<string_t>(update_format);
+		for (idx_t i = 0; i < count; i++) {
+			auto uidx = update_format.sel->get_index(sel.get_index(i));
+			auto &str = update_data[uidx];
+			if (!str.IsInlined()) {
+				str = heap.AddBlob(str);
+			}
 		}
 	}
 
