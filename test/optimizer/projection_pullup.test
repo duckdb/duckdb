@@ -1,0 +1,88 @@
+# name: test/optimizer/projection_pullup.test
+# description: Test projection Pull Up
+# group: [optimizer]
+
+statement ok
+create table t1 as select range a from range(3, 10000);
+
+statement ok
+create table t2 as select range b from range(5, 1000);
+
+statement ok
+create table t3 as select range c from range(100);
+
+statement ok
+create table t4 as select range d from range(10);
+
+statement ok
+create table tbl as select range a, mod(range,10) b from range(10000);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# These optimizers introduce projections. I disable them for now
+statement ok
+PRAGMA disabled_optimizers = 'column_lifetime,statistics_propagation'
+
+# Projection with expressions used in join condition. Cannot pull up
+query II
+explain SELECT * FROM (SELECT a + 1 as x, b FROM tbl) subq JOIN t1 ON subq.x = t1.a;
+----
+logical_opt	<REGEX>:.*JOIN.*PROJECTION.*
+
+# Projection below aggregation. Cannot pull up
+query II
+explain SELECT a, SUM(b) AS sum_b FROM (SELECT a, b FROM tbl WHERE b > 0) GROUP BY a;
+----
+logical_opt	<REGEX>:.*PROJECTION.*AGGREGATE.*
+
+# Projection with case. Cannot pull up
+query II
+explain SELECT * FROM (SELECT CASE WHEN a > 5 THEN a ELSE 0 END as x FROM t1) subq JOIN t2 ON subq.x = t2.b;
+----
+logical_opt	<REGEX>:.*JOIN.*PROJECTION.*
+
+# not column_refs. Cannot pull up
+query II
+explain SELECT * FROM (SELECT a.a + 1 AS newA, b.b + 2 AS newB, a.a +3 as newAA, b.b + 4 as newBB,  FROM t1 a JOIN t2 b ON a.a = b.b) AS join12
+JOIN (SELECT c.c + 3 AS newC, d.d + 4 AS newD FROM t3 c JOIN t4 d ON c.c = d.d) AS join34 ON join12.newA = join34.newC;
+----
+logical_opt	<REGEX>:.*JOIN.*PROJECTION.*
+
+# column_refs in projections on both sides. Should pull up
+query II
+explain SELECT * FROM (SELECT a.a, b.b FROM t1 a JOIN t2 b ON a.a = b.b) AS join12
+JOIN (SELECT c.c, d.d as newD FROM t3 c JOIN t4 d ON c.c = d.d) AS join34 ON join12.a = join34.c;
+----
+logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
+
+# Single side (left) with column_refs in projection
+query II
+explain SELECT * FROM (SELECT a.a, b.b FROM t1 a JOIN t2 b ON a.a = b.b) AS join12
+JOIN t3 on join12.a = t3.c LIMIT 5;
+----
+logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
+
+# Single side (right) with column_refs in projection
+query II
+explain SELECT * FROM t1 AS join12 JOIN (SELECT c.c, d.d as newD FROM t3 c JOIN t4 d ON c.c = d.d) AS join34 ON join12.a = join34.c;
+----
+logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
+
+# Fold mutiple consecutive proejctions into one
+query II
+explain SELECT a3 FROM (SELECT a2 AS a3 FROM (SELECT a1 AS a2 FROM (SELECT a AS a1 FROM tbl) AS t0) AS t1) AS t2 WHERE a3 % 2 = 0
+----
+logical_opt	<!REGEX>:.*PROJECTION.*PROJECTION.*
+
+query II
+explain with cte_1 as (select * from t1) select * from cte_1 join t2 on a=b limit 3;
+----
+logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
+
+query II
+explain SELECT SUM(v1.i) + SUM(v2.i) AS sum_i, SUM(v1.j) + SUM(v2.j) AS sum_j
+FROM (VALUES (1, 10), (2, 5), (3, 4)) AS v1(i, j)
+JOIN (VALUES (1, 10), (2, 5), (3, 4)) AS v2(i, j) ON v1.i = v2.i;
+----
+logical_opt	<!REGEX>:.*AGGREGATION.*JOIN.*PROJECTION.*

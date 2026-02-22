@@ -166,6 +166,24 @@ struct StoreFieldOp {
 	}
 };
 
+// Specialization for string_t to handle big strings correctly
+// For big strings (>12 bytes), string_t contains a pointer to the actual data.
+// We need to copy the actual string data to the result vector's string heap,
+// not just copy the pointer (which would point to aggregate allocator memory).
+template <>
+void StoreFieldOp::Operation<string_t>(Vector &struct_vec, idx_t field_idx, idx_t count, data_ptr_t *sources,
+                                       idx_t field_offset) {
+	auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
+	auto child_data = FlatVector::GetData<string_t>(child);
+
+	for (idx_t row = 0; row < count; row++) {
+		auto src = sources[row] + field_offset;
+		string_t source_str = *reinterpret_cast<string_t *>(src);
+		// AddStringOrBlob handles both inlined and non-inlined strings correctly
+		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
+	}
+}
+
 struct CopyFromInputFieldOp {
 	template <class T>
 	static void Operation(Vector &input_vec, Vector &result_vec, idx_t field_idx, const SelectionVector &sel,
@@ -215,6 +233,24 @@ struct StoreFieldForSelectedRowsOp {
 		}
 	}
 };
+
+// Specialization for string_t to handle big strings correctly
+// Same fix as StoreFieldOp - copy actual string data, not just pointers
+template <>
+void StoreFieldForSelectedRowsOp::Operation<string_t>(const AggregateStateLayout &layout, Vector &result,
+                                                      idx_t field_idx, const SelectionVector &sel, idx_t count,
+                                                      data_ptr_t base_ptr, idx_t field_offset) {
+	auto &child = *StructVector::GetEntries(result)[field_idx];
+	auto child_data = FlatVector::GetData<string_t>(child);
+
+	for (idx_t i = 0; i < count; i++) {
+		idx_t row = sel.get_index(i);
+		auto src = base_ptr + i * layout.aligned_state_size + field_offset;
+		string_t source_str = *reinterpret_cast<string_t *>(src);
+		// AddStringOrBlob handles both inlined and non-inlined strings correctly
+		child_data[row] = StringVector::AddStringOrBlob(child, source_str);
+	}
+}
 
 // Deserialize struct fields from a flattened struct vector into a state buffer.
 // Uses LoadFieldOp for tight SIMD-friendly loops
