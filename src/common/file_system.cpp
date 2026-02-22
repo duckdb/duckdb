@@ -329,9 +329,9 @@ static size_t ParseFilePathTail(const string &input, size_t start, struct Path &
 #if defined(_WIN32)
 //
 // UNC Scheme as we handle it:
-// - scheme = \\
+// - scheme = "\\"
 // - authority = server\share
-// - anchor = \
+// - anchor = "\"
 // - path = < the rest >
 //
 static size_t ParseUNCScheme(const string &input, struct Path &parsed) {
@@ -444,10 +444,17 @@ string Path::ToString() const {
 		}
 		result += segments[i];
 	}
+	if (has_trailing_separator && !segments.empty()) {
+		result += separator;
+	}
 	if (result.empty()) {
 		result = '.';
 	}
 	return result;
+}
+
+string Path::GetBase() const {
+	return scheme + authority + anchor;
 }
 
 string Path::GetPath() const {
@@ -490,6 +497,7 @@ Path Path::FromString(const string &raw) {
 		path_offset = ParseFilePathTail(raw, 0, parsed);
 	}
 	parsed.NormalizeSegments(raw, path_offset);
+	parsed.has_trailing_separator = !raw.empty() && IsPathSeparator(raw.back());
 	D_ASSERT(parsed.HasScheme() || !parsed.HasAuthority());
 	D_ASSERT(parsed.anchor.size() <= 4);
 	return parsed;
@@ -502,6 +510,7 @@ bool Path::HasDrive() const {
 char Path::GetDriveChar() const {
 	const auto size = anchor.size();
 	D_ASSERT(size <= 4);
+	// must be one of {"C:", "C:\" or "\C:", "\C:\"}; switch on size & ':'
 	if (size == 2) {
 		return anchor[0];
 	} else if (size == 3) {
@@ -538,7 +547,7 @@ void Path::NormalizeSegments(const string &raw, size_t path_offset) {
 	SegmentAndNormalizePath(raw.begin() + static_cast<string::difference_type>(path_offset), raw.end(), raw_segs);
 	segments.clear();
 	for (auto &seg : raw_segs) {
-		if (is_absolute && segments.empty() && seg == "..") {
+		if (IsAbsolute() && segments.empty() && seg == "..") {
 			continue; // drop leading ".." on absolute paths (can't go above root)
 		}
 		segments.push_back(std::move(seg));
@@ -562,7 +571,7 @@ Path Path::Join(const Path &rhs) const {
 	const auto seg_prefix = (rhs.segments.size() >= lhs.segments.size() &&
 	                         std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin()));
 #endif
-	if (!rhs.is_absolute && !rhs.HasDrive()) {
+	if (!rhs.IsAbsolute() && !rhs.HasDrive()) {
 		lhs.segments.insert(lhs.segments.end(), rhs.segments.begin(), rhs.segments.end());
 		vector<string> result;
 		result.reserve(lhs.segments.size());
@@ -573,7 +582,7 @@ Path Path::Join(const Path &rhs) const {
 				result.push_back(std::move(seg));
 			}
 		}
-		while (lhs.is_absolute && !result.empty() && result.front() == "..") {
+		while (lhs.IsAbsolute() && !result.empty() && result.front() == "..") {
 			result.erase(result.begin());
 		}
 		lhs.segments = std::move(result);
@@ -585,6 +594,7 @@ Path Path::Join(const Path &rhs) const {
 		throw InvalidInputException("Path: cannot join incompatible paths: \"%s\" onto \"%s\"", rhs.ToString(),
 		                            lhs.ToString());
 	}
+	lhs.has_trailing_separator = rhs.has_trailing_separator;
 	return lhs;
 }
 
@@ -592,6 +602,8 @@ Path Path::Join(const string &rhs) const {
 	return Join(Path::FromString(rhs));
 }
 
+// NOTE: instead of chopping off segments, apply '..'; this guards against traps with odd paths (leading ..,
+// etc.) to make sure we always handle Parentage consistently, at a slight cost of cpu/tmp allocation.
 Path Path::Parent(int n) const {
 	if (n <= 0) {
 		return *this;
@@ -825,35 +837,25 @@ void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<Fil
 	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent
 	// dir that is not in the allowed_directories list
 
-	auto sep = PathSeparator(path);
+	// Walk up from the full path until we find a prefix that already exists, collecting
+	// non-existing ancestors along the way. Stop descending when segments are exhausted
+	// (to avoid Path::Parent() generating ".." paths past the root/base).
+	auto parsed = Path::FromString(path);
 	vector<string> dirs_to_create;
-
-	string current_prefix = path;
-
-	StringUtil::RTrim(current_prefix, sep);
-
-	// Strip directories from the path until we hit a directory that exists
-	while (!current_prefix.empty() && !DirectoryExists(current_prefix)) {
-		auto found = current_prefix.find_last_of(sep);
-
-		// Push back the root dir
-		if (found == string::npos || found == 0) {
-			dirs_to_create.push_back(current_prefix);
-			current_prefix = "";
-			break;
-		}
-
-		// Add the directory to the directories to be created
-		dirs_to_create.push_back(current_prefix.substr(found, current_prefix.size() - found));
-
-		// Update the current prefix to remove the current dir
-		current_prefix = current_prefix.substr(0, found);
+	while (!parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString())) {
+		dirs_to_create.push_back(parsed.ToString());
+		parsed = parsed.Parent();
+	}
+	// If all segments were non-existing, also check the base itself (e.g. "C:/" on an unknown drive)
+	if (!parsed.GetPathSegments().empty()) {
+		// broke because DirectoryExists returned true — nothing more needed
+	} else if (!DirectoryExists(parsed.ToString())) {
+		dirs_to_create.push_back(parsed.ToString());
 	}
 
-	// Create the directories one by one
-	for (vector<string>::reverse_iterator riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
-		current_prefix += *riter;
-		CreateDirectory(current_prefix);
+	// Create directories shallowest to deepest
+	for (auto riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
+		CreateDirectory(*riter);
 	}
 }
 
@@ -1236,6 +1238,7 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 }
 
 string FileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+	// TODO: @benfleis - integrate this properly with Path (needs additional work)
 	if (IsRemoteFile(path_p) || !Path::FromString(path_p).IsLocal()) {
 		// don't canonicalize remote paths
 		return path_p;

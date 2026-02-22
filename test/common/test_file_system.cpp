@@ -148,148 +148,6 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs->FileExists(fname_in_dir2));
 }
 
-TEST_CASE("JoinPath normalizes separators and dot segments", "[file_system]") {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	auto sep = fs->PathSeparator("dummy");
-	auto collapse = [&](const string &path) {
-		return StringUtil::Replace(path, "/", sep);
-	};
-
-	auto normalized = fs->JoinPath("dir//subdir/", "./file");
-	CHECK(normalized == collapse("dir/subdir/file"));
-
-	auto parent = fs->JoinPath("dir/subdir", "../sibling");
-	CHECK(parent == collapse("dir/sibling"));
-
-	CHECK_THROWS(fs->JoinPath("dir", "/abs/path"));
-
-	auto dedup = fs->JoinPath("dir///", "nested///child");
-	CHECK(dedup == collapse("dir/nested/child"));
-
-	auto zero_rel = fs->JoinPath("foo/bar", "../..");
-	CHECK(zero_rel == fs->ConvertSeparators("."));
-}
-
-TEST_CASE("JoinPath handles edge cases", "[file_system]") {
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	auto sep = fs->PathSeparator("dummy");
-	auto collapse = [&](const string &path) {
-		return StringUtil::Replace(path, "/", sep);
-	};
-
-	auto lhs_parent = fs->JoinPath("dir/subdir/..", "sibling");
-	CHECK(lhs_parent == collapse("dir/sibling"));
-
-	auto mixed_dots = fs->JoinPath("./dir/./subdir/./..", "./sibling/.");
-	CHECK(mixed_dots == collapse("dir/sibling"));
-
-	auto overflowing_rel = fs->JoinPath("dir/..", "../..");
-	CHECK(overflowing_rel == fs->ConvertSeparators("../.."));
-
-	auto walk_up_absolute = fs->JoinPath("/usr/local", "../..");
-	CHECK(walk_up_absolute == fs->ConvertSeparators("/"));
-
-	auto root_child = fs->JoinPath("/", "usr/local");
-	CHECK(root_child == fs->ConvertSeparators("/usr/local"));
-
-	auto past_root = fs->JoinPath("/usr/local", "../../..");
-	CHECK(past_root == fs->ConvertSeparators("/"));
-
-	auto file1_join = fs->JoinPath("file:/usr/local", "../bin");
-	CHECK(file1_join == "file:/usr/bin");
-
-	auto file2_join = fs->JoinPath("file://localhost/usr/local", "../bin");
-	CHECK(file2_join == "file://localhost/usr/bin");
-
-	auto file3_join = fs->JoinPath("file:///usr/local", "../bin");
-	CHECK(file3_join == "file:///usr/bin");
-
-	auto s3_join = fs->JoinPath("s3://foo", "bar/baz");
-	CHECK(s3_join == "s3://foo/bar/baz");
-
-	auto s3_parent = fs->JoinPath("s3://foo", "..");
-	CHECK(s3_parent == "s3://foo/");
-
-	auto s3_parent_twice = fs->JoinPath("s3://foo", "../..");
-	CHECK(s3_parent_twice == "s3://foo/");
-
-	CHECK_THROWS(fs->JoinPath("s3://foo", "az://foo"));
-	CHECK_THROWS(fs->JoinPath("s3://foo", "/foo/bar/baz"));
-
-	auto absolute_child = fs->JoinPath("/usr/local", "/usr/local/bin");
-	CHECK(absolute_child == fs->ConvertSeparators("/usr/local/bin"));
-
-	CHECK_THROWS(fs->JoinPath("/usr/local", "/var/log"));
-
-	auto scheme_like_embed = fs->JoinPath("/foo/proto://bar", "a");
-	CHECK(scheme_like_embed == fs->ConvertSeparators("/foo/proto:/bar/a"));
-
-#ifdef _WIN32
-	auto clamp_drive_root = fs->JoinPath(R"(C:\)", R"(..)");
-	CHECK(clamp_drive_root == fs->ConvertSeparators("C:/"));
-
-	auto clamp_drive_root_twice = fs->JoinPath(R"(C:\)", R"(..\..)");
-	CHECK(clamp_drive_root_twice == fs->ConvertSeparators("C:/"));
-
-	auto drive_absolute_child = fs->JoinPath(R"(C:\)", "system32");
-	CHECK(drive_absolute_child == fs->ConvertSeparators("C:/system32"));
-
-	auto drive_relative = fs->JoinPath("C:", "system32");
-	CHECK(drive_relative == fs->ConvertSeparators("C:system32"));
-
-	auto drive_relative_child = fs->JoinPath("C:drive_relative_path", "path");
-	CHECK(drive_relative_child == fs->ConvertSeparators("C:drive_relative_path/path"));
-
-	auto drive_relative_parent = fs->JoinPath("C:drive_relative_path", R"(..\path)");
-	CHECK(drive_relative_parent == "C:path");
-
-	auto unc_path = fs->JoinPath(R"(\\server\share)", R"(child)");
-	CHECK(unc_path == fs->ConvertSeparators(R"(\\server\share\child)"));
-
-	auto unc_long_path = fs->JoinPath(R"(\\?\UNC\server\share)", R"(nested\dir)");
-	CHECK(unc_long_path == fs->ConvertSeparators(R"(\\?\UNC\server\share\nested\dir)"));
-
-	auto long_drive_path = fs->JoinPath(R"(\\?\C:\base)", R"(folder)");
-	CHECK(long_drive_path == fs->ConvertSeparators(R"(\\?\C:\base\folder)"));
-
-	auto ci_prefix = fs->JoinPath(R"(C:\Data)", R"(C:\data\file)");
-	CHECK(ci_prefix == fs->ConvertSeparators(R"(C:\data\file)"));
-
-	CHECK_THROWS(fs->JoinPath(R"(C:\\foo)", R"(D:\\bar)"));
-#endif
-}
-
-#ifdef _WIN32
-TEST_CASE("Glob handles absolute drive paths", "[file_system]") {
-	auto fs = FileSystem::CreateLocal();
-	auto base_dir = fs->NormalizeAbsolutePath(TestCreatePath("glob_drive"));
-	// base_dir resolves to an absolute drive path (e.g., C:\...\glob_drive) to ensure globbing works from a drive root
-	if (fs->DirectoryExists(base_dir)) {
-		fs->RemoveDirectory(base_dir);
-	}
-	fs->CreateDirectory(base_dir);
-
-	auto nested_dir = fs->JoinPath(base_dir, "nested");
-	fs->CreateDirectory(nested_dir);
-	auto fname = fs->JoinPath(nested_dir, "file.csv");
-	create_dummy_file(fname);
-
-	auto pattern = fs->JoinPath(base_dir, "*.csv");
-	auto deep_pattern = fs->JoinPath(fs->JoinPath(base_dir, "*"), "*.csv");
-
-	auto entries_shallow = fs->Glob(pattern);
-	auto entries_deep = fs->Glob(deep_pattern);
-
-	REQUIRE(entries_shallow.size() == 0); // file is nested, so shallow glob should not see it
-	REQUIRE(entries_deep.size() == 1);
-	REQUIRE(fs->ConvertSeparators(entries_deep[0].path) == fs->ConvertSeparators(fname));
-
-	fs->RemoveFile(fname);
-	fs->RemoveDirectory(nested_dir);
-	fs->RemoveDirectory(base_dir);
-}
-#endif
-
 // note: the integer count is chosen as 512 so that we write 512*8=4096 bytes to the file
 // this is required for the Direct-IO as on Windows Direct-IO can only write multiples of sector sizes
 // sector sizes are typically one of [512/1024/2048/4096] bytes, hence a 4096 bytes write succeeds.
@@ -621,7 +479,7 @@ TEST_CASE("filesystem concurrent access and deletion", "[file_system]") {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Path struct tests (ported from playground/test-playground.cpp)
+// Path struct tests
 // ------------------------------------------------------------------------------------------------
 
 TEST_CASE("Path parses and correctly structures fields", "[file_system]") {
@@ -743,7 +601,7 @@ TEST_CASE("Path::FromString/ToString round-trips", "[file_system]") {
 		    make_tuple(OK_, "/",        "/"),
 		    make_tuple(OK_, "/a",       "/a"),
 		    make_tuple(OK_, "/a/b",     "/a/b"),
-		    make_tuple(OK_, "/a/b/",    "/a/b"),
+		    make_tuple(OK_, "/a/b/",    "/a/b/"),
 
 		    make_tuple(OK_, "foo/bar://baz",  "foo/bar:/baz"),
 		    make_tuple(OK_, "/foo/bar://baz", "/foo/bar:/baz"),
@@ -797,7 +655,7 @@ TEST_CASE("Path::FromString/ToString round-trips", "[file_system]") {
 		    make_tuple(OK_, "s3://bucket/bar/../baz",  "s3://bucket/baz"),
 		    make_tuple(OK_, "s3://bucket/..",          "s3://bucket/"),
 		    make_tuple(OK_, "s3://bucket/../..",       "s3://bucket/"),
-		    make_tuple(OK_, "s3://bucket/c:/B/",       "s3://bucket/c:/B"),
+		    make_tuple(OK_, "s3://bucket/c:/B/",       "s3://bucket/c:/B/"),
 		}));
 	}
 	// clang-format on
@@ -872,7 +730,7 @@ TEST_CASE("Path::JoinPath table-based tests", "[file_system]") {
 		    make_tuple(OK_, "a/bar", "../..",    "."),
 		    make_tuple(OK_, "a/bar", "../../..", ".."),
 
-		    make_tuple(OK_, "./a/././b/./", "././c/././", "a/b/c"),
+		    make_tuple(OK_, "./a/././b/./", "././c/././", "a/b/c/"),
 
 		    make_tuple(OK_, "dir/sub/..", "sibling",        "dir/sibling"),
 		    make_tuple(OK_, "./dir/sub/..", "sibling",      "dir/sibling"),
@@ -884,6 +742,9 @@ TEST_CASE("Path::JoinPath table-based tests", "[file_system]") {
 
 		    make_tuple(ERR, "dir", "/abs/path", ""),
 		    make_tuple(ERR, "/fo",  "/foobar",  ""),
+
+		    // scheme-like token embedded after leading slash is treated as path, not scheme
+		    make_tuple(OK_, "/foo/proto://bar", "a", "/foo/proto:/bar/a"),
 		}));
 	}
 
@@ -896,8 +757,9 @@ TEST_CASE("Path::JoinPath table-based tests", "[file_system]") {
 		    make_tuple(OK_, "file:/usr", "bin",             "file:/usr/bin"),
 		    make_tuple(OK_, "file:/usr/local", "../bin",    "file:/usr/bin"),
 
-		    make_tuple(OK_, "file://localhost/usr", "../bin", "file://localhost/bin"),
-		    make_tuple(OK_, "file:///usr/local", "../bin",    "file:///usr/bin"),
+		    make_tuple(OK_, "file://localhost/usr", "../bin",       "file://localhost/bin"),
+		    make_tuple(OK_, "file://localhost/usr/local", "../bin", "file://localhost/usr/bin"),
+		    make_tuple(OK_, "file:///usr/local", "../bin",          "file:///usr/bin"),
 
 		    make_tuple(OK_, "s3://host", "bar/baz", "s3://host/bar/baz"),
 		    make_tuple(OK_, "s3://host", "..",      "s3://host/"),
@@ -912,7 +774,7 @@ TEST_CASE("Path::JoinPath table-based tests", "[file_system]") {
 		    make_tuple(ERR, "s3://bucket/FOO", "s3://bucket/foo/bar", ""),
 
 		    // sub-path joins
-		    make_tuple(OK_, "file:/usr",            "file:/usr/local",            "file:/usr/local"),
+		    make_tuple(OK_, "file:/usr",             "file:/usr/local",            "file:/usr/local"),
 		    make_tuple(OK_, "file://localhost/usr",  "file://localhost/usr/local", "file://localhost/usr/local"),
 		    make_tuple(OK_, "file:///usr",           "file:///usr/local",          "file:///usr/local"),
 		    make_tuple(OK_, "s3://bucket/a",         "s3://bucket/a/b",            "s3://bucket/a/b"),
@@ -963,4 +825,121 @@ TEST_CASE("Path::JoinPath table-based tests", "[file_system]") {
 	} else {
 		CHECK_THROWS(do_join(lhs, rhs));
 	}
+}
+
+TEST_CASE("Path attributes", "[file_system]") {
+	using std::make_tuple;
+
+	auto L = [](const string &path) {
+		string out(path);
+#ifdef _WIN32
+		for (size_t pos = 0; (pos = out.find('/', pos)) != string::npos; pos++) {
+			out[pos] = '\\';
+		}
+#endif
+		return out;
+	};
+
+	std::string input;
+
+	SECTION("IsAbsolute + IsLocal") {
+		bool is_absolute_exp, is_local_exp;
+		enum AbsType { REL = false, ABS = true };
+		enum LocalTypeType { REMOTE = false, LOCAL_ = true };
+
+		// clang-format off
+		SECTION("posix and URI") {
+			std::tie(input, is_absolute_exp, is_local_exp) = GENERATE(table<std::string, bool, bool>({
+			    make_tuple("",                    REL, LOCAL_),
+			    make_tuple("a/b",                 REL, LOCAL_),
+			    make_tuple("/",                   ABS, LOCAL_),
+			    make_tuple("/a/b",                ABS, LOCAL_),
+			    make_tuple("file:/a/b",           ABS, LOCAL_),
+			    make_tuple("file:///a/b",         ABS, LOCAL_),
+			    make_tuple("s3://bucket/foo",     ABS, REMOTE),
+			    make_tuple("az://container/foo",  ABS, REMOTE),
+			    make_tuple("http://host/path",    ABS, REMOTE),
+			}));
+		}
+#if defined(_WIN32)
+		SECTION("windows") {
+			std::tie(input, is_absolute_exp, is_local_exp) = GENERATE(table<std::string, bool, bool>({
+			    make_tuple(R"(C:\foo)",          ABS, LOCAL_),
+			    make_tuple(R"(C:foo)",           REL, LOCAL_),
+			    make_tuple(R"(\\server\share)",  ABS, REMOTE),
+			    make_tuple(R"(\\?\C:\foo)",      ABS, LOCAL_),
+			}));
+		}
+#endif
+		// clang-format on
+
+		CAPTURE(input);
+		auto p = Path::FromString(input);
+		CHECK(p.IsAbsolute() == is_absolute_exp);
+		CHECK(p.IsLocal() == is_local_exp);
+	}
+
+	SECTION("HasTrailingSeparator") {
+		bool exp;
+
+		// clang-format off
+		SECTION("posix and URI") {
+			std::tie(input, exp) = GENERATE(table<std::string, bool>({
+			    make_tuple("",           false),
+			    make_tuple("foo/bar",    false),
+			    make_tuple("foo/bar/",   true),
+			    make_tuple("/",          true),
+			    make_tuple("/a/b",       false),
+			    make_tuple("/a/b/",      true),
+			    make_tuple("s3://b/p",   false),
+			    make_tuple("s3://b/p/",  true),
+			}));
+		}
+#if defined(_WIN32)
+		SECTION("windows") {
+			std::tie(input, exp) = GENERATE(table<std::string, bool>({
+			    make_tuple("C:/",        true),
+			    make_tuple("C:/foo",     false),
+			    make_tuple("C:/foo/",    true),
+			    make_tuple(R"(C:\)",     true),
+			    make_tuple(R"(C:\foo)",  false),
+			    make_tuple(R"(C:\foo\)", true),
+			}));
+		}
+#endif
+
+		CAPTURE(input);
+		CHECK(Path::FromString(input).HasTrailingSeparator() == exp);
+	}
+
+	SECTION("trailing separator ToString") {
+		// bare anchor: anchor already ends with sep, no double-emit
+		CHECK(L(Path::FromString("/").ToString()) 				== L("/"));
+		CHECK(L(Path::FromString("/foo/bar/").ToString()) 		== L("/foo/bar/"));
+		CHECK(L(Path::FromString("/foo/bar").ToString()) 		== L("/foo/bar"));
+		CHECK(Path::FromString("s3://bucket/a/b/").ToString() 	== "s3://bucket/a/b/");
+#if defined(_WIN32)
+		CHECK(Path::FromString("C:/").ToString() 				== "C:/");
+		CHECK(L(Path::FromString("C:/foo/").ToString()) 		== L("C:/foo/"));
+#endif
+	}
+
+	SECTION("trailing separator Join") {
+		CHECK(Path::FromString("a/b").Join("c/").HasTrailingSeparator() == true);
+		CHECK(Path::FromString("a/b").Join("c").HasTrailingSeparator()  == false);
+		CHECK(L(Path::FromString("a/b/").Join("c/").ToString()) == L("a/b/c/"));
+		CHECK(L(Path::FromString("a/b/").Join("c").ToString())  == L("a/b/c"));
+	}
+	// clang-format on
+}
+
+TEST_CASE("Path one-off tests", "[file_system]") {
+	// confirm that Join("..") and Parent() behaviors are identical in corner case
+	auto dotdot = Path::FromString("..");
+	CHECK(dotdot.Parent().ToString() == "../..");
+	CHECK(dotdot.Join("..").ToString() == "../..");
+
+	auto dotdot_a = Path::FromString("../a");
+	CHECK(dotdot_a.Parent().ToString() == "..");
+	CHECK(dotdot_a.Join("..").ToString() == "..");
 }
