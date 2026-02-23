@@ -335,9 +335,9 @@ public:
 	//! L2
 	unique_ptr<SortedTable> l2;
 	//! Li
-	unsafe_vector<int64_t> li;
+	unique_ptr<ColumnDataCollection> li;
 	//! P
-	unsafe_vector<idx_t> p;
+	unique_ptr<ColumnDataCollection> p;
 
 	// Join queue state
 	idx_t l2_blocks = 0;
@@ -353,6 +353,57 @@ protected:
 	void Initialize();
 	void FinishTask(TaskPtr task);
 	bool TryNextTask(Task &task);
+};
+
+template <typename T, typename VECTOR_TYPE = T>
+class IEJoinCursor {
+public:
+	explicit IEJoinCursor(ColumnDataCollection &collection) : collection(collection) {
+		collection.InitializeScan(state);
+		collection.InitializeScanChunk(state, chunk);
+	}
+
+	//! The row count of the paged collection
+	idx_t size() const { //	NOLINT
+		return collection.Count();
+	}
+
+	//! Read a typed cell
+	const T &operator[](idx_t row_idx) {
+		auto index = Seek(row_idx);
+		auto &source = chunk.data[0];
+		const auto data_ptr = reinterpret_cast<T *>(FlatVector::GetData<VECTOR_TYPE>(source));
+		return data_ptr[index];
+	}
+
+private:
+	//! Is the scan in range?
+	inline bool RowIsVisible(idx_t row_idx) const {
+		return (row_idx < state.next_row_index && state.current_row_index <= row_idx);
+	}
+	//! The offset of the row in the given state
+	inline sel_t RowOffset(idx_t row_idx) const {
+		D_ASSERT(RowIsVisible(row_idx));
+		return UnsafeNumericCast<sel_t>(row_idx - state.current_row_index);
+	}
+	//! Scan the next chunk
+	inline bool Scan() {
+		return collection.Scan(state, chunk);
+	}
+	//! Seek to the given row
+	inline idx_t Seek(idx_t row_idx) {
+		if (!RowIsVisible(row_idx)) {
+			collection.Seek(row_idx, state, chunk);
+		}
+		return RowOffset(row_idx);
+	}
+
+	//! The pageable data
+	const ColumnDataCollection &collection;
+	//! The state used for reading the collection
+	ColumnDataScanState state;
+	//! The data chunk read into
+	DataChunk chunk;
 };
 
 struct IEJoinUnion {
@@ -386,24 +437,24 @@ struct IEJoinUnion {
 	                       ExpressionExecutor &executor, SortedTable &marked, int64_t increment, int64_t rid,
 	                       const ChunkRange &range);
 
-	template <typename T, typename VECTOR_TYPE = T>
-	static void ExtractColumn(SortedTable &table, idx_t col_idx, unsafe_vector<T> &result) {
-		result.clear();
-		result.reserve(table.count);
-
+	static unique_ptr<ColumnDataCollection> ExtractColumn(SortedTable &table, idx_t col_idx,
+	                                                      BufferManager &buffer_manager) {
 		auto &collection = *table.sorted->payload_data;
 		vector<column_t> scan_ids(1, col_idx);
-		TupleDataScanState state;
-		collection.InitializeScan(state, scan_ids);
+		TupleDataScanState scan_state;
+		collection.InitializeScan(scan_state, scan_ids);
 
 		DataChunk payload;
-		collection.InitializeScanChunk(state, payload);
+		collection.InitializeScanChunk(scan_state, payload);
 
-		while (collection.Scan(state, payload)) {
-			const auto count = payload.size();
-			const auto data_ptr = reinterpret_cast<T *>(FlatVector::GetData<VECTOR_TYPE>(payload.data[0]));
-			result.insert(result.end(), data_ptr, data_ptr + count);
+		auto result = make_uniq<ColumnDataCollection>(buffer_manager, payload.GetTypes());
+		ColumnDataAppendState append_state;
+		result->InitializeAppend(append_state);
+		while (collection.Scan(scan_state, payload)) {
+			result->Append(append_state, payload);
 		}
+
+		return result;
 	}
 
 	class UnionIterator {
@@ -478,6 +529,11 @@ struct IEJoinUnion {
 	unique_ptr<UnionIterator> op2;
 	unique_ptr<UnionIterator> off2;
 	int64_t lrid;
+
+	//! Li
+	IEJoinCursor<int64_t> li;
+	//! P
+	IEJoinCursor<idx_t, int64_t> p;
 };
 
 idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrupt, SortedTable &table,
@@ -557,7 +613,8 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 	return inserted;
 }
 
-IEJoinUnion::IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chunks) : gsource(gsource), n(0), i(0) {
+IEJoinUnion::IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chunks)
+    : gsource(gsource), n(0), i(0), li(*gsource.li), p(*gsource.p) {
 	auto &op = gsource.op;
 
 	// 7. initialize bit-array B (|B| = n), and set all bits to 0
@@ -623,9 +680,6 @@ bool IEJoinUnion::NextRow() {
 	BLOCKS_ITERATOR off2_itr(*off2->state);
 	BLOCKS_ITERATOR op2_itr(*op2->state);
 	const auto strict = off2->strict;
-
-	auto &li = gsource.li;
-	auto &p = gsource.p;
 
 	auto pinned_idx = off2->GetChunkIndex();
 	for (; i < n; ++i) {
@@ -724,8 +778,6 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 }
 
 idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
-	const auto &li = gsource.li;
-
 	// Release pinned blocks
 	op2->Repin();
 	off2->Repin();
@@ -871,7 +923,7 @@ void IEJoinGlobalSourceState::ExecuteLiTask(ClientContext &client) {
 	// We don't actually need the L1 column, just its sort key, which is in the sort blocks
 	l1->GetSortedRun(client);
 
-	IEJoinUnion::ExtractColumn<int64_t>(*l1, 1, li);
+	li = IEJoinUnion::ExtractColumn(*l1, 1, BufferManager::GetBufferManager(client));
 }
 
 void IEJoinGlobalSourceState::ExecutePermutationTask(ClientContext &client) {
@@ -879,7 +931,7 @@ void IEJoinGlobalSourceState::ExecutePermutationTask(ClientContext &client) {
 	l2->GetSortedRun(client);
 
 	// 6. compute the permutation array P of L2 w.r.t. L1
-	IEJoinUnion::ExtractColumn<idx_t, int64_t>(*l2, 0, p);
+	p = IEJoinUnion::ExtractColumn(*l2, 0, BufferManager::GetBufferManager(client));
 }
 
 class IEJoinLocalSourceState : public LocalSourceState {

@@ -28,6 +28,10 @@ on:
         required: false
         type: string
         default: ""
+      reduced_ci_mode:
+        required: false
+        type: string
+        default: "auto"
       skip_tests:
         required: false
         type: boolean
@@ -49,6 +53,8 @@ jobs:
       # Note when `upload_all_extensions` is true, the extension name is used as prefix to the artifact holding all built extensions
       upload_all_extensions: true
       extension_name: ${{ inputs.artifact_prefix }}
+
+      reduced_ci_mode: ${{ inputs.reduced_ci_mode }}
 
       # DuckDB version is overridden to the current commit of the current repository
       set_caller_as_duckdb: true
