@@ -1,4 +1,6 @@
-SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
+SetStatement <- SetGeneralStatement / SetVariableStatement
+SetGeneralStatement <- 'SET' (StandardAssignment / SetTimeZone)
+SetVariableStatement <- Identifier ':=' Expression
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone <- 'TIME' 'ZONE' Expression

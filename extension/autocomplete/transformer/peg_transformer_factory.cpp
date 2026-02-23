@@ -379,6 +379,8 @@ void PEGTransformerFactory::RegisterExport() {
 
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
+	REGISTER_TRANSFORM(TransformExpressionStatement);
+	REGISTER_TRANSFORM(TransformExpressionAlias);
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLambdaArrowExpression);
@@ -783,12 +785,14 @@ void PEGTransformerFactory::RegisterSet() {
 	// set.gram
 	REGISTER_TRANSFORM(TransformResetStatement);
 	REGISTER_TRANSFORM(TransformSetAssignment);
+	REGISTER_TRANSFORM(TransformSetGeneralStatement);
 	REGISTER_TRANSFORM(TransformSetSetting);
 	REGISTER_TRANSFORM(TransformSetStatement);
 	REGISTER_TRANSFORM(TransformSetTimeZone);
 	REGISTER_TRANSFORM(TransformSetVariable);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);
+	REGISTER_TRANSFORM(TransformSetVariableStatement);
 }
 
 void PEGTransformerFactory::RegisterTransaction() {

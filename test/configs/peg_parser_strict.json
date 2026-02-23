@@ -155,7 +155,8 @@
       "paths": [
         "test/extension/loadable_parser_override.test",
         "test/sql/peg_parser/transformer/peg_transformer.test",
-        "test/sql/collate/test_unsupported_collations.test"
+        "test/sql/collate/test_unsupported_collations.test",
+        "test/extension/consistent_semicolon_extension_parse.test"
       ]
     },
     {

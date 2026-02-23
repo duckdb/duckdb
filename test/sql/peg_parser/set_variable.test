@@ -1,0 +1,30 @@
+# name: test/sql/peg_parser/expression_statement.test
+# description: Test expression statement
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok 
+SET allow_parser_override_extension = strict;
+
+statement ok
+x := 5; 
+
+query I 
+select getvariable('x'); 
+----
+5
+
+statement error
+x := 5,5,5
+----
+Parser Error: Parser override could not parse this query.
+
+# You can override variables
+statement ok
+x := 6
+
+query I 
+select getvariable('x'); 
+----
+6

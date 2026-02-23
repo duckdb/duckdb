@@ -28,7 +28,13 @@ Statement <-
 	LoadStatement /
 	InstallStatement /
 	AnalyzeStatement /
-	MergeIntoStatement
+	MergeIntoStatement /
+    SetVariableStatement /
+	ExpressionStatement
+
+ExpressionStatement <- List(ExpressionAlias)
+ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
+
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -1381,7 +1387,9 @@ CreateType <- EnumSelectType / EnumStringLiteralList / Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
 EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral)?)
 
-SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
+SetStatement <- SetGeneralStatement / SetVariableStatement
+SetGeneralStatement <- 'SET' (StandardAssignment / SetTimeZone)
+SetVariableStatement <- Identifier ':=' Expression
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone <- 'TIME' 'ZONE' Expression

@@ -28,7 +28,13 @@ Statement <-
 	LoadStatement /
 	InstallStatement /
 	AnalyzeStatement /
-	MergeIntoStatement
+	MergeIntoStatement /
+    SetVariableStatement /
+	ExpressionStatement
+
+ExpressionStatement <- List(ExpressionAlias)
+ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
+
 
 CatalogName <- Identifier
 SchemaName <- Identifier
