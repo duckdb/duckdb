@@ -93,9 +93,7 @@ jobs:
       run: echo $DUCKDB_INSTALL_LIB
 
     - name: Test
-      shell: bash
-      run: |
-        python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --tests-per-invocation 100 --timeout 300
+      run: make unittestci
 
  linux-release:
     name: Linux Release (full suite)
