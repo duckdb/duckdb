@@ -115,20 +115,20 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &inde
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(BoundIndex &bound_index, vector<LogicalType> key_types)
-	    : bound_index(bound_index), key_types(std::move(key_types)) {
+	IndexKeyBindData(ART &art, vector<LogicalType> key_types)
+	    : art(art), key_types(std::move(key_types)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<IndexKeyBindData>(bound_index, key_types);
+		return make_uniq<IndexKeyBindData>(art, key_types);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<IndexKeyBindData>();
-		return &bound_index == &other.bound_index && key_types == other.key_types;
+		return &art == &other.art && key_types == other.key_types;
 	}
 
-	BoundIndex &bound_index;
+	ART &art;
 	vector<LogicalType> key_types;
 };
 
@@ -154,6 +154,14 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 
 	auto &index_list = data_table_info.GetIndexes();
 	auto &bound_index = FindBoundIndex(index_list, index_name, path);
+
+	auto index_type = bound_index.GetIndexType();
+	if (index_type != ART::TYPE_NAME) {
+		throw NotImplementedException(
+		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
+	}
+	auto &art = bound_index.Cast<ART>();
+
 	auto key_types = bound_index.logical_types;
 
 	idx_t num_key_args = arguments.size() - INDEX_KEY_FIXED_ARGS;
@@ -174,7 +182,7 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		bound_function.arguments.push_back(key_type);
 	}
 
-	return make_uniq<IndexKeyBindData>(bound_index, std::move(key_types));
+	return make_uniq<IndexKeyBindData>(art, std::move(key_types));
 }
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -186,15 +194,6 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
-	auto index_type = bind_data.bound_index.GetIndexType();
-
-	// Early return: although the binding phase works for any bound index, this is only currently implemented for
-	// ART indexes. More implementations can be added here for various index types.
-	if (index_type != ART::TYPE_NAME) {
-		throw NotImplementedException(
-		    "index_key: index type '%s' is not yet supported (only ART indexes are supported)", index_type);
-	}
-
 	// Create a DataChunk referencing only the key columns (skip path and index_name).
 	DataChunk key_chunk;
 	key_chunk.InitializeEmpty(bind_data.key_types);
@@ -203,7 +202,7 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 	key_chunk.SetCardinality(count);
 
-	auto &art = bind_data.bound_index.Cast<ART>();
+	auto &art = bind_data.art;
 	unsafe_vector<ARTKey> keys(count);
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	art.GenerateKeys<>(allocator, key_chunk, keys);
