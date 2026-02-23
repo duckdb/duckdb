@@ -88,6 +88,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 	auto &group_by = Make<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
 	                                             child.get().estimated_cardinality);
 	group_by.children.push_back(child);
+	if (op.limit.IsValid()) {
+		group_by.Cast<PhysicalHashAggregate>().distinct_limit = op.limit;
+	}
 	if (!requires_projection) {
 		return group_by;
 	}
