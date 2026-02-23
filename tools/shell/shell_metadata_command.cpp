@@ -434,11 +434,56 @@ MetadataResult RunLLMCommand(ShellState &state, const vector<string> &args) {
 
 	bool is_in_memory = (state.zDbFilename.empty() || state.zDbFilename == ":memory:");
 
+	// Gather attached database info before closing the connection
+	string system_prompt;
+	system_prompt +=
+	    "The DuckDB CLI executable is located at: " + StringUtil::Replace(string(state.program_name), "\"", "\\\"") +
+	    "\\n";
+	if (!is_in_memory) {
+		system_prompt =
+		    "You are working on a DuckDB database located at: " + StringUtil::Replace(state.zDbFilename, "\"", "\\\"") +
+		    "\\n";
+	}
+	if (state.conn) {
+		auto result = state.conn->Query("SELECT database_name, path, readonly, type, options "
+		                                "FROM duckdb_databases() "
+		                                "WHERE NOT internal ORDER BY database_name");
+		if (result && !result->HasError()) {
+			for (auto &row : *result) {
+				auto db_name = row.GetValue<string>(0);
+				auto db_path = row.GetValue<string>(1);
+				bool readonly = row.GetValue<bool>(2);
+				auto db_type = row.GetValue<string>(3);
+
+				string attach_cmd = "ATTACH '" + StringUtil::Replace(db_path, "'", "''") + "'";
+				attach_cmd += " AS " + db_name;
+
+				// Collect options
+				vector<string> opts;
+				if (readonly) {
+					opts.push_back("READ_ONLY");
+				}
+				if (db_type != "duckdb") {
+					opts.push_back("TYPE " + db_type);
+				}
+				// Include any extra attach options from the options map
+				auto options_val = row.GetValue<string>(4);
+				if (!options_val.empty() && options_val != "{}") {
+					opts.push_back(options_val);
+				}
+				if (!opts.empty()) {
+					attach_cmd += " (" + StringUtil::Join(opts, ", ") + ")";
+				}
+				attach_cmd += ";";
+				system_prompt += "Attached database: " + attach_cmd + "\\n";
+			}
+		}
+	}
+
 	if (is_in_memory) {
 		state.Print(PrintOutput::STDERR, "Warning: in-memory database cannot be sent to the LLM. "
 		                                 "The database will remain open during the LLM session.\n");
 	} else {
-		state.Print("Closing database before LLM session...\n");
 		state.last_result.reset();
 		state.db.reset();
 		state.conn.reset();
@@ -453,10 +498,8 @@ MetadataResult RunLLMCommand(ShellState &state, const vector<string> &args) {
 	} else {
 		cmd = "claude --resume " + state.llm_session_id;
 	}
-	// Tell the LLM which database it's working with
-	if (!is_in_memory) {
-		cmd += " --append-system-prompt \"You are working on a DuckDB database located at: " +
-		       StringUtil::Replace(state.zDbFilename, "\"", "\\\"") + "\"";
+	if (!system_prompt.empty()) {
+		cmd += " --append-system-prompt \"" + system_prompt + "\"";
 	}
 
 	for (idx_t i = 1; i < args.size(); i++) {
@@ -473,7 +516,6 @@ MetadataResult RunLLMCommand(ShellState &state, const vector<string> &args) {
 
 	// Reopen database if we closed it
 	if (!is_in_memory) {
-		state.Print("Reopening database...\n");
 		state.OpenDB(ShellOpenFlags::KEEP_ALIVE_ON_FAILURE);
 	}
 
