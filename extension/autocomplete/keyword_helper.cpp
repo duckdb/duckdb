@@ -39,7 +39,8 @@ vector<string> PEGKeywordHelper::FindReservedKeywordsByPrefix(const string &pref
 	auto prefix_upper = StringUtil::Upper(prefix);
 	for (auto &keyword : reserved_keyword_map) {
 		auto keyword_upper = StringUtil::Upper(keyword);
-		if (keyword_upper.size() > prefix_upper.size() && keyword_upper.compare(0, prefix_upper.size(), prefix_upper) == 0) {
+		if (keyword_upper.size() > prefix_upper.size() &&
+		    keyword_upper.compare(0, prefix_upper.size(), prefix_upper) == 0) {
 			matches.push_back(keyword_upper);
 		}
 	}
