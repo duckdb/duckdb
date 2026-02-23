@@ -116,8 +116,7 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &inde
 }
 
 struct IndexKeyBindData : public FunctionData {
-	IndexKeyBindData(ART &art, vector<LogicalType> key_types)
-	    : art(art), key_types(std::move(key_types)) {
+	IndexKeyBindData(ART &art, vector<LogicalType> key_types) : art(art), key_types(std::move(key_types)) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
