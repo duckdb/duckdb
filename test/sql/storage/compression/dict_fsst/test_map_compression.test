@@ -1,0 +1,94 @@
+# name: test/sql/storage/compression/dict_fsst/test_map_compression.test
+# description: Test USING COMPRESSION on MAP/LIST columns propagates to leaf VARCHAR child columns
+# group: [dict_fsst]
+
+load __TEST_DIR__/test_map_compression.db readwrite v1.4.2
+
+# MAP(VARCHAR, VARCHAR) with DICT_FSST compression should be accepted and applied to key/value columns
+statement ok
+CREATE TABLE map_compressed (
+	m MAP(VARCHAR, VARCHAR) USING COMPRESSION DICT_FSST
+);
+
+statement ok
+INSERT INTO map_compressed VALUES
+	(MAP {'hello': 'world', 'foo': 'bar'}),
+	(MAP {'hello': 'world', 'baz': 'qux'}),
+	(MAP {'hello': 'world', 'foo': 'bar'}),
+	(MAP {'hello': 'world', 'baz': 'qux'}),
+	(MAP {'hello': 'world', 'foo': 'bar'}),
+	(MAP {'hello': 'world', 'baz': 'qux'}),
+	(MAP {'test': 'value', 'key': 'data'}),
+	(MAP {'test': 'value', 'key': 'data'}),
+	(NULL);
+
+statement ok
+CHECKPOINT
+
+# Verify the key and value VARCHAR segments are compressed with DICT_FSST
+query I
+SELECT compression FROM pragma_storage_info('map_compressed') WHERE segment_type ILIKE 'VARCHAR' LIMIT 2
+----
+DICT_FSST
+DICT_FSST
+
+# Verify data roundtrips correctly - ordered alphabetically by string representation
+query I
+SELECT m FROM map_compressed WHERE m IS NOT NULL ORDER BY m::VARCHAR LIMIT 3
+----
+{hello=world, baz=qux}
+{hello=world, baz=qux}
+{hello=world, baz=qux}
+
+# MAP(VARCHAR, BIGINT) - compression applies to the VARCHAR key leaf only;
+# BIGINT values don't support DICT_FSST but that's fine - they fall back to AUTO
+statement ok
+CREATE TABLE map_mixed (
+	m MAP(VARCHAR, BIGINT) USING COMPRESSION DICT_FSST
+);
+
+statement ok
+INSERT INTO map_mixed VALUES
+	(MAP {'alpha': 1, 'beta': 2}),
+	(MAP {'alpha': 1, 'gamma': 3}),
+	(MAP {'alpha': 1, 'beta': 2}),
+	(MAP {'alpha': 1, 'gamma': 3});
+
+statement ok
+CHECKPOINT
+
+# The VARCHAR key segments should be DICT_FSST compressed
+query I
+SELECT compression FROM pragma_storage_info('map_mixed') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+DICT_FSST
+
+# LIST(VARCHAR) with DICT_FSST compression - applies to the element (child) column
+statement ok
+CREATE TABLE list_compressed (
+	l VARCHAR[] USING COMPRESSION DICT_FSST
+);
+
+statement ok
+INSERT INTO list_compressed VALUES
+	(['hello', 'world', 'foo']),
+	(['hello', 'world', 'bar']),
+	(['hello', 'world', 'foo']),
+	(['hello', 'world', 'bar']),
+	(NULL);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('list_compressed') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+DICT_FSST
+
+# Compression on a MAP with no compatible leaf types should still fail
+statement error
+CREATE TABLE map_int_int (
+	m MAP(INTEGER, INTEGER) USING COMPRESSION DICT_FSST
+);
+----
+Can't compress column "m" with type 'MAP(INTEGER, INTEGER)' (physical: LIST) using compression type 'DICT_FSST'

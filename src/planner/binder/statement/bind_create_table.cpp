@@ -37,6 +37,37 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 	}
 }
 
+// Recursively checks whether compression_type is valid for any leaf (scalar) type within a complex type.
+// For MAP/LIST/STRUCT, the compression is applied to compatible child columns at checkpoint time;
+// non-compatible intermediate columns (e.g. the LIST or STRUCT shell) silently fall back to AUTO.
+static bool CompressionValidForLeafTypes(DBConfig &config, CompressionType compression_type,
+                                         const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::MAP: {
+		auto &key_type = MapType::KeyType(type);
+		auto &value_type = MapType::ValueType(type);
+		return CompressionValidForLeafTypes(config, compression_type, key_type) ||
+		       CompressionValidForLeafTypes(config, compression_type, value_type);
+	}
+	case LogicalTypeId::LIST: {
+		auto &child_type = ListType::GetChildType(type);
+		return CompressionValidForLeafTypes(config, compression_type, child_type);
+	}
+	case LogicalTypeId::STRUCT: {
+		for (auto &child : StructType::GetChildTypes(type)) {
+			if (CompressionValidForLeafTypes(config, compression_type, child.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default: {
+		auto physical_type = type.InternalType();
+		return config.GetCompressionFunction(compression_type, physical_type) != nullptr;
+	}
+	}
+}
+
 static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageManager> storage_manager,
                                   DBConfig &config, BoundCreateTableInfo &info) {
 	auto &base = info.base->Cast<CreateTableInfo>();
@@ -70,6 +101,11 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 		}
 		auto compression_method = config.GetCompressionFunction(compression_type, physical_type);
 		if (!compression_method) {
+			// For complex types (MAP, LIST, STRUCT), the compression is propagated to leaf scalar columns.
+			// Accept if the compression type is compatible with at least one leaf child type.
+			if (CompressionValidForLeafTypes(config, compression_type, logical_type)) {
+				continue;
+			}
 			throw BinderException(
 			    "Can't compress column \"%s\" with type '%s' (physical: %s) using compression type '%s'", col.Name(),
 			    logical_type.ToString(), EnumUtil::ToString(physical_type), CompressionTypeToString(compression_type));
