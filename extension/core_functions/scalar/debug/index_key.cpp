@@ -37,20 +37,21 @@ static TableDescription ExtractTableDescription(const child_list_t<LogicalType> 
 
 		auto &field_value = field_values[i];
 		if (field_value.IsNull()) {
-			continue;
+			throw BinderException("index_key: path field '%s' cannot be NULL", field_types[i].first);
 		}
 		if (field_value.type().id() != LogicalTypeId::VARCHAR) {
 			throw BinderException("index_key: path field '%s' must be VARCHAR", field_types[i].first);
 		}
 
 		auto value = StringValue::Get(field_value);
-		if (!value.empty()) {
-			fields[field_name] = value;
+		if (value.empty()) {
+			throw BinderException("index_key: path field '%s' cannot be empty", field_types[i].first);
 		}
+		fields[field_name] = value;
 	}
 
 	if (fields["table"].empty()) {
-		throw BinderException("index_key: path must contain a non-empty 'table' field");
+		throw BinderException("index_key: path must contain a 'table' field");
 	}
 
 	return TableDescription(fields["catalog"], fields["schema"], fields["table"]);

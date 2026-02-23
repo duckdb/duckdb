@@ -64,35 +64,47 @@ FROM generate_series(1, 100) AS t(i);
 #                                                                                                                      #
 ########################################################################################################################
 
-query I
-SELECT index_key({'catalog': '', 'schema': 'main', 'table': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
-----
-\x80\x00\x00\x01alpha\x00
-
+# Omitting catalog and schema uses defaults
 query I
 SELECT index_key({'table': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
 ----
 \x80\x00\x00\x01alpha\x00
 
+# Explicit schema, omit catalog
 query I
 SELECT index_key({'schema': 'main', 'table': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
 ----
 \x80\x00\x00\x01alpha\x00
 
+# Explicit catalog, omit schema
 query I
+SELECT index_key({'catalog': 'memory', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
+----
+\x80\x00\x00\x01
+
+# Explicit catalog and schema
+query I
+SELECT index_key({'catalog': 'memory', 'schema': 'main', 'table': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
+----
+\x80\x00\x00\x01alpha\x00
+
+# Empty catalog is an error
+statement error
 SELECT index_key({'catalog': '', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
-\x80\x00\x00\x01
+Binder Error: index_key: path field 'catalog' cannot be empty
 
-query I
+# NULL catalog is an error
+statement error
 SELECT index_key({'catalog': NULL::VARCHAR, 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
-\x80\x00\x00\x01
+Binder Error: index_key: path field 'catalog' cannot be NULL
 
-query I
+# NULL schema is an error
+statement error
 SELECT index_key({'schema': NULL::VARCHAR, 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
-\x80\x00\x00\x01
+Binder Error: index_key: path field 'schema' cannot be NULL
 
 ########################################################################################################################
 #                                                                                                                      #
@@ -229,7 +241,7 @@ ORDER BY key1;
 \x80\x00\x00\x04row4\x00\x80\x00\x00\x00\x00\x00\x00\x10
 
 query I
-SELECT index_key({'catalog': '', 'schema': 'main', 'table': 'tbl3'}, 'tbl3_idx', key1, key2, key3)
+SELECT index_key({'catalog': 'memory', 'schema': 'main', 'table': 'tbl3'}, 'tbl3_idx', key1, key2, key3)
 FROM tbl3
 WHERE key1 BETWEEN 1 AND 3
 ORDER BY key1;
@@ -321,23 +333,28 @@ Expected 1 parameters, but none were supplied
 statement error
 SELECT index_key({'schema': 'main'}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: path must contain a non-empty 'table' field
+Binder Error: index_key: path must contain a 'table' field
 
 statement error
 SELECT index_key({'table': NULL::VARCHAR}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: path must contain a non-empty 'table' field
+Binder Error: index_key: path field 'table' cannot be NULL
 
 statement error
 SELECT index_key({'table': 123}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: path field 'table' must be VARCHA
+Binder Error: index_key: path field 'table' must be VARCHAR
 
 statement error
 SELECT index_key({'table': ''}, 'PRIMARY_tbl1_0', 1);
 ----
-Binder Error: index_key: path must contain a non-empty 'table' field
+Binder Error: index_key: path field 'table' cannot be empty
 
+
+statement error
+SELECT index_key({'foo': 'bar', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
+----
+Binder Error: index_key: unknown field 'foo' in path
 
 statement error
 SELECT index_key('tbl1', 'PRIMARY_tbl1_0', 1);
