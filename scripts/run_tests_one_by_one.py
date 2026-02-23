@@ -353,7 +353,7 @@ def launch_test(test, list_of_tests=False):
         additional_data += f" (Time: {end - start:.4f} seconds)"
     if rss_tracking_enabled:
         peak_rss_mib = float(int(peak_rss_bytes or 0)) / (1024.0 * 1024.0)
-        additional_data += f" (Peak RSS: {peak_rss_mib:.1f} MiB)"
+        additional_data += f" (Peak RSS: {peak_rss_mib:.0f} MiB)"
     print(additional_data, flush=True)
     if profile:
         print(f'{test_case}	{end - start}')
