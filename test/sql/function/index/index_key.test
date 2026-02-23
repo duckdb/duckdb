@@ -344,6 +344,11 @@ SELECT index_key('tbl1', 'PRIMARY_tbl1_0', 1);
 ----
 Binder Error: No function matches the given name and argument types
 
+statement error
+SELECT index_key({'schema': 'main', 'schema': 'main', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
+----
+Binder Error: Duplicate struct entry name "schema"
+
 ########################################################################################################################
 #                                                                                                                      #
 #   NULL values                                                                                                        #

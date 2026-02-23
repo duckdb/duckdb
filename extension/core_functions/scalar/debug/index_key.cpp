@@ -101,10 +101,9 @@ static BoundIndex &FindBoundIndex(TableIndexList &index_list, const string &inde
 
 	auto qualified_table = ParseInfo::QualifierToString(path.database, path.schema, path.table);
 	vector<string> available;
-	index_list.Scan([&](Index &idx) {
+	for (auto &idx : index_list.Indexes()) {
 		available.push_back(idx.GetIndexName());
-		return false;
-	});
+	}
 
 	if (available.empty()) {
 		throw CatalogException("index_key: index '%s' was not found on table %s. No indexes found on this table.",
