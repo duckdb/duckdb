@@ -2,7 +2,6 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string.hpp"
-#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 enum class PEGKeywordCategory : uint8_t {
@@ -25,9 +24,6 @@ public:
 		}
 		return false;
 	};
-	//! Returns reserved keywords that start with the given prefix (case-insensitive).
-	//! Returns an empty vector if no matches are found.
-	vector<string> FindReservedKeywordsByPrefix(const string &prefix) const;
 
 private:
 	PEGKeywordHelper();

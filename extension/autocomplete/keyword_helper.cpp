@@ -1,5 +1,4 @@
 #include "keyword_helper.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 PEGKeywordHelper &PEGKeywordHelper::Instance() {
@@ -32,18 +31,5 @@ bool PEGKeywordHelper::KeywordCategoryType(const std::string &text, const PEGKey
 	default:
 		return false;
 	}
-}
-
-vector<string> PEGKeywordHelper::FindReservedKeywordsByPrefix(const string &prefix) const {
-	vector<string> matches;
-	auto prefix_upper = StringUtil::Upper(prefix);
-	for (auto &keyword : reserved_keyword_map) {
-		auto keyword_upper = StringUtil::Upper(keyword);
-		if (keyword_upper.size() > prefix_upper.size() &&
-		    keyword_upper.compare(0, prefix_upper.size(), prefix_upper) == 0) {
-			matches.push_back(keyword_upper);
-		}
-	}
-	return matches;
 }
 } // namespace duckdb

@@ -1308,7 +1308,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
 
-	// suppress suggestions for rules that would pollute statement-level autocomplete
+	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
 	SuppressSuggestions("ExpressionStatement");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
