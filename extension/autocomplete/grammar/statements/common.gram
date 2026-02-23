@@ -35,7 +35,6 @@ Statement <-
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
-SetVariableStatement <- Identifier ':=' Expression
 
 CatalogName <- Identifier
 SchemaName <- Identifier

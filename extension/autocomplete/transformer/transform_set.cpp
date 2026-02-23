@@ -41,6 +41,12 @@ SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transform
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetStatement(PEGTransformer &transformer,
                                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetGeneralStatement(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto &child_pr = list_pr.Child<ListParseResult>(1);
 	return transformer.Transform<unique_ptr<SetStatement>>(child_pr.Child<ChoiceParseResult>(0).result);
 }
