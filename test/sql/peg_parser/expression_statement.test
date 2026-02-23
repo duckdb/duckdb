@@ -1,6 +1,6 @@
-# name: test/sql/peg_parser/parser/sample.test
+# name: test/sql/peg_parser/expression_statement.test
 # description: Test expression statement
-# group: [parser]
+# group: [peg_parser]
 
 require autocomplete
 
