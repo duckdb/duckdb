@@ -15,7 +15,6 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
