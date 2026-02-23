@@ -42,17 +42,13 @@ static uint8_t EncodeMetadataHeader(idx_t byte_length) {
 }
 
 static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, idx_t count) {
-	auto &keys = variant.keys;
-	auto keys_data = variant.keys_data;
-
 	//! NOTE: the parquet variant is limited to a max dictionary size of NumericLimits<uint32_t>::Maximum()
 	//! Whereas we can have NumericLimits<uint32_t>::Maximum() *per* string in DuckDB
 	auto metadata_data = FlatVector::GetData<string_t>(metadata);
 	for (idx_t row = 0; row < count; row++) {
 		uint64_t dictionary_count = 0;
 		if (variant.RowIsValid(row)) {
-			auto list_entry = keys_data[keys.sel->get_index(row)];
-			dictionary_count = list_entry.length;
+			dictionary_count = variant.GetKeysCount(row);
 		}
 		idx_t dictionary_size = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
@@ -72,19 +68,19 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 		auto metadata_blob_data = metadata_blob.GetDataWriteable();
 
 		metadata_blob_data[0] = EncodeMetadataHeader(byte_length);
-		memcpy(metadata_blob_data + 1, reinterpret_cast<data_ptr_t>(&dictionary_count), byte_length);
+		memcpy(metadata_blob_data + 1, const_data_ptr_cast(&dictionary_count), byte_length);
 
 		auto offset_ptr = metadata_blob_data + 1 + byte_length;
 		auto string_ptr = metadata_blob_data + 1 + byte_length + ((dictionary_count + 1) * byte_length);
 		idx_t total_offset = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
-			memcpy(offset_ptr + (i * byte_length), reinterpret_cast<data_ptr_t>(&total_offset), byte_length);
+			memcpy(offset_ptr + (i * byte_length), const_data_ptr_cast(&total_offset), byte_length);
 			auto &key = variant.GetKey(row, i);
 
 			memcpy(string_ptr + total_offset, key.GetData(), key.GetSize());
 			total_offset += key.GetSize();
 		}
-		memcpy(offset_ptr + (dictionary_count * byte_length), reinterpret_cast<data_ptr_t>(&total_offset), byte_length);
+		memcpy(offset_ptr + (dictionary_count * byte_length), const_data_ptr_cast(&total_offset), byte_length);
 		D_ASSERT(offset_ptr + ((dictionary_count + 1) * byte_length) == string_ptr);
 		D_ASSERT(string_ptr + total_offset == metadata_blob_data + total_length);
 		metadata_blob.SetSizeAndFinalize(total_length, total_length);

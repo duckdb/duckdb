@@ -125,7 +125,7 @@ public:
 	                 DataChunk &delete_chunk);
 	//! Appends to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool unsafe = false);
 	//! Append a chunk to the transaction-local storage of this table.
 	void LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                    const vector<unique_ptr<BoundConstraint>> &bound_constraints);
