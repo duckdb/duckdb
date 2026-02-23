@@ -64,13 +64,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEG
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			}
 		} else {
-			// Check if this looks like a mistyped reserved keyword
-			auto &keyword_helper = PEGKeywordHelper::Instance();
-			auto keyword_matches = keyword_helper.FindReservedKeywordsByPrefix(col_expr.GetColumnName());
-			if (!keyword_matches.empty()) {
-				throw ParserException("Unrecognized statement \"%s\". Did you mean \"%s\"?", col_expr.GetColumnName(),
-				                      StringUtil::Join(keyword_matches, "\" or \""));
-			}
 			auto base_table = make_uniq<BaseTableRef>();
 			base_table->table_name = col_expr.GetColumnName();
 			select_node->from_table = std::move(base_table);
