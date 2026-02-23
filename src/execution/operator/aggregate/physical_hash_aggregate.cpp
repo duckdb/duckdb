@@ -409,12 +409,11 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 		table.Sink(context, chunk, sink_input, aggregate_input_chunk, non_distinct_filter);
 	}
 
-	// Check if we can early-terminate for DISTINCT + LIMIT
+	// Check if we can early-terminate for distinct limit
 	if (distinct_limit.IsValid()) {
 		if (global_state.distinct_limit_reached.load(std::memory_order_relaxed)) {
 			return SinkResultType::FINISHED;
 		}
-		// Check this thread's local group count
 		idx_t limit_val = distinct_limit.GetIndex();
 		for (idx_t i = 0; i < groupings.size(); i++) {
 			auto &grouping_local_state = local_state.grouping_states[i];
