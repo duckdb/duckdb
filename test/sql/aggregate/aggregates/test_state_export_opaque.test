@@ -17,56 +17,56 @@ SELECT finalize(bit_xor(d) EXPORT_STATE) FROM dummy;
 
 # grouped aggr
 query IIIII nosort res1
-SELECT g, corr(d, d+1) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, bit_xor(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIII nosort res1
-SELECT g, finalize(corr(d, d+1) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, finalize(bit_xor(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, corr(d, d+1) EXPORT_STATE corr_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, bit_xor(d) EXPORT_STATE xor_state FROM dummy GROUP BY g ORDER BY g;
 
 query IIIII nosort res1
-SELECT g, finalize(corr_state) FROM state ORDER BY g;
+SELECT g, finalize(xor_state) FROM state ORDER BY g;
 ----
 
 # empty groups
 query IIII nosort res4
-SELECT corr(d, d+1) FROM dummy WHERE FALSE;
+SELECT bit_xor(d) FROM dummy WHERE FALSE;
 ----
 
 query IIII nosort res4
-SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM dummy WHERE FALSE;
+SELECT finalize(bit_xor(d) EXPORT_STATE) FROM dummy WHERE FALSE;
 ----
 
 # only null scanned
 query IIII nosort res5
-SELECT corr(d, d+1) FROM (SELECT NULL::integer d);
+SELECT bit_xor(d) FROM (SELECT NULL::integer d);
 ----
 
 query IIII nosort res5
-SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM (SELECT NULL::integer d);
+SELECT finalize(bit_xor(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
 ----
 
 # only null scanned, but grouped
 query IIII nosort res6
-SELECT corr(d, d+1) FROM (SELECT NULL::integer d, g FROM dummy);
+SELECT bit_xor(d) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 query IIII nosort res6
-SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+SELECT finalize(bit_xor(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 # more aggregates
 
-query IIIIII nosort res8
-SELECT g, product(d), bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
+query III nosort res8
+SELECT g, bit_xor(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
 ----
 
-query IIIIII nosort res8
-SELECT g, FINALIZE(product(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+query III nosort res8
+SELECT g, FINALIZE(bit_xor(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query II nosort res9
