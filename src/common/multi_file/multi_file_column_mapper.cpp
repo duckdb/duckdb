@@ -662,13 +662,13 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			auto expr =
 			    multi_file_reader.GetVirtualColumnExpression(context, reader_data, local_columns, global_column_id,
 			                                                 virtual_column_type, local_idx, global_column_reference);
-			if (!expr && !global_column_reference) {
+			if ((!expr && !global_column_reference) || (expr && global_column_reference.get())) {
 				throw InternalException(R"(
 					The GetVirtualColumnExpression is expected to either:"
 					- return an expression applied in FinalizeChunk to create the value for this global column,
 					  forwarding the (potentially changed) 'global_column_id' to the reader to create the needed data for the expression.
 					- set the 'global_column_reference' to replace this virtual column with a MultiFileColumnDefinition, as if it was defined in the schema.
-					Doing neither is not a valid option.
+					Doing neither or both is not a valid option.
 				)");
 			}
 			if (expr && expr->type == ExpressionType::VALUE_CONSTANT) {
