@@ -53,6 +53,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
+#include "duckdb/parser/statement/transaction_statement.hpp"
 
 namespace duckdb {
 
@@ -662,15 +663,29 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 	return ParseStatementsInternal(*lock, query);
 }
 
+void WrapMultiStatementInTransaction(vector<unique_ptr<SQLStatement>> &statements) {
+	auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION);
+	auto begin_statement = make_uniq<TransactionStatement>(std::move(begin_info));
+	statements.insert(statements.begin(), std::move(begin_statement));
+
+	auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT);
+	auto commit_statement = make_uniq<TransactionStatement>(std::move(commit_info));
+	statements.insert(statements.end(), std::move(commit_statement));
+}
+
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
 		Parser parser(GetParserOptions());
 		parser.ParseQuery(query);
-
+		auto &statements = parser.statements;
+		if (!statements.empty() && statements[0].get()->type == StatementType::MULTI_STATEMENT &&
+		    !transaction.HasActiveTransaction()) {
+			WrapMultiStatementInTransaction(statements);
+		}
 		PragmaHandler handler(*this);
-		handler.HandlePragmaStatements(lock, parser.statements);
+		handler.HandlePragmaStatements(lock, statements);
 
-		return std::move(parser.statements);
+		return std::move(statements);
 	} catch (std::exception &ex) {
 		auto error = ErrorData(ex);
 		ProcessError(error, query);
