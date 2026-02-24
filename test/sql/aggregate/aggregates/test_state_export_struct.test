@@ -33,8 +33,8 @@ query I nosort res_corr0
 SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM dummy;
 ----
 
-query IIIIIIIII nosort res1
-SELECT g, sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIIIII nosort res1
+SELECT g, sum(d), avg(d)::integer, count(d), min(d), max(d), stddev(d)::integer, first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIIIIIIIII nosort res1
