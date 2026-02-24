@@ -119,7 +119,7 @@ typedef unordered_map<MetricType, Value, MetricTypeHashFunction> profiler_metric
 class MetricsUtils {
 public:
 	static constexpr uint8_t START_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER);
-	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_PROJECTION_PULLUP);
+	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_LIMITED_DISTINCT_AGGREGATION);
 
 public:
 
