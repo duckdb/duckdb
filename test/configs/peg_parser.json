@@ -123,20 +123,16 @@
       ]
     },
     {
-      "reason": "Unclassified failures",
+      "reason": "Expression depth",
       "paths": [
-        "test/sql/types/enum/test_enum.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
-        "test/sql/overflow/expression_tree_depth.test",
+        "test/sql/overflow/expression_tree_depth.test"
+      ]
+    },
+    {
+      "reason": "Different behaviour compared to PostgreSQL parser",
+      "paths": [
         "test/sql/function/string/test_string_slice.test",
-        "test/optimizer/joins/lateral_cross_join.test",
-        "test/sql/binder/test_string_alias.test",
-        "test/sql/catalog/table/create_table_parameters.test",
-        "test/sql/pragma/test_query_log.test",
-        "test/sql/function/string/test_subscript.test",
-        "test/sql/copy/csv/glob/copy_csv_glob.test",
-        "test/sql/select/test_select_locking.test"
+        "test/sql/function/string/test_subscript.test"
       ]
     },
     {
