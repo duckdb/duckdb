@@ -39,6 +39,10 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 		entry = binder.entry_retriever.GetEntry(type_catalog, type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
 
 		if (!IsValidTypeLookup(entry)) {
+			if (!type_catalog.empty() || !type_schema.empty()) {
+				entry = binder.entry_retriever.GetEntry(type_catalog, type_schema, type_lookup,
+				                                        OnEntryNotFound::THROW_EXCEPTION);
+			}
 			entry = binder.entry_retriever.GetEntry(type_catalog, INVALID_SCHEMA, type_lookup,
 			                                        OnEntryNotFound::RETURN_NULL);
 		}
