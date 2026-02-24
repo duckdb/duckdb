@@ -8,6 +8,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/query_result.hpp"
 
 #include <set>
 
@@ -160,6 +161,8 @@ public:
 	explicit ViewColumnHelper(ClientContext &context, ViewCatalogEntry &entry) : entry(entry) {
 		entry.BindView(context);
 		view_columns = entry.GetColumnInfo();
+		column_names = view_columns->names;
+		QueryResult::DeduplicateColumns(column_names);
 	}
 
 	StandardEntry &Entry() override {
@@ -169,7 +172,7 @@ public:
 		return view_columns->types.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return col < entry.aliases.size() ? entry.aliases[col] : view_columns->names[col];
+		return col < entry.aliases.size() ? entry.aliases[col] : column_names[col];
 	}
 	const LogicalType &ColumnType(idx_t col) override {
 		return view_columns->types[col];
@@ -187,6 +190,7 @@ public:
 private:
 	ViewCatalogEntry &entry;
 	shared_ptr<ViewColumnInfo> view_columns;
+	vector<string> column_names;
 };
 
 unique_ptr<ColumnHelper> ColumnHelper::Create(ClientContext &context, CatalogEntry &entry) {

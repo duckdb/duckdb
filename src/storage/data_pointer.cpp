@@ -31,7 +31,8 @@ unique_ptr<ColumnSegmentState> ColumnSegmentState::Deserialize(Deserializer &des
 	auto &db = deserializer.Get<DatabaseInstance &>();
 	auto &type = deserializer.Get<const LogicalType &>();
 
-	auto compression_function = DBConfig::GetConfig(db).GetCompressionFunction(compression_type, type.InternalType());
+	auto compression_function =
+	    DBConfig::GetConfig(db).TryGetCompressionFunction(compression_type, type.InternalType());
 	if (!compression_function || !compression_function->deserialize_state) {
 		throw SerializationException("Deserializing a ColumnSegmentState but could not find deserialize method");
 	}

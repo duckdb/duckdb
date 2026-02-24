@@ -44,6 +44,15 @@ static void GetTypeFunction(DataChunk &args, ExpressionState &state, Vector &res
 	result.Reference(v);
 }
 
+static unique_ptr<FunctionData> BindGetTypeFunction(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	bound_function.arguments[0] = arguments[0]->return_type;
+	return nullptr;
+}
+
 static unique_ptr<Expression> BindGetTypeFunctionExpression(FunctionBindExpressionInput &input) {
 	auto &return_type = input.children[0]->return_type;
 	if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
@@ -55,7 +64,7 @@ static unique_ptr<Expression> BindGetTypeFunctionExpression(FunctionBindExpressi
 }
 
 ScalarFunction GetTypeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, GetTypeFunction);
+	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::TYPE(), GetTypeFunction, BindGetTypeFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindGetTypeFunctionExpression);
 	return fun;

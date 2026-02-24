@@ -810,7 +810,7 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 	});
 
 	auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
-		return LogicalType::STRUCT({{"untyped_value_index", LogicalType::UINTEGER}, {"typed_value", type}});
+		return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
 	});
 	force_variant_shredding =
 	    LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()}, {"shredded", shredding_type}});
@@ -1648,6 +1648,19 @@ void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
+}
+
+//===----------------------------------------------------------------------===//
+// Warnings As Errors
+//===----------------------------------------------------------------------===//
+
+void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	auto &log_manager = LogManager::Get(*info.context);
+	if (input == Value(true) && !log_manager.GetConfig().enabled) {
+		throw Exception(
+		    ExceptionType::SETTINGS,
+		    "Can not set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
+	}
 }
 
 } // namespace duckdb

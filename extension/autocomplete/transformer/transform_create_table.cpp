@@ -31,7 +31,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateStatement(PEGTran
 	auto temporary_pr = list_pr.Child<OptionalParseResult>(2);
 	auto persistent_type = SecretPersistType::DEFAULT;
 	transformer.TransformOptional<SecretPersistType>(list_pr, 2, persistent_type);
-	if (result->info->TYPE == ParseInfoType::CREATE_SECRET_INFO) {
+	if (result->info->type == CatalogType::SECRET_ENTRY) {
 		auto &secret_info = result->info->Cast<CreateSecretInfo>();
 		secret_info.persist_type = persistent_type;
 	}
@@ -221,7 +221,13 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
 	auto qualified_name = StringToQualifiedName(dotted_identifier);
+	auto type_opt = list_pr.Child<OptionalParseResult>(1);
+	auto generated_opt = list_pr.Child<OptionalParseResult>(2);
 	LogicalType type = LogicalType::ANY;
+	if (!type_opt.HasResult() && !generated_opt.HasResult()) {
+		throw ParserException("Column %s must have a type or be defined as a GENERATED column.",
+		                      qualified_name.ToString());
+	}
 	transformer.TransformOptional<LogicalType>(list_pr, 1, type);
 	auto constraints_opt = list_pr.Child<OptionalParseResult>(4);
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
@@ -258,7 +264,6 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 			}
 		}
 	}
-	auto generated_opt = list_pr.Child<OptionalParseResult>(2);
 	if (generated_opt.HasResult()) {
 		auto generated = transformer.Transform<GeneratedColumnDefinition>(generated_opt.optional_result);
 		if (generated.expr->HasSubquery()) {
@@ -477,7 +482,12 @@ pair<bool, ConstraintType> PEGTransformerFactory::TransformUniqueConstraint(PEGT
 
 pair<bool, ConstraintType> PEGTransformerFactory::TransformNotNullConstraint(PEGTransformer &transformer,
                                                                              optional_ptr<ParseResult> parse_result) {
-	return make_pair(false, ConstraintType::NOT_NULL);
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto not_null = list_pr.Child<OptionalParseResult>(0).HasResult();
+	if (not_null) {
+		return make_pair(false, ConstraintType::NOT_NULL);
+	}
+	return make_pair(false, ConstraintType::INVALID);
 }
 
 LogicalType PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,
