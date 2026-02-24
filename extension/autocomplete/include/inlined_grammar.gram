@@ -29,13 +29,10 @@ Statement <-
 	InstallStatement /
 	AnalyzeStatement /
 	MergeIntoStatement /
-    SetVariableStatement /
 	ExpressionStatement
 
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
-
-SetVariableStatement <- Identifier ':=' Expression
 
 CatalogName <- Identifier
 SchemaName <- Identifier
