@@ -2497,12 +2497,17 @@ PEGTransformerFactory::TransformSubqueryExpression(PEGTransformer &transformer,
 	} else {
 		result->subquery_type = SubqueryType::SCALAR;
 	}
-	auto select_statement = make_uniq<SelectStatement>();
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(subquery_reference);
-	select_statement->node = std::move(select_node);
-	result->subquery = std::move(select_statement);
+	if (subquery_reference->type == TableReferenceType::SUBQUERY) {
+		auto &subquery_ref = subquery_reference->Cast<SubqueryRef>();
+		result->subquery = std::move(subquery_ref.subquery);
+	} else {
+		auto select_statement = make_uniq<SelectStatement>();
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(make_uniq<StarExpression>());
+		select_node->from_table = std::move(subquery_reference);
+		select_statement->node = std::move(select_node);
+		result->subquery = std::move(select_statement);
+	}
 	if (is_not) {
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(result));
