@@ -43,16 +43,6 @@
       ]
     },
     {
-      "reason": "Autocomplete wrong results",
-      "paths": [
-        "test/sql/function/autocomplete/copy.test",
-        "test/sql/function/autocomplete/expressions.test",
-        "test/sql/function/autocomplete/select.test",
-        "test/sql/function/autocomplete/suggest_file.test",
-        "test/sql/function/autocomplete/tpch.test"
-      ]
-    },
-    {
       "reason": "Tokenizer issue",
       "paths": [
         "test/sql/function/list/lambdas/arrow/lambda_scope_deprecated.test"

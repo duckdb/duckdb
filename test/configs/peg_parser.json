@@ -5,16 +5,6 @@
   "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
-      "reason": "Autocomplete wrong results",
-      "paths": [
-        "test/sql/function/autocomplete/copy.test",
-        "test/sql/function/autocomplete/expressions.test",
-        "test/sql/function/autocomplete/select.test",
-        "test/sql/function/autocomplete/suggest_file.test",
-        "test/sql/function/autocomplete/tpch.test"
-      ]
-    },
-    {
       "reason": "Error handling",
       "paths": [
         "test/sql/error/error_position.test",
