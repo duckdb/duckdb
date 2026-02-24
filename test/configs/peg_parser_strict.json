@@ -35,9 +35,6 @@
     {
       "reason": "Parser error",
       "paths": [
-        "test/sql/prepared/parameter_variants.test",
-        "test/sql/parser/digit_separators.test",
-        "test/fuzzer/duckfuzz/list_try_cast.test",
         "test/sql/json/scalar/test_json_extract.test",
         "test/issues/monetdb/test_boolean_not.test"
       ]
@@ -72,7 +69,9 @@
       "reason": "Different behaviour compared to PostgreSQL parser",
       "paths": [
         "test/sql/function/string/test_string_slice.test",
-        "test/sql/function/string/test_subscript.test"
+        "test/sql/function/string/test_subscript.test",
+        "test/sql/prepared/parameter_variants.test",
+        "test/sql/parser/digit_separators.test"
       ]
     },
     {

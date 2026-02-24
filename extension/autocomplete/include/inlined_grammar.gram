@@ -54,7 +54,7 @@ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
 Type <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
-SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
+SimpleType <- (CharacterType / QualifiedTypeName) TypeModifiers?
 CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
                  ('NATIONAL' 'CHARACTER' 'VARYING'?) /
@@ -873,7 +873,7 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
-    AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
+    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
 AnyAllOperator <- ComparisonOperator AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
 SubqueryAny <- 'ANY'
@@ -882,6 +882,8 @@ InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
 ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
+QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '~~*' / '~~~' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
 BitOperator <- '&' / '|' / '<<' / '>>'
@@ -902,7 +904,7 @@ AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 # LEVEL 15
 PrefixExpression <- PrefixOperator* BaseExpression
-PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'

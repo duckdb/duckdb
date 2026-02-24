@@ -1074,6 +1074,22 @@ string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer
 	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
+// QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transformer,
+                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto any_op_pr = ExtractResultFromParens(list_pr.GetChild(1));
+	return transformer.Transform<string>(any_op_pr);
+}
+
+// AnyOp <- '!~~*' / '>>=' / ... / '!'
+string PEGTransformerFactory::TransformAnyOp(PEGTransformer &transformer,
+                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
+}
+
 string PEGTransformerFactory::TransformJsonOperator(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -1383,6 +1399,9 @@ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transforme
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	if (StringUtil::CIEquals(choice_pr.result->name, "QualifiedOperator")) {
+		return transformer.Transform<string>(choice_pr.result);
+	}
 	return transformer.TransformEnum<string>(choice_pr.result);
 }
 
