@@ -78,13 +78,13 @@ SELECT index_key({'schema': 'main', 'table': 'tbl1'}, 'tbl1_idx_composite', 1, '
 
 # Explicit catalog, omit schema
 query I
-SELECT index_key({'catalog': 'memory', 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
+SELECT index_key({'catalog': current_catalog(), 'table': 'tbl1'}, 'PRIMARY_tbl1_0', 1);
 ----
 \x80\x00\x00\x01
 
 # Explicit catalog and schema
 query I
-SELECT index_key({'catalog': 'memory', 'schema': 'main', 'table': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
+SELECT index_key({'catalog': current_catalog(), 'schema': 'main', 'table': 'tbl1'}, 'tbl1_idx_composite', 1, 'alpha');
 ----
 \x80\x00\x00\x01alpha\x00
 
@@ -241,7 +241,7 @@ ORDER BY key1;
 \x80\x00\x00\x04row4\x00\x80\x00\x00\x00\x00\x00\x00\x10
 
 query I
-SELECT index_key({'catalog': 'memory', 'schema': 'main', 'table': 'tbl3'}, 'tbl3_idx', key1, key2, key3)
+SELECT index_key({'catalog': current_catalog(), 'schema': 'main', 'table': 'tbl3'}, 'tbl3_idx', key1, key2, key3)
 FROM tbl3
 WHERE key1 BETWEEN 1 AND 3
 ORDER BY key1;
