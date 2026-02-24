@@ -484,7 +484,7 @@ prof_getpid(void) {
 #endif
 }
 
-long
+static long
 prof_get_pid_namespace() {
 	long ret = 0;
 
