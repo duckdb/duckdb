@@ -652,7 +652,6 @@ public:
 		string stripped_string =
 		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
 		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
-
 		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, string_info.type));
 		result->name = name;
 		return result;
@@ -837,7 +836,6 @@ public:
 		if (!MatchArithmeticOperator(state)) {
 			return nullptr;
 		}
-		Printer::Print("Found arithmetic operator!!!");
 		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
 	}
 
