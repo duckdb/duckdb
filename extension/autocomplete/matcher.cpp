@@ -93,6 +93,7 @@ private:
 		if (StringUtil::CIEquals(keyword, token.text)) {
 			// move to the next token
 			state.token_index++;
+			state.UpdateMaxTokenIndex();
 			return true;
 		}
 		return false;
@@ -434,9 +435,11 @@ public:
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
 		}
 		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
 			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "''", "'");
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
 	}
@@ -535,6 +538,7 @@ private:
 			return false;
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 
@@ -561,10 +565,12 @@ public:
 		if (!MatchReservedIdentifier(state)) {
 			return nullptr;
 		}
-		if (IsQuoted(token_text)) {
-			token_text = token_text.substr(1, token_text.size() - 2);
+		string result_text = token_text;
+		if (IsQuoted(result_text)) {
+			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
 	}
 
 private:
@@ -574,6 +580,7 @@ private:
 			return false;
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -620,6 +627,7 @@ public:
 
 		string stripped_string =
 		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
+		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
 
 		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, string_info.type));
 		result->name = name;
@@ -646,6 +654,7 @@ private:
 
 		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
 			state.token_index++;
+			state.UpdateMaxTokenIndex();
 			return true;
 		}
 		return false;
@@ -712,6 +721,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -775,6 +785,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -830,6 +841,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };

@@ -1065,7 +1065,10 @@
         "description": "Escalate all warnings to errors.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "write_buffer_row_group_count",

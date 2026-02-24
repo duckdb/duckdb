@@ -194,6 +194,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
+	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;
 }

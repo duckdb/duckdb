@@ -415,7 +415,9 @@ bool BaseTokenizer::TokenizeInput() {
 			// Marker found! Revert to standard state
 			size_t full_marker_len = dollar_quote_marker.size() + 2;
 			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
-			quoted = "'" + quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len) + "'";
+			string content = quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len);
+			content = StringUtil::Replace(content, "'", "''");
+			quoted = "'" + content + "'";
 			tokens.emplace_back(quoted, full_marker_len);
 			dollar_quote_marker = string();
 			state = TokenizeState::STANDARD;

@@ -1153,7 +1153,7 @@ public:
 
 	//! For probe synchronization
 	atomic<idx_t> probe_chunk_count;
-	idx_t probe_chunk_done;
+	atomic<idx_t> probe_chunk_done;
 
 	//! To determine the number of threads
 	idx_t probe_count;

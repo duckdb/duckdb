@@ -28,7 +28,7 @@ public:
 	}
 
 public:
-	CompressionFunction &GetCompressionFunction(CompressionType type);
+	const CompressionFunction &GetCompressionFunction(CompressionType type);
 	const LogicalType &GetType() const;
 	ColumnData &GetColumnData();
 	const RowGroup &GetRowGroup();
@@ -49,13 +49,13 @@ public:
 	//! Default constructor, returned when the column data doesn't require checkpoint
 	CheckpointAnalyzeResult() {
 	}
-	CheckpointAnalyzeResult(unique_ptr<AnalyzeState> &&analyze_state, CompressionFunction &function)
+	CheckpointAnalyzeResult(unique_ptr<AnalyzeState> &&analyze_state, const CompressionFunction &function)
 	    : analyze_state(std::move(analyze_state)), function(function) {
 	}
 
 public:
 	unique_ptr<AnalyzeState> analyze_state;
-	optional_ptr<CompressionFunction> function;
+	optional_ptr<const CompressionFunction> function;
 };
 
 class ColumnDataCheckpointer {
@@ -86,7 +86,7 @@ private:
 
 	bool has_changes = false;
 	//! For every column data that is being checkpointed, the applicable functions
-	vector<vector<optional_ptr<CompressionFunction>>> compression_functions;
+	vector<vector<optional_ptr<const CompressionFunction>>> compression_functions;
 	//! For every column data that is being checkpointed, the analyze state of functions being tried
 	vector<vector<unique_ptr<AnalyzeState>>> analyze_states;
 };

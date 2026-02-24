@@ -236,10 +236,9 @@ int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
 
-	// no timeout: return immediately
 	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = static_cast<int>(timeout_micros);
+	tv.tv_sec = static_cast<time_t>(timeout_micros / 1000000);
+	tv.tv_usec = static_cast<int>(timeout_micros % 1000000);
 	return select(1, &rfds, NULL, NULL, &tv);
 #endif
 }

@@ -16,7 +16,7 @@ call enable_peg_parser();
 statement error
 select xvariable a = 1;
 ----
-Parser Error: Parser override could not parse this query
+Parser Error: Syntax error at or near "="
 
 # Just check that it works properly
 query I

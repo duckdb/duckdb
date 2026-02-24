@@ -221,7 +221,13 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
 	auto qualified_name = StringToQualifiedName(dotted_identifier);
+	auto type_opt = list_pr.Child<OptionalParseResult>(1);
+	auto generated_opt = list_pr.Child<OptionalParseResult>(2);
 	LogicalType type = LogicalType::ANY;
+	if (!type_opt.HasResult() && !generated_opt.HasResult()) {
+		throw ParserException("Column %s must have a type or be defined as a GENERATED column.",
+		                      qualified_name.ToString());
+	}
 	transformer.TransformOptional<LogicalType>(list_pr, 1, type);
 	auto constraints_opt = list_pr.Child<OptionalParseResult>(4);
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
@@ -258,7 +264,6 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 			}
 		}
 	}
-	auto generated_opt = list_pr.Child<OptionalParseResult>(2);
 	if (generated_opt.HasResult()) {
 		auto generated = transformer.Transform<GeneratedColumnDefinition>(generated_opt.optional_result);
 		if (generated.expr->HasSubquery()) {

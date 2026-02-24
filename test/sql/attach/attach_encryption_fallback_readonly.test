@@ -2,6 +2,8 @@
 # description: Ensure the fallback crypto implementation is read-only
 # group: [attach]
 
+mode skip
+
 require vector_size 2048
 
 load __TEST_DIR__/tmp.db

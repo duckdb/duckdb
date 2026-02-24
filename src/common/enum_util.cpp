@@ -1169,6 +1169,25 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 	return static_cast<CompressedMaterializationDirection>(StringUtil::StringToEnum(GetCompressedMaterializationDirectionValues(), 3, "CompressedMaterializationDirection", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCompressionFunctionSetLoadResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::ALREADY_LOADED_BEFORE_LOCK), "ALREADY_LOADED_BEFORE_LOCK" },
+		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::ALREADY_LOADED_AFTER_LOCK), "ALREADY_LOADED_AFTER_LOCK" },
+		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::LAZILY_LOADED), "LAZILY_LOADED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CompressionFunctionSetLoadResult>(CompressionFunctionSetLoadResult value) {
+	return StringUtil::EnumToString(GetCompressionFunctionSetLoadResultValues(), 3, "CompressionFunctionSetLoadResult", static_cast<uint32_t>(value));
+}
+
+template<>
+CompressionFunctionSetLoadResult EnumUtil::FromString<CompressionFunctionSetLoadResult>(const char *value) {
+	return static_cast<CompressionFunctionSetLoadResult>(StringUtil::StringToEnum(GetCompressionFunctionSetLoadResultValues(), 3, "CompressionFunctionSetLoadResult", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "AUTO" },

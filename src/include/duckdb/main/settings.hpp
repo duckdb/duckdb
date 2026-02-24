@@ -1557,6 +1557,7 @@ struct WarningsAsErrorsSetting {
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = 92;
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct WriteBufferRowGroupCountSetting {
