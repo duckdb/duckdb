@@ -286,8 +286,10 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	case JoinType::SEMI:
 	case JoinType::ANTI:
 	case JoinType::MARK:
-		if (op.predicate.get()) {
-			return PhysicalPlanGenerator::PlanComparisonJoin(op);
+		for (const auto &cond : op.conditions) {
+			if (!cond.IsComparison()) {
+				return PhysicalPlanGenerator::PlanComparisonJoin(op);
+			}
 		}
 		break;
 	default:
