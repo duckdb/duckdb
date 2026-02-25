@@ -178,8 +178,8 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	auto set_info = make_uniq<UpdateSetInfo>();
 
 	auto &columns = set_info->columns;
-	// REPLACE is rewritten to UPDATE and should not try to write conflict-key columns.
-	// Updating those columns triggers unnecessary delete+insert rewrites and can perturb row ordering.
+	// REPLACE is rewritten to UPDATE. Conflict-key columns are used to match existing rows and
+	// should not be part of the SET list.
 	unordered_set<column_t> conflict_columns;
 	for (auto &index : storage_info.index_info) {
 		if (!index.is_unique) {
