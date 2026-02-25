@@ -1083,8 +1083,7 @@ string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transfo
 }
 
 // AnyOp <- '!~~*' / '>>=' / ... / '!'
-string PEGTransformerFactory::TransformAnyOp(PEGTransformer &transformer,
-                                             optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformAnyOp(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
 	return choice_pr->Cast<KeywordParseResult>().keyword;
@@ -1868,13 +1867,7 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTran
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
 		auto window_name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
-		auto it = transformer.window_clauses.find(string(window_name));
-		if (it == transformer.window_clauses.end()) {
-			throw ParserException("window \"%s\" does not exist", window_name);
-		}
-		auto copied_expr = unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
-
-		return unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(copied_expr));
+		return transformer.GetWindowClause(window_name, true);
 	}
 	return transformer.Transform<unique_ptr<WindowExpression>>(choice_pr.result);
 }
@@ -1884,12 +1877,7 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformParensIdentifier(PE
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.GetChild(0));
 	auto window_name = extract_parens->Cast<IdentifierParseResult>().identifier;
-	auto it = transformer.window_clauses.find(string(window_name));
-	if (it == transformer.window_clauses.end()) {
-		throw ParserException("window \"%s\" does not exist", window_name);
-	}
-	auto copied_expr = it->second->Copy();
-	return unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(copied_expr));
+	return transformer.GetWindowClause(window_name, false);
 }
 
 unique_ptr<WindowExpression>
@@ -1907,12 +1895,6 @@ PEGTransformerFactory::TransformWindowFrameContentsParens(PEGTransformer &transf
 	return transformer.Transform<unique_ptr<WindowExpression>>(extract_parens);
 }
 
-bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end) {
-	bool start_is_default = (start == WindowBoundary::UNBOUNDED_PRECEDING);
-	bool end_is_default = (end == WindowBoundary::CURRENT_ROW_RANGE);
-	return start_is_default && end_is_default;
-}
-
 unique_ptr<WindowExpression>
 PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &transformer,
                                                               optional_ptr<ParseResult> parse_result) {
@@ -1925,15 +1907,7 @@ PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &tr
 	if (window_name.empty()) {
 		return window_frame_contents;
 	}
-	auto it = transformer.window_clauses.find(string(window_name));
-	if (it == transformer.window_clauses.end()) {
-		throw ParserException("window \"%s\" does not exist", window_name);
-	}
-	auto copied_window = unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
-	if (copied_window->start_expr || copied_window->end_expr ||
-	    !IsWindowFrameDefault(copied_window->start, copied_window->end)) {
-		throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_name);
-	}
+	auto copied_window = transformer.GetWindowClause(window_name, false);
 	copied_window->start = window_frame_contents->start;
 	copied_window->end = window_frame_contents->end;
 	copied_window->exclude_clause = window_frame_contents->exclude_clause;

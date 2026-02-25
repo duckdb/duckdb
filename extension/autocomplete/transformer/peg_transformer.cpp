@@ -144,4 +144,26 @@ void PEGTransformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	}
 }
 
+bool PEGTransformer::IsWindowFrameDefault(WindowBoundary start, WindowBoundary end) {
+	bool start_is_default = (start == WindowBoundary::UNBOUNDED_PRECEDING);
+	bool end_is_default = (end == WindowBoundary::CURRENT_ROW_RANGE);
+	return start_is_default && end_is_default;
+}
+
+unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const string &window_name, bool can_copy) {
+	auto it = window_clauses.find(string(window_name));
+	if (it == window_clauses.end()) {
+		throw ParserException("window \"%s\" does not exist", window_name);
+	}
+	auto copied_window = unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
+	if (can_copy) {
+		return copied_window;
+	}
+	if (copied_window->start_expr || copied_window->end_expr ||
+	    !IsWindowFrameDefault(copied_window->start, copied_window->end)) {
+		throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_name);
+	}
+	return copied_window;
+}
+
 } // namespace duckdb

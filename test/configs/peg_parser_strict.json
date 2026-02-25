@@ -24,7 +24,6 @@
     {
       "reason": "Window function exceptions",
       "paths": [
-        "test/sql/window/test_window_clause.test",
         "test/sql/window/test_invalid_window.test"
       ]
     },
