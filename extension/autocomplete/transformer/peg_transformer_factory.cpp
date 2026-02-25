@@ -34,7 +34,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index);
+	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case);
 	MatcherAllocator allocator;
 	auto &matcher = Matcher::RootMatcher(allocator);
 	auto match_result = matcher.MatchParseResult(state);

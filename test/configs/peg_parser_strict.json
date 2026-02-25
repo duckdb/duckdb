@@ -23,10 +23,6 @@
       ]
     },
     {
-      "reason": "Case insensitive preservation",
-      "paths": ["test/sql/settings/setting_preserve_identifier_case.test"]
-    },
-    {
       "reason": "Parser error",
       "paths": [
         "test/sql/json/scalar/test_json_extract.test",
