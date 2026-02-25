@@ -1907,6 +1907,10 @@ PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &tr
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0))->Cast<ListParseResult>();
 	string window_name;
 	transformer.TransformOptional<string>(extract_parens, 0, window_name);
+	auto lower_name = StringUtil::Lower(window_name);
+	if (lower_name == "partition" || lower_name == "range" || lower_name == "rows" || lower_name == "groups") {
+		throw ParserException("Invalid window name \"%s\"", window_name);
+	}
 	auto window_frame_contents =
 	    transformer.Transform<unique_ptr<WindowExpression>>(extract_parens.Child<ListParseResult>(1));
 	if (window_name.empty()) {
