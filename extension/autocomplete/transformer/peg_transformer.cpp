@@ -150,20 +150,12 @@ bool PEGTransformer::IsWindowFrameDefault(WindowBoundary start, WindowBoundary e
 	return start_is_default && end_is_default;
 }
 
-unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const string &window_name, bool can_copy) {
+unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const string &window_name) {
 	auto it = window_clauses.find(string(window_name));
 	if (it == window_clauses.end()) {
 		throw ParserException("window \"%s\" does not exist", window_name);
 	}
-	auto copied_window = unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
-	if (can_copy) {
-		return copied_window;
-	}
-	if (copied_window->start_expr || copied_window->end_expr ||
-	    !IsWindowFrameDefault(copied_window->start, copied_window->end)) {
-		throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_name);
-	}
-	return copied_window;
+	return unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
 }
 
 } // namespace duckdb

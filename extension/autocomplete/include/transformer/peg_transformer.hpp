@@ -146,7 +146,7 @@ public:
 	void PivotEntryCheck(const string &type);
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 	bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end);
-	unique_ptr<WindowExpression> GetWindowClause(const string &window_name, bool can_copy);
+	unique_ptr<WindowExpression> GetWindowClause(const string &window_name);
 
 public:
 	ArenaAllocator &allocator;
