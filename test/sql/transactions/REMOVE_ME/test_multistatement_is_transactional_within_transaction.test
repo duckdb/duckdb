@@ -1,4 +1,4 @@
-# name: test/sql/transactions/REMOVE_ME/test_multistatement_is_transactional.test
+# name: test/sql/transactions/REMOVE_ME/test_multistatement_is_transactional_within_transaction.test
 # group: [REMOVE_ME]
 
 statement ok
@@ -17,7 +17,7 @@ statement ok
 CREATE TABLE t AS SELECT range::INT AS id FROM range(10);
 
 statement error
-ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+BEGIN TRANSACTION; ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 ----
 <REGEX>:.*Conversion Error.*
 

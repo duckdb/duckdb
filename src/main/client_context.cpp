@@ -53,6 +53,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 
 #ifdef __APPLE__
@@ -699,29 +700,63 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 	return ParseStatementsInternal(*lock, query);
 }
 
-void WrapMultiStatementInTransaction(vector<unique_ptr<SQLStatement>> &statements) {
-	auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION);
-	auto begin_statement = make_uniq<TransactionStatement>(std::move(begin_info));
-	statements.insert(statements.begin(), std::move(begin_statement));
-
-	auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT);
-	auto commit_statement = make_uniq<TransactionStatement>(std::move(commit_info));
-	statements.insert(statements.end(), std::move(commit_statement));
-}
-
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
 		Parser parser(GetParserOptions());
 		parser.ParseQuery(query);
-		auto &statements = parser.statements;
-		if (!statements.empty() && statements[0].get()->type == StatementType::MULTI_STATEMENT &&
-		    !transaction.HasActiveTransaction()) {
-			WrapMultiStatementInTransaction(statements);
+		auto &parser_statements = parser.statements;
+		vector<unique_ptr<SQLStatement>> new_parser_statements;
+
+		bool curr_statement_is_in_transaction = transaction.HasActiveTransaction();
+
+		for (idx_t i = 0; i < parser_statements.size(); ++i) {
+			auto stmt = std::move(parser_statements[i]);
+
+			switch (stmt->type) {
+			case StatementType::MULTI_STATEMENT: {
+#ifdef DEBUG // MultiStatement cannot contain transaction statements
+				auto multi_stmt = static_cast<MultiStatement *>(stmt.get());
+				for (auto &sub_statement : multi_stmt->statements) {
+					D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
+				}
+#endif
+				if (curr_statement_is_in_transaction) {
+					new_parser_statements.push_back(std::move(stmt));
+				} else {
+					// inject BEGIN
+					auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION);
+					new_parser_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
+
+					// move the multi statement
+					new_parser_statements.push_back(std::move(stmt));
+
+					// inject COMMIT
+					auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT);
+					new_parser_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
+				}
+				break;
+			}
+			case StatementType::TRANSACTION_STATEMENT: {
+				auto transaction_stmt = static_cast<TransactionStatement *>(stmt.get());
+				if (transaction_stmt->info->type == TransactionType::BEGIN_TRANSACTION) {
+					curr_statement_is_in_transaction = true;
+				} else if (transaction_stmt->info->type == TransactionType::COMMIT ||
+				           transaction_stmt->info->type == TransactionType::ROLLBACK) {
+					curr_statement_is_in_transaction = false;
+				}
+				new_parser_statements.push_back(std::move(stmt));
+				break;
+			}
+			default: {
+				new_parser_statements.push_back(std::move(stmt));
+				break;
+			}
+			}
 		}
 		PragmaHandler handler(*this);
-		handler.HandlePragmaStatements(lock, statements);
+		handler.HandlePragmaStatements(lock, new_parser_statements);
 
-		return std::move(statements);
+		return std::move(new_parser_statements);
 	} catch (std::exception &ex) {
 		auto error = ErrorData(ex);
 		ProcessError(error, query);
