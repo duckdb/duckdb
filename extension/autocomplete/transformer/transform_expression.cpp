@@ -1867,7 +1867,7 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTran
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
 		auto window_name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
-		auto window_clause = transformer.GetWindowClause(window_name);
+		return transformer.GetWindowClause(window_name);
 	}
 	return transformer.Transform<unique_ptr<WindowExpression>>(choice_pr.result);
 }
