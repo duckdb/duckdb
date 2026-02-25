@@ -79,12 +79,6 @@
     {
       "reason": "DESCRIBE with CTE not supported",
       "paths": ["test/sql/cte/cte_describe.test"]
-    },
-    {
-      "reason": "List of all unit test failing",
-      "paths": [
-        "test/sql/cte/test_giant_union_all.test_slow"
-      ]
     }
   ]
 }

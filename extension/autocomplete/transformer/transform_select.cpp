@@ -57,6 +57,16 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(PEG
 		auto setop_list = setop->Cast<ListParseResult>();
 		auto setop_result = transformer.Transform<unique_ptr<SetOperationNode>>(setop_list.Child<ListParseResult>(0));
 		auto right_select = transformer.Transform<unique_ptr<SelectStatement>>(setop_list.Child<ListParseResult>(1));
+		if (select->node->type == QueryNodeType::SET_OPERATION_NODE && select->node->modifiers.empty() &&
+		    select->node->cte_map.map.empty()) {
+			auto &existing = select->node->Cast<SetOperationNode>();
+			if (existing.setop_type == setop_result->setop_type && existing.setop_all == setop_result->setop_all &&
+			    (existing.setop_type == SetOperationType::UNION ||
+			     existing.setop_type == SetOperationType::UNION_BY_NAME)) {
+				existing.children.push_back(std::move(right_select->node));
+				continue;
+			}
+		}
 		setop_result->children.push_back(std::move(select->node));
 		setop_result->children.push_back(std::move(right_select->node));
 		select->node = std::move(setop_result);
