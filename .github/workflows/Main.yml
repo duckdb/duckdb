@@ -11,6 +11,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/shell/**'
+      - '!tools/juliapkg/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
@@ -25,6 +26,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/shell/**'
+      - '!tools/juliapkg/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
@@ -47,7 +49,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
-      - name: Preliminary checks on CI 
+      - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
  linux-debug:
@@ -71,9 +73,13 @@ jobs:
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
-    - name: Install
+    - name: Install ninja-build if missing
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: |
+        if ! command -v ninja >/dev/null 2>&1; then
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq ninja-build
+        fi
 
     - uses: ./.github/actions/ccache-action
 
@@ -123,6 +129,14 @@ jobs:
     - name: Test
       shell: bash
       run: make allunit
+
+ linux-cli:
+    uses: ./.github/workflows/LinuxRelease.yml
+    secrets: inherit
+    needs: linux-debug
+    with:
+      git_ref: ${{ github.sha }}
+      skip_tests: 'false'
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
@@ -451,18 +465,6 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/prefetch_all_storage.json
 
-    - name: Test PEG parser on fallback mode
-      if: (success() || failure()) && steps.build.conclusion == 'success'
-      shell: bash
-      run: |
-        ./build/release/test/unittest --test-config test/configs/peg_parser.json
-
-    - name: Test PEG parser on strict when supported mode
-      if: (success() || failure()) && steps.build.conclusion == 'success'
-      shell: bash
-      run: |
-        ./build/release/test/unittest --test-config test/configs/peg_parser_strict.json
-
     - name: Forwards compatibility tests
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
@@ -494,3 +496,15 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/encryption.json
+
+    - name: Test PEG parser on fallback mode
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/peg_parser.json
+
+    - name: Test PEG parser on strict when supported mode
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/peg_parser_strict.json

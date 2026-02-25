@@ -217,6 +217,15 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	}
 };
 
+LogicalType GetFirstStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> child_types;
+	LogicalType value_type = function.arguments[0];
+	child_types.emplace_back("value", value_type);
+	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
+	child_types.emplace_back("is_null", LogicalType::BOOLEAN);
+	return LogicalType::STRUCT(std::move(child_types));
+}
+
 template <class T, bool LAST, bool SKIP_NULLS>
 void FirstFunctionSimpleUpdate(Vector inputs[], AggregateInputData &aggregate_input_data, idx_t input_count,
                                data_ptr_t state, idx_t count) {
@@ -255,6 +264,7 @@ template <class T, bool LAST, bool SKIP_NULLS>
 AggregateFunction GetFirstAggregateTemplated(const LogicalType &type) {
 	auto result = AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST, SKIP_NULLS>>(type, type);
 	result.SetStateSimpleUpdateCallback(FirstFunctionSimpleUpdate<T, LAST, SKIP_NULLS>);
+	result.SetStructStateExport(GetFirstStateType);
 	return result;
 }
 
@@ -314,19 +324,25 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return GetFirstAggregateTemplated<interval_t, LAST, SKIP_NULLS>(type);
 	case PhysicalType::VARCHAR:
 		if (LAST) {
-			return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
-			                                                   FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
+			auto fun = AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
+			                                                       FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
+			fun.SetStructStateExport(GetFirstStateType);
+			return fun;
 		} else {
-			return AggregateFunction::UnaryAggregate<FirstState<string_t>, string_t, string_t,
-			                                         FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
+			auto fun = AggregateFunction::UnaryAggregate<FirstState<string_t>, string_t, string_t,
+			                                             FirstFunctionString<LAST, SKIP_NULLS>>(type, type);
+			fun.SetStructStateExport(GetFirstStateType);
+			return fun;
 		}
 	default: {
 		using OP = FirstVectorFunction<LAST, SKIP_NULLS>;
 		using STATE = FirstState<string_t>;
-		return AggregateFunction(
+		auto fun = AggregateFunction(
 		    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 		    OP::Update, AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
 		    nullptr, OP::Bind, LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
+		fun.SetStructStateExport(GetFirstStateType);
+		return fun;
 	}
 	}
 }

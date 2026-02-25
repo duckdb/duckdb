@@ -152,6 +152,9 @@ public:
 	vector<LogicalType> unprojected_types;
 
 public:
+	// Compare conditions for priority
+	static bool LessThan(const JoinCondition &a, const JoinCondition &b);
+
 	// Gather the result values and slice the payload columns to those values.
 	static void SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table, ExternalBlockIteratorState &state,
 	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx,

@@ -121,7 +121,7 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 				} else if (const_expr.value.GetValue<string>() == "f") {
 					copy_option.children.push_back(Value(false));
 				} else {
-					throw ParserException("Invalid boolean value for option %s", copy_option.name);
+					copy_option.expression = std::move(expression);
 				}
 			} else {
 				copy_option.expression = std::move(expression);

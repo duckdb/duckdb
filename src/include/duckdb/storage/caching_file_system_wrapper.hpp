@@ -21,7 +21,7 @@ namespace duckdb {
 // Forward declaration.
 class DatabaseInstance;
 class CachingFileSystemWrapper;
-class CachingFileHandle;
+struct CachingFileHandle;
 
 //! CachingFileHandleWrapper wraps CachingFileHandle to conform to FileHandle API.
 class CachingFileHandleWrapper : public FileHandle {
