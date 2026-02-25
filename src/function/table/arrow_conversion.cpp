@@ -382,6 +382,25 @@ static void DirectConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 	FlatVector::SetData(vector, data_ptr);
 }
 
+//! Convert Arrow dictionary indices directly to ENUM values (zero-copy).
+//! ENUM physical storage (UINT8/16/32) matches Arrow dictionary index types exactly.
+static void ColumnArrowToDuckDBEnumIndices(Vector &vector, ArrowArray &array, idx_t chunk_offset, idx_t size,
+                                           const ValidityMask *parent_mask, uint64_t parent_offset,
+                                           int64_t nested_offset) {
+	DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+	ArrowToDuckDBConversion::SetValidityMask(vector, array, chunk_offset, size, NumericCast<int64_t>(parent_offset),
+	                                         nested_offset);
+	if (parent_mask && !parent_mask->AllValid()) {
+		auto &validity = FlatVector::Validity(vector);
+		for (idx_t i = 0; i < size; i++) {
+			if (!parent_mask->RowIsValid(i)) {
+				validity.SetInvalid(i);
+			}
+		}
+	}
+	vector.Verify(size);
+}
+
 template <class T>
 static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                            int64_t parent_offset, idx_t size, int64_t conversion) {
@@ -1393,6 +1412,12 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 	D_ASSERT(arrow_type.HasDictionary());
+
+	if (vector.GetType().id() == LogicalTypeId::ENUM) {
+		ColumnArrowToDuckDBEnumIndices(vector, array, chunk_offset, size, parent_mask, parent_offset, nested_offset);
+		return;
+	}
+
 	const bool has_nulls = CanContainNull(array, parent_mask);
 	if (array_state.CacheOutdated(array.dictionary)) {
 		//! We need to set the dictionary data for this column
