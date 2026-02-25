@@ -1,0 +1,21 @@
+diff --git a/src/catalog/catalog_entry/duck_table_entry.cpp b/src/catalog/catalog_entry/duck_table_entry.cpp
+index eb5c28280d..aa51c7c54d 100644
+--- a/src/catalog/catalog_entry/duck_table_entry.cpp
++++ b/src/catalog/catalog_entry/duck_table_entry.cpp
+@@ -4,6 +4,7 @@
+ #include "duckdb/common/exception/transaction_exception.hpp"
+ #include "duckdb/common/index_map.hpp"
+ #include "duckdb/common/type_visitor.hpp"
++#include "duckdb/common/operator/cast_operators.hpp"
+ #include "duckdb/execution/index/art/art.hpp"
+ #include "duckdb/function/table/table_scan.hpp"
+ #include "duckdb/main/database.hpp"
+@@ -222,6 +223,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
+ 		return RemoveField(context, remove_info);
+ 	}
+ 	case AlterTableType::SET_DEFAULT: {
++		throw TryCast::UnimplementedErrorMessage(PhysicalType::ARRAY, PhysicalType::ARRAY, nullptr);
++
+ 		auto &set_default_info = table_info.Cast<SetDefaultInfo>();
+ 		return SetDefault(context, set_default_info);
+ 	}
