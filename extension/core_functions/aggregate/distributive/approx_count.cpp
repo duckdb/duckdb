@@ -82,6 +82,14 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 	}
 }
 
+LogicalType GetApproxCountDistinctStateType(const AggregateFunction &) {
+	child_list_t<LogicalType> children;
+	for (idx_t i = 0; i < HyperLogLog::M; i++) {
+		children.emplace_back("k" + to_string(i), LogicalType::UTINYINT);
+	}
+	return LogicalType::STRUCT(std::move(children));
+}
+
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {
 	auto fun = AggregateFunction(
 	    {input_type}, LogicalTypeId::BIGINT, AggregateFunction::StateSize<ApproxDistinctCountState>,
@@ -91,6 +99,7 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctSimpleUpdateFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetStructStateExport(GetApproxCountDistinctStateType);
 	return fun;
 }
 
