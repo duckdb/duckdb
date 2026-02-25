@@ -1,3 +1,4 @@
+from datetime import datetime
 import time
 from utils.logger import make_logger
 import os
@@ -9,8 +10,9 @@ logger = make_logger(__name__)
 class TestReport:
   step_names = ["serialize_queries_plans", "execute_all_plans_from_file", "serialize_results", "compare_results"]
 
-  def __init__(self, test_spec, exit_on_failure=False):
+  def __init__(self, test_spec, old_version, new_version, exit_on_failure=False):
     self.test_filename = test_spec.test_absolute_filename
+    self.test_relative_path = test_spec.test_spec_relative_path
     self.test_runtime_directory = test_spec.test_runtime_directory # Test execution directory
     self.comparison_results_file_name = f"{test_spec.results_new_file_name}.report"
     self.comparison_results = None
@@ -19,6 +21,8 @@ class TestReport:
     self.last_timestamp = self.start_time
     self.durations = []
     self.outputs = []
+    self.duckdb_old_version = old_version
+    self.duckdb_new_version = new_version
 
   def end_cached_step(self, step_name, *args):
     str_args = ", ".join([f"'{arg}'" for arg in args])
@@ -102,6 +106,9 @@ class TestReport:
     CREATE TABLE test_report (
       test_filename VARCHAR,
       test_runtime_directory VARCHAR,
+      start_time TIMESTAMP,
+      duckdb_old_version VARCHAR,
+      duckdb_new_version VARCHAR,
     """
     for step_name in TestReport.step_names:
       schema += f"  {step_name}_duration DOUBLE,\n"
@@ -115,14 +122,14 @@ class TestReport:
 
   @staticmethod
   def report_insert():
-    sql = f"INSERT INTO test_report (test_filename, test_runtime_directory, "
+    sql = f"INSERT INTO test_report (test_filename, test_runtime_directory, start_time, duckdb_old_version, duckdb_new_version, "
     sql += ", ".join([f"{step_name}_duration, {step_name}_outcome, {step_name}_stdout, {step_name}_stderr" for step_name in TestReport.step_names])
     sql += ", comparison_report"
-    sql += ") VALUES (?, ?, " + ("?, ?, ?, ?, " * len(TestReport.step_names)) + "?);\n"
+    sql += ") VALUES (?, ?, ?, ?, ?, " + ("?, ?, ?, ?, " * len(TestReport.step_names)) + "?);\n"
     return sql
 
   def report_sql_values(self):
-    values = [self.test_filename, self.test_runtime_directory]
+    values = [self.test_filename, self.test_runtime_directory, datetime.fromtimestamp(self.start_time), self.duckdb_old_version, self.duckdb_new_version]
     for i in range(len(TestReport.step_names)):
       if i < len(self.durations):
         values.append(self.durations[i])
