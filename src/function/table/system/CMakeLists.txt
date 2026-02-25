@@ -5,6 +5,7 @@ add_library_unity(
   duckdb_approx_database_count.cpp
   duckdb_columns.cpp
   duckdb_constraints.cpp
+  duckdb_coordinate_systems.cpp
   duckdb_databases.cpp
   duckdb_dependencies.cpp
   duckdb_extensions.cpp

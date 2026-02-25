@@ -21,6 +21,7 @@ SinkFinalizeType PhysicalExplainAnalyze::Finalize(Pipeline &pipeline, Event &eve
                                                   OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<ExplainAnalyzeStateGlobalState>();
 	auto &profiler = QueryProfiler::Get(context);
+	profiler.FinalizeMetrics();
 	gstate.analyzed_plan = profiler.ToString(format);
 	return SinkFinalizeType::READY;
 }

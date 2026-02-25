@@ -6,7 +6,7 @@ select typeof('POINT(0 1)'::GEOMETRY('
 {
   "$schema": "https://proj.org/schemas/v0.7/projjson.schema.json",
   "type": "GeographicCRS",
-  "name": "WGS 84",
+  "name": "WGS 84 (CRS84)",
   "datum_ensemble": {
     "name": "World Geodetic System 1984 ensemble",
     "members": [
@@ -82,20 +82,20 @@ select typeof('POINT(0 1)'::GEOMETRY('
     "subtype": "ellipsoidal",
     "axis": [
       {
-        "name": "Geodetic latitude",
-        "abbreviation": "Lat",
-        "direction": "north",
-        "unit": "degree"
-      },
-      {
         "name": "Geodetic longitude",
         "abbreviation": "Lon",
         "direction": "east",
         "unit": "degree"
+      },
+      {
+        "name": "Geodetic latitude",
+        "abbreviation": "Lat",
+        "direction": "north",
+        "unit": "degree"
       }
     ]
   },
-  "scope": "Horizontal component of 3D system.",
+  "scope": "Not known.",
   "area": "World.",
   "bbox": {
     "south_latitude": -90,
@@ -104,10 +104,10 @@ select typeof('POINT(0 1)'::GEOMETRY('
     "east_longitude": 180
   },
   "id": {
-    "authority": "EPSG",
-    "code": 4326
+    "authority": "OGC",
+    "code": "CRS84"
   }
 }
 '));
 ----
-GEOMETRY('EPSG:4326')
+GEOMETRY('OGC:CRS84')

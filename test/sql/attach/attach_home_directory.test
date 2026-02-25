@@ -2,9 +2,6 @@
 # description: Test resolution of ATTACH with home directory
 # group: [attach]
 
-# FIXME: ATTACH does not correctly receive the FileOpener of the client
-mode skip
-
 statement ok
 ATTACH '__TEST_DIR__/home_dir.db' AS s1
 
@@ -17,10 +14,16 @@ SELECT SUM(i) FROM s1.integers
 45
 
 statement ok
-DETACH s1
+SET home_directory='__TEST_DIR__'
+
+# already attached
+statement error
+ATTACH '~/home_dir.db' AS s2
+----
+already attached by database "s1"
 
 statement ok
-SET home_directory='__TEST_DIR__'
+DETACH s1
 
 statement ok
 ATTACH '~/home_dir.db' AS s1

@@ -42,7 +42,8 @@ add_library_unity(
   unnest_rewriter.cpp
   window_self_join.cpp
   sampling_pushdown.cpp
-  sum_rewriter.cpp)
+  sum_rewriter.cpp
+  projection_pullup.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

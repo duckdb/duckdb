@@ -115,6 +115,8 @@ public:
 	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
 	void Truncate(idx_t size);
 	void Flush();
+	//! Increment the WAL entry count (for autocheckpoint threshold)
+	void IncrementWALEntriesCount();
 
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 

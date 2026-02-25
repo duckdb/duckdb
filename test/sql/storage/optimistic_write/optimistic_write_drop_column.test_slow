@@ -52,6 +52,9 @@ SELECT SUM(a), SUM(b) FROM test
 
 require skip_reload
 
+statement ok
+CHECKPOINT
+
 # For smaller block sizes (16KB) the total blocks alternate between a few values in the loop.
 # Therefore, we compare to a range of total block counts.
 statement ok
@@ -82,16 +85,19 @@ SELECT SUM(a), SUM(b) FROM test
 ----
 499999500000	500000500000
 
+statement ok
+CHECKPOINT
+
 # Ensure that the total blocks don't exceed the total blocks after the first iteration
-# by more than 1.2.
+# by more than 1.5.
 
 query I
-SELECT CASE WHEN ${i} = 0 THEN True
-	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
-	ELSE False END
+SELECT CASE WHEN ${i} = 0 THEN NULL
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.5 THEN NULL
+	ELSE {'current': current.total_blocks, 'total': total_blocks_tbl.total_blocks} END
 FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
-1
+NULL
 
 # Adjust total_blocks_tbl once to the count after the first iteration.
 

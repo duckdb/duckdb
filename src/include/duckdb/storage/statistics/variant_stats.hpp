@@ -37,6 +37,10 @@ public:
 //! would store any other column).
 struct VariantStats {
 public:
+	static constexpr idx_t TYPED_VALUE_INDEX = 0;
+	static constexpr idx_t UNTYPED_VALUE_INDEX = 1;
+
+public:
 	DUCKDB_API static void Construct(BaseStatistics &stats);
 
 public:
@@ -51,6 +55,14 @@ public:
 	DUCKDB_API static const BaseStatistics &GetUnshreddedStats(const BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics &GetUnshreddedStats(BaseStatistics &stats);
 
+	//! Returns the typed_value stats of a shredded stats entry
+	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &stats);
+	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &&stats) = delete;
+
+	//! Returns the untyped_value_index stats of a shredded stats entry - if there is any
+	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &stats);
+	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &&stats) = delete;
+
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
 	DUCKDB_API static void MarkAsNotShredded(BaseStatistics &stats);
@@ -58,7 +70,7 @@ public:
 public:
 	//! Stats related to the 'shredded' column, which holds all structured data created during shredding
 	//! Returns the LogicalType that represents the shredding as a single DuckDB LogicalType (i.e STRUCT(col1 VARCHAR))
-	DUCKDB_API LogicalType GetShreddedStructuredType(const BaseStatistics &stats);
+	DUCKDB_API static LogicalType GetShreddedStructuredType(const BaseStatistics &stats);
 	DUCKDB_API static void CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type);
 	DUCKDB_API static bool IsShredded(const BaseStatistics &stats);
 	DUCKDB_API static const BaseStatistics &GetShreddedStats(const BaseStatistics &stats);
@@ -67,7 +79,7 @@ public:
 	DUCKDB_API static void SetShreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetShreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
 
-	DUCKDB_API static bool MergeShredding(BaseStatistics &stats, const BaseStatistics &other,
+	DUCKDB_API static bool MergeShredding(const BaseStatistics &stats, const BaseStatistics &other,
 	                                      BaseStatistics &new_stats);
 	DUCKDB_API static unique_ptr<BaseStatistics> WrapExtractedFieldAsVariant(const BaseStatistics &base_variant,
 	                                                                         const BaseStatistics &extracted_field);

@@ -38,6 +38,8 @@ enum class ARTHandlingResult : uint8_t;
 
 enum class ARTScanHandling : uint8_t;
 
+enum class ARTScanResult : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
@@ -159,6 +161,8 @@ enum class DefaultOrderByNullType : uint8_t;
 enum class DependencyEntryType : uint8_t;
 
 enum class DeprecatedIndexType : uint8_t;
+
+enum class DeprecatedUsingKeySyntax : uint8_t;
 
 enum class DestroyBufferUpon : uint8_t;
 
@@ -306,7 +310,11 @@ enum class OperatorResultType : uint8_t;
 
 enum class OptimizerType : uint32_t;
 
+enum class OrderByColumnType : uint8_t;
+
 enum class OrderByNullType : uint8_t;
+
+enum class OrderByStatistics : uint8_t;
 
 enum class OrderPreservationType : uint8_t;
 
@@ -503,6 +511,9 @@ template<>
 const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value);
 
 template<>
+const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
+
+template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
 
 template<>
@@ -684,6 +695,9 @@ const char* EnumUtil::ToChars<DependencyEntryType>(DependencyEntryType value);
 
 template<>
 const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
+
+template<>
+const char* EnumUtil::ToChars<DeprecatedUsingKeySyntax>(DeprecatedUsingKeySyntax value);
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
@@ -905,7 +919,13 @@ template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value);
 
 template<>
+const char* EnumUtil::ToChars<OrderByColumnType>(OrderByColumnType value);
+
+template<>
 const char* EnumUtil::ToChars<OrderByNullType>(OrderByNullType value);
+
+template<>
+const char* EnumUtil::ToChars<OrderByStatistics>(OrderByStatistics value);
 
 template<>
 const char* EnumUtil::ToChars<OrderPreservationType>(OrderPreservationType value);
@@ -1194,6 +1214,9 @@ template<>
 ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value);
 
 template<>
+ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
+
+template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
 
 template<>
@@ -1375,6 +1398,9 @@ DependencyEntryType EnumUtil::FromString<DependencyEntryType>(const char *value)
 
 template<>
 DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value);
+
+template<>
+DeprecatedUsingKeySyntax EnumUtil::FromString<DeprecatedUsingKeySyntax>(const char *value);
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
@@ -1596,7 +1622,13 @@ template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value);
 
 template<>
+OrderByColumnType EnumUtil::FromString<OrderByColumnType>(const char *value);
+
+template<>
 OrderByNullType EnumUtil::FromString<OrderByNullType>(const char *value);
+
+template<>
+OrderByStatistics EnumUtil::FromString<OrderByStatistics>(const char *value);
 
 template<>
 OrderPreservationType EnumUtil::FromString<OrderPreservationType>(const char *value);

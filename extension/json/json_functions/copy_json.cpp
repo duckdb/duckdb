@@ -55,6 +55,9 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 				csv_copy_options["suffix"] = {"\n]\n"};
 				csv_copy_options["new_line"] = {",\n\t"};
 			}
+		} else if (loption == "file_extension") {
+			// Since we set the file extension to "json" above, we need to override it
+			csv_copy_options["file_extension"] = {StringValue::Get(kv.second.back())};
 		} else if (SUPPORTED_BASE_OPTIONS.find(loption) != SUPPORTED_BASE_OPTIONS.end()) {
 			// We support these base options
 			csv_copy_options.insert(kv);

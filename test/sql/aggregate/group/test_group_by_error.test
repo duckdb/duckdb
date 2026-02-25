@@ -17,3 +17,20 @@ statement error
 SELECT * FROM tbl GROUP BY SUM(41)
 ----
 cannot contain aggregates
+
+statement ok
+CREATE TABLE v3 (v4 DOUBLE, v5 INTEGER);
+
+statement error
+SELECT
+    v4,
+    TRY(v5 / v5) AS result
+FROM v3
+GROUP BY v4
+HAVING (
+    SELECT SUM(v5)
+    FROM v3
+    WHERE v5 IS NOT NULL
+)
+----
+must appear in the GROUP BY clause

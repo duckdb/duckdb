@@ -38,6 +38,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateMacroStmt(PEGT
 	}
 	info->type = macro_type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
 	result->info = std::move(info);
+	transformer.PivotEntryCheck("macro");
 	return result;
 }
 

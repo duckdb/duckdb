@@ -11,7 +11,7 @@ create table tbl(col VARIANT);
 
 statement ok
 insert into tbl SELECT * FROM UNNEST([
-	{'almost_a_number': c} for c in ['12', '24', '25a6', '24c', '16']
+	{'almost_a_number': c, 'a_number': CAST(TRY_CAST(c AS INT) AS VARCHAR)} for c in ['12', '24', '25a6', '24c', '16']
 ])
 
 statement ok
@@ -22,11 +22,11 @@ restart
 query I
 from tbl order by all
 ----
-{'almost_a_number': 12}
-{'almost_a_number': 16}
-{'almost_a_number': 24}
-{'almost_a_number': 24c}
-{'almost_a_number': 25a6}
+{'a_number': NULL, 'almost_a_number': 24c}
+{'a_number': NULL, 'almost_a_number': 25a6}
+{'a_number': 12, 'almost_a_number': 12}
+{'a_number': 16, 'almost_a_number': 16}
+{'a_number': 24, 'almost_a_number': 24}
 
 query I
 select col.almost_a_number from tbl order by all
@@ -41,11 +41,29 @@ select col.almost_a_number from tbl order by all
 statement error
 select col.almost_a_number::BIGINT from tbl order by all
 ----
-Conversion Error: Could not convert string '25a6' to INT64
+Conversion Error
 
 # Use TRY_CAST instead
 query I
 select TRY_CAST(col.almost_a_number AS BIGINT) from tbl order by all
+----
+12
+16
+24
+NULL
+NULL
+
+query I
+select col.a_number from tbl order by all
+----
+12
+16
+24
+NULL
+NULL
+
+query I
+select col.a_number::BIGINT from tbl order by all
 ----
 12
 16

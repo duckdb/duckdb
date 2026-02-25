@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/parser/parsed_data/create_coordinate_system_info.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
@@ -296,6 +297,24 @@ optional_ptr<CatalogEntry> Catalog::CreateCollation(ClientContext &context, Crea
 optional_ptr<CatalogEntry> Catalog::CreateCollation(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                                     CreateCollationInfo &info) {
 	return schema.CreateCollation(transaction, info);
+}
+
+//===--------------------------------------------------------------------===//
+// Coordinate System
+//===--------------------------------------------------------------------===//
+optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction transaction,
+                                                           CreateCoordinateSystemInfo &info) {
+	auto &schema = GetSchema(transaction, info.schema);
+	return CreateCoordinateSystem(transaction, schema, info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(ClientContext &context, CreateCoordinateSystemInfo &info) {
+	return CreateCoordinateSystem(GetCatalogTransaction(context), info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateCoordinateSystem(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                                           CreateCoordinateSystemInfo &info) {
+	return schema.CreateCoordinateSystem(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//

@@ -248,8 +248,6 @@ typedef enum UDateDirection {
 #endif  // U_HIDE_DEPRECATED_API
 } UDateDirection;
 
-#if !UCONFIG_NO_BREAK_ITERATION
-
 U_NAMESPACE_BEGIN
 
 class BreakIterator;
@@ -283,13 +281,13 @@ class U_I18N_API FormattedRelativeDateTime : public UMemory, public FormattedVal
      * Move constructor: Leaves the source FormattedRelativeDateTime in an undefined state.
      * @stable ICU 64
      */
-    FormattedRelativeDateTime(FormattedRelativeDateTime&& src) U_NOEXCEPT;
+    FormattedRelativeDateTime(FormattedRelativeDateTime&& src) noexcept;
 
     /**
      * Destruct an instance of FormattedRelativeDateTime.
      * @stable ICU 64
      */
-    virtual ~FormattedRelativeDateTime() U_OVERRIDE;
+    virtual ~FormattedRelativeDateTime() override;
 
     /** Copying not supported; use move constructor instead. */
     FormattedRelativeDateTime(const FormattedRelativeDateTime&) = delete;
@@ -301,19 +299,19 @@ class U_I18N_API FormattedRelativeDateTime : public UMemory, public FormattedVal
      * Move assignment: Leaves the source FormattedRelativeDateTime in an undefined state.
      * @stable ICU 64
      */
-    FormattedRelativeDateTime& operator=(FormattedRelativeDateTime&& src) U_NOEXCEPT;
+    FormattedRelativeDateTime& operator=(FormattedRelativeDateTime&& src) noexcept;
 
     /** @copydoc FormattedValue::toString() */
-    UnicodeString toString(UErrorCode& status) const U_OVERRIDE;
+    UnicodeString toString(UErrorCode& status) const override;
 
     /** @copydoc FormattedValue::toTempString() */
-    UnicodeString toTempString(UErrorCode& status) const U_OVERRIDE;
+    UnicodeString toTempString(UErrorCode& status) const override;
 
     /** @copydoc FormattedValue::appendTo() */
-    Appendable &appendTo(Appendable& appendable, UErrorCode& status) const U_OVERRIDE;
+    Appendable &appendTo(Appendable& appendable, UErrorCode& status) const override;
 
     /** @copydoc FormattedValue::nextPosition() */
-    UBool nextPosition(ConstrainedFieldPosition& cfpos, UErrorCode& status) const U_OVERRIDE;
+    UBool nextPosition(ConstrainedFieldPosition& cfpos, UErrorCode& status) const override;
 
   private:
     FormattedRelativeDateTimeData *fData;
@@ -428,7 +426,7 @@ public:
      * @param locale the locale
      * @param nfToAdopt Constructed object takes ownership of this pointer.
      *   It is an error for caller to delete this pointer or change its
-     *   contents after calling this constructor. Caller may pass NULL for
+     *   contents after calling this constructor. Caller may pass nullptr for
      *   this argument if they want default number format behavior.
      * @param style the format style. The UDAT_RELATIVE bit field has no effect.
      * @param capitalizationContext A value from UDisplayContext that pertains to
@@ -560,7 +558,7 @@ public:
      *
      * This method returns a String. To get more information about the
      * formatting result, use formatNumericToValue().
-     * 
+     *
      * @param offset    The signed offset for the specified unit. This
      *                  will be formatted according to this object's
      *                  NumberFormat object.
@@ -586,7 +584,7 @@ public:
      *
      * This method returns a FormattedRelativeDateTime, which exposes more
      * information than the String returned by formatNumeric().
-     * 
+     *
      * @param offset    The signed offset for the specified unit. This
      *                  will be formatted according to this object's
      *                  NumberFormat object.
@@ -696,11 +694,19 @@ private:
     const SharedPluralRules *fPluralRules;
     UDateRelativeDateTimeFormatterStyle fStyle;
     UDisplayContext fContext;
+#if !UCONFIG_NO_BREAK_ITERATION
     const SharedBreakIterator *fOptBreakIterator;
+#else
+    std::nullptr_t fOptBreakIterator = nullptr;
+#endif // !UCONFIG_NO_BREAK_ITERATION
     Locale fLocale;
     void init(
             NumberFormat *nfToAdopt,
+#if !UCONFIG_NO_BREAK_ITERATION
             BreakIterator *brkIter,
+#else
+            std::nullptr_t,
+#endif // !UCONFIG_NO_BREAK_ITERATION
             UErrorCode &status);
     UnicodeString& adjustForContext(UnicodeString &) const;
     UBool checkNoAdjustForContext(UErrorCode& status) const;
@@ -743,7 +749,6 @@ private:
 
 U_NAMESPACE_END
 
-#endif /* !UCONFIG_NO_BREAK_ITERATION */
 #endif /* !UCONFIG_NO_FORMATTING */
 
 #endif /* U_SHOW_CPLUSPLUS_API */

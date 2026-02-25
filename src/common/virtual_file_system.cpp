@@ -267,6 +267,10 @@ string VirtualFileSystem::PathSeparator(const string &path) {
 	return FindFileSystem(path, nullptr).PathSeparator(path);
 }
 
+string VirtualFileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(path_p, opener).CanonicalizePath(path_p, opener);
+}
+
 unique_ptr<MultiFileList> VirtualFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
                                                                optional_ptr<FileOpener> opener) {
 	return FindFileSystem(path, opener).Glob(path, input, opener);

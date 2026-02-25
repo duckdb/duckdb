@@ -7,7 +7,7 @@ require parquet
 statement error
 SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/invalid.parquet') limit 50;
 ----
-Invalid Input Error: Invalid string encoding found in Parquet file: value "TREL\xC3" is not valid UTF8!
+Invalid string encoding found
 
 statement ok
 pragma disable_optimizer
@@ -15,4 +15,4 @@ pragma disable_optimizer
 statement error
 SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/invalid.parquet') limit 50;
 ----
-Invalid Input Error: Invalid string encoding found in Parquet file: value "TREL\xC3" is not valid UTF8!
+Invalid string encoding found

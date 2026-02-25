@@ -2,6 +2,11 @@
 # group: [type]
 
 query I
+SELECT get_type(NULL);
+----
+"NULL"
+
+query I
 SELECT get_type(1);
 ----
 INTEGER

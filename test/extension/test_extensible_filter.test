@@ -1,0 +1,37 @@
+# name: test/extension/test_extensible_filter.test
+# description: Test loadable table filter extension demo
+# group: [extension]
+
+require notmingw
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+PRAGMA disable_verification;
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+CREATE TABLE rowid_test_table AS SELECT * FROM range(10) t(id)
+
+query I
+SELECT rowid FROM rowid_test_table
+----
+3
+4
+5
+7
+9
+
+query II prefix
+EXPLAIN SELECT rowid FROM rowid_test_table
+----
+physical_plan	<REGEX>:.*rowid_filter.*
+
+

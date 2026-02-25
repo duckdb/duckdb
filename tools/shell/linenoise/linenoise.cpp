@@ -875,9 +875,10 @@ void Linenoise::EditCapitalizeNextWord(Capitalization capitalization) {
 void Linenoise::StartSearch() {
 	// initiate reverse search
 	search = true;
-	search_buf = std::string();
+	search_buf = std::string(buf, len);
 	search_matches.clear();
 	search_index = 0;
+	PerformSearch();
 	RefreshSearch();
 }
 

@@ -2,8 +2,7 @@
 # group: [geo]
 
 query I
-select typeof('POINT(0 1)'::GEOMETRY('
-GEOGCRS["WGS 84",
+select typeof('POINT(0 1)'::GEOMETRY('GEOGCRS["WGS 84 (CRS84)",
     ENSEMBLE["World Geodetic System 1984 ensemble",
         MEMBER["World Geodetic System 1984 (Transit)"],
         MEMBER["World Geodetic System 1984 (G730)"],
@@ -19,20 +18,20 @@ GEOGCRS["WGS 84",
     PRIMEM["Greenwich",0,
         ANGLEUNIT["degree",0.0174532925199433]],
     CS[ellipsoidal,2],
-        AXIS["geodetic latitude (Lat)",north,
+        AXIS["geodetic longitude (Lon)",east,
             ORDER[1],
             ANGLEUNIT["degree",0.0174532925199433]],
-        AXIS["geodetic longitude (Lon)",east,
+        AXIS["geodetic latitude (Lat)",north,
             ORDER[2],
             ANGLEUNIT["degree",0.0174532925199433]],
     USAGE[
-        SCOPE["Horizontal component of 3D system."],
+        SCOPE["Not known."],
         AREA["World."],
         BBOX[-90,-180,90,180]],
-    ID["EPSG",4326]]
+    ID["OGC","CRS84"]]
 '));
 ----
-GEOMETRY('EPSG:4326')
+GEOMETRY('OGC:CRS84')
 
 statement error
 select typeof('POINT(0 1)'::GEOMETRY('GEOGCRS["WGS 84",foo[]'));

@@ -1,0 +1,53 @@
+# name: test/sql/storage/types/variant/variant_shredding_small.test
+# group: [variant]
+
+load __TEST_DIR__/variant_shredding_small.db
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+create table tbl (id INT PRIMARY KEY, col VARIANT)
+
+statement ok
+insert into tbl select i id, {'i': i, 'j': i * 100} FROm range(5) t(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT col FROM tbl
+----
+{'i': 0, 'j': 0}
+{'i': 1, 'j': 100}
+{'i': 2, 'j': 200}
+{'i': 3, 'j': 300}
+{'i': 4, 'j': 400}
+
+query I
+SELECT col.j FROM tbl
+----
+0
+100
+200
+300
+400
+
+query I
+SELECT col.j::INT FROM tbl
+----
+0
+100
+200
+300
+400
+
+query I
+SELECT col FROM tbl WHERE id=3
+----
+{'i': 3, 'j': 300}
+
+query I
+SELECT col FROM tbl WHERE col.i=3
+----
+{'i': 3, 'j': 300}

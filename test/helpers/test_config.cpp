@@ -381,6 +381,7 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 			tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
 			                           inherit_config.tests_to_be_skipped.end());
 		}
+		bool found_duplicate_tests = false;
 		// Convert to unordered_set<string> the list of tests to be skipped
 		auto entry = options.find("skip_tests");
 		if (entry != options.end()) {
@@ -389,10 +390,18 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 				auto children = StructValue::GetChildren(value);
 				auto skip_list = ListValue::GetChildren(children[1]);
 				for (const auto &skipped_test : skip_list) {
-					tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+					auto skipped_test_str = skipped_test.GetValue<string>();
+					auto insert_result = tests_to_be_skipped.insert(skipped_test_str);
+					if (!insert_result.second) {
+						Printer::PrintF("* Test \"%s\" was already present in skipped test list", skipped_test_str);
+						found_duplicate_tests = true;
+					}
 				}
 			}
 			options.erase("skip_tests");
+		}
+		if (found_duplicate_tests) {
+			Printer::PrintF("Run python3 scripts/cleanup_config_skip_tests.py to clean up");
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);

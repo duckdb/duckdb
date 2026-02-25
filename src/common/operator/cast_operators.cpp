@@ -1581,6 +1581,22 @@ bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict
 }
 
 //===--------------------------------------------------------------------===//
+// Cast From UUID To UHUGEINT
+//===--------------------------------------------------------------------===//
+template <>
+uhugeint_t CastFromUUIDToUHugeint::Operation(hugeint_t input) {
+	return BaseUUID::ToUHugeint(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From UHUGEINT To UUID
+//===--------------------------------------------------------------------===//
+template <>
+hugeint_t CastFromUHugeintToUUID::Operation(uhugeint_t input) {
+	return BaseUUID::FromUHugeint(input);
+}
+
+//===--------------------------------------------------------------------===//
 // Cast To Geometry
 //===--------------------------------------------------------------------===//
 template <>
