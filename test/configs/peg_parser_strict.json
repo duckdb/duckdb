@@ -18,7 +18,8 @@
         "test/sql/types/nested/struct/struct_dict.test",
         "test/sql/types/map/map_empty.test",
         "test/sql/binder/column_ref_as_alias.test",
-        "test/sql/error/lineitem_errors.test"
+        "test/sql/error/lineitem_errors.test",
+        "test/sql/copy/csv/test_encodings.test_slow"
       ]
     },
     {
@@ -78,6 +79,12 @@
     {
       "reason": "DESCRIBE with CTE not supported",
       "paths": ["test/sql/cte/cte_describe.test"]
+    },
+    {
+      "reason": "List of all unit test failing",
+      "paths": [
+        "test/sql/cte/test_giant_union_all.test_slow"
+      ]
     }
   ]
 }

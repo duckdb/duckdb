@@ -1932,7 +1932,9 @@ PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &tr
 	if (!copied_window->orders.empty() && !window_frame_contents->orders.empty()) {
 		throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
 	}
-	copied_window->orders = std::move(window_frame_contents->orders);
+	if (copied_window->orders.empty()) {
+		copied_window->orders = std::move(window_frame_contents->orders);
+	}
 	if (!copied_window->partitions.empty() && !window_frame_contents->partitions.empty()) {
 		throw ParserException("Cannot override PARTITION BY clause of window \"%s\"", window_name);
 	}
