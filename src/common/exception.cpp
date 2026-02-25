@@ -331,7 +331,7 @@ SerializationException::SerializationException(const string &msg) : Exception(Ex
 SequenceException::SequenceException(const string &msg) : Exception(ExceptionType::SEQUENCE, msg) {
 }
 
-InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
+InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, INTERRUPT_MESSAGE) {
 }
 
 FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {

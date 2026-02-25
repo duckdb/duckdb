@@ -60,11 +60,17 @@ true
 statement ok
 CREATE TABLE t2_count_int AS SELECT count(range::INT) EXPORT_STATE as state FROM range(10);
 
+# bit_xor is now opted-in to struct-based state
+query T
+SELECT typeof(bit_xor(1::BIGINT) EXPORT_STATE) = 'AGGREGATE_STATE<bit_xor(BIGINT)::BIGINT, STRUCT(is_set BOOLEAN, "value" BIGINT)>';
+----
+true
+
 # other aggregate functions that are not opted-in are not broken
 query T
-SELECT typeof(bit_xor(1::BIGINT) EXPORT_STATE);
+SELECT typeof(min(1::BIGINT) EXPORT_STATE);
 ----
-LEGACY_AGGREGATE_STATE<bit_xor(BIGINT)::BIGINT>
+LEGACY_AGGREGATE_STATE<min(BIGINT)::BIGINT>
 
 # Test with interval type
 query T

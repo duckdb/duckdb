@@ -571,6 +571,11 @@ public:
 	const char *GetRowStart() override {
 		return "| ";
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 /*
@@ -721,6 +726,11 @@ public:
 	}
 	const char *GetRowSeparator() override {
 		return " \\\\\n";
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -990,6 +1000,11 @@ public:
 		}
 		out.Print(escaped);
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 class ModeTclRenderer : public RowRenderer {
@@ -1093,6 +1108,11 @@ public:
 		auto result = StringUtil::Format("%s", SQLIdentifier(string(str, str_len)));
 		out.Print(result);
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 class ModeAsciiRenderer : public RowRenderer {
@@ -1125,6 +1145,11 @@ public:
 			out.Print(data[i]);
 		}
 		out.Print(row_sep);
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1310,6 +1335,11 @@ public:
 		return "null";
 	}
 
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
+
 	bool json_array;
 };
 
@@ -1399,6 +1429,11 @@ public:
 			res += ")";
 		}
 		return res;
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 

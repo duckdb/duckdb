@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/enums/checkpoint_type.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -22,6 +24,9 @@ struct CheckpointOptions {
 	CheckpointAction action;
 	CheckpointType type;
 	transaction_t transaction_id;
+	//! The WAL lock - in case we are holding it during the entire checkpoint.
+	//! This is only required if we are doing a checkpoint instead of writing to the WAL
+	optional_ptr<lock_guard<mutex>> wal_lock;
 };
 
 } // namespace duckdb

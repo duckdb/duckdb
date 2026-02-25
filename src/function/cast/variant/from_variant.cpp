@@ -74,7 +74,9 @@ struct VariantBooleanConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, bool &ret,
 	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != VariantLogicalType::BOOL_FALSE && type_id != VariantLogicalType::BOOL_TRUE) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		ret = type_id == VariantLogicalType::BOOL_TRUE;
@@ -89,7 +91,9 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		ret = Load<T>(value + byte_offset);
@@ -99,7 +103,9 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const StringConversionPayload &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -117,7 +123,9 @@ struct VariantDecimalConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const DecimalConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		auto ptr = value + byte_offset;

@@ -62,11 +62,11 @@ SELECT finalize(skewness(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM d
 # more aggregates
 
 query III nosort res8
-SELECT g, skewness(d), bool_and(d > 5) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, skewness(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query III nosort res8
-SELECT g, FINALIZE(skewness(d) EXPORT_STATE), FINALIZE(bool_and(d > 5) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, FINALIZE(skewness(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query I nosort res9
@@ -77,7 +77,6 @@ SELECT skewness(d) FROM dummy;
 query I nosort res9
 SELECT FINALIZE(skewness(d) EXPORT_STATE) from dummy;
 ----
-
 
 # you're holding it wrong:
 

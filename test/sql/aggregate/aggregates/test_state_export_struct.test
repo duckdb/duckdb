@@ -131,6 +131,55 @@ SELECT covar_pop(d, d+1) FROM dummy;
 query II nosort res9
 SELECT FINALIZE(covar_pop(d, d+1) EXPORT_STATE) FROM dummy;
 
+query II nosort res8a
+SELECT g, bool_and(d > 50) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res8a
+SELECT g, FINALIZE(bool_and(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bool_and(42 > 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': true}
+
+query II nosort res8a2
+SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res8a2
+SELECT g, FINALIZE(bool_or(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bool_or(42 > 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': true}
+
+query T
+SELECT (bool_or(42 < 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': false}
+
+query III nosort res8b
+SELECT g, bit_and(d), bit_or(d), bit_xor(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query III nosort res8b
+SELECT g, FINALIZE(bit_and(d) EXPORT_STATE), FINALIZE(bit_or(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bit_and(42) export_state)::struct(is_set boolean, value integer);
+----
+{'is_set': true, 'value': 42}
+
+query T
+SELECT (bit_xor(100) export_state)::struct(is_set boolean, value bigint);
+----
+{'is_set': true, 'value': 100}
+
 # You're holding it wrong:
 
 statement error

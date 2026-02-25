@@ -1,0 +1,50 @@
+# name: test/sql/storage/types/variant/variant_shredding_omit_untyped.test
+# group: [variant]
+
+require vector_size 2048
+
+load __TEST_DIR__/variant_shredding_omit_untyped.db
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+# ------------------------------ INTEGER Shredding ------------------------------
+
+statement ok
+create table shredded_integer (col VARIANT)
+
+# Insert values 0-99
+statement ok
+insert into shredded_integer select (i % 100)::INTEGER from range(100) t(i)
+
+statement ok
+checkpoint
+
+# verify the untyped_value column is not present
+query I
+SELECT COUNT(*) FROM pragma_storage_info('shredded_integer') WHERE column_path = '[0, 2, 2]'
+----
+0
+
+query II
+SELECT SUM(TRY_CAST(col AS INT)), COUNT(*) FROM shredded_integer
+----
+4950	100
+
+statement ok
+insert into shredded_integer values ('hello world');
+
+statement ok
+checkpoint
+
+# verify the untyped_value column is not present
+query I
+SELECT COUNT(*) FROM pragma_storage_info('shredded_integer') WHERE column_path = '[0, 2, 2]'
+----
+1
+
+query II
+SELECT SUM(TRY_CAST(col AS INT)), COUNT(*) FROM shredded_integer
+----
+4950	101

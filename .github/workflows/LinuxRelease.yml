@@ -29,6 +29,7 @@ on:
       - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
+      - '!tools/juliapkg/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
@@ -40,6 +41,7 @@ on:
       - 'test/configs/**'
       - 'tools/**'
       - '!tools/shell/**'
+      - '!tools/juliapkg/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
@@ -258,6 +260,63 @@ jobs:
           build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
           build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
         "
+
+ main_julia:
+    name: Julia ${{ matrix.version }}
+    needs: linux-release-cli
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - '1.10'
+          - '1'
+        arch:
+          - x64
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - uses: julia-actions/setup-julia@v2
+      with:
+        version: ${{ matrix.version }}
+        arch: ${{ matrix.arch }}
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: duckdb-binaries-linux-amd64
+        path: linux-release-artifacts
+
+    - name: Extract DuckDB Linux release artifacts
+      shell: bash
+      run: |
+        mkdir -p build/release/src
+        unzip -j linux-release-artifacts/duckdb_cli-linux-amd64.zip "duckdb" -d build/release
+        chmod +x build/release/duckdb
+        unzip -j linux-release-artifacts/libduckdb-linux-amd64.zip "libduckdb.so*" -d build/release/src
+        ls -lah build/release/duckdb
+        ls -lah build/release/src/libduckdb.so*
+
+    - name: Run Tests
+      shell: bash
+      run: |
+        export JULIA_DUCKDB_LIBRARY="`pwd`/build/release/src/libduckdb.so"
+        export JULIA_NUM_THREADS=2
+        export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
+        ls $JULIA_DUCKDB_LIBRARY
+        cd tools/juliapkg
+        julia --project -e "import Pkg; Pkg.test()"
+
+    - name: Format Check
+      if: ${{ always() && matrix.version == '1.10' }}
+      shell: bash
+      run: |
+        cd tools/juliapkg
+        julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
+        ./format_check.sh
 
  upload-libduckdb-src:
     name: Upload libduckdb-src.zip
