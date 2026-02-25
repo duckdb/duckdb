@@ -160,14 +160,15 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 }
 
 void GroupedAggregateHashTable::Destroy() {
-	if (!partitioned_data || partitioned_data->Count() == 0 || !layout_ptr->HasDestructor()) {
+	if (!layout_ptr->HasDestructor()) {
 		return;
 	}
 
 	// There are aggregates with destructors: Call the destructor for each of the aggregates
 	// Currently does not happen because aggregate destructors are called while scanning in RadixPartitionedHashTable
 	// LCOV_EXCL_START
-	for (auto &data_collection : partitioned_data->GetPartitions()) {
+	auto acquired_data = AcquirePartitionedData();
+	for (auto &data_collection : acquired_data->GetPartitions()) {
 		if (data_collection->Count() == 0) {
 			continue;
 		}

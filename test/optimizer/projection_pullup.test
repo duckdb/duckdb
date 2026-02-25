@@ -86,3 +86,13 @@ FROM (VALUES (1, 10), (2, 5), (3, 4)) AS v1(i, j)
 JOIN (VALUES (1, 10), (2, 5), (3, 4)) AS v2(i, j) ON v1.i = v2.i;
 ----
 logical_opt	<!REGEX>:.*AGGREGATION.*JOIN.*PROJECTION.*
+
+query II
+explain SELECT DISTINCT a FROM (SELECT a, b FROM (SELECT i AS a, i AS b FROM range(10) t(i)) t1) t2;
+----
+logical_opt	<REGEX>:.*DISTINCT.*PROJECTION.*
+
+query II
+EXPLAIN SELECT * FROM range(5) INTERSECT SELECT * FROM range(5);
+----
+logical_opt	<REGEX>:.*INTERSECT.*PROJECTION.*

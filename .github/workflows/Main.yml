@@ -11,6 +11,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/shell/**'
+      - '!tools/juliapkg/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
@@ -25,6 +26,7 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/shell/**'
+      - '!tools/juliapkg/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
@@ -71,9 +73,13 @@ jobs:
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
-    - name: Install
+    - name: Install ninja-build if missing
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: |
+        if ! command -v ninja >/dev/null 2>&1; then
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq ninja-build
+        fi
 
     - uses: ./.github/actions/ccache-action
 
@@ -123,6 +129,14 @@ jobs:
     - name: Test
       shell: bash
       run: make allunit
+
+ linux-cli:
+    uses: ./.github/workflows/LinuxRelease.yml
+    secrets: inherit
+    needs: linux-debug
+    with:
+      git_ref: ${{ github.sha }}
+      skip_tests: 'false'
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks

@@ -110,6 +110,55 @@ query IIIIIII nosort res8
 SELECT g, FINALIZE(favg(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
+query II nosort res8a
+SELECT g, bool_and(d > 50) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res8a
+SELECT g, FINALIZE(bool_and(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bool_and(42 > 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': true}
+
+query II nosort res8a2
+SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res8a2
+SELECT g, FINALIZE(bool_or(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bool_or(42 > 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': true}
+
+query T
+SELECT (bool_or(42 < 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': false}
+
+query III nosort res8b
+SELECT g, bit_and(d), bit_or(d), bit_xor(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query III nosort res8b
+SELECT g, FINALIZE(bit_and(d) EXPORT_STATE), FINALIZE(bit_or(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bit_and(42) export_state)::struct(is_set boolean, value integer);
+----
+{'is_set': true, 'value': 42}
+
+query T
+SELECT (bit_xor(100) export_state)::struct(is_set boolean, value bigint);
+----
+{'is_set': true, 'value': 100}
+
 # You're holding it wrong:
 
 statement error
@@ -346,3 +395,24 @@ ORDER BY g;
 group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t12
 group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
 group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
+
+# parquet round-trip: write AGGREGATE_STATE directly
+# count() has state STRUCT(count BIGINT) which parquet preserves exactly
+require parquet
+
+statement ok
+COPY (SELECT g, count(d) EXPORT_STATE s1 FROM dummy GROUP BY g) TO '__TEST_DIR__/count_state.parquet' (FORMAT PARQUET);
+
+query II
+SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, count(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '__TEST_DIR__/count_state.parquet' USING(g) ORDER BY g;
+----
+0	20
+1	20
+2	20
+3	20
+4	20
+5	20
+6	20
+7	20
+8	20
+9	20
