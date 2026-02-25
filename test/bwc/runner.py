@@ -1,7 +1,7 @@
 import shutil
 import argparse
 from utils.duckdb_cli import DuckDBCLI
-from utils.duckdb_installer import install_assets, install_extensions, make_cli_path
+from utils.duckdb_installer import install_assets, install_extensions, make_cli_path, get_version
 from utils.test_files_parser import load_test_files
 from utils.test_report import TestReport
 from utils.logger import make_logger
@@ -94,6 +94,24 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+
+class TestRunnerContext:
+  def __init__(self, old_duckdb_version, new_cli_path, nb_tests, summary_file, report_con):
+    self.old_cli_path = make_cli_path(old_duckdb_version)
+    self.new_cli_path = new_cli_path
+    self.nb_tests = nb_tests
+    self.summary_file = summary_file
+    self.report_con = report_con
+    self.report_lock = Lock()
+
+  def initialize(self):
+    self.old_cli_v = '-'.join(get_version(self.old_cli_path))
+    logger.info(f"Old CLI path: {self.old_cli_path} @ {self.old_cli_v}")
+
+    self.new_cli_v = '-'.join(get_version(self.new_cli_path))
+    logger.info(f"New CLI path: {self.new_cli_path} @ {self.new_cli_v}")
+
+
 def run_multi_clis(clis, c):
   results = []
   for cli in clis:
@@ -154,13 +172,13 @@ def get_extensions_versions(clis):
   return versions
 
 
-def do_run_test(old_cli_path, new_cli_path, nb_tests, test_spec):
+def do_run_test(ctx, test_spec):
   global has_checked_versions
-  logger.info(f"Running test {test_spec.test_idx}/{nb_tests}: {test_spec.test_spec_relative_path}")
-  report = TestReport(test_spec)
+  logger.info(f"Running test {test_spec.test_idx}/{ctx.nb_tests}: {test_spec.test_spec_relative_path}")
+  report = TestReport(test_spec, ctx.old_cli_v, ctx.new_cli_v)
   sanity_checks = False
-  with DuckDBCLI(old_cli_path, unsigned=True) as old_cli:
-    with DuckDBCLI(new_cli_path, unsigned=True) as new_cli:
+  with DuckDBCLI(ctx.old_cli_path, unsigned=True) as old_cli:
+    with DuckDBCLI(ctx.new_cli_path, unsigned=True) as new_cli:
       ext_path = 'test_utils'
       run_multi_clis([old_cli, new_cli], f".cd {test_spec.test_runtime_directory}\nLOAD '{ext_path}'")
       logger.debug(f"Loaded extension from '{ext_path}'")
@@ -206,28 +224,28 @@ def do_run_test(old_cli_path, new_cli_path, nb_tests, test_spec):
       report.load_comparison_results()
       return report
 
-def write_summary_file(report_lock, summary_file, to_write):
-  with report_lock:
-    summary_file.write(to_write)
-    summary_file.flush()
+def write_summary_file(ctx, to_write):
+  with ctx.report_lock:
+    ctx.summary_file.write(to_write)
+    ctx.summary_file.flush()
 
-def run_one_test_and_log(old_cli_path, new_cli_path, nb_tests, test, summary_file, report_con, report_lock):
+def run_one_test_and_log(ctx, test):
   if cancel_event.is_set():
     return None
 
   try:
-    report = do_run_test(old_cli_path, new_cli_path, nb_tests, test)
+    report = do_run_test(ctx, test)
     if report.is_successful():
-      write_summary_file(report_lock, summary_file, f"{test.test_spec_relative_path}\n")
-      logger.info(f"Test {test.test_idx}/{nb_tests}: {test.test_spec_relative_path} - SUCCESS")
+      write_summary_file(ctx, f"{test.test_spec_relative_path}\n")
+      logger.info(f"Test {test.test_idx}/{ctx.nb_tests}: {test.test_spec_relative_path} - SUCCESS")
     else:
       em = report.find_exception_message()
-      write_summary_file(report_lock, summary_file, f"{test.test_spec_relative_path} # FAILED: {em}\n")
-      logger.error(f"Test {test.test_idx}/{nb_tests}: {test.test_spec_relative_path} - ❌ FAILED: {em}")
+      write_summary_file(ctx, f"{test.test_spec_relative_path} # FAILED: {em}\n")
+      logger.error(f"Test {test.test_idx}/{ctx.nb_tests}: {test.test_spec_relative_path} - ❌ FAILED: {em}")
 
-    with report_lock:
-      report_con.execute(TestReport.report_insert(), report.report_sql_values())
-      report_con.commit()
+    with ctx.report_lock:
+      ctx.report_con.execute(TestReport.report_insert(), report.report_sql_values())
+      ctx.report_con.commit()
 
     return report
   except Exception as e:
@@ -267,6 +285,7 @@ def cleanup_runtime_dir(bwc_tests_base_dir, dry_run=True):
         logger.error(f"Failed to delete '{file_path}': {e}")
     logger.info(f"Cleanup completed, deleted {removed}/{len(delete_list)} files/directories")
 
+
 if __name__ == "__main__":
   supported_duckdb_versions = [args.old_duckdb_version] if args.old_duckdb_version else [
     "v1.1.0", "v1.1.2", "v1.1.1",
@@ -286,7 +305,8 @@ if __name__ == "__main__":
   # Create the report database
   os.makedirs(f"{bwc_tests_base_dir}/reports", exist_ok=True)
   ts = time.strftime("%Y%m%d_%H%M%S")
-  report_db_path = f"{bwc_tests_base_dir}/reports/test_report_{ts}.duckdb"
+  version_suffix = args.old_duckdb_version if args.old_duckdb_version else "multi_version"
+  report_db_path = f"{bwc_tests_base_dir}/reports/test_report_{version_suffix}_{ts}.duckdb"
   con = duckdb.connect(report_db_path)
   con.execute(TestReport.report_schema())
   con.commit()
@@ -299,18 +319,13 @@ if __name__ == "__main__":
 
   nb_tests_run = 0
   nb_success = 0
+  failed_tests = []
   for old_duckdb_version in supported_duckdb_versions:
     logger.info(f"Running tests for DuckDB version '{old_duckdb_version}'")
 
-    old_cli_p = make_cli_path(old_duckdb_version)
-    new_cli_p = f"{duckdb_root_dir}/build/release/duckdb" if args.new_cli_path is None else args.new_cli_path
-
-    logger.info(f"Old CLI path: {old_cli_p}")
-    logger.info(f"New CLI path: {new_cli_p}")
+    new_cli_path = f"{duckdb_root_dir}/build/release/duckdb" if args.new_cli_path is None else args.new_cli_path
 
     summary_file_path = f"{bwc_tests_base_dir}/tests_summary_{old_duckdb_version}.txt"
-    lock = Lock()
-
     with open(summary_file_path, 'a') as summary_file:
       summary_file.write(f"\n## --- Starting run at {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
       summary_file.flush()
@@ -319,10 +334,13 @@ if __name__ == "__main__":
       res = load_test_files(duckdb_root_dir, bwc_tests_base_dir, old_duckdb_version, test_pattern, single_test_file)
       tests = res['tests']
 
+      runner_context = TestRunnerContext(old_duckdb_version, new_cli_path, len(tests), summary_file, con)
+      runner_context.initialize()
+
       extensions = res['needed_extensions']
       extensions.add('test_utils')
-      install_extensions(old_cli_p, extensions)
-      install_extensions(new_cli_p, extensions)
+      install_extensions(runner_context.old_cli_path, extensions)
+      install_extensions(runner_context.new_cli_path, extensions)
 
       run_sequentially = args.run_sequentially or test_pattern is not None
       stop_on_failure = args.stop_on_failure
@@ -330,12 +348,13 @@ if __name__ == "__main__":
       nb_tests_run = 0
       if run_sequentially:
         for test in tests:
-          report = run_one_test_and_log(old_cli_p, new_cli_p, len(tests), test, summary_file, con, lock)
+          report = run_one_test_and_log(runner_context, test)
           nb_tests_run += 1
 
           if report.is_successful():
             nb_success += 1
           else:
+            failed_tests.append((old_duckdb_version, report.test_relative_path))
             if stop_on_failure:
               break
             elif test_pattern is not None:
@@ -343,14 +362,30 @@ if __name__ == "__main__":
               report.log_steps_queries()
       else:
         with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
-          reports = executor.map(lambda test: run_one_test_and_log(old_cli_p, new_cli_p, len(tests), test, summary_file, con, lock), tests)
+          reports = executor.map(lambda test: run_one_test_and_log(runner_context, test), tests)
 
         reports_list = list(reports)
         nb_tests_run = len(reports_list)
         nb_success = sum(1 for r in reports_list if r.is_successful())
+        for r in reports_list:
+          if not r.is_successful():
+            failed_tests.append((old_duckdb_version, r.test_relative_path))
 
       elapsed = time.time() - start_time
       tps = nb_tests_run / elapsed if elapsed > 0 else 0
       nb_failed = nb_tests_run - nb_success
       logger.info(f"All tests completed in {elapsed:.2f}s - {nb_tests_run} tests run, {nb_success} successful, {nb_failed} failed - {tps:.2f} tests per second.")
+
+  if len(failed_tests) == 0:
+    logger.info("All tests passed successfully! 🎉")
+    sys.exit(0)
+
+  last_version = None
+  for version, test_path in failed_tests:
+    if version != last_version:
+      logger.info(f"Failed tests for DuckDB version '{version}':")
+      logger.info(f"{'-'*40}")
+      last_version = version
+    logger.info(test_path)
+  sys.exit(1)
 

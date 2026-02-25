@@ -64,6 +64,13 @@ def download_test_specs(version, target_sub_dir):
     subprocess.run(["mv", f"duckdb/data", target_dir], cwd=tmpdirname, check=True)
     logger.info(f"[{version}] Copied test specs to '{target_dir}'")
 
+def get_version(cli_path):
+  with DuckDBCLI(cli_path) as cli:
+    result = cli.execute_command("select library_version, source_id from pragma_version();")
+    if not result["success"]:
+      raise RuntimeError(f"Failed to get DuckDB version from CLI at '{cli_path}': {result['stderr']}")
+    return result["output"][1].split(',')
+
 def install_extensions(cli_path, extensions):
   with DuckDBCLI(cli_path, unsigned=True) as cli:
     installed = []
