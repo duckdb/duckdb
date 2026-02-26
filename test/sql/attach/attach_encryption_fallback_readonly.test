@@ -12,7 +12,7 @@ require no_extension_autoloading "EXPECTED: This tests what happens when autoloa
 statement ok
 set autoinstall_known_extensions=false
 
-# First we try to read an encrypted 
+# First we try to read an encrypted database
 statement error
 ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 ----
@@ -59,7 +59,6 @@ statement ok
 SET force_mbedtls_unsafe = 'false'
 
 # Loading httpfs will solve all problems
-
 require httpfs
 
 statement ok

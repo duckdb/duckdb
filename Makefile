@@ -425,6 +425,11 @@ relassert: ${EXTENSION_CONFIG_STEP}
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
+.PHONY: relassert-artifact
+
+relassert-artifact:
+	bash scripts/prepare_relassert_artifact.sh
+
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \

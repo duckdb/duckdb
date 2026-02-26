@@ -38,7 +38,7 @@ public:
 public:
 	static bool IsValid(const char *str_data, uint32_t str_len, bool is_varchar);
 	static bool IsValid(const string &str, bool is_varchar);
-	static void VerifyString(const char *str_data, uint32_t str_len, bool is_varchar);
+	void VerifyString(const char *str_data, uint32_t str_len, bool is_varchar) const;
 	void VerifyString(const char *str_data, uint32_t str_len) const;
 
 	static void ReferenceBlock(Vector &result, shared_ptr<ResizeableBuffer> &block);

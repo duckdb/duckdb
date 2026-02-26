@@ -216,9 +216,18 @@ vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(const P
 	return compression_functions->GetCompressionFunctions(physical_type);
 }
 
-optional_ptr<CompressionFunction> DBConfig::GetCompressionFunction(CompressionType type,
-                                                                   const PhysicalType physical_type) {
+optional_ptr<CompressionFunction> DBConfig::TryGetCompressionFunction(CompressionType type,
+                                                                      const PhysicalType physical_type) {
 	return compression_functions->GetCompressionFunction(type, physical_type);
 }
 
+reference<CompressionFunction> DBConfig::GetCompressionFunction(CompressionType type,
+                                                                const PhysicalType physical_type) {
+	auto result = TryGetCompressionFunction(type, physical_type);
+	if (!result) {
+		throw InternalException("Could not find compression function \"%s\" for physical type \"%s\"",
+		                        EnumUtil::ToString(type), EnumUtil::ToString(physical_type));
+	}
+	return *result;
+}
 } // namespace duckdb

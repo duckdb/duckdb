@@ -150,3 +150,33 @@ QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
     AND count(*) OVER(PARTITION BY date, train_number) = 1;
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
+
+# 12. Case ORDER BY clause
+query II
+EXPLAIN 
+SELECT *, 
+	list(train_number) OVER(
+		PARTITION BY date 
+		ORDER BY train_number DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+		
+FROM services 
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query III
+SELECT 
+	*,
+	list(train_number) OVER(
+		PARTITION BY date 
+		ORDER BY train_number DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+		
+FROM services 
+----
+2024-01-01	100	[101, 100, 100]
+2024-01-01	100	[101, 100, 100]
+2024-01-01	101	[101, 100, 100]
+2024-01-02	100	[100]
