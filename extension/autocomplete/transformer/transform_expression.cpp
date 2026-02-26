@@ -802,8 +802,8 @@ PEGTransformerFactory::TransformComparisonExpression(PEGTransformer &transformer
 			for (size_t i = 0; i < not_expr_repeat.children.size(); i++) {
 				vector<unique_ptr<ParsedExpression>> inner_list_children;
 				inner_list_children.push_back(std::move(right_expr));
-				right_expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT,
-				                                          std::move(inner_list_children));
+				right_expr =
+				    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
 			}
 		}
 		expr = make_uniq<ComparisonExpression>(comparison_operator, std::move(expr), std::move(right_expr));
