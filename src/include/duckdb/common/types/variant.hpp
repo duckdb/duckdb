@@ -19,6 +19,11 @@ struct UnifiedVectorFormat;
 
 enum class VariantChildLookupMode : uint8_t { INVALID, BY_KEY, BY_INDEX };
 
+struct Variant {
+public:
+	static constexpr idx_t VERSION_ADDED = 7; // Added to core in DuckDB v1.5.0
+};
+
 struct VariantPathComponent {
 public:
 	explicit VariantPathComponent() : lookup_mode(VariantChildLookupMode::INVALID) {

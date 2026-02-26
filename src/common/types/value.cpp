@@ -941,7 +941,9 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 
 Value Value::TYPE(const LogicalType &type) {
 	MemoryStream stream;
-	BinarySerializer::Serialize(type, stream);
+	SerializationOptions options;
+	options.serialization_compatibility = SerializationCompatibility::Latest();
+	BinarySerializer::Serialize(type, stream, options);
 	auto data_ptr = const_char_ptr_cast(stream.GetData());
 	auto data_len = stream.GetPosition();
 
@@ -2190,6 +2192,19 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 		if (type_.id() == LogicalTypeId::BLOB) {
 			auto blob_str = Blob::ToString(StringValue::Get(*this));
 			serializer.WriteProperty(102, "value", blob_str);
+		} else if (type_.id() == LogicalTypeId::GEOMETRY) {
+			if (!serializer.ShouldSerialize(7)) {
+				// Write as old-style SPATIAL format
+				string blob;
+				Geometry::ToSpatialGeometry(StringValue::Get(*this), blob);
+				auto text = Blob::ToString(blob);
+				serializer.WriteProperty(102, "value", text);
+			} else {
+				// Otherwise, write as WKB with an explicit format property so that we recognize during deserialization.
+				auto text = Blob::ToString(StringValue::Get(*this));
+				serializer.WriteProperty(102, "value", text);
+				serializer.WriteProperty(103, "geometry_format", GeometryStorageType::WKB);
+			}
 		} else {
 			serializer.WriteProperty(102, "value", StringValue::Get(*this));
 		}
@@ -2277,11 +2292,27 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		new_value.value_.interval = deserializer.ReadProperty<interval_t>(102, "value");
 		break;
 	case PhysicalType::VARCHAR: {
-		auto str = deserializer.ReadProperty<string>(102, "value");
 		if (type.id() == LogicalTypeId::BLOB) {
+			auto str = deserializer.ReadProperty<string>(102, "value");
 			new_value.value_info_ = make_shared_ptr<StringValueInfo>(Blob::ToBlob(str));
+		} else if (type.id() == LogicalTypeId::GEOMETRY) {
+			auto text = deserializer.ReadProperty<string>(102, "value");
+			auto type = deserializer.ReadPropertyWithExplicitDefault<GeometryStorageType>(103, "geometry_format",
+			                                                                              GeometryStorageType::SPATIAL);
+
+			auto blob = Blob::ToBlob(text);
+			if (type == GeometryStorageType::WKB) {
+				new_value.value_info_ = make_shared_ptr<StringValueInfo>(std::move(blob));
+			} else if (type == GeometryStorageType::SPATIAL) {
+				string geom;
+				Geometry::FromSpatialGeometry(blob, geom);
+				new_value.value_info_ = make_shared_ptr<StringValueInfo>(std::move(geom));
+			} else {
+				throw InternalException("Unknown geometry format in value deserialization");
+			}
 		} else {
-			new_value.value_info_ = make_shared_ptr<StringValueInfo>(str);
+			auto str = deserializer.ReadProperty<string>(102, "value");
+			new_value.value_info_ = make_shared_ptr<StringValueInfo>(std::move(str));
 		}
 	} break;
 	case PhysicalType::LIST: {

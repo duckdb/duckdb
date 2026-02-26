@@ -3,7 +3,7 @@
 
 require tpch
 
-load __TEST_DIR__/tpch_sf1_variant.db
+load __TEST_DIR__/tpch_sf1_variant.db readwrite v1.5.0
 
 statement ok
 call dbgen(sf=1, suffix='_normal');
