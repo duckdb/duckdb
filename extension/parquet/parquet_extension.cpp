@@ -96,6 +96,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 	//! Which geo-parquet version to use when writing
 	GeoParquetVersion geoparquet_version = GeoParquetVersion::V1;
+
+	//! Whether TIMESTAMP (without timezone) should be marked as adjusted to UTC in the Parquet schema
+	bool timestamp_is_adjusted_to_utc = false;
 };
 
 void ParquetWriteGlobalState::LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
@@ -139,6 +142,7 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["can_have_nan"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["geoparquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["shredding"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["timestamp_is_adjusted_to_utc"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 }
 
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
@@ -326,6 +330,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			} else {
 				throw BinderException("Expected geoparquet_version 'NONE', 'V1' or 'BOTH'");
 			}
+		} else if (loption == "timestamp_is_adjusted_to_utc") {
+			bind_data->timestamp_is_adjusted_to_utc =
+			    BooleanValue::Get(option.second[0].DefaultCastAs(LogicalType::BOOLEAN));
 		} else {
 			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -358,7 +365,7 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
 	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
 	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
-	    parquet_bind.geoparquet_version);
+	    parquet_bind.geoparquet_version, parquet_bind.timestamp_is_adjusted_to_utc);
 	return std::move(global_state);
 }
 
@@ -614,6 +621,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WritePropertyWithDefault(116, "geoparquet_version", bind_data.geoparquet_version,
 	                                    default_value.geoparquet_version);
 	serializer.WriteProperty(117, "shredding_types", bind_data.shredding_types);
+	serializer.WritePropertyWithDefault(118, "timestamp_is_adjusted_to_utc", bind_data.timestamp_is_adjusted_to_utc,
+	                                    default_value.timestamp_is_adjusted_to_utc);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -648,6 +657,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->geoparquet_version =
 	    deserializer.ReadPropertyWithExplicitDefault(116, "geoparquet_version", default_value.geoparquet_version);
 	data->shredding_types = deserializer.ReadProperty<ShreddingType>(117, "shredding_types");
+	data->timestamp_is_adjusted_to_utc = deserializer.ReadPropertyWithExplicitDefault(
+	    118, "timestamp_is_adjusted_to_utc", default_value.timestamp_is_adjusted_to_utc);
 
 	return std::move(data);
 }
@@ -918,10 +929,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                          Value(false));
 	config.AddExtensionOption("parquet_metadata_cache",
 	                          "Cache Parquet metadata - useful when reading the same files multiple times",
-	                          LogicalType::BOOLEAN, Value(false));
-	config.AddExtensionOption("parquet_timestamp_is_adjusted_to_utc",
-	                          "Whether Parquet TIMESTAMP columns written from DuckDB timestamps without time zone "
-	                          "should set isAdjustedToUTC to true.",
 	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption(
 	    "enable_geoparquet_conversion",
