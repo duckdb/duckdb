@@ -25,8 +25,7 @@
     {
       "reason": "Parser error",
       "paths": [
-        "test/sql/json/scalar/test_json_extract.test",
-        "test/issues/monetdb/test_boolean_not.test"
+        "test/sql/json/scalar/test_json_extract.test"
       ]
     },
     {

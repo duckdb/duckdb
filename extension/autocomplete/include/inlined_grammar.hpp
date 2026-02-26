@@ -811,7 +811,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*\n"
 	"IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'\n"
 	"# LEVEL 6\n"
-	"ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*\n"
+	"ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator 'NOT'* BetweenInLikeExpression)*\n"
 	"ComparisonOperator <-\n"
 	"    OperatorEqual /\n"
 	"    OperatorNotEqual /\n"
