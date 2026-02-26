@@ -42,10 +42,6 @@
         "test/sql/prepared/parameter_variants.test",
         "test/sql/parser/digit_separators.test"
       ]
-    },
-    {
-      "reason": "DESCRIBE with CTE not supported",
-      "paths": ["test/sql/cte/cte_describe.test"]
     }
   ]
 }

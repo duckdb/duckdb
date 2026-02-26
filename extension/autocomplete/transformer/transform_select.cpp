@@ -3,6 +3,7 @@
 #include "ast/join_qualifier.hpp"
 #include "ast/limit_percent_result.hpp"
 #include "ast/table_alias.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -40,6 +41,22 @@ PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transfor
 	transformer.TransformOptional<vector<unique_ptr<ResultModifier>>>(list_pr, 2, result_modifiers);
 	for (auto &result_modifier : result_modifiers) {
 		select_statement->node->modifiers.push_back(std::move(result_modifier));
+	}
+	if (select_statement->node->type != QueryNodeType::SELECT_NODE) {
+		return select_statement;
+	}
+	auto &select_node = select_statement->node->Cast<SelectNode>();
+	if (select_node.from_table->type != TableReferenceType::SHOW_REF) {
+		return select_statement;
+	}
+	auto &show_ref = select_node.from_table->Cast<ShowRef>();
+	if (!select_statement->node->cte_map.map.empty()) {
+		throw ParserException("%s with CTE not allowed - wrap the statement in a subquery instead",
+		                      EnumUtil::ToString(show_ref.show_type));
+	}
+	if (!select_statement->node->modifiers.empty()) {
+		throw ParserException("%s with ORDER BY not allowed - wrap the statement in a subquery instead",
+		                      EnumUtil::ToString(show_ref.show_type));
 	}
 	return select_statement;
 }
