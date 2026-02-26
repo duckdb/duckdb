@@ -49,12 +49,6 @@
       ]
     },
     {
-      "reason": "Expression depth",
-      "paths": [
-        "test/sql/overflow/expression_tree_depth.test"
-      ]
-    },
-    {
       "reason": "Different behaviour compared to PostgreSQL parser",
       "paths": [
         "test/sql/function/string/test_string_slice.test",
