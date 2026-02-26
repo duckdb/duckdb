@@ -10,7 +10,7 @@ namespace {
 
 struct ReduceExecuteInfo {
 	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
-	    : left_slice(make_uniq<Vector>(*info.child_vector)) {
+	    : context(context), left_slice(make_uniq<Vector>(*info.child_vector)) {
 		if (info.has_initial) {
 			initial_value_offset = 0;
 		}
@@ -56,11 +56,14 @@ struct ReduceExecuteInfo {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
 		}
 
+		accumulator_cast = make_uniq<Vector>(info.result.GetType(), info.row_count);
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
 	};
 
 	ValidityMask active_rows;
+	ClientContext &context;
 	unique_ptr<Vector> left_slice;
+	unique_ptr<Vector> accumulator_cast;
 	unique_ptr<ExpressionExecutor> expr_executor;
 	vector<LogicalType> input_types;
 
@@ -68,6 +71,15 @@ struct ReduceExecuteInfo {
 	SelectionVector left_sel;
 	SelectionVector active_rows_sel;
 };
+
+void ReferenceAccumulator(ReduceExecuteInfo &execute_info, Vector &target, Vector &source, const idx_t count) {
+	if (source.GetType() != target.GetType()) {
+		VectorOperations::Cast(execute_info.context, source, *execute_info.accumulator_cast, count, true);
+		target.Reference(*execute_info.accumulator_cast);
+	} else {
+		target.Reference(source);
+	}
+}
 
 bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFunctions::LambdaInfo &info,
                    DataChunk &result_chunk) {
@@ -146,9 +158,11 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 
 	if (loops == 0 && info.has_initial) {
 		info.column_infos[0].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
-		input_chunk.data[accumulator_offset].Reference(info.column_infos[0].vector);
+		auto &initial_vector = info.column_infos[0].vector.get();
+		ReferenceAccumulator(execute_info, input_chunk.data[accumulator_offset], initial_vector, reduced_row_idx);
 	} else {
-		input_chunk.data[accumulator_offset].Reference(*execute_info.left_slice);
+		ReferenceAccumulator(execute_info, input_chunk.data[accumulator_offset], *execute_info.left_slice,
+		                     reduced_row_idx);
 	}
 	input_chunk.data[element_offset].Reference(right_slice);
 
@@ -190,11 +204,9 @@ LogicalType ResolveReduceAccumulatorType(ClientContext &context, const LogicalTy
 			return LogicalType::LIST(list_child_type);
 		}
 	}
-	if (initial_type.IsNumeric() && list_child_type.IsNumeric()) {
-		LogicalType max_logical_type;
-		if (LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_type, max_logical_type)) {
-			return max_logical_type;
-		}
+	LogicalType max_logical_type;
+	if (LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_type, max_logical_type)) {
+		return max_logical_type;
 	}
 	return initial_type;
 }

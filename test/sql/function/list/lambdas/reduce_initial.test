@@ -84,7 +84,7 @@ Binder Error
 query I
 SELECT list_reduce([0], lambda acc, x: if(len(acc::VARCHAR) - 1, true, false), false);
 ----
-true
+0
 
 statement error
 SELECT list_reduce([1, 2], lambda x: x, 100);
