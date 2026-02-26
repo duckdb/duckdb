@@ -37,7 +37,10 @@ public:
 	string file_extension;
 	CopyOverwriteMode overwrite_mode;
 	bool per_thread_output;
+	optional_idx batch_size;
+	optional_idx batch_size_bytes;
 	optional_idx file_size_bytes;
+	optional_idx batches_per_file;
 	bool rotate;
 	CopyFunctionReturnType return_type;
 

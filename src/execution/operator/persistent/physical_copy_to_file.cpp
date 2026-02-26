@@ -288,6 +288,11 @@ public:
 	}
 	unique_ptr<GlobalFunctionData> global_state;
 	unique_ptr<LocalFunctionData> local_state;
+
+	//! For prepare/flush batch
+	unique_ptr<ColumnDataCollection> collection;
+	ColumnDataAppendState collection_append_state;
+
 	idx_t total_rows_copied = 0;
 	idx_t partitioned_write_flush_threshold;
 
@@ -444,7 +449,7 @@ void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode o
 }
 
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
-	if (partition_output || per_thread_output || rotate) {
+	if (partition_output || per_thread_output || Rotate()) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		if (!fs.IsRemoteFile(file_path)) {
 			if (fs.FileExists(file_path)) {
@@ -467,7 +472,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		}
 
 		auto state = make_uniq<CopyToFunctionGlobalState>(context);
-		if (!per_thread_output && rotate && write_empty_file) {
+		if (!per_thread_output && Rotate() && write_empty_file) {
 			auto global_lock = state->lock.GetExclusiveLock();
 			state->global_state = CreateFileState(context, *state, *global_lock);
 		}
@@ -529,7 +534,7 @@ void PhysicalCopyToFile::WriteRotateInternal(ExecutionContext &context, GlobalSi
 		}
 		auto &file_state = *g.global_state;
 		auto &file_lock = *g.file_write_lock_if_rotating;
-		if (rotate && function.rotate_next_file(file_state, *bind_data, file_size_bytes)) {
+		if (Rotate() && function.rotate_next_file(file_state, *bind_data, file_size_bytes)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
 			auto owned_gstate = std::move(g.global_state);
 			g.global_state = CreateFileState(context.client, *sink_state, *global_guard);
@@ -556,11 +561,99 @@ void PhysicalCopyToFile::WriteRotateInternal(ExecutionContext &context, GlobalSi
 	}
 }
 
+bool PhysicalCopyToFile::Rotate() const {
+	return file_size_bytes.IsValid() || batches_per_file.IsValid();
+}
+
+static unique_ptr<StorageLockKey> GrabLock(StorageLock &lock, StorageLockType type, bool needs_lock) {
+	if (!needs_lock) {
+		return nullptr;
+	}
+	if (type == StorageLockType::EXCLUSIVE) {
+		return lock.GetExclusiveLock();
+	}
+	D_ASSERT(type == StorageLockType::SHARED);
+	return lock.GetSharedLock();
+}
+
+void PhysicalCopyToFile::SinkInternal(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+                                      unique_ptr<GlobalFunctionData> &file_state_ptr, const bool needs_lock) const {
+	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
+	auto &lstate = input.local_state.Cast<CopyToFunctionLocalState>();
+
+	if (!lstate.collection) {
+		lstate.collection = make_uniq<ColumnDataCollection>(context.client, expected_types);
+		lstate.collection->InitializeAppend(lstate.collection_append_state);
+	}
+	lstate.collection->Append(lstate.collection_append_state, chunk);
+
+	const auto exceeds_count = lstate.collection->Count() >= batch_size.GetIndex();
+	const auto exceeds_size = batch_size.IsValid() && lstate.collection->SizeInBytes() >= batch_size_bytes.GetIndex();
+	if (!exceeds_count && !exceeds_size) {
+		return;
+	}
+
+	if (!Rotate()) {
+		auto global_guard = GrabLock(gstate.lock, StorageLockType::EXCLUSIVE, needs_lock);
+		if (!file_state_ptr) {
+			file_state_ptr = CreateFileState(context.client, *sink_state, *global_guard);
+			global_guard.reset();
+		}
+
+		auto prepared_batch =
+		    function.prepare_batch(context.client, *bind_data, *file_state_ptr, std::move(lstate.collection));
+		function.flush_batch(context.client, *bind_data, *file_state_ptr, *prepared_batch);
+
+		return;
+	}
+
+	while (true) {
+		// Grab global lock and dereference the current file state (and corresponding lock)
+		auto global_guard = GrabLock(gstate.lock, StorageLockType::EXCLUSIVE, needs_lock);
+		if (!file_state_ptr) {
+			file_state_ptr = CreateFileState(context.client, *sink_state, *global_guard);
+		}
+		auto &file_state = *file_state_ptr;
+		auto &file_lock = *gstate.file_write_lock_if_rotating;
+		if (Rotate() && function.rotate_next_file(file_state, *bind_data, file_size_bytes)) {
+			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
+			auto owned_file_state = std::move(file_state_ptr);
+			file_state_ptr = CreateFileState(context.client, *sink_state, *global_guard);
+			auto owned_lock = std::move(gstate.file_write_lock_if_rotating);
+			gstate.file_write_lock_if_rotating = make_uniq<StorageLock>();
+			global_guard.reset();
+
+			// This thread now waits for the exclusive lock on this file while other threads complete their writes
+			// Note that new writes can still start, as there is already a new global state
+			auto file_guard = GrabLock(*owned_lock, StorageLockType::EXCLUSIVE, needs_lock);
+			function.copy_to_finalize(context.client, *bind_data, *owned_file_state);
+		} else {
+			// Get shared file write lock while holding global lock,
+			// so file can't be rotated before we get the write lock
+			auto file_guard = GrabLock(file_lock, StorageLockType::SHARED, needs_lock);
+
+			// Because we got the shared lock on the file, we're sure that it will keep existing until we release it
+			global_guard.reset();
+
+			// Sink/Combine!
+			fun(file_state);
+			break;
+		}
+	}
+
+	auto prepared_batch =
+	    function.prepare_batch(context.client, *bind_data, *gstate.global_state, std::move(lstate.collection));
+	if (!Rotate()) {
+		function.flush_batch(context.client, *bind_data, *gstate.global_state, *prepared_batch);
+		return;
+	}
+}
+
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
-	if (!write_empty_file && !rotate) {
+	if (!write_empty_file && !Rotate()) {
 		// if we are only writing the file when there are rows to write we need to initialize here
 		g.Initialize(context.client, *this);
 	}
@@ -577,7 +670,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 			// Lazily create file state here to prevent creating empty files
 			auto global_lock = g.lock.GetExclusiveLock();
 			gstate = CreateFileState(context.client, *sink_state, *global_lock);
-		} else if (rotate && function.rotate_next_file(*gstate, *bind_data, file_size_bytes)) {
+		} else if (Rotate() && function.rotate_next_file(*gstate, *bind_data, file_size_bytes)) {
 			function.copy_to_finalize(context.client, *bind_data, *gstate);
 			auto global_lock = g.lock.GetExclusiveLock();
 			gstate = CreateFileState(context.client, *sink_state, *global_lock);
@@ -586,7 +679,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	if (!file_size_bytes.IsValid() && !rotate) {
+	if (!file_size_bytes.IsValid() && !Rotate()) {
 		function.copy_to_sink(context, *bind_data, *g.global_state, *l.local_state, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -617,7 +710,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 				function.copy_to_combine(context, *bind_data, *l.global_state, *l.local_state);
 				function.copy_to_finalize(context.client, *bind_data, *l.global_state);
 			}
-		} else if (rotate) {
+		} else if (Rotate()) {
 			WriteRotateInternal(context, input.global_state, [&](GlobalFunctionData &gstate) {
 				function.copy_to_combine(context, *bind_data, gstate, *l.local_state);
 			});
@@ -653,7 +746,7 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 			D_ASSERT(!per_thread_output);
 			D_ASSERT(!partition_output);
 			D_ASSERT(!file_size_bytes.IsValid());
-			D_ASSERT(!rotate);
+			D_ASSERT(!Rotate());
 			MoveTmpFile(context, file_path);
 		}
 	}

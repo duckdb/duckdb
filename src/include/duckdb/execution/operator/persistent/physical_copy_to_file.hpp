@@ -45,8 +45,10 @@ public:
 	CopyOverwriteMode overwrite_mode;
 	bool parallel;
 	bool per_thread_output;
+	optional_idx batch_size;
+	optional_idx batch_size_bytes;
 	optional_idx file_size_bytes;
-	bool rotate;
+	optional_idx batches_per_file;
 	CopyFunctionReturnType return_type;
 
 	bool partition_output;
@@ -100,6 +102,9 @@ public:
 private:
 	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,
 	                                               StorageLockKey &global_lock) const;
+	bool Rotate() const;
+	void SinkInternal(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+	                  unique_ptr<GlobalFunctionData> &file_state_ptr, bool needs_lock) const;
 	void WriteRotateInternal(ExecutionContext &context, GlobalSinkState &global_state,
 	                         const std::function<void(GlobalFunctionData &)> &fun) const;
 };
