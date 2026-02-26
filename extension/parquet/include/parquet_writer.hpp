@@ -123,8 +123,7 @@ public:
 
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
 	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-	                                bool allow_geometry, ClientContext &context,
-	                                bool timestamp_is_adjusted_to_utc);
+	                                bool allow_geometry, ClientContext &context, bool timestamp_is_adjusted_to_utc);
 
 	ClientContext &GetContext() {
 		return context;

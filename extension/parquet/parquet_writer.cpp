@@ -381,8 +381,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p,
                              optional_idx dictionary_size_limit_p, idx_t string_dictionary_page_size_limit_p,
                              bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
-                             int64_t compression_level_p, ParquetVersion parquet_version, GeoParquetVersion geoparquet_version,
-                             bool timestamp_is_adjusted_to_utc_p)
+                             int64_t compression_level_p, ParquetVersion parquet_version,
+                             GeoParquetVersion geoparquet_version, bool timestamp_is_adjusted_to_utc_p)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
       shredding_types(std::move(shredding_types_p)), encryption_config(std::move(encryption_config_p)),
