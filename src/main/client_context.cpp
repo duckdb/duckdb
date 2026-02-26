@@ -700,59 +700,64 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 	return ParseStatementsInternal(*lock, query);
 }
 
+vector<unique_ptr<SQLStatement>> WrapMultiStatementInTransaction(vector<unique_ptr<SQLStatement>> &parser_statements,
+                                                                 bool is_in_active_transaction) {
+	vector<unique_ptr<SQLStatement>> new_parser_statements;
+	for (idx_t i = 0; i < parser_statements.size(); ++i) {
+		auto stmt = std::move(parser_statements[i]);
+
+		switch (stmt->type) {
+		case StatementType::MULTI_STATEMENT: {
+#ifdef DEBUG // MultiStatement cannot contain transaction statements
+			auto multi_stmt = static_cast<MultiStatement *>(stmt.get());
+			for (auto &sub_statement : multi_stmt->statements) {
+				D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
+			}
+#endif
+			if (is_in_active_transaction) {
+				new_parser_statements.push_back(std::move(stmt));
+			} else {
+				// inject BEGIN
+				auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION);
+				new_parser_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
+
+				// move the multi statement
+				new_parser_statements.push_back(std::move(stmt));
+
+				// inject COMMIT
+				auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT);
+				new_parser_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
+			}
+			break;
+		}
+		case StatementType::TRANSACTION_STATEMENT: {
+			auto transaction_stmt = static_cast<TransactionStatement *>(stmt.get());
+			if (transaction_stmt->info->type == TransactionType::BEGIN_TRANSACTION) {
+				is_in_active_transaction = true;
+			} else if (transaction_stmt->info->type == TransactionType::COMMIT ||
+			           transaction_stmt->info->type == TransactionType::ROLLBACK) {
+				is_in_active_transaction = false;
+			}
+			new_parser_statements.push_back(std::move(stmt));
+			break;
+		}
+		default: {
+			new_parser_statements.push_back(std::move(stmt));
+			break;
+		}
+		}
+	}
+	return new_parser_statements;
+}
+
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
 		Parser parser(GetParserOptions());
 		parser.ParseQuery(query);
 		auto &parser_statements = parser.statements;
-		vector<unique_ptr<SQLStatement>> new_parser_statements;
 
-		bool curr_statement_is_in_transaction = transaction.HasActiveTransaction();
-
-		for (idx_t i = 0; i < parser_statements.size(); ++i) {
-			auto stmt = std::move(parser_statements[i]);
-
-			switch (stmt->type) {
-			case StatementType::MULTI_STATEMENT: {
-#ifdef DEBUG // MultiStatement cannot contain transaction statements
-				auto multi_stmt = static_cast<MultiStatement *>(stmt.get());
-				for (auto &sub_statement : multi_stmt->statements) {
-					D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
-				}
-#endif
-				if (curr_statement_is_in_transaction) {
-					new_parser_statements.push_back(std::move(stmt));
-				} else {
-					// inject BEGIN
-					auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION);
-					new_parser_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
-
-					// move the multi statement
-					new_parser_statements.push_back(std::move(stmt));
-
-					// inject COMMIT
-					auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT);
-					new_parser_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
-				}
-				break;
-			}
-			case StatementType::TRANSACTION_STATEMENT: {
-				auto transaction_stmt = static_cast<TransactionStatement *>(stmt.get());
-				if (transaction_stmt->info->type == TransactionType::BEGIN_TRANSACTION) {
-					curr_statement_is_in_transaction = true;
-				} else if (transaction_stmt->info->type == TransactionType::COMMIT ||
-				           transaction_stmt->info->type == TransactionType::ROLLBACK) {
-					curr_statement_is_in_transaction = false;
-				}
-				new_parser_statements.push_back(std::move(stmt));
-				break;
-			}
-			default: {
-				new_parser_statements.push_back(std::move(stmt));
-				break;
-			}
-			}
-		}
+		vector<unique_ptr<SQLStatement>> new_parser_statements =
+		    WrapMultiStatementInTransaction(parser_statements, transaction.HasActiveTransaction());
 		PragmaHandler handler(*this);
 		handler.HandlePragmaStatements(lock, new_parser_statements);
 
