@@ -84,8 +84,39 @@ jobs:
       - name: Install Python dependencies
         run: pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
 
+      - name: Download BWC cache
+        run: |
+          VERSION=${{ matrix.old_duckdb_version }}
+          CACHE_ARCHIVE="runtime_${VERSION}.tar.gz"
+          RUNTIME_DIR="duckdb_unittest_tempdir/bwc/runtime"
+          mkdir -p "${RUNTIME_DIR}"
+
+          # Download the cache archive from test-utils repo
+          DOWNLOAD_URL="https://raw.githubusercontent.com/duckdb/bwc-test-utils/main/cache/${CACHE_ARCHIVE}"
+          HTTP_CODE=$(curl -sL -w '%{http_code}' -o "/tmp/${CACHE_ARCHIVE}" "${DOWNLOAD_URL}" || true)
+
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "Failed to download cache for ${VERSION} (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+
+          tar xzf "/tmp/${CACHE_ARCHIVE}" -C "${RUNTIME_DIR}"
+          CACHED=$(find "${RUNTIME_DIR}/${VERSION}" -name "*.plan.bin" | wc -l)
+          echo "Extracted cache for ${VERSION}: ${CACHED} cached test plans"
+
       - name: Run BWC tests
         run: python3.11 test/bwc/runner.py --old_duckdb_version=${{ matrix.old_duckdb_version }}
+
+      - name: Export BWC cache
+        if: always()
+        run: python3.11 test/bwc/export_cache.py --version ${{ matrix.old_duckdb_version }} --output-dir duckdb_unittest_tempdir/bwc/cache
+
+      - name: Upload BWC cache
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bwc-cache-${{ matrix.old_duckdb_version }}
+          path: duckdb_unittest_tempdir/bwc/cache/runtime_${{ matrix.old_duckdb_version }}.tar.gz
 
       - name: Upload test artifacts
         if: always()
