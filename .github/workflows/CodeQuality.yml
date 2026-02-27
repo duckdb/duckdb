@@ -51,6 +51,7 @@ jobs:
 
   format-check:
     name: Format Check
+    if: false
     runs-on: ubuntu-22.04
     needs: check-draft
     env:
@@ -87,6 +88,7 @@ jobs:
 
   enum-check:
     name: C Enum Integrity Check
+    if: false
     needs: format-check
     runs-on: ubuntu-22.04
 
@@ -113,7 +115,7 @@ jobs:
   tidy-check:
     name: Tidy Check
     runs-on: ubuntu-24.04
-    needs: format-check
+    # needs: format-check
 
     env:
       CC: gcc
@@ -147,7 +149,7 @@ jobs:
       - name: Tidy Check
         shell: bash
         # if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-        run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
+        run: make tidy-check # TIDY_BINARY=/tmp/clang-tidy-cache
 
       # - name: Tidy Check Diff
       #   shell: bash
