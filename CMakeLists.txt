@@ -58,6 +58,14 @@ if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
     endif()
 endif()
 
+if (DUCKDB_LINKER)
+  set(DUCKDB_LINKER_FLAG "-fuse-ld=${DUCKDB_LINKER}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  message(STATUS "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
+endif()
+
 
 # Determine install paths
 # default to gnu standard installation directories (lib, bin, include)
