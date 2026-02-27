@@ -270,6 +270,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	BindResult bind_lambda_result =
 	    BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function, nullptr);
+	bind_lambda_function_t override_bind_lambda_storage = nullptr;
 	optional_ptr<bind_lambda_function_t> capture_bind_lambda = &bind_lambda_function;
 	unique_ptr<BindLambdaContext> override_bind_lambda_context;
 	auto capture_child_types = function_child_types;
@@ -294,7 +295,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			capture_child_types = std::move(rebind_result.capture_child_types);
 			override_bind_lambda_context = std::move(rebind_result.override_bind_lambda_context);
 			if (rebind_result.override_bind_lambda) {
-				capture_bind_lambda = &rebind_result.override_bind_lambda;
+				override_bind_lambda_storage = rebind_result.override_bind_lambda;
+				capture_bind_lambda = &override_bind_lambda_storage;
 			} else {
 				capture_bind_lambda = &bind_lambda_function;
 			}
