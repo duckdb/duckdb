@@ -148,13 +148,13 @@ jobs:
 
       - name: Tidy Check
         shell: bash
-        # if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-        run: make tidy-check # TIDY_BINARY=/tmp/clang-tidy-cache
+        if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+        run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
 
-      # - name: Tidy Check Diff
-      #   shell: bash
-      #   if: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/feature' }}
-      #   run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
+      - name: Tidy Check Diff
+        shell: bash
+        if: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/feature' }}
+        run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
       - name: Ccache log
         run: tail -n200 /tmp/ccache.log
