@@ -1,4 +1,4 @@
-# name: test/sql/transactions/REMOVE_ME/test_multistatement_is_transactional_within_chained_transaction.test
+# name: test/sql/transactions/REMOVE_ME/test_multistatement_is_transactional_chained_pragma_and_transaction.test
 # group: [REMOVE_ME]
 
 statement ok
@@ -8,16 +8,13 @@ statement ok
 USE wal_replay;
 
 statement ok
-PRAGMA disable_checkpoint_on_shutdown;
-
-statement ok
 SET wal_autocheckpoint='1TB'
 
 statement ok
 CREATE TABLE t AS SELECT range::INT AS id FROM range(10);
 
 statement error
-BEGIN TRANSACTION; ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+PRAGMA disable_checkpoint_on_shutdown; BEGIN TRANSACTION; ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 ----
 <REGEX>:.*Conversion Error.*
 
