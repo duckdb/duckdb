@@ -48,7 +48,7 @@ struct ReduceExecuteInfo {
 			input_types.push_back(LogicalType::BIGINT);
 		}
 		input_types.push_back(info.child_vector->GetType());
-		input_types.push_back(info.result.GetType());
+		input_types.push_back(info.lambda_expr->return_type);
 
 		// info.column_infos includes the list column plus captured args (and the initial value if present).
 		// skip the first entry if there is an initial value
@@ -56,7 +56,7 @@ struct ReduceExecuteInfo {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
 		}
 
-		accumulator_cast = make_uniq<Vector>(info.result.GetType(), info.row_count);
+		accumulator_cast = make_uniq<Vector>(info.lambda_expr->return_type, info.row_count);
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
 	};
 
@@ -72,8 +72,15 @@ struct ReduceExecuteInfo {
 	SelectionVector active_rows_sel;
 };
 
-void ReferenceAccumulator(ReduceExecuteInfo &execute_info, Vector &target, Vector &source, const idx_t count) {
+void ReferenceAccumulator(ReduceExecuteInfo &execute_info, Vector &target, Vector &source, const idx_t count,
+                          const bool allow_cast) {
 	if (source.GetType() != target.GetType()) {
+		if (!allow_cast) {
+			throw InternalException("list_reduce accumulator type mismatch: %s referenced %s",
+			                        source.GetType().ToString(), target.GetType().ToString());
+		}
+		execute_info.accumulator_cast->SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::Validity(*execute_info.accumulator_cast).SetAllValid(count);
 		VectorOperations::Cast(execute_info.context, source, *execute_info.accumulator_cast, count, true);
 		target.Reference(*execute_info.accumulator_cast);
 	} else {
@@ -159,10 +166,10 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	if (loops == 0 && info.has_initial) {
 		info.column_infos[0].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
 		auto &initial_vector = info.column_infos[0].vector.get();
-		ReferenceAccumulator(execute_info, input_chunk.data[accumulator_offset], initial_vector, reduced_row_idx);
+		ReferenceAccumulator(execute_info, input_chunk.data[accumulator_offset], initial_vector, reduced_row_idx, true);
 	} else {
 		ReferenceAccumulator(execute_info, input_chunk.data[accumulator_offset], *execute_info.left_slice,
-		                     reduced_row_idx);
+		                     reduced_row_idx, loops == 0);
 	}
 	input_chunk.data[element_offset].Reference(right_slice);
 
@@ -193,22 +200,13 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	return false;
 }
 
-LogicalType ResolveReduceAccumulatorType(ClientContext &context, const LogicalType &list_child_type,
-                                         const LogicalType &initial_type) {
-	if (initial_type.id() == LogicalTypeId::SQLNULL || initial_type.id() == LogicalTypeId::UNKNOWN) {
-		return list_child_type;
-	}
-	if (initial_type.id() == LogicalTypeId::LIST) {
-		auto initial_child = ListType::GetChildType(initial_type);
-		if (initial_child.id() == LogicalTypeId::SQLNULL || initial_child.id() == LogicalTypeId::UNKNOWN) {
-			return LogicalType::LIST(list_child_type);
-		}
-	}
+LogicalType ResolveReduceAccumulatorType(ClientContext &context, const LogicalType &initial_type,
+                                         const LogicalType &lambda_return_type) {
 	LogicalType max_logical_type;
-	if (LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_type, max_logical_type)) {
+	if (LogicalType::TryGetMaxLogicalType(context, initial_type, lambda_return_type, max_logical_type)) {
 		return max_logical_type;
 	}
-	return initial_type;
+	throw BinderException("No common super type between initial value and lambda return type");
 }
 
 unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
@@ -226,14 +224,21 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 		return bind_data;
 	}
 
-	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
-
 	bool has_initial = arguments.size() == 3;
-	LogicalType accumulator_type = list_child_type;
+	LogicalType accumulator_type;
 	if (has_initial) {
-		const auto initial_value_type = arguments[2]->return_type;
-		accumulator_type = ResolveReduceAccumulatorType(context, list_child_type, initial_value_type);
+		const auto &initial_value_type = arguments[2]->return_type;
+		auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
+		auto &lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
+		accumulator_type = ResolveReduceAccumulatorType(context, initial_value_type, lambda_return_type);
 		arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), accumulator_type);
+	} else {
+		auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
+		auto list_child_type = LambdaFunctions::DetermineListChildType(arguments[0]->return_type);
+		auto &lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
+		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
+			throw BinderException("No common super type between list element and lambda return type");
+		}
 	}
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
@@ -253,18 +258,13 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 }
 
 LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType> &function_child_types,
-                               const idx_t parameter_idx) {
+                               const idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context) {
 	auto list_child_type = LambdaFunctions::DetermineListChildType(function_child_types[0]);
-	LogicalType accumulator_type = list_child_type;
-	if (function_child_types.size() == 3) {
-		constexpr idx_t initial_idx = 2;
-		const LogicalType &initial_value_type = function_child_types[initial_idx];
-		accumulator_type = ResolveReduceAccumulatorType(context, list_child_type, initial_value_type);
-	}
+	const bool has_initial = function_child_types.size() == 3;
 
 	switch (parameter_idx) {
 	case 0:
-		return accumulator_type;
+		return has_initial ? function_child_types[2] : list_child_type;
 	case 1:
 		return list_child_type;
 	case 2:
@@ -275,8 +275,8 @@ LogicalType BindReduceChildren(ClientContext &context, const vector<LogicalType>
 }
 
 LogicalType ListReduceBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                 const idx_t parameter_idx) {
-	return BindReduceChildren(context, function_child_types, parameter_idx);
+                                 const idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context) {
+	return BindReduceChildren(context, function_child_types, parameter_idx, bind_lambda_context);
 }
 
 } // namespace

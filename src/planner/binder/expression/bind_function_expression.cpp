@@ -14,6 +14,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "list_reduce_lambda_binder.hpp"
 
 namespace duckdb {
 
@@ -258,11 +260,29 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// bind the lambda parameter
 	auto &lambda_expr = function.children[lambda_expr_idx]->Cast<LambdaExpression>();
-	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function);
+	auto lambda_expr_copy = lambda_expr.Copy();
+	BindResult bind_lambda_result =
+	    BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function, nullptr);
+	optional_ptr<bind_lambda_function_t> capture_bind_lambda = &bind_lambda_function;
+	bind_lambda_function_t override_bind_lambda = nullptr;
+	LogicalType override_accumulator_type_storage;
+	bool override_has_accumulator_type = false;
+	unique_ptr<BindLambdaContext> override_bind_lambda_context;
+	auto capture_child_types = function_child_types;
 
 	if (bind_lambda_result.HasError()) {
 		return BindResult(bind_lambda_result.error);
 	}
+	auto bind_lambda_expression = [&](LambdaExpression &expr, idx_t lambda_depth, const vector<LogicalType> &types,
+	                                  optional_ptr<bind_lambda_function_t> bind_lambda_fn,
+	                                  optional_ptr<BindLambdaContext> bind_lambda_context) {
+		return BindExpression(expr, lambda_depth, types, bind_lambda_fn, bind_lambda_context);
+	};
+	MaybeRebindListReduceLambda(context, function, func, depth, function_child_types, bind_lambda_function,
+	                            lambda_expr_copy->Cast<LambdaExpression>(), bind_lambda_result, capture_bind_lambda,
+	                            capture_child_types, override_bind_lambda, override_accumulator_type_storage,
+	                            override_has_accumulator_type, bind_lambda_expression, nullptr,
+	                            override_bind_lambda_context);
 
 	// successfully bound: replace the node with a BoundExpression
 	auto alias = function.children[lambda_expr_idx]->GetAlias();
@@ -286,7 +306,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children[lambda_expr_idx]->Cast<BoundLambdaExpression>();
-	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, &bind_lambda_function, function_child_types);
+	if (override_bind_lambda) {
+		D_ASSERT(override_has_accumulator_type);
+		CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, capture_bind_lambda,
+		                     override_bind_lambda_context, capture_child_types);
+	} else {
+		CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, capture_bind_lambda, nullptr,
+		                     capture_child_types);
+	}
 
 	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =

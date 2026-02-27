@@ -12,6 +12,7 @@ add_library_unity(
   bind_constant_expression.cpp
   bind_function_expression.cpp
   bind_lambda.cpp
+  list_reduce_lambda_binder.cpp
   bind_macro_expression.cpp
   bind_operator_expression.cpp
   bind_parameter_expression.cpp

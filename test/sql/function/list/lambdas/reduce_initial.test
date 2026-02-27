@@ -84,7 +84,7 @@ Binder Error
 query I
 SELECT list_reduce([0], lambda acc, x: if(len(acc::VARCHAR) - 1, true, false), false);
 ----
-0
+true
 
 statement error
 SELECT list_reduce([1, 2], lambda x: x, 100);
@@ -486,10 +486,10 @@ SELECT a FROM where_clause WHERE list_reduce(a, lambda x, y: x - y, initial) > 0
 [5, 4, 3, 2, 1]
 
 # where the initial value has a different type of the list
-query I
+statement error
 SELECT list_reduce([0], lambda x, y: x > 3, 3.1);
 ----
-1.0
+Binder Error: No common super type between initial value and lambda return type
 
 query I
 SELECT list_reduce([1, 2, 3], lambda x, y: x + y, 10.5);
@@ -517,6 +517,26 @@ SELECT list_reduce([2147483647, 1]::INTEGER[], lambda acc, x: acc + x, 0::BIGINT
 2147483648
 
 query I
+SELECT list_reduce([1, 2, 3], lambda acc, x: acc + x, 0.1::DECIMAL(18,6));
+----
+6.100000
+
+query I
+SELECT list_reduce([1, 2, 3], lambda acc, x: acc + x::DECIMAL(18,6), 0.1::DECIMAL(18,6));
+----
+6.100000
+
+query I
+SELECT list_reduce([0.1, 0.2, 0.3]::DECIMAL(18,6)[], lambda acc, x: acc + x, 1);
+----
+1.600000
+
+query I
+SELECT list_reduce([0.1, 0.2, 0.3]::DECIMAL(18,6)[], lambda acc, x: acc + x, 1::INTEGER);
+----
+1.600000
+
+query I
 SELECT list_reduce([1, 2, 3], lambda acc, x: acc + x, NULL::DOUBLE);
 ----
 NULL
@@ -527,12 +547,10 @@ CREATE TABLE cast_test (l int[], initial float);
 statement ok
 INSERT INTO cast_test VALUES ([1, 2, 3], 100.0), ([0], 3.1), ([3, 2, 1], 10.5);
 
-query I 
+statement error
 SELECT list_reduce(l, lambda x, y: x > 3, initial) FROM cast_test;
 ----
-0.0
-1.0
-0.0
+Binder Error: No common super type between initial value and lambda return type
 
 query I
 SELECT list_reduce(l, lambda x, y: x + y, initial) FROM cast_test;
@@ -558,7 +576,7 @@ No function matches the given name and argument types '+(INTEGER[], INTEGER)'
 statement error
 SELECT list_reduce([1], lambda acc, x: 'bad', 0);
 ----
-Conversion Error
+Binder Error: No common super type between initial value and lambda return type
 
 query I
 SELECT list_reduce([BLOB 'hello'], lambda x, y: x, 'text');
