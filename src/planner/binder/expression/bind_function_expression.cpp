@@ -260,13 +260,17 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// bind the lambda parameter
 	auto &lambda_expr = function.children[lambda_expr_idx]->Cast<LambdaExpression>();
-	auto lambda_expr_copy = lambda_expr.Copy();
+
+	unique_ptr<ParsedExpression> lambda_expr_copy;
+	const bool is_list_reduce = func.name == "list_reduce";
+	if (is_list_reduce) {
+		// We have to make this copy before binding in case we have to double-bind
+		lambda_expr_copy = lambda_expr.Copy();
+	}
+
 	BindResult bind_lambda_result =
 	    BindExpression(lambda_expr, depth, function_child_types, &bind_lambda_function, nullptr);
 	optional_ptr<bind_lambda_function_t> capture_bind_lambda = &bind_lambda_function;
-	bind_lambda_function_t override_bind_lambda = nullptr;
-	LogicalType override_accumulator_type_storage;
-	bool override_has_accumulator_type = false;
 	unique_ptr<BindLambdaContext> override_bind_lambda_context;
 	auto capture_child_types = function_child_types;
 
@@ -278,11 +282,24 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	                                  optional_ptr<BindLambdaContext> bind_lambda_context) {
 		return BindExpression(expr, lambda_depth, types, bind_lambda_fn, bind_lambda_context);
 	};
-	MaybeRebindListReduceLambda(context, function, func, depth, function_child_types, bind_lambda_function,
-	                            lambda_expr_copy->Cast<LambdaExpression>(), bind_lambda_result, capture_bind_lambda,
-	                            capture_child_types, override_bind_lambda, override_accumulator_type_storage,
-	                            override_has_accumulator_type, bind_lambda_expression, nullptr,
-	                            override_bind_lambda_context);
+
+	if (is_list_reduce) {
+		// list_reduce requires binding the lambda function a second time as there is a cyclical dependency between its
+		// acc parameter type and its return type. This is resolved by initially binding it with acc = initial, and then
+		// rebinding it with acc = return type
+		auto rebind_result =
+		    MaybeRebindListReduceLambda(context, depth, function_child_types, bind_lambda_function, bind_lambda_result,
+		                                bind_lambda_expression, nullptr, lambda_expr_copy);
+		if (rebind_result.did_rebind) {
+			capture_child_types = std::move(rebind_result.capture_child_types);
+			override_bind_lambda_context = std::move(rebind_result.override_bind_lambda_context);
+			if (rebind_result.override_bind_lambda) {
+				capture_bind_lambda = &rebind_result.override_bind_lambda;
+			} else {
+				capture_bind_lambda = &bind_lambda_function;
+			}
+		}
+	}
 
 	// successfully bound: replace the node with a BoundExpression
 	auto alias = function.children[lambda_expr_idx]->GetAlias();
@@ -306,14 +323,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children[lambda_expr_idx]->Cast<BoundLambdaExpression>();
-	if (override_bind_lambda) {
-		D_ASSERT(override_has_accumulator_type);
-		CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, capture_bind_lambda,
-		                     override_bind_lambda_context, capture_child_types);
-	} else {
-		CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, capture_bind_lambda, nullptr,
-		                     capture_child_types);
-	}
+	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, capture_bind_lambda,
+	                     override_bind_lambda_context, capture_child_types);
 
 	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =
