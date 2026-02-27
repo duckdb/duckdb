@@ -33,6 +33,169 @@ query I nosort res_corr0
 SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM dummy;
 ----
 
+# Regression aggregates: ungrouped direct vs EXPORT_STATE + finalize
+query I
+SELECT regr_count(d, d+1) FROM dummy;
+----
+100
+
+query I
+SELECT finalize(regr_count(d, d+1) EXPORT_STATE) FROM dummy;
+----
+100
+
+query I
+SELECT regr_avgx(d, d+1) FROM dummy;
+----
+50.5
+
+query I
+SELECT finalize(regr_avgx(d, d+1) EXPORT_STATE) FROM dummy;
+----
+50.5
+
+query I
+SELECT regr_avgy(d, d+1) FROM dummy;
+----
+49.5
+
+query I
+SELECT finalize(regr_avgy(d, d+1) EXPORT_STATE) FROM dummy;
+----
+49.5
+
+query I
+SELECT regr_slope(d, d+1) FROM dummy;
+----
+1.0
+
+query I
+SELECT finalize(regr_slope(d, d+1) EXPORT_STATE) FROM dummy;
+----
+1.0
+
+query I
+SELECT regr_intercept(d, d+1) FROM dummy;
+----
+-1.0
+
+query I
+SELECT finalize(regr_intercept(d, d+1) EXPORT_STATE) FROM dummy;
+----
+-1.0
+
+query I
+SELECT regr_r2(d, d+1) FROM dummy;
+----
+1.0
+
+query I
+SELECT finalize(regr_r2(d, d+1) EXPORT_STATE) FROM dummy;
+----
+1.0
+
+query I
+SELECT regr_sxx(d, d+1) FROM dummy;
+----
+83325.0
+
+query I
+SELECT finalize(regr_sxx(d, d+1) EXPORT_STATE) FROM dummy;
+----
+83325.0
+
+query I
+SELECT regr_syy(d, d+1) FROM dummy;
+----
+83325.0
+
+query I
+SELECT finalize(regr_syy(d, d+1) EXPORT_STATE) FROM dummy;
+----
+83325.0
+
+query I
+SELECT regr_sxy(d, d+1) FROM dummy;
+----
+83325.0
+
+query I
+SELECT finalize(regr_sxy(d, d+1) EXPORT_STATE) FROM dummy;
+----
+83325.0
+
+# Regression aggregates: grouped direct vs EXPORT_STATE + finalize
+query IIIIIIIIII nosort
+SELECT g, regr_count(d, d+1), regr_avgx(d, d+1), regr_avgy(d, d+1), regr_slope(d, d+1), regr_intercept(d, d+1), regr_r2(d, d+1), regr_sxx(d, d+1), regr_syy(d, d+1), regr_sxy(d, d+1) FROM dummy GROUP BY g ORDER BY g;
+----
+0	10	46.0	45.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+1	10	47.0	46.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+2	10	48.0	47.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+3	10	49.0	48.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+4	10	50.0	49.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+5	10	51.0	50.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+6	10	52.0	51.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+7	10	53.0	52.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+8	10	54.0	53.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+9	10	55.0	54.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+
+query IIIIIIIIII nosort
+SELECT g, finalize(regr_count(d, d+1) EXPORT_STATE), finalize(regr_avgx(d, d+1) EXPORT_STATE), finalize(regr_avgy(d, d+1) EXPORT_STATE), finalize(regr_slope(d, d+1) EXPORT_STATE), finalize(regr_intercept(d, d+1) EXPORT_STATE), finalize(regr_r2(d, d+1) EXPORT_STATE), finalize(regr_sxx(d, d+1) EXPORT_STATE), finalize(regr_syy(d, d+1) EXPORT_STATE), finalize(regr_sxy(d, d+1) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+0	10	46.0	45.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+1	10	47.0	46.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+2	10	48.0	47.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+3	10	49.0	48.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+4	10	50.0	49.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+5	10	51.0	50.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+6	10	52.0	51.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+7	10	53.0	52.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+8	10	54.0	53.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+9	10	55.0	54.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+
+# Regression: persist state and finalize later
+statement ok
+CREATE TABLE state_regr AS SELECT g, regr_slope(d, d+1) EXPORT_STATE slope_state, regr_count(d, d+1) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+
+query III nosort
+SELECT g, regr_slope(d, d+1), regr_count(d, d+1) FROM dummy GROUP BY g ORDER BY g;
+----
+0	1.0	10
+1	1.0	10
+2	1.0	10
+3	1.0	10
+4	1.0	10
+5	1.0	10
+6	1.0	10
+7	1.0	10
+8	1.0	10
+9	1.0	10
+
+query III nosort
+SELECT g, finalize(slope_state), finalize(count_state) FROM state_regr ORDER BY g;
+----
+0	1.0	10
+1	1.0	10
+2	1.0	10
+3	1.0	10
+4	1.0	10
+5	1.0	10
+6	1.0	10
+7	1.0	10
+8	1.0	10
+9	1.0	10
+
+# Regression: struct shape for state export
+query T
+SELECT (regr_count(1, 2) export_state)::struct(count bigint);
+----
+{'count': 1}
+
+query T
+SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count bigint);
+----
+{'sum': 2.0, 'count': 1}
+
 query IIIIIIIII nosort res1
 SELECT g, sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----

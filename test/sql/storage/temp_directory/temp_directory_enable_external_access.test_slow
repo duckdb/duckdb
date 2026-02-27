@@ -1,4 +1,4 @@
-# name: test/sql/storage/temp_directory/temp_directory_enable_external_access.test
+# name: test/sql/storage/temp_directory/temp_directory_enable_external_access.test_slow
 # group: [temp_directory]
 
 require block_size 262144

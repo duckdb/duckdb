@@ -12,6 +12,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 #include <cstring>
@@ -284,16 +285,16 @@ void ColumnSegment::VisitBlockIds(BlockIdVisitor &visitor) const {
 // Filter Selection
 //===--------------------------------------------------------------------===//
 template <class T, class OP, bool HAS_NULL>
-static idx_t TemplatedFilterSelection(UnifiedVectorFormat &vdata, T predicate, SelectionVector &sel,
-                                      idx_t approved_tuple_count, SelectionVector &result_sel) {
+static idx_t TemplatedFilterSelection(const UnifiedVectorFormat &vdata, T predicate, const SelectionVector &sel,
+                                      const idx_t approved_tuple_count, SelectionVector &result_sel) {
 	auto &mask = vdata.validity;
-	auto vec = UnifiedVectorFormat::GetData<T>(vdata);
+	const auto vec = UnifiedVectorFormat::GetData<const T>(vdata);
 	idx_t result_count = 0;
 	for (idx_t i = 0; i < approved_tuple_count; i++) {
-		auto idx = sel.get_index(i);
+		const auto idx = sel.get_index(i);
 		auto vector_idx = vdata.sel->get_index(idx);
 		bool comparison_result =
-		    (!HAS_NULL || mask.RowIsValid(vector_idx)) && OP::Operation(vec[vector_idx], predicate);
+		    (!HAS_NULL || mask.RowIsValidUnsafe(vector_idx)) && OP::Operation(vec[vector_idx], predicate);
 		result_sel.set_index(result_count, idx);
 		result_count += comparison_result;
 	}
@@ -557,6 +558,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		auto &bloom_filter = filter.Cast<BFTableFilter>();
 		auto &state = filter_state.Cast<BFTableFilterState>();
 		return bloom_filter.Filter(vector, sel, approved_tuple_count, state);
+	}
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
+		return perfect_hash_join_filter.Filter(vector, sel, approved_tuple_count);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();

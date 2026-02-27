@@ -219,3 +219,81 @@ query T
 SELECT finalize(product(1.0::DOUBLE) EXPORT_STATE) IS NULL FROM (SELECT 1 WHERE FALSE);
 ----
 true
+
+# Regression aggregates now have struct-based state export
+# regr_count
+query T
+SELECT typeof(regr_count(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_count(DOUBLE, DOUBLE)::UINTEGER, STRUCT(count UBIGINT)>';
+----
+true
+
+# regr_avgx, regr_avgy
+query T
+SELECT typeof(regr_avgx(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_avgx(DOUBLE, DOUBLE)::DOUBLE, STRUCT(sum DOUBLE, count UBIGINT)>';
+----
+true
+
+query T
+SELECT typeof(regr_avgy(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_avgy(DOUBLE, DOUBLE)::DOUBLE, STRUCT(sum DOUBLE, count UBIGINT)>';
+----
+true
+
+# regr_slope
+query T
+SELECT typeof(regr_slope(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_slope(DOUBLE, DOUBLE)::DOUBLE, STRUCT(cov_pop STRUCT(count UBIGINT, meanx DOUBLE, meany DOUBLE, co_moment DOUBLE), var_pop STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE))>';
+----
+true
+
+# regr_intercept
+query T
+SELECT typeof(regr_intercept(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_intercept(DOUBLE, DOUBLE)::DOUBLE, STRUCT(count UBIGINT, sum_x DOUBLE, sum_y DOUBLE, slope STRUCT(cov_pop STRUCT(count UBIGINT, meanx DOUBLE, meany DOUBLE, co_moment DOUBLE), var_pop STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE)))>';
+----
+true
+
+# regr_r2
+query T
+SELECT typeof(regr_r2(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_r2(DOUBLE, DOUBLE)::DOUBLE, STRUCT(corr STRUCT(cov_pop STRUCT(count UBIGINT, meanx DOUBLE, meany DOUBLE, co_moment DOUBLE), dev_pop_x STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE), dev_pop_y STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE)), var_pop_x STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE), var_pop_y STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE))>';
+----
+true
+
+# regr_sxx, regr_syy
+query T
+SELECT typeof(regr_sxx(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_sxx(DOUBLE, DOUBLE)::DOUBLE, STRUCT(count UBIGINT, var_pop STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE))>';
+----
+true
+
+query T
+SELECT typeof(regr_syy(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_syy(DOUBLE, DOUBLE)::DOUBLE, STRUCT(count UBIGINT, var_pop STRUCT(count UBIGINT, mean DOUBLE, dsquared DOUBLE))>';
+----
+true
+
+# regr_sxy
+query T
+SELECT typeof(regr_sxy(1.0, 2.0) EXPORT_STATE) = 'AGGREGATE_STATE<regr_sxy(DOUBLE, DOUBLE)::DOUBLE, STRUCT(count UBIGINT, cov_pop STRUCT(count UBIGINT, meanx DOUBLE, meany DOUBLE, co_moment DOUBLE))>';
+----
+true
+
+# regr_count: create table, describe, combine and finalize
+statement ok
+CREATE TABLE t_regr_count AS SELECT regr_count(range::DOUBLE, range::DOUBLE + 1) EXPORT_STATE as state FROM range(10);
+
+query T
+SELECT column_type='AGGREGATE_STATE<regr_count(DOUBLE, DOUBLE)::UINTEGER, STRUCT(count UBIGINT)>' FROM (DESCRIBE t_regr_count) WHERE column_name = 'state';
+----
+true
+
+query R
+SELECT finalize(combine(state, state)) FROM t_regr_count;
+----
+20
+
+# Casting regression state to struct should work
+query T
+SELECT (regr_count(1.0, 2.0) export_state)::struct(count ubigint);
+----
+{'count': 1}
+
+query T
+SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);
+----
+{'sum': 2.0, 'count': 1}

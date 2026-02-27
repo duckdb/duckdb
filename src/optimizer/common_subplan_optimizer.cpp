@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
 
@@ -305,46 +306,62 @@ private:
 
 	template <ConversionType TYPE>
 	bool ConvertExpressions(LogicalOperator &op) {
-		const auto &table_index_mapping =
-		    TYPE == ConversionType::TO_CANONICAL ? to_canonical_table_index : restore_original_table_index;
-		bool can_materialize = true;
 		idx_t info_idx = 0;
+		bool can_materialize = true;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
 			ExpressionIterator::EnumerateExpression(*expr, [&](unique_ptr<Expression> &child) {
-				// Replace column binding
-				if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &column_binding = child->Cast<BoundColumnRefExpression>().binding;
-					const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
-					                            ? column_binding.table_index
-					                            : restore_original_table_index.at(column_binding.table_index);
-					auto &table_map = table_index_map.at(lookup_idx);
-					if (!table_map.Empty<TYPE>()) {
-						// Replace column index
-						column_binding.column_index = table_map.Get<TYPE>(column_binding.column_index);
-					}
-					// Replace table index
-					column_binding.table_index = table_index_mapping.at(column_binding.table_index);
-				}
-
-				// Replace default fields
-				switch (TYPE) {
-				case ConversionType::TO_CANONICAL:
-					expression_info.emplace_back(std::move(child->alias), child->query_location);
-					child->alias.clear();
-					child->query_location.SetInvalid();
-					break;
-				case ConversionType::RESTORE_ORIGINAL:
-					auto &info = expression_info[info_idx++];
-					child->alias = std::move(info.first);
-					child->query_location = info.second;
-					break;
-				}
-				if (child->IsVolatile()) {
-					can_materialize = false;
-				}
+				ConvertExpression<TYPE>(*child, info_idx, can_materialize);
 			});
 		});
+		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = op.Cast<LogicalGet>();
+			for (auto &entry : get.table_filters.filters) {
+				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
+					continue;
+				}
+				auto &expression_filter = entry.second->Cast<ExpressionFilter>();
+				ConvertExpression<TYPE>(*expression_filter.expr, info_idx, can_materialize);
+			}
+		}
 		return can_materialize;
+	}
+
+	template <ConversionType TYPE>
+	void ConvertExpression(Expression &expr, idx_t &info_idx, bool &can_materialize) {
+		const auto &table_index_mapping =
+		    TYPE == ConversionType::TO_CANONICAL ? to_canonical_table_index : restore_original_table_index;
+
+		// Replace column binding
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &column_binding = expr.Cast<BoundColumnRefExpression>().binding;
+			const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
+			                            ? column_binding.table_index
+			                            : restore_original_table_index.at(column_binding.table_index);
+			auto &table_map = table_index_map.at(lookup_idx);
+			if (!table_map.Empty<TYPE>()) {
+				// Replace column index
+				column_binding.column_index = table_map.Get<TYPE>(column_binding.column_index);
+			}
+			// Replace table index
+			column_binding.table_index = table_index_mapping.at(column_binding.table_index);
+		}
+
+		// Replace default fields
+		switch (TYPE) {
+		case ConversionType::TO_CANONICAL:
+			expression_info.emplace_back(std::move(expr.alias), expr.query_location);
+			expr.alias.clear();
+			expr.query_location.SetInvalid();
+			break;
+		case ConversionType::RESTORE_ORIGINAL:
+			auto &info = expression_info[info_idx++];
+			expr.alias = std::move(info.first);
+			expr.query_location = info.second;
+			break;
+		}
+		if (expr.IsVolatile()) {
+			can_materialize = false;
+		}
 	}
 
 private:
@@ -683,6 +700,7 @@ public:
 				to_remove.push_back(signature); // Just one operator in this subplan
 				continue;
 			}
+
 			if (subplan_info.subplans.size() == 1) {
 				to_remove.push_back(signature); // No other identical subplan
 				continue;
@@ -696,8 +714,9 @@ public:
 				auto parent_it = subplans.find(*parent_signature);
 				if (parent_it != subplans.end()) {
 					const auto subplan_count = subplan_info.subplans.size() * signature.OperatorCount();
-					const auto parent_count = parent_it->second.subplans.size() * parent_signature->OperatorCount();
-					if (parent_count >= subplan_count) {
+					const auto parent_subplan_count = parent_it->second.subplans.size();
+					const auto parent_count = parent_subplan_count * parent_signature->OperatorCount();
+					if (parent_subplan_count != 1 && parent_count >= subplan_count) {
 						to_remove.push_back(signature); // Parent is better, this one is redundant
 						continue;
 					}
@@ -735,7 +754,7 @@ public:
 				const auto &subplan_bindings = subplan_info.subplans[subplan_idx].canonical_bindings;
 				for (auto &cb : subplan_bindings) {
 					if (max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end()) {
-						bail = true; // Subplan does not fully contain the the other subplans
+						bail = true; // Subplan does not fully contain the other subplans
 						break;
 					}
 				}
