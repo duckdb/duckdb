@@ -349,7 +349,7 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 	for (auto &entry : index_entries) {
 		// Merge any data appended to the index while the checkpoint was running.
 		auto &index = *entry->index;
-		if (!index.IsBound()) {
+		if (!index.IsBound() || index.GetIndexType() != ART::TYPENAME) {
 			continue;
 		}
 		lock_guard<mutex> guard(entry->lock);
