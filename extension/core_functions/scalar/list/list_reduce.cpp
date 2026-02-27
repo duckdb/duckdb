@@ -206,7 +206,8 @@ LogicalType ResolveReduceAccumulatorType(ClientContext &context, const LogicalTy
 	if (LogicalType::TryGetMaxLogicalType(context, initial_type, lambda_return_type, max_logical_type)) {
 		return max_logical_type;
 	}
-	throw BinderException("No common super type between initial value and lambda return type");
+	throw BinderException("No common super type between initial value type %s and lambda return type %s",
+	                      initial_type.ToString(), lambda_return_type.ToString());
 }
 
 unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
@@ -237,7 +238,8 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 		auto list_child_type = LambdaFunctions::DetermineListChildType(arguments[0]->return_type);
 		auto &lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
 		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
-			throw BinderException("No common super type between list element and lambda return type");
+			throw BinderException("No common super type between list element type %s and lambda return type %s",
+			                      list_child_type.ToString(), lambda_return_type.ToString());
 		}
 	}
 
@@ -247,10 +249,12 @@ unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &
 	}
 	auto has_index = bound_lambda_expr.parameter_count == 3;
 
+	const auto lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
 	auto cast_lambda_expr =
 	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), accumulator_type);
 	if (!cast_lambda_expr) {
-		throw BinderException("Could not cast lambda expression to accumulator type");
+		throw BinderException("Could not cast lambda return type %s to accumulator type %s",
+		                      lambda_return_type.ToString(), accumulator_type.ToString());
 	}
 	bound_function.SetReturnType(cast_lambda_expr->return_type);
 	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(cast_lambda_expr), has_index,

@@ -75,11 +75,13 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 	if (has_initial) {
 		const auto &initial_type = function_child_types[2];
 		if (!LogicalType::TryGetMaxLogicalType(context, initial_type, lambda_return_type, accumulator_type)) {
-			throw BinderException("No common super type between initial value and lambda return type");
+			throw BinderException("No common super type between initial value type %s and lambda return type %s",
+			                      initial_type.ToString(), lambda_return_type.ToString());
 		}
 	} else {
 		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
-			throw BinderException("No common super type between list element and lambda return type");
+			throw BinderException("No common super type between list element type %s and lambda return type %s",
+			                      list_child_type.ToString(), lambda_return_type.ToString());
 		}
 	}
 
