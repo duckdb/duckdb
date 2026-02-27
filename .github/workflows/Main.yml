@@ -97,6 +97,7 @@ jobs:
     env:
       CC: gcc-10
       CXX: g++-10
+      DUCKDB_LINKER: mold
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -113,9 +114,9 @@ jobs:
     - name: Install tools
       shell: bash
       run: |
-        if ! command -v ninja >/dev/null 2>&1; then
+        if ! command -v ninja >/dev/null 2>&1 || ! command -v mold >/dev/null 2>&1; then
           sudo apt-get update -y -qq
-          sudo apt-get install -y -qq ninja-build
+          sudo apt-get install -y -qq ninja-build mold
         fi
 
         if ! command -v g++-10 >/dev/null 2>&1; then
