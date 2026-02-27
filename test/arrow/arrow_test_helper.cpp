@@ -240,7 +240,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		    config,
 		    [&batch_size](ClientConfig &config) {
 			    config.get_result_collector = [&batch_size](ClientContext &context,
-			                                                PreparedStatementData &data) -> PhysicalOperator & {
+			                                                PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
 				    return PhysicalArrowCollector::Create(context, data, batch_size);
 			    };
 		    },
