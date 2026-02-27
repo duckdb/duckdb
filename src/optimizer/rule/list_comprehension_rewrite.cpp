@@ -6,6 +6,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/lambda_functions.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -17,6 +18,11 @@ namespace duckdb {
 namespace {
 
 bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression &expr, const string &target_name) {
+	D_ASSERT(!expr.children.empty());
+	if (expr.function.name == target_name && expr.children[0]->return_type.id() == LogicalTypeId::LIST) {
+		return true;
+	}
+
 	// Compare function name with catalog to recognize aliases
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, expr.function.name,
@@ -55,27 +61,35 @@ optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &stru
 bool UsesIndexParameter(Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 		auto &ref = expr.Cast<BoundReferenceExpression>();
-		if (ref.index == 1) {
+		if (ref.index == 0) {
 			return true;
 		}
 	}
 	bool uses_index = false;
-	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
-		if (uses_index) {
-			return;
-		}
-		if (child->GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			auto &ref = child->Cast<BoundReferenceExpression>();
-			if (ref.index == 1) {
-				uses_index = true;
+	ExpressionIterator::EnumerateChildren(expr, [&uses_index](unique_ptr<Expression> &child) {
+		ExpressionIterator::EnumerateExpression(child, [&uses_index](Expression &child) {
+			if (uses_index) {
 				return;
 			}
-		}
-		if (!uses_index) {
-			uses_index = UsesIndexParameter(*child);
-		}
+			if (child.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+				auto &ref = child.Cast<BoundReferenceExpression>();
+				if (ref.index == 0) {
+					uses_index = true;
+					return;
+				}
+			}
+		});
 	});
 	return uses_index;
+}
+
+void RemoveIndexInputSlot(unique_ptr<Expression> &expr) {
+	ExpressionIterator::VisitExpressionClassMutable(expr, ExpressionClass::BOUND_REF,
+	                                                [&](unique_ptr<Expression> &child) {
+		                                                auto &ref = child->Cast<BoundReferenceExpression>();
+		                                                D_ASSERT(ref.index > 0);
+		                                                ref.index--;
+	                                                });
 }
 
 bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
@@ -231,7 +245,12 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &mat
 	}
 
 	auto apply_return_type = LogicalType::LIST(result_expr.return_type);
-	auto apply_bind_info = make_uniq<ListLambdaBindData>(apply_return_type, result_expr.Copy(), inner_bind.has_index);
+	auto apply_lambda = result_expr.Copy();
+	if (inner_bind.has_index) {
+		// The apply function included an index but it was not used. Adapt references to exclude index
+		RemoveIndexInputSlot(apply_lambda);
+	}
+	auto apply_bind_info = make_uniq<ListLambdaBindData>(apply_return_type, std::move(apply_lambda));
 	return make_uniq<BoundFunctionExpression>(apply_return_type, root.function, std::move(apply_children),
 	                                          std::move(apply_bind_info), root.is_operator);
 }
