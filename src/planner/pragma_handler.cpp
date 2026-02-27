@@ -22,7 +22,6 @@ PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
 
 void PragmaHandler::HandlePragmaStatementInternal(unique_ptr<SQLStatement> &statement,
                                                   vector<unique_ptr<SQLStatement>> &new_statements) {
-	// PRAGMA statement: check if we need to replace it by a new set of statements
 	PragmaHandler handler(context);
 	string new_query;
 	bool expanded = handler.HandlePragma(*statement, new_query);
@@ -40,10 +39,9 @@ void PragmaHandler::HandlePragmaStatementInternal(unique_ptr<SQLStatement> &stat
 	}
 }
 
-void WrapMultiStatementInTransaction(unique_ptr<MultiStatement> &multi_statement, bool is_in_active_transaction,
-                                     vector<unique_ptr<SQLStatement>> &new_statements) {
-#ifdef DEBUG // MultiStatement cannot contain transaction statements
-
+void UnPackMultiStatementIntoTransaction(unique_ptr<MultiStatement> &multi_statement, bool is_in_active_transaction,
+                                         vector<unique_ptr<SQLStatement>> &new_statements) {
+#ifdef DEBUG // MultiStatement should not contain transaction statements
 	for (auto &sub_statement : multi_statement->statements) {
 		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
 	}
@@ -81,11 +79,11 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 		}
 		case StatementType::MULTI_STATEMENT: {
 			auto multi_statement = unique_ptr<MultiStatement>(static_cast<MultiStatement *>(statements[i].release()));
-			WrapMultiStatementInTransaction(multi_statement, is_in_active_transaction, new_statements);
+			UnPackMultiStatementIntoTransaction(multi_statement, is_in_active_transaction, new_statements);
 			break;
 		}
 		case StatementType::TRANSACTION_STATEMENT: {
-			auto transaction_stmt = static_cast<TransactionStatement *>(statements[i].get());
+			const auto transaction_stmt = static_cast<TransactionStatement *>(statements[i].get());
 			if (transaction_stmt->info->type == TransactionType::BEGIN_TRANSACTION) {
 				is_in_active_transaction = true;
 			} else if (transaction_stmt->info->type == TransactionType::COMMIT ||
