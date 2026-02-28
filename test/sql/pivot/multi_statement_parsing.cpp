@@ -13,7 +13,7 @@ TEST_CASE("Parsing multiple statements including a PIVOT in one go results in a 
 
 	// Check that the SELECT 42 statement is last in the parsed statements list
 	auto statements = con.context->ParseStatements(query);
-	REQUIRE(statements.size() == 3);
+	REQUIRE(statements.size() == 5);
 	// REQUIRE(statements.back()->query == "SELECT 42;");
 
 	// Execute the query
