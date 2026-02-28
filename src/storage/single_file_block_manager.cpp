@@ -1364,17 +1364,40 @@ void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
 	if (!DBConfig::Get(db).options.trim_free_blocks) {
 		return;
 	}
-	for (auto itr = blocks.begin(); itr != blocks.end(); ++itr) {
+	// Under the lock, collect only blocks that are still in the free list (not concurrently allocated
+	// between the lock releases in WriteHeader). Remove them temporarily to prevent concurrent
+	// allocation of blocks being trimmed.
+	set<block_id_t> to_trim;
+	{
+		lock_guard<mutex> lock(single_file_block_lock);
+		for (auto &block_id : blocks) {
+			auto it = free_list.find(block_id);
+			if (it != free_list.end()) {
+				free_list.erase(it);
+				to_trim.insert(block_id);
+			}
+			// Block not in free_list: concurrently allocated, skip trimming.
+		}
+	}
+	// Trim contiguous ranges without holding the lock.
+	for (auto itr = to_trim.begin(); itr != to_trim.end(); ++itr) {
 		block_id_t first = *itr;
 		block_id_t last = first;
 		// Find end of contiguous range.
-		for (++itr; itr != blocks.end() && (*itr == last + 1); ++itr) {
+		for (++itr; itr != to_trim.end() && (*itr == last + 1); ++itr) {
 			last = *itr;
 		}
 		// We are now one too far.
 		--itr;
 		// Trim the range.
 		TrimFreeBlockRange(first, last);
+	}
+	// Re-add trimmed blocks to the free list under the lock.
+	{
+		lock_guard<mutex> lock(single_file_block_lock);
+		for (auto &block_id : to_trim) {
+			free_list.insert(block_id);
+		}
 	}
 }
 
