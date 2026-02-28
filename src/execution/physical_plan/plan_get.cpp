@@ -102,7 +102,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		vector<unique_ptr<Expression>> select_list;
 		unique_ptr<Expression> unsupported_filter;
 		unordered_set<idx_t> to_remove;
-		auto virtual_columns = op.function.get_virtual_columns(context, op.bind_data.get());
+
+		virtual_column_map_t virtual_columns;
+		if (op.function.get_virtual_columns) {
+			virtual_columns = op.function.get_virtual_columns(context, op.bind_data.get());
+		}
 		for (auto &entry : table_filters->filters) {
 			auto column_id = column_ids[entry.first].GetPrimaryIndex();
 			if (!op.function.supports_pushdown_type(*op.bind_data, column_id)) {
