@@ -23,7 +23,7 @@ INSERT INTO right_table VALUES
     (2, '2024-01-01 10:04:00', 'A', 150.50, false),
     (3, '2024-01-01 10:09:00', 'B', 379.00, true);
 
-statement error
+query IIII
 SELECT * 
 FROM left_table l 
 ASOF SEMI JOIN right_table r 
@@ -32,9 +32,10 @@ ASOF SEMI JOIN right_table r
 	AND l.price + r.bid > 300
 ORDER BY 1
 ----
-Not implemented Error: Unsupported ASOF JOIN type (SEMI) with arbitrary predicate
+2	2024-01-01 10:05:00	A	151.000
+3	2024-01-01 10:10:00	B	380.000
 
-statement error
+query IIII
 SELECT * 
 FROM left_table l 
 ASOF ANTI JOIN right_table r 
@@ -42,7 +43,7 @@ ASOF ANTI JOIN right_table r
 	AND l.ts >= r.ts 
 	AND l.price + r.bid > 300;
 ----
-Not implemented Error: Unsupported ASOF JOIN type (ANTI) with arbitrary predicate
+1	2024-01-01 10:00:00	A	150.000
 
 statement error
 SELECT * 

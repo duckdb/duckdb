@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/variant_stats_merging.test_slow
 # group: [variant]
 
-load __TEST_DIR__/variant_stats_merging.db
+load __TEST_DIR__/variant_stats_merging.db readwrite v1.5.0
 
 # Always shred
 statement ok
