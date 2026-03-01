@@ -112,8 +112,8 @@ TEST_CASE("trim_free_blocks does not trim concurrently allocated blocks", "[pers
 		duckdb::DBConfig config;
 		config.options.trim_free_blocks = true;
 		config.options.checkpoint_on_shutdown = false;
-		config.file_system = duckdb::make_uniq<duckdb::VirtualFileSystem>(
-		    duckdb::unique_ptr<TrimRaceFileSystem>(race_fs));
+		config.file_system =
+		    duckdb::make_uniq<duckdb::VirtualFileSystem>(duckdb::unique_ptr<TrimRaceFileSystem>(race_fs));
 
 		duckdb::DuckDB db(db_path, &config);
 		duckdb::Connection con(db);
