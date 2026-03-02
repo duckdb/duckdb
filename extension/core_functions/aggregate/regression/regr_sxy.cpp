@@ -2,7 +2,7 @@
 // Returns REGR_COUNT(expr1, expr2) * COVAR_POP(expr1, expr2) for non-null pairs.
 
 #include "core_functions/aggregate/regression/regr_count.hpp"
-#include "core_functions/aggregate/algebraic/covar.hpp"
+#include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 
@@ -50,12 +50,7 @@ struct RegrSXYOperation {
 LogicalType GetRegrSXYStateType(const AggregateFunction &) {
 	child_list_t<LogicalType> state_children;
 	state_children.emplace_back("count", LogicalType::UBIGINT);
-	child_list_t<LogicalType> cov_pop_children;
-	cov_pop_children.emplace_back("count", LogicalType::UBIGINT);
-	cov_pop_children.emplace_back("meanx", LogicalType::DOUBLE);
-	cov_pop_children.emplace_back("meany", LogicalType::DOUBLE);
-	cov_pop_children.emplace_back("co_moment", LogicalType::DOUBLE);
-	state_children.emplace_back("cov_pop", LogicalType::STRUCT(std::move(cov_pop_children)));
+	state_children.emplace_back("cov_pop", CovarPopFun::GetFunction().GetStateType());
 	return LogicalType::STRUCT(std::move(state_children));
 }
 
