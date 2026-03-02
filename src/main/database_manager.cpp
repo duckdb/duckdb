@@ -15,8 +15,10 @@
 
 namespace duckdb {
 
+// Oids are started at 20000 to avoid colliding with Postgres builtin types, which end at 16383:
+// https://github.com/postgres/postgres/blob/db93988ab0e78396f2ed9e96c826ff988d12b9f2/src/include/access/transam.h#L156-L197
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
-    : db(db), next_oid(0), current_query_number(1), current_transaction_id(0) {
+    : db(db), next_oid(20000), current_query_number(1), current_transaction_id(0) {
 	system = make_shared_ptr<AttachedDatabase>(db);
 	auto &config = DBConfig::GetConfig(db);
 	path_manager = config.path_manager;
