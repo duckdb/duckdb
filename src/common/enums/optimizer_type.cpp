@@ -41,6 +41,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"extension", OptimizerType::EXTENSION},
     {"materialized_cte", OptimizerType::MATERIALIZED_CTE},
     {"sum_rewriter", OptimizerType::SUM_REWRITER},
+    {"avg_rewriter", OptimizerType::AVG_REWRITER},
     {"late_materialization", OptimizerType::LATE_MATERIALIZATION},
     {"cte_inlining", OptimizerType::CTE_INLINING},
     {"common_subplan", OptimizerType::COMMON_SUBPLAN},
