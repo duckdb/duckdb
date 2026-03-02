@@ -99,6 +99,7 @@ jobs:
       CXX: g++
       DUCKDB_LINKER: mold
       TREAT_WARNINGS_AS_ERRORS: 1
+      EXTENSION_STATIC_BUILD: 0
       GEN: ninja
       CRASH_ON_ASSERT: 1
       FORCE_DEBUG: 1
