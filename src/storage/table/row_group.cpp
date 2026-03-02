@@ -1252,7 +1252,8 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// merge row group stats into the global stats
 		auto lock = global_stats.GetLock();
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-			if (is_loaded && !is_loaded[column_idx]) {
+			if (is_loaded && !is_loaded[column_idx] &&
+			    collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
 				// column is not loaded from disk - don't load just to update stats
 				writer.SetHasUnloadedColumn(column_idx);
 				continue;
