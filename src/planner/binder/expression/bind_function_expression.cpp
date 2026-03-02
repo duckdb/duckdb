@@ -161,13 +161,11 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 		    TypeContainsDecimal(rebound_lambda_expr.lambda_expr->return_type)) {
 			if (rebound_lambda_expr.lambda_expr->return_type != accumulator_type) {
 				const auto old_return_type = rebound_lambda_expr.lambda_expr->return_type;
-				auto cast_expr = BoundCastExpression::AddCastToType(context,
-				                                                    std::move(rebound_lambda_expr.lambda_expr),
+				auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(rebound_lambda_expr.lambda_expr),
 				                                                    accumulator_type);
 				if (!cast_expr) {
 					throw BinderException("Could not cast lambda return type %s to accumulator type %s",
-					                      old_return_type.ToString(),
-					                      accumulator_type.ToString());
+					                      old_return_type.ToString(), accumulator_type.ToString());
 				}
 				rebound_lambda_expr.lambda_expr = std::move(cast_expr);
 			}
