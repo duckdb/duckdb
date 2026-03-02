@@ -20,16 +20,9 @@ AvgRewriterOptimizer::AvgRewriterOptimizer(Optimizer &optimizer) : optimizer(opt
 	// Set up an expression matcher that detects AVG(x)
 	auto op = make_uniq<AggregateExpressionMatcher>();
 	op->function = make_uniq<SpecificFunctionMatcher>("avg");
-	op->policy = SetMatcher::Policy::UNORDERED;
+	op->policy = SetMatcher::Policy::ORDERED;
 	op->matchers.push_back(make_uniq<ExpressionMatcher>());
 	avg_matcher = std::move(op);
-
-	// Set up an expression matcher that detects COUNT(*)
-	op = make_uniq<AggregateExpressionMatcher>();
-	op->function = make_uniq<SpecificFunctionMatcher>("count_star");
-	op->policy = SetMatcher::Policy::UNORDERED;
-	op->matchers.push_back(make_uniq<ExpressionMatcher>());
-	count_star_matcher = std::move(op);
 }
 
 AvgRewriterOptimizer::~AvgRewriterOptimizer() {
@@ -58,8 +51,8 @@ void AvgRewriterOptimizer::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		AvgRewriterOptimizer sum_rewriter(optimizer);
-		sum_rewriter.StandardVisitOperator(op);
+		AvgRewriterOptimizer avg_rewriter(optimizer);
+		avg_rewriter.StandardVisitOperator(op);
 		return;
 	}
 	default:
@@ -86,28 +79,11 @@ void AvgRewriterOptimizer::RewriteAvgs(unique_ptr<LogicalOperator> &op) {
 	}
 	const idx_t aggr_count = aggr.expressions.size();
 
-	// We only do this if there is more than one AVG/COUNT(*)
-	idx_t num_count = 0;
-	optional_idx count_star_idx;
-	for (idx_t i = 0; i < aggr_count; ++i) {
-		auto &expr = aggr.expressions[i];
-		vector<reference<Expression>> bindings;
-		if (avg_matcher->Match(*expr, bindings)) {
-			num_count++;
-		} else if (count_star_matcher->Match(*expr, bindings)) {
-			num_count++;
-			count_star_idx = i;
-		}
-	}
-	if (num_count < 2) {
-		return;
-	}
-
 	auto &catalog = Catalog::GetSystemCatalog(optimizer.context);
 	FunctionBinder function_binder(optimizer.context);
 
-	// Rewrite all AVG(x) to SUM(x)
-	unordered_set<idx_t> rewrote_map;
+	// Rewrite all AVG(x) to SUM(x), and add a COUNT(x) to the list of aggregates
+	unordered_map<idx_t, idx_t> rewrote_map;
 	for (idx_t i = 0; i < aggr_count; ++i) {
 		auto &expr = aggr.expressions[i];
 		vector<reference<Expression>> bindings;
@@ -115,25 +91,29 @@ void AvgRewriterOptimizer::RewriteAvgs(unique_ptr<LogicalOperator> &op) {
 			continue;
 		}
 
-		// Found AVG(x)
-		auto &avg = bindings[0].get().Cast<BoundAggregateExpression>();
-		auto main_expr = std::move(avg.children[0]);
-
-		// Turn this into SUM(x)
+		// Found AVG(x), turn it into SUM(x)
+		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().children[0]);
 		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
-		const auto sum_fun = sum_entry.functions.GetFunctionByArguments(optimizer.context, {main_expr->return_type});
+		const auto sum_fun = sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->return_type});
 		vector<unique_ptr<Expression>> args;
-		args.push_back(std::move(main_expr));
+		args.push_back(std::move(avg_child));
+		avg_child = args.back()->Copy();
 		expr = function_binder.BindAggregateFunction(sum_fun, std::move(args));
-		rewrote_map.insert(i);
-	}
-	D_ASSERT(!rewrote_map.empty());
 
-	// Add COUNT(*) if it's not there
-	if (!count_star_idx.IsValid()) {
-		count_star_idx = aggr.expressions.size();
-		aggr.expressions.push_back(function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
-		                                                                 AggregateType::NON_DISTINCT));
+		// Map from SUM(x) index to COUNT(x) index
+		rewrote_map.emplace(i, aggr.expressions.size());
+
+		// Create COUNT(x)
+		const auto count_fun = CountFunctionBase::GetFunction();
+		args = vector<unique_ptr<Expression>>();
+		args.push_back(std::move(avg_child));
+		auto count_aggr =
+		    function_binder.BindAggregateFunction(count_fun, std::move(args), nullptr, AggregateType::NON_DISTINCT);
+		aggr.expressions.push_back(std::move(count_aggr));
+	}
+
+	if (rewrote_map.empty()) {
+		return;
 	}
 
 	// We rewrote aggregates - we need to push a projection in which we re-compute the original result
@@ -148,21 +128,22 @@ void AvgRewriterOptimizer::RewriteAvgs(unique_ptr<LogicalOperator> &op) {
 	}
 
 	for (idx_t i = 0; i < aggr_count; i++) {
-		const auto idx = group_count + i;
-		ColumnBinding aggregate_binding(aggr.aggregate_index, idx);
-		aggregate_map[aggregate_binding] = ColumnBinding(proj_index, idx);
+		ColumnBinding aggregate_binding(aggr.aggregate_index, i);
+		aggregate_map[aggregate_binding] = ColumnBinding(proj_index, group_count + i);
 		auto &aggr_type = aggr.expressions[i]->return_type;
 		auto aggr_ref = make_uniq<BoundColumnRefExpression>(aggr_type, aggregate_binding);
-		if (rewrote_map.find(i) == rewrote_map.end()) {
+
+		const auto rewrote_entry = rewrote_map.find(i);
+		if (rewrote_entry == rewrote_map.end()) {
 			// Not rewritten - just push a reference
 			projection_expressions.push_back(std::move(aggr_ref));
 			continue;
 		}
 
-		// Rewritten - need to compute the final result by dividing SUM(x) by COUNT(*)
-		ColumnBinding count_binding(aggr.aggregate_index, count_star_idx.GetIndex());
-		auto count_ref = make_uniq<BoundColumnRefExpression>(aggr.expressions[count_star_idx.GetIndex()]->return_type,
-		                                                     count_binding);
+		// Rewritten - need to compute the final result by dividing SUM(x) by COUNT(x)
+		ColumnBinding count_binding(aggr.aggregate_index, rewrote_entry->second);
+		auto count_ref =
+		    make_uniq<BoundColumnRefExpression>(aggr.expressions[rewrote_entry->second]->return_type, count_binding);
 
 		auto final_result = optimizer.BindScalarFunction("/", std::move(aggr_ref), std::move(count_ref));
 		projection_expressions.push_back(std::move(final_result));

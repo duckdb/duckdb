@@ -33,6 +33,5 @@ private:
 	Optimizer &optimizer;
 	column_binding_map_t<ColumnBinding> aggregate_map;
 	unique_ptr<ExpressionMatcher> avg_matcher;
-	unique_ptr<ExpressionMatcher> count_star_matcher;
 };
 } // namespace duckdb
