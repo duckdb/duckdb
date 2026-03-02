@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
@@ -20,6 +21,37 @@
 namespace duckdb {
 
 namespace {
+
+static bool TypeContainsDecimal(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL:
+		return true;
+	case LogicalTypeId::LIST:
+		return TypeContainsDecimal(ListType::GetChildType(type));
+	case LogicalTypeId::ARRAY:
+		return TypeContainsDecimal(ArrayType::GetChildType(type));
+	case LogicalTypeId::STRUCT: {
+		for (const auto &child : StructType::GetChildTypes(type)) {
+			if (TypeContainsDecimal(child.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::MAP:
+		return TypeContainsDecimal(MapType::KeyType(type)) || TypeContainsDecimal(MapType::ValueType(type));
+	case LogicalTypeId::UNION: {
+		for (const auto &child : UnionType::CopyMemberTypes(type)) {
+			if (TypeContainsDecimal(child.second)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
+}
 
 class ListReduceBindLambdaContext final : public BindLambdaContext {
 public:
@@ -111,13 +143,34 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 
 	if (has_initial) {
 		D_ASSERT(lambda_expr_copy);
-		auto &lambda_expr_rebind = lambda_expr_copy->Cast<LambdaExpression>();
 		auto rebind_child_types = function_child_types;
 		rebind_child_types[2] = accumulator_type;
+
+		auto lambda_expr_rebind_copy = lambda_expr_copy->Copy();
+		auto &lambda_expr_rebind = lambda_expr_rebind_copy->Cast<LambdaExpression>();
 		bind_lambda_result = bind_lambda_expression(lambda_expr_rebind, depth, rebind_child_types,
 		                                            &bind_lambda_function, bind_lambda_context);
 		if (bind_lambda_result.HasError()) {
 			bind_lambda_result.error.Throw();
+		}
+
+		auto &rebound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
+		// Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen
+		// accumulator type when decimals are involved.
+		if (TypeContainsDecimal(accumulator_type) ||
+		    TypeContainsDecimal(rebound_lambda_expr.lambda_expr->return_type)) {
+			if (rebound_lambda_expr.lambda_expr->return_type != accumulator_type) {
+				const auto old_return_type = rebound_lambda_expr.lambda_expr->return_type;
+				auto cast_expr = BoundCastExpression::AddCastToType(context,
+				                                                    std::move(rebound_lambda_expr.lambda_expr),
+				                                                    accumulator_type);
+				if (!cast_expr) {
+					throw BinderException("Could not cast lambda return type %s to accumulator type %s",
+					                      old_return_type.ToString(),
+					                      accumulator_type.ToString());
+				}
+				rebound_lambda_expr.lambda_expr = std::move(cast_expr);
+			}
 		}
 		result.did_rebind = true;
 		result.capture_child_types = std::move(rebind_child_types);
