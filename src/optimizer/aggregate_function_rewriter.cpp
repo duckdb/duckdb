@@ -22,9 +22,7 @@ public:
 	virtual ~AggregateRewriteRule() = default;
 
 public:
-	virtual bool ShouldSkip(const LogicalAggregate &aggr) const {
-		return false;
-	}
+	virtual bool ShouldSkip(const LogicalAggregate &aggr) const = 0;
 	virtual unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,
 	                                       vector<unique_ptr<Expression>> &additional_expressions) = 0;
 	virtual unique_ptr<Expression>
@@ -49,8 +47,11 @@ public:
 	explicit AvgRewriteRule(Optimizer &optimizer) : AggregateRewriteRule(optimizer) {
 		auto op = make_uniq<AggregateExpressionMatcher>();
 		op->function = make_uniq<SpecificFunctionMatcher>("avg");
+		op->type = make_uniq<NumericTypeMatcher>();
 		op->policy = SetMatcher::Policy::ORDERED;
-		op->matchers.push_back(make_uniq<ExpressionMatcher>());
+		auto child_matcher = make_uniq<StableExpressionMatcher>();
+		child_matcher->type = make_uniq<NumericTypeMatcher>();
+		op->matchers.push_back(std::move(child_matcher));
 		matcher = std::move(op);
 	}
 
@@ -148,6 +149,12 @@ public:
 	    : optimizer(optimizer), rule(rule) {
 	}
 
+private:
+	struct RewriteInfo {
+		idx_t count_idx;
+		vector<unique_ptr<Expression>> additional_expressions;
+	};
+
 public:
 	void Optimize(unique_ptr<LogicalOperator> &op) {
 		if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
@@ -190,11 +197,6 @@ private:
 		}
 		return nullptr;
 	}
-
-	struct RewriteInfo {
-		idx_t count_idx;
-		vector<unique_ptr<Expression>> additional_expressions;
-	};
 
 	void RewriteAggregates(unique_ptr<LogicalOperator> &op) {
 		auto &aggr = op->Cast<LogicalAggregate>();
