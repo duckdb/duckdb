@@ -33,18 +33,9 @@ env:
   AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
 
 jobs:
- check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI
-        run: echo "Event name is ${{ github.event_name }}"
-
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    needs: check-draft
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
@@ -142,7 +133,6 @@ jobs:
     name: Windows (32 Bit)
     needs:
       - win-release-64
-      - check-draft
     if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
     runs-on: windows-latest
 
@@ -179,7 +169,6 @@ jobs:
    name: Windows (ARM64)
    needs:
     - win-release-64
-    - check-draft
    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
    runs-on: windows-latest
 
@@ -242,7 +231,6 @@ jobs:
      name: MinGW (64 Bit)
      needs:
       - win-release-64
-      - check-draft
      if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
      steps:
