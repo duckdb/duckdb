@@ -32,7 +32,10 @@ CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compres
 	                                                  {CompressionType::COMPRESSION_CHIMP, optional_idx(), 0},
 	                                                  {CompressionType::COMPRESSION_DICTIONARY, 0, 4},
 	                                                  {CompressionType::COMPRESSION_FSST, 0, 4},
-	                                                  {CompressionType::COMPRESSION_DICT_FSST, 5, optional_idx()}});
+	                                                  {CompressionType::COMPRESSION_ROARING, 4, optional_idx()},
+	                                                  {CompressionType::COMPRESSION_ZSTD, 4, optional_idx()},
+	                                                  {CompressionType::COMPRESSION_DICT_FSST, 5, optional_idx()},
+	                                                  {CompressionType::COMPRESSION_PFOR_DELTA, NumericLimits<idx_t>::Maximum() - 1, optional_idx()}});
 
 	optional_idx current_storage_version;
 	if (storage_manager && storage_manager->HasStorageVersion()) {
