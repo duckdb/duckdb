@@ -347,12 +347,6 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 	lock_guard<mutex> lock(index_entries_lock);
 	for (auto &entry : index_entries) {
-		if (!entry->removed_data_during_checkpoint && !entry->added_data_during_checkpoint) {
-			continue;
-		}
-		if (index.GetIndexType() != ART::TYPE_NAME) {
-			throw InternalException("Concurrent changes made to a non-ART index");
-		}
 		// Merge any data appended to the index while the checkpoint was running.
 		auto &index = *entry->index;
 		if (!index.IsBound()) {
@@ -360,6 +354,13 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 		}
 		lock_guard<mutex> guard(entry->lock);
 		auto &bound_index = index.Cast<BoundIndex>();
+		if (!entry->removed_data_during_checkpoint && !entry->added_data_during_checkpoint) {
+			continue;
+		}
+		if (bound_index.GetIndexType() != ART::TYPE_NAME) {
+			throw InternalException("Concurrent changes made to a non-ART index");
+		}
+
 		auto &art = bound_index.Cast<ART>();
 
 		if (entry->removed_data_during_checkpoint) {
