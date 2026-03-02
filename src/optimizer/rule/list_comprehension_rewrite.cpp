@@ -18,8 +18,8 @@ namespace duckdb {
 namespace {
 
 bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression &expr, const string &target_name) {
-	D_ASSERT(!expr.children.empty());
-	if (expr.function.name == target_name && expr.children[0]->return_type.id() == LogicalTypeId::LIST) {
+	if (expr.function.name == target_name) {
+		D_ASSERT(!expr.children.empty() && expr.children[0]->return_type.id() == LogicalTypeId::LIST);
 		return true;
 	}
 
