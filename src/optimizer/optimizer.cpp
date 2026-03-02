@@ -32,6 +32,7 @@
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/optimizer/avg_rewriter.hpp"
 #include "duckdb/optimizer/sum_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/topn_window_elimination.hpp"
@@ -137,6 +138,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::CTE_INLINING, [&]() {
 		CTEInlining cte_inlining(*this);
 		plan = cte_inlining.Optimize(std::move(plan));
+	});
+
+	// Rewrites AVG(x) into SUM(x) / COUNT(*)
+	RunOptimizer(OptimizerType::AVG_REWRITER, [&]() {
+		AvgRewriterOptimizer optimizer(*this);
+		optimizer.Optimize(plan);
 	});
 
 	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)

@@ -25,6 +25,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPERATOR_ROWS_SCANNED,
 		MetricType::OPERATOR_TIMING,
 		MetricType::OPERATOR_TYPE,
+		MetricType::OPTIMIZER_AVG_REWRITER,
 		MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
 		MetricType::OPTIMIZER_COLUMN_LIFETIME,
 		MetricType::OPTIMIZER_COMMON_AGGREGATE,
