@@ -8,7 +8,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
 	this->temporary = info.temporary;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
-	for (auto &expr : expressions) {
+	for (auto &expr : info.expressions) {
 		D_ASSERT(expr);
 		expressions.push_back(expr->Copy());
 	}
