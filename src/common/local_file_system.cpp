@@ -94,14 +94,70 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 }
 
 #else
+
+// Maximum length of a path that does not require a long path prefix or
+// LongPathsEnabled setting along with longPathAware manifest.
+// For files the limit is 260 - 1 characters.
+// Directories additionally must be able to create 8+3 files inside them.
+// The limit applies to fully resolved absolute paths.
+static const size_t WINDOWS_MAX_SHORT_PATH = 247;
+static const size_t WINDOWS_MAX_LONG_PATH = 32000;
+static const std::wstring WINDOWS_LOCAL_LONG_PATH_PREFIX = L"\\\\?\\";
+static const std::wstring WINDOWS_UNC_LONG_PATH_PREFIX = L"\\\\?\\UNC\\";
+
 static std::wstring ConvertPathToUnicode(const string &path) {
 	return WindowsUtil::UTF8ToUnicode(path.c_str());
 }
 
+static std::wstring ConvertPathToNormalizedAbsolute(const std::wstring &path) {
+	// len includes NULL-terminator
+	DWORD len = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
+	if (len == 0) {
+		string error = LocalFileSystem::GetLastErrorAsString();
+		string utf8_path = WindowsUtil::UnicodeToUTF8(path.c_str());
+		throw IOException("Failed to get length for normalized path \"%s\": %s", utf8_path, error);
+	}
+
+	std::vector<wchar_t> buf;
+	buf.resize(len);
+
+	// written does NOT include NULL-terminator
+	DWORD written = GetFullPathNameW(path.c_str(), len, buf.data(), nullptr);
+	if (written == 0) {
+		string error = LocalFileSystem::GetLastErrorAsString();
+		string utf8_path = WindowsUtil::UnicodeToUTF8(path.c_str());
+		throw IOException("Failed to normalize path \"%s\", length: %lu: %s", utf8_path, len, error);
+	}
+
+	return std::wstring(buf.data(), written);
+}
+
 static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const string &path,
                                                      optional_ptr<FileOpener> opener) {
-	auto normalized_path = fs.ExpandPath(path, opener);
-	return ConvertPathToUnicode(normalized_path);
+	string normalized_path = fs.ExpandPath(path, opener);
+	std::wstring unicode_path = ConvertPathToUnicode(normalized_path);
+
+	// We need to get absolute path to check the length. Normalizing it (removing "." and "..",
+	// flipping forward slashes) is only required if the path is long.
+	// We are doing it for all paths to not perform current working dir resolving twice.
+	std::wstring abs_path = ConvertPathToNormalizedAbsolute(unicode_path);
+
+	if (abs_path.length() <= WINDOWS_MAX_SHORT_PATH || abs_path.find(WINDOWS_LOCAL_LONG_PATH_PREFIX) == 0 ||
+	    abs_path.find(WINDOWS_UNC_LONG_PATH_PREFIX) == 0) {
+		return abs_path;
+	}
+
+	if (abs_path.length() > WINDOWS_MAX_LONG_PATH) {
+		string resolved_path = WindowsUtil::UnicodeToUTF8(abs_path.c_str());
+		throw IOException("Path is too long, length: %zu, beginning: %s[...]", abs_path.length(),
+		                  resolved_path.substr(0, 100));
+	}
+
+	if (abs_path.find(L"\\\\") == 0) {
+		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path;
+	}
+
+	return WINDOWS_LOCAL_LONG_PATH_PREFIX + abs_path;
 }
 
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
@@ -1072,7 +1128,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		if (!extended_error.empty()) {
 			extended_error = "\n" + extended_error;
 		}
-		throw IOException("Cannot open file \"%s\": %s%s", path.c_str(), error, extended_error);
+		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+		throw IOException("Cannot open file \"%s\": %s%s", abs_path, error, extended_error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
 	if (flags.OpenForAppending()) {
@@ -1235,7 +1292,8 @@ void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<File
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, directory, opener);
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to create directory \"%s\": %s", directory.c_str(), error);
+		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+		throw IOException("Failed to create directory \"%s\": %s", abs_path, error);
 	}
 }
 
@@ -1250,7 +1308,8 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory, optional_
 	auto unicode_path = NormalizePathAndConvertToUnicode(fs, directory, opener);
 	if (!RemoveDirectoryW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to delete directory \"%s\": %s", directory, error);
+		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+		throw IOException("Failed to delete directory \"%s\": %s", abs_path, error);
 	}
 }
 
@@ -1268,7 +1327,8 @@ void LocalFileSystem::RemoveFile(const string &filename, optional_ptr<FileOpener
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	if (!DeleteFileW(unicode_path.c_str())) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Failed to delete file \"%s\": %s", filename, error);
+		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
+		throw IOException("Failed to delete file \"%s\": %s", abs_path, error);
 	}
 }
 
