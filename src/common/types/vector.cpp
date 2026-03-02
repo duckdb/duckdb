@@ -599,6 +599,13 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			index = sel_vector.get_index(index);
 			break;
 		}
+		case VectorType::SHREDDED_VECTOR: {
+			// FIXME: this is extremely inefficient
+			Vector copy(LogicalType::VARIANT());
+			copy.Reference(*vector);
+			copy.Flatten(index + 1);
+			return copy.GetValue(index);
+		}
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
@@ -1387,6 +1394,10 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 	}
 	ToUnifiedFormat(count, vdata);
 
+	if (logical_type.id() == LogicalTypeId::GEOMETRY && serializer.ShouldSerialize(Geometry::VERSION_ADDED)) {
+		serializer.WriteProperty<GeometryStorageType>(99, "geometry_format", GeometryStorageType::WKB);
+	}
+
 	const bool has_validity_mask = (count > 0) && !vdata.validity.AllValid();
 	serializer.WriteProperty(100, "has_validity_mask", has_validity_mask);
 	if (has_validity_mask) {
@@ -1405,6 +1416,30 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		auto ptr = make_unsafe_uniq_array_uninitialized<data_t>(write_size);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteProperty(102, "data", ptr.get(), write_size);
+	} else if (logical_type.id() == LogicalTypeId::GEOMETRY) {
+		auto geoms = UnifiedVectorFormat::GetData<string_t>(vdata);
+
+		// Are we targeting an older serialization version?
+		if (!serializer.ShouldSerialize(7)) {
+			// Serialize data as old-style SPATIAL format
+			string blob;
+			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
+				auto idx = vdata.sel->get_index(i);
+				if (!vdata.validity.RowIsValid(idx)) {
+					list.WriteElement(NullValue<string_t>());
+				} else {
+					Geometry::ToSpatialGeometry(geoms[idx], blob);
+					list.WriteElement(blob);
+				}
+			});
+		} else {
+			// Serialize as WKB format
+			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
+				auto idx = vdata.sel->get_index(i);
+				auto wkb = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : geoms[idx];
+				list.WriteElement(wkb);
+			});
+		}
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
@@ -1518,6 +1553,7 @@ public:
 
 void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
+
 	const auto vtype = // older versions that only supported flat vectors did not serialize vector_type,
 	    deserializer.ReadPropertyWithExplicitDefault<VectorType>(90, "vector_type", VectorType::FLAT_VECTOR);
 
@@ -1540,6 +1576,14 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		return;
 	}
 
+	auto geometry_format = GeometryStorageType::WKB;
+	if (logical_type.id() == LogicalTypeId::GEOMETRY) {
+		// Try to read the geometry format, but default to the old SPATIAL format for older versions that did not
+		// serialize this property
+		geometry_format = deserializer.ReadPropertyWithExplicitDefault<GeometryStorageType>(
+		    99, "geometry_format", GeometryStorageType::SPATIAL);
+	}
+
 	auto &validity = FlatVector::Validity(*this);
 	auto validity_count = MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE);
 	validity.Reset(validity_count);
@@ -1556,6 +1600,28 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		deserializer.ReadProperty(102, "data", ptr.get(), column_size);
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
+	} else if (logical_type.id() == LogicalTypeId::GEOMETRY) {
+		auto blobs = FlatVector::GetData<string_t>(*this);
+
+		if (geometry_format == GeometryStorageType::WKB) {
+			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
+				auto geom = list.ReadElement<string>();
+				if (validity.RowIsValid(i)) {
+					blobs[i] = StringVector::AddStringOrBlob(*this, geom);
+				}
+			});
+		} else if (geometry_format == GeometryStorageType::SPATIAL) {
+			// Try to read old SPATIAL format and convert to new GEOMETRY format
+			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
+				auto blob = list.ReadElement<string>();
+				if (validity.RowIsValid(i)) {
+					Geometry::FromSpatialGeometry(blob, blobs[i], *this);
+				}
+			});
+		} else {
+			throw InternalException("Unsupported geometry format in vector serialization");
+		}
+
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
@@ -1579,7 +1645,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 						continue;
 					}
 					strings[i] = string_t(byte_read_ptr, lengths_read_ptr[i]);
-					byte_read_ptr += byte_read_ptr[i];
+					byte_read_ptr += lengths_read_ptr[i];
 				}
 			} else { // this is ye olde way of string serialization
 				deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {

@@ -228,6 +228,14 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	return 1;
 }
 
+void LogicalGet::SetScanOrder(unique_ptr<RowGroupOrderOptions> options) {
+	if (!function.set_scan_order) {
+		throw InternalException("LogicalGet::SetScanOrder called but function does not have scan order defined");
+	}
+	row_group_order_options = make_uniq<RowGroupOrderOptions>(*options);
+	function.set_scan_order(std::move(options), bind_data.get());
+}
+
 void LogicalGet::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
@@ -249,6 +257,8 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
 	serializer.WritePropertyWithDefault(212, "extra_info", extra_info, ExtraOperatorInfo {});
 	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", ordinality_idx);
+	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
+	                                                                      row_group_order_options);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -279,6 +289,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
 	deserializer.ReadPropertyWithDefault<optional_idx>(213, "ordinality_idx", result->ordinality_idx);
+	auto row_group_order_options =
+	    deserializer.ReadPropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options");
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -335,6 +347,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	result->virtual_columns = std::move(virtual_columns);
 	result->bind_data = std::move(bind_data);
+	if (row_group_order_options) {
+		result->SetScanOrder(std::move(row_group_order_options));
+	}
 	return std::move(result);
 }
 

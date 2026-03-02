@@ -1,6 +1,10 @@
 #include "duckdb/storage/table/column_data.hpp"
+
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -8,16 +12,14 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/array_column_data.hpp"
+#include "duckdb/storage/table/geo_column_data.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/function/variant/variant_shredding.hpp"
-#include "duckdb/storage/table/geo_column_data.hpp"
 
 namespace duckdb {
 
@@ -624,7 +626,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
-	auto new_segment = ColumnSegment::CreateTransientSegment(db, *function, type, segment_size, block_manager);
+	auto new_segment = ColumnSegment::CreateTransientSegment(db, function, type, segment_size, block_manager);
 	AppendSegment(l, std::move(new_segment));
 }
 
@@ -835,7 +837,7 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
 		const auto &geometry_data = extra_data->Cast<GeometryPersistentColumnData>();
-		PersistentColumnData result(Geometry::GetVectorizedType(geometry_data.geom_type, geometry_data.vert_type));
+		PersistentColumnData result(Geometry::GetVectorizedType(geometry_data.storage_type));
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
@@ -863,7 +865,7 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 	// TODO: This is ugly
 	if (result.extra_data && result.extra_data->GetType() == ExtraPersistentColumnDataType::GEOMETRY) {
 		auto &geo_data = result.extra_data->Cast<GeometryPersistentColumnData>();
-		auto actual_type = Geometry::GetVectorizedType(geo_data.geom_type, geo_data.vert_type);
+		auto actual_type = Geometry::GetVectorizedType(geo_data.storage_type);
 
 		// We need to set the actual type in scope, as when we deserialize "data_pointers" we use it to detect
 		// the type of the statistics.
@@ -1008,8 +1010,7 @@ void ExtraPersistentColumnData::Serialize(Serializer &serializer) const {
 	} break;
 	case ExtraPersistentColumnDataType::GEOMETRY: {
 		const auto &geometry_data = Cast<GeometryPersistentColumnData>();
-		serializer.WritePropertyWithDefault(101, "geom_type", geometry_data.geom_type, GeometryType::INVALID);
-		serializer.WritePropertyWithDefault(102, "vert_type", geometry_data.vert_type, VertexType::XY);
+		serializer.WritePropertyWithDefault(101, "storage_type", geometry_data.storage_type, GeometryStorageType::WKB);
 	} break;
 	default:
 		throw InternalException("Unknown PersistentColumnData type");
@@ -1025,10 +1026,9 @@ unique_ptr<ExtraPersistentColumnData> ExtraPersistentColumnData::Deserialize(Des
 		return make_uniq<VariantPersistentColumnData>(storage_type);
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
-		auto geom_type =
-		    deserializer.ReadPropertyWithExplicitDefault<GeometryType>(101, "geom_type", GeometryType::INVALID);
-		auto vert_type = deserializer.ReadPropertyWithExplicitDefault<VertexType>(102, "vert_type", VertexType::XY);
-		return make_uniq<GeometryPersistentColumnData>(geom_type, vert_type);
+		const auto storage_type = deserializer.ReadPropertyWithExplicitDefault<GeometryStorageType>(
+		    101, "storage_type", GeometryStorageType::WKB);
+		return make_uniq<GeometryPersistentColumnData>(storage_type);
 	}
 	default:
 		throw InternalException("Unknown PersistentColumnData type");
@@ -1052,7 +1052,13 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	CompressionInfo compression_info(block_manager);
 	deserializer.Set<const CompressionInfo &>(compression_info);
 	deserializer.Set<const LogicalType &>(type);
+
+	auto &catalog = info.GetDB().GetStorageManager().GetAttached().GetCatalog();
+	deserializer.Set<Catalog &>(catalog);
+
 	auto persistent_column_data = PersistentColumnData::Deserialize(deserializer);
+
+	deserializer.Unset<Catalog>();
 	deserializer.Unset<LogicalType>();
 	deserializer.Unset<const CompressionInfo>();
 	deserializer.Unset<DatabaseInstance>();

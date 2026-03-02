@@ -16,6 +16,11 @@ namespace duckdb {
 //! Struct column data represents a struct
 class VariantColumnData : public ColumnData {
 public:
+	//! Indices into the inner shredded struct: STRUCT(typed_value <type>, untyped_value_index UINTEGER)
+	static constexpr idx_t TYPED_VALUE_INDEX = 0;
+	static constexpr idx_t UNTYPED_VALUE_INDEX = 1;
+
+public:
 	VariantColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                  ColumnDataType data_type, optional_ptr<ColumnData> parent);
 

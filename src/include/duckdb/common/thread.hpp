@@ -11,6 +11,7 @@
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 using std::thread;
@@ -26,7 +27,9 @@ namespace duckdb {
 
 struct ThreadUtil {
 	static void SleepMs(idx_t ms);
+	static void SleepMicroSeconds(idx_t micros);
 	static thread_id GetThreadId();
+	static string GetThreadIdString();
 };
 
 } // namespace duckdb

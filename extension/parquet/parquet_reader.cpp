@@ -25,6 +25,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 
 namespace duckdb {
 
@@ -80,8 +81,8 @@ static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t
 
 static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
-             const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
-             optional_idx footer_size) {
+             const shared_ptr<const ParquetEncryptionConfig> &encryption_config,
+             shared_ptr<EncryptionUtil> &encryption_util, optional_idx footer_size) {
 	auto file_proto = CreateThriftFileProtocol(context, file_handle, false);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
@@ -149,6 +150,9 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 
 	if (footer_encrypted) {
+		// Get the encryption util
+		// The parquet reader only reads data, so we set util to true
+		encryption_util = context.db->GetEncryptionUtil(true);
 		crypto_metadata->read(file_proto.get());
 
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
@@ -163,7 +167,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			aad_crypto_metadata.SetModule(ParquetCrypto::FOOTER);
 		}
 		ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
-		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util,
+		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), *encryption_util,
 		                    aad_crypto_metadata);
 	} else {
 		metadata->read(file_proto.get());
@@ -552,13 +556,23 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		// which performs the WKB validation/transformation using the `ST_GeomFromWKB` function of DuckDB.
 		// This enables us to also support other geometry encodings (such as GeoArrow geometries) easier in the future.
 
+		// Try to parse the CRS
+		LogicalType target_type;
+
+		auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs);
+		if (lookup) {
+			target_type = LogicalType::GEOMETRY(*lookup);
+		} else {
+			target_type = LogicalType::GEOMETRY();
+		}
+
 		// Inner BLOB schema
 		vector<ParquetColumnSchema> geometry_child;
 		geometry_child.emplace_back(ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx));
 
 		// Wrap in geometry schema
-		return ParquetColumnSchema::FromChildSchemas(s_ele.name, LogicalType::GEOMETRY(crs), max_define, max_repeat,
-		                                             this_idx, next_file_idx++, std::move(geometry_child),
+		return ParquetColumnSchema::FromChildSchemas(s_ele.name, target_type, max_define, max_repeat, this_idx,
+		                                             next_file_idx++, std::move(geometry_child),
 		                                             ParquetColumnSchemaType::GEOMETRY);
 	}
 
@@ -821,25 +835,19 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			footer_size = UBigIntValue::Get(footer_entry->second);
 		}
 	}
-	// set pointer to factory method for AES state
-	auto &config = DBConfig::GetConfig(context_p);
-	if (config.encryption_util && parquet_options.debug_use_openssl) {
-		encryption_util = config.encryption_util;
-	} else {
-		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-	}
+
 	// If metadata cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!metadata_p) {
 		if (!MetadataCacheEnabled(context_p)) {
 			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
-			                        *encryption_util, footer_size);
+			                        encryption_util, footer_size);
 		} else {
 			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file.path);
 			if (!metadata || !metadata->IsValid(*file_handle)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
-				                        *encryption_util, footer_size);
+				                        encryption_util, footer_size);
 				ObjectCache::GetObjectCache(context_p).Put(file.path, metadata);
 			}
 		}

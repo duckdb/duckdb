@@ -1,24 +1,26 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
-#include "duckdb/parallel/thread_context.hpp"
+
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/data_table.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/storage/table_io_manager.hpp"
-#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/common/types/conflict_manager.hpp"
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_state.hpp"
-#include "duckdb/function/create_sort_key.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -532,28 +534,26 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	if (conflict_info.column_ids.empty()) {
 		auto &global_indexes = data_table.GetDataTableInfo()->GetIndexes();
 		// We care about every index that applies to the table if no ON CONFLICT (...) target is given
-		global_indexes.Scan([&](Index &index) {
+		for (auto &index : global_indexes.Indexes()) {
 			if (!index.IsUnique()) {
-				return false;
+				continue;
 			}
 			D_ASSERT(index.IsBound());
 			if (conflict_info.ConflictTargetMatches(index)) {
 				matching_indexes.insert(index);
 			}
-			return false;
-		});
+		}
 		auto &local_indexes = local_storage.GetIndexes(context.client, data_table);
-		local_indexes.Scan([&](Index &index) {
+		for (auto &index : local_indexes.Indexes()) {
 			if (!index.IsUnique()) {
-				return false;
+				continue;
 			}
 			D_ASSERT(index.IsBound());
 			if (conflict_info.ConflictTargetMatches(index)) {
 				auto &bound_index = index.Cast<BoundIndex>();
 				matching_indexes.insert(bound_index);
 			}
-			return false;
-		});
+		}
 	}
 
 	auto inner_conflicts = CheckDistinctness(insert_chunk, conflict_info, matching_indexes);
@@ -634,7 +634,9 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 		if (return_chunk) {
 			gstate.return_collection.Append(insert_chunk);
 		}
-		storage.LocalAppend(table, context.client, insert_chunk, bound_constraints);
+		// When action_type is throw, we already verify constraints in `OnConflictHandling`
+		storage.LocalAppend(table, context.client, insert_chunk, bound_constraints,
+		                    action_type == OnConflictAction::THROW);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
 			(void)HandleInsertConflicts<true>(table, context, lstate, gstate, lstate.update_chunk, *this);
 			(void)HandleInsertConflicts<false>(table, context, lstate, gstate, lstate.update_chunk, *this);
@@ -703,14 +705,13 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		LocalAppendState append_state;
 		storage.InitializeLocalAppend(append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-		collection.Scan(transaction, [&](DataChunk &insert_chunk) {
+		for (auto &insert_chunk : collection.Chunks(transaction)) {
 			storage.LocalAppend(append_state, context.client, insert_chunk, false);
-			return true;
-		});
+		}
 		storage.FinalizeLocalAppend(append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.optimistic_writer->WriteLastRowGroup(optimistic_collection);
+		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
 		lstate.optimistic_writer->FinalFlush();
 		gstate.table.GetStorage().LocalMerge(context.client, optimistic_collection);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);

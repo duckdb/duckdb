@@ -81,7 +81,7 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 	encryption_version = target_encryption_version;
 }
 
-void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
+void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 	string storage_version_user_provided = "";
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {
@@ -125,12 +125,15 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
 	}
+	// erase encryption settings
+	options.erase("encryption_key");
+	options.erase("encryption_cipher");
 	if (encryption) {
 		SetEncryptionVersion(storage_version_user_provided);
 	}
 }
 
-StorageManager::StorageManager(AttachedDatabase &db, string path_p, const AttachOptions &options)
+StorageManager::StorageManager(AttachedDatabase &db, string path_p, AttachOptions &options)
     : db(db), path(std::move(path_p)), read_only(options.access_mode == AccessMode::READ_ONLY), wal_size(0) {
 	if (path.empty()) {
 		path = IN_MEMORY_PATH;
@@ -172,6 +175,18 @@ void StorageManager::SetWALSize(idx_t size) {
 	wal_size = size;
 }
 
+idx_t StorageManager::GetWALEntriesCount() const {
+	return wal_entries_count;
+}
+
+void StorageManager::ResetWALEntriesCount() {
+	wal_entries_count = 0;
+}
+
+void StorageManager::IncrementWALEntriesCount() {
+	wal_entries_count++;
+}
+
 optional_ptr<WriteAheadLog> StorageManager::GetWAL() {
 	if (InMemory() || read_only || !load_complete) {
 		return nullptr;
@@ -187,7 +202,11 @@ bool StorageManager::HasWAL() const {
 }
 
 bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options) {
-	lock_guard<mutex> guard(wal_lock);
+	unique_ptr<lock_guard<mutex>> guard;
+	if (!options.wal_lock) {
+		// not holding the WAL lock yet - grab it
+		guard = GetWALLock();
+	}
 	// while holding the WAL lock - get the last committed transaction from the transaction manager
 	// this is the commit we will be checkpointing on - everything in this commit will be written to the file
 	// any new commits made will be written to the next wal
@@ -205,13 +224,16 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	}
 	// verify the main WAL is the active WAL currently
 	if (wal->GetPath() != wal_path) {
-		throw InternalException("Current WAL path %s does not match base WAL path %s in WALStartCheckpoint",
+		throw InternalException("Current WAL path \"%s\" does not match base WAL path \"%s\" in WALStartCheckpoint",
 		                        wal->GetPath(), wal_path);
 	}
 	// write to the main WAL that we have initiated a checkpoint
 	wal->WriteCheckpoint(meta_block);
 	wal->Flush();
 
+	// We no longer need to hold on to the WAL blocks here. If the checkpoint fails, we throw a fatal exception and
+	// enter an inconsistent state. If it succeeds, then this WAL is no longer relevant.
+	wal->MarkBlocksInUseAsModified();
 	// close the main WAL
 	wal.reset();
 
@@ -241,7 +263,7 @@ void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 		// this is the common scenario if there are no concurrent writes happening while checkpointing
 		// in this case we can just remove the main WAL and re-instantiate it to empty
 		fs.TryRemoveFile(wal_path);
-
+		ResetWALEntriesCount();
 		wal = make_uniq<WriteAheadLog>(*this, wal_path);
 		return;
 	}
@@ -343,7 +365,7 @@ public:
 	}
 };
 
-SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, const AttachOptions &options)
+SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, AttachOptions &options)
     : StorageManager(db, std::move(path), options) {
 }
 
@@ -554,6 +576,7 @@ public:
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
 	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t &count) override;
 	bool HasRowGroupData() override;
+	unordered_set<block_id_t> &GetBlockIdsInUse() override;
 
 private:
 	idx_t initial_wal_size = 0;
@@ -561,6 +584,7 @@ private:
 	WriteAheadLog &wal;
 	WALCommitState state;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
+	unordered_set<block_id_t> block_ids_in_use;
 };
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
@@ -603,6 +627,12 @@ void SingleFileStorageCommitState::FlushCommit() {
 	if (state != WALCommitState::IN_PROGRESS) {
 		return;
 	}
+	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
+	auto &block_manager = wal.GetStorageManager().GetBlockManager();
+	for (const block_id_t block_id : block_ids_in_use) {
+		block_manager.MarkBlockAsUsed(block_id);
+		wal.AddBlockInUse(block_id);
+	}
 	wal.Flush();
 	state = WALCommitState::FLUSHED;
 }
@@ -611,10 +641,6 @@ void SingleFileStorageCommitState::AddRowGroupData(DataTable &table, idx_t start
                                                    unique_ptr<PersistentCollectionData> row_group_data) {
 	if (row_group_data->HasUpdates()) {
 		// cannot serialize optimistic block pointers if in-memory updates exist
-		return;
-	}
-	if (table.HasIndexes()) {
-		// cannot serialize optimistic block pointers if the table has indexes
 		return;
 	}
 	auto &entries = optimistically_written_data[table];
@@ -645,6 +671,10 @@ optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroup
 
 bool SingleFileStorageCommitState::HasRowGroupData() {
 	return !optimistically_written_data.empty();
+}
+
+unordered_set<block_id_t> &SingleFileStorageCommitState::GetBlockIdsInUse() {
+	return block_ids_in_use;
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {
@@ -692,8 +722,9 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		try {
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
+			ActiveTimer profiler;
 			if (client_context) {
-				auto profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
+				profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
 			}
 
 			// Write the checkpoint.
@@ -758,9 +789,22 @@ vector<MetadataBlockInfo> SingleFileStorageManager::GetMetadataInfo() {
 }
 
 bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
+	auto &config = DBConfig::Get(db).options;
+
+	// Check size-based threshold
 	auto initial_size = NumericCast<idx_t>(GetWALSize());
 	idx_t expected_wal_size = initial_size + estimated_wal_bytes;
-	return expected_wal_size > DBConfig::Get(db).options.checkpoint_wal_size;
+	if (expected_wal_size > config.checkpoint_wal_size) {
+		return true;
+	}
+
+	// Check entry-based threshold (if enabled)
+	auto entry_limit = Settings::Get<WalAutocheckpointEntriesSetting>(DBConfig::Get(db));
+	if (entry_limit > 0 && GetWALEntriesCount() >= entry_limit) {
+		return true;
+	}
+
+	return false;
 }
 
 shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCreateTableInfo *info /*info*/) {

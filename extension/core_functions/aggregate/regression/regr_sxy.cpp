@@ -47,11 +47,24 @@ struct RegrSXYOperation {
 	}
 };
 
+LogicalType GetRegrSXYStateType(const AggregateFunction &) {
+	child_list_t<LogicalType> state_children;
+	state_children.emplace_back("count", LogicalType::UBIGINT);
+	child_list_t<LogicalType> cov_pop_children;
+	cov_pop_children.emplace_back("count", LogicalType::UBIGINT);
+	cov_pop_children.emplace_back("meanx", LogicalType::DOUBLE);
+	cov_pop_children.emplace_back("meany", LogicalType::DOUBLE);
+	cov_pop_children.emplace_back("co_moment", LogicalType::DOUBLE);
+	state_children.emplace_back("cov_pop", LogicalType::STRUCT(std::move(cov_pop_children)));
+	return LogicalType::STRUCT(std::move(state_children));
+}
+
 } // namespace
 
 AggregateFunction RegrSXYFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSXyState, double, double, double, RegrSXYOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrSXYStateType);
 }
 
 } // namespace duckdb

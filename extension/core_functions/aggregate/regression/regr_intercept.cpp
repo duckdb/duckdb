@@ -60,11 +60,35 @@ struct RegrInterceptOperation {
 	}
 };
 
+LogicalType GetRegrInterceptStateType(const AggregateFunction &) {
+	child_list_t<LogicalType> state_children;
+	state_children.emplace_back("count", LogicalType::UBIGINT);
+	state_children.emplace_back("sum_x", LogicalType::DOUBLE);
+	state_children.emplace_back("sum_y", LogicalType::DOUBLE);
+
+	child_list_t<LogicalType> slope_children;
+	child_list_t<LogicalType> cov_pop_children;
+	cov_pop_children.emplace_back("count", LogicalType::UBIGINT);
+	cov_pop_children.emplace_back("meanx", LogicalType::DOUBLE);
+	cov_pop_children.emplace_back("meany", LogicalType::DOUBLE);
+	cov_pop_children.emplace_back("co_moment", LogicalType::DOUBLE);
+	slope_children.emplace_back("cov_pop", LogicalType::STRUCT(std::move(cov_pop_children)));
+	child_list_t<LogicalType> var_pop_children;
+	var_pop_children.emplace_back("count", LogicalType::UBIGINT);
+	var_pop_children.emplace_back("mean", LogicalType::DOUBLE);
+	var_pop_children.emplace_back("dsquared", LogicalType::DOUBLE);
+	slope_children.emplace_back("var_pop", LogicalType::STRUCT(std::move(var_pop_children)));
+	state_children.emplace_back("slope", LogicalType::STRUCT(std::move(slope_children)));
+
+	return LogicalType::STRUCT(std::move(state_children));
+}
+
 } // namespace
 
 AggregateFunction RegrInterceptFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrInterceptState, double, double, double, RegrInterceptOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrInterceptStateType);
 }
 
 } // namespace duckdb

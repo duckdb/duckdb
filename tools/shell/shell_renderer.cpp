@@ -571,6 +571,11 @@ public:
 	const char *GetRowStart() override {
 		return "| ";
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 /*
@@ -721,6 +726,11 @@ public:
 	}
 	const char *GetRowSeparator() override {
 		return " \\\\\n";
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -990,6 +1000,11 @@ public:
 		}
 		out.Print(escaped);
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 class ModeTclRenderer : public RowRenderer {
@@ -1093,6 +1108,11 @@ public:
 		auto result = StringUtil::Format("%s", SQLIdentifier(string(str, str_len)));
 		out.Print(result);
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 class ModeAsciiRenderer : public RowRenderer {
@@ -1125,6 +1145,11 @@ public:
 			out.Print(data[i]);
 		}
 		out.Print(row_sep);
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1310,6 +1335,11 @@ public:
 		return "null";
 	}
 
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
+
 	bool json_array;
 };
 
@@ -1399,6 +1429,11 @@ public:
 			res += ")";
 		}
 		return res;
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1631,6 +1666,7 @@ ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(stat
 	config.decimal_separator = state.decimal_separator;
 	config.thousand_separator = state.thousand_separator;
 	config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
+	config.hidden_rows_hint = "use .last to show entire result";
 }
 
 void ModeDuckBoxRenderer::RemoveRenderLimits() {
@@ -1814,6 +1850,8 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 
 void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
                                     const string &log_message, const duckdb::RegisteredLoggingContext &context) {
+	duckdb::lock_guard<duckdb::mutex> l(lock);
+
 	HighlightElementType element_type;
 	switch (level) {
 	case duckdb::LogLevel::LOG_TRACE:
@@ -1835,6 +1873,13 @@ void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLe
 	default:
 		throw std::runtime_error("Unsupported log level for WriteLogEntry");
 	}
+
+	// check if the log has already been printed
+	auto log_id = duckdb::StringUtil::CIHash(log_message);
+	if (printed_logs.find(log_id) != printed_logs.end()) {
+		return;
+	}
+	printed_logs.emplace(log_id);
 
 	const auto log_level = duckdb::EnumUtil::ToString(level);
 	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);

@@ -134,6 +134,13 @@
         "default_value": "64"
     },
     {
+        "name": "auto_checkpoint_skip_wal_threshold",
+        "description": "The estimated WAL write size at which point we will skip writing to the WAL and only checkpoint. Skipping writing to the WAL means concurrent commits are blocked while the checkpoint is happening.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "100000"
+    },
+    {
         "name": "autoinstall_extension_repository",
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "VARCHAR",
@@ -240,6 +247,13 @@
         "default_value": "0"
     },
     {
+        "name": "debug_eviction_queue_sleep_micro_seconds",
+        "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
@@ -337,6 +351,13 @@
         "type": "VARCHAR",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "deprecated_using_key_syntax",
+        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
+        "type": "ENUM<DeprecatedUsingKeySyntax>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
     },
     {
         "name": "disable_database_invalidation",
@@ -578,6 +599,13 @@
         ]
     },
     {
+        "name": "force_mbedtls_unsafe",
+        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "force_variant_shredding",
         "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
         "type": "VARCHAR",
@@ -641,6 +669,13 @@
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
+    },
+    {
+        "name": "ignore_unknown_crs",
+        "description": "Ignore unknown Coordinate Reference Systems (CRS) when creating geometry types or importing geospatial data.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "immediate_transaction_mode",
@@ -1031,6 +1066,23 @@
         "type": "BIGINT",
         "scope": "global",
         "default_value": "30000"
+    },
+    {
+        "name": "wal_autocheckpoint_entries",
+        "description": "Trigger automatic checkpoint when WAL entry count reaches or exceeds N (0 = disabled)",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
+        "name": "warnings_as_errors",
+        "description": "Escalate all warnings to errors.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "write_buffer_row_group_count",

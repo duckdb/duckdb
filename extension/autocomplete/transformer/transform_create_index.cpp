@@ -39,6 +39,9 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(PEGT
 		auto index_element_list = ExtractParseResultsFromList(extract_parens);
 		for (auto index_element : index_element_list) {
 			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(index_element);
+			if (expr->GetExpressionType() == ExpressionType::COLLATE) {
+				throw NotImplementedException("Index with collation not supported yet!");
+			}
 			index_info->expressions.push_back(expr->Copy());
 			index_info->parsed_expressions.push_back(expr->Copy());
 		}

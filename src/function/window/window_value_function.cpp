@@ -65,6 +65,14 @@ public:
 				sort_nulls.Initialize();
 			}
 		}
+
+		auto &required = state.required;
+		required.clear();
+
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+
+		WindowBoundariesState::AddImpliedBounds(required, gvstate.executor.wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -235,6 +243,22 @@ public:
 		if (gstate.row_tree) {
 			local_row = gstate.row_tree->GetLocalState(context);
 		}
+
+		const auto &wexpr = gstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		if (wexpr.arg_orders.empty()) {
+			required.insert(PARTITION_BEGIN);
+			required.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			required.insert(FRAME_BEGIN);
+			required.insert(FRAME_END);
+		}
+
+		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 
 	//! Accumulate the secondary sort values
@@ -590,8 +614,8 @@ void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 				frame_width += frame.end - frame.start;
 			}
 
-			if (n < frame_width) {
-				const auto nth_index = gvstate.value_tree->SelectNth(frames, n - 1);
+			if (--n < frame_width) {
+				const auto nth_index = gvstate.value_tree->SelectNth(frames, n);
 				if (nth_index.second || nth_index.first >= cursor.Count()) {
 					// Past end of frame
 					FlatVector::SetNull(result, i, true);
@@ -893,11 +917,22 @@ class WindowFillLocalState : public WindowLeadLagLocalState {
 public:
 	WindowFillLocalState(ExecutionContext &context, const WindowLeadLagGlobalState &gvstate)
 	    : WindowLeadLagLocalState(context, gvstate) {
-		//	If we optimised the ordering, force computation of the validity range.
-		if (!gvstate.value_tree) {
-			state.required.insert(VALID_BEGIN);
-			state.required.insert(VALID_END);
+		const auto &wexpr = gvstate.executor.wexpr;
+
+		auto &required = state.required;
+		required.clear();
+
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+
+		if (wexpr.arg_orders.empty() || !gvstate.value_tree) {
+			//	FILL uses the validity ranges to quickly eliminate indexes that can't be interpolated.
+			//	This only works for non-secondary orderings
+			required.insert(VALID_BEGIN);
+			required.insert(VALID_END);
 		}
+
+		WindowBoundariesState::AddImpliedBounds(required, gvstate.executor.wexpr);
 	}
 
 	//! Finish the sinking and prepare to scan

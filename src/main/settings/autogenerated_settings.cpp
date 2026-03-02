@@ -109,6 +109,13 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
+// Deprecated Using Key Syntax
+//===----------------------------------------------------------------------===//
+void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {

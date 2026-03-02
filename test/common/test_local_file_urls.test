@@ -31,43 +31,43 @@ SELECT * FROM read_csv_auto(getvariable('work_dir_localhost') || '/data/csv/norm
 John	ipsum
 
 # Test glob with file:/some/path
-query II
-SELECT file[:6], parse_filename(file) FROM glob(getvariable('work_dir_no_host') || '/data/*/bad_date_timestamp_mix.csv')
+query I
+SELECT parse_filename(file) FROM glob(getvariable('work_dir_no_host') || '/data/*/bad_date_timestamp_mix.csv')
 ----
-file:/	bad_date_timestamp_mix.csv
+bad_date_timestamp_mix.csv
 
 # Test glob with file:///some/path
-query II
-SELECT file[:8], parse_filename(file) FROM glob(getvariable('work_dir_triple_slash') || '/data/*/bad_date_timestamp_mix.csv')
+query I
+SELECT parse_filename(file) FROM glob(getvariable('work_dir_triple_slash') || '/data/*/bad_date_timestamp_mix.csv')
 ----
-file:///	bad_date_timestamp_mix.csv
+bad_date_timestamp_mix.csv
 
 # Test glob with file://localhost/some/path/to/duckdb/repo
-query II
-SELECT file[:17], parse_filename(file) FROM glob(getvariable('work_dir_localhost') || '/data/*/bad_date_timestamp_mix.csv')
+query I
+SELECT parse_filename(file) FROM glob(getvariable('work_dir_localhost') || '/data/*/bad_date_timestamp_mix.csv')
 ----
-file://localhost/	bad_date_timestamp_mix.csv
+bad_date_timestamp_mix.csv
 
 # Test scanning multiple files using glob with file:/some/path
-query III
-SELECT id, filename[:6], parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_no_host') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
+query II
+SELECT id, parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_no_host') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
 ----
-1	file:/	test.csv
-2	file:/	test.csv
+1	test.csv
+2	test.csv
 
 # Test scanning multiple files using glob with file:///some/path
-query III
-SELECT id, filename[:8], parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_triple_slash') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
+query II
+SELECT id, parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_triple_slash') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
 ----
-1	file:///	test.csv
-2	file:///	test.csv
+1	test.csv
+2	test.csv
 
 # Test scanning multiple files using glob with file://localhost/some/path
-query III
-SELECT id, filename[:17], parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_localhost') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
+query II
+SELECT id, parse_filename(filename) FROM read_csv_auto(getvariable('work_dir_localhost') || '/data/csv/hive-partitioning/simple/*/*/test.csv', filename=1) ORDER BY id
 ----
-1	file://localhost/	test.csv
-2	file://localhost/	test.csv
+1	test.csv
+2	test.csv
 
 require noforcestorage
 

@@ -1157,16 +1157,31 @@ unique_ptr<duckdb::ProgressBarDisplay> CreateProgressBar() {
 	return make_uniq<ShellProgressBarDisplay>();
 }
 
+static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::LogStorage> storage_ptr) {
+	auto *db_instance = db.instance.get();
+	auto &log_manager = db_instance->GetLogManager();
+	log_manager.RegisterLogStorage("shell_log_storage", storage_ptr);
+	log_manager.SetLogStorage(*db_instance, "shell_log_storage");
+	log_manager.SetEnableLogging(db_instance);
+	log_manager.SetLogLevel(duckdb::LogLevel::LOG_WARNING);
+}
+
 void ShellState::OpenDB(ShellOpenFlags flags) {
+	// log storage to stdout
+	auto std_out_log_storage = duckdb::make_shared_ptr<ShellLogStorage>(*this);
+	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = std_out_log_storage;
+
 	if (!db) {
 		try {
 			db = make_uniq<duckdb::DuckDB>(zDbFilename.c_str(), &config);
+			RegisterShellLogger(*db, storage_ptr);
 			conn = make_uniq<duckdb::Connection>(*db);
 		} catch (std::exception &ex) {
 			duckdb::ErrorData error(ex);
 			PrintDatabaseError(error.Message());
 			if (flags == ShellOpenFlags::KEEP_ALIVE_ON_FAILURE) {
 				db = make_uniq<duckdb::DuckDB>(":memory:", &config);
+				RegisterShellLogger(*db, storage_ptr);
 				conn = make_uniq<duckdb::Connection>(*db);
 			} else {
 				exit(1);
@@ -1187,17 +1202,6 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 			ExecuteQuery("PRAGMA enable_print_progress_bar");
 		}
 	}
-
-	// Register log storage to stdout
-	auto std_out_log_storage = duckdb::make_shared_ptr<ShellLogStorage>(*this);
-	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = std_out_log_storage;
-
-	auto *db_instance = db->instance.get();
-	auto &log_manager = db_instance->GetLogManager();
-	log_manager.RegisterLogStorage("shell_log_storage", storage_ptr);
-	log_manager.SetLogStorage(*db_instance, "shell_log_storage");
-	log_manager.SetEnableLogging(db_instance);
-	log_manager.SetLogLevel(duckdb::LogLevel::LOG_WARNING);
 }
 
 /*
@@ -2869,7 +2873,8 @@ static string GetHomeDirectory() {
 }
 
 string ShellState::GetDefaultDuckDBRC() {
-	return GetHomeDirectory() + "/.duckdbrc";
+	duckdb::LocalFileSystem lfs;
+	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
 }
 
 /*

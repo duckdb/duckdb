@@ -50,7 +50,13 @@ public:
 		key.len = sizeof(value);
 	}
 
-	static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value);
+	static inline ARTKey CreateARTKeyFromBytes(ArenaAllocator &allocator, const_data_ptr_t data, idx_t len) {
+		auto new_data = allocator.Allocate(len);
+		memcpy(new_data, data, len);
+		return ARTKey(new_data, len);
+	}
+
+	static ARTKey CreateKey(ArenaAllocator &allocator, Value &value, optional_idx storage_version);
 
 public:
 	data_t &operator[](idx_t i) {

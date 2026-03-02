@@ -12,7 +12,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	if (stmt.relkind == duckdb_libpgquery::PG_OBJECT_MATVIEW) {
 		throw NotImplementedException("Materialized view not implemented");
 	}
-	if (stmt.is_select_into || stmt.into->options) {
+	if (stmt.is_select_into) {
 		throw NotImplementedException("Unimplemented features for CREATE TABLE as");
 	}
 	if (stmt.query->type != duckdb_libpgquery::T_PGSelectStmt) {
@@ -26,6 +26,22 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 		throw ParserException("Empty table name not supported");
 	}
 	auto query = TransformSelectStmt(*stmt.query, false);
+
+	vector<unique_ptr<ParsedExpression>> partition_keys;
+	if (stmt.into->partition_list) {
+		TransformExpressionList(*stmt.into->partition_list, partition_keys);
+	}
+	info->partition_keys = std::move(partition_keys);
+
+	vector<unique_ptr<ParsedExpression>> order_keys;
+	if (stmt.into->sort_list) {
+		TransformExpressionList(*stmt.into->sort_list, order_keys);
+	}
+	info->sort_keys = std::move(order_keys);
+
+	if (stmt.into->options) {
+		TransformTableOptions(info->options, *stmt.into->options);
+	}
 
 	// push a LIMIT 0 if 'WITH NO DATA' is specified
 	if (stmt.into->skipData) {
@@ -47,6 +63,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 			info->columns.AddColumn(ColumnDefinition(cols[i], LogicalType::UNKNOWN));
 		}
 	}
+
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->table = qname.name;

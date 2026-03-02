@@ -9,7 +9,7 @@ AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / Chan
 
 AddConstraint <- 'ADD' TopLevelConstraint
 AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
-AddColumnEntry <- DottedIdentifier TypeOrGenerated ColumnConstraint*
+AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
 DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
 AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
 RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier
@@ -42,4 +42,4 @@ QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
 AlterSequenceOptions <- RenameAlter / SetSequenceOption
 SetSequenceOption <- List(SequenceOption)
 
-AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'RENAME' 'TO' Identifier
+AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier

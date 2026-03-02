@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/parquet_debug_use_openssl.test
+# description: Test Parquet debug_use_openssl (deprecated)
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/parquet_debug_use_openssl.parquet' (DEBUG_USE_OPENSSL true)
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/parquet_debug_use_openssl.parquet', debug_use_openssl=false)
+----
+42
