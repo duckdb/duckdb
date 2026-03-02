@@ -1029,10 +1029,16 @@ TemporaryPersistent <- 'TEMPORARY'
 
 CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
 
-CreateTableAs <- IdentifierList? 'AS' SelectStatementInternal WithData?
+CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' SelectStatementInternal WithData?
+PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions
+PartitionOptSortedOptions <- PartitionOptions SortedOptions?
+SortedOptPartitionOptions <- SortedOptions PartitionOptions?
+PartitionOptions <- 'PARTITIONED' 'BY' Parens(List(Expression))
+SortedOptions <- 'SORTED' 'BY' Parens(List(Expression))
+
 WithData <- 'WITH' 'NO'? 'DATA'
 IdentifierList <- Parens(List(Identifier))
-CreateColumnList <- Parens(CreateTableColumnList)
+CreateColumnList <- Parens(CreateTableColumnList) PartitionSortedOptions? WithList?
 IfNotExists <- 'IF' 'NOT' 'EXISTS'
 QualifiedName <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
 SchemaReservedIdentifierOrStringLiteral <- SchemaQualification ReservedIdentifierOrStringLiteral
@@ -1105,10 +1111,11 @@ Oids <- ('WITH' / 'WITHOUT') 'OIDS'
 IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 Unique <- 'UNIQUE'
 IndexType <- 'USING' Identifier
-RelOption <- DottedIdentifier ('=' DefArg)?
-DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral
+RelOption <- (DottedIdentifier / StringLiteral) ('=' DefArg)?
+DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
 ReservedKeywordValue <- ReservedKeyword
 NoneLiteral <- 'NONE'
+
 LoadStatement <- 'LOAD' ColIdOrString
 InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
 FromSource <- 'FROM' (Identifier / StringLiteral)

@@ -7,7 +7,7 @@ Oids <- ('WITH' / 'WITHOUT') 'OIDS'
 IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 Unique <- 'UNIQUE'
 IndexType <- 'USING' Identifier
-RelOption <- DottedIdentifier ('=' DefArg)?
-DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral
+RelOption <- (DottedIdentifier / StringLiteral) ('=' DefArg)?
+DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
 ReservedKeywordValue <- ReservedKeyword
 NoneLiteral <- 'NONE'

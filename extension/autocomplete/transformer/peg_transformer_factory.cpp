@@ -265,6 +265,11 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformIdentifierList);
 	REGISTER_TRANSFORM(TransformCreateColumnList);
 	REGISTER_TRANSFORM(TransformCreateTableColumnList);
+	REGISTER_TRANSFORM(TransformPartitionSortedOptions);
+	REGISTER_TRANSFORM(TransformPartitionOptSortedOptions);
+	REGISTER_TRANSFORM(TransformSortedOptPartitionOptions);
+	REGISTER_TRANSFORM(TransformPartitionOptions);
+	REGISTER_TRANSFORM(TransformSortedOptions);
 	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformColIdOrString);
 	REGISTER_TRANSFORM(TransformColLabelOrString);
