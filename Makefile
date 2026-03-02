@@ -404,7 +404,7 @@ unittestci:
 	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 
 smoke:
-	$(PYTHON) scripts/ci/run_test_batches.py --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+	$(PYTHON) scripts/ci/run_tests.py --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
 
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
