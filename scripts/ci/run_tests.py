@@ -24,6 +24,7 @@ class TestRunnerConfig:
     unittest_bin: str
     test_command: str
     workers: int
+    retry: int
     batch_size: int
     batch_timeout_seconds: int
     rss_memory_threshold_mib: int | None
@@ -217,6 +218,7 @@ def parse_args():
     )
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--max-failures", type=int)
+    parser.add_argument("--retry", type=int, default=0)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
     return parser.parse_args()
@@ -233,6 +235,7 @@ def main():
         unittest_bin=args.unittest_bin,
         test_command=args.test_command,
         workers=max(1, args.workers),
+        retry=max(0, args.retry),
         batch_size=batch_size,
         batch_timeout_seconds=args.batch_timeout,
         rss_memory_threshold_mib=args.track_rss_memory,
@@ -245,6 +248,7 @@ def main():
 
     print(
         f"found {len(tests)} tests, batch_size={batch_size}, workers={config.workers}, "
+        f"retry={config.retry}, "
         f"runtime_threshold={config.runtime_threshold_seconds}s, "
         f"rss_memory_threshold={config.rss_memory_threshold_mib}MiB, "
         f"batch_timeout={config.batch_timeout_seconds}s"
@@ -265,6 +269,7 @@ def main():
                 "batch_idx": next_batch_idx,
                 "batch": batch,
                 "start": time.monotonic(),
+                "attempt": 0,
             }
             next_batch_idx += 1
 
@@ -287,6 +292,21 @@ def main():
                         f"batch with file {batch_info['batch'][0]} peak RSS {format_mib(result['peak_rss_bytes']):.0f} MiB"
                     )
                 if result["failed"]:
+                    if batch_info["attempt"] < config.retry:
+                        next_attempt = batch_info["attempt"] + 1
+                        print(
+                            f"retrying failed test batch {batch_info['batch_idx']} "
+                            f"(attempt {next_attempt}/{config.retry})"
+                        )
+                        retry_future = executor.submit(run_batch, config, batch_info["batch"])
+                        future_to_batch[retry_future] = {
+                            "batch_idx": batch_info["batch_idx"],
+                            "batch": batch_info["batch"],
+                            "start": time.monotonic(),
+                            "attempt": next_attempt,
+                        }
+                        continue
+
                     if config.max_failures is not None and failed_count + 1 >= config.max_failures:
                         stop_launching = True
                     failed_count += 1
@@ -314,6 +334,7 @@ def main():
                     "batch_idx": next_batch_idx,
                     "batch": batch,
                     "start": time.monotonic(),
+                    "attempt": 0,
                 }
                 next_batch_idx += 1
 
