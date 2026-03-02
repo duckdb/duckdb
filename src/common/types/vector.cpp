@@ -3196,7 +3196,7 @@ void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t coun
 
 bool ShreddedVector::IsFullyShredded(Vector &vec) {
 	auto &unshredded_vector = GetUnshreddedVector(vec);
-	if (ConstantVector::IsNull(unshredded_vector)) {
+	if (unshredded_vector.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(unshredded_vector)) {
 		return true;
 	}
 	return false;

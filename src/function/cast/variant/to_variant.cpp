@@ -118,12 +118,12 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 		auto &shredded_child = *top_shredded[1];
 		auto &shredded_components = StructVector::GetEntries(shredded_child);
 		// untyped_value_index is all NULL
-		auto &untyped_value_index = *shredded_components[0];
+		auto &untyped_value_index = *shredded_components[1];
 		untyped_value_index.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(untyped_value_index, true);
 
 		// reference the input directly
-		auto &typed_value = *shredded_components[1];
+		auto &typed_value = *shredded_components[0];
 		typed_value.Reference(source);
 
 		result.Shred(shredded_vector);
