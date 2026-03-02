@@ -191,6 +191,24 @@ def run_batch(config: TestRunnerConfig, batch):
     }
 
 
+def submit_batch(executor, config: TestRunnerConfig, batch, future_to_batch, batch_idx: int, attempt: int):
+    future = executor.submit(run_batch, config, batch)
+    future_to_batch[future] = {
+        "batch_idx": batch_idx,
+        "batch": batch,
+        "start": time.monotonic(),
+        "attempt": attempt,
+    }
+
+
+def submit_batches(executor, config: TestRunnerConfig, batches, future_to_batch, next_batch_idx: int):
+    while next_batch_idx < len(batches) and len(future_to_batch) < config.workers:
+        batch = batches[next_batch_idx]
+        submit_batch(executor, config, batch, future_to_batch, next_batch_idx, 0)
+        next_batch_idx += 1
+    return next_batch_idx
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-list", type=Path, required=True)
@@ -262,16 +280,7 @@ def main():
         future_to_batch = {}
         next_batch_idx = 0
 
-        while next_batch_idx < len(batches) and len(future_to_batch) < config.workers:
-            batch = batches[next_batch_idx]
-            future = executor.submit(run_batch, config, batch)
-            future_to_batch[future] = {
-                "batch_idx": next_batch_idx,
-                "batch": batch,
-                "start": time.monotonic(),
-                "attempt": 0,
-            }
-            next_batch_idx += 1
+        next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
         while future_to_batch:
             done, _ = concurrent.futures.wait(
@@ -298,13 +307,14 @@ def main():
                             f"retrying failed test batch {batch_info['batch_idx']} "
                             f"(attempt {next_attempt}/{config.retry})"
                         )
-                        retry_future = executor.submit(run_batch, config, batch_info["batch"])
-                        future_to_batch[retry_future] = {
-                            "batch_idx": batch_info["batch_idx"],
-                            "batch": batch_info["batch"],
-                            "start": time.monotonic(),
-                            "attempt": next_attempt,
-                        }
+                        submit_batch(
+                            executor,
+                            config,
+                            batch_info["batch"],
+                            future_to_batch,
+                            batch_info["batch_idx"],
+                            next_attempt,
+                        )
                         continue
 
                     if config.max_failures is not None and failed_count + 1 >= config.max_failures:
@@ -323,20 +333,8 @@ def main():
                     )
                     print("========================")
 
-            while not stop_launching and next_batch_idx < len(batches) and len(future_to_batch) < config.workers:
-                batch = batches[next_batch_idx]
-                future = executor.submit(
-                    run_batch,
-                    config,
-                    batch,
-                )
-                future_to_batch[future] = {
-                    "batch_idx": next_batch_idx,
-                    "batch": batch,
-                    "start": time.monotonic(),
-                    "attempt": 0,
-                }
-                next_batch_idx += 1
+            if not stop_launching:
+                next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
     if failed_count:
         print(f"error: found {failed_count} test batch failures")
