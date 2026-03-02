@@ -40,7 +40,7 @@ enum class OptimizerType : uint32_t {
 	JOIN_FILTER_PUSHDOWN = 23,
 	EXTENSION = 24,
 	MATERIALIZED_CTE = 25,
-	SUM_REWRITER = 26,
+	AGGREGATE_FUNCTION_REWRITER = 26,
 	LATE_MATERIALIZATION = 27,
 	CTE_INLINING = 28,
 	ROW_GROUP_PRUNER = 29,
@@ -49,7 +49,6 @@ enum class OptimizerType : uint32_t {
 	JOIN_ELIMINATION = 32,
 	WINDOW_SELF_JOIN = 33,
 	PROJECTION_PULLUP = 34,
-	AVG_REWRITER = 35,
 };
 
 string OptimizerTypeToString(OptimizerType type);
