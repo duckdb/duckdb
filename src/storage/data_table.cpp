@@ -1,4 +1,5 @@
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -895,10 +896,10 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 }
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool unsafe) {
 	LocalAppendState append_state;
 	InitializeLocalAppend(append_state, table, context, bound_constraints);
-	LocalAppend(append_state, context, chunk, false);
+	LocalAppend(append_state, context, chunk, unsafe);
 	FinalizeLocalAppend(append_state);
 }
 

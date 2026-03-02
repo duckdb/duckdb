@@ -1,0 +1,7 @@
+# name: test/sql/types/interval/interval_alias.test
+# group: [interval]
+
+query I
+SELECT alias('5 days'::INTERVAL DAY TO SECOND);
+----
+CAST('5 days' AS INTERVAL)

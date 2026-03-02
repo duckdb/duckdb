@@ -63,16 +63,29 @@ struct RegrSYYOperation : RegrBaseOperation {
 	}
 };
 
+LogicalType GetRegrSStateType(const AggregateFunction &) {
+	child_list_t<LogicalType> state_children;
+	state_children.emplace_back("count", LogicalType::UBIGINT);
+	child_list_t<LogicalType> var_pop_children;
+	var_pop_children.emplace_back("count", LogicalType::UBIGINT);
+	var_pop_children.emplace_back("mean", LogicalType::DOUBLE);
+	var_pop_children.emplace_back("dsquared", LogicalType::DOUBLE);
+	state_children.emplace_back("var_pop", LogicalType::STRUCT(std::move(var_pop_children)));
+	return LogicalType::STRUCT(std::move(state_children));
+}
+
 } // namespace
 
 AggregateFunction RegrSXXFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSXXOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrSStateType);
 }
 
 AggregateFunction RegrSYYFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSYYOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrSStateType);
 }
 
 } // namespace duckdb

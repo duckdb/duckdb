@@ -8,12 +8,14 @@
 
 #pragma once
 
-#include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 
 namespace duckdb {
+class AttachedDatabase;
 class DatabaseInstance;
 class TableIOManager;
+class RowGroupCollection;
 
 struct DataTableInfo {
 	friend class DataTable;

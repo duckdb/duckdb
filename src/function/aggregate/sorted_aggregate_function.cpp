@@ -37,8 +37,8 @@ struct SortedAggregateBindData : public FunctionData {
 
 		//	The first sort column is the group number. It is prefixed onto the buffered data
 		sort_types.emplace_back(LogicalType::USMALLINT);
-		orders.emplace_back(BoundOrderByNode(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
-		                                     make_uniq<BoundReferenceExpression>(sort_types.back(), 0U)));
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
+		                    make_uniq<BoundReferenceExpression>(sort_types.back(), 0U));
 
 		// Determine whether we are sorted on all the arguments.
 		// Even if we are not, we want to share inputs for sorting.
@@ -732,7 +732,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 			const auto type = order.type;
 			const auto null_order = order.null_order;
 			auto expression = order.expression->Copy();
-			expr.arg_orders.emplace_back(BoundOrderByNode(type, null_order, std::move(expression)));
+			expr.arg_orders.emplace_back(type, null_order, std::move(expression));
 		}
 	}
 

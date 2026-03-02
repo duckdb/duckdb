@@ -219,9 +219,8 @@ yyjson_mut_val *JSONConverter::VisitInteger<uhugeint_t>(uhugeint_t val, yyjson_m
 
 } // namespace
 
-yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const RecursiveUnifiedVectorFormat &source,
+yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const UnifiedVariantVectorData &variant,
                                                    idx_t row, uint32_t values_idx) {
-	UnifiedVariantVectorData variant(source);
 	return VariantVisitor<JSONConverter>::Visit(variant, row, values_idx, doc);
 }
 

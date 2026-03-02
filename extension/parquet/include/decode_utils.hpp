@@ -68,11 +68,13 @@ public:
 			SkipAligned(src, aligned_count, width);
 			count = remainder;
 		}
-		// Optimized version: calculate the number of bytes to skip directly
-		for (idx_t i = 0; i < count; i++) {
-			bitpack_pos += width;
-			src.unsafe_inc((bitpack_pos - 1) / BITPACK_DLEN);
-			bitpack_pos = (bitpack_pos - 1) % BITPACK_DLEN + 1;
+		const idx_t total_bits = bitpack_pos + count * width;
+		if (total_bits <= BITPACK_DLEN) {
+			bitpack_pos = UnsafeNumericCast<bitpacking_width_t>(total_bits);
+		} else {
+			const idx_t bytes_to_advance = (total_bits - 1) / BITPACK_DLEN;
+			src.unsafe_inc(bytes_to_advance);
+			bitpack_pos = UnsafeNumericCast<bitpacking_width_t>(total_bits - bytes_to_advance * BITPACK_DLEN);
 		}
 	}
 

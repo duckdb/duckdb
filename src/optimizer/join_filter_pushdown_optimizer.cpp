@@ -176,7 +176,6 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	case JoinType::OUTER:
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
-	case JoinType::RIGHT_SEMI:
 		// cannot generate join filters for these join types
 		// mark/single - cannot change cardinality of probe side
 		// left/outer always need to include every row from probe side
@@ -278,13 +277,10 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		}
 	}
 	if (!pushdown_info->probe_info.empty()) {
-		const auto &rhs_child = join.children[1];
-		if (rhs_child->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
-			pushdown_info->build_side_has_filter = IsFiltering(join.children[0]);
-		} else {
-			pushdown_info->build_side_has_filter = IsFiltering(join.children[1]);
-		}
+		const idx_t child_idx = join.children[1]->type == LogicalOperatorType::LOGICAL_DELIM_GET ? 0 : 1;
+		pushdown_info->build_side_has_filter = IsFiltering(join.children[child_idx]);
 	}
+
 	// set up the filter pushdown in the join itself
 	join.filter_pushdown = std::move(pushdown_info);
 }

@@ -1,0 +1,22 @@
+# name: test/sql/outofcore/evicted_memory_bytes_updates.test_slow
+# group: [outofcore]
+
+statement ok
+SET threads=1;
+
+statement ok
+SET temp_directory='__TEST_DIR__/test_temp_dir'
+
+statement ok
+SET memory_limit='50MB';
+
+statement ok
+create table range as from range(1_000_000);
+
+statement ok
+select any_value(range) from range a group by range % 1000000;
+
+query II
+SELECT memory_usage_bytes, temporary_storage_bytes FROM duckdb_memory() WHERE tag = 'HASH_TABLE';
+----
+0	0

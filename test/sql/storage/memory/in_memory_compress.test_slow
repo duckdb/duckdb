@@ -1,4 +1,4 @@
-# name: test/sql/storage/memory/in_memory_compress.test
+# name: test/sql/storage/memory/in_memory_compress.test_slow
 # description: Test in-memory compression
 # group: [memory]
 

@@ -2,8 +2,10 @@
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
@@ -11,13 +13,12 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/main/settings.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 
 namespace duckdb {
 
@@ -697,6 +698,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 			row_group_data = make_uniq<PersistentCollectionData>();
 		}
 	}
+	bool is_persistent = segments.back()->GetNode().IsPersistent();
 	for (auto &entry : segments) {
 		auto row_group = entry->MoveNode();
 		row_group->MoveToCollection(*this);
@@ -716,6 +718,9 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	}
 	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();
+	if (is_persistent) {
+		SetAppendRequiresNewRowGroup();
+	}
 }
 
 //===--------------------------------------------------------------------===//

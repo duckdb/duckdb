@@ -1,13 +1,14 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/logging/log_manager.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,7 @@ CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(Compressio
 	auto &db = col_data->GetDatabase();
 	auto &column_type = col_data->type;
 	auto &config = DBConfig::GetConfig(db);
-	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
+	return config.GetCompressionFunction(compression_type, column_type.InternalType());
 }
 
 DatabaseInstance &ColumnDataCheckpointData::GetDatabase() {
@@ -307,7 +308,7 @@ void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions 
 		auto &config = DBConfig::GetConfig(db);
 		// Override the function to the COMPRESSION_EMPTY
 		// turning the compression+final compress steps into a no-op, saving a single empty segment
-		validity.function = config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT);
+		validity.function = config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT).get();
 	}
 
 	// Initialize the compression for the selected function

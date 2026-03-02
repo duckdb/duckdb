@@ -54,16 +54,25 @@ struct RegrAvgYFunction : RegrAvgFunction {
 	}
 };
 
+LogicalType GetRegrAvgStateType(const AggregateFunction &) {
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("sum", LogicalType::DOUBLE);
+	child_types.emplace_back("count", LogicalType::UBIGINT);
+	return LogicalType::STRUCT(std::move(child_types));
+}
+
 } // namespace
 
 AggregateFunction RegrAvgxFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgXFunction>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrAvgStateType);
 }
 
 AggregateFunction RegrAvgyFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrState, double, double, double, RegrAvgYFunction>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrAvgStateType);
 }
 
 } // namespace duckdb

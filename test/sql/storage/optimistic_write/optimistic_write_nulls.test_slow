@@ -1,4 +1,4 @@
-# name: test/sql/storage/optimistic_write/optimistic_write_nulls.test
+# name: test/sql/storage/optimistic_write/optimistic_write_nulls.test_slow
 # description: Test large appends within individual transactions
 # group: [optimistic_write]
 

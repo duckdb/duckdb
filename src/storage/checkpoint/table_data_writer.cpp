@@ -9,9 +9,10 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
 

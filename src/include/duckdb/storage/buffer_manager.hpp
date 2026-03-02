@@ -9,18 +9,18 @@
 #pragma once
 
 #include "duckdb/common/enums/memory_tag.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 class BlockMemory;
 class Allocator;
 class BufferPool;
 class TemporaryMemoryManager;
+class AttachedDatabase;
+class BlockManager;
+class DatabaseInstance;
 
 class BufferManager {
 	friend class BufferHandle;
@@ -76,7 +76,7 @@ public:
 	//! Returns the block size for buffer-managed blocks.
 	virtual idx_t GetBlockSize() const = 0;
 	//! Returns the maximum available memory for a given query.
-	virtual idx_t GetQueryMaxMemory() const = 0;
+	virtual idx_t GetOperatorMemoryLimit() const = 0;
 
 	//! Returns a newly registered block of transient memory.
 	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager);

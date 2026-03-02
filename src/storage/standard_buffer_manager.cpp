@@ -112,8 +112,8 @@ idx_t StandardBufferManager::GetBlockSize() const {
 	return temp_block_manager->GetBlockSize();
 }
 
-idx_t StandardBufferManager::GetQueryMaxMemory() const {
-	return GetBufferPool().GetQueryMaxMemory();
+idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
+	return GetBufferPool().GetOperatorMemoryLimit();
 }
 
 template <typename... ARGS>
@@ -521,7 +521,14 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	}
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
-		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer));
+
+		auto buffer =
+		    temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer));
+
+		// Decrement evicted size.
+		evicted_data_per_tag[uint8_t(tag)] -= buffer->AllocSize();
+
+		return buffer;
 	}
 
 	// This block contains data of variable size so we need to open it and read it to get its size.
@@ -557,6 +564,10 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 
 	// Delete the file and return the buffer.
 	DeleteTemporaryFile(block.GetMemory());
+
+	// Decrement evicted size.
+	evicted_data_per_tag[uint8_t(tag)] -= buffer->AllocSize();
+
 	return buffer;
 }
 

@@ -6,31 +6,31 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
-#include "duckdb/main/settings.hpp"
-#include "duckdb/common/thread.hpp"
 
 namespace duckdb {
 
@@ -130,6 +130,10 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	if (storage_manager.InMemory()) {
+		return;
+	}
+	if (ValidChecker::IsInvalidated(db.GetDatabase())) {
+		// don't checkpoint invalidated databases
 		return;
 	}
 	// assert that the checkpoint manager hasn't been used before
@@ -263,13 +267,23 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 		// truncate the WAL
 		if (has_wal) {
-			auto wal_lock = storage_manager.GetWALLock();
+			unique_ptr<lock_guard<mutex>> owned_wal_lock;
+			optional_ptr<lock_guard<mutex>> wal_lock;
+			if (!options.wal_lock) {
+				// not holding the WAL lock yet - grab it
+				owned_wal_lock = storage_manager.GetWALLock();
+				wal_lock = *owned_wal_lock;
+			} else {
+				// we already have the WAL lock - just refer to it
+				wal_lock = options.wal_lock;
+			}
 			storage_manager.WALFinishCheckpoint(*wal_lock);
 		}
 	} catch (std::exception &ex) {
 		// any exceptions thrown here are fatal
 		ErrorData error(ex);
 		if (error.Type() == ExceptionType::FATAL) {
+			ValidChecker::Invalidate(db.GetDatabase(), error.Message());
 			throw;
 		}
 		throw FatalException("Failed to create checkpoint: %s", error.Message());
@@ -293,6 +307,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &index_list = table_info->GetIndexes();
 		index_list.MergeCheckpointDeltas(options.transaction_id);
 	}
+	active_checkpoint.Clear();
 }
 
 void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {
