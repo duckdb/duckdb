@@ -937,9 +937,14 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 	}
 	case PhysicalType::STRUCT: {
 		idx_t total_size = 0;
-		auto &children = StructVector::GetEntries(*this);
-		for (auto &child : children) {
-			total_size += child->GetAllocationSize(cardinality);
+		if (vector_type == VectorType::SHREDDED_VECTOR) {
+			total_size += ShreddedVector::GetShreddedVector(*this).GetAllocationSize(cardinality);
+			total_size += ShreddedVector::GetUnshreddedVector(*this).GetAllocationSize(cardinality);
+		} else {
+			auto &children = StructVector::GetEntries(*this);
+			for (auto &child : children) {
+				total_size += child->GetAllocationSize(cardinality);
+			}
 		}
 		return total_size;
 	}

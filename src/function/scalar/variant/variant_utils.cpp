@@ -355,7 +355,10 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 
 LogicalType VariantUtils::ShreddedType(const LogicalType &logical_type) {
 	auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
-		return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
+		if (type.id() == LogicalTypeId::STRUCT) {
+			return LogicalType::STRUCT({{"typed_value", type}});
+		}
+		return type;
 	});
 	return LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()}, {"shredded", shredding_type}});
 }
