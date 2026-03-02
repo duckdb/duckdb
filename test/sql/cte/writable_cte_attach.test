@@ -1,0 +1,69 @@
+# name: test/sql/cte/writable_cte_attach.test
+# description: Test writable CTEs with attached databases
+# group: [cte]
+
+statement ok
+ATTACH DATABASE ':memory:' AS db2;
+
+statement ok
+CREATE SCHEMA db2.s1;
+
+foreach prefix db2.s1 db2
+
+statement ok
+CREATE TABLE ${prefix}.target(id INTEGER, val TEXT);
+
+query II
+WITH ins AS (INSERT INTO ${prefix}.target VALUES (1, 'test'), (2, 'hello') RETURNING *)
+SELECT * FROM ins ORDER BY id;
+----
+1	test
+2	hello
+
+query II
+WITH upd AS (UPDATE ${prefix}.target SET val = 'updated' WHERE id = 1 RETURNING *)
+SELECT * FROM upd;
+----
+1	updated
+
+query II
+WITH del AS (DELETE FROM ${prefix}.target WHERE id = 2 RETURNING *)
+SELECT * FROM del;
+----
+2	hello
+
+statement ok
+DROP TABLE ${prefix}.target;
+
+endloop
+
+# Cross-database: CTE writes to db2 using data from main
+statement ok
+CREATE TABLE main.source(id INTEGER, val TEXT);
+
+statement ok
+INSERT INTO main.source VALUES (1, 'a'), (2, 'b');
+
+statement ok
+CREATE TABLE db2.destination(id INTEGER, val TEXT);
+
+query II
+WITH copied AS (
+    INSERT INTO db2.destination SELECT * FROM main.source RETURNING *
+)
+SELECT * FROM copied ORDER BY id;
+----
+1	a
+2	b
+
+statement ok
+DROP TABLE main.source;
+
+statement ok
+DROP TABLE db2.destination;
+
+statement ok
+DROP SCHEMA db2.s1;
+
+statement ok
+DETACH db2;

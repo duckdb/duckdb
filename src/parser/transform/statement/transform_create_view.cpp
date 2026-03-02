@@ -1,8 +1,44 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
+
+// Forward declaration for recursion
+static bool ContainsWritableCTEInNode(const QueryNode &node);
+
+static bool ContainsWritableCTEInCTEMap(const CommonTableExpressionMap &cte_map) {
+	for (auto &entry : cte_map.map) {
+		auto &cte_info = entry.second;
+		// Check if this CTE's query node is a StatementNode (writable CTE)
+		if (cte_info->query && cte_info->query->node) {
+			if (cte_info->query->node->type == QueryNodeType::STATEMENT_NODE) {
+				return true;
+			}
+			// Recursively check CTEs within this CTE's query
+			if (ContainsWritableCTEInNode(*cte_info->query->node)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool ContainsWritableCTEInNode(const QueryNode &node) {
+	// Check this node's CTE map
+	if (ContainsWritableCTEInCTEMap(node.cte_map)) {
+		return true;
+	}
+	return false;
+}
+
+static bool ContainsWritableCTE(const SelectStatement &stmt) {
+	if (!stmt.node) {
+		return false;
+	}
+	return ContainsWritableCTEInNode(*stmt.node);
+}
 
 unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::PGViewStmt &stmt) {
 	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGViewStmt);
@@ -22,6 +58,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
 	info->query = TransformSelectStmt(*stmt.query, false);
+
+	// Disallow writable CTEs in views
+	if (ContainsWritableCTE(*info->query)) {
+		throw ParserException("Views cannot contain data-modifying statements in CTEs");
+	}
 
 	PivotEntryCheck("view");
 
