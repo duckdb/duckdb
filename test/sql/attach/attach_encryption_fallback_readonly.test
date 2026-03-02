@@ -18,7 +18,7 @@ set autoinstall_known_extensions=false
 statement error
 ATTACH 'data/attach_test/encrypted_gcm_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 ----
-Invalid Configuration Error:  DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.  To write an encrypted database that is NOT securely encrypted, one can use SET force_mbedtls_unsafe = 'true'.
+Invalid Configuration Error:  DuckDB currently has a read-only crypto module loaded
 
 # It works again by setting READONLY
 statement ok
@@ -36,16 +36,16 @@ FROM enc.test ORDER BY value
 statement ok
 DETACH enc
 
-# Creating a new table will also fail
+# Creating a new db will also fail
 statement error
 ATTACH '__TEST_DIR__/test_write_only.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 ----
-Invalid Configuration Error:  DuckDB currently has a read-only crypto module loaded. Please re-open using READONLY, or ensure httpfs is loaded using `LOAD httpfs`.  To write an encrypted database that is NOT securely encrypted, one can use SET force_mbedtls_unsafe = 'true'.
+Invalid Configuration Error:  DuckDB currently has a read-only crypto module loaded
 
 statement ok
 SET force_mbedtls_unsafe = 'true'
 
-# Creating a new table will now pass, since we explicitly set to use Mbed TLS
+# Creating a new db will now pass, since we explicitly set to use Mbed TLS
 statement ok
 ATTACH '__TEST_DIR__/test_write_only.db' as enc (ENCRYPTION_KEY 'abcde', ENCRYPTION_CIPHER 'GCM');
 

@@ -5,6 +5,9 @@ require parquet
 
 require json
 
+# TODO: Requires minimum storage version v1.5.0, which is not the default
+require no_force_storage
+
 statement ok
 CREATE TABLE json_data AS SELECT
 	i AS id,

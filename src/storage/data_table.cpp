@@ -1129,28 +1129,58 @@ void DataTable::MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommi
 	row_groups->Verify();
 }
 
+static void GatherBlockIds(WriteAheadLog &log, const PersistentColumnData &column_data,
+                           unordered_set<block_id_t> &block_ids) {
+	for (const auto &pointer : column_data.pointers) {
+		const auto block_id = pointer.block_pointer.block_id;
+		if (block_id != INVALID_BLOCK && log.NewBlockInUse(block_id)) {
+			block_ids.insert(block_id);
+		}
+	}
+	// Recurse into the children.
+	for (const auto &child_column_data : column_data.child_columns) {
+		GatherBlockIds(log, child_column_data, block_ids);
+	}
+}
+
 void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
                            optional_ptr<StorageCommitState> commit_state) {
 	log.WriteSetTable(info->schema, info->table);
-	if (commit_state) {
-		idx_t optimistic_count = 0;
-		auto entry = commit_state->GetRowGroupData(*this, row_start, optimistic_count);
-		if (entry) {
-			D_ASSERT(optimistic_count > 0);
-			log.WriteRowGroupData(*entry);
-			if (optimistic_count > count) {
-				throw InternalException(
-				    "Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)",
-				    optimistic_count, count);
-			}
-			// write any remaining (non-optimistically written) rows to the WAL normally
-			row_start += optimistic_count;
-			count -= optimistic_count;
-			if (count == 0) {
-				return;
-			}
+	if (!commit_state) {
+		ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
+		return;
+	}
+
+	idx_t optimistic_count = 0;
+	auto entry = commit_state->GetRowGroupData(*this, row_start, optimistic_count);
+	if (!entry) {
+		ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
+		return;
+	}
+
+	// Optimistically write the entry.
+	D_ASSERT(optimistic_count > 0);
+	log.WriteRowGroupData(*entry);
+	if (optimistic_count > count) {
+		throw InternalException(
+		    "Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)",
+		    optimistic_count, count);
+	}
+
+	// Get all the blocks that need to be kept alive as long as the WAL is alive.
+	for (const auto &row_group_data : entry->row_group_data) {
+		for (const auto &column_data : row_group_data.column_data) {
+			GatherBlockIds(log, column_data, commit_state->GetBlockIdsInUse());
 		}
 	}
+
+	// Write any remaining (non-optimistically written) rows to the WAL.
+	row_start += optimistic_count;
+	count -= optimistic_count;
+	if (count == 0) {
+		return;
+	}
+
 	ScanTableSegment(transaction, row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }
 

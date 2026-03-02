@@ -1359,6 +1359,14 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 }
 
 void LogicalType::Serialize(Serializer &serializer) const {
+	// Serialize geometry as old extension geometry type if required
+	if (id_ == LogicalTypeId::GEOMETRY && !serializer.ShouldSerialize(7)) {
+		// This will drop the CRS information, but that's better than throwing an error.
+		auto legacy_geom = Geometry::GetSpatialGeometryType();
+		legacy_geom.Serialize(serializer);
+		return;
+	}
+
 	// This is a UNBOUND type and we are writing to older storage.
 	// 1. try to default-bind into a concrete logical type, and serialize that
 	// 2. if that fails, serialize normally, in which case the UNBOUND_TYPE_INFO will try to
@@ -1381,7 +1389,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
 	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
+
 	LogicalType result(id, std::move(type_info));
+
+	if (Geometry::IsSpatialGeometryType(result)) {
+		// This is a legacy geometry type, deserialize as geometry
+		return LogicalType::GEOMETRY();
+	}
+
 	return result;
 }
 
