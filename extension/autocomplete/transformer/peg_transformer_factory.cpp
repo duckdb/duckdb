@@ -110,6 +110,8 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformSequenceName);
 	REGISTER_TRANSFORM(TransformSetSortedBy);
 	REGISTER_TRANSFORM(TransformResetSortedBy);
+	REGISTER_TRANSFORM(TransformSetOptions);
+	REGISTER_TRANSFORM(TransformResetOptions);
 }
 
 void PEGTransformerFactory::RegisterAttach() {

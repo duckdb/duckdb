@@ -56,12 +56,6 @@
         "test/sql/prepared/parameter_variants.test",
         "test/sql/parser/digit_separators.test"
       ]
-    },
-    {
-      "reason": "New syntax",
-      "paths": [
-        "test/sql/alter/alter_table_set_table_options.test"
-      ]
     }
   ]
 }
