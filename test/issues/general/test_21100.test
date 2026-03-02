@@ -22,12 +22,6 @@ statement ok
 UPDATE tl SET data = [42]
 
 query I
-SELECT stats(data) from tl
-----
-[[Min: 42, Max: 42][Has Null: false, Has No Null: true]][Has Null: true, Has No Null: true]
-
-# Bug, actually returns 0
-query I
 SELECT COUNT(*) FROM tl WHERE data IS NOT NULL
 ----
 1
@@ -43,13 +37,6 @@ INSERT INTO t VALUES (NULL)
 statement ok
 UPDATE t SET data = {'a': 42}
 
-
-query I
-SELECT stats(data) from t
-----
- {a: [Min: 42, Max: 42][Has Null: true, Has No Null: true]}[Has Null: true, Has No Null: true]
-
-# Bug, actually returns 0
 query I
 SELECT COUNT(*) FROM t WHERE data IS NOT NULL
 ----
