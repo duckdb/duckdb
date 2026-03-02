@@ -22,6 +22,12 @@ namespace duckdb {
 			DUCKDB_LOG(HANDLE.logger, FileSystemLogType, HANDLE, OP)                                                   \
 		}                                                                                                              \
 	}
+#define DUCKDB_LOG_FILE_SYSTEM_ERROR(HANDLE, OP)                                                                       \
+	{                                                                                                                  \
+		if (HANDLE.logger) {                                                                                           \
+			DUCKDB_LOG(HANDLE.logger, FileSystemErrorType, HANDLE, OP)                                                 \
+		}                                                                                                              \
+	}
 
 // Macros for logging to file handles
 #define DUCKDB_LOG_FILE_SYSTEM_READ(HANDLE, BYTES, POS)  DUCKDB_LOG_FILE_SYSTEM_BYTES(HANDLE, "READ", BYTES, POS);

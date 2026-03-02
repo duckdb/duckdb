@@ -78,6 +78,19 @@ public:
 	static string ConstructLogMessage(const FileHandle &handle, const string &op);
 };
 
+class FileSystemErrorType : public LogType {
+public:
+	static constexpr const char *NAME = "FileSystemError";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_ERROR;
+
+	//! Construct the log type
+	FileSystemErrorType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const FileHandle &handle, const string &op);
+};
+
 class HTTPLogType : public LogType {
 public:
 	static constexpr const char *NAME = "HTTP";

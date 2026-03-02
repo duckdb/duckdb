@@ -14,6 +14,7 @@ namespace duckdb {
 
 constexpr LogLevel DefaultLogType::LEVEL;
 constexpr LogLevel FileSystemLogType::LEVEL;
+constexpr LogLevel FileSystemErrorType::LEVEL;
 constexpr LogLevel QueryLogType::LEVEL;
 constexpr LogLevel HTTPLogType::LEVEL;
 constexpr LogLevel PhysicalOperatorLogType::LEVEL;
@@ -48,6 +49,27 @@ LogicalType FileSystemLogType::GetLogType() {
 	child_list_t<LogicalType> child_list = {
 	    {"fs", LogicalType::VARCHAR},   {"path", LogicalType::VARCHAR}, {"op", LogicalType::VARCHAR},
 	    {"bytes", LogicalType::BIGINT}, {"pos", LogicalType::BIGINT},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+//===--------------------------------------------------------------------===//
+// FileSystemErrorType
+//===--------------------------------------------------------------------===//
+FileSystemErrorType::FileSystemErrorType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+string FileSystemErrorType::ConstructLogMessage(const FileHandle &handle, const string &op) {
+	return StringUtil::Format("{\"fs\":\"%s\",\"path\":\"%s\",\"op\":\"%s\"}", handle.file_system.GetName(),
+	                          handle.path, op);
+}
+
+LogicalType FileSystemErrorType::GetLogType() {
+	LogicalType result;
+	child_list_t<LogicalType> child_list = {
+	    {"fs", LogicalType::VARCHAR},
+	    {"path", LogicalType::VARCHAR},
+	    {"op", LogicalType::VARCHAR},
 	};
 	return LogicalType::STRUCT(child_list);
 }
