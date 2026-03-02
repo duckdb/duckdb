@@ -151,7 +151,8 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 }
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-                                        bool allow_geometry, ClientContext &context) {
+                                        bool allow_geometry, ClientContext &context,
+                                        bool timestamp_is_adjusted_to_utc) {
 	if (duckdb_type.IsJSONType()) {
 		schema_ele.converted_type = ConvertedType::JSON;
 		schema_ele.__isset.converted_type = true;
@@ -212,14 +213,15 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
-		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIMESTAMP_TZ);
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC =
+		    (duckdb_type.id() == LogicalTypeId::TIMESTAMP_TZ) || timestamp_is_adjusted_to_utc;
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
 		schema_ele.__isset.converted_type = false;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
-		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = timestamp_is_adjusted_to_utc;
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.NANOS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -227,7 +229,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
-		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = false;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = timestamp_is_adjusted_to_utc;
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS = true;
 		break;
 	case LogicalTypeId::ENUM:
@@ -380,7 +382,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              optional_idx dictionary_size_limit_p, idx_t string_dictionary_page_size_limit_p,
                              bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
                              int64_t compression_level_p, ParquetVersion parquet_version,
-                             GeoParquetVersion geoparquet_version)
+                             GeoParquetVersion geoparquet_version, bool timestamp_is_adjusted_to_utc_p)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
       shredding_types(std::move(shredding_types_p)), encryption_config(std::move(encryption_config_p)),
@@ -388,7 +390,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       string_dictionary_page_size_limit(string_dictionary_page_size_limit_p),
       enable_bloom_filters(enable_bloom_filters_p),
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
-      parquet_version(parquet_version), geoparquet_version(geoparquet_version), total_written(0), num_row_groups(0) {
+      parquet_version(parquet_version), geoparquet_version(geoparquet_version),
+      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), total_written(0), num_row_groups(0) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
