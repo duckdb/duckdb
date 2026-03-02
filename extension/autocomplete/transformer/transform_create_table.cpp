@@ -570,8 +570,8 @@ void PEGTransformerFactory::VerifyColumnRefs(const ParsedExpression &expr) {
 	});
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformPartitionOptions(
-    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformPartitionOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	// PartitionOptions <- 'PARTITIONED' 'BY' Parens(List(Expression))
 	// child 0: 'PARTITIONED', child 1: 'BY', child 2: Parens(List(Expression))
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -584,8 +584,8 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformPartitionOp
 	return result;
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSortedOptions(
-    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSortedOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	// SortedOptions <- 'SORTED' 'BY' Parens(List(Expression))
 	// child 0: 'SORTED', child 1: 'BY', child 2: Parens(List(Expression))
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -598,8 +598,9 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSortedOptio
 	return result;
 }
 
-PartitionSortedOptions PEGTransformerFactory::TransformPartitionOptSortedOptions(
-    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+PartitionSortedOptions
+PEGTransformerFactory::TransformPartitionOptSortedOptions(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
 	// PartitionOptSortedOptions <- PartitionOptions SortedOptions?
 	// child 0: PartitionOptions, child 1: SortedOptions?
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -610,20 +611,20 @@ PartitionSortedOptions PEGTransformerFactory::TransformPartitionOptSortedOptions
 	return result;
 }
 
-PartitionSortedOptions PEGTransformerFactory::TransformSortedOptPartitionOptions(
-    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+PartitionSortedOptions
+PEGTransformerFactory::TransformSortedOptPartitionOptions(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
 	// SortedOptPartitionOptions <- SortedOptions PartitionOptions?
 	// child 0: SortedOptions, child 1: PartitionOptions?
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	PartitionSortedOptions result;
-	result.sort_keys =
-	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
+	result.sort_keys = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 1, result.partition_keys);
 	return result;
 }
 
-PartitionSortedOptions PEGTransformerFactory::TransformPartitionSortedOptions(
-    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+PartitionSortedOptions PEGTransformerFactory::TransformPartitionSortedOptions(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
 	// PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<PartitionSortedOptions>(list_pr.Child<ChoiceParseResult>(0).result);

@@ -478,8 +478,8 @@ private:
 	static string TransformIndexType(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformIndexElement(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformWithList(PEGTransformer &transformer,
-	                                                                             optional_ptr<ParseResult> parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformWithList(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
 	TransformRelOptionOrOids(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
@@ -487,7 +487,7 @@ private:
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformOids(PEGTransformer &transformer,
 	                                                                          optional_ptr<ParseResult> parse_result);
 	static pair<string, unique_ptr<ParsedExpression>> TransformRelOption(PEGTransformer &transformer,
-	                                                                      optional_ptr<ParseResult> parse_result);
+	                                                                     optional_ptr<ParseResult> parse_result);
 	static string TransformIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// create_macro.gram
