@@ -82,9 +82,7 @@ def format_batch_failure(
 
 
 def run_batch(config: TestRunnerConfig, batch):
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf8", delete=True
-    ) as batch_file:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as batch_file:
         batch_file.write("\n".join(batch))
         batch_file.write("\n")
         batch_file.flush()
@@ -127,9 +125,7 @@ def parse_args():
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--max-failures", type=int)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument(
-        "--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS
-    )
+    parser.add_argument("--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
     return parser.parse_args()
 
 
@@ -185,16 +181,10 @@ def main():
                 batch_info = future_to_batch.pop(future)
                 result = future.result()
                 elapsed = time.monotonic() - batch_info["start"]
-                if (
-                    config.runtime_threshold_seconds is not None
-                    and elapsed >= config.runtime_threshold_seconds
-                ):
+                if config.runtime_threshold_seconds is not None and elapsed >= config.runtime_threshold_seconds:
                     print(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
                 if result is not None:
-                    if (
-                        config.max_failures is not None
-                        and failed_count + 1 >= config.max_failures
-                    ):
+                    if config.max_failures is not None and failed_count + 1 >= config.max_failures:
                         stop_launching = True
                     failed_count += 1
                     print(
@@ -210,11 +200,7 @@ def main():
                     )
                     print("========================")
 
-            while (
-                not stop_launching
-                and next_batch_idx < len(batches)
-                and len(future_to_batch) < config.workers
-            ):
+            while not stop_launching and next_batch_idx < len(batches) and len(future_to_batch) < config.workers:
                 batch = batches[next_batch_idx]
                 future = executor.submit(
                     run_batch,
