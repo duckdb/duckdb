@@ -20,7 +20,7 @@ LogicalType GetCorrExportStateType(const AggregateFunction &) {
 
 AggregateFunction CorrFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<CorrState, double, double, double, CorrOperation>(
-			   LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-		.SetStructStateExport(GetCorrExportStateType);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetCorrExportStateType);
 }
 } // namespace duckdb

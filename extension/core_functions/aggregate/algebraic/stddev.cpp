@@ -27,8 +27,8 @@ AggregateFunction StdDevPopFun::GetFunction() {
 }
 
 AggregateFunction VarPopFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<StddevState, double, double, VarPopOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE)
+	return AggregateFunction::UnaryAggregate<StddevState, double, double, VarPopOperation>(LogicalType::DOUBLE,
+	                                                                                       LogicalType::DOUBLE)
 	    .SetStructStateExport(GetStddevStateType);
 }
 
