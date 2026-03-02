@@ -11,6 +11,7 @@ from pathlib import Path
 
 DEFAULT_BATCH_SIZE = 20
 DEFAULT_BATCH_TIMEOUT_SECONDS = 300
+DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_WORKERS = os.cpu_count() or 1
 
 
@@ -21,7 +22,7 @@ class TestRunnerConfig:
     workers: int
     batch_size: int
     batch_timeout_seconds: int
-    track_runtime: bool
+    runtime_threshold_seconds: int | None
     max_failures: int | None
 
 
@@ -41,7 +42,14 @@ def load_tests(path: Path):
     return tests
 
 
-def format_batch_failure(batch_idx: int, batch, config: TestRunnerConfig, stdout: str, stderr: str, message: str | None = None):
+def format_batch_failure(
+    batch_idx: int,
+    batch,
+    config: TestRunnerConfig,
+    stdout: str,
+    stderr: str,
+    message: str | None = None,
+):
     rerun_cmd = (
         "printf '%s\\n' "
         + " ".join(shlex.quote(test) for test in batch)
@@ -68,7 +76,9 @@ def format_batch_failure(batch_idx: int, batch, config: TestRunnerConfig, stdout
 
 
 def run_batch(config: TestRunnerConfig, batch):
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as batch_file:
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf8", delete=True
+    ) as batch_file:
         batch_file.write("\n".join(batch))
         batch_file.write("\n")
         batch_file.flush()
@@ -101,11 +111,19 @@ def parse_args():
     parser.add_argument("--test-list", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("unittest_bin")
-    parser.add_argument("--track-runtime", action="store_true")
+    parser.add_argument(
+        "--track-runtime",
+        type=int,
+        nargs="?",
+        const=DEFAULT_RUNTIME_THRESHOLD_SECONDS,
+        default=None,
+    )
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--max-failures", type=int)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
+    parser.add_argument(
+        "--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS
+    )
     return parser.parse_args()
 
 
@@ -114,13 +132,14 @@ def main():
     max_failures = args.max_failures
     if args.fail_fast:
         max_failures = 1
+    batch_size = 1 if args.track_runtime is not None else args.batch_size
     config = TestRunnerConfig(
         test_list=args.test_list,
         unittest_bin=args.unittest_bin,
         workers=max(1, args.workers),
-        batch_size=args.batch_size,
+        batch_size=batch_size,
         batch_timeout_seconds=args.batch_timeout,
-        track_runtime=args.track_runtime,
+        runtime_threshold_seconds=args.track_runtime,
         max_failures=max_failures,
     )
 
@@ -128,6 +147,7 @@ def main():
 
     print(
         f"found {len(tests)} tests, batch_size={config.batch_size}, workers={config.workers}, "
+        f"runtime_threshold={config.runtime_threshold_seconds}s, "
         f"batch_timeout={config.batch_timeout_seconds}s"
     )
 
@@ -158,10 +178,16 @@ def main():
                 batch_info = future_to_batch.pop(future)
                 result = future.result()
                 elapsed = time.monotonic() - batch_info["start"]
-                if config.track_runtime:
-                    print(f"batch {batch_info['batch_idx']} completed in {elapsed:.2f}s")
+                if (
+                    config.runtime_threshold_seconds is not None
+                    and elapsed >= config.runtime_threshold_seconds
+                ):
+                    print(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
                 if result is not None:
-                    if config.max_failures is not None and failed_count + 1 >= config.max_failures:
+                    if (
+                        config.max_failures is not None
+                        and failed_count + 1 >= config.max_failures
+                    ):
                         stop_launching = True
                     failed_count += 1
                     print(
@@ -177,7 +203,11 @@ def main():
                     )
                     print("========================")
 
-            while not stop_launching and next_batch_idx < len(batches) and len(future_to_batch) < config.workers:
+            while (
+                not stop_launching
+                and next_batch_idx < len(batches)
+                and len(future_to_batch) < config.workers
+            ):
                 batch = batches[next_batch_idx]
                 future = executor.submit(
                     run_batch,
