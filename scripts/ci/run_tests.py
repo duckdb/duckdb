@@ -31,6 +31,12 @@ def chunked(items, n):
         yield items[i : i + n]
 
 
+def compute_batch_size(test_count: int, config: TestRunnerConfig):
+    if test_count == 0:
+        return 1
+    return max(1, min(config.batch_size, (test_count + config.workers - 1) // config.workers))
+
+
 def load_tests(path: Path):
     tests = []
     with path.open("r", encoding="utf8") as f:
@@ -144,14 +150,15 @@ def main():
     )
 
     tests = load_tests(config.test_list)
+    batch_size = compute_batch_size(len(tests), config)
 
     print(
-        f"found {len(tests)} tests, batch_size={config.batch_size}, workers={config.workers}, "
+        f"found {len(tests)} tests, batch_size={batch_size}, workers={config.workers}, "
         f"runtime_threshold={config.runtime_threshold_seconds}s, "
         f"batch_timeout={config.batch_timeout_seconds}s"
     )
 
-    batches = list(chunked(tests, config.batch_size))
+    batches = list(chunked(tests, batch_size))
     failed_count = 0
     stop_launching = False
 
