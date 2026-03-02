@@ -19,6 +19,7 @@ DEFAULT_WORKERS = os.cpu_count() or 1
 class TestRunnerConfig:
     test_list: Path
     unittest_bin: str
+    test_command: str
     workers: int
     batch_size: int
     batch_timeout_seconds: int
@@ -48,6 +49,13 @@ def load_tests(path: Path):
     return tests
 
 
+def build_test_command(config: TestRunnerConfig, test_list: str):
+    return config.test_command.format(
+        binary=shlex.quote(config.unittest_bin),
+        test_list=test_list,
+    )
+
+
 def format_batch_failure(
     batch_idx: int,
     batch,
@@ -60,7 +68,7 @@ def format_batch_failure(
         "printf '%s\\n' "
         + " ".join(shlex.quote(test) for test in batch)
         + " > /tmp/duckdb_test_batch.txt && "
-        + f"{shlex.quote(config.unittest_bin)} --use-colour yes -f /tmp/duckdb_test_batch.txt"
+        + build_test_command(config, "/tmp/duckdb_test_batch.txt")
     )
     parts = [f"### failed test batch {batch_idx} ###", ""]
     if message is not None:
@@ -86,9 +94,10 @@ def run_batch(config: TestRunnerConfig, batch):
         batch_file.write("\n".join(batch))
         batch_file.write("\n")
         batch_file.flush()
+        command = build_test_command(config, shlex.quote(batch_file.name))
         try:
             proc = subprocess.run(
-                [config.unittest_bin, "--use-colour", "yes", "-f", batch_file.name],
+                shlex.split(command),
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -116,6 +125,11 @@ def parse_args():
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("unittest_bin")
     parser.add_argument(
+        "--test-command",
+        default="{binary} --use-colour yes -f {test_list}",
+        help="shell command template used to run a test batch; supports {binary} and {test_list}",
+    )
+    parser.add_argument(
         "--track-runtime",
         type=int,
         nargs="?",
@@ -138,6 +152,7 @@ def main():
     config = TestRunnerConfig(
         test_list=args.test_list,
         unittest_bin=args.unittest_bin,
+        test_command=args.test_command,
         workers=max(1, args.workers),
         batch_size=batch_size,
         batch_timeout_seconds=args.batch_timeout,
