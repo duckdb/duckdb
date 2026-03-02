@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
 import argparse
 import concurrent.futures
+import os
 import shlex
 import subprocess
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
-SMOKE_LIST = Path("test/smoke_tests.list")
-BATCH_SIZE = 20
-BATCH_TIMEOUT_SECONDS = 5 * 60
+DEFAULT_BATCH_SIZE = 20
+DEFAULT_BATCH_TIMEOUT_SECONDS = 300
+DEFAULT_WORKERS = os.cpu_count() or 1
+
+
+@dataclass(frozen=True)
+class TestRunnerConfig:
+    test_list: Path
+    unittest_bin: str
+    workers: int
+    batch_size: int
+    batch_timeout_seconds: int
+    track_runtime: bool
+    max_failures: int | None
 
 
 def chunked(items, n):
@@ -28,12 +41,12 @@ def load_tests(path: Path):
     return tests
 
 
-def format_batch_failure(batch_idx: int, batch, unittest_bin: str, stdout: str, stderr: str, message: str | None = None):
+def format_batch_failure(batch_idx: int, batch, config: TestRunnerConfig, stdout: str, stderr: str, message: str | None = None):
     rerun_cmd = (
         "printf '%s\\n' "
         + " ".join(shlex.quote(test) for test in batch)
-        + " > /tmp/duckdb_smoke_batch.txt && "
-        + f"{shlex.quote(unittest_bin)} --use-colour yes -f /tmp/duckdb_smoke_batch.txt"
+        + " > /tmp/duckdb_test_batch.txt && "
+        + f"{shlex.quote(config.unittest_bin)} --use-colour yes -f /tmp/duckdb_test_batch.txt"
     )
     parts = [f"### failed test batch {batch_idx} ###", ""]
     if message is not None:
@@ -54,24 +67,24 @@ def format_batch_failure(batch_idx: int, batch, unittest_bin: str, stdout: str, 
     return "\n".join(parts)
 
 
-def run_batch(unittest_bin: str, batch):
+def run_batch(config: TestRunnerConfig, batch):
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as batch_file:
         batch_file.write("\n".join(batch))
         batch_file.write("\n")
         batch_file.flush()
         try:
             proc = subprocess.run(
-                [unittest_bin, "--use-colour", "yes", "-f", batch_file.name],
+                [config.unittest_bin, "--use-colour", "yes", "-f", batch_file.name],
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=BATCH_TIMEOUT_SECONDS,
+                timeout=config.batch_timeout_seconds,
             )
         except subprocess.TimeoutExpired as exc:
             return {
                 "stdout": exc.stdout or "",
                 "stderr": exc.stderr or "",
-                "message": f"batch timed out after {BATCH_TIMEOUT_SECONDS} seconds",
+                "message": f"batch timed out after {config.batch_timeout_seconds} seconds",
             }
     if proc.returncode == 0:
         return None
@@ -85,40 +98,50 @@ def run_batch(unittest_bin: str, batch):
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--test-list", type=Path, required=True)
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("unittest_bin")
-    parser.add_argument("workers", type=int)
     parser.add_argument("--track-runtime", action="store_true")
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--max-failures", type=int)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument("--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    unittest_bin = args.unittest_bin
-    workers = max(1, args.workers)
     max_failures = args.max_failures
     if args.fail_fast:
         max_failures = 1
-
-    tests = load_tests(SMOKE_LIST)
-
-    print(
-        f"found {len(tests)} tests, batch_size={BATCH_SIZE}, workers={workers}, "
-        f"batch_timeout={BATCH_TIMEOUT_SECONDS}s"
+    config = TestRunnerConfig(
+        test_list=args.test_list,
+        unittest_bin=args.unittest_bin,
+        workers=max(1, args.workers),
+        batch_size=args.batch_size,
+        batch_timeout_seconds=args.batch_timeout,
+        track_runtime=args.track_runtime,
+        max_failures=max_failures,
     )
 
-    batches = list(chunked(tests, BATCH_SIZE))
+    tests = load_tests(config.test_list)
+
+    print(
+        f"found {len(tests)} tests, batch_size={config.batch_size}, workers={config.workers}, "
+        f"batch_timeout={config.batch_timeout_seconds}s"
+    )
+
+    batches = list(chunked(tests, config.batch_size))
     failed_count = 0
     stop_launching = False
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
         future_to_batch = {}
         next_batch_idx = 0
 
-        while next_batch_idx < len(batches) and len(future_to_batch) < workers:
+        while next_batch_idx < len(batches) and len(future_to_batch) < config.workers:
             batch = batches[next_batch_idx]
-            future = executor.submit(run_batch, unittest_bin, batch)
+            future = executor.submit(run_batch, config, batch)
             future_to_batch[future] = {
                 "batch_idx": next_batch_idx,
                 "batch": batch,
@@ -135,17 +158,17 @@ def main():
                 batch_info = future_to_batch.pop(future)
                 result = future.result()
                 elapsed = time.monotonic() - batch_info["start"]
-                if args.track_runtime:
+                if config.track_runtime:
                     print(f"batch {batch_info['batch_idx']} completed in {elapsed:.2f}s")
                 if result is not None:
-                    if max_failures is not None and failed_count + 1 >= max_failures:
+                    if config.max_failures is not None and failed_count + 1 >= config.max_failures:
                         stop_launching = True
                     failed_count += 1
                     print(
                         format_batch_failure(
                             batch_info["batch_idx"],
                             batch_info["batch"],
-                            unittest_bin,
+                            config,
                             result["stdout"],
                             result["stderr"],
                             result["message"],
@@ -154,11 +177,11 @@ def main():
                     )
                     print("========================")
 
-            while not stop_launching and next_batch_idx < len(batches) and len(future_to_batch) < workers:
+            while not stop_launching and next_batch_idx < len(batches) and len(future_to_batch) < config.workers:
                 batch = batches[next_batch_idx]
                 future = executor.submit(
                     run_batch,
-                    unittest_bin,
+                    config,
                     batch,
                 )
                 future_to_batch[future] = {
@@ -172,7 +195,7 @@ def main():
         print(f"error: found {failed_count} test batch failures")
         return 1
 
-    print("all smoke tests passed.")
+    print("all tests passed.")
     return 0
 
 
