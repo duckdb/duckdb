@@ -1001,6 +1001,9 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 			}
 		}
 	}
+	if (!validity.CanHaveNoNull() && !mask.CheckAllInvalid(count)) {
+		validity.SetHasNoNullFast();
+	}
 	sel.Initialize(nullptr);
 	return count;
 }
