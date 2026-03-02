@@ -1,0 +1,110 @@
+# name: test/sql/settings/test_transaction_isolation.test
+# description: Test transaction_isolation setting
+# group: [settings]
+
+# default value
+query I
+SELECT current_setting('transaction_isolation')
+----
+read committed
+
+# SET TRANSACTION ISOLATION LEVEL syntax
+statement ok
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED
+
+query I
+SHOW TRANSACTION ISOLATION LEVEL
+----
+read committed
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
+
+query I
+SHOW TRANSACTION ISOLATION LEVEL
+----
+read uncommitted
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ
+
+query I
+SHOW TRANSACTION ISOLATION LEVEL
+----
+repeatable read
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL SNAPSHOT
+
+query I
+SHOW TRANSACTION ISOLATION LEVEL
+----
+snapshot
+
+# SERIALIZABLE is not supported
+statement error
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE
+----
+SERIALIZABLE isolation level is not supported
+
+# regular SET syntax
+statement ok
+SET transaction_isolation = 'read committed'
+
+query I
+SELECT current_setting('transaction_isolation')
+----
+read committed
+
+statement ok
+SET transaction_isolation = 'repeatable read'
+
+query I
+SELECT current_setting('transaction_isolation')
+----
+repeatable read
+
+# case insensitive
+statement ok
+SET transaction_isolation = 'READ COMMITTED'
+
+query I
+SELECT current_setting('transaction_isolation')
+----
+read committed
+
+# invalid isolation level
+statement error
+SET transaction_isolation = 'invalid'
+----
+Unrecognized transaction isolation level
+
+# SERIALIZABLE via regular SET
+statement error
+SET transaction_isolation = 'serializable'
+----
+SERIALIZABLE isolation level is not supported
+
+# RESET
+statement ok
+SET TRANSACTION ISOLATION LEVEL SNAPSHOT
+
+statement ok
+RESET transaction_isolation
+
+query I
+SELECT current_setting('transaction_isolation')
+----
+read committed
+
+# RESET TRANSACTION ISOLATION LEVEL syntax
+statement ok
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ
+
+statement ok
+RESET TRANSACTION ISOLATION LEVEL
+
+query I
+SHOW TRANSACTION ISOLATION LEVEL
+----
+read committed

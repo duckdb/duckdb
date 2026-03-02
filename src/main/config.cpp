@@ -195,6 +195,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(TempDirectorySetting),
     DUCKDB_SETTING_CALLBACK(TempFileEncryptionSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
+    DUCKDB_SETTING_CALLBACK(TransactionIsolationSetting),
     DUCKDB_SETTING(UsernameSetting),
     DUCKDB_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
     DUCKDB_SETTING(VariantMinimumShreddingSizeSetting),
@@ -207,7 +208,7 @@ static const ConfigurationOption internal_options[] = {
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 97),
                                                      DUCKDB_SETTING_ALIAS("null_order", 40),
                                                      DUCKDB_SETTING_ALIAS("profiling_output", 117),
-                                                     DUCKDB_SETTING_ALIAS("user", 132),
+                                                     DUCKDB_SETTING_ALIAS("user", 133),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 23),
                                                      DUCKDB_SETTING_ALIAS("worker_threads", 131),
                                                      FINAL_ALIAS};
