@@ -52,6 +52,8 @@ public:
 	bool temporary;
 	//! Whether or not the entry is an internal entry (cannot be deleted, not dumped, etc)
 	bool internal;
+	//! The name of the extension that registered this entry (empty for core entries)
+	string extension_name;
 	//! Timestamp at which the catalog entry was created
 	atomic<transaction_t> timestamp;
 	//! (optional) comment on this entry

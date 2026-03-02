@@ -83,6 +83,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("extension_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("function_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
@@ -707,6 +710,9 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 
 	// internal, LogicalType::BOOLEAN
 	output.SetValue(col++, output_offset, Value::BOOLEAN(function.internal));
+
+	// extension_name, LogicalType::VARCHAR - display empty as NULL
+	output.SetValue(col++, output_offset, function.extension_name.empty() ? Value() : Value(function.extension_name));
 
 	// function_oid, LogicalType::BIGINT
 	output.SetValue(col++, output_offset, Value::BIGINT(NumericCast<int64_t>(function.oid)));

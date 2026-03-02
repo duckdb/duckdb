@@ -42,6 +42,8 @@ public:
 	bool temporary;
 	//! Whether or not the entry is an internal entry
 	bool internal;
+	//! The name of the extension that registered this entry (empty for core entries)
+	string extension_name;
 	//! The SQL string of the CREATE statement
 	string sql;
 	//! The inherent dependencies of the created entry
