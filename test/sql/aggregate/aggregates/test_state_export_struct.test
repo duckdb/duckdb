@@ -208,12 +208,12 @@ SELECT g, finalize(slope_state), finalize(count_state) FROM state_regr ORDER BY 
 
 # Regression: struct shape for state export
 query T
-SELECT (regr_count(1, 2) export_state)::struct(count bigint);
+SELECT (regr_count(1, 2) export_state)::struct(count ubigint);
 ----
 {'count': 1}
 
 query T
-SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count bigint);
+SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);
 ----
 {'sum': 2.0, 'count': 1}
 
