@@ -4,6 +4,7 @@ import concurrent.futures
 import os
 import shlex
 import subprocess
+import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -11,7 +12,9 @@ from pathlib import Path
 
 DEFAULT_BATCH_SIZE = 20
 DEFAULT_BATCH_TIMEOUT_SECONDS = 300
+DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
+DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 DEFAULT_WORKERS = os.cpu_count() or 1
 
 
@@ -23,6 +26,7 @@ class TestRunnerConfig:
     workers: int
     batch_size: int
     batch_timeout_seconds: int
+    rss_memory_threshold_mib: int | None
     runtime_threshold_seconds: int | None
     max_failures: int | None
 
@@ -54,6 +58,49 @@ def build_test_command(config: TestRunnerConfig, test_list: str):
         binary=shlex.quote(config.unittest_bin),
         test_list=test_list,
     )
+
+
+def get_process_rss_bytes(pid: int):
+    if sys.platform.startswith("linux"):
+        try:
+            with open(f"/proc/{pid}/status", "r", encoding="utf8") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        fields = line.split()
+                        return int(fields[1]) * 1024
+        except (FileNotFoundError, ProcessLookupError, ValueError):
+            return None
+        return None
+
+    if sys.platform == "darwin":
+        try:
+            proc = subprocess.run(
+                ["ps", "-o", "rss=", "-p", str(pid)],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except OSError:
+            return None
+
+        if proc.returncode != 0:
+            return None
+
+        output = proc.stdout.strip()
+        if not output:
+            return None
+
+        try:
+            return int(output) * 1024
+        except ValueError:
+            return None
+
+    return None
+
+
+def format_mib(value_bytes: int):
+    return value_bytes / (1024 * 1024)
 
 
 def format_batch_failure(
@@ -90,32 +137,56 @@ def format_batch_failure(
 
 
 def run_batch(config: TestRunnerConfig, batch):
+    failed = False
+    stdout = ""
+    stderr = ""
+    message = None
+    peak_rss_bytes = 0
+
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as batch_file:
         batch_file.write("\n".join(batch))
         batch_file.write("\n")
         batch_file.flush()
         command = build_test_command(config, shlex.quote(batch_file.name))
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 shlex.split(command),
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=config.batch_timeout_seconds,
             )
-        except subprocess.TimeoutExpired as exc:
-            return {
-                "stdout": exc.stdout or "",
-                "stderr": exc.stderr or "",
-                "message": f"batch timed out after {config.batch_timeout_seconds} seconds",
-            }
-    if proc.returncode == 0:
-        return None
+            deadline = time.monotonic() + config.batch_timeout_seconds
+
+            while proc.poll() is None:
+                rss_bytes = get_process_rss_bytes(proc.pid)
+                if rss_bytes is not None:
+                    peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
+                if time.monotonic() >= deadline:
+                    proc.kill()
+                    stdout, stderr = proc.communicate()
+                    failed = True
+                    message = f"batch timed out after {config.batch_timeout_seconds} seconds"
+                    break
+                if proc.poll() is None:
+                    time.sleep(DEFAULT_RSS_POLL_INTERVAL_SECONDS)
+
+            if message is None:
+                stdout, stderr = proc.communicate()
+                rss_bytes = get_process_rss_bytes(proc.pid)
+                if rss_bytes is not None:
+                    peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
+                failed = proc.returncode != 0
+        except OSError as exc:
+            failed = True
+            stderr = str(exc)
+            message = "failed to launch batch command"
 
     return {
-        "stdout": proc.stdout,
-        "stderr": proc.stderr,
-        "message": None,
+        "failed": failed,
+        "stdout": stdout,
+        "stderr": stderr,
+        "message": message,
+        "peak_rss_bytes": peak_rss_bytes,
     }
 
 
@@ -135,6 +206,14 @@ def parse_args():
         nargs="?",
         const=DEFAULT_RUNTIME_THRESHOLD_SECONDS,
         default=None,
+    )
+    parser.add_argument(
+        "--track-rss-memory",
+        type=int,
+        nargs="?",
+        const=DEFAULT_RSS_MEMORY_THRESHOLD_MIB,
+        default=None,
+        help="print batches whose peak RSS meets or exceeds the threshold in MiB (default: 1024)",
     )
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--max-failures", type=int)
@@ -156,6 +235,7 @@ def main():
         workers=max(1, args.workers),
         batch_size=batch_size,
         batch_timeout_seconds=args.batch_timeout,
+        rss_memory_threshold_mib=args.track_rss_memory,
         runtime_threshold_seconds=args.track_runtime,
         max_failures=max_failures,
     )
@@ -166,6 +246,7 @@ def main():
     print(
         f"found {len(tests)} tests, batch_size={batch_size}, workers={config.workers}, "
         f"runtime_threshold={config.runtime_threshold_seconds}s, "
+        f"rss_memory_threshold={config.rss_memory_threshold_mib}MiB, "
         f"batch_timeout={config.batch_timeout_seconds}s"
     )
 
@@ -198,7 +279,14 @@ def main():
                 elapsed = time.monotonic() - batch_info["start"]
                 if config.runtime_threshold_seconds is not None and elapsed >= config.runtime_threshold_seconds:
                     print(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
-                if result is not None:
+                if (
+                    config.rss_memory_threshold_mib is not None
+                    and format_mib(result["peak_rss_bytes"]) >= config.rss_memory_threshold_mib
+                ):
+                    print(
+                        f"batch with file {batch_info['batch'][0]} peak RSS {format_mib(result['peak_rss_bytes']):.0f} MiB"
+                    )
+                if result["failed"]:
                     if config.max_failures is not None and failed_count + 1 >= config.max_failures:
                         stop_launching = True
                     failed_count += 1
