@@ -53,7 +53,8 @@ static inline void ExtractConjunctedExpressions(Expression &expression,
 unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                       bool &changes_made, bool is_root) {
 	// Only applies to top-level FILTER expressions
-	if ((op.type != LogicalOperatorType::LOGICAL_FILTER && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN) ||
+	if ((op.type != LogicalOperatorType::LOGICAL_FILTER && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN &&
+	     op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) ||
 	    !is_root) {
 		return nullptr;
 	}
