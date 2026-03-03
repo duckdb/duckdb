@@ -71,7 +71,7 @@ struct RowIdSetOutput {
 	}
 
 	bool IsFull() const {
-		D_ASSERT(row_ids.size() >= 0 && row_ids.size() <= capacity);
+		D_ASSERT(row_ids.size() <= capacity);
 		return row_ids.size() >= capacity;
 	}
 	void SetKey(const IteratorKey &, const idx_t) {
@@ -105,7 +105,7 @@ struct KeyRowIdOutput {
 		arena.Reset();
 	}
 	bool IsFull() const {
-		D_ASSERT(count >= 0 && count <= capacity);
+		D_ASSERT(count <= capacity);
 		return count >= capacity;
 	}
 	void SetKey(const IteratorKey &current_key, const idx_t column_key_len) {

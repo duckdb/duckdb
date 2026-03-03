@@ -27,6 +27,7 @@
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 
 namespace duckdb {
 
@@ -901,44 +902,73 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
-bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                               const PhysicalComparisonJoin &op, const ExpressionType &cmp,
-                                               const bool is_perfect_hashtable) const {
+bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op,
+                                               const ExpressionType &cmp, optional_ptr<JoinHashTable> ht) const {
 	if (!ht) {
 		return false;
 	}
 
-	// with a perfect hashtable we expect good min/max pruning, so we don't want the bloom filter
-	if (is_perfect_hashtable) {
+	// bf is only supported for equality conditions
+	if (cmp != ExpressionType::COMPARE_EQUAL && cmp != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		return false;
 	}
 
-	// bf is only supported for single key joins with equality condition as the Filter API only allows
-	// single-column filters so far
-	const bool can_use_bf = ht->conditions.size() == 1 && cmp == ExpressionType::COMPARE_EQUAL;
+	// and only if there is exactly one equality condition
+	// as the Filter API only allows single-column filters so far
+	idx_t equality_column_count = 0;
+	for (auto &cond : ht->conditions) {
+		const auto cond_cmp = cond.GetComparisonType();
+		if (cond_cmp == ExpressionType::COMPARE_EQUAL || cond_cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			equality_column_count++;
+		}
+	}
+	if (equality_column_count != 1) {
+		return false;
+	}
 
-	// building the bloom filter is costly on the build to make probing faster, so only use it if there are
-	// more probing tuples than build tuples
+	// building the bloom filter is costly on the build to make probing faster,
+	// so only use it if there are less build tuples than probing tuples
+	static constexpr double BUILD_TO_PROBE_RATIO_THRESHOLD = 1.0;
 	const double build_to_probe_ratio =
-	    static_cast<double>(op.children[0].get().estimated_cardinality) / static_cast<double>(ht->Count());
-	const bool probe_larger_then_build = build_to_probe_ratio > 1.0;
+	    static_cast<double>(ht->Count()) / static_cast<double>(op.children[0].get().estimated_cardinality);
+	if (build_to_probe_ratio > BUILD_TO_PROBE_RATIO_THRESHOLD) {
+		return false;
+	}
 
-	// only use bloom filter if there is no in-filter already
-	return can_use_bf && build_side_has_filter && probe_larger_then_build;
+	// if we have a build side without a filter, only build the bloom filter if the ratio/size is small enough
+	static constexpr double NON_FILTERING_RATIO_THRESHOLD = 0.1;
+	static constexpr idx_t NON_FILTERING_BUILD_SIDE_THRESHOLD = 4194304;
+	if (!build_side_has_filter && build_to_probe_ratio > NON_FILTERING_RATIO_THRESHOLD &&
+	    ht->Count() > NON_FILTERING_BUILD_SIDE_THRESHOLD) {
+		return false;
+	}
+
+	return true;
 }
 
-void JoinFilterPushdownInfo::PushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
-                                             const PhysicalOperator &op, idx_t filter_col_idx) const {
+void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht,
+                                             const JoinFilterPushdownFilter &info, idx_t filter_col_idx) const {
 	// If the nulls are equal, we let nulls pass. If not, we filter them
 	auto filters_null_values = !ht.NullValuesAreEqual(0);
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
 	const auto key_type = ht.conditions[0].GetLHS().return_type;
-	auto bf_filter = make_uniq<BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
 	ht.SetBuildBloomFilter(true);
+	auto filter =
+	    make_uniq_base<TableFilter, BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
+	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilter::BF_THRESHOLD,
+	                                              SelectivityOptionalFilter::BF_CHECK_N);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+}
 
-	auto opt_bf_filter = make_uniq<SelectivityOptionalFilter>(
-	    std::move(bf_filter), SelectivityOptionalFilter::BF_THRESHOLD, SelectivityOptionalFilter::BF_CHECK_N);
-	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_bf_filter));
+void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &op,
+                                                       PerfectHashJoinExecutor &perfect_join_executor,
+                                                       const JoinFilterPushdownFilter &info,
+                                                       idx_t filter_col_idx) const {
+	const auto key_name = op.Cast<PhysicalHashJoin>().conditions[0].GetRHS().ToString();
+	auto filter = make_uniq_base<TableFilter, PerfectHashJoinFilter>(perfect_join_executor, key_name);
+	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilter::PHJ_THRESHOLD,
+	                                              SelectivityOptionalFilter::PHJ_CHECK_N);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalState &gstate) const {
@@ -954,12 +984,20 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalSta
 	return final_min_max;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                                              const PhysicalComparisonJoin &op,
-                                                              unique_ptr<DataChunk> final_min_max,
-                                                              const bool is_perfect_hashtable) const {
+static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
+                                      const idx_t &filter_col_idx, unique_ptr<TableFilter> filter) {
+	info.dynamic_filters->PushFilter(op, filter_col_idx,
+	                                 make_uniq<SelectivityOptionalFilter>(std::move(filter),
+	                                                                      SelectivityOptionalFilter::MIN_MAX_THRESHOLD,
+	                                                                      SelectivityOptionalFilter::MIN_MAX_CHECK_N));
+}
+
+unique_ptr<DataChunk>
+JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
+                                        unique_ptr<DataChunk> final_min_max, optional_ptr<JoinHashTable> ht,
+                                        optional_ptr<PerfectHashJoinExecutor> perfect_join_executor) const {
 	if (probe_info.empty()) {
-		return final_min_max; // There are not table souces in which we can push down filters
+		return final_min_max; // There are no table sources in which we can push down filters
 	}
 
 	// create a filter for each of the aggregates
@@ -987,23 +1025,19 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				// min = max - single value
 				// generate a "one-sided" comparison filter for the LHS
 				// Note that this also works for equalities.
-				auto constant_filter = make_uniq<ConstantFilter>(cmp, std::move(min_val));
-				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(constant_filter));
+				info.dynamic_filters->PushFilter(op, filter_col_idx,
+				                                 make_uniq<ConstantFilter>(cmp, std::move(min_val)));
 			} else {
 				// min != max - generate a range filter or bloom filter + optional range filter
 				// for non-equalities, the range must be half-open
 				// e.g., for lhs < rhs we can only use lhs <= max
-
 				switch (cmp) {
 				case ExpressionType::COMPARE_EQUAL:
 				case ExpressionType::COMPARE_GREATERTHAN:
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-					auto greater_equals =
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
-					auto optional_greater_equals = make_uniq<SelectivityOptionalFilter>(
-					    std::move(greater_equals), SelectivityOptionalFilter::MIN_MAX_THRESHOLD,
-					    SelectivityOptionalFilter::MIN_MAX_CHECK_N);
-					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_greater_equals));
+					CreateDynamicMinMaxFilter(
+					    op, info, filter_col_idx,
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val)));
 					break;
 				}
 				default:
@@ -1013,20 +1047,18 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 				case ExpressionType::COMPARE_EQUAL:
 				case ExpressionType::COMPARE_LESSTHAN:
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-					auto less_equals =
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
-					auto optional_less_equals = make_uniq<SelectivityOptionalFilter>(
-					    std::move(less_equals), SelectivityOptionalFilter::MIN_MAX_THRESHOLD,
-					    SelectivityOptionalFilter::MIN_MAX_CHECK_N);
-					info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(optional_less_equals));
+					CreateDynamicMinMaxFilter(
+					    op, info, filter_col_idx,
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val)));
 					break;
 				}
 				default:
 					break;
 				}
-
-				if (ht && CanUseBloomFilter(context, ht, op, cmp, is_perfect_hashtable)) {
-					PushBloomFilter(info, *ht, op, filter_col_idx);
+				if (perfect_join_executor) {
+					PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
+				} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
+					PushBloomFilter(op, *ht, info, filter_col_idx);
 				}
 			}
 		}
@@ -1034,11 +1066,12 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 	return final_min_max;
 }
 
-unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                                       JoinFilterGlobalState &gstate,
-                                                       const PhysicalComparisonJoin &op) const {
+unique_ptr<DataChunk>
+JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinFilterGlobalState &gstate,
+                                 const PhysicalComparisonJoin &op, optional_ptr<JoinHashTable> ht,
+                                 optional_ptr<PerfectHashJoinExecutor> perfect_hash_join_executor) const {
 	auto final_min_max = FinalizeMinMax(gstate);
-	return FinalizeFilters(context, ht, op, std::move(final_min_max), false);
+	return FinalizeFilters(context, op, std::move(final_min_max), ht, perfect_hash_join_executor);
 }
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -1132,13 +1165,16 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
 	}
 
+	if (!use_perfect_hash) {
+		sink.perfect_join_executor.reset();
+	}
+
 	if (filter_min_max) {
-		filter_pushdown->FinalizeFilters(context, &ht, *this, std::move(filter_min_max), use_perfect_hash);
+		filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, sink.perfect_join_executor);
 	}
 
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
-		sink.perfect_join_executor.reset();
 		sink.ScheduleFinalize(pipeline, event);
 	}
 	sink.finalized = true;

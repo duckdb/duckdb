@@ -67,11 +67,48 @@ struct RegrR2Operation {
 	}
 };
 
+LogicalType GetRegrR2StateType(const AggregateFunction &) {
+	child_list_t<LogicalType> state_children;
+
+	child_list_t<LogicalType> corr_children;
+	child_list_t<LogicalType> cov_pop_children;
+	cov_pop_children.emplace_back("count", LogicalType::UBIGINT);
+	cov_pop_children.emplace_back("meanx", LogicalType::DOUBLE);
+	cov_pop_children.emplace_back("meany", LogicalType::DOUBLE);
+	cov_pop_children.emplace_back("co_moment", LogicalType::DOUBLE);
+	corr_children.emplace_back("cov_pop", LogicalType::STRUCT(std::move(cov_pop_children)));
+	child_list_t<LogicalType> dev_pop_x_children;
+	dev_pop_x_children.emplace_back("count", LogicalType::UBIGINT);
+	dev_pop_x_children.emplace_back("mean", LogicalType::DOUBLE);
+	dev_pop_x_children.emplace_back("dsquared", LogicalType::DOUBLE);
+	corr_children.emplace_back("dev_pop_x", LogicalType::STRUCT(std::move(dev_pop_x_children)));
+	child_list_t<LogicalType> dev_pop_y_children;
+	dev_pop_y_children.emplace_back("count", LogicalType::UBIGINT);
+	dev_pop_y_children.emplace_back("mean", LogicalType::DOUBLE);
+	dev_pop_y_children.emplace_back("dsquared", LogicalType::DOUBLE);
+	corr_children.emplace_back("dev_pop_y", LogicalType::STRUCT(std::move(dev_pop_y_children)));
+	state_children.emplace_back("corr", LogicalType::STRUCT(std::move(corr_children)));
+
+	child_list_t<LogicalType> var_pop_x_children;
+	var_pop_x_children.emplace_back("count", LogicalType::UBIGINT);
+	var_pop_x_children.emplace_back("mean", LogicalType::DOUBLE);
+	var_pop_x_children.emplace_back("dsquared", LogicalType::DOUBLE);
+	state_children.emplace_back("var_pop_x", LogicalType::STRUCT(std::move(var_pop_x_children)));
+	child_list_t<LogicalType> var_pop_y_children;
+	var_pop_y_children.emplace_back("count", LogicalType::UBIGINT);
+	var_pop_y_children.emplace_back("mean", LogicalType::DOUBLE);
+	var_pop_y_children.emplace_back("dsquared", LogicalType::DOUBLE);
+	state_children.emplace_back("var_pop_y", LogicalType::STRUCT(std::move(var_pop_y_children)));
+
+	return LogicalType::STRUCT(std::move(state_children));
+}
+
 } // namespace
 
 AggregateFunction RegrR2Fun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrR2State, double, double, double, RegrR2Operation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrR2StateType);
 }
 
 } // namespace duckdb

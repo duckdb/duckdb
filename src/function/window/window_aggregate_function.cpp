@@ -116,6 +116,12 @@ public:
 		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 		aggregator_state = aggregator.GetLocalState(context, *gastate.gsink);
 
+		auto &required = state.required;
+		required.clear();
+		required.insert(FRAME_BEGIN);
+		required.insert(FRAME_END);
+		WindowBoundariesState::AddImpliedBounds(required, gastate.executor.wexpr);
+
 		// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
 		auto filter_ref = gastate.filter_ref;
 		if (filter_ref) {

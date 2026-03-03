@@ -19,45 +19,44 @@ void ProjectionPullup::PopParents(const LogicalOperator &op) {
 	}
 }
 
-void ProjectionPullup::InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, bool stop_at_op) {
-	for (auto &child : op->children) {
-		if (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
-			child->ResolveOperatorTypes();
-			auto proj_index = optimizer.binder.GenerateTableIndex();
-			auto child_bindings = child->GetColumnBindings();
-			const auto child_types = child->types;
-			const auto column_count = child_bindings.size();
+void ProjectionPullup::InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, unique_ptr<LogicalOperator> &child,
+                                               bool stop_at_op) {
+	if (child->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		child->ResolveOperatorTypes();
+		auto proj_index = optimizer.binder.GenerateTableIndex();
+		auto child_bindings = child->GetColumnBindings();
+		const auto child_types = child->types;
+		const auto column_count = child_bindings.size();
 
-			vector<unique_ptr<Expression>> expressions;
-			expressions.reserve(column_count);
-			for (idx_t i = 0; i < column_count; i++) {
-				expressions.push_back(make_uniq<BoundColumnRefExpression>(child_types[i], child_bindings[i]));
-			}
-
-			ColumnBindingReplacer replacer;
-			for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-				const auto &old_binding = child_bindings[col_idx];
-				replacer.replacement_bindings.emplace_back(old_binding, ColumnBinding(proj_index, col_idx));
-			}
-
-			auto new_projection = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
-			if (child->has_estimated_cardinality) {
-				new_projection->SetEstimatedCardinality(child->estimated_cardinality);
-			}
-
-			new_projection->children.emplace_back(std::move(child));
-			child = std::move(new_projection);
-
-			if (stop_at_op) {
-				replacer.stop_operator = op.get();
-			} else {
-				replacer.stop_operator = child.get();
-			}
-			replacer.VisitOperator(root);
+		vector<unique_ptr<Expression>> expressions;
+		expressions.reserve(column_count);
+		for (idx_t i = 0; i < column_count; i++) {
+			expressions.push_back(make_uniq<BoundColumnRefExpression>(child_types[i], child_bindings[i]));
 		}
-		ProjectionPullup next(optimizer, root);
-		next.Optimize(child->children[0]);
+
+		ColumnBindingReplacer replacer;
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			const auto &old_binding = child_bindings[col_idx];
+			replacer.replacement_bindings.emplace_back(old_binding, ColumnBinding(proj_index, col_idx));
+		}
+
+		auto new_projection = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
+		if (child->has_estimated_cardinality) {
+			new_projection->SetEstimatedCardinality(child->estimated_cardinality);
+		}
+
+		new_projection->children.emplace_back(std::move(child));
+		child = std::move(new_projection);
+
+		if (stop_at_op) {
+			replacer.stop_operator = op.get();
+		} else {
+			replacer.stop_operator = child.get();
+		}
+		replacer.VisitOperator(root);
 	}
+	ProjectionPullup next(optimizer, root);
+	next.Optimize(child->children[0]);
 }
 
 void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
@@ -68,7 +67,9 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_UNION: {
-		InsertProjectionBelowOp(op, true);
+		for (auto &child : op->children) {
+			InsertProjectionBelowOp(op, child, true);
+		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DISTINCT:
@@ -77,24 +78,31 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 	case LogicalOperatorType::LOGICAL_PIVOT: {
-		InsertProjectionBelowOp(op, false);
+		for (auto &child : op->children) {
+			InsertProjectionBelowOp(op, child, false);
+		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &comp_join = op->Cast<LogicalComparisonJoin>();
-		// FIXME: For SEMI, we should be able to recurse into the LHS sub-tree with no problem. For the RHS, do not
-		// remove projections directly below it.
-		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI) {
+		if (comp_join.join_type == JoinType::MARK) {
 			break; // bail
 		}
 
 		// We can pull through this operator, add it to the stack
 		parents.push_back(*op);
+		if (comp_join.join_type == JoinType::SEMI) {
+			// LHS: can pull through
+			Optimize(op->children[0]);
 
-		// Recurse
-		for (auto &child : op->children) {
-			Optimize(child);
+			// RHS: Cannot pull through. Add a projection "barrier"
+			InsertProjectionBelowOp(op, op->children[1], false);
+		} else {
+			// All other joins: recurse normally on both sides
+			for (auto &child : op->children) {
+				Optimize(child);
+			}
 		}
 
 		PopParents(*op);

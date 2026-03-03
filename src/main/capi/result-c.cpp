@@ -147,6 +147,9 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 	auto &collection = result.Collection();
 	idx_t row_count = collection.Count();
 	column->deprecated_nullmask = (bool *)duckdb_malloc(sizeof(bool) * collection.Count());
+	if (!column->deprecated_nullmask) {
+		return DuckDBError;
+	}
 
 	auto type_size = GetCTypeSize(column->deprecated_type);
 	if (type_size == 0) {
@@ -159,7 +162,7 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 	}
 
 	column->deprecated_data = duckdb_malloc(type_size * row_count);
-	if (!column->deprecated_nullmask || !column->deprecated_data) { // LCOV_EXCL_START
+	if (!column->deprecated_data) { // LCOV_EXCL_START
 		// malloc failure
 		return DuckDBError;
 	} // LCOV_EXCL_STOP

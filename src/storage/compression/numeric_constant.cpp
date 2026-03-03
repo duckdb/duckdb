@@ -170,6 +170,10 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		filters_nulls = bf.FiltersNullValues();
 		break;
 	}
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+		filters_nulls = true;
+		break;
+	}
 	default:
 		throw InternalException("FIXME: unsupported type for filter selection in validity select");
 	}
