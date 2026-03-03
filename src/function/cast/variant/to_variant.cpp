@@ -144,21 +144,33 @@ unique_ptr<FunctionLocalState> CastToVariantLocalState(CastLocalStateParameters 
 	return make_uniq<VariantLocalData>(cast_data.shredded_type);
 }
 
+static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	if (source.GetType().IsNested()) {
+		// shredded casts for nested types not yet supported
+		return false;
+	}
+	if (!VariantUtils::VariantSupportsType(source.GetType())) {
+		// type is not natively supported in variant so it cannot be emitted as a shredded type without conversion
+		return false;
+	}
+	auto &local_data = parameters.local_state->Cast<VariantLocalData>();
+	auto &shredded_vector = local_data.GetShreddedVector(count);
+
+	// emit a shredded vector that references the source directly
+	auto &top_shredded = StructVector::GetEntries(shredded_vector);
+	auto &shredded_child = *top_shredded[1];
+	shredded_child.Reference(source);
+
+	result.Shred(shredded_vector);
+	return true;
+}
+
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	if (!count) {
 		return true;
 	}
-	bool is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR && count == 1;
-	if (source.GetType().id() == LogicalTypeId::BIGINT) {
-		auto &local_data = parameters.local_state->Cast<VariantLocalData>();
-		auto &shredded_vector = local_data.GetShreddedVector(count);
-
-		// reference the input directly
-		auto &top_shredded = StructVector::GetEntries(shredded_vector);
-		auto &shredded_child = *top_shredded[1];
-		shredded_child.Reference(source);
-
-		result.Shred(shredded_vector);
+	if (TryToShreddedCast(source, result, count, parameters)) {
+		bool is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR && count == 1;
 		if (is_constant) {
 			result.Flatten(1);
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
