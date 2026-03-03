@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests
 
 all: release
 opt: release
@@ -405,6 +405,9 @@ allunit_relassert:
 
 smoke:
 	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+
+runnertests:
+	python3 -m unittest scripts.ci.test_run_tests
 
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
