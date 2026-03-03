@@ -40,7 +40,6 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	switch (op.join_type) {
 	case JoinType::SEMI:
 		can_merge = can_merge && op.conditions.size() == 1;
-		can_iejoin = can_iejoin && op.conditions.size() == 2;
 		break;
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
