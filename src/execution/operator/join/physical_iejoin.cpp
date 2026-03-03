@@ -1313,6 +1313,7 @@ void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChun
 			}
 			lsel[unique_count++] = lsel[i];
 		}
+		lsel.resize(unique_count);
 		result_count = unique_count;
 
 		//	Handle chunk boundaries: If we found a match for the last value
