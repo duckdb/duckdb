@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import concurrent.futures
+import contextlib
 import os
 import shlex
 import subprocess
@@ -102,6 +103,34 @@ def get_process_rss_bytes(pid: int):
 
 def format_mib(value_bytes: int):
     return value_bytes / (1024 * 1024)
+
+
+def generate_test_list(test_file, unittest_bin: str):
+    proc = subprocess.run(
+        [unittest_bin, "--list-test-names-only", "*"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.stderr:
+        if proc.stdout:
+            print(proc.stdout, end="")
+        print(proc.stderr, end="", file=sys.stderr)
+        raise RuntimeError(f"failed to generate test list from {unittest_bin}")
+    test_file.write(proc.stdout)
+    test_file.flush()
+
+
+@contextlib.contextmanager
+def open_test_list(test_list: Path | None, unittest_bin: str):
+    if test_list is not None:
+        with test_list.open("r", encoding="utf8") as test_file:
+            yield Path(test_file.name)
+        return
+
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as test_file:
+        generate_test_list(test_file, unittest_bin)
+        yield Path(test_file.name)
 
 
 def format_batch_failure(
@@ -211,7 +240,7 @@ def submit_batches(executor, config: TestRunnerConfig, batches, future_to_batch,
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test-list", type=Path, required=True)
+    parser.add_argument("--test-list", type=Path)
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("unittest_bin")
     parser.add_argument(
@@ -248,31 +277,36 @@ def main():
     if args.fail_fast:
         max_failures = 1
     batch_size = 1 if args.track_runtime is not None else args.batch_size
-    config = TestRunnerConfig(
-        test_list=args.test_list,
-        unittest_bin=args.unittest_bin,
-        test_command=args.test_command,
-        workers=max(1, args.workers),
-        retry=max(0, args.retry),
-        batch_size=batch_size,
-        batch_timeout_seconds=args.batch_timeout,
-        rss_memory_threshold_mib=args.track_rss_memory,
-        runtime_threshold_seconds=args.track_runtime,
-        max_failures=max_failures,
-    )
+    with open_test_list(args.test_list, args.unittest_bin) as test_file:
+        config = TestRunnerConfig(
+            test_list=test_file,
+            unittest_bin=args.unittest_bin,
+            test_command=args.test_command,
+            workers=max(1, args.workers),
+            retry=max(0, args.retry),
+            batch_size=batch_size,
+            batch_timeout_seconds=args.batch_timeout,
+            rss_memory_threshold_mib=args.track_rss_memory,
+            runtime_threshold_seconds=args.track_runtime,
+            max_failures=max_failures,
+        )
 
-    tests = load_tests(config.test_list)
-    batch_size = compute_batch_size(len(tests), config)
+        tests = load_tests(config.test_list)
+        batch_size = compute_batch_size(len(tests), config)
 
-    print(
-        f"found {len(tests)} tests, batch_size={batch_size}, workers={config.workers}, "
-        f"retry={config.retry}, "
-        f"runtime_threshold={config.runtime_threshold_seconds}s, "
-        f"rss_memory_threshold={config.rss_memory_threshold_mib}MiB, "
-        f"batch_timeout={config.batch_timeout_seconds}s"
-    )
+        print(
+            f"found {len(tests)} tests, batch_size={batch_size}, workers={config.workers}, "
+            f"retry={config.retry}, "
+            f"runtime_threshold={config.runtime_threshold_seconds}s, "
+            f"rss_memory_threshold={config.rss_memory_threshold_mib}MiB, "
+            f"batch_timeout={config.batch_timeout_seconds}s"
+        )
 
-    batches = list(chunked(tests, batch_size))
+        batches = list(chunked(tests, batch_size))
+        return run_tests(config, batches)
+
+
+def run_tests(config: TestRunnerConfig, batches):
     failed_count = 0
     stop_launching = False
 
