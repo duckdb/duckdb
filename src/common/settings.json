@@ -1044,6 +1044,16 @@
         ]
     },
     {
+        "name": "transaction_isolation",
+        "description": "The transaction isolation level (READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, or SNAPSHOT). SERIALIZABLE is not supported.",
+        "type": "VARCHAR",
+        "default_value": "read committed",
+        "default_scope": "local",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",

@@ -3,3 +3,4 @@
 %type <node> var_value
 %type <node> zone_value
 %type <list> var_list
+%type <str> iso_level

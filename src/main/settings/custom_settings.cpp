@@ -1623,6 +1623,24 @@ void TempFileEncryptionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
+// Transaction Isolation
+//===----------------------------------------------------------------------===//
+void TransactionIsolationSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	auto parameter = StringUtil::Lower(input.ToString());
+	if (parameter == "read uncommitted" || parameter == "read committed" || parameter == "repeatable read" ||
+	    parameter == "snapshot") {
+		input = Value(parameter);
+	} else if (parameter == "serializable") {
+		throw NotImplementedException("SERIALIZABLE isolation level is not supported");
+	} else {
+		throw InvalidInputException(
+		    "Unrecognized transaction isolation level \"%s\", supported levels: READ UNCOMMITTED, "
+		    "READ COMMITTED, REPEATABLE READ, SNAPSHOT",
+		    input.ToString());
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Threads
 //===----------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

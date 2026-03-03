@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -198,6 +199,9 @@ BoundStatement Binder::BindShowTable(ShowRef &ref) {
 		sql = PragmaShowVariables();
 	} else if (lname == "__show_tables_expanded") {
 		sql = PragmaShowTablesExpanded();
+	} else if (ref.show_type == ShowType::SHOW_UNQUALIFIED) {
+		sql = StringUtil::Format("SELECT current_setting(%s) AS %s;", KeywordHelper::WriteQuoted(ref.table_name, '\''),
+		                         KeywordHelper::WriteOptionallyQuoted(ref.table_name));
 	} else {
 		sql = PragmaShow(ref.table_name);
 	}

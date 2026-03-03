@@ -50,6 +50,14 @@ set_rest:	/* Generic SET syntaxes: */
 					$$ = n;
 				}
 			/* Special syntaxes mandated by SQL standard: */
+			| TRANSACTION ISOLATION LEVEL iso_level
+				{
+					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
+					n->kind = VAR_SET_VALUE;
+					n->name = (char*) "transaction_isolation";
+					n->args = list_make1(makeStringConst($4, @4));
+					$$ = n;
+				}
 			| TIME ZONE zone_value
 				{
 					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
@@ -136,4 +144,13 @@ zone_value:
 
 var_list:	var_value								{ $$ = list_make1($1); }
 			| var_list ',' var_value				{ $$ = lappend($1, $3); }
+		;
+
+
+iso_level:
+			READ_P UNCOMMITTED						{ $$ = (char*) "read uncommitted"; }
+			| READ_P COMMITTED						{ $$ = (char*) "read committed"; }
+			| REPEATABLE READ_P						{ $$ = (char*) "repeatable read"; }
+			| SERIALIZABLE							{ $$ = (char*) "serializable"; }
+			| SNAPSHOT								{ $$ = (char*) "snapshot"; }
 		;
