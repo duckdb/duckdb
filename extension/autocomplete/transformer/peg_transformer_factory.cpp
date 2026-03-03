@@ -219,6 +219,8 @@ void PEGTransformerFactory::RegisterCreateIndex() {
 	REGISTER_TRANSFORM(TransformRelOptionOrOids);
 	REGISTER_TRANSFORM(TransformRelOptionList);
 	REGISTER_TRANSFORM(TransformOids);
+	REGISTER_TRANSFORM(TransformRelOptionName);
+	REGISTER_TRANSFORM(TransformRelOptionArgumentOpt);
 	REGISTER_TRANSFORM(TransformRelOption);
 	REGISTER_TRANSFORM(TransformIndexName);
 }

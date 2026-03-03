@@ -110,45 +110,55 @@ PEGTransformerFactory::TransformOids(PEGTransformer &transformer, optional_ptr<P
 	throw NotImplementedException("Oids for index are not yet implemented.");
 }
 
-pair<string, unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+string PEGTransformerFactory::TransformRelOptionName(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	// RelOption <- (DottedIdentifier / StringLiteral) ('=' DefArg)?
-	// child 0: anonymous group (DottedIdentifier / StringLiteral)
-	// child 1: optional ('=' DefArg)
-	auto &nested_list_pr = list_pr.Child<ListParseResult>(0);
-	auto identifier_or_string = nested_list_pr.Child<ChoiceParseResult>(0).result;
-	string option_name;
-	if (StringUtil::CIEquals(identifier_or_string->name, "DottedIdentifier")) {
-		auto dotted_identifier = transformer.Transform<vector<string>>(identifier_or_string);
-		option_name = StringUtil::Join(dotted_identifier, ".");
+	// RelOptionName <- DottedIdentifier / StringLiteral
+	auto choice = list_pr.Child<ChoiceParseResult>(0).result;
+	if (StringUtil::CIEquals(choice->name, "DottedIdentifier")) {
+		auto dotted_identifier = transformer.Transform<vector<string>>(choice);
+		return StringUtil::Join(dotted_identifier, ".");
 	} else {
-		option_name = identifier_or_string->Cast<StringLiteralParseResult>().GetRawString();
+		return choice->Cast<StringLiteralParseResult>().GetRawString();
 	}
-	auto arg_opt = list_pr.Child<OptionalParseResult>(1);
-	if (!arg_opt.HasResult()) {
-		return {option_name, make_uniq<ConstantExpression>(Value())};
-	}
-	// ('=' DefArg): child 0 is '=', child 1 is DefArg
+}
+
+unique_ptr<ParsedExpression>
+PEGTransformerFactory::TransformRelOptionArgumentOpt(PEGTransformer &transformer,
+                                                     optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// RelOptionArgumentOpt <- '=' DefArg
+	// child 0: '=' keyword, child 1: DefArg
 	// DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
-	auto &inner_list = arg_opt.optional_result->Cast<ListParseResult>();
-	auto &defarg_list = inner_list.Child<ListParseResult>(1);
+	auto &defarg_list = list_pr.Child<ListParseResult>(1);
 	auto def_arg_choice = defarg_list.Child<ChoiceParseResult>(0).result;
 	if (def_arg_choice->name == "ReservedKeyword") {
 		auto &rw_list = def_arg_choice->Cast<ListParseResult>();
 		auto keyword = rw_list.Child<ChoiceParseResult>(0).result->Cast<KeywordParseResult>().keyword;
-		return {option_name, make_uniq<ConstantExpression>(Value(keyword))};
+		return make_uniq<ConstantExpression>(Value(keyword));
 	} else if (def_arg_choice->name == "StringLiteral") {
-		return {option_name, make_uniq<ConstantExpression>(Value(transformer.Transform<string>(def_arg_choice)))};
+		return make_uniq<ConstantExpression>(Value(transformer.Transform<string>(def_arg_choice)));
 	} else if (def_arg_choice->name == "NoneLiteral") {
-		return {option_name, make_uniq<ConstantExpression>(Value())};
-	} else if (def_arg_choice->name == "NumberLiteral") {
-		return {option_name, transformer.Transform<unique_ptr<ParsedExpression>>(def_arg_choice)};
-	} else if (def_arg_choice->name == "Expression") {
-		return {option_name, transformer.Transform<unique_ptr<ParsedExpression>>(def_arg_choice)};
+		return make_uniq<ConstantExpression>(Value());
+	} else if (def_arg_choice->name == "NumberLiteral" || def_arg_choice->name == "Expression") {
+		return transformer.Transform<unique_ptr<ParsedExpression>>(def_arg_choice);
 	} else {
-		throw ParserException("Unexpected rule encountered in TransformRelOption: %s", def_arg_choice->name);
+		throw ParserException("Unexpected rule encountered in TransformRelOptionArgumentOpt: %s", def_arg_choice->name);
 	}
+}
+
+pair<string, unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// RelOption <- RelOptionName RelOptionArgumentOpt?
+	// child 0: RelOptionName, child 1: RelOptionArgumentOpt?
+	auto option_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	auto arg_opt = list_pr.Child<OptionalParseResult>(1);
+	if (!arg_opt.HasResult()) {
+		return {option_name, make_uniq<ConstantExpression>(Value())};
+	}
+	auto value = transformer.Transform<unique_ptr<ParsedExpression>>(arg_opt.optional_result);
+	return {option_name, std::move(value)};
 }
 
 string PEGTransformerFactory::TransformIndexName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
