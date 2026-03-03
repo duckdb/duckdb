@@ -6,3 +6,15 @@ require autocomplete
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$from tenk1 join tenk1 join int8_tbl on 1 = 1 on 1 = 1;$TEST_PEG_PARSER$);
+
+# Join re-association: CROSS JOIN followed by LEFT JOIN with ON
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select * from a cross join b left join c on (a.x = c.x);$TEST_PEG_PARSER$);
+
+# Multi-level re-association: two CROSS JOINs followed by LEFT JOIN with ON
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select * from a cross join b cross join c left join d on (a.x = d.x);$TEST_PEG_PARSER$);
+
+# NATURAL JOIN followed by LEFT JOIN with ON
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select * from a natural join b left join c on (a.x = c.x);$TEST_PEG_PARSER$);

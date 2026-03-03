@@ -54,7 +54,7 @@ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
 Type <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
-SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
+SimpleType <- (CharacterType / QualifiedTypeName) TypeModifiers?
 CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
                  ('NATIONAL' 'CHARACTER' 'VARYING'?) /
@@ -835,7 +835,7 @@ IsNull <- 'ISNULL'
 IsDistinctFromExpression <- ComparisonExpression (IsDistinctFromOp ComparisonExpression)*
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'
 # LEVEL 6
-ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
+ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator 'NOT'* BetweenInLikeExpression)*
 ComparisonOperator <-
     OperatorEqual /
     OperatorNotEqual /
@@ -873,7 +873,7 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
-    AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
+    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
 AnyAllOperator <- ComparisonOperator AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
 SubqueryAny <- 'ANY'
@@ -882,6 +882,8 @@ InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
 ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
+QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '~~*' / '~~~' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*
 BitOperator <- '&' / '|' / '<<' / '>>'
@@ -902,7 +904,7 @@ AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 # LEVEL 15
 PrefixExpression <- PrefixOperator* BaseExpression
-PrefixOperator <- MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
@@ -1231,12 +1233,12 @@ DistinctOnTargets <- 'ON' Parens(List(Expression))
 
 InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
-TableRef <- InnerTableRef JoinOrPivot* TableAlias?
+TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- Lateral? SubqueryReference TableAlias?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 TableAliasColon <- ColIdOrString ':'
 ValuesRef <- ValuesClause TableAlias?
-ParensTableRef <- TableAliasColon? Parens(TableRef) SampleClause?
+ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
@@ -1266,7 +1268,9 @@ FunctionArgument <- NamedParameter / Expression
 NamedParameter <- TypeName Type? NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
-TableAlias <- 'AS'? IdentifierOrStringLiteral ColumnAliases?
+TableAlias <- TableAliasAs / TableAliasWithoutAs
+TableAliasAs <- 'AS' IdentifierOrStringLiteral ColumnAliases?
+TableAliasWithoutAs <- Identifier ColumnAliases?
 
 AtClause <- 'AT' Parens(AtSpecifier)
 AtSpecifier <- AtUnit '=>' Expression
@@ -1416,7 +1420,7 @@ FromOrTo <- 'FROM' / 'TO'
 
 CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
 
-CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
+CopyFileName <- Parameter / ParensExpression / StringLiteral / Identifier / (Identifier '.' ColId)
 CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
 SpecializedOptionList <- SpecializedOption*
 SpecializedOption <- SingleOption / NullAsOption / DelimiterAsOption / EscapeAsOption /
