@@ -17,7 +17,7 @@ DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 # Leave some CPU headroom so parallel test execution does not fully saturate CI runners.
-DEFAULT_WORKERS = max(1, int((os.cpu_count() or 1) * 0.5))
+DEFAULT_WORKERS = "75%"
 MAX_RETRIES = 3
 
 
@@ -147,6 +147,15 @@ def get_process_rss_bytes(pid: int):
 
 def format_mib(value_bytes: int):
     return value_bytes / (1024 * 1024)
+
+
+def resolve_workers(workers: str):
+    cpu_count = os.cpu_count() or 1
+    workers = workers.strip()
+    if workers.endswith("%"):
+        percentage = int(workers[:-1])
+        return max(1, int(cpu_count * (percentage / 100.0)))
+    return max(1, int(workers))
 
 
 def generate_test_list(test_file, unittest_bin: str, pattern: str):
@@ -349,7 +358,7 @@ def report_batch_metrics(config: TestRunnerConfig, batch_info, result, elapsed: 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-list", type=Path)
-    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+    parser.add_argument("--workers", default=DEFAULT_WORKERS)
     parser.add_argument("unittest_bin")
     parser.add_argument("pattern", nargs="?", default="")
     parser.add_argument(
@@ -390,6 +399,7 @@ def main():
     if retry == 0 and os.environ.get("CI"):
         retry = 1
         print("CI detected, enabling retry=1")
+    workers = resolve_workers(args.workers)
     batch_size = 1 if args.track_runtime is not None else args.batch_size
     with open_test_list(args.test_list, args.unittest_bin, args.pattern) as test_file:
         config = TestRunnerConfig(
@@ -397,7 +407,7 @@ def main():
             unittest_bin=args.unittest_bin,
             pattern=args.pattern,
             test_command=args.test_command,
-            workers=max(1, args.workers),
+            workers=workers,
             retry=retry,
             batch_size=batch_size,
             batch_timeout_seconds=args.batch_timeout,
