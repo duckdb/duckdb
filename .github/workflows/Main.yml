@@ -114,15 +114,7 @@ jobs:
 
     - name: Install tools
       shell: bash
-      run: |
-        if ! command -v ninja >/dev/null 2>&1 || ! command -v mold >/dev/null 2>&1; then
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq ninja-build mold
-        fi
-
-        ls -lh /usr/bin/gcc* /usr/bin/g++*
-        gcc --version
-        g++ --version
+      run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -200,6 +192,7 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: ninja
+      DUCKDB_LINKER: mold
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
@@ -207,8 +200,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+    - name: Install tools
+      run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
