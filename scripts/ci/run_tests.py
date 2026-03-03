@@ -19,6 +19,13 @@ DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 DEFAULT_WORKERS = os.cpu_count() or 1
 
 
+def enable_line_buffering():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(line_buffering=True)
+
+
 @dataclass(frozen=True)
 class TestRunnerConfig:
     test_list: Path
@@ -286,6 +293,7 @@ def parse_args():
 
 
 def main():
+    enable_line_buffering()
     args = parse_args()
     max_failures = args.max_failures
     if args.fail_fast:
