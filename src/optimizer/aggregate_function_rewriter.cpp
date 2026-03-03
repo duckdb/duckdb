@@ -112,6 +112,8 @@ public:
 
 public:
 	bool ShouldSkip(const LogicalAggregate &aggr) const override {
+		// This can probably be relaxed to be the same check as AvgRewriteRule,
+		// but behaviour (for now) is the same as the old SumRewriterOptimizer
 		return !aggr.groups.empty();
 	}
 
@@ -294,7 +296,7 @@ AggregateFunctionRewriter::~AggregateFunctionRewriter() {
 }
 
 void AggregateFunctionRewriter::Optimize(unique_ptr<LogicalOperator> &op) {
-	// Run each rule as an independent sub-pass so that transformations by an earlier rule
+	// Run each rule as an independent pass so that transformations by an earlier rule affect later rules
 	for (auto &rule : rules) {
 		AggregateFunctionRewriterInternal rewriter(optimizer, *rule);
 		rewriter.Optimize(op);
