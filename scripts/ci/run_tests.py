@@ -16,7 +16,8 @@ DEFAULT_BATCH_TIMEOUT_SECONDS = 600
 DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
-DEFAULT_WORKERS = os.cpu_count() or 1
+# Leave some CPU headroom so parallel test execution does not fully saturate CI runners.
+DEFAULT_WORKERS = max(1, int((os.cpu_count() or 1) * 0.75))
 
 
 def enable_line_buffering():
