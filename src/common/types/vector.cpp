@@ -887,9 +887,13 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
-	case VectorType::SHREDDED_VECTOR:
-		// FIXME: print shredded info
+	case VectorType::SHREDDED_VECTOR: {
+		auto &shredded_vector = ShreddedVector::GetShreddedVector(*this);
+		auto &unshredded_vector = ShreddedVector::GetUnshreddedVector(*this);
+		retval += "Shredded: " + shredded_vector.ToString(count);
+		retval += ", Unshredded: " + unshredded_vector.ToString(count);
 		break;
+	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
