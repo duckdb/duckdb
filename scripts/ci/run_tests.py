@@ -106,8 +106,12 @@ def format_mib(value_bytes: int):
 
 
 def generate_test_list(test_file, unittest_bin: str):
+    # Catch returns the number of matching tests from --list-test-names-only,
+    # so a non-zero exit code here is expected when tests are found.
+    command = [unittest_bin, "--list-test-names-only", "*"]
+    print(f"generated test list using: {shlex.join(command)}")
     proc = subprocess.run(
-        [unittest_bin, "--list-test-names-only", "*"],
+        command,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

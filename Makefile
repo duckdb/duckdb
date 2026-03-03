@@ -410,8 +410,8 @@ unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
 
-allunit: release # uses release build because otherwise allunit takes forever
-	build/release/test/unittest "*"
+allunit:
+	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest $(T)
 
 docs:
 	mkdir -p ./build/docs && \
