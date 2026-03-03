@@ -170,6 +170,12 @@ def format_batch_failure(
     return "\n".join(parts)
 
 
+def normalize_output(output):
+    if isinstance(output, bytes):
+        return output.decode("utf8", errors="replace")
+    return output or ""
+
+
 def run_batch(config: TestRunnerConfig, batch):
     failed = False
     stdout = ""
@@ -198,6 +204,8 @@ def run_batch(config: TestRunnerConfig, batch):
                 if time.monotonic() >= deadline:
                     proc.kill()
                     stdout, stderr = proc.communicate()
+                    stdout = normalize_output(stdout)
+                    stderr = normalize_output(stderr)
                     failed = True
                     message = f"batch timed out after {config.batch_timeout_seconds} seconds"
                     break
@@ -206,6 +214,8 @@ def run_batch(config: TestRunnerConfig, batch):
 
             if message is None:
                 stdout, stderr = proc.communicate()
+                stdout = normalize_output(stdout)
+                stderr = normalize_output(stderr)
                 rss_bytes = get_process_rss_bytes(proc.pid)
                 if rss_bytes is not None:
                     peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
