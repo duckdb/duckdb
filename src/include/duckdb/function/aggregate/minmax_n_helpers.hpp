@@ -16,6 +16,9 @@
 
 namespace duckdb {
 
+//! Maximum allowed value for N in the window top-N optimizer and ArgMinMaxNWithTies aggregate.
+static constexpr int64_t MINMAX_N_LIMIT = 10000;
+
 // For basic types
 template <class T>
 struct HeapEntry {
@@ -822,7 +825,6 @@ inline void ArgMinMaxNWithTiesUpdate(Vector inputs[], AggregateInputData &aggr_i
 		auto &state = *states[state_idx];
 
 		if (!state.is_initialized) {
-			static constexpr int64_t MAX_N = 1000000;
 			const auto nidx = n_format.sel->get_index(i);
 			if (!n_format.validity.RowIsValid(nidx)) {
 				throw InvalidInputException(
@@ -833,9 +835,10 @@ inline void ArgMinMaxNWithTiesUpdate(Vector inputs[], AggregateInputData &aggr_i
 				throw InvalidInputException(
 				    "Invalid input for __internal_arg_min/__internal_arg_max_rank: n value must be > 0");
 			}
-			if (nval >= MAX_N) {
+			if (nval >= MINMAX_N_LIMIT) {
 				throw InvalidInputException(
-				    "Invalid input for __internal_arg_min/__internal_arg_max_rank: n value must be < %d", MAX_N);
+				    "Invalid input for __internal_arg_min/__internal_arg_max_rank: n value must be < %d",
+				    MINMAX_N_LIMIT);
 			}
 			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
 		}

@@ -544,19 +544,15 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	// MAX_N must match the limit enforced in MinMaxNState::Initialize, which rejects n >= 1000000 at execution time.
-	// Skip optimization for out-of-range values so the query falls back to the standard window execution path instead
-	// of throwing.
-	static constexpr int64_t MAX_N = 1000000;
 	const auto bigint_value = filter_value.value.GetValue<int64_t>();
 	switch (comparison) {
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		if (bigint_value < 1 || bigint_value >= MAX_N) {
+		if (bigint_value < 1 || bigint_value >= MINMAX_N_LIMIT) {
 			return false;
 		}
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		if (bigint_value < 2 || bigint_value > MAX_N) {
+		if (bigint_value < 2 || bigint_value > MINMAX_N_LIMIT) {
 			return false;
 		}
 		break;
@@ -1011,6 +1007,10 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 
 unique_ptr<LogicalOperator> TopNWindowElimination::TryPrepareLateMaterialization(const LogicalWindow &window,
                                                                                  vector<unique_ptr<Expression>> &args) {
+	if (optimizer.OptimizerDisabled(OptimizerType::LATE_MATERIALIZATION)) {
+		return nullptr;
+	}
+
 	vector<idx_t> lhs_projections;
 	vector<reference<LogicalOperator>> stack;
 	bool use_late_materialization = CanUseLateMaterialization(window, args, lhs_projections, stack);

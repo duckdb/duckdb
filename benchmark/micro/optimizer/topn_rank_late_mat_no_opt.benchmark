@@ -1,0 +1,19 @@
+# name: benchmark/micro/optimizer/topn_rank_late_mat_no_opt.benchmark
+# description: Benchmark of top n rank window elimination with late materialization (optimization disabled)
+# group: [optimizer]
+
+name TopN Rank Late Materialization No Opt
+group micro
+subgroup optimizer
+
+init
+SET disabled_optimizers TO 'late_materialization';
+
+load
+CREATE TABLE rank_bench AS (
+	SELECT k, v, v % 1000 AS v2
+	FROM range(0, 1000000) vals(v), range(0, 100) keys(k)
+);
+
+run
+SELECT * FROM (SELECT rank() OVER (PARTITION BY k ORDER BY v DESC) rk, k, v, v2  FROM rank_bench) WHERE rk <= 3;

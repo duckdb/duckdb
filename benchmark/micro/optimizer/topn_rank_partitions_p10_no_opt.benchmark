@@ -1,0 +1,16 @@
+# name: benchmark/micro/optimizer/topn_rank_partitions_p10_no_opt.benchmark
+# description: Benchmark of top n rank window elimination with 10 partitions (optimization disabled)
+# group: [optimizer]
+
+name TopN Rank Partitions P10 No Opt
+group micro
+subgroup optimizer
+
+init
+SET disabled_optimizers TO 'top_n_window_elimination';
+
+load
+CREATE TABLE rank_p10 AS (SELECT k, v FROM range(0, 1000000) vals(v), range(0, 10) keys(k));
+
+run
+SELECT * FROM (SELECT rank() OVER (PARTITION BY k ORDER BY v DESC) rk, k, v FROM rank_p10) WHERE rk <= 3;

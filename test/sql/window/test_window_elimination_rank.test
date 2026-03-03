@@ -203,6 +203,40 @@ SELECT * FROM (
 3	1	91	name_91
 3	2	92	name_92
 
+# When late_materialization is disabled, should NOT use COMPARISON_JOIN
+statement ok
+SET disabled_optimizers='late_materialization';
+
+query II
+EXPLAIN SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val, name
+    FROM test
+) WHERE rk <= 3;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# Correctness: result should be the same even with late_materialization disabled
+query IIII rowsort
+SELECT * FROM (
+    SELECT rank() OVER (PARTITION BY grp ORDER BY val DESC) as rk,
+           grp, val, name
+    FROM test
+) WHERE rk <= 3;
+----
+1	0	99	name_99
+1	1	97	name_97
+1	2	98	name_98
+2	0	96	name_96
+2	1	94	name_94
+2	2	95	name_95
+3	0	93	name_93
+3	1	91	name_91
+3	2	92	name_92
+
+statement ok
+RESET disabled_optimizers;
+
 # =============================================
 # End Late Materialization Tests
 # =============================================
