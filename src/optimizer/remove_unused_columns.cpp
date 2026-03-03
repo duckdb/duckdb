@@ -354,8 +354,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			ColumnBindingReplacer column_binding_replacer;
 			column_binding_replacer.replacement_bindings = cte_ref_pruner.binding_replacements;
 			column_binding_replacer.VisitOperator(*cte.children[1]);
+			return;
 		}
-		return;
+		everything_referenced = true;
+		break;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		auto &cte_ref = op.Cast<LogicalCTERef>();
