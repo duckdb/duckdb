@@ -8,7 +8,7 @@ namespace duckdb {
 
 namespace {
 struct RegrInterceptState {
-	size_t count;
+	uint64_t count;
 	double sum_x;
 	double sum_y;
 	RegrSlopeState slope;
