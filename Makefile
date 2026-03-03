@@ -400,8 +400,8 @@ unittest: debug
 unittest_release: release
 	build/release/test/unittest
 
-unittestci:
-	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
+allunit_relassert:
+	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
 smoke:
 	$(PYTHON) scripts/ci/run_tests.py --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
