@@ -17,7 +17,7 @@ DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 # Leave some CPU headroom so parallel test execution does not fully saturate CI runners.
-DEFAULT_WORKERS = max(1, int((os.cpu_count() or 1) * 0.75))
+DEFAULT_WORKERS = max(1, int((os.cpu_count() or 1) * 0.5))
 
 
 def enable_line_buffering():
