@@ -437,8 +437,9 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 
 static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 	D_ASSERT(!yyjson_is_arr(val) && !yyjson_is_obj(val));
-	auto &desc = node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId(val));
-	if (desc.type == LogicalTypeId::UBIGINT &&
+	const auto val_type = JSONCommon::ValTypeToLogicalTypeId(val);
+	auto &desc = node.GetOrCreateDescription(val_type);
+	if (val_type == LogicalTypeId::UBIGINT &&
 	    unsafe_yyjson_get_uint(val) > static_cast<uint64_t>(NumericLimits<int64_t>::Maximum())) {
 		desc.has_large_ubigint = true;
 	}
