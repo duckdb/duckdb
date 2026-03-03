@@ -145,7 +145,7 @@ jobs:
     needs:
       - prepare
       - linux-debug
-    runs-on: ubuntu-latest
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
     - uses: actions/checkout@v4
