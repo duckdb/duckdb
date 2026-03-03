@@ -18,6 +18,7 @@ DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 # Leave some CPU headroom so parallel test execution does not fully saturate CI runners.
 DEFAULT_WORKERS = max(1, int((os.cpu_count() or 1) * 0.5))
+MAX_RETRIES = 3
 
 
 def enable_line_buffering():
@@ -40,6 +41,27 @@ class TestRunnerConfig:
     rss_memory_threshold_mib: int | None
     runtime_threshold_seconds: int | None
     max_failures: int | None
+
+
+class BatchRunState:
+    def __init__(self):
+        self.failed_count = 0
+        self.retry_count = 0
+        self.stop_launching = False
+
+    def record_retry(self):
+        self.retry_count += 1
+
+    def record_failure(self):
+        self.failed_count += 1
+
+    def can_retry(self, batch_info, config: TestRunnerConfig):
+        return batch_info["attempt"] < config.retry and self.retry_count < MAX_RETRIES
+
+    def should_stop(self, config: TestRunnerConfig):
+        return self.stop_launching or (
+            config.max_failures is not None and self.failed_count >= config.max_failures
+        )
 
 
 def chunked(items, n):
@@ -274,6 +296,56 @@ def submit_batches(executor, config: TestRunnerConfig, batches, future_to_batch,
     return next_batch_idx
 
 
+def handle_failed_batch(executor, config: TestRunnerConfig, state: BatchRunState, future_to_batch, batch_info, result):
+    print(
+        format_batch_failure(
+            batch_info["batch_idx"],
+            batch_info["batch"],
+            config,
+            result["stdout"],
+            result["stderr"],
+            result["message"],
+        ),
+        end="",
+    )
+    print("========================")
+    if state.can_retry(batch_info, config):
+        state.record_retry()
+        next_attempt = batch_info["attempt"] + 1
+        print(
+            f"retrying failed test batch {batch_info['batch_idx']} "
+            f"(attempt {next_attempt}/{config.retry}, retry {state.retry_count}/{MAX_RETRIES})"
+        )
+        submit_batch(
+            executor,
+            config,
+            batch_info["batch"],
+            future_to_batch,
+            batch_info["batch_idx"],
+            next_attempt,
+        )
+        return True
+
+    if batch_info["attempt"] < config.retry:
+        print(f"stopping after reaching {MAX_RETRIES} retries")
+        state.stop_launching = True
+
+    state.record_failure()
+    if state.should_stop(config):
+        state.stop_launching = True
+    return False
+
+
+def report_batch_metrics(config: TestRunnerConfig, batch_info, result, elapsed: float):
+    if config.runtime_threshold_seconds is not None and elapsed >= config.runtime_threshold_seconds:
+        print(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
+    if (
+        config.rss_memory_threshold_mib is not None
+        and format_mib(result["peak_rss_bytes"]) >= config.rss_memory_threshold_mib
+    ):
+        print(f"batch with file {batch_info['batch'][0]} peak RSS {format_mib(result['peak_rss_bytes']):.0f} MiB")
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-list", type=Path)
@@ -350,8 +422,7 @@ def main():
 
 
 def run_tests(config: TestRunnerConfig, batches):
-    failed_count = 0
-    stop_launching = False
+    state = BatchRunState()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
         future_to_batch = {}
@@ -368,53 +439,16 @@ def run_tests(config: TestRunnerConfig, batches):
                 batch_info = future_to_batch.pop(future)
                 result = future.result()
                 elapsed = time.monotonic() - batch_info["start"]
-                if config.runtime_threshold_seconds is not None and elapsed >= config.runtime_threshold_seconds:
-                    print(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
-                if (
-                    config.rss_memory_threshold_mib is not None
-                    and format_mib(result["peak_rss_bytes"]) >= config.rss_memory_threshold_mib
-                ):
-                    print(
-                        f"batch with file {batch_info['batch'][0]} peak RSS {format_mib(result['peak_rss_bytes']):.0f} MiB"
-                    )
+                report_batch_metrics(config, batch_info, result, elapsed)
                 if result["failed"]:
-                    if batch_info["attempt"] < config.retry:
-                        next_attempt = batch_info["attempt"] + 1
-                        print(
-                            f"retrying failed test batch {batch_info['batch_idx']} "
-                            f"(attempt {next_attempt}/{config.retry})"
-                        )
-                        submit_batch(
-                            executor,
-                            config,
-                            batch_info["batch"],
-                            future_to_batch,
-                            batch_info["batch_idx"],
-                            next_attempt,
-                        )
+                    if handle_failed_batch(executor, config, state, future_to_batch, batch_info, result):
                         continue
 
-                    if config.max_failures is not None and failed_count + 1 >= config.max_failures:
-                        stop_launching = True
-                    failed_count += 1
-                    print(
-                        format_batch_failure(
-                            batch_info["batch_idx"],
-                            batch_info["batch"],
-                            config,
-                            result["stdout"],
-                            result["stderr"],
-                            result["message"],
-                        ),
-                        end="",
-                    )
-                    print("========================")
-
-            if not stop_launching:
+            if not state.stop_launching:
                 next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
-    if failed_count:
-        print(f"error: found {failed_count} test batch failures")
+    if state.failed_count:
+        print(f"error: found {state.failed_count} test batch failures")
         return 1
 
     print("all tests passed.")
