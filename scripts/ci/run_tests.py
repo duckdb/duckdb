@@ -314,6 +314,10 @@ def main():
     max_failures = args.max_failures
     if args.fail_fast:
         max_failures = 1
+    retry = max(0, args.retry)
+    if retry == 0 and os.environ.get("CI"):
+        retry = 1
+        print("CI detected, enabling retry=1")
     batch_size = 1 if args.track_runtime is not None else args.batch_size
     with open_test_list(args.test_list, args.unittest_bin, args.pattern) as test_file:
         config = TestRunnerConfig(
@@ -322,7 +326,7 @@ def main():
             pattern=args.pattern,
             test_command=args.test_command,
             workers=max(1, args.workers),
-            retry=max(0, args.retry),
+            retry=retry,
             batch_size=batch_size,
             batch_timeout_seconds=args.batch_timeout,
             rss_memory_threshold_mib=args.track_rss_memory,
