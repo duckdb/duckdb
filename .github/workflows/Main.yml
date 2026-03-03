@@ -15,6 +15,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '!.github/workflows/Swift.yml'
+      - '!.github/workflows/Windows.yml'
       - '!.github/workflows/Regression.yml'
       - '!.github/workflows/Extensions.yml'
       - '!.github/workflows/LinuxRelease.yml'
@@ -33,6 +35,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '!.github/workflows/Swift.yml'
+      - '!.github/workflows/Windows.yml'
       - '!.github/workflows/Regression.yml'
       - '!.github/workflows/Extensions.yml'
       - '!.github/workflows/LinuxRelease.yml'
@@ -230,6 +234,20 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       skip_tests: 'false'
+
+ swift:
+    uses: ./.github/workflows/Swift.yml
+    secrets: inherit
+    needs: linux-debug
+
+ windows:
+    uses: ./.github/workflows/Windows.yml
+    secrets: inherit
+    needs: linux-debug
+    with:
+      git_ref: ${{ github.sha }}
+      skip_tests: 'false'
+      run_all: 'true'
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
