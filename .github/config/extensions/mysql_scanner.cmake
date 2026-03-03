@@ -1,4 +1,4 @@
-if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
+if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(mysql_scanner
             DONT_LINK
             LOAD_TESTS
