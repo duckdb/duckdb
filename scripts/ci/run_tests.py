@@ -31,6 +31,7 @@ def enable_line_buffering():
 class TestRunnerConfig:
     test_list: Path
     unittest_bin: str
+    pattern: str
     test_command: str
     workers: int
     retry: int
@@ -126,10 +127,10 @@ def format_mib(value_bytes: int):
     return value_bytes / (1024 * 1024)
 
 
-def generate_test_list(test_file, unittest_bin: str):
+def generate_test_list(test_file, unittest_bin: str, pattern: str):
     # Catch returns the number of matching tests from --list-test-names-only,
     # so a non-zero exit code here is expected when tests are found.
-    command = [unittest_bin, "--list-test-names-only", "*"]
+    command = [unittest_bin, "--list-test-names-only", pattern]
     print(f"generated test list using: {shlex.join(command)}")
     proc = subprocess.run(
         command,
@@ -147,14 +148,14 @@ def generate_test_list(test_file, unittest_bin: str):
 
 
 @contextlib.contextmanager
-def open_test_list(test_list: Path | None, unittest_bin: str):
+def open_test_list(test_list: Path | None, unittest_bin: str, pattern: str):
     if test_list is not None:
         with test_list.open("r", encoding="utf8") as test_file:
             yield Path(test_file.name)
         return
 
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as test_file:
-        generate_test_list(test_file, unittest_bin)
+        generate_test_list(test_file, unittest_bin, pattern)
         yield Path(test_file.name)
 
 
@@ -278,6 +279,7 @@ def parse_args():
     parser.add_argument("--test-list", type=Path)
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("unittest_bin")
+    parser.add_argument("pattern", nargs="?", default="")
     parser.add_argument(
         "--test-command",
         default="{binary} --use-colour yes -f {test_list}",
@@ -313,10 +315,11 @@ def main():
     if args.fail_fast:
         max_failures = 1
     batch_size = 1 if args.track_runtime is not None else args.batch_size
-    with open_test_list(args.test_list, args.unittest_bin) as test_file:
+    with open_test_list(args.test_list, args.unittest_bin, args.pattern) as test_file:
         config = TestRunnerConfig(
             test_list=test_file,
             unittest_bin=args.unittest_bin,
+            pattern=args.pattern,
             test_command=args.test_command,
             workers=max(1, args.workers),
             retry=max(0, args.retry),

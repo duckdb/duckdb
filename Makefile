@@ -401,7 +401,7 @@ unittest_release: release
 	build/release/test/unittest
 
 allunit_relassert:
-	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
+	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest '*' $(T)
 
 smoke:
 	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
@@ -411,7 +411,7 @@ unittestarrow:
 
 
 allunit:
-	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest $(T)
+	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest '*' $(T)
 
 docs:
 	mkdir -p ./build/docs && \
