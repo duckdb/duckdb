@@ -302,7 +302,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		if (!cte_info_map) {
 			cte_info_map = make_shared_ptr<unordered_map<idx_t, MaterializedCTEInfo>>();
 		}
-		auto &cte_map_entry = (*cte_info_map)[rec.table_index];
+		(*cte_info_map).insert({rec.table_index, MaterializedCTEInfo()});
 		everything_referenced = true;
 		break;
 	}
@@ -372,7 +372,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 
 		for (auto &entry : column_references) {
 			if (entry.first.table_index == cte_ref.table_index) {
-				auto &referenced_column = entry.second;
 				auto &test = cte_map_ref[cte_ref.cte_index].column_references;
 				test.insert(entry);
 			}
