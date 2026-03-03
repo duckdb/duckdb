@@ -25,16 +25,6 @@ struct CardinalityFun {
 	static ScalarFunction GetFunction();
 };
 
-struct MapFun {
-	static constexpr const char *Name = "map";
-	static constexpr const char *Parameters = "keys,values";
-	static constexpr const char *Description = "Creates a map from a set of keys and values";
-	static constexpr const char *Example = "map(['key1', 'key2'], ['val1', 'val2'])";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
 struct MapEntriesFun {
 	static constexpr const char *Name = "map_entries";
 	static constexpr const char *Parameters = "map";

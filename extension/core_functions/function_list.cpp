@@ -258,7 +258,6 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(MakeTimestampMsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MakeTimestampNsFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTypeFun),
-	DUCKDB_SCALAR_FUNCTION_SET(MapFun),
 	DUCKDB_SCALAR_FUNCTION(MapConcatFun),
 	DUCKDB_SCALAR_FUNCTION(MapEntriesFun),
 	DUCKDB_SCALAR_FUNCTION(MapExtractFun),

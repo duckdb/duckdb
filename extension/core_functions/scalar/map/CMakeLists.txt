@@ -5,7 +5,6 @@ add_library_unity(
   map_extract.cpp
   map_from_entries.cpp
   map_entries.cpp
-  map.cpp
   map_concat.cpp
   switch.cpp
   cardinality.cpp)
