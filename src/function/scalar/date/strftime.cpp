@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/function/scalar/date_functions.hpp"
-#include "duckdb/function/scalar/date_functions.hpp"
 
 #include <cctype>
 #include <utility>
