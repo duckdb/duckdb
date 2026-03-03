@@ -128,7 +128,7 @@ class RemoveUnusedColumns : public BaseColumnPruner {
 public:
 	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false,
 	                    shared_ptr<unordered_map<idx_t, MaterializedCTEInfo>> cte_info_map = nullptr)
-	    : binder(binder), context(context), everything_referenced(is_root), cte_info_map(cte_info_map) {
+	    : binder(binder), context(context), everything_referenced(is_root), cte_info_map(std::move(cte_info_map)) {
 	}
 
 	void VisitOperator(LogicalOperator &op) override;

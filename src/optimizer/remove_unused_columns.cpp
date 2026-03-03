@@ -368,7 +368,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		auto &cte_ref = op.Cast<LogicalCTERef>();
 		if (!cte_info_map) {
-			throw InternalException("CTE reference found without CTE info map");
+			everything_referenced = true;
+			break;
 		}
 		auto &cte_map_ref = *cte_info_map;
 		auto it = cte_map_ref.find(cte_ref.cte_index);
