@@ -337,6 +337,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 			}
 
+			if (expressions.empty()) {
+				// no columns referenced, but we can not have an empty projection, as this would
+				// result in an empty left-hand side of the cte
+				break;
+			}
+
 			auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
 			projection->children.push_back(std::move(cte.children[0]));
 			cte.children[0] = std::move(projection);
