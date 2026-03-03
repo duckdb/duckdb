@@ -444,11 +444,12 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 			if (caught_e) {
 				std::rethrow_exception(caught_e);
 			} else if (response && !response->HasRequestError()) {
-				throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s'",
-				                    static_cast<int>(response->status), method, request.url);
+				throw HTTPException(*response, "Request returned HTTP %d for HTTP %s to '%s' (host '%s')",
+				                    static_cast<int>(response->status), method, request.url, request.proto_host_port);
 			} else {
 				string error = response ? response->GetError() : "Unknown error";
-				throw IOException("%s error for HTTP %s to '%s'", error, method, request.url);
+				throw IOException("%s error for HTTP %s to '%s' (host '%s')", error, method, request.url,
+				                  request.proto_host_port);
 			}
 		}
 	}
