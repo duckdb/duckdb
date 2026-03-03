@@ -5,9 +5,8 @@
   "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
-      "reason": "Error handling",
+      "reason": "Does not produce prepared statement",
       "paths": [
-        "test/sql/types/nested/struct/struct_dict.test",
         "test/sql/types/map/map_empty.test"
       ]
     },
