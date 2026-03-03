@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_BATCH_SIZE = 20
+DEFAULT_BATCH_SIZE = 10
 DEFAULT_BATCH_TIMEOUT_SECONDS = 300
 DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
@@ -41,8 +41,21 @@ class TestRunnerConfig:
 
 
 def chunked(items, n):
-    for i in range(0, len(items), n):
-        yield items[i : i + n]
+    # Keep input order, cap batches at n entries, and isolate .test_slow
+    # files so each batch contains at most one slow test.
+    batch = []
+    slow_count = 0
+    for item in items:
+        item_is_slow = item.endswith(".test_slow")
+        if batch and (len(batch) >= n or (item_is_slow and slow_count >= 1)):
+            yield batch
+            batch = []
+            slow_count = 0
+        batch.append(item)
+        if item_is_slow:
+            slow_count += 1
+    if batch:
+        yield batch
 
 
 def compute_batch_size(test_count: int, config: TestRunnerConfig):
