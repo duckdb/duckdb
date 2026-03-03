@@ -36,15 +36,6 @@
         "aliases": ["array_unique"]
     },
     {
-        "name": "list_value",
-        "parameters": "any,...",
-        "description": "Creates a LIST containing the argument values.",
-        "example": "list_value(4, 5, 6)",
-        "categories": ["list"],
-        "type": "scalar_function_set",
-        "aliases": ["list_pack"]
-    },
-    {
         "name": "list_slice",
         "variants": [
             {
@@ -98,24 +89,6 @@
         "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["array_reverse_sort"]
-    },
-    {
-        "name": "list_transform",
-        "parameters": "list,lambda(x)",
-        "description": "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. The return type is defined by the return type of the `lambda` function.",
-        "example": "list_transform([1, 2, 3], lambda x : x + 1)",
-        "categories": ["list", "lambda"],
-        "type": "scalar_function",
-        "aliases": ["array_transform", "list_apply", "array_apply", "apply"]
-    },
-    {
-        "name": "list_filter",
-        "parameters": "list,lambda(x)",
-        "description": "Constructs a list from those elements of the input `list` for which the `lambda` function returns `true`. DuckDB must be able to cast the `lambda` function's return type to `BOOL`. The return type of `list_filter` is the same as the input list's.",
-        "example": "list_filter([3, 4, 5], lambda x : x > 4)",
-        "categories": ["list", "lambda"],
-        "type": "scalar_function",
-        "aliases": ["array_filter", "filter"]
     },
     {
         "name": "list_reduce",
@@ -186,14 +159,6 @@
         "categories": ["list"],
         "type": "scalar_function_set",
         "aliases": ["list_negative_dot_product"]
-    },
-    {
-        "name": "unpivot_list",
-        "parameters": "any,...",
-        "description": "Identical to list_value, but generated as part of unpivot for better error messages.",
-        "example": "unpivot_list(4, 5, 6)",
-        "categories": ["list"],
-        "type": "scalar_function"
     },
     {
         "name": "list_has_any",

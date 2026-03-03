@@ -20,6 +20,39 @@
         "aliases": ["lcase"]
     },
     {
+        "name": "trim",
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the `characters` from either side of the `string`. `characters` defaults to `space`.",
+        "examples": [
+            "trim('    test  ')",
+            "trim('>>>>test<<', '><')"
+        ],
+        "categories": ["string"],
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "ltrim",
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the `characters` from the left side of the `string`. `characters` defaults to `space`.",
+        "examples": [
+            "ltrim('    test  ')",
+            "ltrim('>>>>test<<', '><')"
+        ],
+        "categories": ["string"],
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "rtrim",
+        "parameters": "string,characters",
+        "description": "Removes any occurrences of any of the `characters` from the right side of the `string`. `characters` defaults to `space`.",
+        "examples": [
+            "rtrim('    test  ')",
+            "rtrim('>>>>test<<', '><')"
+        ],
+        "categories": ["string"],
+        "type": "scalar_function_set"
+    },
+    {
         "name": "concat_ws",
         "parameters": "separator,string,...",
         "description": "Concatenates many strings, separated by `separator`. `NULL` inputs are skipped.",

@@ -91,22 +91,6 @@ struct ArrayUniqueFun {
 	static constexpr const char *Name = "array_unique";
 };
 
-struct ListValueFun {
-	static constexpr const char *Name = "list_value";
-	static constexpr const char *Parameters = "any,...";
-	static constexpr const char *Description = "Creates a LIST containing the argument values.";
-	static constexpr const char *Example = "list_value(4, 5, 6)";
-	static constexpr const char *Categories = "list";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct ListPackFun {
-	using ALIAS = ListValueFun;
-
-	static constexpr const char *Name = "list_pack";
-};
-
 struct ListSliceFun {
 	static constexpr const char *Name = "list_slice";
 	static constexpr const char *Parameters = "list,begin,end\001list,begin,end,step";
@@ -175,62 +159,6 @@ struct ArrayReverseSortFun {
 	using ALIAS = ListReverseSortFun;
 
 	static constexpr const char *Name = "array_reverse_sort";
-};
-
-struct ListTransformFun {
-	static constexpr const char *Name = "list_transform";
-	static constexpr const char *Parameters = "list,lambda(x)";
-	static constexpr const char *Description = "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. The return type is defined by the return type of the `lambda` function.";
-	static constexpr const char *Example = "list_transform([1, 2, 3], lambda x : x + 1)";
-	static constexpr const char *Categories = "list,lambda";
-
-	static ScalarFunction GetFunction();
-};
-
-struct ArrayTransformFun {
-	using ALIAS = ListTransformFun;
-
-	static constexpr const char *Name = "array_transform";
-};
-
-struct ListApplyFun {
-	using ALIAS = ListTransformFun;
-
-	static constexpr const char *Name = "list_apply";
-};
-
-struct ArrayApplyFun {
-	using ALIAS = ListTransformFun;
-
-	static constexpr const char *Name = "array_apply";
-};
-
-struct ApplyFun {
-	using ALIAS = ListTransformFun;
-
-	static constexpr const char *Name = "apply";
-};
-
-struct ListFilterFun {
-	static constexpr const char *Name = "list_filter";
-	static constexpr const char *Parameters = "list,lambda(x)";
-	static constexpr const char *Description = "Constructs a list from those elements of the input `list` for which the `lambda` function returns `true`. DuckDB must be able to cast the `lambda` function's return type to `BOOL`. The return type of `list_filter` is the same as the input list's.";
-	static constexpr const char *Example = "list_filter([3, 4, 5], lambda x : x > 4)";
-	static constexpr const char *Categories = "list,lambda";
-
-	static ScalarFunction GetFunction();
-};
-
-struct ArrayFilterFun {
-	using ALIAS = ListFilterFun;
-
-	static constexpr const char *Name = "array_filter";
-};
-
-struct FilterFun {
-	using ALIAS = ListFilterFun;
-
-	static constexpr const char *Name = "filter";
 };
 
 struct ListReduceFun {
@@ -347,16 +275,6 @@ struct ListNegativeDotProductFun {
 	using ALIAS = ListNegativeInnerProductFun;
 
 	static constexpr const char *Name = "list_negative_dot_product";
-};
-
-struct UnpivotListFun {
-	static constexpr const char *Name = "unpivot_list";
-	static constexpr const char *Parameters = "any,...";
-	static constexpr const char *Description = "Identical to list_value, but generated as part of unpivot for better error messages.";
-	static constexpr const char *Example = "unpivot_list(4, 5, 6)";
-	static constexpr const char *Categories = "list";
-
-	static ScalarFunction GetFunction();
 };
 
 struct ListHasAnyFun {

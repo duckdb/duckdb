@@ -51,6 +51,22 @@ struct DatediffFun {
 	static constexpr const char *Name = "datediff";
 };
 
+struct DateSubFun {
+	static constexpr const char *Name = "date_sub";
+	static constexpr const char *Parameters = "part,startdate,enddate";
+	static constexpr const char *Description = "The number of complete partitions between the timestamps";
+	static constexpr const char *Example = "date_sub('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct DatesubFun {
+	using ALIAS = DateSubFun;
+
+	static constexpr const char *Name = "datesub";
+};
+
 struct DatePartFun {
 	static constexpr const char *Name = "date_part";
 	static constexpr const char *Parameters = "ts";
@@ -67,20 +83,14 @@ struct DatepartFun {
 	static constexpr const char *Name = "datepart";
 };
 
-struct DateSubFun {
-	static constexpr const char *Name = "date_sub";
-	static constexpr const char *Parameters = "part,startdate,enddate";
-	static constexpr const char *Description = "The number of complete partitions between the timestamps";
-	static constexpr const char *Example = "date_sub('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
+struct TimezoneFun {
+	static constexpr const char *Name = "timezone";
+	static constexpr const char *Parameters = "ts";
+	static constexpr const char *Description = "Extract the timezone component from a date or timestamp";
+	static constexpr const char *Example = "timezone(timestamp '2021-08-03 11:59:44.123456')";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
-};
-
-struct DatesubFun {
-	using ALIAS = DateSubFun;
-
-	static constexpr const char *Name = "datesub";
 };
 
 struct DateTruncFun {
@@ -436,16 +446,6 @@ struct TimeBucketFun {
 	static constexpr const char *Parameters = "bucket_width,timestamp,origin";
 	static constexpr const char *Description = "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets";
 	static constexpr const char *Example = "time_bucket(INTERVAL '2 weeks', TIMESTAMP '1992-04-20 15:26:00-07', TIMESTAMP '1992-04-01 00:00:00-07')";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
-struct TimezoneFun {
-	static constexpr const char *Name = "timezone";
-	static constexpr const char *Parameters = "ts";
-	static constexpr const char *Description = "Extract the timezone component from a date or timestamp";
-	static constexpr const char *Example = "timezone(timestamp '2021-08-03 11:59:44.123456')";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();

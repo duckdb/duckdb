@@ -1,4 +1,4 @@
-#include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"

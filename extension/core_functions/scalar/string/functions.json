@@ -201,17 +201,6 @@
         "type": "scalar_function"
     },
     {
-        "name": "ltrim",
-        "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the `characters` from the left side of the `string`. `characters` defaults to `space`.",
-        "examples": [
-            "ltrim('    test  ')",
-            "ltrim('>>>>test<<', '><')"
-        ],
-        "categories": ["string"],
-        "type": "scalar_function_set"
-    },
-    {
         "name": "parse_dirname",
         "parameters": "path,separator",
         "description": "Returns the top-level directory name from the given `path`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
@@ -329,34 +318,12 @@
         "type": "scalar_function"
     },
     {
-        "name": "rtrim",
-        "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the `characters` from the right side of the `string`. `characters` defaults to `space`.",
-        "examples": [
-            "rtrim('    test  ')",
-            "rtrim('>>>>test<<', '><')"
-        ],
-        "categories": ["string"],
-        "type": "scalar_function_set"
-    },
-    {
         "name": "translate",
         "parameters": "string,from,to",
         "description": "Replaces each character in `string` that matches a character in the `from` set with the corresponding character in the `to` set. If `from` is longer than `to`, occurrences of the extra characters in `from` are deleted.",
         "example": "translate('12345', '143', 'ax')",
         "categories": ["string"],
         "type": "scalar_function"
-    },
-    {
-        "name": "trim",
-        "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the `characters` from either side of the `string`. `characters` defaults to `space`.",
-        "examples": [
-            "trim('    test  ')",
-            "trim('>>>>test<<', '><')"
-        ],
-        "categories": ["string"],
-        "type": "scalar_function_set"
     },
     {
         "name": "unbin",

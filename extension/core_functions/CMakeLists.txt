@@ -7,7 +7,7 @@ add_subdirectory(aggregate)
 add_subdirectory(scalar)
 
 set(CORE_FUNCTION_FILES ${CORE_FUNCTION_FILES} core_functions_extension.cpp
-                        function_list.cpp lambda_functions.cpp)
+                        function_list.cpp)
 
 build_static_extension(core_functions ${CORE_FUNCTION_FILES})
 set(PARAMETERS "-warnings")

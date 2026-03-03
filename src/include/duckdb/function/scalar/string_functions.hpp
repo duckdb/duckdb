@@ -47,6 +47,36 @@ struct LcaseFun {
 	static constexpr const char *Name = "lcase";
 };
 
+struct TrimFun {
+	static constexpr const char *Name = "trim";
+	static constexpr const char *Parameters = "string,characters";
+	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from either side of the `string`. `characters` defaults to `space`.";
+	static constexpr const char *Example = "trim('    test  ')\002trim('>>>>test<<', '><')";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct LtrimFun {
+	static constexpr const char *Name = "ltrim";
+	static constexpr const char *Parameters = "string,characters";
+	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from the left side of the `string`. `characters` defaults to `space`.";
+	static constexpr const char *Example = "ltrim('    test  ')\002ltrim('>>>>test<<', '><')";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct RtrimFun {
+	static constexpr const char *Name = "rtrim";
+	static constexpr const char *Parameters = "string,characters";
+	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from the right side of the `string`. `characters` defaults to `space`.";
+	static constexpr const char *Example = "rtrim('    test  ')\002rtrim('>>>>test<<', '><')";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct ConcatWsFun {
 	static constexpr const char *Name = "concat_ws";
 	static constexpr const char *Parameters = "separator,string,...";

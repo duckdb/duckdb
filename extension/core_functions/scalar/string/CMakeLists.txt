@@ -17,7 +17,6 @@ add_library_unity(
   left_right.cpp
   to_base.cpp
   pad.cpp
-  trim.cpp
   format_bytes.cpp
   parse_formatted_bytes.cpp
   hex.cpp

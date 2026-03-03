@@ -263,16 +263,6 @@ struct LpadFun {
 	static ScalarFunction GetFunction();
 };
 
-struct LtrimFun {
-	static constexpr const char *Name = "ltrim";
-	static constexpr const char *Parameters = "string,characters";
-	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from the left side of the `string`. `characters` defaults to `space`.";
-	static constexpr const char *Example = "ltrim('    test  ')\002ltrim('>>>>test<<', '><')";
-	static constexpr const char *Categories = "string";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
 struct ParseDirnameFun {
 	static constexpr const char *Name = "parse_dirname";
 	static constexpr const char *Parameters = "path,separator";
@@ -383,16 +373,6 @@ struct RpadFun {
 	static ScalarFunction GetFunction();
 };
 
-struct RtrimFun {
-	static constexpr const char *Name = "rtrim";
-	static constexpr const char *Parameters = "string,characters";
-	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from the right side of the `string`. `characters` defaults to `space`.";
-	static constexpr const char *Example = "rtrim('    test  ')\002rtrim('>>>>test<<', '><')";
-	static constexpr const char *Categories = "string";
-
-	static ScalarFunctionSet GetFunctions();
-};
-
 struct TranslateFun {
 	static constexpr const char *Name = "translate";
 	static constexpr const char *Parameters = "string,from,to";
@@ -401,16 +381,6 @@ struct TranslateFun {
 	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
-};
-
-struct TrimFun {
-	static constexpr const char *Name = "trim";
-	static constexpr const char *Parameters = "string,characters";
-	static constexpr const char *Description = "Removes any occurrences of any of the `characters` from either side of the `string`. `characters` defaults to `space`.";
-	static constexpr const char *Example = "trim('    test  ')\002trim('>>>>test<<', '><')";
-	static constexpr const char *Categories = "string";
-
-	static ScalarFunctionSet GetFunctions();
 };
 
 struct UnbinFun {
