@@ -1190,6 +1190,9 @@ PEGTransformerFactory::TransformAdditiveExpression(PEGTransformer &transformer,
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		auto func_expr = make_uniq<FunctionExpression>(std::move(term), std::move(term_children));
 		func_expr->is_operator = true;
+		if (inner_list_pr.offset.IsValid()) {
+			transformer.SetQueryLocation(*func_expr, inner_list_pr.offset);
+		}
 		expr = std::move(func_expr);
 	}
 	return expr;
