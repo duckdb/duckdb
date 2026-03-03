@@ -404,7 +404,7 @@ allunit_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
 smoke:
-	$(PYTHON) scripts/ci/run_tests.py --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
 
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
