@@ -438,7 +438,12 @@ relassert: ${EXTENSION_CONFIG_STEP}
 .PHONY: relassert-artifact
 
 relassert-artifact:
-	bash scripts/prepare_relassert_artifact.sh
+	bash scripts/prepare_build_artifact.sh relassert
+
+.PHONY: release-artifact
+
+release-artifact:
+	bash scripts/prepare_build_artifact.sh release
 
 benchmark:
 	mkdir -p ./build/release && \

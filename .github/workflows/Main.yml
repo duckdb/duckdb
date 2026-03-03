@@ -195,9 +195,9 @@ jobs:
       run_all: 'true'
 
  linux-release:
-    name: Linux Release (full suite)
-    needs: linux-debug
-    runs-on: ubuntu-24.04
+    name: Linux Release
+    needs: prepare
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: ninja
       BUILD_JEMALLOC: 1
@@ -208,17 +208,52 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install
-      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      shell: bash
       run: make release
 
-    - name: Test
+    - name: Prepare release artifact
       shell: bash
+      run: make release-artifact
+
+    - name: Upload release build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-release-build
+        path: build/release-artifact.tar.gz
+        if-no-files-found: error
+
+ linux-release-tests:
+    name: Linux Release Tests
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download release build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-release-build
+        path: build
+
+    - name: Extract release build artifact
+      shell: bash
+      run: |
+        rm -rf build/release
+        tar -xzf build/release-artifact.tar.gz -C build
+
+    - name: Test
       run: make allunit
 
  linux-cli:
