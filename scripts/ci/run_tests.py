@@ -18,7 +18,7 @@ DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 # Leave some CPU headroom so parallel test execution does not fully saturate CI runners.
 DEFAULT_WORKERS = "75%"
-MAX_RETRIES = 3
+DEFAULT_MAX_RETRIES = 4
 
 
 def enable_line_buffering():
@@ -36,6 +36,7 @@ class TestRunnerConfig:
     test_command: str
     workers: int
     retry: int
+    max_retries: int
     batch_size: int
     batch_timeout_seconds: int
     rss_memory_threshold_mib: int | None
@@ -56,7 +57,7 @@ class BatchRunState:
         self.failed_count += 1
 
     def can_retry(self, batch_info, config: TestRunnerConfig):
-        return batch_info["attempt"] < config.retry and self.retry_count < MAX_RETRIES
+        return batch_info["attempt"] < config.retry and self.retry_count < config.max_retries
 
     def should_stop(self, config: TestRunnerConfig):
         return self.stop_launching or (
@@ -323,7 +324,7 @@ def handle_failed_batch(executor, config: TestRunnerConfig, state: BatchRunState
         next_attempt = batch_info["attempt"] + 1
         print(
             f"retrying failed test batch {batch_info['batch_idx']} "
-            f"(attempt {next_attempt}/{config.retry}, retry {state.retry_count}/{MAX_RETRIES})"
+            f"(attempt {next_attempt}/{config.retry}, retry {state.retry_count}/{config.max_retries})"
         )
         submit_batch(
             executor,
@@ -336,8 +337,7 @@ def handle_failed_batch(executor, config: TestRunnerConfig, state: BatchRunState
         return True
 
     if batch_info["attempt"] < config.retry:
-        print(f"stopping after reaching {MAX_RETRIES} retries")
-        state.stop_launching = True
+        print(f"not retrying failed test batch {batch_info['batch_idx']} after reaching {config.max_retries} retries")
 
     state.record_failure()
     if state.should_stop(config):
@@ -384,6 +384,7 @@ def parse_args():
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--max-failures", type=int)
     parser.add_argument("--retry", type=int, default=0)
+    parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
     return parser.parse_args()
@@ -399,6 +400,7 @@ def main():
     if retry == 0 and os.environ.get("CI"):
         retry = 1
         print("CI detected, enabling retry=1")
+    max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
     batch_size = 1 if args.track_runtime is not None else args.batch_size
     with open_test_list(args.test_list, args.unittest_bin, args.pattern) as test_file:
@@ -409,6 +411,7 @@ def main():
             test_command=args.test_command,
             workers=workers,
             retry=retry,
+            max_retries=max_retries,
             batch_size=batch_size,
             batch_timeout_seconds=args.batch_timeout,
             rss_memory_threshold_mib=args.track_rss_memory,
