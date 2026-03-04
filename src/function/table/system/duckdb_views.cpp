@@ -56,6 +56,9 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFun
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("is_bound");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
 	return nullptr;
 }
 
@@ -134,16 +137,23 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 				break;
 			case 10: {
 				// column_count, LogicalType::BIGINT
-				// make sure the view is bound so we know the columns it emits
-				view.BindView(context);
+				// if the view is unbound - we return NULL
 				auto columns = view.GetColumnInfo();
-				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(columns->types.size())));
+				output.SetValue(c, count,
+				                columns ? Value::BIGINT(NumericCast<int64_t>(columns->types.size())) : Value());
 				break;
 			}
 			case 11:
 				// sql, LogicalType::VARCHAR
 				output.SetValue(c, count, Value(view.ToSQL()));
 				break;
+			case 12: {
+				// is_bound, LogicalType::BOOLEAN
+				// whether or not the view is bound
+				auto columns = view.GetColumnInfo();
+				output.SetValue(c, count, Value::BOOLEAN(columns.get()));
+				break;
+			}
 			default:
 				throw InternalException("Unsupported column index for duckdb_views");
 			}

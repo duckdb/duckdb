@@ -159,16 +159,14 @@ private:
 class ViewColumnHelper : public ColumnHelper {
 public:
 	explicit ViewColumnHelper(ClientContext &context, ViewCatalogEntry &entry) : entry(entry) {
-		try {
-			entry.BindView(context);
-
-			auto view_columns = entry.GetColumnInfo();
+		auto view_columns = entry.GetColumnInfo();
+		if (view_columns) {
 			column_names = view_columns->names;
 			types = view_columns->types;
 			QueryResult::DeduplicateColumns(column_names);
 			bound_view = true;
-		} catch (...) {
-			// failed to bind view - return NULL for columns
+		} else {
+			// view is not bound - emit a single placeholder column
 			types.push_back(LogicalTypeId::INVALID);
 		}
 	}
