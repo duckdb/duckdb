@@ -77,8 +77,24 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 	for (idx_t i = 0; i < statements.size(); i++) {
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
+			if (is_in_active_transaction) {
+				context.RunFunctionInTransactionInternal(
+				    lock, [&]() { HandlePragmaStatementInternal(statements[i], new_statements); });
+				break;
+			}
+			// inject BEGIN
+			auto begin_info = make_uniq<TransactionInfo>(
+			    TransactionType::BEGIN_TRANSACTION, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+			new_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
+
+			// add pragma statement
 			context.RunFunctionInTransactionInternal(
 			    lock, [&]() { HandlePragmaStatementInternal(statements[i], new_statements); });
+
+			// inject COMMIT
+			auto commit_info = make_uniq<TransactionInfo>(
+			    TransactionType::COMMIT, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+			new_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
 			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
