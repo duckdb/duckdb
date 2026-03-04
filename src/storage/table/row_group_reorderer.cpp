@@ -276,7 +276,13 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 	}
 
 	if (row_group_map.empty()) {
-		return nullptr;
+		// All row groups have unknown stats - scan them all without reordering
+		for (auto &remaining_row_group : remaining_row_groups) {
+			ordered_row_groups.push_back(remaining_row_group);
+		}
+
+		// Recurse (just once, since we will go into the returning either nullptr or ordered_row_groups[0].get())
+		return GetRootSegment(row_groups);
 	}
 
 	D_ASSERT(row_group_map.size() > options.row_group_offset);
