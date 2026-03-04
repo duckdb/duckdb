@@ -39,7 +39,7 @@ public:
 
 public:
 	ColumnDataCheckpointData &checkpoint_data;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;

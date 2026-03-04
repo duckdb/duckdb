@@ -1,4 +1,5 @@
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/common/types/geometry.hpp"
 
 namespace duckdb {
 
@@ -62,9 +63,18 @@ void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, const char *va
 	ARTKey::CreateARTKey(allocator, key, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
 }
 
-ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value) {
-	D_ASSERT(type == value.type().InternalType());
-	switch (type) {
+ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, Value &value, optional_idx storage_version) {
+	const auto &type = value.type();
+	D_ASSERT(type.InternalType() == value.type().InternalType());
+
+	if (type.id() == LogicalTypeId::GEOMETRY && (!storage_version.IsValid() || (storage_version.GetIndex() < 7))) {
+		// Convert to old-style geometry for older storage versions.
+		string buffer;
+		Geometry::ToSpatialGeometry(value.GetValueUnsafe<string>(), buffer);
+		return ARTKey::CreateARTKey(allocator, string_t(buffer));
+	}
+
+	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		return ARTKey::CreateARTKey<bool>(allocator, value);
 	case PhysicalType::INT8:

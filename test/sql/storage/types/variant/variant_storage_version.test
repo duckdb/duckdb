@@ -1,0 +1,36 @@
+# name: test/sql/storage/types/variant/variant_storage_version.test
+# group: [variant]
+
+statement ok
+attach '__TEST_DIR__/variant.db' (STORAGE_VERSION 'v1.4.4');
+
+statement ok
+use variant;
+
+statement error
+create table all_types as select struct_pack(*COLUMNS(*))::VARIANT test from test_all_types();
+----
+Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0
+
+statement error
+create table t1 (v VARIANT);
+----
+Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0
+
+statement error
+create table t2 as select '1'::VARIANT v;
+----
+Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0
+
+statement ok
+create table t3 (i INT);
+
+statement error
+alter table t3 add column v VARIANT;
+----
+Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0
+
+statement error
+alter table t3 alter column i set type VARIANT;
+----
+Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0

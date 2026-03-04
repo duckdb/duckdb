@@ -18,7 +18,7 @@ LogicalType GetRegrCountStateType(const AggregateFunction &) {
 } // namespace
 
 AggregateFunction RegrCountFun::GetFunction() {
-	auto regr_count = AggregateFunction::BinaryAggregate<size_t, double, double, uint32_t, RegrCountFunction>(
+	auto regr_count = AggregateFunction::BinaryAggregate<uint64_t, double, double, uint32_t, RegrCountFunction>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::UINTEGER);
 	regr_count.name = "regr_count";
 	regr_count.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
