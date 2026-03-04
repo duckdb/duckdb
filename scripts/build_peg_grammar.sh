@@ -1,36 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Print each command before executing (optional, for debug)
-# set -x
 
-# Activate virtual environment
-if [[ -d ".venv" ]]; then
-  source .venv/bin/activate
-else
-  echo "Error: .venv directory not found"
+# Always run from repo root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(dirname "$SCRIPT_DIR")"
+
+if ! command -v python3 &>/dev/null; then
+  echo "Error: python3 not found"
   exit 1
 fi
 
-# Run grammar inlining with and without argument
 GRAMMAR_FILE="extension/autocomplete/inline_grammar.py"
 if [[ ! -f "$GRAMMAR_FILE" ]]; then
   echo "Error: $GRAMMAR_FILE not found"
-  deactivate
   exit 1
 fi
 
-python "$GRAMMAR_FILE" --grammar-file
-python "$GRAMMAR_FILE"
-
+python3 "$GRAMMAR_FILE" --grammar-file
+python3 "$GRAMMAR_FILE"
 echo "Successfully built PEG grammar files"
 
-# Transformer coverage check (warnings only, non-blocking)
 TRANSFORMER_SCRIPT="scripts/generate_peg_transformer.py"
-if [[ -f "$TRANSFORMER_SCRIPT" ]]; then
-  echo ""
-  echo "--- Transformer Coverage Check ---"
-  python "$TRANSFORMER_SCRIPT" -q || true
+if [[ ! -f "$TRANSFORMER_SCRIPT" ]]; then
+  echo "Error: $TRANSFORMER_SCRIPT not found"
+  exit 1
 fi
 
-# Deactivate virtual environment
-deactivate
+echo ""
+echo "--- Transformer Coverage Check ---"
+python3 "$TRANSFORMER_SCRIPT" -q || true
