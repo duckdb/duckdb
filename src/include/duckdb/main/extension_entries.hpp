@@ -451,7 +451,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"make_timestamp_ns", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamptz", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_type", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"map", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_concat", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_entries", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_extract", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
