@@ -415,6 +415,9 @@ unittestarrow:
 
 allunit:
 	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
+ifndef CI
+allunit: release
+endif
 
 docs:
 	mkdir -p ./build/docs && \
