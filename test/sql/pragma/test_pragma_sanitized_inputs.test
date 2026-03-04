@@ -1,0 +1,45 @@
+# name: test/sql/pragma/test_pragma_sanitized_inputs.test
+# description: Test that pragma functions are properly sanitized
+# group: [pragma]
+
+statement ok
+PRAGMA enable_verification
+
+# Create a test table for pragma_table_info and pragma_storage_info
+statement ok
+CREATE TABLE test_table(i INTEGER, j VARCHAR)
+
+statement ok
+INSERT INTO test_table VALUES (1, 'hello'), (2, 'world')
+
+# Test multiple pragma functions with injection attempts
+# These should all fail gracefully without executing injected SQL
+
+foreach pragma_func table_info storage_info "show"
+
+# Ensure we correctly sanitize the input
+statement error
+PRAGMA ${pragma_func}('test_table''); DROP TABLE test_table; --')
+----
+Catalog Error
+
+endloop
+
+# Test import_database with injection attempt
+statement error
+PRAGMA import_database('test_table''); DROP TABLE test_table; --')
+----
+IO Error
+
+# Test copy_database with injection attempt (two parameters)
+statement error
+PRAGMA copy_database('test_table''); DROP TABLE test_table; --', 'target')
+----
+Binder Error
+
+# Verify that the test_table still exists and was not dropped
+query II
+SELECT * FROM test_table ORDER BY i
+----
+1	hello
+2	world

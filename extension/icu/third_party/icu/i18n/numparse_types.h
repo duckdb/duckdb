@@ -64,14 +64,15 @@ class CompactUnicodeString {
         fBuffer[0] = 0;
     }
 
-    CompactUnicodeString(const UnicodeString& text)
-            : fBuffer(text.length() + 1) {
-        uprv_memcpy(fBuffer.getAlias(), text.getBuffer(), sizeof(UChar) * text.length());
+    CompactUnicodeString(const UnicodeString& text, UErrorCode& status)
+            : fBuffer(text.length() + 1, status) {
+        if (U_FAILURE(status)) { return; }
+        uprv_memcpy(fBuffer.getAlias(), text.getBuffer(), sizeof(char16_t) * text.length());
         fBuffer[text.length()] = 0;
     }
 
     inline UnicodeString toAliasedUnicodeString() const {
-        return UnicodeString(TRUE, fBuffer.getAlias(), -1);
+        return UnicodeString(true, fBuffer.getAlias(), -1);
     }
 
     bool operator==(const CompactUnicodeString& other) const {
@@ -80,7 +81,7 @@ class CompactUnicodeString {
     }
 
   private:
-    MaybeStackArray<UChar, stackCapacity> fBuffer;
+    MaybeStackArray<char16_t, stackCapacity> fBuffer;
 };
 
 
@@ -124,7 +125,7 @@ class U_I18N_API ParsedNumber {
     /**
      * The currency that got consumed.
      */
-    UChar currencyCode[4];
+    char16_t currencyCode[4];
 
     ParsedNumber();
 

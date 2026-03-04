@@ -69,7 +69,7 @@ struct compareInfo {
 
 /*
 ** For LIKE and GLOB matching on EBCDIC machines, assume that every
-** character is exactly one byte in size.  Also, provde the Utf8Read()
+** character is exactly one byte in size.  Also, provide the Utf8Read()
 ** macro for fast reading of the next character in the common case where
 ** the next character is ASCII.
 */
@@ -128,7 +128,7 @@ static const struct compareInfo likeInfoNorm = {'%', '_', 0, 1};
 **
 **      '%'       Matches any sequence of zero or more characters
 **
-***     '_'       Matches any one character
+**      '_'       Matches any one character
 **
 **      Ec        Where E is the "esc" character and c is any other
 **                character, including '%', '_', and esc, match exactly c.

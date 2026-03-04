@@ -59,11 +59,19 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	return ret;
 }
 
-idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context, idx_t column_id) {
-	if (!get.function.statistics) {
+idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext &context,
+                                                 const ColumnIndex &column_id) {
+	if (!get.function.statistics && !get.function.statistics_extended) {
 		return 0;
 	}
-	auto column_statistics = get.function.statistics(context, get.bind_data.get(), column_id);
+	unique_ptr<BaseStatistics> column_statistics;
+	if (get.function.statistics_extended) {
+		TableFunctionGetStatisticsInput input(get.bind_data.get(), column_id);
+		column_statistics = get.function.statistics_extended(context, input);
+	} else {
+		D_ASSERT(get.function.statistics);
+		column_statistics = get.function.statistics(context, get.bind_data.get(), column_id.GetPrimaryIndex());
+	}
 	if (!column_statistics) {
 		return 0;
 	}
@@ -89,7 +97,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	auto &column_ids = get.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column_id = column_ids[i].GetPrimaryIndex();
-		auto distinct_count = GetDistinctCount(get, context, column_id);
+		auto distinct_count = GetDistinctCount(get, context, column_ids[i]);
 		if (distinct_count > 0) {
 			auto column_distinct_count = DistinctCount({distinct_count, true});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
@@ -112,8 +120,15 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		column_statistics = nullptr;
 		bool has_non_optional_filters = false;
 		for (auto &it : get.table_filters.filters) {
-			if (get.bind_data && get.function.statistics) {
-				column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
+			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
+				if (get.function.statistics_extended) {
+					auto column_index = ColumnIndex(it.first);
+					TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
+					column_statistics = get.function.statistics_extended(context, input);
+				} else {
+					D_ASSERT(get.function.statistics);
+					column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
+				}
 			}
 
 			if (column_statistics) {
@@ -428,7 +443,7 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 	return stats;
 }
 
-idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t column_index, TableFilter &filter,
+idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t column_index, const TableFilter &filter,
                                                    BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
 	switch (filter.filter_type) {

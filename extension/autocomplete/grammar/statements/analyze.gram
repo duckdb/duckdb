@@ -1,3 +1,2 @@
 AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
-AnalyzeTarget <- QualifiedName Parens(List(Name))?
-Name <- ColId ('.' ColLabel)*
+AnalyzeTarget <- BaseTableName NameList?

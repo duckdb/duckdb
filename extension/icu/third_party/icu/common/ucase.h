@@ -56,7 +56,8 @@ enum {
     UCASE_LOC_TURKISH,
     UCASE_LOC_LITHUANIAN,
     UCASE_LOC_GREEK,
-    UCASE_LOC_DUTCH
+    UCASE_LOC_DUTCH,
+    UCASE_LOC_ARMENIAN
 };
 
 /**
@@ -107,6 +108,10 @@ ucase_fold(UChar32 c, uint32_t options);
 U_CFUNC void U_EXPORT2
 ucase_addCaseClosure(UChar32 c, const USetAdder *sa);
 
+/** Case closure with only scf=Simple_Case_Folding. */
+U_CFUNC void U_EXPORT2
+ucase_addSimpleCaseClosure(UChar32 c, const USetAdder *sa);
+
 /**
  * Maps the string to single code points and adds the associated case closure
  * mappings.
@@ -117,7 +122,7 @@ ucase_addCaseClosure(UChar32 c, const USetAdder *sa);
  * the string itself is added as well as part of its code points' closure.
  * It must be length>=0.
  *
- * @return TRUE if the string was found
+ * @return true if the string was found
  */
 U_CFUNC UBool U_EXPORT2
 ucase_addStringCaseClosure(const UChar *s, int32_t length, const USetAdder *sa);
@@ -138,10 +143,10 @@ public:
      */
     UChar32 next(UnicodeString &full);
 private:
-    FullCaseFoldingIterator(const FullCaseFoldingIterator &);  // no copy
-    FullCaseFoldingIterator &operator=(const FullCaseFoldingIterator &);  // no assignment
+    FullCaseFoldingIterator(const FullCaseFoldingIterator &) = delete;  // no copy
+    FullCaseFoldingIterator &operator=(const FullCaseFoldingIterator &) = delete;  // no assignment
 
-    const UChar *unfold;
+    const char16_t *unfold;
     int32_t unfoldRows;
     int32_t unfoldRowWidth;
     int32_t unfoldStringWidth;
@@ -158,9 +163,9 @@ private:
 namespace LatinCase {
 
 /** Case mapping/folding data for code points up to U+017F. */
-constexpr UChar LIMIT = 0x180;
+constexpr char16_t LIMIT = 0x180;
 /** U+017F case-folds and uppercases crossing the ASCII boundary. */
-constexpr UChar LONG_S = 0x17f;
+constexpr char16_t LONG_S = 0x17f;
 /** Exception: Complex mapping, or too-large delta. */
 constexpr int8_t EXC = -0x80;
 
@@ -310,6 +315,21 @@ UCaseMapFull(UChar32 c,
              int32_t caseLocale);
 
 U_CDECL_END
+
+/* for icuexportdata -------------------------------------------------------- */
+
+struct UCaseProps {
+    void *mem;  // TODO: was unused, and type UDataMemory -- remove
+    const int32_t *indexes;
+    const uint16_t *exceptions;
+    const uint16_t *unfold;
+
+    UTrie2 trie;
+    uint8_t formatVersion[4];
+};
+
+U_CAPI const struct UCaseProps * U_EXPORT2
+ucase_getSingleton(int32_t *pExceptionsLength, int32_t *pUnfoldLength);
 
 /* file definitions --------------------------------------------------------- */
 

@@ -1,5 +1,4 @@
 #include "duckdb/storage/compression/dict_fsst/analyze.hpp"
-#include "fsst.h"
 
 namespace duckdb {
 namespace dict_fsst {

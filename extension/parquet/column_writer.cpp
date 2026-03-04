@@ -288,6 +288,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		//! Construct the column schema
 		auto variant_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
+		if (field_id && field_id->set) {
+			variant_column.field_id = field_id->field_id;
+		}
 		vector<unique_ptr<ColumnWriter>> child_writers;
 		child_writers.reserve(child_types.size());
 
@@ -318,7 +321,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		                                      std::move(child_writers));
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
+	    type.id() == LogicalTypeId::AGGREGATE_STATE) {
 		auto struct_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {
@@ -494,10 +498,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 template <>
 struct NumericLimits<float_na_equal> {
 	static constexpr float Minimum() {
-		return std::numeric_limits<float>::lowest();
+		return NumericLimits<float>::Minimum();
 	};
 	static constexpr float Maximum() {
-		return std::numeric_limits<float>::max();
+		return NumericLimits<float>::Maximum();
 	};
 	static constexpr bool IsSigned() {
 		return std::is_signed<float>::value;
@@ -510,10 +514,10 @@ struct NumericLimits<float_na_equal> {
 template <>
 struct NumericLimits<double_na_equal> {
 	static constexpr double Minimum() {
-		return std::numeric_limits<double>::lowest();
+		return NumericLimits<double>::Minimum();
 	};
 	static constexpr double Maximum() {
-		return std::numeric_limits<double>::max();
+		return NumericLimits<double>::Maximum();
 	};
 	static constexpr bool IsSigned() {
 		return std::is_signed<double>::value;

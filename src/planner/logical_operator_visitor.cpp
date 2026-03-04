@@ -127,6 +127,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &target : rec.key_targets) {
 			callback(&target);
 		}
+		for (auto &aggregate : rec.payload_aggregates) {
+			callback(&aggregate);
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
@@ -145,8 +148,8 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 			callback(&expr);
 		}
 		for (auto &cond : join.conditions) {
-			callback(&cond.left);
-			callback(&cond.right);
+			callback(&cond.LeftReference());
+			callback(&cond.RightReference());
 		}
 		for (auto &expr : join.arbitrary_expressions) {
 			callback(&expr);
@@ -164,11 +167,12 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 			callback(&expr);
 		}
 		for (auto &cond : join.conditions) {
-			callback(&cond.left);
-			callback(&cond.right);
-		}
-		if (join.predicate) {
-			callback(&join.predicate);
+			if (cond.IsComparison()) {
+				callback(&cond.LeftReference());
+				callback(&cond.RightReference());
+			} else {
+				callback(&cond.JoinExpressionReference());
+			}
 		}
 		break;
 	}

@@ -2,12 +2,29 @@
 #include "shell_highlight.hpp"
 #include "shell_prompt.hpp"
 #include "shell_progress_bar.hpp"
+#include "shell_renderer.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
 #endif
 
 namespace duckdb_shell {
+
+MetadataResult ToggleAbout(ShellState &state, const vector<string> &args) {
+	string about_text = "DuckDB is an in-process analytical database management system designed for fast "
+	                    "execution of complex SQL queries. It runs embedded within its host process with "
+	                    "no external dependencies, and is optimized for OLAP workloads using a columnar, "
+	                    "vectorized execution engine.\n\n"
+	                    "Developed and maintained by the DuckDB Foundation, "
+	                    "available under the MIT License.\n"
+	                    "For more information, visit https://duckdb.org or "
+	                    "https://github.com/duckdb/duckdb.\n\n";
+
+	state.PrintF(PrintOutput::STDOUT, "DuckDB %s (%s)\n\n", duckdb::DuckDB::LibraryVersion(),
+	             duckdb::DuckDB::ReleaseCodename());
+	state.Print(PrintOutput::STDOUT, about_text);
+	return MetadataResult::SUCCESS;
+}
 
 MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
 	state.bail_on_error = state.StringToBool(args[1]);
@@ -220,6 +237,18 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
+	if (state.last_result) {
+		auto renderer = state.GetRenderer();
+		renderer->RemoveRenderLimits();
+		auto res = state.RenderQueryResult(*renderer, *state.last_result);
+		if (res == SuccessState::FAILURE) {
+			return MetadataResult::FAIL;
+		}
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 	if (state.safe_mode) {
 		state.PrintF(PrintOutput::STDERR, ".log cannot be used in -safe mode\n");
@@ -232,13 +261,16 @@ MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult SetMaxRows(ShellState &state, const vector<string> &args) {
-	if (args.size() > 2) {
+	if (args.size() > 3) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	if (args.size() == 1) {
 		state.PrintF("current max rows: %zu\n", state.max_rows);
-	} else {
-		state.max_rows = (size_t)ShellState::StringToInt(args[1]);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_rows = (size_t)ShellState::StringToInt(args[1]);
+	if (args.size() > 2) {
+		state.max_analyze_rows = (size_t)ShellState::StringToInt(args[2]);
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -306,6 +338,12 @@ MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
 	}
 	if (args.size() >= 4) {
 		ShellState::SetPrompt(state.continuePromptSelected, args[3]);
+	}
+	if (args.size() >= 5) {
+		ShellState::SetPrompt(state.scrollUpPrompt, args[4]);
+	}
+	if (args.size() >= 6) {
+		ShellState::SetPrompt(state.scrollDownPrompt, args[5]);
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -753,6 +791,7 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 }
 
 static const MetadataCommand metadata_commands[] = {
+    {"about", 0, ToggleAbout, "", "Show information about DuckDB", 0, ""},
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
     {"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0, ""},
@@ -814,6 +853,7 @@ static const MetadataCommand metadata_commands[] = {
     {"keyword", 2, SetHighlightingColor<DeprecatedHighlightColors::KEYWORD>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
 #endif
+    {"last", 1, RenderLastResult, "", "Render the last result without truncating", 0, ""},
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},

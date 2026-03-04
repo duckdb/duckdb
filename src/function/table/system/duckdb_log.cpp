@@ -62,6 +62,9 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 	bool denormalized_table = false;
 	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");
 	if (denormalized_table_setting != input.named_parameters.end()) {
+		if (denormalized_table_setting->second.IsNull()) {
+			throw InvalidInputException("denormalized_table cannot be NULL");
+		}
 		denormalized_table = denormalized_table_setting->second.GetValue<bool>();
 	}
 

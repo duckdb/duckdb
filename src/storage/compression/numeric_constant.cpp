@@ -160,13 +160,18 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		Value val(type);
-		filters_nulls = expr_filter.EvaluateWithConstant(state.executor, val);
+		//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
+		filters_nulls = !expr_filter.EvaluateWithConstant(state.executor, val);
 		filters_valid_values = false;
 		break;
 	}
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bf = filter.Cast<BFTableFilter>();
 		filters_nulls = bf.FiltersNullValues();
+		break;
+	}
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+		filters_nulls = true;
 		break;
 	}
 	default:

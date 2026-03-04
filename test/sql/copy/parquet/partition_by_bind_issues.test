@@ -1,0 +1,26 @@
+# name: test/sql/copy/parquet/partition_by_bind_issues.test
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE test AS SELECT
+	'test' AS user,
+	'2025' AS year
+
+# 'user' is also the name of a SQLValueFunction, this used to bind incorrectly (#20324)
+statement ok
+COPY (
+	SELECT
+		*
+	FROM
+		test
+) TO '__TEST_DIR__/partition_by_test.parquet' (
+	FORMAT PARQUET,
+	PARTITION_BY user
+)
+
+query II
+select * from '__TEST_DIR__/partition_by_test.parquet'
+----
+2025	test

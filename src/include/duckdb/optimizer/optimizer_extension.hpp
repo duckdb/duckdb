@@ -10,9 +10,10 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 namespace duckdb {
-
+struct DBConfig;
 class Optimizer;
 class ClientContext;
 
@@ -44,6 +45,11 @@ public:
 
 	//! Additional optimizer info passed to the optimize functions
 	shared_ptr<OptimizerExtensionInfo> optimizer_info;
+
+	static void Register(DBConfig &config, OptimizerExtension extension);
+	static ExtensionCallbackIteratorHelper<OptimizerExtension> Iterate(ClientContext &context) {
+		return ExtensionCallbackManager::Get(context).OptimizerExtensions();
+	}
 };
 
 } // namespace duckdb

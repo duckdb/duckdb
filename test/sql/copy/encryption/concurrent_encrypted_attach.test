@@ -3,6 +3,8 @@
 
 require httpfs
 
+require no_extension_autoloading "FIXME: there are timing issues in autoloading httpfs"
+
 concurrentloop i 0 10
 
 statement ok

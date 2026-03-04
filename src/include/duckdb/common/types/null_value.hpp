@@ -27,11 +27,12 @@ inline T NullValue() {
 	return std::numeric_limits<T>::min();
 }
 
-constexpr const char str_nil[2] = {'\200', '\0'};
+//! This could be two bytes but then GCC gives a warning when it's copied
+constexpr const char str_nil[4] = {'\200', '\0', '\0', '\0'};
 
 template <>
 inline const char *NullValue() {
-	D_ASSERT(str_nil[0] == '\200' && str_nil[1] == '\0');
+	D_ASSERT(str_nil[0] == '\200' && str_nil[1] == '\0' && str_nil[2] == '\0' && str_nil[3] == '\0');
 	return str_nil;
 }
 

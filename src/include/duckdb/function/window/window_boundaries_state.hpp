@@ -91,7 +91,7 @@ private:
 struct WindowBoundariesState {
 	static bool HasPrecedingRange(const BoundWindowExpression &wexpr);
 	static bool HasFollowingRange(const BoundWindowExpression &wexpr);
-	static WindowBoundsSet GetWindowBounds(const BoundWindowExpression &wexpr);
+	static void AddImpliedBounds(WindowBoundsSet &bounds, const BoundWindowExpression &wexpr);
 	static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n);
 	static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx_t &n);
 

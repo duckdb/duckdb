@@ -118,11 +118,7 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           const FileGlobInput &glob_input) {
-	vector<OpenFileInfo> open_files;
-	for (auto &path : paths) {
-		open_files.emplace_back(path);
-	}
-	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), glob_input);
+	auto res = make_uniq<GlobMultiFileList>(context, paths, glob_input);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && glob_input.behavior != FileGlobOptions::ALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}

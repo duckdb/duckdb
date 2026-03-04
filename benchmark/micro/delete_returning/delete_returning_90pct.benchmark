@@ -1,0 +1,20 @@
+# name: benchmark/micro/delete_returning/delete_returning_90pct.benchmark
+# description: DELETE RETURNING ~90% of rows (optimized path)
+# group: [delete_returning]
+
+load
+CREATE TABLE t_90pct (c1 INT, c2 VARCHAR, c3 DOUBLE, c4 INT, c5 VARCHAR);
+INSERT INTO t_90pct SELECT
+    i, 'val_' || i::VARCHAR, i * 1.5, i + 1, 'str_' || (i+1)::VARCHAR
+FROM range(1000000) t(i);
+
+run
+DELETE FROM t_90pct WHERE c1 % 10 != 0 RETURNING *;
+
+cleanup
+DROP TABLE IF EXISTS t_90pct;
+CREATE TABLE t_90pct (c1 INT, c2 VARCHAR, c3 DOUBLE, c4 INT, c5 VARCHAR);
+INSERT INTO t_90pct SELECT
+    i, 'val_' || i::VARCHAR, i * 1.5, i + 1, 'str_' || (i+1)::VARCHAR
+FROM range(1000000) t(i);
+

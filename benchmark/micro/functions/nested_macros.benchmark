@@ -1,0 +1,17 @@
+# name: benchmark/micro/functions/nested_macros.benchmark
+# description: Run a query with deeply nested macros to check for regressions.
+# group: [functions]
+
+load
+CREATE OR REPLACE TABLE foo (
+    c0 INT, c1 INT, c2 INT, c3 INT, c4 INT, c5 INT,
+    c6 INT, c7 INT, c8 INT, c9 INT, c10 INT, c11 INT
+);
+
+run
+SELECT NULLIF(ADD(c4,
+    NULLIF(ADD(c8,NULLIF(ADD(c1,NULLIF(ADD(c0,
+    NULLIF(ADD(c2,NULLIF(ADD(c5,NULLIF(ADD(c7,
+    NULLIF(ADD(c9,NULLIF(ADD(c3,NULLIF(ADD(c10,
+    NULLIF(ADD(c6, c11),0)),0)),0)),0)),0)),0)),0)),0)),0)),0)),0)
+FROM foo;

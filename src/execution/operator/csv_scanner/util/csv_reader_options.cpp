@@ -742,7 +742,7 @@ void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, co
 		sql_type_list.reserve(sql_type_names.size());
 		for (auto &sql_type : sql_type_names) {
 			auto def_type = TransformStringToLogicalType(sql_type, context);
-			if (def_type.id() == LogicalTypeId::USER) {
+			if (def_type.id() == LogicalTypeId::UNBOUND) {
 				throw BinderException("Unrecognized type \"%s\" for read_csv %s definition", sql_type, key);
 			}
 			sql_type_list.push_back(std::move(def_type));

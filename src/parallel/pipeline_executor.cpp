@@ -1,6 +1,7 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
@@ -192,9 +193,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	ExecutionBudget chunk_budget(max_chunks);
 	do {
-		if (context.client.interrupted) {
-			throw InterruptException();
-		}
+		context.client.InterruptCheck();
 
 		OperatorResultType result;
 		if (exhausted_pipeline && done_flushing && !remaining_sink_chunk && !next_batch_blocked &&
@@ -262,8 +261,8 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 
 		if (result == OperatorResultType::FINISHED) {
+			D_ASSERT(in_process_operators.empty());
 			exhausted_pipeline = true;
-			break;
 		}
 	} while (chunk_budget.Next());
 
@@ -287,14 +286,14 @@ void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
 	in_process_operators = stack<idx_t>();
 
 	if (pipeline.GetSource()) {
-		auto guard = pipeline.source_state->Lock();
-		pipeline.source_state->PreventBlocking(guard);
-		pipeline.source_state->UnblockTasks(guard);
+		annotated_lock_guard<annotated_mutex> guard(pipeline.source_state->lock);
+		pipeline.source_state->PreventBlocking();
+		pipeline.source_state->UnblockTasks();
 	}
 	if (pipeline.GetSink()) {
-		auto guard = pipeline.GetSink()->sink_state->Lock();
-		pipeline.GetSink()->sink_state->PreventBlocking(guard);
-		pipeline.GetSink()->sink_state->UnblockTasks(guard);
+		annotated_lock_guard<annotated_mutex> guard(pipeline.GetSink()->sink_state->lock);
+		pipeline.GetSink()->sink_state->PreventBlocking();
+		pipeline.GetSink()->sink_state->UnblockTasks();
 	}
 }
 
@@ -421,9 +420,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	while (true) {
-		if (context.client.interrupted) {
-			throw InterruptException();
-		}
+		context.client.InterruptCheck();
 		// now figure out where to put the chunk
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
@@ -455,7 +452,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				FinishProcessing(NumericCast<int32_t>(current_idx));
 				return OperatorResultType::FINISHED;
 			}
-			current_chunk.Verify();
+			current_chunk.Verify(context.client.db);
 		}
 
 		if (current_chunk.size() == 0) {
@@ -548,9 +545,7 @@ void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 }
 
 void PipelineExecutor::StartOperator(PhysicalOperator &op) {
-	if (context.client.interrupted) {
-		throw InterruptException();
-	}
+	context.client.InterruptCheck();
 	context.thread.profiler.StartOperator(&op);
 }
 
@@ -558,7 +553,7 @@ void PipelineExecutor::EndOperator(PhysicalOperator &op, optional_ptr<DataChunk>
 	context.thread.profiler.EndOperator(chunk);
 
 	if (chunk) {
-		chunk->Verify();
+		chunk->Verify(context.client.db);
 	}
 }
 

@@ -48,6 +48,18 @@ string UncompressedStringSegmentState::GetSegmentInfo() const {
 	return "Overflow String Block Ids: " + result;
 }
 
+void UncompressedStringSegmentState::InsertOverflowBlock(block_id_t block_id, reference<StringBlock> block) {
+	auto write_lock = overflow_blocks_lock.GetExclusiveLock();
+	overflow_blocks.insert(make_pair(block_id, block));
+}
+
+reference<StringBlock> UncompressedStringSegmentState::FindOverflowBlock(block_id_t block_id) {
+	auto read_lock = overflow_blocks_lock.GetSharedLock();
+	auto entry = overflow_blocks.find(block_id);
+	D_ASSERT(entry != overflow_blocks.end());
+	return entry->second;
+}
+
 void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,
                                              block_id_t &result_block, int32_t &result_offset) {
 	auto &block_manager = partial_block_manager.GetBlockManager();

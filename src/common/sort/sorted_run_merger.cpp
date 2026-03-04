@@ -1,10 +1,13 @@
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
 
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/parallel/parallel_destroy_task.hpp"
 
 #include "vergesort.h"
 #include "pdqsort.h"
@@ -42,12 +45,7 @@ public:
 	}
 
 public:
-	unique_lock<mutex> Lock() {
-		return unique_lock<mutex>(lock);
-	}
-
-	unsafe_vector<SortedRunPartitionBoundary> &GetRunBoundaries(const unique_lock<mutex> &guard) {
-		VerifyLock(guard);
+	unsafe_vector<SortedRunPartitionBoundary> &GetRunBoundaries() DUCKDB_REQUIRES(lock) {
 		return run_boundaries;
 	}
 
@@ -59,16 +57,11 @@ public:
 		begin_computed = true;
 	}
 
-private:
-	void VerifyLock(const unique_lock<mutex> &guard) const {
-#ifdef D_ASSERT_IS_ENABLED
-		D_ASSERT(guard.mutex() && RefersToSameObject(*guard.mutex(), lock));
-#endif
-	}
+public:
+	annotated_mutex lock;
 
 private:
-	mutex lock;
-	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
+	unsafe_vector<SortedRunPartitionBoundary> run_boundaries DUCKDB_GUARDED_BY(lock);
 	atomic<bool> begin_computed;
 
 public:
@@ -102,6 +95,8 @@ public:
 	bool TaskFinished() const;
 	//! Do the work this thread has been assigned
 	SourceResultType ExecuteTask(SortedRunMergerGlobalState &gstate, optional_ptr<DataChunk> chunk);
+	//! Clear outstanding allocations
+	void Clear();
 
 private:
 	//! Computes upper partition boundaries using K-way Merge Path
@@ -184,7 +179,7 @@ public:
 	bool AssignTask(SortedRunMergerLocalState &lstate) {
 		D_ASSERT(!lstate.partition_idx.IsValid());
 		D_ASSERT(lstate.task == SortedRunMergerTask::FINISHED);
-		auto guard = Lock();
+		annotated_lock_guard<annotated_mutex> guard(lock);
 		if (next_partition_idx == num_partitions) {
 			return false; // Nothing left to do
 		}
@@ -245,15 +240,15 @@ public:
 			idx_t begin_idx = 0;
 			if (destroy_partition_idx != 0) {
 				auto &begin_partition = *partitions[destroy_partition_idx];
-				auto partition_guard = begin_partition.Lock();
-				begin_idx = begin_partition.GetRunBoundaries(partition_guard)[run_idx].end;
+				const annotated_lock_guard<annotated_mutex> partition_guard(begin_partition.lock);
+				begin_idx = begin_partition.GetRunBoundaries()[run_idx].end;
 			}
 
 			idx_t end_idx = merger.sorted_runs[run_idx]->Count();
 			if (end_partition_idx != num_partitions) {
 				auto &end_partition = *partitions[end_partition_idx];
-				auto partition_guard = end_partition.Lock();
-				end_idx = end_partition.GetRunBoundaries(partition_guard)[run_idx].end;
+				const annotated_lock_guard<annotated_mutex> partition_guard(end_partition.lock);
+				end_idx = end_partition.GetRunBoundaries()[run_idx].end;
 			}
 
 			merger.sorted_runs[run_idx]->DestroyData(begin_idx, end_idx);
@@ -296,7 +291,7 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
     : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
       task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs),
       merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX),
-      sorted_run_scan_state(gstate.context, gstate.merger.sort), sort_key_pointers(LogicalType::POINTER) {
+      sort_key_pointers(LogicalType::POINTER), sorted_run_scan_state(gstate.context, gstate.merger.sort) {
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
@@ -312,6 +307,13 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 			                              EnumUtil::ToString(iterator_state_type));
 		}
 	}
+}
+
+void SortedRunMergerLocalState::Clear() {
+	in_memory_states.clear();
+	external_states.clear();
+	merged_partition.Reset();
+	sorted_run_scan_state.Clear();
 }
 
 bool SortedRunMergerLocalState::TaskFinished() const {
@@ -378,10 +380,12 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 
 	// Copy over the run boundaries from the assigned partition (under lock)
 	auto &current_partition = *gstate.partitions[p_idx.GetIndex()];
-	auto current_partition_guard = current_partition.Lock();
-	const auto begin_computed = current_partition.GetBeginComputed();
-	run_boundaries = current_partition.GetRunBoundaries(current_partition_guard);
-	current_partition_guard.unlock();
+	bool begin_computed;
+	{
+		const annotated_lock_guard<annotated_mutex> current_partition_guard(current_partition.lock);
+		begin_computed = current_partition.GetBeginComputed();
+		run_boundaries = current_partition.GetRunBoundaries();
+	}
 
 	if (!begin_computed) {
 		// We can use information from previous partitions to speed up computing this partition
@@ -390,8 +394,8 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 			if (!prev_partition.GetBeginComputed()) {
 				continue;
 			}
-			auto prev_partition_guard = prev_partition.Lock();
-			const auto &prev_partition_run_boundaries = prev_partition.GetRunBoundaries(prev_partition_guard);
+			const annotated_lock_guard<annotated_mutex> prev_partition_guard(prev_partition.lock);
+			const auto &prev_partition_run_boundaries = prev_partition.GetRunBoundaries();
 			for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 				run_boundaries[run_idx].begin = prev_partition_run_boundaries[run_idx].begin;
 			}
@@ -419,9 +423,9 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	if (p_idx.GetIndex() != gstate.num_partitions - 1) {
 		auto &next_partition = *gstate.partitions[p_idx.GetIndex() + 1];
 		if (!next_partition.GetBeginComputed()) {
-			auto next_partition_guard = next_partition.Lock();
+			annotated_lock_guard<annotated_mutex> next_partition_guard(next_partition.lock);
 			if (!next_partition.GetBeginComputed()) {
-				auto &next_partition_run_boundaries = next_partition.GetRunBoundaries(next_partition_guard);
+				auto &next_partition_run_boundaries = next_partition.GetRunBoundaries();
 				for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 					const auto &computed_boundary = run_boundaries[run_idx];
 					D_ASSERT(computed_boundary.begin == computed_boundary.end);
@@ -433,12 +437,14 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	}
 
 	// Set the computed end partition boundaries of the current partition
-	current_partition_guard.lock();
-	auto &current_partition_run_boundaries = current_partition.GetRunBoundaries(current_partition_guard);
-	for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
-		const auto &computed_boundary = run_boundaries[run_idx];
-		D_ASSERT(computed_boundary.begin == computed_boundary.end);
-		current_partition_run_boundaries[run_idx].end = computed_boundary.end;
+	{
+		annotated_lock_guard<annotated_mutex> current_partition_guard(current_partition.lock);
+		auto &current_partition_run_boundaries = current_partition.GetRunBoundaries();
+		for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
+			const auto &computed_boundary = run_boundaries[run_idx];
+			D_ASSERT(computed_boundary.begin == computed_boundary.end);
+			current_partition_run_boundaries[run_idx].end = computed_boundary.end;
+		}
 	}
 }
 
@@ -547,7 +553,9 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 
 		// Erase from active if begin is equal to end
 		if (min_run_boundary.begin == min_run_boundary.end) {
-			active_run_idxs.erase(std::find(active_run_idxs.begin(), active_run_idxs.end(), min_idx));
+			auto it = std::find(active_run_idxs.begin(), active_run_idxs.end(), min_idx);
+			D_ASSERT(it != active_run_idxs.end());
+			active_run_idxs.erase(it);
 		}
 
 		// Update total remaining accordingly
@@ -567,8 +575,8 @@ void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	auto &current_partition = *gstate.partitions[partition_idx.GetIndex()];
 	if (current_partition.GetBeginComputed()) {
 		// Begin has been computed, boundaries are ready to use. Copy to local
-		auto guard = current_partition.Lock();
-		run_boundaries = current_partition.GetRunBoundaries(guard);
+		annotated_lock_guard<annotated_mutex> guard(current_partition.lock);
+		run_boundaries = current_partition.GetRunBoundaries();
 		return;
 	}
 
@@ -578,9 +586,9 @@ void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
 
 	// Copy to local
-	auto guard = current_partition.Lock();
+	annotated_lock_guard<annotated_mutex> guard(current_partition.lock);
 	D_ASSERT(current_partition.GetBeginComputed());
-	run_boundaries = current_partition.GetRunBoundaries(guard);
+	run_boundaries = current_partition.GetRunBoundaries();
 }
 
 void SortedRunMergerLocalState::MergePartition(SortedRunMergerGlobalState &gstate) {
@@ -783,12 +791,6 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			}
 		}
 
-		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
-		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
-		                            count);
-		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
-		                               *FlatVector::IncrementalSelectionVector(), count);
-
 		if (SORT_KEY::HAS_PAYLOAD) {
 			if (!sorted_run->payload_data->GetLayout().AllConstant()) {
 				sorted_run->payload_data->FindHeapPointers(payload_data_input, count);
@@ -798,7 +800,20 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 			                                sorted_run->payload_append_state.chunk_state, 0, count);
 			sorted_run->payload_data->CopyRows(sorted_run->payload_append_state.chunk_state, payload_data_input,
 			                                   *FlatVector::IncrementalSelectionVector(), count);
+
+			const auto new_payload_locations =
+			    FlatVector::GetData<const data_ptr_t>(sorted_run->payload_append_state.chunk_state.row_locations);
+			for (idx_t i = 0; i < count; i++) {
+				auto &key = merged_partition_keys[merged_partition_index + i];
+				key.SetPayload(new_payload_locations[i]);
+			}
 		}
+
+		sorted_run->key_append_state.chunk_state.heap_sizes.Reference(key_data_input.heap_sizes);
+		sorted_run->key_data->Build(sorted_run->key_append_state.pin_state, sorted_run->key_append_state.chunk_state, 0,
+		                            count);
+		sorted_run->key_data->CopyRows(sorted_run->key_append_state.chunk_state, key_data_input,
+		                               *FlatVector::IncrementalSelectionVector(), count);
 
 		merged_partition_index += count;
 	}
@@ -816,14 +831,19 @@ unique_ptr<SortedRun> SortedRunMergerLocalState::TemplatedMaterializePartition(S
 //===--------------------------------------------------------------------===//
 SortedRunMerger::SortedRunMerger(const Sort &sort_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  idx_t partition_size_p, bool external_p, bool is_index_sort_p)
-    : sort(sort_p), sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
-      partition_size(partition_size_p), external(external_p), is_index_sort(is_index_sort_p) {
+    : scheduler(TaskScheduler::GetScheduler(*sort_p.context.db)), sort(sort_p), sorted_runs(std::move(sorted_runs_p)),
+      total_count(SortedRunsTotalCount(sorted_runs)), partition_size(partition_size_p), external(external_p),
+      is_index_sort(is_index_sort_p) {
+}
+
+SortedRunMerger::~SortedRunMerger() {
+	ParallelDestroyTask<decltype(sorted_runs)>::Schedule(scheduler, sorted_runs);
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
                                                                   GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
-	auto guard = gstate.Lock();
+	annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 	return make_uniq<SortedRunMergerLocalState>(gstate);
 }
 
@@ -843,7 +863,13 @@ SourceResultType SortedRunMerger::GetData(ExecutionContext &, DataChunk &chunk, 
 		}
 	}
 
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	if (chunk.size() != 0) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	}
+
+	// Done
+	lstate.Clear();
+	return SourceResultType::FINISHED;
 }
 
 OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &, DataChunk &, GlobalSourceState &,
@@ -877,6 +903,7 @@ SourceResultType SortedRunMerger::MaterializeSortedRun(ExecutionContext &, Opera
 			break;
 		}
 	}
+	lstate.Clear(); // Done
 
 	// The thread that completes the materialization returns FINISHED, all other threads return HAVE_MORE_OUTPUT
 	return res;
@@ -891,11 +918,12 @@ unique_ptr<SortedRun> SortedRunMerger::GetSortedRun(GlobalSourceState &global_st
 	}
 	auto &target = *gstate.materialized_partitions[0];
 	for (idx_t i = 1; i < gstate.materialized_partitions.size(); i++) {
-		auto &source = *gstate.materialized_partitions[i];
-		target.key_data->Combine(*source.key_data);
+		auto &source = gstate.materialized_partitions[i];
+		target.key_data->Combine(*source->key_data);
 		if (target.payload_data) {
-			target.payload_data->Combine(*source.payload_data);
+			target.payload_data->Combine(*source->payload_data);
 		}
+		source.reset();
 	}
 	auto res = std::move(gstate.materialized_partitions[0]);
 	gstate.materialized_partitions.clear();

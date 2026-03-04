@@ -1,0 +1,328 @@
+# name: test/sql/pragma/profiling/call_enable_profiling_function.test
+# description: Test enable_profiling() function.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/test.txt'
+
+#########################################################################################################################
+#            disable_profiling()
+#########################################################################################################################
+
+statement ok
+CALL disable_profiling();
+
+query I
+SELECT CURRENT_SETTING('enable_profiling');
+----
+NULL
+
+#########################################################################################################################
+#            enable_profiling()	without args		
+#########################################################################################################################
+
+statement ok
+CALL enable_profiling();
+
+query I
+SELECT CURRENT_SETTING('enable_profiling');
+----
+query_tree
+
+#########################################################################################################################
+#            test setting format
+#########################################################################################################################
+
+statement ok
+CALL enable_profiling(format='json')
+
+query I
+SELECT CURRENT_SETTING('enable_profiling');
+----
+json
+
+statement error
+CALL enable_profiling(format='i dont exist hehe')
+----
+Parser Error: Unrecognized print format
+
+#########################################################################################################################
+#            test setting coverage
+#########################################################################################################################
+
+query I
+SELECT CURRENT_SETTING('profiling_coverage');
+----
+SELECT
+
+statement ok
+CALL enable_profiling(coverage='all')
+
+query I
+SELECT CURRENT_SETTING('profiling_coverage');
+----
+ALL
+
+statement error
+CALL enable_profiling(coverage='i dont exist hehe')
+----
+Not implemented Error
+
+#########################################################################################################################
+#            test setting save location				
+#########################################################################################################################
+
+query I
+SELECT CURRENT_SETTING('profiling_output');
+----
+__TEST_DIR__/test.txt
+
+statement ok
+CALL enable_profiling(save_location='__TEST_DIR__/other_file.txt')
+
+query I
+SELECT CURRENT_SETTING('profiling_output');
+----
+__TEST_DIR__/other_file.txt
+
+# doesn't work on a wrong file type
+statement error
+CALL enable_profiling(save_location='__TEST_DIR__/other_file.db')
+----
+Parser Error: Invalid output file type: db
+
+#########################################################################################################################
+#            test setting mode	
+#########################################################################################################################
+
+query I
+SELECT CURRENT_SETTING('profiling_mode');
+----
+standard
+
+statement ok
+CALL enable_profiling(mode='detailed')
+
+query I
+SELECT CURRENT_SETTING('profiling_mode');
+----
+detailed
+
+statement error
+CALL enable_profiling(mode='i dont exist hehe')
+----
+Parser Error
+
+statement error
+CALL enable_profiling(mode='true')
+----
+Parser Error
+
+#########################################################################################################################
+#            test setting metrics
+#########################################################################################################################
+
+statement error
+CALL enable_profiling(metrics = "hello");
+----
+IO Error: Could not parse the custom profiler settings file due to incorrect JSON
+
+# Set metrics from JSON
+statement ok
+CALL enable_profiling(metrics = {"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"})
+
+query I
+SELECT column_name
+FROM (DESCRIBE SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')))
+ORDER BY column_name;
+----
+CUMULATIVE_CARDINALITY
+CUMULATIVE_ROWS_SCANNED
+OPERATOR_CARDINALITY
+OPERATOR_ROWS_SCANNED
+
+# Set metrics from STRUCT
+statement ok
+CALL enable_profiling(metrics = {'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false})
+
+query I
+SELECT column_name
+FROM (DESCRIBE SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')))
+ORDER BY column_name;
+----
+EXTRA_INFO
+QUERY_NAME
+
+# Set metrics from LIST
+statement ok
+CALL enable_profiling(metrics = ['LATENCY', 'RESULT_SET_SIZE']);
+
+query I
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+----
+LATENCY
+RESULT_SET_SIZE
+
+# Set metrics from JSON STRING
+statement ok
+CALL enable_profiling(metrics = '{"CPU_TIME": "true", "BLOCKED_THREAD_TIME": "true"}');
+
+query I
+SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
+----
+BLOCKED_THREAD_TIME
+CPU_TIME
+
+# Can't mix types though
+statement error
+CALL enable_profiling(metrics = ['LATENCY', 'RESULT_SET_SIZE' = true]);
+----
+Conversion Error: 
+
+statement error
+CALL enable_profiling(metrics = 'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false, "CUMULATIVE_CARDINALITY": "true");
+----
+Parser Error:
+
+statement ok
+RESET custom_profiling_settings;
+
+query I
+SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
+----
+ATTACH_LOAD_STORAGE_LATENCY
+ATTACH_REPLAY_WAL_LATENCY
+BLOCKED_THREAD_TIME
+CHECKPOINT_LATENCY
+COMMIT_LOCAL_STORAGE_LATENCY
+CPU_TIME
+CUMULATIVE_CARDINALITY
+CUMULATIVE_ROWS_SCANNED
+EXTRA_INFO
+LATENCY
+OPERATOR_CARDINALITY
+OPERATOR_NAME
+OPERATOR_ROWS_SCANNED
+OPERATOR_TIMING
+OPERATOR_TYPE
+QUERY_NAME
+RESULT_SET_SIZE
+ROWS_RETURNED
+SYSTEM_PEAK_BUFFER_MEMORY
+SYSTEM_PEAK_TEMP_DIR_SIZE
+TOTAL_BYTES_READ
+TOTAL_BYTES_WRITTEN
+TOTAL_MEMORY_ALLOCATED
+WAITING_TO_ATTACH_LATENCY
+WAL_REPLAY_ENTRY_COUNT
+WRITE_TO_WAL_LATENCY
+
+# Set metrics straight into function
+statement ok
+CALL enable_profiling(['LATENCY', 'RESULT_SET_SIZE']);
+
+query I
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+----
+LATENCY
+RESULT_SET_SIZE
+
+# Set metrics straight into function with other settings too
+statement ok
+CALL enable_profiling(['TOTAL_BYTES_READ', 'TOTAL_BYTES_WRITTEN'], mode = 'detailed');
+
+query I
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+----
+TOTAL_BYTES_READ
+TOTAL_BYTES_WRITTEN
+
+query I
+SELECT CURRENT_SETTING('profiling_mode');
+----
+detailed
+
+# Other way around doesn't work
+statement error
+CALL enable_profiling(mode = 'detailed', ['LATENCY', 'RESULT_SET_SIZE']);
+----
+Invalid Error: Unnamed parameters cannot come after named parameters
+
+#########################################################################################################################
+#            test setting format AND save location	
+#########################################################################################################################
+
+# Set profiling format and save location to json file
+statement ok
+CALL enable_profiling(format='json', save_location='__TEST_DIR__/test.json')
+
+query I
+SELECT CURRENT_SETTING('enable_profiling');
+----
+json
+
+query I
+SELECT CURRENT_SETTING('profiling_output');
+----
+__TEST_DIR__/test.json
+
+# format and save location file type don't match
+statement error
+CALL enable_profiling(format='query_tree', save_location='__TEST_DIR__/test.json')
+----
+Invalid Input Error: EnableProfiling: the save_location must be a .txt file or match the specified format.
+
+#########################################################################################################################
+#            test all													
+#########################################################################################################################
+
+statement ok
+CALL enable_profiling(format='query_tree', save_location='__TEST_DIR__/test.txt', coverage='select', mode='standard', metrics=['QUERY_NAME', 'LATENCY'])
+
+query I
+SELECT CURRENT_SETTING('enable_profiling');
+----
+query_tree
+
+query I
+SELECT CURRENT_SETTING('profiling_output');
+----
+__TEST_DIR__/test.txt
+
+query I
+SELECT CURRENT_SETTING('profiling_coverage');
+----
+SELECT
+
+query I
+SELECT CURRENT_SETTING('profiling_mode');
+----
+standard
+
+query I
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+----
+LATENCY
+QUERY_NAME
+
+#########################################################################################################################
+#            Invalid input		
+#########################################################################################################################
+
+# Invalid parameter
+statement error
+CALL enable_profiling(this_does_not_exist = 'hello');
+----
+Invalid named parameter "this_does_not_exist" for function enable_profiling
+
+statement error
+CALL enable_profiling(format);
+----
+No function matches the given name and argument types 'enable_profiling(VARCHAR)'.
+
+statement error
+CALL enable_profiling('hello', 'goodbye');
+----
+No function matches the given name and argument types 'enable_profiling(VARCHAR, VARCHAR)'

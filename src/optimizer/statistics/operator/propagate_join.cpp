@@ -1,7 +1,6 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
@@ -17,20 +16,25 @@ namespace duckdb {
 void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	for (idx_t i = 0; i < join.conditions.size(); i++) {
 		auto &condition = join.conditions[i];
-		const auto stats_left = PropagateExpression(condition.left);
-		const auto stats_right = PropagateExpression(condition.right);
+		if (!condition.IsComparison()) {
+			PropagateExpression(condition.JoinExpressionReference());
+			continue;
+		}
+
+		const auto stats_left = PropagateExpression(condition.LeftReference());
+		const auto stats_right = PropagateExpression(condition.RightReference());
 		if (stats_left && stats_right) {
-			if ((condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
-			     condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&
+			if ((condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+			     condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) &&
 			    stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
 				// null values are equal in this join, and both sides can have null values
 				// nothing to do here
 				continue;
 			}
-			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.comparison);
+			auto prune_result = PropagateComparison(*stats_left, *stats_right, condition.GetComparisonType());
 			// Add stats to logical_join for perfect hash join
-			join.join_stats.push_back(stats_left->ToUnique());
-			join.join_stats.push_back(stats_right->ToUnique());
+			condition.SetLeftStats(stats_left->ToUnique());
+			condition.SetRightStats(stats_right->ToUnique());
 			switch (prune_result) {
 			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
@@ -73,7 +77,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				// the semantics of restricting to a single match
 				// so we can't replace it with an equi-join on the remaining conditions.
 				if (join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-					switch (condition.comparison) {
+					switch (condition.GetComparisonType()) {
 					case ExpressionType::COMPARE_GREATERTHAN:
 					case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 					case ExpressionType::COMPARE_LESSTHAN:
@@ -86,8 +90,6 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				if (join.conditions.size() > 1) {
 					// there are multiple conditions: erase this condition
 					join.conditions.erase_at(i);
-					// remove the corresponding statistics
-					join.join_stats.clear();
 					i--;
 					continue;
 				} else {
@@ -143,30 +145,30 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		// anti joins have inverse statistics propagation
 		// (i.e. if we have an anti join on i: [0, 100] and j: [0, 25], the resulting stats are i:[25,100])
 		// for now we don't handle anti joins
-		if (condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
-		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		if (condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+		    condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// skip update when null values are equal (for now?)
 			continue;
 		}
 		switch (join.join_type) {
 		case JoinType::INNER:
 		case JoinType::SEMI: {
-			UpdateFilterStatistics(*condition.left, *condition.right, condition.comparison);
-			auto updated_stats_left = PropagateExpression(condition.left);
-			auto updated_stats_right = PropagateExpression(condition.right);
+			UpdateFilterStatistics(condition.GetLHS(), condition.GetRHS(), condition.GetComparisonType());
+			auto updated_stats_left = PropagateExpression(condition.LeftReference());
+			auto updated_stats_right = PropagateExpression(condition.RightReference());
 
 			// Try to push lhs stats down rhs and vice versa
 			if (stats_left && stats_right && updated_stats_left && updated_stats_right &&
-			    condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
-			    condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				CreateFilterFromJoinStats(join.children[0], condition.left, *stats_left, *updated_stats_left);
-				CreateFilterFromJoinStats(join.children[1], condition.right, *stats_right, *updated_stats_right);
-			}
+			    condition.GetLHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+			    condition.GetRHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+				CreateFilterFromJoinStats(join.children[0], condition.LeftReference(), *stats_left,
+				                          *updated_stats_left);
+				CreateFilterFromJoinStats(join.children[1], condition.RightReference(), *stats_right,
+				                          *updated_stats_right);
 
-			// Update join_stats when is already part of the join
-			if (join.join_stats.size() == 2) {
-				join.join_stats[0] = std::move(updated_stats_left);
-				join.join_stats[1] = std::move(updated_stats_right);
+				// Update join_stats when is already part of the join
+				condition.SetLeftStats(std::move(updated_stats_left));
+				condition.SetRightStats(std::move(updated_stats_right));
 			}
 			break;
 		}

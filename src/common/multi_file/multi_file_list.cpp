@@ -4,10 +4,9 @@
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 #include <algorithm>
 
@@ -79,14 +78,15 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 //===--------------------------------------------------------------------===//
 // MultiFileListIterator
 //===--------------------------------------------------------------------===//
-MultiFileListIterationHelper MultiFileList::Files() {
+MultiFileListIterationHelper MultiFileList::Files() const {
 	return MultiFileListIterationHelper(*this);
 }
 
-MultiFileListIterationHelper::MultiFileListIterationHelper(MultiFileList &file_list_p) : file_list(file_list_p) {
+MultiFileListIterationHelper::MultiFileListIterationHelper(const MultiFileList &file_list_p) : file_list(file_list_p) {
 }
 
-MultiFileListIterationHelper::MultiFileListIterator::MultiFileListIterator(MultiFileList *file_list_p)
+MultiFileListIterationHelper::MultiFileListIterator::MultiFileListIterator(
+    optional_ptr<const MultiFileList> file_list_p)
     : file_list(file_list_p) {
 	if (!file_list) {
 		return;
@@ -136,27 +136,41 @@ const OpenFileInfo &MultiFileListIterationHelper::MultiFileListIterator::operato
 //===--------------------------------------------------------------------===//
 // MultiFileList
 //===--------------------------------------------------------------------===//
-MultiFileList::MultiFileList(vector<OpenFileInfo> paths, FileGlobInput glob_input_p)
-    : paths(std::move(paths)), glob_input(std::move(glob_input_p)) {
-}
-
-MultiFileList::MultiFileList(vector<OpenFileInfo> paths, FileGlobOptions options)
-    : MultiFileList(std::move(paths), FileGlobInput(options)) {
+MultiFileList::MultiFileList() {
 }
 
 MultiFileList::~MultiFileList() {
 }
 
-const vector<OpenFileInfo> MultiFileList::GetPaths() const {
-	return paths;
-}
-
-void MultiFileList::InitializeScan(MultiFileListScanData &iterator) {
+void MultiFileList::InitializeScan(MultiFileListScanData &iterator) const {
 	iterator.current_file_idx = 0;
 }
 
-bool MultiFileList::Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file) {
+vector<OpenFileInfo> MultiFileList::GetDisplayFileList(optional_idx max_files) const {
+	vector<OpenFileInfo> files;
+	for (idx_t i = 0;; i++) {
+		if (max_files.IsValid() && files.size() >= max_files.GetIndex()) {
+			break;
+		}
+		auto file = GetFile(i);
+		if (file.path.empty()) {
+			break;
+		}
+		files.push_back(std::move(file));
+	}
+	return files;
+}
+
+MultiFileCount MultiFileList::GetFileCount(idx_t min_exact_count) const {
+	return MultiFileCount(GetTotalFileCount());
+}
+
+bool MultiFileList::Scan(MultiFileListScanData &iterator, OpenFileInfo &result_file) const {
 	D_ASSERT(iterator.current_file_idx != DConstants::INVALID_INDEX);
+	if (iterator.scan_type == MultiFileListScanType::FETCH_IF_AVAILABLE &&
+	    !FileIsAvailable(iterator.current_file_idx)) {
+		return false;
+	}
 	auto maybe_file = GetFile(iterator.current_file_idx);
 
 	if (maybe_file.path.empty()) {
@@ -171,8 +185,17 @@ bool MultiFileList::Scan(MultiFileListScanData &iterator, OpenFileInfo &result_f
 
 unique_ptr<MultiFileList> MultiFileList::ComplexFilterPushdown(ClientContext &context, const MultiFileOptions &options,
                                                                MultiFilePushdownInfo &info,
-                                                               vector<unique_ptr<Expression>> &filters) {
-	// By default the filter pushdown into a multifilelist does nothing
+                                                               vector<unique_ptr<Expression>> &filters) const {
+	if (!options.hive_partitioning && !options.filename) {
+		return nullptr;
+	}
+
+	// FIXME: don't copy list until first file is filtered
+	auto file_copy = GetAllFiles();
+	auto res = PushdownInternal(context, options, info, filters, file_copy);
+	if (res) {
+		return make_uniq<SimpleMultiFileList>(std::move(file_copy));
+	}
 	return nullptr;
 }
 
@@ -181,75 +204,51 @@ unique_ptr<MultiFileList> MultiFileList::DynamicFilterPushdown(ClientContext &co
                                                                const vector<LogicalType> &types,
                                                                const vector<column_t> &column_ids,
                                                                TableFilterSet &filters) const {
-	// By default the filter pushdown into a multifilelist does nothing
+	if (!options.hive_partitioning && !options.filename) {
+		return nullptr;
+	}
+
+	// FIXME: don't copy list until first file is filtered
+	auto file_copy = GetAllFiles();
+	auto res = PushdownInternal(context, options, names, types, column_ids, filters, file_copy);
+	if (res) {
+		return make_uniq<SimpleMultiFileList>(std::move(file_copy));
+	}
+
 	return nullptr;
 }
 
-unique_ptr<NodeStatistics> MultiFileList::GetCardinality(ClientContext &context) {
+unique_ptr<NodeStatistics> MultiFileList::GetCardinality(ClientContext &context) const {
 	return nullptr;
 }
 
-OpenFileInfo MultiFileList::GetFirstFile() {
+OpenFileInfo MultiFileList::GetFirstFile() const {
 	return GetFile(0);
 }
 
-bool MultiFileList::IsEmpty() {
+bool MultiFileList::IsEmpty() const {
 	return GetExpandResult() == FileExpandResult::NO_FILES;
 }
 
-unique_ptr<MultiFileList> MultiFileList::Copy() {
+unique_ptr<MultiFileList> MultiFileList::Copy() const {
 	return make_uniq<SimpleMultiFileList>(GetAllFiles());
+}
+
+bool MultiFileList::FileIsAvailable(idx_t i) const {
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
 // SimpleMultiFileList
 //===--------------------------------------------------------------------===//
-SimpleMultiFileList::SimpleMultiFileList(vector<OpenFileInfo> paths_p)
-    : MultiFileList(std::move(paths_p), FileGlobOptions::ALLOW_EMPTY) {
+SimpleMultiFileList::SimpleMultiFileList(vector<OpenFileInfo> paths_p) : paths(std::move(paths_p)) {
 }
 
-unique_ptr<MultiFileList> SimpleMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
-                                                                     const MultiFileOptions &options,
-                                                                     MultiFilePushdownInfo &info,
-                                                                     vector<unique_ptr<Expression>> &filters) {
-	if (!options.hive_partitioning && !options.filename) {
-		return nullptr;
-	}
-
-	// FIXME: don't copy list until first file is filtered
-	auto file_copy = paths;
-	auto res = PushdownInternal(context_p, options, info, filters, file_copy);
-
-	if (res) {
-		return make_uniq<SimpleMultiFileList>(file_copy);
-	}
-
-	return nullptr;
-}
-
-unique_ptr<MultiFileList>
-SimpleMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-                                           const vector<string> &names, const vector<LogicalType> &types,
-                                           const vector<column_t> &column_ids, TableFilterSet &filters) const {
-	if (!options.hive_partitioning && !options.filename) {
-		return nullptr;
-	}
-
-	// FIXME: don't copy list until first file is filtered
-	auto file_copy = paths;
-	auto res = PushdownInternal(context, options, names, types, column_ids, filters, file_copy);
-	if (res) {
-		return make_uniq<SimpleMultiFileList>(file_copy);
-	}
-
-	return nullptr;
-}
-
-vector<OpenFileInfo> SimpleMultiFileList::GetAllFiles() {
+vector<OpenFileInfo> SimpleMultiFileList::GetAllFiles() const {
 	return paths;
 }
 
-FileExpandResult SimpleMultiFileList::GetExpandResult() {
+FileExpandResult SimpleMultiFileList::GetExpandResult() const {
 	if (paths.size() > 1) {
 		return FileExpandResult::MULTIPLE_FILES;
 	} else if (paths.size() == 1) {
@@ -259,7 +258,7 @@ FileExpandResult SimpleMultiFileList::GetExpandResult() {
 	return FileExpandResult::NO_FILES;
 }
 
-OpenFileInfo SimpleMultiFileList::GetFile(idx_t i) {
+OpenFileInfo SimpleMultiFileList::GetFile(idx_t i) const {
 	if (paths.empty() || i >= paths.size()) {
 		return OpenFileInfo("");
 	}
@@ -267,99 +266,61 @@ OpenFileInfo SimpleMultiFileList::GetFile(idx_t i) {
 	return paths[i];
 }
 
-idx_t SimpleMultiFileList::GetTotalFileCount() {
+idx_t SimpleMultiFileList::GetTotalFileCount() const {
 	return paths.size();
 }
 
 //===--------------------------------------------------------------------===//
-// GlobMultiFileList
+// LazyFileList
 //===--------------------------------------------------------------------===//
-GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<OpenFileInfo> paths_p, FileGlobInput glob_input)
-    : MultiFileList(std::move(paths_p), std::move(glob_input)), context(context_p), current_path(0) {
+LazyMultiFileList::LazyMultiFileList(optional_ptr<ClientContext> context_p) : context(context_p) {
 }
 
-unique_ptr<MultiFileList> GlobMultiFileList::ComplexFilterPushdown(ClientContext &context_p,
-                                                                   const MultiFileOptions &options,
-                                                                   MultiFilePushdownInfo &info,
-                                                                   vector<unique_ptr<Expression>> &filters) {
+vector<OpenFileInfo> LazyMultiFileList::GetAllFiles() const {
 	lock_guard<mutex> lck(lock);
-
-	// Expand all
-	// FIXME: lazy expansion
-	// FIXME: push down filters into glob
-	while (ExpandNextPath()) {
-	}
-
-	if (!options.hive_partitioning && !options.filename) {
-		return nullptr;
-	}
-	auto res = PushdownInternal(context, options, info, filters, expanded_files);
-	if (res) {
-		return make_uniq<SimpleMultiFileList>(expanded_files);
-	}
-
-	return nullptr;
-}
-
-unique_ptr<MultiFileList>
-GlobMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
-                                         const vector<string> &names, const vector<LogicalType> &types,
-                                         const vector<column_t> &column_ids, TableFilterSet &filters) const {
-	if (!options.hive_partitioning && !options.filename) {
-		return nullptr;
-	}
-	lock_guard<mutex> lck(lock);
-
-	// Expand all paths into a copy
-	// FIXME: lazy expansion and push filters into glob
-	idx_t path_index = current_path;
-	auto file_list = expanded_files;
-	while (ExpandPathInternal(path_index, file_list)) {
-	}
-
-	auto res = PushdownInternal(context, options, names, types, column_ids, filters, file_list);
-	if (res) {
-		return make_uniq<SimpleMultiFileList>(file_list);
-	}
-
-	return nullptr;
-}
-
-vector<OpenFileInfo> GlobMultiFileList::GetAllFiles() {
-	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath()) {
+	while (ExpandNextPathInternal()) {
 	}
 	return expanded_files;
 }
 
-idx_t GlobMultiFileList::GetTotalFileCount() {
+idx_t LazyMultiFileList::GetTotalFileCount() const {
 	lock_guard<mutex> lck(lock);
-	while (ExpandNextPath()) {
+	while (ExpandNextPathInternal()) {
 	}
 	return expanded_files.size();
 }
 
-FileExpandResult GlobMultiFileList::GetExpandResult() {
-	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
-	GetFile(1);
+MultiFileCount LazyMultiFileList::GetFileCount(idx_t min_exact_count) const {
+	lock_guard<mutex> lck(lock);
+	// expand files so that we get to min_exact_count
+	while (!all_files_expanded && expanded_files.size() < min_exact_count && ExpandNextPathInternal()) {
+	}
+	auto type = all_files_expanded ? FileExpansionType::ALL_FILES_EXPANDED : FileExpansionType::NOT_ALL_FILES_KNOWN;
+	return MultiFileCount(expanded_files.size(), type);
+}
 
+FileExpandResult LazyMultiFileList::GetExpandResult() const {
+	// GetFile(1) will ensure at least the first 2 files are expanded if they are available
+	(void)GetFile(1);
+
+	lock_guard<mutex> lck(lock);
 	if (expanded_files.size() > 1) {
 		return FileExpandResult::MULTIPLE_FILES;
 	} else if (expanded_files.size() == 1) {
 		return FileExpandResult::SINGLE_FILE;
 	}
-
 	return FileExpandResult::NO_FILES;
 }
 
-OpenFileInfo GlobMultiFileList::GetFile(idx_t i) {
+bool LazyMultiFileList::FileIsAvailable(idx_t i) const {
 	lock_guard<mutex> lck(lock);
-	return GetFileInternal(i);
+	return i < expanded_files.size();
 }
 
-OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i) {
+OpenFileInfo LazyMultiFileList::GetFile(idx_t i) const {
+	lock_guard<mutex> lck(lock);
 	while (expanded_files.size() <= i) {
-		if (!ExpandNextPath()) {
+		if (!ExpandNextPathInternal()) {
 			return OpenFileInfo("");
 		}
 	}
@@ -367,26 +328,76 @@ OpenFileInfo GlobMultiFileList::GetFileInternal(idx_t i) {
 	return expanded_files[i];
 }
 
-bool GlobMultiFileList::ExpandPathInternal(idx_t &current_path, vector<OpenFileInfo> &result) const {
-	if (current_path >= paths.size()) {
+bool LazyMultiFileList::ExpandNextPathInternal() const {
+	if (all_files_expanded) {
 		return false;
 	}
-
-	auto &fs = FileSystem::GetFileSystem(context);
-	auto glob_files = fs.GlobFiles(paths[current_path].path, context, glob_input);
-	std::sort(glob_files.begin(), glob_files.end());
-	result.insert(result.end(), glob_files.begin(), glob_files.end());
-
-	current_path++;
+	if (context && context->interrupted) {
+		throw InterruptException();
+	}
+	if (!ExpandNextPath()) {
+		all_files_expanded = true;
+		return false;
+	}
 	return true;
 }
 
-bool GlobMultiFileList::ExpandNextPath() {
-	return ExpandPathInternal(current_path, expanded_files);
+//===--------------------------------------------------------------------===//
+// GlobMultiFileList
+//===--------------------------------------------------------------------===//
+GlobMultiFileList::GlobMultiFileList(ClientContext &context_p, vector<string> globs_p, FileGlobInput glob_input_p)
+    : LazyMultiFileList(&context_p), context(context_p), globs(std::move(globs_p)), glob_input(std::move(glob_input_p)),
+      current_glob(0) {
 }
 
-bool GlobMultiFileList::IsFullyExpanded() const {
-	return current_path == paths.size();
+vector<OpenFileInfo> GlobMultiFileList::GetDisplayFileList(optional_idx max_files) const {
+	// for globs we display the actual globs in the ToString() - instead of expanding to the files read
+	vector<OpenFileInfo> result;
+	for (auto &glob : globs) {
+		if (max_files.IsValid() && result.size() >= max_files.GetIndex()) {
+			break;
+		}
+		result.emplace_back(glob);
+	}
+	return result;
+}
+
+bool GlobMultiFileList::ExpandNextPath() const {
+	if (current_glob >= globs.size()) {
+		return false;
+	}
+	if (current_glob >= file_lists.size()) {
+		// glob is not yet started for this file - start it and initiate the scan over this file
+		auto &fs = FileSystem::GetFileSystem(context);
+		auto glob_result = fs.GlobFileList(globs[current_glob], glob_input);
+		scan_state = MultiFileListScanData();
+		glob_result->InitializeScan(scan_state);
+		file_lists.push_back(std::move(glob_result));
+	}
+	// get the next batch of files we can fetch through the glob
+	auto &glob_list = *file_lists[current_glob];
+	scan_state.scan_type = MultiFileListScanType::ALWAYS_FETCH;
+	OpenFileInfo file;
+	if (!glob_list.Scan(scan_state, file)) {
+		// no more files available in this glob - move to the next glob
+		current_glob++;
+		return true;
+	}
+	// we found a file as part of this glob - add it to the result
+	vector<OpenFileInfo> glob_files;
+	glob_files.push_back(std::move(file));
+
+	// now continue scanning files that are already available (i.e. that don't require extra I/O operations to fetch)
+	scan_state.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
+	while (glob_list.Scan(scan_state, file)) {
+		glob_files.push_back(std::move(file));
+	}
+
+	// sort the files and add them to the list of files
+	std::sort(glob_files.begin(), glob_files.end());
+	expanded_files.insert(expanded_files.end(), glob_files.begin(), glob_files.end());
+
+	return true;
 }
 
 } // namespace duckdb

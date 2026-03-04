@@ -19,10 +19,8 @@
 /*   IBM UK, PO Box 31, Birmingham Road, Warwick CV34 5JL, UK         */
 /* ------------------------------------------------------------------ */
 
-#ifndef DECCONTEXT_H_
-#define DECCONTEXT_H_
 /* Modified version, for use from within ICU.
- *    Renamed public functions, to avoid an unwanted export of the
+ *    Renamed public functions, to avoid an unwanted export of the 
  *    standard names from the ICU library.
  *
  *    Use ICU's uprv_malloc() and uprv_free()
@@ -53,6 +51,8 @@
 /*                                                                    */
 /* ------------------------------------------------------------------ */
 
+#if !defined(DECCONTEXT)
+  #define DECCONTEXT
   #define DECCNAME     "decContext"                     /* Short name */
   #define DECCFULLNAME "Decimal Context Descriptor"   /* Verbose name */
   #define DECCAUTHOR   "Mike Cowlishaw"               /* Who to blame */
@@ -60,8 +60,8 @@
   #if !defined(int32_t)
 /* #include <stdint.h>   */         /* C99 standard integers           */
   #endif
-#include <stdio.h>               /* for printf, etc.                */
-#include <signal.h>              /* for traps                       */
+  #include <stdio.h>               /* for printf, etc.                */
+  #include <signal.h>              /* for traps                       */
 
   /* Extended flags setting -- set this to 0 to use only IEEE flags   */
   #if !defined(DECEXTFLAG)
@@ -250,21 +250,20 @@
   #define DEC_INIT_DECQUAD    DEC_INIT_DECIMAL128
 
   /* decContext routines                                              */
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextClearStatus(decContext *, uint32_t);
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextDefault(decContext *, int32_t);
-  U_INTERNAL enum rounding U_EXPORT2 uprv_decContextGetRounding(decContext *);
-  U_INTERNAL uint32_t      U_EXPORT2 uprv_decContextGetStatus(decContext *);
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextRestoreStatus(decContext *, uint32_t, uint32_t);
-  U_INTERNAL uint32_t      U_EXPORT2 uprv_decContextSaveStatus(decContext *, uint32_t);
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextSetRounding(decContext *, enum rounding);
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextSetStatus(decContext *, uint32_t);
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextSetStatusFromString(decContext *, const char *);
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextSetStatusFromStringQuiet(decContext *, const char *);
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextSetStatusQuiet(decContext *, uint32_t);
-  U_INTERNAL const char  * U_EXPORT2 uprv_decContextStatusToString(const decContext *);
-  U_INTERNAL int32_t       U_EXPORT2 uprv_decContextTestEndian(uint8_t);
-  U_INTERNAL uint32_t      U_EXPORT2 uprv_decContextTestSavedStatus(uint32_t, uint32_t);
-  U_INTERNAL uint32_t      U_EXPORT2 uprv_decContextTestStatus(decContext *, uint32_t);
-  U_INTERNAL decContext  * U_EXPORT2 uprv_decContextZeroStatus(decContext *);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextClearStatus(decContext *, uint32_t);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextDefault(decContext *, int32_t);
+  U_CAPI enum rounding U_EXPORT2 uprv_decContextGetRounding(decContext *);
+  U_CAPI uint32_t      U_EXPORT2 uprv_decContextGetStatus(decContext *);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextRestoreStatus(decContext *, uint32_t, uint32_t);
+  U_CAPI uint32_t      U_EXPORT2 uprv_decContextSaveStatus(decContext *, uint32_t);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextSetRounding(decContext *, enum rounding);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextSetStatus(decContext *, uint32_t);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextSetStatusFromString(decContext *, const char *);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextSetStatusFromStringQuiet(decContext *, const char *);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextSetStatusQuiet(decContext *, uint32_t);
+  U_CAPI const char  * U_EXPORT2 uprv_decContextStatusToString(const decContext *);
+  U_CAPI uint32_t      U_EXPORT2 uprv_decContextTestSavedStatus(uint32_t, uint32_t);
+  U_CAPI uint32_t      U_EXPORT2 uprv_decContextTestStatus(decContext *, uint32_t);
+  U_CAPI decContext  * U_EXPORT2 uprv_decContextZeroStatus(decContext *);
 
 #endif

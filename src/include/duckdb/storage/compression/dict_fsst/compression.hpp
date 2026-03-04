@@ -5,7 +5,7 @@
 #include "duckdb/storage/compression/dict_fsst/common.hpp"
 #include "duckdb/storage/compression/dict_fsst/analyze.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/common/string_map_set.hpp"
+#include "duckdb/common/bitpacking.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
@@ -55,7 +55,7 @@ public:
 
 public:
 	ColumnDataCheckpointData &checkpoint_data;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle current_handle;

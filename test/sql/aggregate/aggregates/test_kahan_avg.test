@@ -13,3 +13,24 @@ query R
 SELECT FAVG(n) - '2251799813685248.5'::DOUBLE FROM doubles;
 ----
 0
+
+# Test that Kahan avg preserves precision in exported states combine operations, should fail if we miss the `err` value in the state export
+statement ok
+CREATE TABLE kahan_context1 AS
+SELECT unnest([9007199254740992.0, 1.0, 1.0, 1.0, 1.0]) as val;
+
+statement ok
+CREATE TABLE kahan_context2 AS
+SELECT unnest([9007199254740990.0, 2.0, 2.0, 2.0, 2.0]) as val;
+
+query R
+  SELECT
+      finalize(combine(
+          (SELECT favg(val) EXPORT_STATE FROM kahan_context1),
+          (SELECT favg(val) EXPORT_STATE FROM kahan_context2)
+      )) -
+      (SELECT favg(val) FROM (
+          SELECT val FROM kahan_context1 UNION ALL SELECT val FROM kahan_context2
+      ));
+----
+0

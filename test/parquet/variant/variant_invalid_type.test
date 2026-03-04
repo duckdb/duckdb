@@ -1,0 +1,9 @@
+# name: test/parquet/variant/variant_invalid_type.test
+# group: [variant]
+
+require parquet
+
+statement error
+COPY (SELECT 1::hugeint::variant) TO '__TEST_DIR__/invalid_parquet_variant.parquet';
+----
+Can't convert

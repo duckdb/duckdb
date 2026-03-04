@@ -1,0 +1,55 @@
+# name: test/sql/alter/alter_table_set_table_options.test
+# description: Test ALTER TABLE SET table options
+# group: [alter]
+
+statement ok
+CREATE TABLE tbl1(i INTEGER);
+
+statement ok
+set variable location='my/location/path';
+
+statement error
+ALTER TABLE tbl1 SET ('foo'='baz', 'buzz'='wizz');
+----
+<REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*
+
+statement error
+ALTER TABLE tbl1 SET (foo='baz', buzz='wizz');
+----
+<REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*
+
+# works with Functions
+statement error
+ALTER TABLE tbl1 SET (foo=getvariable('location'));
+----
+<REGEX>:.*Not implemented Error: SET .*options.* is not supported for DuckDB tables.*
+
+statement error
+ALTER TABLE tbl1 RESET ('foo', 'buzz');
+----
+<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
+
+statement error
+ALTER TABLE tbl1 RESET (foo, buzz);
+----
+<REGEX>:.*Not implemented Error: RESET .*options.* is not supported for DuckDB tables.*
+
+statement error
+ALTER TABLE tbl1 RESET ('foo'='baz', 'buzz'='wizz');
+----
+<REGEX>:.*Parser Error: "'baz'".*
+
+statement error
+ALTER TABLE tbl1 RESET (foo='baz', buzz='wizz');
+----
+<REGEX>:.*Parser Error: "'baz'".*
+
+statement error
+ALTER TABLE tbl1 RESET ();
+----
+<REGEX>:.*Parser Error.*syntax error.*
+
+statement error
+ALTER TABLE tbl1 SET ();
+----
+<REGEX>:.*Parser Error.*syntax error.*

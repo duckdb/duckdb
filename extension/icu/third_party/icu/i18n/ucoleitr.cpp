@@ -11,7 +11,7 @@
 * Modification History:
 *
 * Date        Name        Description
-* 02/15/2001  synwee      Modified all methods to process its own function
+* 02/15/2001  synwee      Modified all methods to process its own function 
 *                         instead of calling the equivalent c++ api (coleitr.h)
 * 2012-2014   markus      Rewritten in C++ again.
 ******************************************************************************/
@@ -31,16 +31,16 @@
 
 U_NAMESPACE_USE
 
-#define ucoleitr_BUFFER_LENGTH             100
+#define BUFFER_LENGTH             100
 
-#define ucoleitr_DEFAULT_BUFFER_SIZE 16
-#define ucoleitr_BUFFER_GROW 8
+#define DEFAULT_BUFFER_SIZE 16
+#define BUFFER_GROW 8
 
-#define ucoleitr_ARRAY_COPY(dst, src, count) uprv_memcpy((void *) (dst), (void *) (src), (size_t)(count) * sizeof (src)[0])
+#define ARRAY_COPY(dst, src, count) uprv_memcpy((void *) (dst), (void *) (src), (size_t)(count) * sizeof (src)[0])
 
-#define ucoleitr_NEW_ARRAY(type, count) (type *) uprv_malloc((size_t)(count) * sizeof(type))
+#define NEW_ARRAY(type, count) (type *) uprv_malloc((size_t)(count) * sizeof(type))
 
-#define ucoleitr_DELETE_ARRAY(array) uprv_free((void *) (array))
+#define DELETE_ARRAY(array) uprv_free((void *) (array))
 
 struct RCEI
 {
@@ -53,7 +53,7 @@ U_NAMESPACE_BEGIN
 
 struct RCEBuffer
 {
-    RCEI    defaultBuffer[ucoleitr_DEFAULT_BUFFER_SIZE];
+    RCEI    defaultBuffer[DEFAULT_BUFFER_SIZE];
     RCEI   *buffer;
     int32_t bufferIndex;
     int32_t bufferSize;
@@ -76,7 +76,7 @@ RCEBuffer::RCEBuffer()
 RCEBuffer::~RCEBuffer()
 {
     if (buffer != defaultBuffer) {
-        ucoleitr_DELETE_ARRAY(buffer);
+        DELETE_ARRAY(buffer);
     }
 }
 
@@ -91,20 +91,20 @@ void RCEBuffer::put(uint32_t ce, int32_t ixLow, int32_t ixHigh, UErrorCode &erro
         return;
     }
     if (bufferIndex >= bufferSize) {
-        RCEI *newBuffer = ucoleitr_NEW_ARRAY(RCEI, bufferSize + ucoleitr_BUFFER_GROW);
-        if (newBuffer == NULL) {
+        RCEI *newBuffer = NEW_ARRAY(RCEI, bufferSize + BUFFER_GROW);
+        if (newBuffer == nullptr) {
             errorCode = U_MEMORY_ALLOCATION_ERROR;
             return;
         }
 
-        ucoleitr_ARRAY_COPY(newBuffer, buffer, bufferSize);
+        ARRAY_COPY(newBuffer, buffer, bufferSize);
 
         if (buffer != defaultBuffer) {
-            ucoleitr_DELETE_ARRAY(buffer);
+            DELETE_ARRAY(buffer);
         }
 
         buffer = newBuffer;
-        bufferSize += ucoleitr_BUFFER_GROW;
+        bufferSize += BUFFER_GROW;
     }
 
     buffer[bufferIndex].ce   = ce;
@@ -120,7 +120,7 @@ const RCEI *RCEBuffer::get()
      return &buffer[--bufferIndex];
     }
 
-    return NULL;
+    return nullptr;
 }
 
 PCEBuffer::PCEBuffer()
@@ -133,7 +133,7 @@ PCEBuffer::PCEBuffer()
 PCEBuffer::~PCEBuffer()
 {
     if (buffer != defaultBuffer) {
-        ucoleitr_DELETE_ARRAY(buffer);
+        DELETE_ARRAY(buffer);
     }
 }
 
@@ -153,20 +153,20 @@ void PCEBuffer::put(uint64_t ce, int32_t ixLow, int32_t ixHigh, UErrorCode &erro
         return;
     }
     if (bufferIndex >= bufferSize) {
-        PCEI *newBuffer = ucoleitr_NEW_ARRAY(PCEI, bufferSize + ucoleitr_BUFFER_GROW);
-        if (newBuffer == NULL) {
+        PCEI *newBuffer = NEW_ARRAY(PCEI, bufferSize + BUFFER_GROW);
+        if (newBuffer == nullptr) {
             errorCode = U_MEMORY_ALLOCATION_ERROR;
             return;
         }
 
-        ucoleitr_ARRAY_COPY(newBuffer, buffer, bufferSize);
+        ARRAY_COPY(newBuffer, buffer, bufferSize);
 
         if (buffer != defaultBuffer) {
-            ucoleitr_DELETE_ARRAY(buffer);
+            DELETE_ARRAY(buffer);
         }
 
         buffer = newBuffer;
-        bufferSize += ucoleitr_BUFFER_GROW;
+        bufferSize += BUFFER_GROW;
     }
 
     buffer[bufferIndex].ce   = ce;
@@ -182,7 +182,7 @@ const PCEI *PCEBuffer::get()
      return &buffer[--bufferIndex];
     }
 
-    return NULL;
+    return nullptr;
 }
 
 UCollationPCE::UCollationPCE(UCollationElements *elems) { init(elems); }
@@ -205,7 +205,7 @@ void UCollationPCE::init(const Collator &coll)
 
     strength    = coll.getAttribute(UCOL_STRENGTH, status);
     toShift     = coll.getAttribute(UCOL_ALTERNATE_HANDLING, status) == UCOL_SHIFTED;
-    isShifted   = FALSE;
+    isShifted   = false;
     variableTop = coll.getVariableTop(status);
 }
 
@@ -254,13 +254,13 @@ uint64_t UCollationPCE::processCE(uint32_t ce)
         }
 
         primary = secondary = tertiary = 0;
-        isShifted = TRUE;
+        isShifted = true;
     } else {
         if (strength >= UCOL_QUATERNARY) {
             quaternary = 0xFFFF;
         }
 
-        isShifted = FALSE;
+        isShifted = false;
     }
 
     return primary << 48 | secondary << 32 | tertiary << 16 | quaternary;
@@ -272,28 +272,28 @@ U_NAMESPACE_END
 
 U_CAPI UCollationElements* U_EXPORT2
 ucol_openElements(const UCollator  *coll,
-                  const UChar      *text,
+                  const char16_t   *text,
                         int32_t    textLength,
                         UErrorCode *status)
 {
     if (U_FAILURE(*status)) {
-        return NULL;
+        return nullptr;
     }
-    if (coll == NULL || (text == NULL && textLength != 0)) {
+    if (coll == nullptr || (text == nullptr && textLength != 0)) {
         *status = U_ILLEGAL_ARGUMENT_ERROR;
-        return NULL;
+        return nullptr;
     }
     const RuleBasedCollator *rbc = RuleBasedCollator::rbcFromUCollator(coll);
-    if (rbc == NULL) {
+    if (rbc == nullptr) {
         *status = U_UNSUPPORTED_ERROR;  // coll is a Collator but not a RuleBasedCollator
-        return NULL;
+        return nullptr;
     }
 
     UnicodeString s((UBool)(textLength < 0), text, textLength);
     CollationElementIterator *cei = rbc->createCollationElementIterator(s);
-    if (cei == NULL) {
+    if (cei == nullptr) {
         *status = U_MEMORY_ALLOCATION_ERROR;
-        return NULL;
+        return nullptr;
     }
 
     return cei->toUCollationElements();
@@ -313,7 +313,7 @@ ucol_reset(UCollationElements *elems)
 }
 
 U_CAPI int32_t U_EXPORT2
-ucol_next(UCollationElements *elems,
+ucol_next(UCollationElements *elems, 
           UErrorCode         *status)
 {
     if (U_FAILURE(*status)) {
@@ -353,11 +353,11 @@ UCollationPCE::nextProcessed(
         result = processCE((uint32_t)ce);
     } while (result == UCOL_IGNORABLE);
 
-    if (ixLow != NULL) {
+    if (ixLow != nullptr) {
         *ixLow = low;
     }
 
-    if (ixHigh != NULL) {
+    if (ixHigh != nullptr) {
         *ixHigh = high;
     }
 
@@ -397,7 +397,7 @@ UCollationPCE::previousProcessed(
         // buffer raw CEs up to non-ignorable primary
         RCEBuffer rceb;
         int32_t ce;
-
+        
         // **** do we need to reset rceb, or will it always be empty at this point ****
         do {
             high = cei->getOffset();
@@ -433,11 +433,11 @@ UCollationPCE::previousProcessed(
 finish:
     if (pceBuffer.isEmpty()) {
         // **** Is -1 the right value for ixLow, ixHigh? ****
-    	if (ixLow != NULL) {
+    	if (ixLow != nullptr) {
     		*ixLow = -1;
     	}
-
-    	if (ixHigh != NULL) {
+    	
+    	if (ixHigh != nullptr) {
     		*ixHigh = -1
     		;
     	}
@@ -446,11 +446,11 @@ finish:
 
     const PCEI *pcei = pceBuffer.get();
 
-    if (ixLow != NULL) {
+    if (ixLow != nullptr) {
         *ixLow = pcei->low;
     }
 
-    if (ixHigh != NULL) {
+    if (ixHigh != nullptr) {
         *ixHigh = pcei->high;
     }
 
@@ -476,7 +476,7 @@ ucol_getMaxExpansion(const UCollationElements *elems,
 
 U_CAPI void U_EXPORT2
 ucol_setText(      UCollationElements *elems,
-             const UChar              *text,
+             const char16_t           *text,
                    int32_t            textLength,
                    UErrorCode         *status)
 {
@@ -484,7 +484,7 @@ ucol_setText(      UCollationElements *elems,
         return;
     }
 
-    if ((text == NULL && textLength != 0)) {
+    if ((text == nullptr && textLength != 0)) {
         *status = U_ILLEGAL_ARGUMENT_ERROR;
         return;
     }
@@ -511,19 +511,19 @@ ucol_setOffset(UCollationElements    *elems,
 }
 
 U_CAPI int32_t U_EXPORT2
-ucol_primaryOrder (int32_t order)
+ucol_primaryOrder (int32_t order) 
 {
     return (order >> 16) & 0xffff;
 }
 
 U_CAPI int32_t U_EXPORT2
-ucol_secondaryOrder (int32_t order)
+ucol_secondaryOrder (int32_t order) 
 {
     return (order >> 8) & 0xff;
 }
 
 U_CAPI int32_t U_EXPORT2
-ucol_tertiaryOrder (int32_t order)
+ucol_tertiaryOrder (int32_t order) 
 {
     return order & 0xff;
 }

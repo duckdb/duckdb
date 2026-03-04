@@ -8,17 +8,18 @@
 #define __UCPTRIE_H__
 
 #include "unicode/utypes.h"
-
-#include "unicode/localpointer.h"
 #include "unicode/ucpmap.h"
 #include "unicode/utf8.h"
+
+#if U_SHOW_CPLUSPLUS_API
+#include "unicode/localpointer.h"
+#endif   // U_SHOW_CPLUSPLUS_API
 
 U_CDECL_BEGIN
 
 /**
  * \file
- *
- * This file defines an immutable Unicode code point trie.
+ * \brief C API: This file defines an immutable Unicode code point trie.
  *
  * @see UCPTrie
  * @see UMutableCPTrie
@@ -41,7 +42,7 @@ typedef union UCPTrieData {
 /**
  * Immutable Unicode code point trie structure.
  * Fast, reasonably compact, map from Unicode code points (U+0000..U+10FFFF) to integer values.
- * For details see http://site.icu-project.org/design/struct/utrie
+ * For details see https://icu.unicode.org/design/struct/utrie
  *
  * Do not access UCPTrie fields directly; use public functions and macros.
  * Functions are easy to use: They support all trie types and value widths.
@@ -580,11 +581,11 @@ enum {
 // Do not conditionalize with #ifndef U_HIDE_INTERNAL_API, needed for public API
 
 /** @internal */
-U_INTERNAL int32_t U_EXPORT2
+U_CAPI int32_t U_EXPORT2
 ucptrie_internalSmallIndex(const UCPTrie *trie, UChar32 c);
 
 /** @internal */
-U_INTERNAL int32_t U_EXPORT2
+U_CAPI int32_t U_EXPORT2
 ucptrie_internalSmallU8Index(const UCPTrie *trie, int32_t lt1, uint8_t t2, uint8_t t3);
 
 /**
@@ -592,7 +593,7 @@ ucptrie_internalSmallU8Index(const UCPTrie *trie, int32_t lt1, uint8_t t2, uint8
  * Do not call directly.
  * @internal
  */
-U_INTERNAL int32_t U_EXPORT2
+U_CAPI int32_t U_EXPORT2
 ucptrie_internalU8PrevIndex(const UCPTrie *trie, UChar32 c,
                             const uint8_t *start, const uint8_t *src);
 

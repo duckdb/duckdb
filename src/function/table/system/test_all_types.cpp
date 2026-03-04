@@ -69,8 +69,10 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	result.emplace_back(LogicalType::TIMESTAMP_TZ, "timestamp_tz");
 
 	// More complex numeric types.
-	result.emplace_back(LogicalType::FLOAT, "float");
-	result.emplace_back(LogicalType::DOUBLE, "double");
+	result.emplace_back(LogicalType::FLOAT, "float", Value::FLOAT(std::numeric_limits<float>::lowest()),
+	                    Value::FLOAT(std::numeric_limits<float>::max()));
+	result.emplace_back(LogicalType::DOUBLE, "double", Value::DOUBLE(std::numeric_limits<double>::lowest()),
+	                    Value::DOUBLE(std::numeric_limits<double>::max()));
 	result.emplace_back(LogicalType::DECIMAL(4, 1), "dec_4_1");
 	result.emplace_back(LogicalType::DECIMAL(9, 4), "dec_9_4");
 	result.emplace_back(LogicalType::DECIMAL(18, 6), "dec_18_6");
@@ -315,6 +317,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	    fixed_int_array_type, {fixed_int_max_array_value, fixed_int_min_array_value, fixed_int_max_array_value});
 	result.emplace_back(list_of_fixed_array_of_int_type, "list_of_fixed_int_array",
 	                    list_of_fixed_array_of_int_min_value, list_of_fixed_array_of_int_max_value);
+
+	result.emplace_back(LogicalType::TIME_NS, "time_ns");
 
 	return result;
 }

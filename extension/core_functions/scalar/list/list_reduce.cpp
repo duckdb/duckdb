@@ -1,6 +1,8 @@
 #include "core_functions/scalar/list_functions.hpp"
+
 #include "duckdb/function/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -46,6 +48,7 @@ struct ReduceExecuteInfo {
 		}
 		input_types.push_back(left_slice->GetType());
 		input_types.push_back(left_slice->GetType());
+
 		// skip the first entry if there is an initial value
 		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());

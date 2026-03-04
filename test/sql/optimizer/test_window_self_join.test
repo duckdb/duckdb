@@ -1,0 +1,182 @@
+# name: test/sql/optimizer/test_window_self_join.test
+# description: Test Window Self-Join "constant aggrgate" optimizer
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE services (date DATE, train_number INT);
+
+statement ok
+INSERT INTO services VALUES ('2024-01-01', 100), ('2024-01-01', 100), ('2024-01-01', 101), ('2024-01-02', 100);
+
+# 1. Basic Case: count(*) = 1
+# Should be optimized to INNER JOIN
+query II
+EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 1
+ORDER BY ALL;
+----
+2024-01-01	101
+2024-01-02	100
+
+# 2. Case with explicit count(*) function (if different syntax supported)
+# DuckDB treats count(*) same as count() usually.
+
+# 3. Case where optimization should apply: count(*) > 1
+query II
+EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) > 1;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) > 1;
+----
+2024-01-01	100
+2024-01-01	100
+
+query II
+FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) > 1;
+----
+2024-01-01	100
+2024-01-01	100
+
+# 4. Case where optimization should apply: count(*) = 2
+query II
+EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 2;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+FROM services QUALIFY count(*) OVER(PARTITION BY date, train_number) = 2;
+----
+2024-01-01	100
+2024-01-01	100
+
+# 5. Case with no partitions (should not optimize per current logic)
+query II
+EXPLAIN FROM services QUALIFY count(*) OVER() = 1;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+# 6. Case with ORDER BY (should not optimize)
+query II
+EXPLAIN FROM services QUALIFY count(*) OVER(PARTITION BY date ORDER BY train_number) = 1;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+# 7. Larger dataset / complex types (optional, but good for verification)
+statement ok
+CREATE TABLE items (id INT, category VARCHAR);
+
+statement ok
+INSERT INTO items VALUES (1, 'A'), (2, 'A'), (3, 'B'), (4, 'C'), (5, 'C');
+
+query IT
+FROM items QUALIFY count(*) OVER(PARTITION BY category) = 1;
+----
+3	B
+
+query IT
+EXPLAIN FROM items QUALIFY count(*) OVER(PARTITION BY category) = 1;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+# 8. Case with NULL partition keys
+# This tests that COMPARE_NOT_DISTINCT_FROM is used for join conditions
+# NULL = NULL returns NULL (falsy), but NULL IS NOT DISTINCT FROM NULL returns TRUE
+statement ok
+CREATE TABLE null_partition_test (id INT, category VARCHAR);
+
+statement ok
+INSERT INTO null_partition_test VALUES (1, 'A'), (2, 'A'), (3, NULL), (4, NULL), (5, 'B');
+
+# Row id=5 is the only row with category='B' (count=1)
+# Row id=3 and id=4 both have category=NULL, so count=2, they should NOT be returned
+# This verifies that NULL partition keys are correctly grouped together
+query II
+FROM null_partition_test QUALIFY count(*) OVER(PARTITION BY category) = 1;
+----
+5	B
+
+# Verify the optimization is applied (INNER JOIN instead of WINDOW)
+query II
+EXPLAIN FROM null_partition_test QUALIFY count(*) OVER(PARTITION BY category) = 1;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+# 9. Case with non-COUNT aggregate
+# Should be optimized to INNER JOIN
+query II
+EXPLAIN 
+FROM services QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 101;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+FROM services QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 101;
+----
+2024-01-01	101
+
+# 10. Case with multiple aggregates
+# Should be optimized to INNER JOIN
+query II
+EXPLAIN 
+FROM services 
+QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
+    AND count(*) OVER(PARTITION BY date, train_number) = 1;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query II
+FROM services 
+QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
+    AND count(*) OVER(PARTITION BY date, train_number) = 1;
+----
+2024-01-02	100
+
+# 11. Case filter clause
+# Should be optimized to INNER JOIN
+query II
+EXPLAIN 
+FROM services 
+WHERE date > '2024-06-30'::DATE
+QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
+    AND count(*) OVER(PARTITION BY date, train_number) = 1;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+# 12. Case ORDER BY clause
+query II
+EXPLAIN 
+SELECT *, 
+	list(train_number) OVER(
+		PARTITION BY date 
+		ORDER BY train_number DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+		
+FROM services 
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
+
+query III
+SELECT 
+	*,
+	list(train_number) OVER(
+		PARTITION BY date 
+		ORDER BY train_number DESC
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		) as trains
+		
+FROM services 
+----
+2024-01-01	100	[101, 100, 100]
+2024-01-01	100	[101, 100, 100]
+2024-01-01	101	[101, 100, 100]
+2024-01-02	100	[100]

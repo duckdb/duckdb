@@ -6,6 +6,9 @@ statement ok
 PRAGMA explain_output = 'PHYSICAL_ONLY'
 
 statement ok
+SET disabled_optimizers TO 'common_subplan'
+
+statement ok
 CREATE TABLE vals1 AS SELECT i AS i, i AS j FROM range(0, 11, 1) t1(i)
 
 statement ok
@@ -30,13 +33,13 @@ physical_plan	<REGEX>:.*=5.*=5.*
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=3) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl2.i AND tbl1.k=tbl2.k
 ----
-physical_plan	<REGEX>:(.*=5.*=3.*=5.*=3.*|.*=3.*=5.*=3.*=5.*)
+physical_plan	<REGEX>:(.*=5.*=3.*=5.*=3.*|.*=3.*=5.*=3.*=5.*|.*=5.*=5.*=3.*=3.*)
 
 ## INNER JOIN: pull up two filters in cross product from RHS
 query II
 EXPLAIN SELECT * FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2 WHERE i=5 AND k=3) tbl2 WHERE tbl1.i=tbl2.i AND tbl1.k=tbl2.k
 ----
-physical_plan	<REGEX>:(.*=5.*=3.*=5.*=3.*|.*=3.*=5.*=3.*=5.*)
+physical_plan	<REGEX>:(.*=5.*=3.*=5.*=3.*|.*=3.*=5.*=3.*=5.*|.*=5.*=5.*=3.*=3.*)
 
 #### LEFT JOIN: pull up a single filter from LHS ####
 query II

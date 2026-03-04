@@ -20,6 +20,7 @@ struct CScalarFunctionInfo : public ScalarFunctionInfo {
 	}
 
 	duckdb_scalar_function_bind_t bind = nullptr;
+	duckdb_scalar_function_init_t init = nullptr;
 	duckdb_scalar_function_t function = nullptr;
 	duckdb_function_info extra_info = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
@@ -73,11 +74,40 @@ struct CScalarFunctionInternalBindInfo {
 	string error = "";
 };
 
+struct CScalarFunctionLocalState : public FunctionLocalState {
+	~CScalarFunctionLocalState() override {
+		if (local_state && delete_callback) {
+			delete_callback(local_state);
+		}
+		local_state = nullptr;
+		delete_callback = nullptr;
+	}
+
+	void *local_state;
+	duckdb_delete_callback_t delete_callback = nullptr;
+};
+
+struct CScalarFunctionInternalInitInfo {
+	CScalarFunctionInternalInitInfo(ClientContext &context, CScalarFunctionBindData &bind_data,
+	                                CScalarFunctionLocalState &local_state)
+	    : context(context), bind_data(bind_data), local_state(local_state) {
+	}
+
+	ClientContext &context;
+	CScalarFunctionBindData &bind_data;
+	CScalarFunctionLocalState &local_state;
+
+	bool success = true;
+	string error = "";
+};
+
 struct CScalarFunctionInternalFunctionInfo {
-	explicit CScalarFunctionInternalFunctionInfo(const CScalarFunctionBindData &bind_data)
-	    : bind_data(bind_data), success(true) {};
+	explicit CScalarFunctionInternalFunctionInfo(const CScalarFunctionBindData &bind_data,
+	                                             CScalarFunctionLocalState &local_state)
+	    : bind_data(bind_data), local_state(local_state), success(true) {};
 
 	const CScalarFunctionBindData &bind_data;
+	CScalarFunctionLocalState &local_state;
 
 	bool success;
 	string error = "";
@@ -102,6 +132,15 @@ duckdb::CScalarFunctionInternalBindInfo &GetCScalarFunctionBindInfo(duckdb_bind_
 
 duckdb_bind_info ToCScalarFunctionBindInfo(duckdb::CScalarFunctionInternalBindInfo &info) {
 	return reinterpret_cast<duckdb_bind_info>(&info);
+}
+
+duckdb::CScalarFunctionInternalInitInfo &GetCScalarFunctionInitInfo(duckdb_init_info info) {
+	D_ASSERT(info);
+	return *reinterpret_cast<duckdb::CScalarFunctionInternalInitInfo *>(info);
+}
+
+duckdb_init_info ToCScalarFunctionInitInfo(duckdb::CScalarFunctionInternalInitInfo &info) {
+	return reinterpret_cast<duckdb_init_info>(&info);
 }
 
 duckdb::CScalarFunctionInternalFunctionInfo &GetCScalarFunctionInfo(duckdb_function_info info) {
@@ -134,17 +173,37 @@ unique_ptr<FunctionData> CScalarFunctionBind(ClientContext &context, ScalarFunct
 	return std::move(result);
 }
 
+unique_ptr<FunctionLocalState> CScalarFunctionInit(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                   FunctionData *bind_data) {
+	auto &function = expr.function;
+	auto &info = function.GetExtraFunctionInfo().Cast<CScalarFunctionInfo>();
+	D_ASSERT(info.function);
+
+	auto result = make_uniq<CScalarFunctionLocalState>();
+	if (info.init) {
+		auto &context = state.GetContext();
+		auto &c_bind_data = bind_data->Cast<CScalarFunctionBindData>();
+		CScalarFunctionInternalInitInfo init_info(context, c_bind_data, *result);
+		info.init(ToCScalarFunctionInitInfo(init_info));
+		if (!init_info.success) {
+			throw InvalidInputException(init_info.error);
+		}
+	}
+	return std::move(result);
+}
+
 void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &function = state.expr.Cast<BoundFunctionExpression>();
 	auto &bind_info = function.bind_info;
 	auto &c_bind_info = bind_info->Cast<CScalarFunctionBindData>();
+	auto &c_local_state = ExecuteFunctionState::GetFunctionState(state)->Cast<CScalarFunctionLocalState>();
 
 	auto all_const = input.AllConstant();
 	input.Flatten();
 	auto c_input = reinterpret_cast<duckdb_data_chunk>(&input);
 	auto c_result = reinterpret_cast<duckdb_vector>(&result);
 
-	CScalarFunctionInternalFunctionInfo function_info(c_bind_info);
+	CScalarFunctionInternalFunctionInfo function_info(c_bind_info, c_local_state);
 	auto c_function_info = ToCScalarFunctionInfo(function_info);
 	c_bind_info.info.function(c_function_info, c_input, c_result);
 	if (!function_info.success) {
@@ -167,6 +226,7 @@ using duckdb::GetCScalarFunctionSet;
 duckdb_scalar_function duckdb_create_scalar_function() {
 	auto function = new duckdb::ScalarFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIScalarFunction,
 	                                           duckdb::CScalarFunctionBind);
+	function->init_local_state = duckdb::CScalarFunctionInit;
 	function->SetExtraFunctionInfo<duckdb::CScalarFunctionInfo>();
 	return reinterpret_cast<duckdb_scalar_function>(function);
 }
@@ -343,6 +403,67 @@ void duckdb_scalar_function_set_function(duckdb_scalar_function function, duckdb
 	auto &scalar_function = GetCScalarFunction(function);
 	auto &info = scalar_function.GetExtraFunctionInfo().Cast<duckdb::CScalarFunctionInfo>();
 	info.function = execute_func;
+}
+
+void *duckdb_scalar_function_get_state(duckdb_function_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto &function_info = GetCScalarFunctionInfo(info);
+	return function_info.local_state.local_state;
+}
+
+void duckdb_scalar_function_set_init(duckdb_scalar_function function, duckdb_scalar_function_init_t init_func) {
+	if (!function || !init_func) {
+		return;
+	}
+	auto &scalar_function = GetCScalarFunction(function);
+	auto &info = scalar_function.GetExtraFunctionInfo().Cast<duckdb::CScalarFunctionInfo>();
+	info.init = init_func;
+}
+
+void duckdb_scalar_function_init_set_error(duckdb_init_info info, const char *error) {
+	if (!info || !error) {
+		return;
+	}
+	auto &scalar_function = duckdb::GetCScalarFunctionInitInfo(info);
+	scalar_function.error = error;
+	scalar_function.success = false;
+}
+
+void duckdb_scalar_function_init_set_state(duckdb_init_info info, void *local_state, duckdb_delete_callback_t destroy) {
+	if (!info) {
+		return;
+	}
+	auto &init_info = duckdb::GetCScalarFunctionInitInfo(info);
+	init_info.local_state.local_state = local_state;
+	init_info.local_state.delete_callback = destroy;
+}
+
+void duckdb_scalar_function_init_get_client_context(duckdb_init_info info, duckdb_client_context *out_context) {
+	if (!info || !out_context) {
+		return;
+	}
+	auto &init_info = duckdb::GetCScalarFunctionInitInfo(info);
+	auto &context = init_info.context;
+	auto wrapper = new duckdb::CClientContextWrapper(context);
+	*out_context = reinterpret_cast<duckdb_client_context>(wrapper);
+}
+
+void *duckdb_scalar_function_init_get_bind_data(duckdb_init_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto &init_info = duckdb::GetCScalarFunctionInitInfo(info);
+	return init_info.bind_data.bind_data;
+}
+
+void *duckdb_scalar_function_init_get_extra_info(duckdb_init_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto &init_info = duckdb::GetCScalarFunctionInitInfo(info);
+	return init_info.bind_data.info.extra_info;
 }
 
 duckdb_state duckdb_register_scalar_function(duckdb_connection connection, duckdb_scalar_function function) {

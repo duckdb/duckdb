@@ -18,10 +18,18 @@ namespace duckdb_adbc {
 
 class AppenderWrapper {
 public:
-	AppenderWrapper(duckdb_connection conn, const char *schema, const char *table) : appender(nullptr) {
-		if (duckdb_appender_create(conn, schema, table, &appender) != DuckDBSuccess) {
-			appender = nullptr;
+	AppenderWrapper(duckdb_connection conn, const char *catalog, const char *schema, const char *table)
+	    : appender(nullptr) {
+		// Note: duckdb_appender_create_ext allocates an internal wrapper even on failure.
+		// If creation fails, make sure to destroy it to avoid leaking.
+		auto created = duckdb_appender(nullptr);
+		if (duckdb_appender_create_ext(conn, catalog, schema, table, &created) != DuckDBSuccess) {
+			if (created) {
+				duckdb_appender_destroy(&created);
+			}
+			return;
 		}
+		appender = created;
 	}
 	~AppenderWrapper() {
 		if (appender) {
@@ -121,6 +129,58 @@ AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcEr
 
 AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct AdbcError *error);
 
+AdbcStatusCode ConnectionCancel(struct AdbcConnection *connection, struct AdbcError *error);
+
+// Database Typed Option API (ADBC 1.1.0)
+AdbcStatusCode DatabaseGetOption(struct AdbcDatabase *database, const char *key, char *value, size_t *length,
+                                 struct AdbcError *error);
+AdbcStatusCode DatabaseGetOptionBytes(struct AdbcDatabase *database, const char *key, uint8_t *value, size_t *length,
+                                      struct AdbcError *error);
+AdbcStatusCode DatabaseGetOptionDouble(struct AdbcDatabase *database, const char *key, double *value,
+                                       struct AdbcError *error);
+AdbcStatusCode DatabaseGetOptionInt(struct AdbcDatabase *database, const char *key, int64_t *value,
+                                    struct AdbcError *error);
+AdbcStatusCode DatabaseSetOptionBytes(struct AdbcDatabase *database, const char *key, const uint8_t *value,
+                                      size_t length, struct AdbcError *error);
+AdbcStatusCode DatabaseSetOptionInt(struct AdbcDatabase *database, const char *key, int64_t value,
+                                    struct AdbcError *error);
+AdbcStatusCode DatabaseSetOptionDouble(struct AdbcDatabase *database, const char *key, double value,
+                                       struct AdbcError *error);
+
+// Connection Typed Option API (ADBC 1.1.0)
+AdbcStatusCode ConnectionGetOption(struct AdbcConnection *connection, const char *key, char *value, size_t *length,
+                                   struct AdbcError *error);
+AdbcStatusCode ConnectionGetOptionBytes(struct AdbcConnection *connection, const char *key, uint8_t *value,
+                                        size_t *length, struct AdbcError *error);
+AdbcStatusCode ConnectionGetOptionDouble(struct AdbcConnection *connection, const char *key, double *value,
+                                         struct AdbcError *error);
+AdbcStatusCode ConnectionGetOptionInt(struct AdbcConnection *connection, const char *key, int64_t *value,
+                                      struct AdbcError *error);
+AdbcStatusCode ConnectionSetOptionBytes(struct AdbcConnection *connection, const char *key, const uint8_t *value,
+                                        size_t length, struct AdbcError *error);
+AdbcStatusCode ConnectionSetOptionInt(struct AdbcConnection *connection, const char *key, int64_t value,
+                                      struct AdbcError *error);
+AdbcStatusCode ConnectionSetOptionDouble(struct AdbcConnection *connection, const char *key, double value,
+                                         struct AdbcError *error);
+
+// Statement Typed Option API (ADBC 1.1.0)
+AdbcStatusCode StatementGetOption(struct AdbcStatement *statement, const char *key, char *value, size_t *length,
+                                  struct AdbcError *error);
+AdbcStatusCode StatementGetOptionBytes(struct AdbcStatement *statement, const char *key, uint8_t *value, size_t *length,
+                                       struct AdbcError *error);
+AdbcStatusCode StatementGetOptionDouble(struct AdbcStatement *statement, const char *key, double *value,
+                                        struct AdbcError *error);
+AdbcStatusCode StatementGetOptionInt(struct AdbcStatement *statement, const char *key, int64_t *value,
+                                     struct AdbcError *error);
+AdbcStatusCode StatementSetOptionBytes(struct AdbcStatement *statement, const char *key, const uint8_t *value,
+                                       size_t length, struct AdbcError *error);
+AdbcStatusCode StatementSetOptionInt(struct AdbcStatement *statement, const char *key, int64_t value,
+                                     struct AdbcError *error);
+AdbcStatusCode StatementSetOptionDouble(struct AdbcStatement *statement, const char *key, double value,
+                                        struct AdbcError *error);
+
+const AdbcError *ErrorFromArrayStream(struct ArrowArrayStream *stream, AdbcStatusCode *status);
+
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error);
 
@@ -128,6 +188,8 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                      int64_t *rows_affected, struct AdbcError *error);
+
+AdbcStatusCode StatementCancel(struct AdbcStatement *statement, struct AdbcError *error);
 
 AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcError *error);
 

@@ -463,7 +463,7 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->recursive_keys = $3;
+				n->using_key_list = $3;
 				n->ctematerialized = $5;
 				n->ctequery = $7;
 				n->location = @1;
@@ -472,8 +472,8 @@ common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' Prepar
 		;
 
 opt_on_key:
-		USING KEY '(' column_ref_list_opt_comma ')' 				{ $$ = $4; }
-		| /*EMPTY*/												{ $$ = list_make1(NIL); }
+		USING KEY '(' target_list_opt_comma ')' 				{ $$ = $4; }
+		| /*EMPTY*/												{ $$ = NULL; }
 		;
 
 column_ref_list_opt_comma:
@@ -1696,6 +1696,11 @@ Typename:	SimpleTypename opt_array_bounds
 					$$ = $1;
 					$$->arrayBounds = $2;
 				}
+			| qualified_typename opt_array_bounds
+				{
+					$$ = makeTypeNameFromNameList($1);
+					$$->arrayBounds = $2;
+				}
 			| SETOF SimpleTypename opt_array_bounds
 				{
 					$$ = $2;
@@ -1708,9 +1713,20 @@ Typename:	SimpleTypename opt_array_bounds
 					$$ = $1;
 					$$->arrayBounds = list_make1(makeInteger($4));
 				}
+			| qualified_typename ARRAY '[' Iconst ']'
+				{
+					$$ = makeTypeNameFromNameList($1);
+					$$->arrayBounds = list_make1(makeInteger($4));
+				}
 			| SETOF SimpleTypename ARRAY '[' Iconst ']'
 				{
 					$$ = $2;
+					$$->arrayBounds = list_make1(makeInteger($5));
+					$$->setof = true;
+				}
+			| SETOF qualified_typename ARRAY '[' Iconst ']'
+				{
+					$$ = makeTypeNameFromNameList($2);
 					$$->arrayBounds = list_make1(makeInteger($5));
 					$$->setof = true;
 				}
@@ -1719,16 +1735,22 @@ Typename:	SimpleTypename opt_array_bounds
 					$$ = $1;
 					$$->arrayBounds = list_make1(makeInteger(-1));
 				}
+			| qualified_typename ARRAY
+				{
+					$$ = makeTypeNameFromNameList($1);
+					$$->arrayBounds = list_make1(makeInteger(-1));
+				}
 			| SETOF SimpleTypename ARRAY
 				{
 					$$ = $2;
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| qualified_typename opt_array_bounds
+			| SETOF qualified_typename ARRAY
 				{
-					$$ = makeTypeNameFromNameList($1);
-					$$->arrayBounds = $2;
+					$$ = makeTypeNameFromNameList($2);
+					$$->arrayBounds = list_make1(makeInteger(-1));
+					$$->setof = true;
 				}
 			| RowOrStruct '(' colid_type_list ')' opt_array_bounds
 				{
@@ -3159,18 +3181,56 @@ list_comprehension:
 				}
 				| '[' a_expr FOR name_list IN_P c_expr IF_P a_expr']'
 				{
-					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
+					/* Construct first apply */
+					PGNamedArgExpr *filter_expr = makeNode(PGNamedArgExpr);
+					filter_expr->name = pstrdup("filter");
+					filter_expr->arg = (PGExpr *) $8;
+					filter_expr->argnumber = -1;
+					filter_expr->location = @8;
+
+					PGNamedArgExpr *result_expr = makeNode(PGNamedArgExpr);
+					result_expr->name = pstrdup("result");
+					result_expr->arg = (PGExpr *) $2;
+					result_expr->argnumber = -1;
+					result_expr->location = @2;
+
+					PGFuncCall *struct_pack = makeFuncCall(SystemFuncName("struct_pack"), list_make2(filter_expr, result_expr), @1);
+
+					PGLambdaFunction *lambda_apply_1 = makeNode(PGLambdaFunction);
+					lambda_apply_1->lhs = $4;
+					lambda_apply_1->rhs = (PGNode *)struct_pack;
+					lambda_apply_1->location = @1;
+
+					PGFuncCall *apply_func_1 = makeFuncCall(SystemFuncName("list_apply"), list_make2($6, lambda_apply_1), @1);
+
+					/* Construct filter */
+					PGNode *elem_column_ref_filter = makeColumnRef(pstrdup("elem"), NIL, @1, yyscanner);
+					PGNode *filter_column_name = makeStringConst("filter", @1);
+					PGFuncCall *filter_extract = makeFuncCall(SystemFuncName("struct_extract"), list_make2(elem_column_ref_filter, filter_column_name), @1);					PGLambdaFunction *lambda = makeNode(PGLambdaFunction);
 					lambda->lhs = $4;
 					lambda->rhs = $2;
 					lambda->location = @1;
 
 					PGLambdaFunction *lambda_filter = makeNode(PGLambdaFunction);
-					lambda_filter->lhs = $4;
-					lambda_filter->rhs = $8;
-					lambda_filter->location = @8;
-					PGFuncCall *filter = makeFuncCall(SystemFuncName("list_filter"), list_make2($6, lambda_filter), @1);
-					PGFuncCall *n = makeFuncCall(SystemFuncName("list_apply"), list_make2(filter, lambda), @1);
-					$$ = (PGNode *) n;
+					lambda_filter->lhs = list_make1(makeString("elem"));
+					lambda_filter->rhs = (PGNode *) filter_extract;
+					lambda_filter->location = @1;
+
+					PGFuncCall *filter_func = makeFuncCall(SystemFuncName("list_filter"), list_make2(apply_func_1, lambda_filter), @1);
+
+					/* Construct second apply */
+					PGNode *elem_column_ref_result = makeColumnRef(pstrdup("elem"), NIL, @1, yyscanner);
+					PGNode *result_column_name = makeStringConst("result", @1);
+					PGFuncCall *result_extract = makeFuncCall(SystemFuncName("struct_extract"), list_make2(elem_column_ref_filter, result_column_name), @1);
+
+					PGLambdaFunction *lambda_apply_2 = makeNode(PGLambdaFunction);
+					lambda_apply_2->lhs = list_make1(makeString("elem"));
+					lambda_apply_2->rhs = (PGNode *) result_extract;
+					lambda_apply_2->location = @1;
+
+					PGFuncCall *apply_func_2 = makeFuncCall(SystemFuncName("list_apply"), list_make2(filter_func, lambda_apply_2), @1);
+
+					$$ = (PGNode *) apply_func_2;
 				}
 			;
 

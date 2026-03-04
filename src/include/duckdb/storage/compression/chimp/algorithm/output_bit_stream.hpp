@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb.h"
 #include "duckdb/common/assert.hpp"
 
 #include "duckdb/storage/compression/chimp/algorithm/bit_utils.hpp"

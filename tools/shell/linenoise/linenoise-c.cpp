@@ -120,8 +120,9 @@ void linenoiseSetCompletionRendering(int enabled) {
 	}
 }
 
-void linenoiseSetPrompt(const char *continuation, const char *continuationSelected) {
-	Linenoise::SetPrompt(continuation, continuationSelected);
+void linenoiseSetPrompt(const char *continuation, const char *continuationSelected, const char *scrollUp,
+                        const char *scrollDown) {
+	Linenoise::SetPrompt(continuation, continuationSelected, scrollUp, scrollDown);
 }
 
 /* This function is used by the callback function registered by the user
@@ -156,6 +157,9 @@ void linenoiseClearScreen(void) {
 }
 
 int linenoiseGetTerminalColorMode() {
+	// buffer any available input - we need to interact with stdin
+	Terminal::BufferAvailableInput();
+
 	duckdb::TerminalColor background_color;
 	if (!duckdb::Terminal::TryGetBackgroundColor(background_color)) {
 		return LINENOISE_UNKNOWN_MODE;

@@ -15,8 +15,8 @@
  *   11/11/09    kirtig      Finished first cut of implementation.
  ********************************************************************/
 
-#ifndef SELFMT_H
-#define SELFMT_H
+#ifndef SELFMT
+#define SELFMT
 
 #include "unicode/utypes.h"
 
@@ -259,7 +259,7 @@ public:
      * @return         true if other is semantically equal to this.
      * @stable ICU 4.4
      */
-    virtual bool operator==(const Format& other) const;
+    virtual bool operator==(const Format& other) const override;
 
     /**
      * Return true if another object is semantically unequal to this one.
@@ -275,7 +275,7 @@ public:
      * result and should delete it when done.
      * @stable ICU 4.4
      */
-    virtual SelectFormat* clone() const;
+    virtual SelectFormat* clone() const override;
 
     /**
      * Format an object to produce a string.
@@ -295,7 +295,7 @@ public:
     UnicodeString& format(const Formattable& obj,
                          UnicodeString& appendTo,
                          FieldPosition& pos,
-                         UErrorCode& status) const;
+                         UErrorCode& status) const override;
 
     /**
      * Returns the pattern from applyPattern() or constructor.
@@ -331,7 +331,7 @@ public:
      */
     virtual void parseObject(const UnicodeString& source,
                             Formattable& result,
-                            ParsePosition& parse_pos) const;
+                            ParsePosition& parse_pos) const override;
 
     /**
      * ICU "poor man's RTTI", returns a UClassID for this class.
@@ -343,12 +343,12 @@ public:
      * ICU "poor man's RTTI", returns a UClassID for the actual class.
      * @stable ICU 4.4
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
 private:
     friend class MessageFormat;
 
-    SelectFormat();   // default constructor not implemented.
+    SelectFormat() = delete;   // default constructor not implemented.
 
     /**
      * Finds the SelectFormat sub-message for the given keyword, or the "other" sub-message.

@@ -26,6 +26,7 @@ public:
 
 public:
 	void Scan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count, DataChunk &chunk);
+	void Clear();
 
 private:
 	template <SortKeyType sort_key_type>

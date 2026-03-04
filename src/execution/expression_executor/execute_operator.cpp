@@ -113,8 +113,18 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		}
 	} else if (expression_type == ExpressionType::OPERATOR_TRY) {
 		auto &child_state = *state->child_states[0];
+		Vector try_result(result.GetType());
 		try {
-			Execute(*expr.children[0], &child_state, sel, count, result);
+			Execute(*expr.children[0], &child_state, sel, count, try_result);
+			if (try_result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				result.Reference(try_result);
+				return;
+			}
+			if (sel) {
+				VectorOperations::Copy(try_result, result, *sel, count, 0, 0, count);
+			} else {
+				VectorOperations::Copy(try_result, result, count, 0, 0);
+			}
 			return;
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
@@ -123,12 +133,19 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				throw;
 			}
 		}
+
+		// On error, evaluate per row
 		SelectionVector selvec(1);
 		DataChunk intermediate;
 		intermediate.Initialize(GetAllocator(), {result.GetType()}, 1);
 		for (idx_t i = 0; i < count; i++) {
 			intermediate.Reset();
 			intermediate.SetCardinality(1);
+
+			// Make sure to clear any dictionary states in the child expression, so that it actually
+			// gets executed anew for every row
+			child_state.ResetDictionaryStates();
+
 			selvec.set_index(0, sel ? sel->get_index(i) : i);
 			Value val(result.GetType());
 			try {

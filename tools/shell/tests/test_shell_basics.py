@@ -1040,6 +1040,29 @@ def test_columnar_mode(shell):
     result = test.run()
     result.check_stdout('Row 1')
 
+def test_columnar_mode_truncate(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".col")
+        .statement(".maxwidth 100")
+        .statement("select * from range(100,200);")
+    )
+    result = test.run()
+    result.check_stdout('Row 98')
+    result.check_stdout('198')
+
+def test_empty_result(shell):
+    test = (
+        ShellTest(shell)
+        .statement("select 42 empty_result where 1=0;")
+    )
+    result = test.run()
+    result.check_stdout('''┌──────────────┐
+│ empty_result │
+│    int32     │
+└──────────────┘
+     0 rows''')
+
 def test_columnar_mode_constant(shell):
     columns = ','.join(["'MyValue" + str(x) + "'" for x in range(100)])
     test = (
@@ -1226,5 +1249,12 @@ def test_open_with_sql_and_null_return(shell):
     )
     result = test.run()
     result.check_stderr("Error: --sql query returned a null value")
+
+
+def test_about(shell):
+    test = ShellTest(shell).statement(".about")
+
+    result = test.run()
+    result.check_stdout("DuckDB is an in-process analytical database management system designed for fast ")
 
 # fmt: on

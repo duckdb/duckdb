@@ -1,0 +1,110 @@
+# name: test/sql/peg_parser/peg_syntax_error.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok 
+call enable_peg_parser();
+
+statement error
+SELECT (1 + (2 * 3);
+----
+Parser Error: Syntax error at or near ")"
+
+statement error
+SELECT 1 + 2 * ;
+----
+Parser Error: Syntax error at or near "*"
+
+statement error
+SELECT * FROM users JOIN orders;
+----
+Parser Error: Syntax error at or near "orders"
+
+statement error
+SELECT * FROM users WHERE id = 1 WHERE age > 20;
+----
+Parser Error: Syntax error at or near "WHERE"
+
+statement error
+SELECT (10).;
+----
+Parser Error: Syntax error at or near "."
+
+statement error
+SELECT * FROM tbl WHERE id IN ();
+----
+Parser Error: Syntax error at or near ")"
+
+statement error
+SELECT a, b,, FROM tbl;
+----
+Parser Error: Syntax error at or near ","
+
+statement error
+SELECT users..id FROM users;
+----
+Parser Error: Syntax error at or near ".."
+
+statement error
+SELECT * FROM tbl WHERE x = (SELECT 1 FROM (SELECT 2);
+----
+Parser Error: Syntax error at or near ")"
+
+statement error
+SELECT x -> x + FROM tbl;
+----
+Parser Error: Syntax error at or near "FROM"
+
+statement error
+WITH cte AS (SELECT 1) SELECT * FROM cte WHERE (SELECT 1 FROM cte2;
+----
+Parser Error: Syntax error at or near "cte2"
+
+statement error
+SELECT id, SUM(amount) OVER (PARTITION BY ) FROM sales;
+----
+Parser Error: Syntax error at or near ")"
+
+# This error could be improved by saying there's an empty select list
+statement error
+WITH cte1 AS (SELECT 1), cte2 AS (SELECT ) SELECT * FROM cte1;
+----
+Parser Error: Syntax error at or near ")"
+
+statement error
+SELECT count(*) FILTER (WHERE ) FROM tbl;
+----
+Parser Error: Syntax error at or near ")"
+
+statement error
+SELECT {'a': 1, 'b': };
+----
+Parser Error: Syntax error at or near "}"
+
+statement error
+SELECT CASE WHEN x > 10 THEN 'large' WHEN x < 5;
+----
+Parser Error: Syntax error at or near "5"
+
+statement error
+SELECT '2023-01-01':: ;
+----
+Parser Error: Syntax error at or near "::"
+
+statement error
+SELECT 1 INTERSECT;
+----
+Parser Error: Syntax error at or near "INTERSECT"
+
+statement ok 
+create table tbl (a bigint, b bigint, c bigint); 
+
+statement ok
+SELECT a, b, SUM(c) FROM tbl GROUP BY GROUPING SETS (a, (b, ));
+
+statement error
+CREATE TABLE t1 (id INTEGER, name );
+----
+Parser Error: Column "name" must have a type or be defined as a GENERATED column.

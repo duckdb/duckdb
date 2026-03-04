@@ -709,6 +709,9 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::FILE_META_
 
 	names.emplace_back("footer_size");
 	return_types.emplace_back(LogicalType::UBIGINT);
+
+	names.emplace_back("column_orders");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 }
 
 idx_t ParquetFileMetadataProcessor::TotalRowCount(ParquetReader &reader) {
@@ -739,6 +742,17 @@ void ParquetFileMetadataProcessor::ReadRow(vector<reference<Vector>> &output, id
 	output[7].get().SetValue(output_idx, Value::UBIGINT(reader.GetHandle().GetFileSize()));
 	// footer_size
 	output[8].get().SetValue(output_idx, Value::UBIGINT(reader.metadata->footer_size));
+	// column_orders
+	Value column_orders_value;
+	if (meta_data->__isset.column_orders) {
+		vector<Value> column_orders;
+		column_orders.reserve(meta_data->column_orders.size());
+		for (auto &column_order : meta_data->column_orders) {
+			column_orders.push_back(Value(ConvertParquetElementToString(column_order)));
+		}
+		column_orders_value = Value::LIST(LogicalType::VARCHAR, column_orders);
+	}
+	output[9].get().SetValue(output_idx, column_orders_value);
 }
 
 //===--------------------------------------------------------------------===//

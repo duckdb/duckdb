@@ -16,6 +16,10 @@ DatabaseInstance &RowGroupWriter::GetDatabase() {
 	return table.ParentCatalog().GetDatabase();
 }
 
+AttachedDatabase &RowGroupWriter::GetAttachedDatabase() {
+	return table.ParentCatalog().GetAttached();
+}
+
 SingleFileRowGroupWriter::SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
                                                    TableDataWriter &writer, MetadataWriter &table_data_writer)
     : RowGroupWriter(table, partial_block_manager), writer(writer), table_data_writer(table_data_writer) {

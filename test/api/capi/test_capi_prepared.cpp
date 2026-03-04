@@ -1,4 +1,7 @@
 #include "capi_tester.hpp"
+#include <atomic>
+#include <random>
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
@@ -496,6 +499,73 @@ TEST_CASE("Maintain prepared statement types", "[capi]") {
 	duckdb_destroy_prepare(&stmt);
 }
 
+TEST_CASE("Test duckdb_parameter_name", "[capi]") {
+	CAPITester tester;
+	duckdb_prepared_statement stmt;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	SECTION("Contiguous positional parameters") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT $1, $2, $3", &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_nparams(stmt) == 3);
+
+		const char *name;
+		name = duckdb_parameter_name(stmt, 1);
+		REQUIRE(string(name) == "1");
+		duckdb_free((void *)name);
+
+		name = duckdb_parameter_name(stmt, 2);
+		REQUIRE(string(name) == "2");
+		duckdb_free((void *)name);
+
+		name = duckdb_parameter_name(stmt, 3);
+		REQUIRE(string(name) == "3");
+		duckdb_free((void *)name);
+
+		REQUIRE(duckdb_parameter_name(stmt, 4) == nullptr);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("Uncontiguous parameters") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT $1, $10", &stmt) == DuckDBSuccess);
+
+		REQUIRE(duckdb_nparams(stmt) == 2);
+
+		const char *name;
+		name = duckdb_parameter_name(stmt, 1);
+		REQUIRE(string(name) == "1");
+		duckdb_free((void *)name);
+
+		name = duckdb_parameter_name(stmt, 10);
+		REQUIRE(string(name) == "10");
+		duckdb_free((void *)name);
+
+		// Non-existing indexes
+		REQUIRE(duckdb_parameter_name(stmt, 2) == nullptr);
+		REQUIRE(duckdb_parameter_name(stmt, 11) == nullptr);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+
+	SECTION("Named parameters") {
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT $foo, $bar", &stmt) == DuckDBSuccess);
+		REQUIRE(duckdb_nparams(stmt) == 2);
+
+		const char *name;
+		// Named parameters are starting from 1
+		name = duckdb_parameter_name(stmt, 1);
+		REQUIRE(string(name) == "foo");
+		duckdb_free((void *)name);
+
+		name = duckdb_parameter_name(stmt, 2);
+		REQUIRE(string(name) == "bar");
+		duckdb_free((void *)name);
+
+		duckdb_destroy_prepare(&stmt);
+	}
+}
+
 TEST_CASE("Prepared streaming result", "[capi]") {
 	CAPITester tester;
 
@@ -603,6 +673,56 @@ TEST_CASE("Test STRING LITERAL parameter type", "[capi]") {
 	REQUIRE(duckdb_bind_varchar(stmt, 1, "a") == DuckDBSuccess);
 	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_STRING_LITERAL);
 	duckdb_destroy_prepare(&stmt);
+
+	duckdb_disconnect(&conn);
+	duckdb_close(&db);
+}
+
+TEST_CASE("Test concurrent prepared statement execution race condition MRE", "[capi]") {
+	// This test is a minimal reproducible example for the race condition described in #7187 (internal).
+	duckdb_database db;
+	REQUIRE(duckdb_open(nullptr, &db) == DuckDBSuccess);
+
+	duckdb_connection conn;
+	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
+
+	std::atomic<idx_t> failures {0};
+	std::atomic<idx_t> completed {0};
+
+	constexpr idx_t NUM_THREADS = 4;
+	constexpr idx_t ITERATIONS = 1000;
+
+	duckdb::vector<std::thread> threads;
+	for (idx_t t = 0; t < NUM_THREADS; t++) {
+		threads.emplace_back([&]() {
+			for (idx_t i = 0; i < ITERATIONS; i++) {
+				duckdb_prepared_statement stmt = nullptr;
+				if (duckdb_prepare(conn, "SELECT 1", &stmt) != DuckDBSuccess) {
+					++failures;
+					continue;
+				}
+
+				duckdb_result result;
+				if (duckdb_execute_prepared(stmt, &result) != DuckDBSuccess) {
+					++failures;
+					duckdb_destroy_prepare(&stmt);
+					continue;
+				}
+
+				duckdb_destroy_result(&result);
+				duckdb_destroy_prepare(&stmt);
+				++completed;
+			}
+		});
+	}
+
+	for (auto &t : threads) {
+		t.join();
+	}
+
+	// All executions should succeed
+	REQUIRE(failures == 0);
+	REQUIRE(completed == NUM_THREADS * ITERATIONS);
 
 	duckdb_disconnect(&conn);
 	duckdb_close(&db);

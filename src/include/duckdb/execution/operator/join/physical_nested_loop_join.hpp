@@ -25,9 +25,6 @@ public:
 	                       PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
 	                       idx_t estimated_cardinality);
 
-	// Predicate (join conditions that don't reference both sides)
-	unique_ptr<Expression> predicate;
-
 public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;

@@ -8,31 +8,33 @@
 
 #pragma once
 
-#include "duckdb/common/enums/index_constraint_type.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/storage/statistics/column_statistics.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
 class BoundForeignKeyConstraint;
+class AttachedDatabase;
 class ClientContext;
+class ColumnList;
 class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
+class DataChunk;
+class DistinctStatistics;
 class DuckTransaction;
+class Expression;
+class Index;
+class OptimisticDataWriter;
 class RowGroup;
+class RowGroupCollection;
+class Serializer;
 class StorageManager;
 class TableCatalogEntry;
 class TableIOManager;
+class Vector;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
@@ -41,8 +43,12 @@ class TableScanState;
 struct TableDeleteState;
 struct ConstraintState;
 struct TableUpdateState;
-enum class VerifyExistenceType : uint8_t;
 struct OptimisticWriteCollection;
+struct ColumnFetchState;
+struct DataTableInfo;
+struct LocalAppendState;
+struct ParallelTableScanState;
+struct TableAppendState;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped
@@ -85,8 +91,9 @@ public:
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context) const;
-	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
+	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
+	                            const vector<ColumnIndex> &column_indexes);
+	idx_t NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -97,6 +104,8 @@ public:
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(DuckTransaction &transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
 	           const Vector &row_ids, idx_t fetch_count, ColumnFetchState &state);
+	void FetchCommitted(DataChunk &result, const vector<StorageIndex> &column_ids, const Vector &row_identifiers,
+	                    idx_t fetch_count, ColumnFetchState &state);
 	//! Returns true, if the transaction can fetch the row ID.
 	bool CanFetch(DuckTransaction &transaction, const row_t row_id);
 
@@ -116,7 +125,7 @@ public:
 	                 DataChunk &delete_chunk);
 	//! Appends to the transaction-local storage of this table
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool unsafe = false);
 	//! Append a chunk to the transaction-local storage of this table.
 	void LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                    const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -180,23 +189,24 @@ public:
 	                      const std::function<void(DataChunk &chunk)> &function);
 
 	//! Merge a row group collection directly into this table - appending it to the end of the table without copying
-	void MergeStorage(RowGroupCollection &data, TableIndexList &indexes, optional_ptr<StorageCommitState> commit_state);
+	void MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state);
 
 	//! Appends a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
 	//! If an index is bound, it appends table_chunk. Else, it buffers index_chunk.
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
 	                                 DataChunk &table_chunk, DataChunk &index_chunk,
 	                                 const vector<StorageIndex> &mapped_column_ids, row_t row_start,
-	                                 const IndexAppendMode index_append_mode);
+	                                 const IndexAppendMode index_append_mode, optional_idx active_checkpoint);
 	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &table_chunk,
 	                          DataChunk &index_chunk, const vector<StorageIndex> &mapped_column_ids, row_t row_start,
 	                          const IndexAppendMode index_append_mode);
-	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
-	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
-	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
-	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
+	//! Revert a previous append made to indexes in a chunk with the row ids [row_start, ..., row_start + chunk.size()]
+	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, row_t row_start);
+	//! Revert a previous append made to indexes with the given row-ids
+	void RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
-	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count);
+	void RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
+	                       IndexRemovalType removal_type, optional_idx checkpoint_id = optional_idx());
 
 	void SetAsMainTable() {
 		this->version = DataTableVersion::MAIN_TABLE;
@@ -215,7 +225,7 @@ public:
 	string TableModification() const;
 
 	//! Get statistics of a physical column within the table
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const StorageIndex &column_id);
 
 	//! Get table sample
 	unique_ptr<BlockingSample> GetSample();
@@ -235,7 +245,7 @@ public:
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 
 	//! Scans the next chunk for the CREATE INDEX operator
-	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
+	bool CreateIndexScan(TableScanState &state, DataChunk &result);
 	//! Returns true, if the index name is unique (i.e., no PK, UNIQUE, FK constraint has the same name)
 	//! FIXME: This is only necessary until we treat all indexes as catalog entries, allowing to alter constraints
 	bool IndexNameIsUnique(const string &name);
@@ -272,7 +282,7 @@ public:
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              const IndexStorageInfo &info);
+	              IndexStorageInfo index_info);
 	//! AddIndex moves an index to this table's index list.
 	void AddIndex(unique_ptr<Index> index);
 

@@ -54,6 +54,6 @@ CHECKPOINT
 
 # expected almost no blocks here - the table was cleared
 query I
-SELECT case when total_blocks < 5 then NULL else t end FROM pragma_database_size() t
+SELECT case when total_blocks - free_blocks < 5 then NULL else t end FROM pragma_database_size() t
 ----
 NULL

@@ -16,7 +16,7 @@
 U_NAMESPACE_BEGIN
 
 StringPiece::StringPiece(const char* str)
-    : ptr_(str), length_((str == NULL) ? 0 : static_cast<int32_t>(uprv_strlen(str))) { }
+    : ptr_(str), length_((str == nullptr) ? 0 : static_cast<int32_t>(uprv_strlen(str))) { }
 
 StringPiece::StringPiece(const StringPiece& x, int32_t pos) {
   if (pos < 0) {
@@ -45,10 +45,51 @@ StringPiece::StringPiece(const StringPiece& x, int32_t pos, int32_t len) {
 
 void StringPiece::set(const char* str) {
   ptr_ = str;
-  if (str != NULL)
+  if (str != nullptr)
     length_ = static_cast<int32_t>(uprv_strlen(str));
   else
     length_ = 0;
+}
+
+int32_t StringPiece::find(StringPiece needle, int32_t offset) {
+  if (length() == 0 && needle.length() == 0) {
+    return 0;
+  }
+  // TODO: Improve to be better than O(N^2)?
+  for (int32_t i = offset; i < length(); i++) {
+    int32_t j = 0;
+    for (; j < needle.length(); i++, j++) {
+      if (data()[i] != needle.data()[j]) {
+        i -= j;
+        goto outer_end;
+      }
+    }
+    return i - j;
+    outer_end: void();
+  }
+  return -1;
+}
+
+int32_t StringPiece::compare(StringPiece other) {
+  int32_t i = 0;
+  for (; i < length(); i++) {
+    if (i == other.length()) {
+      // this is longer
+      return 1;
+    }
+    char a = data()[i];
+    char b = other.data()[i];
+    if (a < b) {
+      return -1;
+    } else if (a > b) {
+      return 1;
+    }
+  }
+  if (i < other.length()) {
+    // other is longer
+    return -1;
+  }
+  return 0;
 }
 
 U_EXPORT UBool U_EXPORT2

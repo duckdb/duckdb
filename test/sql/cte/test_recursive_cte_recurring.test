@@ -1,0 +1,134 @@
+# name: test/sql/cte/test_recursive_cte_recurring.test
+# description: Recursive CTEs with access to the UNION table
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification;
+
+query II
+WITH RECURSIVE deduction AS (
+	-- P, (not P or Q), (not Q)
+	SELECT clause FROM (VALUES ([1]), ([-1, 2]), ([-2])) AS kb(clause)
+		UNION
+	SELECT
+	-- Create new clause by merging and removing resolved literals
+	list_distinct(
+		list_concat(
+			list_filter(p_new.clause, lambda x: x <> lit),
+				list_filter(p_old.clause, lambda x: x <> -lit)
+			)
+		) AS new_clause
+	FROM deduction p_new -- Newly added clauses
+	CROSS JOIN UNNEST(p_new.clause) AS t_lit(lit)
+	-- We join with the UNION table to find the negation of that literal
+	JOIN recurring.deduction p_old ON list_contains(p_old.clause, -lit)
+	WHERE
+		-- A resolution step is only useful if it doesn't create a tautology (like [P, not P]).
+		NOT EXISTS (
+			SELECT 1 FROM (
+				-- Check all literals in the potential new clause
+				SELECT UNNEST(list_concat(
+					list_filter(p_new.clause, lambda x: x <> lit),
+						list_filter(p_old.clause, lambda x: x <> -lit)
+				)) AS l
+			)
+			GROUP BY abs(l)
+			HAVING count(distinct l) > 1 -- Found both X and -X
+		)
+)
+-- If we deduced an empty clause [], it means the input was contradictory.
+SELECT CASE WHEN EXISTS (SELECT 1 FROM deduction WHERE len(clause) = 0)
+            THEN 'CONTRADICTION FOUND'
+            ELSE 'LOGICALLY CONSISTENT'
+       END AS result,
+       (SELECT list(clause ORDER BY clause) FROM deduction) AS all_deduced_clauses;
+----
+CONTRADICTION FOUND	[[], [-2], [-1], [-1, 2], [1], [2]]
+
+# Find broken parts whose primary AND secondary supporting dependencies
+# are broken.  Derived from Example 1.2 (Nonlinear Query) in
+#
+# I. S. Mumick, S. J. Finkelstein, Hamid Pirahesh, and Raghu
+# Ramakrishnan. 1990. "Magic is relevant". SIGMOD Rec. 19, 2 (Jun.
+# 1990), 247–258. DOI:https://doi.org/10.1145/93605.98734.
+# Sample component hierarchy
+# (a component is broken if its primary AND secondary
+#  dependencies are broken)
+#
+#      c1
+#    ᵖ/  \ˢ
+#  ᵇc2    c3
+#        /  \
+#     ᵇc4    c5ᵇ
+#     /  \
+#   c6    c7
+#
+# If c2, c4, c5 are broken, then
+#  - c3 is broken, and in turn
+#  - c1 is broken
+query I
+WITH RECURSIVE
+"primary"(c,p) AS (
+  VALUES ('c1', 'c2'),
+         ('c3', 'c4'),
+         ('c4', 'c6')
+),
+secondary(c,s) AS (
+  VALUES ('c1', 'c3'),
+         ('c3', 'c5'),
+         ('c4', 'c7')
+),
+broken(c) AS (
+  VALUES ('c2'),
+         ('c4'),
+         ('c5')
+),
+fail(c) AS (
+  SELECT b.c
+  FROM   broken AS b
+    UNION
+  SELECT p.c
+  FROM  "primary" AS p, secondary AS s, recurring.fail AS f1, recurring.fail AS f2
+  WHERE f1.c = p.p
+  AND   f2.c = s.s
+  AND   p.c = s.c
+)
+TABLE fail
+ORDER BY c;
+----
+c1
+c2
+c3
+c4
+c5
+
+query II
+WITH RECURSIVE
+parent(p,c) AS (
+  VALUES ('c1','c2'),
+         ('c1','c3'),
+         ('c3','c4'),
+         ('c3','c5'),
+         ('c4','c6'),
+         ('c4','c7')
+),
+ancestor(a,c) AS (
+  FROM parent
+    UNION
+  SELECT a1.x, a2.y
+  FROM   recurring.ancestor AS a1(x,z) NATURAL JOIN recurring.ancestor AS a2(z,y)
+)
+FROM ancestor ORDER BY ALL;
+----
+c1	c2
+c1	c3
+c1	c4
+c1	c5
+c1	c6
+c1	c7
+c3	c4
+c3	c5
+c3	c6
+c3	c7
+c4	c6
+c4	c7

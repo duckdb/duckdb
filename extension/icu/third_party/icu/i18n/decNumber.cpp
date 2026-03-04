@@ -20,7 +20,7 @@
 /* ------------------------------------------------------------------ */
 
 /* Modified version, for use from within ICU.
- *    Renamed public functions, to avoid an unwanted export of the
+ *    Renamed public functions, to avoid an unwanted export of the 
  *    standard names from the ICU library.
  *
  *    Use ICU's uprv_malloc() and uprv_free()
@@ -95,11 +95,11 @@
 /*    conversions are available in separate modules.                  */
 /*                                                                    */
 /* 7. Normally, input operands are assumed to be valid.  Set DECCHECK */
-/*    to 1 for extended operand checking (including NULL operands).   */
-/*    Results are undefined if a badly-formed structure (or a NULL    */
+/*    to 1 for extended operand checking (including nullptr operands).   */
+/*    Results are undefined if a badly-formed structure (or a nullptr    */
 /*    pointer to a structure) is provided, though with DECCHECK       */
 /*    enabled the operator routines are protected against exceptions. */
-/*    (Except if the result pointer is NULL, which is unrecoverable.) */
+/*    (Except if the result pointer is nullptr, which is unrecoverable.) */
 /*                                                                    */
 /*    However, the routines will never cause exceptions if they are   */
 /*    given well-formed operands, even if the value of the operands   */
@@ -189,28 +189,28 @@
 /* Public lookup table used by the D2U macro  */
 static const uByte d2utable[DECMAXD2U+1]=D2UTABLE;
 
-#define DECNUMBER_DECVERB     1              /* set to 1 for verbose DECCHECK  */
-#define DECNUMBER_powers      DECPOWERS      /* old internal name  */
+#define DECVERB     1              /* set to 1 for verbose DECCHECK  */
+#define powers      DECPOWERS      /* old internal name  */
 
 /* Local constants  */
-#define DECNUMBER_DIVIDE      0x80           /* Divide operators  */
-#define DECNUMBER_REMAINDER   0x40           /* ..  */
-#define DECNUMBER_DIVIDEINT   0x20           /* ..  */
-#define DECNUMBER_REMNEAR     0x10           /* ..  */
-#define DECNUMBER_COMPARE     0x01           /* Compare operators  */
-#define DECNUMBER_COMPMAX     0x02           /* ..  */
-#define DECNUMBER_COMPMIN     0x03           /* ..  */
-#define DECNUMBER_COMPTOTAL   0x04           /* ..  */
-#define DECNUMBER_COMPNAN     0x05           /* .. [NaN processing]  */
-#define DECNUMBER_COMPSIG     0x06           /* .. [signaling DECNUMBER_COMPARE]  */
-#define DECNUMBER_COMPMAXMAG  0x07           /* ..  */
-#define DECNUMBER_COMPMINMAG  0x08           /* ..  */
+#define DIVIDE      0x80           /* Divide operators  */
+#define REMAINDER   0x40           /* ..  */
+#define DIVIDEINT   0x20           /* ..  */
+#define REMNEAR     0x10           /* ..  */
+#define COMPARE     0x01           /* Compare operators  */
+#define COMPMAX     0x02           /* ..  */
+#define COMPMIN     0x03           /* ..  */
+#define COMPTOTAL   0x04           /* ..  */
+#define COMPNAN     0x05           /* .. [NaN processing]  */
+#define COMPSIG     0x06           /* .. [signaling COMPARE]  */
+#define COMPMAXMAG  0x07           /* ..  */
+#define COMPMINMAG  0x08           /* ..  */
 
-#define DECNUMBER_DEC_sNaN     0x40000000    /* local status: sNaN signal  */
-#define DECNUMBER_BADINT  (Int)0x80000000    /* most-negative Int; error indicator  */
+#define DEC_sNaN     0x40000000    /* local status: sNaN signal  */
+#define BADINT  (Int)0x80000000    /* most-negative Int; error indicator  */
 /* Next two indicate an integer >= 10**6, and its parity (bottom bit)  */
-#define DECNUMBER_BIGEVEN (Int)0x80000002
-#define DECNUMBER_BIGODD  (Int)0x80000003
+#define BIGEVEN (Int)0x80000002
+#define BIGODD  (Int)0x80000003
 
 static const Unit uarrone[1]={1};   /* Unit array of 1, used for incrementing  */
 
@@ -222,7 +222,7 @@ static const uByte DECSTICKYTAB[10]={1,1,2,3,4,6,6,7,8,9}; /* used if sticky */
 #endif
 
 /* ------------------------------------------------------------------ */
-/* Powers of ten (DECNUMBER_powers[n]==10**n, 0<=n<=9)                          */
+/* Powers of ten (powers[n]==10**n, 0<=n<=9)                          */
 /* ------------------------------------------------------------------ */
 static const uInt DECPOWERS[10]={1, 10, 100, 1000, 10000, 100000, 1000000,
                           10000000, 100000000, 1000000000};
@@ -233,7 +233,7 @@ static const uInt DECPOWERS[10]={1, 10, 100, 1000, 10000, 100000, 1000000,
   #define eInt  Int           /* extended integer  */
   #define ueInt uInt          /* unsigned extended integer  */
   /* Constant multipliers for divide-by-power-of five using reciprocal  */
-  /* multiply, after removing DECNUMBER_powers of 2 by shifting, and final shift  */
+  /* multiply, after removing powers of 2 by shifting, and final shift  */
   /* of 17 [we only need up to **4]  */
   static const uInt multies[]={131073, 26215, 5243, 1049, 210};
   /* QUOT10 -- macro to return the quotient of unit u divided by 10**n  */
@@ -305,21 +305,21 @@ static decNumber * decRoundOperand(const decNumber *, decContext *, uInt *);
 #define SPECIALARG  (rhs->bits & DECSPECIAL)
 #define SPECIALARGS ((lhs->bits | rhs->bits) & DECSPECIAL)
 
-// /* For use in ICU */
-// #define malloc(a) uprv_malloc(a)
-// #define free(a) uprv_free(a)
+/* For use in ICU */
+#define malloc(a) uprv_malloc(a)
+#define free(a) uprv_free(a)
 
 /* Diagnostic macros, etc. */
 #if DECALLOC
 /* Handle malloc/free accounting.  If enabled, our accountable routines  */
 /* are used; otherwise the code just goes straight to the system malloc  */
-// /* and free routines.  */
-// #define malloc(a) decMalloc(a)
-// #define free(a) decFree(a)
+/* and free routines.  */
+#define malloc(a) decMalloc(a)
+#define free(a) decFree(a)
 #define DECFENCE 0x5a              /* corruption detector  */
 /* 'Our' malloc and free:  */
-// static void *decMalloc(size_t);
-// static void  decFree(void *);
+static void *decMalloc(size_t);
+static void  decFree(void *);
 uInt decAllocBytes=0;              /* count of bytes allocated  */
 /* Note that DECALLOC code only checks for storage buffer overflow.  */
 /* To check for memory leaks, the decAllocBytes variable must be  */
@@ -368,8 +368,8 @@ static void decDumpAr(char, const Unit *, Int);
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromInt32(decNumber *dn, Int in) {
   uInt unsig;
   if (in>=0) unsig=in;
-   else {                               /* negative (possibly DECNUMBER_BADINT)  */
-    if (in==DECNUMBER_BADINT) unsig=(uInt)1073741824*2; /* special case  */
+   else {                               /* negative (possibly BADINT)  */
+    if (in==BADINT) unsig=(uInt)1073741824*2; /* special case  */
      else unsig=-in;                    /* invert  */
     }
   /* in is now positive  */
@@ -419,7 +419,7 @@ U_CAPI Int U_EXPORT2 uprv_decNumberToInt32(const decNumber *dn, decContext *set)
     #endif
     up++;
     /* collect remaining Units, if any, into hi  */
-    for (d=DECDPUN; d<dn->digits; up++, d+=DECDPUN) hi+=*up*DECNUMBER_powers[d-1];
+    for (d=DECDPUN; d<dn->digits; up++, d+=DECDPUN) hi+=*up*powers[d-1];
     /* now low has the lsd, hi the remainder  */
     if (hi>214748364 || (hi==214748364 && lo>7)) { /* out of range?  */
       /* most-negative is a reprieve  */
@@ -455,7 +455,7 @@ U_CAPI uInt U_EXPORT2 uprv_decNumberToUInt32(const decNumber *dn, decContext *se
     #endif
     up++;
     /* collect remaining Units, if any, into hi  */
-    for (d=DECDPUN; d<dn->digits; up++, d+=DECDPUN) hi+=*up*DECNUMBER_powers[d-1];
+    for (d=DECDPUN; d<dn->digits; up++, d+=DECDPUN) hi+=*up*powers[d-1];
 
     /* now low has the lsd, hi the remainder  */
     if (hi>429496729 || (hi==429496729 && lo>5)) ; /* no reprieve possible  */
@@ -516,11 +516,11 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromString(decNumber *dn, const char 
   Unit  *res;                      /* where result will be built  */
   Unit  resbuff[SD2U(DECBUFFER+9)];/* local buffer in case need temporary  */
                                    /* [+9 allows for ln() constants]  */
-  Unit  *allocres=NULL;            /* -> allocated result, iff allocated  */
+  Unit  *allocres=nullptr;            /* -> allocated result, iff allocated  */
   Int   d=0;                       /* count of digits found in decimal part  */
-  const char *dotchar=NULL;        /* where dot was found  */
+  const char *dotchar=nullptr;        /* where dot was found  */
   const char *cfirst=chars;        /* -> first character of decimal part  */
-  const char *last=NULL;           /* -> last digit of decimal part  */
+  const char *last=nullptr;           /* -> last digit of decimal part  */
   const char *c;                   /* work  */
   Unit  *up;                       /* ..  */
   #if DECDPUN>1
@@ -541,7 +541,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromString(decNumber *dn, const char 
         d++;                       /* count of real digits  */
         continue;                  /* still in decimal part  */
         }
-      if (*c=='.' && dotchar==NULL) { /* first '.'  */
+      if (*c=='.' && dotchar==nullptr) { /* first '.'  */
         dotchar=c;                 /* record offset into decimal part  */
         if (c==cfirst) cfirst++;   /* first digit must follow  */
         continue;}
@@ -558,7 +558,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromString(decNumber *dn, const char 
       break;
       } /* c  */
 
-    if (last==NULL) {              /* no digits yet  */
+    if (last==nullptr) {              /* no digits yet  */
       status=DEC_Conversion_syntax;/* assume the worst  */
       if (*c=='\0') break;         /* and no more to come...  */
       #if DECSUBSET
@@ -566,7 +566,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromString(decNumber *dn, const char 
       if (!set->extended) break;   /* hopeless  */
       #endif
       /* Infinities and NaNs are possible, here  */
-      if (dotchar!=NULL) break;    /* .. unless had a dot  */
+      if (dotchar!=nullptr) break;    /* .. unless had a dot  */
       uprv_decNumberZero(dn);           /* be optimistic  */
       if (decBiStr(c, "infinity", "INFINITY")
        || decBiStr(c, "inf", "INF")) {
@@ -609,7 +609,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromString(decNumber *dn, const char 
       /* good; drop through to convert the integer to coefficient  */
       status=0;                    /* syntax is OK  */
       bits=dn->bits;               /* for copy-back  */
-      } /* last==NULL  */
+      } /* last==nullptr  */
 
      else if (*c!='\0') {          /* more to process...  */
       /* had some digits; exponent is only valid sequence now  */
@@ -667,7 +667,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromString(decNumber *dn, const char 
       } /* at least one leading 0  */
 
     /* Handle decimal point...  */
-    if (dotchar!=NULL && dotchar<last)  /* non-trailing '.' found?  */
+    if (dotchar!=nullptr && dotchar<last)  /* non-trailing '.' found?  */
       exponent -= static_cast<int32_t>(last-dotchar);         /* adjust exponent  */
     /* [we can now ignore the .]  */
 
@@ -679,7 +679,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromString(decNumber *dn, const char 
       res=resbuff;                      /* assume use local buffer  */
       if (needbytes>(Int)sizeof(resbuff)) { /* too big for local  */
         allocres=(Unit *)malloc(needbytes);
-        if (allocres==NULL) {status|=DEC_Insufficient_storage; break;}
+        if (allocres==nullptr) {status|=DEC_Insufficient_storage; break;}
         res=allocres;
         }
       }
@@ -736,7 +736,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFromString(decNumber *dn, const char 
     /* decNumberShow(dn);  */
     } while(0);                         /* [for break]  */
 
-  if (allocres!=NULL) free(allocres);   /* drop any storage used  */
+  if (allocres!=nullptr) free(allocres);   /* drop any storage used  */
   if (status!=0) decStatus(dn, status, set);
   return dn;
   } /* decNumberFromString */
@@ -854,7 +854,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberAnd(decNumber *res, const decNumber *
       *uc=0;                            /* can now write back  */
       /* This loop could be unrolled and/or use BIN2BCD tables  */
       for (i=0; i<DECDPUN; i++) {
-        if (a&b&1) *uc=*uc+(Unit)DECNUMBER_powers[i];  /* effect AND  */
+        if (a&b&1) *uc=*uc+(Unit)powers[i];  /* effect AND  */
         j=a%10;
         a=a/10;
         j|=b%10;
@@ -889,7 +889,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberAnd(decNumber *res, const decNumber *
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompare(decNumber *res, const decNumber *lhs,
                              const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decCompareOp(res, lhs, rhs, set, DECNUMBER_COMPARE, &status);
+  decCompareOp(res, lhs, rhs, set, COMPARE, &status);
   if (status!=0) decStatus(res, status, set);
   return res;
   } /* decNumberCompare  */
@@ -909,7 +909,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompare(decNumber *res, const decNumb
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompareSignal(decNumber *res, const decNumber *lhs,
                                    const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decCompareOp(res, lhs, rhs, set, DECNUMBER_COMPSIG, &status);
+  decCompareOp(res, lhs, rhs, set, COMPSIG, &status);
   if (status!=0) decStatus(res, status, set);
   return res;
   } /* decNumberCompareSignal  */
@@ -930,7 +930,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompareSignal(decNumber *res, const d
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompareTotal(decNumber *res, const decNumber *lhs,
                                   const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decCompareOp(res, lhs, rhs, set, DECNUMBER_COMPTOTAL, &status);
+  decCompareOp(res, lhs, rhs, set, COMPTOTAL, &status);
   if (status!=0) decStatus(res, status, set);
   return res;
   } /* decNumberCompareTotal  */
@@ -953,9 +953,9 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompareTotalMag(decNumber *res, const
   uInt status=0;                   /* accumulator  */
   uInt needbytes;                  /* for space calculations  */
   decNumber bufa[D2N(DECBUFFER+1)];/* +1 in case DECBUFFER=0  */
-  decNumber *allocbufa=NULL;       /* -> allocated bufa, iff allocated  */
+  decNumber *allocbufa=nullptr;       /* -> allocated bufa, iff allocated  */
   decNumber bufb[D2N(DECBUFFER+1)];
-  decNumber *allocbufb=NULL;       /* -> allocated bufb, iff allocated  */
+  decNumber *allocbufb=nullptr;       /* -> allocated bufb, iff allocated  */
   decNumber *a, *b;                /* temporary pointers  */
 
   #if DECCHECK
@@ -969,7 +969,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompareTotalMag(decNumber *res, const
       needbytes=sizeof(decNumber)+(D2U(lhs->digits)-1)*sizeof(Unit);
       if (needbytes>sizeof(bufa)) {     /* need malloc space  */
         allocbufa=(decNumber *)malloc(needbytes);
-        if (allocbufa==NULL) {          /* hopeless -- abandon  */
+        if (allocbufa==nullptr) {          /* hopeless -- abandon  */
           status|=DEC_Insufficient_storage;
           break;}
         a=allocbufa;                    /* use the allocated space  */
@@ -983,7 +983,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompareTotalMag(decNumber *res, const
       needbytes=sizeof(decNumber)+(D2U(rhs->digits)-1)*sizeof(Unit);
       if (needbytes>sizeof(bufb)) {     /* need malloc space  */
         allocbufb=(decNumber *)malloc(needbytes);
-        if (allocbufb==NULL) {          /* hopeless -- abandon  */
+        if (allocbufb==nullptr) {          /* hopeless -- abandon  */
           status|=DEC_Insufficient_storage;
           break;}
         b=allocbufb;                    /* use the allocated space  */
@@ -992,11 +992,11 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompareTotalMag(decNumber *res, const
       b->bits&=~DECNEG;                 /* .. and clear the sign  */
       rhs=b;                            /* use copy from here on  */
       }
-    decCompareOp(res, lhs, rhs, set, DECNUMBER_COMPTOTAL, &status);
+    decCompareOp(res, lhs, rhs, set, COMPTOTAL, &status);
     } while(0);                         /* end protected  */
 
-  if (allocbufa!=NULL) free(allocbufa); /* drop any storage used  */
-  if (allocbufb!=NULL) free(allocbufb); /* ..  */
+  if (allocbufa!=nullptr) free(allocbufa); /* drop any storage used  */
+  if (allocbufb!=nullptr) free(allocbufb); /* ..  */
   if (status!=0) decStatus(res, status, set);
   return res;
   } /* decNumberCompareTotalMag  */
@@ -1016,7 +1016,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberCompareTotalMag(decNumber *res, const
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberDivide(decNumber *res, const decNumber *lhs,
                             const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decDivideOp(res, lhs, rhs, set, DECNUMBER_DIVIDE, &status);
+  decDivideOp(res, lhs, rhs, set, DIVIDE, &status);
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
   decCheckInexact(res, set);
@@ -1039,7 +1039,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberDivide(decNumber *res, const decNumbe
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberDivideInteger(decNumber *res, const decNumber *lhs,
                                    const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decDivideOp(res, lhs, rhs, set, DECNUMBER_DIVIDEINT, &status);
+  decDivideOp(res, lhs, rhs, set, DIVIDEINT, &status);
   if (status!=0) decStatus(res, status, set);
   return res;
   } /* decNumberDivideInteger  */
@@ -1073,7 +1073,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberExp(decNumber *res, const decNumber *
                          decContext *set) {
   uInt status=0;                        /* accumulator  */
   #if DECSUBSET
-  decNumber *allocrhs=NULL;        /* non-NULL if rounded rhs allocated  */
+  decNumber *allocrhs=nullptr;        /* non-nullptr if rounded rhs allocated  */
   #endif
 
   #if DECCHECK
@@ -1090,7 +1090,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberExp(decNumber *res, const decNumber *
       /* reduce operand and set lostDigits status, as needed  */
       if (rhs->digits>set->digits) {
         allocrhs=decRoundOperand(rhs, set, &status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       }
@@ -1099,7 +1099,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberExp(decNumber *res, const decNumber *
     } while(0);                         /* end protected  */
 
   #if DECSUBSET
-  if (allocrhs !=NULL) free(allocrhs);  /* drop any storage used  */
+  if (allocrhs !=nullptr) free(allocrhs);  /* drop any storage used  */
   #endif
   /* apply significant status  */
   if (status!=0) decStatus(res, status, set);
@@ -1132,7 +1132,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFMA(decNumber *res, const decNumber *
   decContext dcmul;                /* context for the multiplication  */
   uInt needbytes;                  /* for space calculations  */
   decNumber bufa[D2N(DECBUFFER*2+1)];
-  decNumber *allocbufa=NULL;       /* -> allocated bufa, iff allocated  */
+  decNumber *allocbufa=nullptr;       /* -> allocated bufa, iff allocated  */
   decNumber *acc;                  /* accumulator pointer  */
   decNumber dzero;                 /* work  */
 
@@ -1162,7 +1162,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFMA(decNumber *res, const decNumber *
     needbytes=sizeof(decNumber)+(D2U(dcmul.digits)-1)*sizeof(Unit);
     if (needbytes>sizeof(bufa)) {       /* need malloc space  */
       allocbufa=(decNumber *)malloc(needbytes);
-      if (allocbufa==NULL) {            /* hopeless -- abandon  */
+      if (allocbufa==nullptr) {            /* hopeless -- abandon  */
         status|=DEC_Insufficient_storage;
         break;}
       acc=allocbufa;                    /* use the allocated space  */
@@ -1177,7 +1177,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFMA(decNumber *res, const decNumber *
     /* Note sNaN has to go through addOp to shorten payload if  */
     /* necessary  */
     if ((status&DEC_Invalid_operation)!=0) {
-      if (!(status&DECNUMBER_DEC_sNaN)) {         /* but be true invalid  */
+      if (!(status&DEC_sNaN)) {         /* but be true invalid  */
         uprv_decNumberZero(res);             /* acc not yet set  */
         res->bits=DECNAN;
         break;
@@ -1194,7 +1194,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberFMA(decNumber *res, const decNumber *
     decAddOp(res, acc, fhs, set, 0, &status);
     } while(0);                         /* end protected  */
 
-  if (allocbufa!=NULL) free(allocbufa); /* drop any storage used  */
+  if (allocbufa!=nullptr) free(allocbufa); /* drop any storage used  */
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
   decCheckInexact(res, set);
@@ -1244,7 +1244,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberInvert(decNumber *res, const decNumbe
     /* always need to examine all bits in rhs  */
     /* This loop could be unrolled and/or use BIN2BCD tables  */
     for (i=0; i<DECDPUN; i++) {
-      if ((~a)&1) *uc=*uc+(Unit)DECNUMBER_powers[i];   /* effect INVERT  */
+      if ((~a)&1) *uc=*uc+(Unit)powers[i];   /* effect INVERT  */
       j=a%10;
       a=a/10;
       if (j>1) {
@@ -1293,7 +1293,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLn(decNumber *res, const decNumber *r
                         decContext *set) {
   uInt status=0;                   /* accumulator  */
   #if DECSUBSET
-  decNumber *allocrhs=NULL;        /* non-NULL if rounded rhs allocated  */
+  decNumber *allocrhs=nullptr;        /* non-nullptr if rounded rhs allocated  */
   #endif
 
   #if DECCHECK
@@ -1308,7 +1308,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLn(decNumber *res, const decNumber *r
       /* reduce operand and set lostDigits status, as needed  */
       if (rhs->digits>set->digits) {
         allocrhs=decRoundOperand(rhs, set, &status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       /* special check in subset for rhs=0  */
@@ -1321,7 +1321,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLn(decNumber *res, const decNumber *r
     } while(0);                         /* end protected  */
 
   #if DECSUBSET
-  if (allocrhs !=NULL) free(allocrhs);  /* drop any storage used  */
+  if (allocrhs !=nullptr) free(allocrhs);  /* drop any storage used  */
   #endif
   /* apply significant status  */
   if (status!=0) decStatus(res, status, set);
@@ -1364,7 +1364,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLogB(decNumber *res, const decNumber 
   #endif
 
   /* NaNs as usual; Infinities return +Infinity; 0->oops  */
-  if (decNumberIsNaN(rhs)) decNaNs(res, rhs, NULL, set, &status);
+  if (decNumberIsNaN(rhs)) decNaNs(res, rhs, nullptr, set, &status);
    else if (decNumberIsInfinite(rhs)) uprv_decNumberCopyAbs(res, rhs);
    else if (decNumberIsZero(rhs)) {
     uprv_decNumberZero(res);                 /* prepare for Infinity  */
@@ -1425,15 +1425,15 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLog10(decNumber *res, const decNumber
   /* buffers for a and b working decimals  */
   /* (adjustment calculator, same size)  */
   decNumber bufa[D2N(DECBUFFER+2)];
-  decNumber *allocbufa=NULL;       /* -> allocated bufa, iff allocated  */
+  decNumber *allocbufa=nullptr;       /* -> allocated bufa, iff allocated  */
   decNumber *a=bufa;               /* temporary a  */
   decNumber bufb[D2N(DECBUFFER+2)];
-  decNumber *allocbufb=NULL;       /* -> allocated bufb, iff allocated  */
+  decNumber *allocbufb=nullptr;       /* -> allocated bufb, iff allocated  */
   decNumber *b=bufb;               /* temporary b  */
   decNumber bufw[D2N(10)];         /* working 2-10 digit number  */
   decNumber *w=bufw;               /* ..  */
   #if DECSUBSET
-  decNumber *allocrhs=NULL;        /* non-NULL if rounded rhs allocated  */
+  decNumber *allocrhs=nullptr;        /* non-nullptr if rounded rhs allocated  */
   #endif
 
   decContext aset;                 /* working context  */
@@ -1450,7 +1450,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLog10(decNumber *res, const decNumber
       /* reduce operand and set lostDigits status, as needed  */
       if (rhs->digits>set->digits) {
         allocrhs=decRoundOperand(rhs, set, &status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       /* special check in subset for rhs=0  */
@@ -1462,7 +1462,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLog10(decNumber *res, const decNumber
 
     uprv_decContextDefault(&aset, DEC_INIT_DECIMAL64); /* clean context  */
 
-    /* handle exact DECNUMBER_powers of 10; only check if +ve finite  */
+    /* handle exact powers of 10; only check if +ve finite  */
     if (!(rhs->bits&(DECNEG|DECSPECIAL)) && !ISZERO(rhs)) {
       Int residue=0;               /* (no residue)  */
       uInt copystat=0;             /* clean status  */
@@ -1495,7 +1495,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLog10(decNumber *res, const decNumber
     needbytes=sizeof(decNumber)+(D2U(p)-1)*sizeof(Unit);
     if (needbytes>sizeof(bufa)) {       /* need malloc space  */
       allocbufa=(decNumber *)malloc(needbytes);
-      if (allocbufa==NULL) {            /* hopeless -- abandon  */
+      if (allocbufa==nullptr) {            /* hopeless -- abandon  */
         status|=DEC_Insufficient_storage;
         break;}
       a=allocbufa;                      /* use the allocated space  */
@@ -1508,7 +1508,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLog10(decNumber *res, const decNumber
 
     /* skip the division if the result so far is infinite, NaN, or  */
     /* zero, or there was an error; note NaN from sNaN needs copy  */
-    if (status&DEC_NaNs && !(status&DECNUMBER_DEC_sNaN)) break;
+    if (status&DEC_NaNs && !(status&DEC_sNaN)) break;
     if (a->bits&DECSPECIAL || ISZERO(a)) {
       uprv_decNumberCopy(res, a);            /* [will fit]  */
       break;}
@@ -1518,7 +1518,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLog10(decNumber *res, const decNumber
     needbytes=sizeof(decNumber)+(D2U(p)-1)*sizeof(Unit);
     if (needbytes>sizeof(bufb)) {       /* need malloc space  */
       allocbufb=(decNumber *)malloc(needbytes);
-      if (allocbufb==NULL) {            /* hopeless -- abandon  */
+      if (allocbufb==nullptr) {            /* hopeless -- abandon  */
         status|=DEC_Insufficient_storage;
         break;}
       b=allocbufb;                      /* use the allocated space  */
@@ -1535,13 +1535,13 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLog10(decNumber *res, const decNumber
     decLnOp(b, w, &aset, &ignore);      /* b=ln(10)  */
 
     aset.digits=set->digits;            /* for final divide  */
-    decDivideOp(res, a, b, &aset, DECNUMBER_DIVIDE, &status); /* into result  */
+    decDivideOp(res, a, b, &aset, DIVIDE, &status); /* into result  */
     } while(0);                         /* [for break]  */
 
-  if (allocbufa!=NULL) free(allocbufa); /* drop any storage used  */
-  if (allocbufb!=NULL) free(allocbufb); /* ..  */
+  if (allocbufa!=nullptr) free(allocbufa); /* drop any storage used  */
+  if (allocbufb!=nullptr) free(allocbufb); /* ..  */
   #if DECSUBSET
-  if (allocrhs !=NULL) free(allocrhs);  /* ..  */
+  if (allocrhs !=nullptr) free(allocrhs);  /* ..  */
   #endif
   /* apply significant status  */
   if (status!=0) decStatus(res, status, set);
@@ -1569,7 +1569,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberLog10(decNumber *res, const decNumber
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberMax(decNumber *res, const decNumber *lhs,
                          const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decCompareOp(res, lhs, rhs, set, DECNUMBER_COMPMAX, &status);
+  decCompareOp(res, lhs, rhs, set, COMPMAX, &status);
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
   decCheckInexact(res, set);
@@ -1592,7 +1592,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberMax(decNumber *res, const decNumber *
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberMaxMag(decNumber *res, const decNumber *lhs,
                          const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decCompareOp(res, lhs, rhs, set, DECNUMBER_COMPMAXMAG, &status);
+  decCompareOp(res, lhs, rhs, set, COMPMAXMAG, &status);
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
   decCheckInexact(res, set);
@@ -1615,7 +1615,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberMaxMag(decNumber *res, const decNumbe
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberMin(decNumber *res, const decNumber *lhs,
                          const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decCompareOp(res, lhs, rhs, set, DECNUMBER_COMPMIN, &status);
+  decCompareOp(res, lhs, rhs, set, COMPMIN, &status);
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
   decCheckInexact(res, set);
@@ -1638,7 +1638,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberMin(decNumber *res, const decNumber *
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberMinMag(decNumber *res, const decNumber *lhs,
                          const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decCompareOp(res, lhs, rhs, set, DECNUMBER_COMPMINMAG, &status);
+  decCompareOp(res, lhs, rhs, set, COMPMINMAG, &status);
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
   decCheckInexact(res, set);
@@ -1710,7 +1710,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberNextMinus(decNumber *res, const decNu
   dtiny.exponent=DEC_MIN_EMIN-1;             /* .. smaller than tiniest  */
   workset.round=DEC_ROUND_FLOOR;
   decAddOp(res, rhs, &dtiny, &workset, DECNEG, &status);
-  status&=DEC_Invalid_operation|DECNUMBER_DEC_sNaN;    /* only sNaN Invalid please  */
+  status&=DEC_Invalid_operation|DEC_sNaN;    /* only sNaN Invalid please  */
   if (status!=0) decStatus(res, status, set);
   return res;
   } /* decNumberNextMinus  */
@@ -1747,7 +1747,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberNextPlus(decNumber *res, const decNum
   dtiny.exponent=DEC_MIN_EMIN-1;             /* .. smaller than tiniest  */
   workset.round=DEC_ROUND_CEILING;
   decAddOp(res, rhs, &dtiny, &workset, 0, &status);
-  status&=DEC_Invalid_operation|DECNUMBER_DEC_sNaN;    /* only sNaN Invalid please  */
+  status&=DEC_Invalid_operation|DEC_sNaN;    /* only sNaN Invalid please  */
   if (status!=0) decStatus(res, status, set);
   return res;
   } /* decNumberNextPlus  */
@@ -1781,7 +1781,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberNextToward(decNumber *res, const decN
     }
    else { /* Is numeric, so no chance of sNaN Invalid, etc.  */
     result=decCompare(lhs, rhs, 0);     /* sign matters  */
-    if (result==DECNUMBER_BADINT) status|=DEC_Insufficient_storage; /* rare  */
+    if (result==BADINT) status|=DEC_Insufficient_storage; /* rare  */
      else { /* valid compare  */
       if (result==0) uprv_decNumberCopySign(res, lhs, rhs); /* easy  */
        else { /* differ: need NextPlus or NextMinus  */
@@ -1868,7 +1868,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberOr(decNumber *res, const decNumber *l
       Int i, j;
       /* This loop could be unrolled and/or use BIN2BCD tables  */
       for (i=0; i<DECDPUN; i++) {
-        if ((a|b)&1) *uc=*uc+(Unit)DECNUMBER_powers[i];     /* effect OR  */
+        if ((a|b)&1) *uc=*uc+(Unit)powers[i];     /* effect OR  */
         j=a%10;
         a=a/10;
         j|=b%10;
@@ -1974,11 +1974,11 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberMultiply(decNumber *res, const decNum
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberPower(decNumber *res, const decNumber *lhs,
                            const decNumber *rhs, decContext *set) {
   #if DECSUBSET
-  decNumber *alloclhs=NULL;        /* non-NULL if rounded lhs allocated  */
-  decNumber *allocrhs=NULL;        /* .., rhs  */
+  decNumber *alloclhs=nullptr;        /* non-nullptr if rounded lhs allocated  */
+  decNumber *allocrhs=nullptr;        /* .., rhs  */
   #endif
-  decNumber *allocdac=NULL;        /* -> allocated acc buffer, iff used  */
-  decNumber *allocinv=NULL;        /* -> allocated 1/x buffer, iff used  */
+  decNumber *allocdac=nullptr;        /* -> allocated acc buffer, iff used  */
+  decNumber *allocinv=nullptr;        /* -> allocated 1/x buffer, iff used  */
   Int   reqdigits=set->digits;     /* requested DIGITS  */
   Int   n;                         /* rhs in binary  */
   Flag  rhsint=0;                  /* 1 if rhs is an integer  */
@@ -2010,12 +2010,12 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberPower(decNumber *res, const decNumber
     if (!set->extended) { /* reduce operands and set status, as needed  */
       if (lhs->digits>reqdigits) {
         alloclhs=decRoundOperand(lhs, set, &status);
-        if (alloclhs==NULL) break;
+        if (alloclhs==nullptr) break;
         lhs=alloclhs;
         }
       if (rhs->digits>reqdigits) {
         allocrhs=decRoundOperand(rhs, set, &status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       }
@@ -2058,10 +2058,10 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberPower(decNumber *res, const decNumber
 
     /* Original rhs may be an integer that fits and is in range  */
     n=decGetInt(rhs);
-    if (n!=DECNUMBER_BADINT) {                    /* it is an integer  */
+    if (n!=BADINT) {                    /* it is an integer  */
       rhsint=1;                         /* record the fact for 1**n  */
       isoddint=(Flag)n&1;               /* [works even if big]  */
-      if (n!=DECNUMBER_BIGEVEN && n!=DECNUMBER_BIGODD)      /* can use integer path?  */
+      if (n!=BIGEVEN && n!=BIGODD)      /* can use integer path?  */
         useint=1;                       /* looks good  */
       }
 
@@ -2166,7 +2166,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberPower(decNumber *res, const decNumber
     /* [needbytes also used below if 1/lhs needed]  */
     if (needbytes>sizeof(dacbuff)) {
       allocdac=(decNumber *)malloc(needbytes);
-      if (allocdac==NULL) {   /* hopeless -- abandon  */
+      if (allocdac==nullptr) {   /* hopeless -- abandon  */
         status|=DEC_Insufficient_storage;
         break;}
       dac=allocdac;           /* use the allocated space  */
@@ -2203,17 +2203,17 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberPower(decNumber *res, const decNumber
       /* if a negative power the constant 1 is needed, and if not subset  */
       /* invert the lhs now rather than inverting the result later  */
       if (decNumberIsNegative(rhs)) {   /* was a **-n [hence digits>0]  */
-        decNumber *inv=invbuff;         /* asssume use fixed buffer  */
+        decNumber *inv=invbuff;         /* assume use fixed buffer  */
         uprv_decNumberCopy(&dnOne, dac);     /* dnOne=1;  [needed now or later]  */
         #if DECSUBSET
         if (set->extended) {            /* need to calculate 1/lhs  */
         #endif
           /* divide lhs into 1, putting result in dac [dac=1/dac]  */
-          decDivideOp(dac, &dnOne, lhs, &aset, DECNUMBER_DIVIDE, &status);
+          decDivideOp(dac, &dnOne, lhs, &aset, DIVIDE, &status);
           /* now locate or allocate space for the inverted lhs  */
           if (needbytes>sizeof(invbuff)) {
             allocinv=(decNumber *)malloc(needbytes);
-            if (allocinv==NULL) {       /* hopeless -- abandon  */
+            if (allocinv==nullptr) {       /* hopeless -- abandon  */
               status|=DEC_Insufficient_storage;
               break;}
             inv=allocinv;               /* use the allocated space  */
@@ -2272,7 +2272,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberPower(decNumber *res, const decNumber
       if (!set->extended &&                  /* subset math  */
           decNumberIsNegative(rhs)) {        /* was a **-n [hence digits>0]  */
         /* so divide result into 1 [dac=1/dac]  */
-        decDivideOp(dac, &dnOne, dac, &aset, DECNUMBER_DIVIDE, &status);
+        decDivideOp(dac, &dnOne, dac, &aset, DIVIDE, &status);
         }
       #endif
       } /* rhs integer path  */
@@ -2285,11 +2285,11 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberPower(decNumber *res, const decNumber
     #endif
     } while(0);                         /* end protected  */
 
-  if (allocdac!=NULL) free(allocdac);   /* drop any storage used  */
-  if (allocinv!=NULL) free(allocinv);   /* ..  */
+  if (allocdac!=nullptr) free(allocdac);   /* drop any storage used  */
+  if (allocinv!=nullptr) free(allocinv);   /* ..  */
   #if DECSUBSET
-  if (alloclhs!=NULL) free(alloclhs);   /* ..  */
-  if (allocrhs!=NULL) free(allocrhs);   /* ..  */
+  if (alloclhs!=nullptr) free(alloclhs);   /* ..  */
+  if (allocrhs!=nullptr) free(allocrhs);   /* ..  */
   #endif
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
@@ -2344,7 +2344,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberNormalize(decNumber *res, const decNu
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberReduce(decNumber *res, const decNumber *rhs,
                             decContext *set) {
   #if DECSUBSET
-  decNumber *allocrhs=NULL;        /* non-NULL if rounded rhs allocated  */
+  decNumber *allocrhs=nullptr;        /* non-nullptr if rounded rhs allocated  */
   #endif
   uInt status=0;                   /* as usual  */
   Int  residue=0;                  /* as usual  */
@@ -2360,7 +2360,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberReduce(decNumber *res, const decNumbe
       /* reduce operand and set lostDigits status, as needed  */
       if (rhs->digits>set->digits) {
         allocrhs=decRoundOperand(rhs, set, &status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       }
@@ -2369,7 +2369,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberReduce(decNumber *res, const decNumbe
 
     /* Infinities copy through; NaNs need usual treatment  */
     if (decNumberIsNaN(rhs)) {
-      decNaNs(res, rhs, NULL, set, &status);
+      decNaNs(res, rhs, nullptr, set, &status);
       break;
       }
 
@@ -2381,7 +2381,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberReduce(decNumber *res, const decNumbe
     } while(0);                              /* end protected  */
 
   #if DECSUBSET
-  if (allocrhs !=NULL) free(allocrhs);       /* ..  */
+  if (allocrhs !=nullptr) free(allocrhs);       /* ..  */
   #endif
   if (status!=0) decStatus(res, status, set);/* then report status  */
   return res;
@@ -2428,7 +2428,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberRescale(decNumber *res, const decNumb
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberRemainder(decNumber *res, const decNumber *lhs,
                                const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decDivideOp(res, lhs, rhs, set, DECNUMBER_REMAINDER, &status);
+  decDivideOp(res, lhs, rhs, set, REMAINDER, &status);
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
   decCheckInexact(res, set);
@@ -2451,7 +2451,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberRemainder(decNumber *res, const decNu
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberRemainderNear(decNumber *res, const decNumber *lhs,
                                    const decNumber *rhs, decContext *set) {
   uInt status=0;                        /* accumulator  */
-  decDivideOp(res, lhs, rhs, set, DECNUMBER_REMNEAR, &status);
+  decDivideOp(res, lhs, rhs, set, REMNEAR, &status);
   if (status!=0) decStatus(res, status, set);
   #if DECCHECK
   decCheckInexact(res, set);
@@ -2501,8 +2501,8 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberRotate(decNumber *res, const decNumbe
     status=DEC_Invalid_operation;
    else { /* both numeric, rhs is an integer  */
     rotate=decGetInt(rhs);                   /* [cannot fail]  */
-    if (rotate==DECNUMBER_BADINT                       /* something bad ..  */
-     || rotate==DECNUMBER_BIGODD || rotate==DECNUMBER_BIGEVEN    /* .. very big ..  */
+    if (rotate==BADINT                       /* something bad ..  */
+     || rotate==BIGODD || rotate==BIGEVEN    /* .. very big ..  */
      || abs(rotate)>set->digits)             /* .. or out of range  */
       status=DEC_Invalid_operation;
      else {                                  /* rhs is OK  */
@@ -2555,16 +2555,16 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberRotate(decNumber *res, const decNumbe
         units=rotate/DECDPUN;           /* whole units to rotate  */
         shift=rotate%DECDPUN;           /* left-over digits count  */
         if (shift>0) {                  /* not an exact number of units  */
-          uInt save=res->lsu[0]%DECNUMBER_powers[shift];    /* save low digit(s)  */
+          uInt save=res->lsu[0]%powers[shift];    /* save low digit(s)  */
           decShiftToLeast(res->lsu, D2U(res->digits), shift);
           if (shift>msudigits) {        /* msumax-1 needs >0 digits  */
-            uInt rem=save%DECNUMBER_powers[shift-msudigits];/* split save  */
-            *msumax=(Unit)(save/DECNUMBER_powers[shift-msudigits]); /* and insert  */
+            uInt rem=save%powers[shift-msudigits];/* split save  */
+            *msumax=(Unit)(save/powers[shift-msudigits]); /* and insert  */
             *(msumax-1)=*(msumax-1)
-                       +(Unit)(rem*DECNUMBER_powers[DECDPUN-(shift-msudigits)]); /* ..  */
+                       +(Unit)(rem*powers[DECDPUN-(shift-msudigits)]); /* ..  */
             }
            else { /* all fits in msumax  */
-            *msumax=*msumax+(Unit)(save*DECNUMBER_powers[msudigits-shift]); /* [maybe *1]  */
+            *msumax=*msumax+(Unit)(save*powers[msudigits-shift]); /* [maybe *1]  */
             }
           } /* digits shift needed  */
 
@@ -2575,9 +2575,9 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberRotate(decNumber *res, const decNumbe
           /*   0, again)  */
           shift=DECDPUN-msudigits;
           if (shift>0) {                /* not an exact number of units  */
-            uInt save=res->lsu[0]%DECNUMBER_powers[shift];  /* save low digit(s)  */
+            uInt save=res->lsu[0]%powers[shift];  /* save low digit(s)  */
             decShiftToLeast(res->lsu, units, shift);
-            *msumax=*msumax+(Unit)(save*DECNUMBER_powers[msudigits]);
+            *msumax=*msumax+(Unit)(save*powers[msudigits]);
             } /* partial shift needed  */
 
           /* Step 3: rotate the units array using triple reverse  */
@@ -2659,8 +2659,8 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberScaleB(decNumber *res, const decNumbe
    else {
     /* lhs is a number; rhs is a finite with q==0  */
     reqexp=decGetInt(rhs);                   /* [cannot fail]  */
-    if (reqexp==DECNUMBER_BADINT                       /* something bad ..  */
-     || reqexp==DECNUMBER_BIGODD || reqexp==DECNUMBER_BIGEVEN    /* .. very big ..  */
+    if (reqexp==BADINT                       /* something bad ..  */
+     || reqexp==BIGODD || reqexp==BIGEVEN    /* .. very big ..  */
      || abs(reqexp)>(2*(set->digits+set->emax))) /* .. or out of range  */
       status=DEC_Invalid_operation;
      else {                                  /* rhs is OK  */
@@ -2714,8 +2714,8 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberShift(decNumber *res, const decNumber
     status=DEC_Invalid_operation;
    else { /* both numeric, rhs is an integer  */
     shift=decGetInt(rhs);                    /* [cannot fail]  */
-    if (shift==DECNUMBER_BADINT                        /* something bad ..  */
-     || shift==DECNUMBER_BIGODD || shift==DECNUMBER_BIGEVEN      /* .. very big ..  */
+    if (shift==BADINT                        /* something bad ..  */
+     || shift==BIGODD || shift==BIGEVEN      /* .. very big ..  */
      || abs(shift)>set->digits)              /* .. or out of range  */
       status=DEC_Invalid_operation;
      else {                                  /* rhs is OK  */
@@ -2845,7 +2845,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
   Int  dropped;                    /* ..  */
 
   #if DECSUBSET
-  decNumber *allocrhs=NULL;        /* non-NULL if rounded rhs allocated  */
+  decNumber *allocrhs=nullptr;        /* non-nullptr if rounded rhs allocated  */
   #endif
   /* buffer for f [needs +1 in case DECBUFFER 0]  */
   decNumber buff[D2N(DECBUFFER+1)];
@@ -2853,9 +2853,9 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
   decNumber bufa[D2N(DECBUFFER+2)];
   /* buffer for temporary, b [must be same size as a]  */
   decNumber bufb[D2N(DECBUFFER+2)];
-  decNumber *allocbuff=NULL;       /* -> allocated buff, iff allocated  */
-  decNumber *allocbufa=NULL;       /* -> allocated bufa, iff allocated  */
-  decNumber *allocbufb=NULL;       /* -> allocated bufb, iff allocated  */
+  decNumber *allocbuff=nullptr;       /* -> allocated buff, iff allocated  */
+  decNumber *allocbufa=nullptr;       /* -> allocated bufa, iff allocated  */
+  decNumber *allocbufb=nullptr;       /* -> allocated bufb, iff allocated  */
   decNumber *f=buff;               /* reduced fraction  */
   decNumber *a=bufa;               /* approximation to result  */
   decNumber *b=bufb;               /* intermediate result  */
@@ -2873,7 +2873,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
       /* reduce operand and set lostDigits status, as needed  */
       if (rhs->digits>set->digits) {
         allocrhs=decRoundOperand(rhs, set, &status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         /* [Note: 'f' allocation below could reuse this buffer if  */
         /* used, but as this is rare they are kept separate for clarity.]  */
         rhs=allocrhs;
@@ -2888,7 +2888,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
         if (decNumberIsNegative(rhs)) status|=DEC_Invalid_operation;
          else uprv_decNumberCopy(res, rhs);        /* +Infinity  */
         }
-       else decNaNs(res, rhs, NULL, set, &status); /* a NaN  */
+       else decNaNs(res, rhs, nullptr, set, &status); /* a NaN  */
       break;
       }
 
@@ -2926,7 +2926,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
     needbytes=sizeof(decNumber)+(D2U(rhs->digits)-1)*sizeof(Unit);
     if (needbytes>(Int)sizeof(buff)) {
       allocbuff=(decNumber *)malloc(needbytes);
-      if (allocbuff==NULL) {  /* hopeless -- abandon  */
+      if (allocbuff==nullptr) {  /* hopeless -- abandon  */
         status|=DEC_Insufficient_storage;
         break;}
       f=allocbuff;            /* use the allocated space  */
@@ -2936,7 +2936,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
     if (needbytes>(Int)sizeof(bufa)) {            /* [same applies to b]  */
       allocbufa=(decNumber *)malloc(needbytes);
       allocbufb=(decNumber *)malloc(needbytes);
-      if (allocbufa==NULL || allocbufb==NULL) {   /* hopeless  */
+      if (allocbufa==nullptr || allocbufb==nullptr) {   /* hopeless  */
         status|=DEC_Insufficient_storage;
         break;}
       a=allocbufa;            /* use the allocated spaces  */
@@ -3009,7 +3009,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
       workset.digits=MINI(workset.digits*2-2, maxp);
       /* a = 0.5 * (a + f/a)  */
       /* [calculated at p then rounded to currentprecision]  */
-      decDivideOp(b, f, a, &workset, DECNUMBER_DIVIDE, &ignore); /* b=f/a  */
+      decDivideOp(b, f, a, &workset, DIVIDE, &ignore); /* b=f/a  */
       decAddOp(b, b, a, &workset, 0, &ignore);         /* b=b+a  */
       decMultiplyOp(a, b, t, &workset, &ignore);       /* a=b*0.5  */
       } /* loop  */
@@ -3050,7 +3050,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
     decAddOp(b, a, t, &workset, DECNEG, &ignore); /* b = a - 0.5 ulp  */
     workset.round=DEC_ROUND_UP;
     decMultiplyOp(b, b, b, &workset, &ignore);    /* b = mulru(b, b)  */
-    decCompareOp(b, f, b, &workset, DECNUMBER_COMPARE, &ignore); /* b ? f, reversed  */
+    decCompareOp(b, f, b, &workset, COMPARE, &ignore); /* b ? f, reversed  */
     if (decNumberIsNegative(b)) {                 /* f < b [i.e., b > f]  */
       /* this is the more common adjustment, though both are rare  */
       t->exponent++;                              /* make 1.0 ulp  */
@@ -3065,7 +3065,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
       decAddOp(b, a, t, &workset, 0, &ignore);    /* b = a + 0.5 ulp  */
       workset.round=DEC_ROUND_DOWN;
       decMultiplyOp(b, b, b, &workset, &ignore);  /* b = mulrd(b, b)  */
-      decCompareOp(b, b, f, &workset, DECNUMBER_COMPARE, &ignore);   /* b ? f  */
+      decCompareOp(b, b, f, &workset, COMPARE, &ignore);   /* b ? f  */
       if (decNumberIsNegative(b)) {               /* b < f  */
         t->exponent++;                            /* make 1.0 ulp  */
         t->lsu[0]=1;                              /* ..  */
@@ -3101,7 +3101,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
         status|=DEC_Inexact|DEC_Rounded;
         }
        else {                                /* plausible  */
-        decCompareOp(t, b, rhs, &workset, DECNUMBER_COMPARE, &mstatus); /* b ? rhs  */
+        decCompareOp(t, b, rhs, &workset, COMPARE, &mstatus); /* b ? rhs  */
         if (!ISZERO(t)) status|=DEC_Inexact|DEC_Rounded; /* not equal  */
          else {                              /* is Exact  */
           /* here, dropped is the count of trailing zeros in 'a'  */
@@ -3147,11 +3147,11 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberSquareRoot(decNumber *res, const decN
     uprv_decNumberCopy(res, a);                   /* a is now the result  */
     } while(0);                              /* end protected  */
 
-  if (allocbuff!=NULL) free(allocbuff);      /* drop any storage used  */
-  if (allocbufa!=NULL) free(allocbufa);      /* ..  */
-  if (allocbufb!=NULL) free(allocbufb);      /* ..  */
+  if (allocbuff!=nullptr) free(allocbuff);      /* drop any storage used  */
+  if (allocbufa!=nullptr) free(allocbufa);      /* ..  */
+  if (allocbufb!=nullptr) free(allocbufb);      /* ..  */
   #if DECSUBSET
-  if (allocrhs !=NULL) free(allocrhs);       /* ..  */
+  if (allocrhs !=nullptr) free(allocrhs);       /* ..  */
   #endif
   if (status!=0) decStatus(res, status, set);/* then report status  */
   #if DECCHECK
@@ -3221,7 +3221,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberToIntegralExact(decNumber *res, const
   /* handle infinities and NaNs  */
   if (SPECIALARG) {
     if (decNumberIsInfinite(rhs)) uprv_decNumberCopy(res, rhs); /* an Infinity  */
-     else decNaNs(res, rhs, NULL, set, &status); /* a NaN  */
+     else decNaNs(res, rhs, nullptr, set, &status); /* a NaN  */
     }
    else { /* finite  */
     /* have a finite number; no error possible (res must be big enough)  */
@@ -3298,7 +3298,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberXor(decNumber *res, const decNumber *
       Int i, j;
       /* This loop could be unrolled and/or use BIN2BCD tables  */
       for (i=0; i<DECDPUN; i++) {
-        if ((a^b)&1) *uc=*uc+(Unit)DECNUMBER_powers[i];     /* effect XOR  */
+        if ((a^b)&1) *uc=*uc+(Unit)powers[i];     /* effect XOR  */
         j=a%10;
         a=a/10;
         j|=b%10;
@@ -3385,7 +3385,7 @@ const char *uprv_decNumberClassToString(enum decClass eclass) {
 U_CAPI decNumber * U_EXPORT2 uprv_decNumberCopy(decNumber *dest, const decNumber *src) {
 
   #if DECCHECK
-  if (src==NULL) return uprv_decNumberZero(dest);
+  if (src==nullptr) return uprv_decNumberZero(dest);
   #endif
 
   if (dest==src) return dest;                /* no copy required  */
@@ -3605,7 +3605,7 @@ U_CAPI decNumber * U_EXPORT2 uprv_decNumberTrim(decNumber *dn) {
 /*                                                                    */
 /* No error is possible.                                              */
 /* ------------------------------------------------------------------ */
-const char * uprv_decNumberVersion(void) {
+const char * uprv_decNumberVersion() {
   return DECVERSION;
   } /* decNumberVersion  */
 
@@ -3776,7 +3776,7 @@ static void decToString(const decNumber *dn, char *string, Flag eng) {
 
   /* Finally add the E-part, if needed.  It will never be 0, has a
      base maximum and minimum of +999999999 through -999999999, but
-     could range down to -1999999998 for anormal numbers */
+     could range down to -1999999998 for abnormal numbers */
   if (e!=0) {
     Flag had=0;               /* 1=had non-zero  */
     *c='E'; c++;
@@ -3831,14 +3831,14 @@ static void decToString(const decNumber *dn, char *string, Flag eng) {
 /*                                                                    */
 /* Addition, especially x=x+1, is speed-critical.                     */
 /* The static buffer is larger than might be expected to allow for    */
-/* calls from higher-level funtions (notable exp).                    */
+/* calls from higher-level functions (notable exp).                    */
 /* ------------------------------------------------------------------ */
 static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
                             const decNumber *rhs, decContext *set,
                             uByte negate, uInt *status) {
   #if DECSUBSET
-  decNumber *alloclhs=NULL;        /* non-NULL if rounded lhs allocated  */
-  decNumber *allocrhs=NULL;        /* .., rhs  */
+  decNumber *alloclhs=nullptr;        /* non-nullptr if rounded lhs allocated  */
+  decNumber *allocrhs=nullptr;        /* .., rhs  */
   #endif
   Int   rhsshift;                  /* working shift (in Units)  */
   Int   maxdigits;                 /* longest logical length  */
@@ -3850,7 +3850,7 @@ static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
   Unit  accbuff[SD2U(DECBUFFER*2+20)]; /* local buffer [*2+20 reduces many  */
                                    /* allocations when called from  */
                                    /* other operations, notable exp]  */
-  Unit  *allocacc=NULL;            /* -> allocated acc buffer, iff allocated  */
+  Unit  *allocacc=nullptr;            /* -> allocated acc buffer, iff allocated  */
   Int   reqdigits=set->digits;     /* local copy; requested DIGITS  */
   Int   padding;                   /* work  */
 
@@ -3864,12 +3864,12 @@ static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
       /* reduce operands and set lostDigits status, as needed  */
       if (lhs->digits>reqdigits) {
         alloclhs=decRoundOperand(lhs, set, status);
-        if (alloclhs==NULL) break;
+        if (alloclhs==nullptr) break;
         lhs=alloclhs;
         }
       if (rhs->digits>reqdigits) {
         allocrhs=decRoundOperand(rhs, set, status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       }
@@ -3983,7 +3983,7 @@ static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
         partial+=*rhs->lsu;
         if ((partial<=DECDPUNMAX)       /* result fits in unit  */
          && (lhs->digits>=DECDPUN ||    /* .. and no digits-count change  */
-             partial<(Int)DECNUMBER_powers[lhs->digits])) { /* ..  */
+             partial<(Int)powers[lhs->digits])) { /* ..  */
           if (res!=lhs) uprv_decNumberCopy(res, lhs);  /* not in place  */
           *res->lsu=(Unit)partial;      /* [copy could have overwritten RHS]  */
           break;
@@ -4051,7 +4051,7 @@ static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
 
       /* LHS digits may affect result  */
       rhsshift=D2U(padding+1)-1;        /* this much by Unit shift ..  */
-      mult=DECNUMBER_powers[padding-(rhsshift*DECDPUN)]; /* .. this by multiplication  */
+      mult=powers[padding-(rhsshift*DECDPUN)]; /* .. this by multiplication  */
       } /* padding needed  */
 
     if (diffsign) mult=-mult;           /* signs differ  */
@@ -4075,7 +4075,7 @@ static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
       if (need*sizeof(Unit)>sizeof(accbuff)) {
         /* printf("malloc add %ld %ld\n", need, sizeof(accbuff));  */
         allocacc=(Unit *)malloc(need*sizeof(Unit));
-        if (allocacc==NULL) {           /* hopeless -- abandon  */
+        if (allocacc==nullptr) {           /* hopeless -- abandon  */
           *status|=DEC_Insufficient_storage;
           break;}
         acc=allocacc;
@@ -4171,10 +4171,10 @@ static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
       }
     } while(0);                              /* end protected  */
 
-  if (allocacc!=NULL) free(allocacc);        /* drop any storage used  */
+  if (allocacc!=nullptr) free(allocacc);        /* drop any storage used  */
   #if DECSUBSET
-  if (allocrhs!=NULL) free(allocrhs);        /* ..  */
-  if (alloclhs!=NULL) free(alloclhs);        /* ..  */
+  if (allocrhs!=nullptr) free(allocrhs);        /* ..  */
+  if (alloclhs!=nullptr) free(alloclhs);        /* ..  */
   #endif
   return res;
   } /* decAddOp  */
@@ -4191,7 +4191,7 @@ static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
 /*   lhs is A                                                         */
 /*   rhs is B                                                         */
 /*   set is the context                                               */
-/*   op  is DECNUMBER_DIVIDE, DECNUMBER_DIVIDEINT, DECNUMBER_REMAINDER, or DECNUMBER_REMNEAR respectively.    */
+/*   op  is DIVIDE, DIVIDEINT, REMAINDER, or REMNEAR respectively.    */
 /*   status is the usual accumulator                                  */
 /*                                                                    */
 /* C must have space for set->digits digits.                          */
@@ -4247,18 +4247,18 @@ static decNumber * decAddOp(decNumber *res, const decNumber *lhs,
 /* long subtractions.  These are acc and var1 respectively.           */
 /* var1 is a copy of the lhs coefficient, var2 is the rhs coefficient.*/
 /* The static buffers may be larger than might be expected to allow   */
-/* for calls from higher-level funtions (notable exp).                */
+/* for calls from higher-level functions (notable exp).                */
 /* ------------------------------------------------------------------ */
 static decNumber * decDivideOp(decNumber *res,
                                const decNumber *lhs, const decNumber *rhs,
                                decContext *set, Flag op, uInt *status) {
   #if DECSUBSET
-  decNumber *alloclhs=NULL;        /* non-NULL if rounded lhs allocated  */
-  decNumber *allocrhs=NULL;        /* .., rhs  */
+  decNumber *alloclhs=nullptr;        /* non-nullptr if rounded lhs allocated  */
+  decNumber *allocrhs=nullptr;        /* .., rhs  */
   #endif
   Unit  accbuff[SD2U(DECBUFFER+DECDPUN+10)]; /* local buffer  */
   Unit  *acc=accbuff;              /* -> accumulator array for result  */
-  Unit  *allocacc=NULL;            /* -> allocated buffer, iff allocated  */
+  Unit  *allocacc=nullptr;            /* -> allocated buffer, iff allocated  */
   Unit  *accnext;                  /* -> where next digit will go  */
   Int   acclength;                 /* length of acc needed [Units]  */
   Int   accunits;                  /* count of units accumulated  */
@@ -4266,7 +4266,7 @@ static decNumber * decDivideOp(decNumber *res,
 
   Unit  varbuff[SD2U(DECBUFFER*2+DECDPUN)];  /* buffer for var1  */
   Unit  *var1=varbuff;             /* -> var1 array for long subtraction  */
-  Unit  *varalloc=NULL;            /* -> allocated buffer, iff used  */
+  Unit  *varalloc=nullptr;            /* -> allocated buffer, iff used  */
   Unit  *msu1;                     /* -> msu of var1  */
 
   const Unit *var2;                /* -> var2 array  */
@@ -4283,7 +4283,7 @@ static decNumber * decDivideOp(decNumber *res,
   Int   residue;                   /* for rounding  */
   Int   reqdigits=set->digits;     /* requested DIGITS  */
   Int   exponent;                  /* working exponent  */
-  Int   maxexponent=0;             /* DECNUMBER_DIVIDE maximum exponent if unrounded  */
+  Int   maxexponent=0;             /* DIVIDE maximum exponent if unrounded  */
   uByte bits;                      /* working sign  */
   Unit  *target;                   /* work  */
   const Unit *source;              /* ..  */
@@ -4303,12 +4303,12 @@ static decNumber * decDivideOp(decNumber *res,
       /* reduce operands and set lostDigits status, as needed  */
       if (lhs->digits>reqdigits) {
         alloclhs=decRoundOperand(lhs, set, status);
-        if (alloclhs==NULL) break;
+        if (alloclhs==nullptr) break;
         lhs=alloclhs;
         }
       if (rhs->digits>reqdigits) {
         allocrhs=decRoundOperand(rhs, set, status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       }
@@ -4326,7 +4326,7 @@ static decNumber * decDivideOp(decNumber *res,
       /* one or two infinities  */
       if (decNumberIsInfinite(lhs)) {   /* LHS (dividend) is infinite  */
         if (decNumberIsInfinite(rhs) || /* two infinities are invalid ..  */
-            op & (DECNUMBER_REMAINDER | DECNUMBER_REMNEAR)) { /* as is remainder of infinity  */
+            op & (REMAINDER | REMNEAR)) { /* as is remainder of infinity  */
           *status|=DEC_Invalid_operation;
           break;
           }
@@ -4337,16 +4337,16 @@ static decNumber * decDivideOp(decNumber *res,
         }
        else {                           /* RHS (divisor) is infinite  */
         residue=0;
-        if (op&(DECNUMBER_REMAINDER|DECNUMBER_REMNEAR)) {
+        if (op&(REMAINDER|REMNEAR)) {
           /* result is [finished clone of] lhs  */
           decCopyFit(res, lhs, set, &residue, status);
           }
          else {  /* a division  */
           uprv_decNumberZero(res);
           res->bits=bits;               /* set +/- zero  */
-          /* for DECNUMBER_DIVIDEINT the exponent is always 0.  For DECNUMBER_DIVIDE, result  */
+          /* for DIVIDEINT the exponent is always 0.  For DIVIDE, result  */
           /* is a 0 with infinitely negative exponent, clamped to minimum  */
-          if (op&DECNUMBER_DIVIDE) {
+          if (op&DIVIDE) {
             res->exponent=set->emin-set->digits+1;
             *status|=DEC_Clamped;
             }
@@ -4364,7 +4364,7 @@ static decNumber * decDivideOp(decNumber *res,
         }
        else {
         uprv_decNumberZero(res);
-        if (op&(DECNUMBER_REMAINDER|DECNUMBER_REMNEAR)) *status|=DEC_Invalid_operation;
+        if (op&(REMAINDER|REMNEAR)) *status|=DEC_Invalid_operation;
          else {
           *status|=DEC_Division_by_zero; /* x/0  */
           res->bits=bits|DECINF;         /* .. is +/- Infinity  */
@@ -4378,7 +4378,7 @@ static decNumber * decDivideOp(decNumber *res,
       if (!set->extended) uprv_decNumberZero(res);
        else {
       #endif
-        if (op&DECNUMBER_DIVIDE) {
+        if (op&DIVIDE) {
           residue=0;
           exponent=lhs->exponent-rhs->exponent; /* ideal exponent  */
           uprv_decNumberCopy(res, lhs);      /* [zeros always fit]  */
@@ -4386,7 +4386,7 @@ static decNumber * decDivideOp(decNumber *res,
           res->exponent=exponent;       /* exponent, too  */
           decFinalize(res, set, &residue, status);   /* check exponent  */
           }
-         else if (op&DECNUMBER_DIVIDEINT) {
+         else if (op&DIVIDEINT) {
           uprv_decNumberZero(res);           /* integer 0  */
           res->bits=bits;               /* sign as computed  */
           }
@@ -4408,9 +4408,9 @@ static decNumber * decDivideOp(decNumber *res,
 
     /* If the working exponent is -ve, then some quick exits are  */
     /* possible because the quotient is known to be <1  */
-    /* [for DECNUMBER_REMNEAR, it needs to be < -1, as -0.5 could need work]  */
-    if (exponent<0 && !(op==DECNUMBER_DIVIDE)) {
-      if (op&DECNUMBER_DIVIDEINT) {
+    /* [for REMNEAR, it needs to be < -1, as -0.5 could need work]  */
+    if (exponent<0 && !(op==DIVIDE)) {
+      if (op&DIVIDEINT) {
         uprv_decNumberZero(res);                  /* integer part is 0  */
         #if DECSUBSET
         if (set->extended)
@@ -4420,15 +4420,15 @@ static decNumber * decDivideOp(decNumber *res,
       /* fastpath remainders so long as the lhs has the smaller  */
       /* (or equal) exponent  */
       if (lhs->exponent<=rhs->exponent) {
-        if (op&DECNUMBER_REMAINDER || exponent<-1) {
-          /* It is DECNUMBER_REMAINDER or safe DECNUMBER_REMNEAR; result is [finished  */
+        if (op&REMAINDER || exponent<-1) {
+          /* It is REMAINDER or safe REMNEAR; result is [finished  */
           /* clone of] lhs  (r = x - 0*y)  */
           residue=0;
           decCopyFit(res, lhs, set, &residue, status);
           decFinish(res, set, &residue, status);
           break;
           }
-        /* [unsafe DECNUMBER_REMNEAR drops through]  */
+        /* [unsafe REMNEAR drops through]  */
         }
       } /* fastpaths  */
 
@@ -4440,7 +4440,7 @@ static decNumber * decDivideOp(decNumber *res,
     if (acclength*sizeof(Unit)>sizeof(accbuff)) {
       /* printf("malloc dvacc %ld units\n", acclength);  */
       allocacc=(Unit *)malloc(acclength*sizeof(Unit));
-      if (allocacc==NULL) {             /* hopeless -- abandon  */
+      if (allocacc==nullptr) {             /* hopeless -- abandon  */
         *status|=DEC_Insufficient_storage;
         break;}
       acc=allocacc;                     /* use the allocated space  */
@@ -4455,17 +4455,17 @@ static decNumber * decDivideOp(decNumber *res,
     /* whichever is larger  */
     /*   +1                -- for rounding of slide to right  */
     /*   +1                -- for leading 0s  */
-    /*   +1                -- for pre-adjust if a remainder or DECNUMBER_DIVIDEINT  */
+    /*   +1                -- for pre-adjust if a remainder or DIVIDEINT  */
     /* [Note: unused units do not participate in decUnitAddSub data]  */
     maxdigits=rhs->digits+reqdigits-1;
     if (lhs->digits>maxdigits) maxdigits=lhs->digits;
     var1units=D2U(maxdigits)+2;
-    /* allocate a guard unit above msu1 for DECNUMBER_REMAINDERNEAR  */
-    if (!(op&DECNUMBER_DIVIDE)) var1units++;
+    /* allocate a guard unit above msu1 for REMAINDERNEAR  */
+    if (!(op&DIVIDE)) var1units++;
     if ((var1units+1)*sizeof(Unit)>sizeof(varbuff)) {
       /* printf("malloc dvvar %ld units\n", var1units+1);  */
       varalloc=(Unit *)malloc((var1units+1)*sizeof(Unit));
-      if (varalloc==NULL) {             /* hopeless -- abandon  */
+      if (varalloc==nullptr) {             /* hopeless -- abandon  */
         *status|=DEC_Insufficient_storage;
         break;}
       var1=varalloc;                    /* use the allocated space  */
@@ -4476,7 +4476,7 @@ static decNumber * decDivideOp(decNumber *res,
     /* subtract in place is always possible.  The rhs (var2) has  */
     /* virtual padding (implemented by decUnitAddSub).  */
     /* One guard unit was allocated above msu1 for rem=rem+rem in  */
-    /* DECNUMBER_REMAINDERNEAR.  */
+    /* REMAINDERNEAR.  */
     msu1=var1+var1units-1;              /* msu of var1  */
     source=lhs->lsu+D2U(lhs->digits)-1; /* msu of input array  */
     for (target=msu1; source>=lhs->lsu; source--, target--) *target=*source;
@@ -4504,15 +4504,15 @@ static decNumber * decDivideOp(decNumber *res,
     /* number of leading zeros in var1 msu and subtract those in var2 msu.  */
     /* [This is actually done by counting the digits and negating, as  */
     /* lead1=DECDPUN-digits1, and similarly for lead2.]  */
-    for (pow=&DECNUMBER_powers[1]; *msu1>=*pow; pow++) exponent--;
-    for (pow=&DECNUMBER_powers[1]; *msu2>=*pow; pow++) exponent++;
+    for (pow=&powers[1]; *msu1>=*pow; pow++) exponent--;
+    for (pow=&powers[1]; *msu2>=*pow; pow++) exponent++;
 
     /* Now, if doing an integer divide or remainder, ensure that  */
     /* the result will be Unit-aligned.  To do this, shift the var1  */
     /* accumulator towards least if need be.  (It's much easier to  */
     /* do this now than to reassemble the residue afterwards, if  */
     /* doing a remainder.)  Also ensure the exponent is not negative.  */
-    if (!(op&DECNUMBER_DIVIDE)) {
+    if (!(op&DIVIDE)) {
       Unit *u;                          /* work  */
       /* save the initial 'false' padding of var1, in digits  */
       var1initpad=(var1units-D2U(lhs->digits))*DECDPUN;
@@ -4525,10 +4525,10 @@ static decNumber * decDivideOp(decNumber *res,
       /* clean any most-significant units which were just emptied  */
       for (u=msu1; cut>=DECDPUN; cut-=DECDPUN, u--) *u=0;
       } /* align  */
-     else { /* is DECNUMBER_DIVIDE  */
+     else { /* is DIVIDE  */
       maxexponent=lhs->exponent-rhs->exponent;    /* save  */
       /* optimization: if the first iteration will just produce 0,  */
-      /* preadjust to skip it [valid for DECNUMBER_DIVIDE only]  */
+      /* preadjust to skip it [valid for DIVIDE only]  */
       if (*msu1<*msu2) {
         var2ulen--;                     /* shift down  */
         exponent-=DECDPUN;              /* update the exponent  */
@@ -4609,7 +4609,7 @@ static decNumber * decDivideOp(decNumber *res,
         /* account exactly for the new digits  */
         if (accunits==0) {
           accdigits++;                       /* at least one  */
-          for (pow=&DECNUMBER_powers[1]; thisunit>=*pow; pow++) accdigits++;
+          for (pow=&powers[1]; thisunit>=*pow; pow++) accdigits++;
           }
          else accdigits+=DECDPUN;
         accunits++;                          /* update count  */
@@ -4620,13 +4620,13 @@ static decNumber * decDivideOp(decNumber *res,
       /* if the residue is zero, the operation is done (unless divide  */
       /* or divideInteger and still not enough digits yet)  */
       if (*var1==0 && var1units==1) {        /* residue is 0  */
-        if (op&(DECNUMBER_REMAINDER|DECNUMBER_REMNEAR)) break;
-        if ((op&DECNUMBER_DIVIDE) && (exponent<=maxexponent)) break;
+        if (op&(REMAINDER|REMNEAR)) break;
+        if ((op&DIVIDE) && (exponent<=maxexponent)) break;
         /* [drop through if divideInteger]  */
         }
       /* also done enough if calculating remainder or integer  */
       /* divide and just did the last ('units') unit  */
-      if (exponent==0 && !(op&DECNUMBER_DIVIDE)) break;
+      if (exponent==0 && !(op&DIVIDE)) break;
 
       /* to get here, var1 is less than var2, so divide var2 by the per-  */
       /* Unit power of ten and go for the next digit  */
@@ -4648,7 +4648,7 @@ static decNumber * decDivideOp(decNumber *res,
     /* accnext now -> lowest unit of result  */
 
     residue=0;                     /* assume no residue  */
-    if (op&DECNUMBER_DIVIDE) {
+    if (op&DIVIDE) {
       /* record the presence of any residue, for rounding  */
       if (*var1!=0 || var1units>1) residue=1;
        else { /* no residue  */
@@ -4665,9 +4665,9 @@ static decNumber * decDivideOp(decNumber *res,
             if (exponent>=maxexponent) break;     /* don't chop real 0s  */
             #if DECDPUN<=4
               if ((lsu-QUOT10(lsu, drop+1)
-                  *DECNUMBER_powers[drop+1])!=0) break;     /* found non-0 digit  */
+                  *powers[drop+1])!=0) break;     /* found non-0 digit  */
             #else
-              if (lsu%DECNUMBER_powers[drop+1]!=0) break;   /* found non-0 digit  */
+              if (lsu%powers[drop+1]!=0) break;   /* found non-0 digit  */
             #endif
             exponent++;
             }
@@ -4681,13 +4681,13 @@ static decNumber * decDivideOp(decNumber *res,
         #endif
         } /* exact divide  */
       } /* divide  */
-     else /* op!=DECNUMBER_DIVIDE */ {
+     else /* op!=DIVIDE */ {
       /* check for coefficient overflow  */
       if (accdigits+exponent>reqdigits) {
         *status|=DEC_Division_impossible;
         break;
         }
-      if (op & (DECNUMBER_REMAINDER|DECNUMBER_REMNEAR)) {
+      if (op & (REMAINDER|REMNEAR)) {
         /* [Here, the exponent will be 0, because var1 was adjusted  */
         /* appropriately.]  */
         Int postshift;                       /* work  */
@@ -4736,7 +4736,7 @@ static decNumber * decDivideOp(decNumber *res,
         /* Now correct the result if doing remainderNear; if it  */
         /* (looking just at coefficients) is > rhs/2, or == rhs/2 and  */
         /* the integer was odd then the result should be rem-rhs.  */
-        if (op&DECNUMBER_REMNEAR) {
+        if (op&REMNEAR) {
           Int compare, tarunits;        /* work  */
           Unit *up;                     /* ..  */
           /* calculate remainder*2 into the var1 buffer (which has  */
@@ -4751,7 +4751,7 @@ static decNumber * decDivideOp(decNumber *res,
           /* RHS.  The remainder's exponent may be smaller than the RHS's.  */
           compare=decUnitCompare(accnext, tarunits, rhs->lsu, D2U(rhs->digits),
                                  rhs->exponent-exponent);
-          if (compare==DECNUMBER_BADINT) {             /* deep trouble  */
+          if (compare==BADINT) {             /* deep trouble  */
             *status|=DEC_Insufficient_storage;
             break;}
 
@@ -4779,7 +4779,7 @@ static decNumber * decDivideOp(decNumber *res,
                   if (*up!=DECDPUNMAX) break;/* non-nines  */
                   }
                  else {                      /* this is the last Unit  */
-                  if (*up==DECNUMBER_powers[quotdigits]-1) allnines=1;
+                  if (*up==powers[quotdigits]-1) allnines=1;
                   break;
                   }
                 quotdigits-=DECDPUN;         /* checked those digits  */
@@ -4798,15 +4798,15 @@ static decNumber * decDivideOp(decNumber *res,
             /* subtract [A+B*(-m)]; the result will always be negative  */
             accunits=-decUnitAddSub(accnext, accunits,
                                     rhs->lsu, D2U(rhs->digits),
-                                    expunits, accnext, -(Int)DECNUMBER_powers[exprem]);
+                                    expunits, accnext, -(Int)powers[exprem]);
             accdigits=decGetDigits(accnext, accunits); /* count digits exactly  */
             accunits=D2U(accdigits);    /* and recalculate the units for copy  */
             /* [exponent is as for original remainder]  */
             bits^=DECNEG;               /* flip the sign  */
             }
-          } /* DECNUMBER_REMNEAR  */
-        } /* DECNUMBER_REMAINDER or DECNUMBER_REMNEAR  */
-      } /* not DECNUMBER_DIVIDE  */
+          } /* REMNEAR  */
+        } /* REMAINDER or REMNEAR  */
+      } /* not DIVIDE  */
 
     /* Set exponent and bits  */
     res->exponent=exponent;
@@ -4819,15 +4819,15 @@ static decNumber * decDivideOp(decNumber *res,
 
     #if DECSUBSET
     /* If a divide then strip trailing zeros if subset [after round]  */
-    if (!set->extended && (op==DECNUMBER_DIVIDE)) decTrim(res, set, 0, 1, &dropped);
+    if (!set->extended && (op==DIVIDE)) decTrim(res, set, 0, 1, &dropped);
     #endif
     } while(0);                              /* end protected  */
 
-  if (varalloc!=NULL) free(varalloc);   /* drop any storage used  */
-  if (allocacc!=NULL) free(allocacc);   /* ..  */
+  if (varalloc!=nullptr) free(varalloc);   /* drop any storage used  */
+  if (allocacc!=nullptr) free(allocacc);   /* ..  */
   #if DECSUBSET
-  if (allocrhs!=NULL) free(allocrhs);   /* ..  */
-  if (alloclhs!=NULL) free(alloclhs);   /* ..  */
+  if (allocrhs!=nullptr) free(allocrhs);   /* ..  */
+  if (alloclhs!=nullptr) free(alloclhs);   /* ..  */
   #endif
   return res;
   } /* decDivideOp  */
@@ -4878,7 +4878,7 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
   uByte  bits;                     /* result sign  */
   Unit  *acc;                      /* -> accumulator Unit array  */
   Int    needbytes;                /* size calculator  */
-  void  *allocacc=NULL;            /* -> allocated accumulator, iff allocated  */
+  void  *allocacc=nullptr;            /* -> allocated accumulator, iff allocated  */
   Unit  accbuff[SD2U(DECBUFFER*4+1)]; /* buffer (+1 for DECBUFFER==0,  */
                                    /* *4 for calls from other operations)  */
   const Unit *mer, *mermsup;       /* work  */
@@ -4902,10 +4902,10 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
     /* lazy carry evaluation  */
     uInt   zlhibuff[(DECBUFFER*2+1)/8+1]; /* buffer (+1 for DECBUFFER==0)  */
     uInt  *zlhi=zlhibuff;                 /* -> lhs array  */
-    uInt  *alloclhi=NULL;                 /* -> allocated buffer, iff allocated  */
+    uInt  *alloclhi=nullptr;                 /* -> allocated buffer, iff allocated  */
     uInt   zrhibuff[(DECBUFFER*2+1)/8+1]; /* buffer (+1 for DECBUFFER==0)  */
     uInt  *zrhi=zrhibuff;                 /* -> rhs array  */
-    uInt  *allocrhi=NULL;                 /* -> allocated buffer, iff allocated  */
+    uInt  *allocrhi=nullptr;                 /* -> allocated buffer, iff allocated  */
     uLong  zaccbuff[(DECBUFFER*2+1)/4+2]; /* buffer (+1 for DECBUFFER==0)  */
     /* [allocacc is shared for both paths, as only one will run]  */
     uLong *zacc=zaccbuff;          /* -> accumulator array for exact result  */
@@ -4926,8 +4926,8 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
   #endif
 
   #if DECSUBSET
-    decNumber *alloclhs=NULL;      /* -> allocated buffer, iff allocated  */
-    decNumber *allocrhs=NULL;      /* -> allocated buffer, iff allocated  */
+    decNumber *alloclhs=nullptr;      /* -> allocated buffer, iff allocated  */
+    decNumber *allocrhs=nullptr;      /* -> allocated buffer, iff allocated  */
   #endif
 
   #if DECCHECK
@@ -4967,12 +4967,12 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
       /* reduce operands and set lostDigits status, as needed  */
       if (lhs->digits>set->digits) {
         alloclhs=decRoundOperand(lhs, set, status);
-        if (alloclhs==NULL) break;
+        if (alloclhs==nullptr) break;
         lhs=alloclhs;
         }
       if (rhs->digits>set->digits) {
         allocrhs=decRoundOperand(rhs, set, status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       }
@@ -5018,7 +5018,7 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
       if (needbytes>(Int)sizeof(zaccbuff)) {
         allocacc=(uLong *)malloc(needbytes);
         zacc=(uLong *)allocacc;}
-      if (zlhi==NULL||zrhi==NULL||zacc==NULL) {
+      if (zlhi==nullptr||zrhi==nullptr||zacc==nullptr) {
         *status|=DEC_Insufficient_storage;
         break;}
 
@@ -5031,12 +5031,12 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
       for (count=lhs->digits, cup=lhs->lsu, lip=zlhi; count>0; lip++)
         for (p=0, *lip=0; p<FASTDIGS && count>0;
              p+=DECDPUN, cup++, count-=DECDPUN)
-          *lip+=*cup*DECNUMBER_powers[p];
+          *lip+=*cup*powers[p];
       lmsi=lip-1;     /* save -> msi  */
       for (count=rhs->digits, cup=rhs->lsu, rip=zrhi; count>0; rip++)
         for (p=0, *rip=0; p<FASTDIGS && count>0;
              p+=DECDPUN, cup++, count-=DECDPUN)
-          *rip+=*cup*DECNUMBER_powers[p];
+          *rip+=*cup*powers[p];
       rmsi=rip-1;     /* save -> msi  */
 
       /* zero the accumulator  */
@@ -5113,7 +5113,7 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
       needbytes=(D2U(lhs->digits)+D2U(rhs->digits))*sizeof(Unit);
       if (needbytes>(Int)sizeof(accbuff)) {
         allocacc=(Unit *)malloc(needbytes);
-        if (allocacc==NULL) {*status|=DEC_Insufficient_storage; break;}
+        if (allocacc==nullptr) {*status|=DEC_Insufficient_storage; break;}
         acc=(Unit *)allocacc;                /* use the allocated space  */
         }
 
@@ -5172,14 +5172,14 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
     decFinish(res, set, &residue, status);   /* final cleanup  */
     } while(0);                         /* end protected  */
 
-  if (allocacc!=NULL) free(allocacc);   /* drop any storage used  */
+  if (allocacc!=nullptr) free(allocacc);   /* drop any storage used  */
   #if DECSUBSET
-  if (allocrhs!=NULL) free(allocrhs);   /* ..  */
-  if (alloclhs!=NULL) free(alloclhs);   /* ..  */
+  if (allocrhs!=nullptr) free(allocrhs);   /* ..  */
+  if (alloclhs!=nullptr) free(alloclhs);   /* ..  */
   #endif
   #if FASTMUL
-  if (allocrhi!=NULL) free(allocrhi);   /* ..  */
-  if (alloclhi!=NULL) free(alloclhi);   /* ..  */
+  if (allocrhi!=nullptr) free(allocrhi);   /* ..  */
+  if (alloclhi!=nullptr) free(alloclhi);   /* ..  */
   #endif
   return res;
   } /* decMultiplyOp  */
@@ -5242,7 +5242,7 @@ static decNumber * decMultiplyOp(decNumber *res, const decNumber *lhs,
 /*    exp(-x) where x can be the tiniest number (Ntiny).              */
 /*                                                                    */
 /* 2. Normalizing x to be <=0.1 (instead of <=1) reduces loop         */
-/*    iterations by appoximately a third with additional (although    */
+/*    iterations by approximately a third with additional (although    */
 /*    diminishing) returns as the range is reduced to even smaller    */
 /*    fractions.  However, h (the power of 10 used to correct the     */
 /*    result at the end, see below) must be kept <=8 as otherwise     */
@@ -5278,7 +5278,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
   /* is treated like other buffers, using DECBUFFER, +1 in case  */
   /* DECBUFFER is 0  */
   decNumber bufr[D2N(DECBUFFER*2+1)];
-  decNumber *allocrhs=NULL;        /* non-NULL if rhs buffer allocated  */
+  decNumber *allocrhs=nullptr;        /* non-nullptr if rhs buffer allocated  */
 
   /* the working precision will be no more than set->digits+8+1  */
   /* so for on-stack buffers DECBUFFER+9 is used, +1 in case DECBUFFER  */
@@ -5286,11 +5286,11 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
 
   /* buffer for t, term (working precision plus)  */
   decNumber buft[D2N(DECBUFFER*2+9+1)];
-  decNumber *allocbuft=NULL;       /* -> allocated buft, iff allocated  */
+  decNumber *allocbuft=nullptr;       /* -> allocated buft, iff allocated  */
   decNumber *t=buft;               /* term  */
   /* buffer for a, accumulator (working precision * 2), at least 9  */
   decNumber bufa[D2N(DECBUFFER*4+18+1)];
-  decNumber *allocbufa=NULL;       /* -> allocated bufa, iff allocated  */
+  decNumber *allocbufa=nullptr;       /* -> allocated bufa, iff allocated  */
   decNumber *a=bufa;               /* accumulator  */
   /* decNumber for the divisor term; this needs at most 9 digits  */
   /* and so can be fixed size [16 so can use standard context]  */
@@ -5310,7 +5310,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
           uprv_decNumberZero(res);
          else uprv_decNumberCopy(res, rhs);  /* +Infinity -> self  */
         }
-       else decNaNs(res, rhs, NULL, set, status); /* a NaN  */
+       else decNaNs(res, rhs, nullptr, set, status); /* a NaN  */
       break;}
 
     if (ISZERO(rhs)) {                  /* zeros -> exact 1  */
@@ -5337,7 +5337,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
     d->exponent=-set->digits;           /* * 10**(-d)  */
     if (decNumberIsNegative(rhs)) d->exponent--;  /* negative case  */
     comp=decCompare(d, rhs, 1);         /* signless compare  */
-    if (comp==DECNUMBER_BADINT) {
+    if (comp==BADINT) {
       *status|=DEC_Insufficient_storage;
       break;}
     if (comp>=0) {                      /* rhs < d  */
@@ -5400,7 +5400,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
         needbytes=sizeof(decNumber)+(D2U(rhs->digits)-1)*sizeof(Unit);
         if (needbytes>sizeof(bufr)) {   /* need malloc space  */
           allocrhs=(decNumber *)malloc(needbytes);
-          if (allocrhs==NULL) {         /* hopeless -- abandon  */
+          if (allocrhs==nullptr) {         /* hopeless -- abandon  */
             *status|=DEC_Insufficient_storage;
             break;}
           newrhs=allocrhs;              /* use the allocated space  */
@@ -5432,7 +5432,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
       needbytes=sizeof(decNumber)+(D2U(p*2)-1)*sizeof(Unit);
       if (needbytes>sizeof(bufa)) {     /* need malloc space  */
         allocbufa=(decNumber *)malloc(needbytes);
-        if (allocbufa==NULL) {          /* hopeless -- abandon  */
+        if (allocbufa==nullptr) {          /* hopeless -- abandon  */
           *status|=DEC_Insufficient_storage;
           break;}
         a=allocbufa;                    /* use the allocated space  */
@@ -5444,7 +5444,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
       needbytes=sizeof(decNumber)+(D2U(p+2)-1)*sizeof(Unit);
       if (needbytes>sizeof(buft)) {     /* need malloc space  */
         allocbuft=(decNumber *)malloc(needbytes);
-        if (allocbuft==NULL) {          /* hopeless -- abandon  */
+        if (allocbuft==nullptr) {          /* hopeless -- abandon  */
           *status|=DEC_Insufficient_storage;
           break;}
         t=allocbuft;                    /* use the allocated space  */
@@ -5474,7 +5474,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
         /* [but it should remain unchanged after first add]  */
         decAddOp(a, a, t, &aset, 0, status);           /* a=a+t  */
         decMultiplyOp(t, t, x, &tset, &ignore);        /* t=t*x  */
-        decDivideOp(t, t, d, &tset, DECNUMBER_DIVIDE, &ignore);  /* t=t/d  */
+        decDivideOp(t, t, d, &tset, DIVIDE, &ignore);  /* t=t/d  */
         /* the iteration ends when the term cannot affect the result,  */
         /* if rounded to p digits, which is when its value is smaller  */
         /* than the accumulator by p+1 digits.  There must also be  */
@@ -5497,7 +5497,7 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
     if (h>0) {
       Int seenbit=0;               /* set once a 1-bit is seen  */
       Int i;                       /* counter  */
-      Int n=DECNUMBER_powers[h];             /* always positive  */
+      Int n=powers[h];             /* always positive  */
       aset.digits=p+2;             /* sufficient precision  */
       /* avoid the overhead and many extra digits of decNumberPower  */
       /* as all that is needed is the short 'multipliers' loop; here  */
@@ -5528,9 +5528,9 @@ decNumber * decExpOp(decNumber *res, const decNumber *rhs,
     decFinish(res, set, &residue, status);       /* cleanup/set flags  */
     } while(0);                         /* end protected  */
 
-  if (allocrhs !=NULL) free(allocrhs);  /* drop any storage used  */
-  if (allocbufa!=NULL) free(allocbufa); /* ..  */
-  if (allocbuft!=NULL) free(allocbuft); /* ..  */
+  if (allocrhs !=nullptr) free(allocrhs);  /* drop any storage used  */
+  if (allocbufa!=nullptr) free(allocbufa); /* ..  */
+  if (allocbuft!=nullptr) free(allocbuft); /* ..  */
   /* [status is handled by caller]  */
   return res;
   } /* decExpOp  */
@@ -5616,7 +5616,7 @@ static const uShort LNnn[90]={9016,  8652,  8316,  8008,  7724,  7456,  7208,
 /*    would certainly save at least one if it were made ten times     */
 /*    bigger, too (for truncated fractions 0.100 through 0.999).      */
 /*    However, for most practical evaluations, at least four or five  */
-/*    iterations will be neede -- so this would only speed up by      */
+/*    iterations will be needed -- so this would only speed up by      */
 /*    20-25% and that probably does not justify increasing the table  */
 /*    size.                                                           */
 /*                                                                    */
@@ -5640,10 +5640,10 @@ decNumber * decLnOp(decNumber *res, const decNumber *rhs,
   /* buffers for a (accumulator, typically precision+2) and b  */
   /* (adjustment calculator, same size)  */
   decNumber bufa[D2N(DECBUFFER+12)];
-  decNumber *allocbufa=NULL;       /* -> allocated bufa, iff allocated  */
+  decNumber *allocbufa=nullptr;       /* -> allocated bufa, iff allocated  */
   decNumber *a=bufa;               /* accumulator/work  */
   decNumber bufb[D2N(DECBUFFER*2+2)];
-  decNumber *allocbufb=NULL;       /* -> allocated bufa, iff allocated  */
+  decNumber *allocbufb=nullptr;       /* -> allocated bufa, iff allocated  */
   decNumber *b=bufb;               /* adjustment/work  */
 
   decNumber  numone;               /* constant 1  */
@@ -5662,7 +5662,7 @@ decNumber * decLnOp(decNumber *res, const decNumber *rhs,
           *status|=DEC_Invalid_operation;
          else uprv_decNumberCopy(res, rhs);  /* +Infinity -> self  */
         }
-       else decNaNs(res, rhs, NULL, set, status); /* a NaN  */
+       else decNaNs(res, rhs, nullptr, set, status); /* a NaN  */
       break;}
 
     if (ISZERO(rhs)) {                  /* +/- zeros -> -Infinity  */
@@ -5713,7 +5713,7 @@ decNumber * decLnOp(decNumber *res, const decNumber *rhs,
     needbytes=sizeof(decNumber)+(D2U(MAXI(p,16))-1)*sizeof(Unit);
     if (needbytes>sizeof(bufa)) {     /* need malloc space  */
       allocbufa=(decNumber *)malloc(needbytes);
-      if (allocbufa==NULL) {          /* hopeless -- abandon  */
+      if (allocbufa==nullptr) {          /* hopeless -- abandon  */
         *status|=DEC_Insufficient_storage;
         break;}
       a=allocbufa;                    /* use the allocated space  */
@@ -5722,7 +5722,7 @@ decNumber * decLnOp(decNumber *res, const decNumber *rhs,
     needbytes=sizeof(decNumber)+(D2U(MAXI(pp,16))-1)*sizeof(Unit);
     if (needbytes>sizeof(bufb)) {     /* need malloc space  */
       allocbufb=(decNumber *)malloc(needbytes);
-      if (allocbufb==NULL) {          /* hopeless -- abandon  */
+      if (allocbufb==nullptr) {          /* hopeless -- abandon  */
         *status|=DEC_Insufficient_storage;
         break;}
       b=allocbufb;                    /* use the allocated space  */
@@ -5809,7 +5809,7 @@ decNumber * decLnOp(decNumber *res, const decNumber *rhs,
           (a->digits+a->exponent)>=(b->digits+b->exponent+set->digits+1)) {
         if (a->digits==p) break;
         if (decNumberIsZero(a)) {
-          decCompareOp(&cmp, rhs, &numone, &aset, DECNUMBER_COMPARE, &ignore); /* rhs=1 ?  */
+          decCompareOp(&cmp, rhs, &numone, &aset, COMPARE, &ignore); /* rhs=1 ?  */
           if (cmp.lsu[0]==0) a->exponent=0;            /* yes, exact 0  */
            else *status|=(DEC_Inexact | DEC_Rounded);  /* no, inexact  */
           break;
@@ -5843,8 +5843,8 @@ decNumber * decLnOp(decNumber *res, const decNumber *rhs,
     decFinish(res, set, &residue, status);       /* cleanup/set flags  */
     } while(0);                         /* end protected  */
 
-  if (allocbufa!=NULL) free(allocbufa); /* drop any storage used  */
-  if (allocbufb!=NULL) free(allocbufb); /* ..  */
+  if (allocbufa!=nullptr) free(allocbufa); /* drop any storage used  */
+  if (allocbufb!=nullptr) free(allocbufb); /* ..  */
   /* [status is handled by caller]  */
   return res;
   } /* decLnOp  */
@@ -5878,8 +5878,8 @@ static decNumber * decQuantizeOp(decNumber *res, const decNumber *lhs,
                                  const decNumber *rhs, decContext *set,
                                  Flag quant, uInt *status) {
   #if DECSUBSET
-  decNumber *alloclhs=NULL;        /* non-NULL if rounded lhs allocated  */
-  decNumber *allocrhs=NULL;        /* .., rhs  */
+  decNumber *alloclhs=nullptr;        /* non-nullptr if rounded lhs allocated  */
+  decNumber *allocrhs=nullptr;        /* .., rhs  */
   #endif
   const decNumber *inrhs=rhs;      /* save original rhs  */
   Int   reqdigits=set->digits;     /* requested DIGITS  */
@@ -5897,12 +5897,12 @@ static decNumber * decQuantizeOp(decNumber *res, const decNumber *lhs,
       /* reduce operands and set lostDigits status, as needed  */
       if (lhs->digits>reqdigits) {
         alloclhs=decRoundOperand(lhs, set, status);
-        if (alloclhs==NULL) break;
+        if (alloclhs==nullptr) break;
         lhs=alloclhs;
         }
       if (rhs->digits>reqdigits) { /* [this only checks lostDigits]  */
         allocrhs=decRoundOperand(rhs, set, status);
-        if (allocrhs==NULL) break;
+        if (allocrhs==nullptr) break;
         rhs=allocrhs;
         }
       }
@@ -5935,8 +5935,8 @@ static decNumber * decQuantizeOp(decNumber *res, const decNumber *lhs,
     if (!set->extended) etiny=set->emin;     /* no subnormals  */
     #endif
 
-    if (reqexp==DECNUMBER_BADINT                       /* bad (rescale only) or ..  */
-     || reqexp==DECNUMBER_BIGODD || reqexp==DECNUMBER_BIGEVEN    /* very big (ditto) or ..  */
+    if (reqexp==BADINT                       /* bad (rescale only) or ..  */
+     || reqexp==BIGODD || reqexp==BIGEVEN    /* very big (ditto) or ..  */
      || (reqexp<etiny)                       /* < lowest  */
      || (reqexp>set->emax)) {                /* > emax  */
       *status|=DEC_Invalid_operation;
@@ -6011,8 +6011,8 @@ static decNumber * decQuantizeOp(decNumber *res, const decNumber *lhs,
     } while(0);                         /* end protected  */
 
   #if DECSUBSET
-  if (allocrhs!=NULL) free(allocrhs);   /* drop any storage used  */
-  if (alloclhs!=NULL) free(alloclhs);   /* ..  */
+  if (allocrhs!=nullptr) free(allocrhs);   /* drop any storage used  */
+  if (alloclhs!=nullptr) free(alloclhs);   /* ..  */
   #endif
   return res;
   } /* decQuantizeOp  */
@@ -6021,16 +6021,16 @@ static decNumber * decQuantizeOp(decNumber *res, const decNumber *lhs,
 /* decCompareOp -- compare, min, or max two Numbers                   */
 /*                                                                    */
 /*   This computes C = A ? B and carries out one of four operations:  */
-/*     DECNUMBER_COMPARE    -- returns the signum (as a number) giving the      */
+/*     COMPARE    -- returns the signum (as a number) giving the      */
 /*                   result of a comparison unless one or both        */
 /*                   operands is a NaN (in which case a NaN results)  */
-/*     DECNUMBER_COMPSIG    -- as DECNUMBER_COMPARE except that a quiet NaN raises        */
+/*     COMPSIG    -- as COMPARE except that a quiet NaN raises        */
 /*                   Invalid operation.                               */
-/*     DECNUMBER_COMPMAX    -- returns the larger of the operands, using the    */
+/*     COMPMAX    -- returns the larger of the operands, using the    */
 /*                   754 maxnum operation                             */
-/*     DECNUMBER_COMPMAXMAG -- ditto, comparing absolute values                 */
-/*     DECNUMBER_COMPMIN    -- the 754 minnum operation                         */
-/*     DECNUMBER_COMPMINMAG -- ditto, comparing absolute values                 */
+/*     COMPMAXMAG -- ditto, comparing absolute values                 */
+/*     COMPMIN    -- the 754 minnum operation                         */
+/*     COMPMINMAG -- ditto, comparing absolute values                 */
 /*     COMTOTAL   -- returns the signum (as a number) giving the      */
 /*                   result of a comparison using 754 total ordering  */
 /*                                                                    */
@@ -6041,8 +6041,8 @@ static decNumber * decQuantizeOp(decNumber *res, const decNumber *lhs,
 /*   op  is the operation flag                                        */
 /*   status is the usual accumulator                                  */
 /*                                                                    */
-/* C must have space for one digit for DECNUMBER_COMPARE or set->digits for     */
-/* DECNUMBER_COMPMAX, DECNUMBER_COMPMIN, DECNUMBER_COMPMAXMAG, or DECNUMBER_COMPMINMAG.                       */
+/* C must have space for one digit for COMPARE or set->digits for     */
+/* COMPMAX, COMPMIN, COMPMAXMAG, or COMPMINMAG.                       */
 /* ------------------------------------------------------------------ */
 /* The emphasis here is on speed for common cases, and avoiding       */
 /* coefficient comparison if possible.                                */
@@ -6051,8 +6051,8 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
                          const decNumber *rhs, decContext *set,
                          Flag op, uInt *status) {
   #if DECSUBSET
-  decNumber *alloclhs=NULL;        /* non-NULL if rounded lhs allocated  */
-  decNumber *allocrhs=NULL;        /* .., rhs  */
+  decNumber *alloclhs=nullptr;        /* non-nullptr if rounded lhs allocated  */
+  decNumber *allocrhs=nullptr;        /* .., rhs  */
   #endif
   Int   result=0;                  /* default result value  */
   uByte merged;                    /* work  */
@@ -6067,12 +6067,12 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
       /* reduce operands and set lostDigits status, as needed  */
       if (lhs->digits>set->digits) {
         alloclhs=decRoundOperand(lhs, set, status);
-        if (alloclhs==NULL) {result=DECNUMBER_BADINT; break;}
+        if (alloclhs==nullptr) {result=BADINT; break;}
         lhs=alloclhs;
         }
       if (rhs->digits>set->digits) {
         allocrhs=decRoundOperand(rhs, set, status);
-        if (allocrhs==NULL) {result=DECNUMBER_BADINT; break;}
+        if (allocrhs==nullptr) {result=BADINT; break;}
         rhs=allocrhs;
         }
       }
@@ -6080,7 +6080,7 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
     /* [following code does not require input rounding]  */
 
     /* If total ordering then handle differing signs 'up front'  */
-    if (op==DECNUMBER_COMPTOTAL) {                /* total ordering  */
+    if (op==COMPTOTAL) {                /* total ordering  */
       if (decNumberIsNegative(lhs) && !decNumberIsNegative(rhs)) {
         result=-1;
         break;
@@ -6095,10 +6095,10 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
     /* This assumes sNaN (even just one) leads to NaN.  */
     merged=(lhs->bits | rhs->bits) & (DECSNAN | DECNAN);
     if (merged) {                       /* a NaN bit set  */
-      if (op==DECNUMBER_COMPARE);                 /* result will be NaN  */
-       else if (op==DECNUMBER_COMPSIG)            /* treat qNaN as sNaN  */
-        *status|=DEC_Invalid_operation | DECNUMBER_DEC_sNaN;
-       else if (op==DECNUMBER_COMPTOTAL) {        /* total ordering, always finite  */
+      if (op==COMPARE);                 /* result will be NaN  */
+       else if (op==COMPSIG)            /* treat qNaN as sNaN  */
+        *status|=DEC_Invalid_operation | DEC_sNaN;
+       else if (op==COMPTOTAL) {        /* total ordering, always finite  */
         /* signs are known to be the same; compute the ordering here  */
         /* as if the signs are both positive, then invert for negatives  */
         if (!decNumberIsNaN(lhs)) result=-1;
@@ -6121,25 +6121,25 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
         /* min or max -- 754 rules ignore single NaN  */
         if (!decNumberIsNaN(lhs) || !decNumberIsNaN(rhs)) {
           /* just one NaN; force choice to be the non-NaN operand  */
-          op=DECNUMBER_COMPMAX;
+          op=COMPMAX;
           if (lhs->bits & DECNAN) result=-1; /* pick rhs  */
                              else result=+1; /* pick lhs  */
           break;
           }
         } /* max or min  */
-      op=DECNUMBER_COMPNAN;                            /* use special path  */
+      op=COMPNAN;                            /* use special path  */
       decNaNs(res, lhs, rhs, set, status);   /* propagate NaN  */
       break;
       }
     /* have numbers  */
-    if (op==DECNUMBER_COMPMAXMAG || op==DECNUMBER_COMPMINMAG) result=decCompare(lhs, rhs, 1);
+    if (op==COMPMAXMAG || op==COMPMINMAG) result=decCompare(lhs, rhs, 1);
      else result=decCompare(lhs, rhs, 0);    /* sign matters  */
     } while(0);                              /* end protected  */
 
-  if (result==DECNUMBER_BADINT) *status|=DEC_Insufficient_storage; /* rare  */
+  if (result==BADINT) *status|=DEC_Insufficient_storage; /* rare  */
    else {
-    if (op==DECNUMBER_COMPARE || op==DECNUMBER_COMPSIG ||op==DECNUMBER_COMPTOTAL) { /* returning signum  */
-      if (op==DECNUMBER_COMPTOTAL && result==0) {
+    if (op==COMPARE || op==COMPSIG ||op==COMPTOTAL) { /* returning signum  */
+      if (op==COMPTOTAL && result==0) {
         /* operands are numerically equal or same NaN (and same sign,  */
         /* tested first); if identical, leave result 0  */
         if (lhs->exponent!=rhs->exponent) {
@@ -6154,7 +6154,7 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
         if (result<0) res->bits=DECNEG;
         }
       }
-     else if (op==DECNUMBER_COMPNAN);             /* special, drop through  */
+     else if (op==COMPNAN);             /* special, drop through  */
      else {                             /* MAX or MIN, non-NaN result  */
       Int residue=0;                    /* rounding accumulator  */
       /* choose the operand for the result  */
@@ -6165,7 +6165,7 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
         uByte srhs=(rhs->bits & DECNEG);
         #if DECSUBSET
         if (!set->extended) {           /* subset: force left-hand  */
-          op=DECNUMBER_COMPMAX;
+          op=COMPMAX;
           result=+1;
           }
         else
@@ -6186,7 +6186,7 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
           }
         } /* numerically equal  */
       /* here result will be non-0; reverse if looking for MIN  */
-      if (op==DECNUMBER_COMPMIN || op==DECNUMBER_COMPMINMAG) result=-result;
+      if (op==COMPMIN || op==COMPMINMAG) result=-result;
       choice=(result>0 ? lhs : rhs);    /* choose  */
       /* copy chosen to result, rounding if need be  */
       decCopyFit(res, choice, set, &residue, status);
@@ -6194,8 +6194,8 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
       }
     }
   #if DECSUBSET
-  if (allocrhs!=NULL) free(allocrhs);   /* free any storage used  */
-  if (alloclhs!=NULL) free(alloclhs);   /* ..  */
+  if (allocrhs!=nullptr) free(allocrhs);   /* free any storage used  */
+  if (alloclhs!=nullptr) free(alloclhs);   /* ..  */
   #endif
   return res;
   } /* decCompareOp  */
@@ -6209,7 +6209,7 @@ static decNumber * decCompareOp(decNumber *res, const decNumber *lhs,
 /*  Arg2 is B, a decNumber which is not a NaN                         */
 /*  Arg3 is 1 for a sign-independent compare, 0 otherwise             */
 /*                                                                    */
-/*  returns -1, 0, or 1 for A<B, A==B, or A>B, or DECNUMBER_BADINT if failure   */
+/*  returns -1, 0, or 1 for A<B, A==B, or A>B, or BADINT if failure   */
 /*  (the only possible failure is an allocation error)                */
 /* ------------------------------------------------------------------ */
 static Int decCompare(const decNumber *lhs, const decNumber *rhs,
@@ -6255,7 +6255,7 @@ static Int decCompare(const decNumber *lhs, const decNumber *rhs,
   compare=decUnitCompare(lhs->lsu, D2U(lhs->digits),
                          rhs->lsu, D2U(rhs->digits),
                          rhs->exponent-lhs->exponent);
-  if (compare!=DECNUMBER_BADINT) compare*=result;      /* comparison succeeded  */
+  if (compare!=BADINT) compare*=result;      /* comparison succeeded  */
   return compare;
   } /* decCompare  */
 
@@ -6272,7 +6272,7 @@ static Int decCompare(const decNumber *lhs, const decNumber *rhs,
 /*  Arg4 is B length in Units                                         */
 /*  Arg5 is E (0 if the units are aligned)                            */
 /*                                                                    */
-/*  returns -1, 0, or 1 for A<B, A==B, or A>B, or DECNUMBER_BADINT if failure   */
+/*  returns -1, 0, or 1 for A<B, A==B, or A>B, or BADINT if failure   */
 /*  (the only possible failure is an allocation error, which can      */
 /*  only occur if E!=0)                                               */
 /* ------------------------------------------------------------------ */
@@ -6280,7 +6280,7 @@ static Int decUnitCompare(const Unit *a, Int alength,
                           const Unit *b, Int blength, Int exp) {
   Unit  *acc;                      /* accumulator for result  */
   Unit  accbuff[SD2U(DECBUFFER*2+1)]; /* local buffer  */
-  Unit  *allocacc=NULL;            /* -> allocated acc buffer, iff allocated  */
+  Unit  *allocacc=nullptr;            /* -> allocated acc buffer, iff allocated  */
   Int   accunits, need;            /* units in use or needed for acc  */
   const Unit *l, *r, *u;           /* work  */
   Int   expunits, exprem, result;  /* ..  */
@@ -6312,7 +6312,7 @@ static Int decUnitCompare(const Unit *a, Int alength,
   acc=accbuff;                          /* assume use local buffer  */
   if (need*sizeof(Unit)>sizeof(accbuff)) {
     allocacc=(Unit *)malloc(need*sizeof(Unit));
-    if (allocacc==NULL) return DECNUMBER_BADINT;  /* hopeless -- abandon  */
+    if (allocacc==nullptr) return BADINT;  /* hopeless -- abandon  */
     acc=allocacc;
     }
   /* Calculate units and remainder from exponent.  */
@@ -6320,7 +6320,7 @@ static Int decUnitCompare(const Unit *a, Int alength,
   exprem=exp%DECDPUN;
   /* subtract [A+B*(-m)]  */
   accunits=decUnitAddSub(a, alength, b, blength, expunits, acc,
-                         -(Int)DECNUMBER_powers[exprem]);
+                         -(Int)powers[exprem]);
   /* [UnitAddSub result may have leading zeros, even on zero]  */
   if (accunits<0) result=-1;            /* negative result  */
    else {                               /* non-negative result  */
@@ -6329,7 +6329,7 @@ static Int decUnitCompare(const Unit *a, Int alength,
     result=(*u==0 ? 0 : +1);
     }
   /* clean up and return the result  */
-  if (allocacc!=NULL) free(allocacc);   /* drop any storage used  */
+  if (allocacc!=nullptr) free(allocacc);   /* drop any storage used  */
   return result;
   } /* decUnitCompare  */
 
@@ -6657,12 +6657,12 @@ static decNumber * decTrim(decNumber *dn, decContext *set, Flag all,
   cut=1;                           /* digit (1-DECDPUN) in Unit  */
   up=dn->lsu;                      /* -> current Unit  */
   for (d=0; d<dn->digits-1; d++) { /* [don't strip the final digit]  */
-    /* slice by DECNUMBER_powers  */
+    /* slice by powers  */
     #if DECDPUN<=4
       uInt quot=QUOT10(*up, cut);
-      if ((*up-quot*DECNUMBER_powers[cut])!=0) break;  /* found non-0 digit  */
+      if ((*up-quot*powers[cut])!=0) break;  /* found non-0 digit  */
     #else
-      if (*up%DECNUMBER_powers[cut]!=0) break;         /* found non-0 digit  */
+      if (*up%powers[cut]!=0) break;         /* found non-0 digit  */
     #endif
     /* have a trailing 0  */
     if (!all) {                    /* trimming  */
@@ -6735,7 +6735,7 @@ static Int decShiftToMost(Unit *uar, Int digits, Int shift) {
 
   if (shift==0) return digits;     /* [fastpath] nothing to do  */
   if ((digits+shift)<=DECDPUN) {   /* [fastpath] single-unit case  */
-    *uar=(Unit)(*uar*DECNUMBER_powers[shift]);
+    *uar=(Unit)(*uar*powers[shift]);
     return digits+shift;
     }
 
@@ -6752,14 +6752,14 @@ static Int decShiftToMost(Unit *uar, Int digits, Int shift) {
       /* split the source Unit and accumulate remainder for next  */
       #if DECDPUN<=4
         uInt quot=QUOT10(*source, cut);
-        uInt rem=*source-quot*DECNUMBER_powers[cut];
+        uInt rem=*source-quot*powers[cut];
         next+=quot;
       #else
-        uInt rem=*source%DECNUMBER_powers[cut];
-        next+=*source/DECNUMBER_powers[cut];
+        uInt rem=*source%powers[cut];
+        next+=*source/powers[cut];
       #endif
       if (target<=first) *target=(Unit)next;   /* write to target iff valid  */
-      next=rem*DECNUMBER_powers[DECDPUN-cut];            /* save remainder for next Unit  */
+      next=rem*powers[DECDPUN-cut];            /* save remainder for next Unit  */
       }
     } /* shift-move  */
 
@@ -6809,7 +6809,7 @@ static Int decShiftToLeast(Unit *uar, Int units, Int shift) {
   #if DECDPUN<=4
     quot=QUOT10(*up, cut);
   #else
-    quot=*up/DECNUMBER_powers[cut];
+    quot=*up/powers[cut];
   #endif
   for (; ; target++) {
     *target=(Unit)quot;
@@ -6819,12 +6819,12 @@ static Int decShiftToLeast(Unit *uar, Int units, Int shift) {
     quot=*up;
     #if DECDPUN<=4
       quot=QUOT10(quot, cut);
-      rem=*up-quot*DECNUMBER_powers[cut];
+      rem=*up-quot*powers[cut];
     #else
-      rem=quot%DECNUMBER_powers[cut];
-      quot=quot/DECNUMBER_powers[cut];
+      rem=quot%powers[cut];
+      quot=quot/powers[cut];
     #endif
-    *target=(Unit)(*target+rem*DECNUMBER_powers[DECDPUN-cut]);
+    *target=(Unit)(*target+rem*powers[DECDPUN-cut]);
     count-=cut;
     if (count<=0) break;
     }
@@ -6847,7 +6847,7 @@ static Int decShiftToLeast(Unit *uar, Int units, Int shift) {
 /* Instead, return an allocated decNumber, rounded as required.       */
 /* It is the caller's responsibility to free the allocated storage.   */
 /*                                                                    */
-/* If no storage is available then the result cannot be used, so NULL */
+/* If no storage is available then the result cannot be used, so nullptr */
 /* is returned.                                                       */
 /* ------------------------------------------------------------------ */
 static decNumber *decRoundOperand(const decNumber *dn, decContext *set,
@@ -6860,9 +6860,9 @@ static decNumber *decRoundOperand(const decNumber *dn, decContext *set,
   /* length specified by the context  */
   res=(decNumber *)malloc(sizeof(decNumber)
                           +(D2U(set->digits)-1)*sizeof(Unit));
-  if (res==NULL) {
+  if (res==nullptr) {
     *status|=DEC_Insufficient_storage;
-    return NULL;
+    return nullptr;
     }
   decCopyFit(res, dn, set, &residue, &newstatus);
   decApplyRound(res, set, residue, &newstatus);
@@ -6995,7 +6995,7 @@ static void decSetCoeff(decNumber *dn, decContext *set, const Unit *lsu,
   /* here up -> Unit with first discarded digit  */
   cut=discard-(count-DECDPUN)-1;
   if (cut==DECDPUN-1) {       /* unit-boundary case (fast)  */
-    Unit half=(Unit)DECNUMBER_powers[DECDPUN]>>1;
+    Unit half=(Unit)powers[DECDPUN]>>1;
     /* set residue directly  */
     if (*up>=half) {
       if (*up>half) *residue=7;
@@ -7026,10 +7026,10 @@ static void decSetCoeff(decNumber *dn, decContext *set, const Unit *lsu,
       #if DECDPUN<=4
         U_ASSERT(/* cut >= 0 &&*/ cut <= 4);
         quot=QUOT10(*up, cut);
-        rem=*up-quot*DECNUMBER_powers[cut];
+        rem=*up-quot*powers[cut];
       #else
-        rem=*up%DECNUMBER_powers[cut];
-        quot=*up/DECNUMBER_powers[cut];
+        rem=*up%powers[cut];
+        quot=*up/powers[cut];
       #endif
       if (rem!=0) *residue=1;
       }
@@ -7066,12 +7066,12 @@ static void decSetCoeff(decNumber *dn, decContext *set, const Unit *lsu,
         quot=*up;
         #if DECDPUN<=4
           quot=QUOT10(quot, cut);
-          rem=*up-quot*DECNUMBER_powers[cut];
+          rem=*up-quot*powers[cut];
         #else
-          rem=quot%DECNUMBER_powers[cut];
-          quot=quot/DECNUMBER_powers[cut];
+          rem=quot%powers[cut];
+          quot=quot/powers[cut];
         #endif
-        *target=(Unit)(*target+rem*DECNUMBER_powers[DECDPUN-cut]);
+        *target=(Unit)(*target+rem*powers[DECDPUN-cut]);
         count-=cut;
         if (count<=0) break;
         } /* shift-copy loop  */
@@ -7186,7 +7186,7 @@ static void decApplyRound(decNumber *dn, decContext *set, Int residue,
 
     default: {      /* e.g., DEC_ROUND_MAX  */
       *status|=DEC_Invalid_context;
-      #if DECTRACE || (DECCHECK && DECNUMBER_DECVERB)
+      #if DECTRACE || (DECCHECK && DECVERB)
       printf("Unknown rounding mode: %d\n", set->round);
       #endif
       break;}
@@ -7206,9 +7206,9 @@ static void decApplyRound(decNumber *dn, decContext *set, Int residue,
     for (up=dn->lsu; ; up++) {
       if (count<=DECDPUN) {
         /* this is the last Unit (the msu)  */
-        if (*up!=DECNUMBER_powers[count]-1) break;     /* not still 9s  */
+        if (*up!=powers[count]-1) break;     /* not still 9s  */
         /* here if it, too, is all nines  */
-        *up=(Unit)DECNUMBER_powers[count-1];           /* here 999 -> 100 etc.  */
+        *up=(Unit)powers[count-1];           /* here 999 -> 100 etc.  */
         for (up=up-1; up>=dn->lsu; up--) *up=0; /* others all to 0  */
         dn->exponent++;                      /* and bump exponent  */
         /* [which, very rarely, could cause Overflow...]  */
@@ -7230,12 +7230,12 @@ static void decApplyRound(decNumber *dn, decContext *set, Int residue,
     for (up=dn->lsu; ; up++) {
       if (count<=DECDPUN) {
         /* this is the last Unit (the msu)  */
-        if (*up!=DECNUMBER_powers[count-1]) break;     /* not 100..  */
+        if (*up!=powers[count-1]) break;     /* not 100..  */
         /* here if have the 1000... case  */
         sup=up;                              /* save msu pointer  */
-        *up=(Unit)DECNUMBER_powers[count]-1;           /* here 100 in msu -> 999  */
+        *up=(Unit)powers[count]-1;           /* here 100 in msu -> 999  */
         /* others all to all-nines, too  */
-        for (up=up-1; up>=dn->lsu; up--) *up=(Unit)DECNUMBER_powers[DECDPUN]-1;
+        for (up=up-1; up>=dn->lsu; up--) *up=(Unit)powers[DECDPUN]-1;
         dn->exponent--;                      /* and bump exponent  */
 
         /* iff the number was at the subnormal boundary (exponent=etiny)  */
@@ -7246,7 +7246,7 @@ static void decApplyRound(decNumber *dn, decContext *set, Int residue,
         if (dn->exponent+1==set->emin-set->digits+1) {
           if (count==1 && dn->digits==1) *sup=0;  /* here 9 -> 0[.9]  */
            else {
-            *sup=(Unit)DECNUMBER_powers[count-1]-1;    /* here 999.. in msu -> 99..  */
+            *sup=(Unit)powers[count-1]-1;    /* here 999.. in msu -> 99..  */
             dn->digits--;
             }
           dn->exponent++;
@@ -7343,7 +7343,7 @@ static void decFinalize(decNumber *dn, decContext *set, Int *residue,
     nmin.lsu[0]=1;
     nmin.exponent=set->emin;
     comp=decCompare(dn, &nmin, 1);                /* (signless compare)  */
-    if (comp==DECNUMBER_BADINT) {                           /* oops  */
+    if (comp==BADINT) {                           /* oops  */
       *status|=DEC_Insufficient_storage;          /* abandon...  */
       return;
       }
@@ -7446,7 +7446,7 @@ static void decSetMaxValue(decNumber *dn, decContext *set) {
   for (up=dn->lsu; ; up++) {
     if (count>DECDPUN) *up=DECDPUNMAX;  /* unit full o'nines  */
      else {                             /* this is the msu  */
-      *up=(Unit)(DECNUMBER_powers[count]-1);
+      *up=(Unit)(powers[count]-1);
       break;
       }
     count-=DECDPUN;                /* filled those digits  */
@@ -7577,14 +7577,14 @@ static uInt decCheckMath(const decNumber *rhs, decContext *set,
 /*   dn is the number [which will not be altered]                     */
 /*                                                                    */
 /*   returns one of:                                                  */
-/*     DECNUMBER_BADINT if there is a non-zero fraction                         */
+/*     BADINT if there is a non-zero fraction                         */
 /*     the converted integer                                          */
-/*     DECNUMBER_BIGEVEN if the integer is even and magnitude > 2*10**9         */
-/*     DECNUMBER_BIGODD  if the integer is odd  and magnitude > 2*10**9         */
+/*     BIGEVEN if the integer is even and magnitude > 2*10**9         */
+/*     BIGODD  if the integer is odd  and magnitude > 2*10**9         */
 /*                                                                    */
 /* This checks and gets a whole number from the input decNumber.      */
-/* The sign can be determined from dn by the caller when DECNUMBER_BIGEVEN or   */
-/* DECNUMBER_BIGODD is returned.                                                */
+/* The sign can be determined from dn by the caller when BIGEVEN or   */
+/* BIGODD is returned.                                                */
 /* ------------------------------------------------------------------ */
 static Int decGetInt(const decNumber *dn) {
   Int  theInt;                          /* result accumulator  */
@@ -7613,7 +7613,7 @@ static Int decGetInt(const decNumber *dn) {
     Int count=-dn->exponent;            /* digits to discard  */
     /* spin up whole units until reach the Unit with the unit digit  */
     for (; count>=DECDPUN; up++) {
-      if (*up!=0) return DECNUMBER_BADINT;        /* non-zero Unit to discard  */
+      if (*up!=0) return BADINT;        /* non-zero Unit to discard  */
       count-=DECDPUN;
       }
     if (count==0) got=0;                /* [a multiple of DECDPUN]  */
@@ -7622,12 +7622,12 @@ static Int decGetInt(const decNumber *dn) {
       /* slice off fraction digits and check for non-zero  */
       #if DECDPUN<=4
         theInt=QUOT10(*up, count);
-        rem=*up-theInt*DECNUMBER_powers[count];
+        rem=*up-theInt*powers[count];
       #else
-        rem=*up%DECNUMBER_powers[count];          /* slice off discards  */
-        theInt=*up/DECNUMBER_powers[count];
+        rem=*up%powers[count];          /* slice off discards  */
+        theInt=*up/powers[count];
       #endif
-      if (rem!=0) return DECNUMBER_BADINT;        /* non-zero fraction  */
+      if (rem!=0) return BADINT;        /* non-zero fraction  */
       /* it looks good  */
       got=DECDPUN-count;                /* number of digits so far  */
       up++;                             /* ready for next  */
@@ -7642,12 +7642,12 @@ static Int decGetInt(const decNumber *dn) {
     Int save=theInt;
     /* collect any remaining unit(s)  */
     for (; got<ilength; up++) {
-      theInt+=*up*DECNUMBER_powers[got];
+      theInt+=*up*powers[got];
       got+=DECDPUN;
       }
     if (ilength==10) {                  /* need to check for wrap  */
-      if (theInt/(Int)DECNUMBER_powers[got-DECDPUN]!=(Int)*(up-1)) ilength=11;
-         /* [that test also disallows the DECNUMBER_BADINT result case]  */
+      if (theInt/(Int)powers[got-DECDPUN]!=(Int)*(up-1)) ilength=11;
+         /* [that test also disallows the BADINT result case]  */
        else if (neg && theInt>1999999997) ilength=11;
        else if (!neg && theInt>999999999) ilength=11;
       if (ilength==11) theInt=save;     /* restore correct low bit  */
@@ -7655,8 +7655,8 @@ static Int decGetInt(const decNumber *dn) {
     }
 
   if (ilength>10) {                     /* too big  */
-    if (theInt&1) return DECNUMBER_BIGODD;        /* bottom bit 1  */
-    return DECNUMBER_BIGEVEN;                     /* bottom bit 0  */
+    if (theInt&1) return BIGODD;        /* bottom bit 1  */
+    return BIGEVEN;                     /* bottom bit 0  */
     }
 
   if (neg) theInt=-theInt;              /* apply sign  */
@@ -7690,7 +7690,7 @@ static decNumber *decDecap(decNumber *dn, Int drop) {
     }
   msu=dn->lsu+D2U(dn->digits-drop)-1;   /* -> likely msu  */
   cut=MSUDIGITS(dn->digits-drop);       /* digits to be in use in msu  */
-  if (cut!=DECDPUN) *msu%=DECNUMBER_powers[cut];  /* clear left digits  */
+  if (cut!=DECDPUN) *msu%=powers[cut];  /* clear left digits  */
   /* that may have left leading zero digits, so do a proper count...  */
   dn->digits=decGetDigits(dn->lsu, static_cast<int32_t>(msu-dn->lsu+1));
   return dn;
@@ -7725,7 +7725,7 @@ static Flag decBiStr(const char *targ, const char *str1, const char *str2) {
 /*                                                                    */
 /*   res     is the result number                                     */
 /*   lhs     is the first operand                                     */
-/*   rhs     is the second operand, or NULL if none                   */
+/*   rhs     is the second operand, or nullptr if none                   */
 /*   context is used to limit payload length                          */
 /*   status  contains the current status                              */
 /*   returns res in case convenient                                   */
@@ -7740,11 +7740,11 @@ static decNumber * decNaNs(decNumber *res, const decNumber *lhs,
   /* This decision tree ends up with LHS being the source pointer,  */
   /* and status updated if need be  */
   if (lhs->bits & DECSNAN)
-    *status|=DEC_Invalid_operation | DECNUMBER_DEC_sNaN;
-   else if (rhs==NULL);
+    *status|=DEC_Invalid_operation | DEC_sNaN;
+   else if (rhs==nullptr);
    else if (rhs->bits & DECSNAN) {
     lhs=rhs;
-    *status|=DEC_Invalid_operation | DECNUMBER_DEC_sNaN;
+    *status|=DEC_Invalid_operation | DEC_sNaN;
     }
    else if (lhs->bits & DECNAN);
    else lhs=rhs;
@@ -7788,7 +7788,7 @@ static decNumber * decNaNs(decNumber *res, const decNumber *lhs,
 static void decStatus(decNumber *dn, uInt status, decContext *set) {
   if (status & DEC_NaNs) {              /* error status -> NaN  */
     /* if cause was an sNaN, clear and propagate [NaN is already set up]  */
-    if (status & DECNUMBER_DEC_sNaN) status&=~DECNUMBER_DEC_sNaN;
+    if (status & DEC_sNaN) status&=~DEC_sNaN;
      else {
       uprv_decNumberZero(dn);                /* other error: clean throughout  */
       dn->bits=DECNAN;                  /* and make a quiet NaN  */
@@ -7838,7 +7838,7 @@ static Int decGetDigits(Unit *uar, Int len) {
     if (*up<1000) break;           /* is 100-999  */
     digits++;
     #if DECDPUN>4                  /* count the rest ...  */
-    for (pow=&DECNUMBER_powers[4]; *up>=*pow; pow++) digits++;
+    for (pow=&powers[4]; *up>=*pow; pow++) digits++;
     #endif
     #endif
     #endif
@@ -7862,8 +7862,8 @@ void uprv_decNumberShow(const decNumber *dn) {
   uInt u, d;                       /* ..  */
   Int cut;                         /* ..  */
   char isign='+';                  /* main sign  */
-  if (dn==NULL) {
-    printf("NULL\n");
+  if (dn==nullptr) {
+    printf("nullptr\n");
     return;}
   if (decNumberIsNegative(dn)) isign='-';
   printf(" >> %c ", isign);
@@ -7888,8 +7888,8 @@ void uprv_decNumberShow(const decNumber *dn) {
     u=*up;
     printf(":");
     for (cut=DECDPUN-1; cut>=0; cut--) {
-      d=u/DECNUMBER_powers[cut];
-      u-=d*DECNUMBER_powers[cut];
+      d=u/powers[cut];
+      u-=d*powers[cut];
       printf("%ld", (LI)d);
       } /* cut  */
     } /* up  */
@@ -7944,39 +7944,39 @@ static void decDumpAr(char name, const Unit *ar, Int len) {
 /* ------------------------------------------------------------------ */
 /* decCheckOperands -- check operand(s) to a routine                  */
 /*   res is the result structure (not checked; it will be set to      */
-/*          quiet NaN if error found (and it is not NULL))            */
+/*          quiet NaN if error found (and it is not nullptr))            */
 /*   lhs is the first operand (may be DECUNRESU)                      */
 /*   rhs is the second (may be DECUNUSED)                             */
 /*   set is the context (may be DECUNCONT)                            */
 /*   returns 0 if both operands, and the context are clean, or 1      */
 /*     otherwise (in which case the context will show an error,       */
-/*     unless NULL).  Note that res is not cleaned; caller should     */
-/*     handle this so res=NULL case is safe.                          */
+/*     unless nullptr).  Note that res is not cleaned; caller should     */
+/*     handle this so res=nullptr case is safe.                          */
 /* The caller is expected to abandon immediately if 1 is returned.    */
 /* ------------------------------------------------------------------ */
 static Flag decCheckOperands(decNumber *res, const decNumber *lhs,
                              const decNumber *rhs, decContext *set) {
   Flag bad=0;
-  if (set==NULL) {                 /* oops; hopeless  */
-    #if DECTRACE || DECNUMBER_DECVERB
-    printf("Reference to context is NULL.\n");
+  if (set==nullptr) {                 /* oops; hopeless  */
+    #if DECTRACE || DECVERB
+    printf("Reference to context is nullptr.\n");
     #endif
     bad=1;
     return 1;}
    else if (set!=DECUNCONT
      && (set->digits<1 || set->round>=DEC_ROUND_MAX)) {
     bad=1;
-    #if DECTRACE || DECNUMBER_DECVERB
+    #if DECTRACE || DECVERB
     printf("Bad context [digits=%ld round=%ld].\n",
            (LI)set->digits, (LI)set->round);
     #endif
     }
    else {
-    if (res==NULL) {
+    if (res==nullptr) {
       bad=1;
       #if DECTRACE
-      /* this one not DECNUMBER_DECVERB as standard tests include NULL  */
-      printf("Reference to result is NULL.\n");
+      /* this one not DECVERB as standard tests include nullptr  */
+      printf("Reference to result is nullptr.\n");
       #endif
       }
     if (!bad && lhs!=DECUNUSED) bad=(decCheckNumber(lhs));
@@ -7984,7 +7984,7 @@ static Flag decCheckOperands(decNumber *res, const decNumber *lhs,
     }
   if (bad) {
     if (set!=DECUNCONT) uprv_decContextSetStatus(set, DEC_Invalid_operation);
-    if (res!=DECUNRESU && res!=NULL) {
+    if (res!=DECUNRESU && res!=nullptr) {
       uprv_decNumberZero(res);
       res->bits=DECNAN;       /* qNaN  */
       }
@@ -8006,17 +8006,17 @@ static Flag decCheckNumber(const decNumber *dn) {
   Int ae, d, digits;          /* ..  */
   Int emin, emax;             /* ..  */
 
-  if (dn==NULL) {             /* hopeless  */
+  if (dn==nullptr) {             /* hopeless  */
     #if DECTRACE
-    /* this one not DECNUMBER_DECVERB as standard tests include NULL  */
-    printf("Reference to decNumber is NULL.\n");
+    /* this one not DECVERB as standard tests include nullptr  */
+    printf("Reference to decNumber is nullptr.\n");
     #endif
     return 1;}
 
   /* check special values  */
   if (dn->bits & DECSPECIAL) {
     if (dn->exponent!=0) {
-      #if DECTRACE || DECNUMBER_DECVERB
+      #if DECTRACE || DECVERB
       printf("Exponent %ld (not 0) for a special value [%02x].\n",
              (LI)dn->exponent, dn->bits);
       #endif
@@ -8025,12 +8025,12 @@ static Flag decCheckNumber(const decNumber *dn) {
     /* 2003.09.08: NaNs may now have coefficients, so next tests Inf only  */
     if (decNumberIsInfinite(dn)) {
       if (dn->digits!=1) {
-        #if DECTRACE || DECNUMBER_DECVERB
+        #if DECTRACE || DECVERB
         printf("Digits %ld (not 1) for an infinity.\n", (LI)dn->digits);
         #endif
         return 1;}
       if (*dn->lsu!=0) {
-        #if DECTRACE || DECNUMBER_DECVERB
+        #if DECTRACE || DECVERB
         printf("LSU %ld (not 0) for an infinity.\n", (LI)*dn->lsu);
         #endif
         decDumpAr('I', dn->lsu, D2U(dn->digits));
@@ -8043,7 +8043,7 @@ static Flag decCheckNumber(const decNumber *dn) {
 
   /* check the coefficient  */
   if (dn->digits<1 || dn->digits>DECNUMMAXP) {
-    #if DECTRACE || DECNUMBER_DECVERB
+    #if DECTRACE || DECVERB
     printf("Digits %ld in number.\n", (LI)dn->digits);
     #endif
     return 1;}
@@ -8053,16 +8053,16 @@ static Flag decCheckNumber(const decNumber *dn) {
   for (up=dn->lsu; d>0; up++) {
     if (d>DECDPUN) maxuint=DECDPUNMAX;
      else {                   /* reached the msu  */
-      maxuint=DECNUMBER_powers[d]-1;
-      if (dn->digits>1 && *up<DECNUMBER_powers[d-1]) {
-        #if DECTRACE || DECNUMBER_DECVERB
+      maxuint=powers[d]-1;
+      if (dn->digits>1 && *up<powers[d-1]) {
+        #if DECTRACE || DECVERB
         printf("Leading 0 in number.\n");
         uprv_decNumberShow(dn);
         #endif
         return 1;}
       }
     if (*up>maxuint) {
-      #if DECTRACE || DECNUMBER_DECVERB
+      #if DECTRACE || DECVERB
       printf("Bad Unit [%08lx] in %ld-digit number at offset %ld [maxuint %ld].\n",
               (LI)*up, (LI)dn->digits, (LI)(up-dn->lsu), (LI)maxuint);
       #endif
@@ -8078,13 +8078,13 @@ static Flag decCheckNumber(const decNumber *dn) {
   emin=DECNUMMINE;
   digits=DECNUMMAXP;
   if (ae<emin-(digits-1)) {
-    #if DECTRACE || DECNUMBER_DECVERB
+    #if DECTRACE || DECVERB
     printf("Adjusted exponent underflow [%ld].\n", (LI)ae);
     uprv_decNumberShow(dn);
     #endif
     return 1;}
   if (ae>+emax) {
-    #if DECTRACE || DECNUMBER_DECVERB
+    #if DECTRACE || DECVERB
     printf("Adjusted exponent overflow [%ld].\n", (LI)ae);
     uprv_decNumberShow(dn);
     #endif
@@ -8105,7 +8105,7 @@ static void decCheckInexact(const decNumber *dn, decContext *set) {
   #if !DECSUBSET && DECEXTFLAG
     if ((set->status & (DEC_Inexact|DEC_Subnormal))==DEC_Inexact
      && (set->digits!=dn->digits) && !(dn->bits & DECSPECIAL)) {
-      #if DECTRACE || DECNUMBER_DECVERB
+      #if DECTRACE || DECVERB
       printf("Insufficient digits [%ld] on normal Inexact result.\n",
              (LI)dn->digits);
       uprv_decNumberShow(dn);
@@ -8114,7 +8114,7 @@ static void decCheckInexact(const decNumber *dn, decContext *set) {
       }
   #else
     /* next is a noop for quiet compiler  */
-    if (dn!=NULL && dn->digits==0) set->status|=DEC_Invalid_operation;
+    if (dn!=nullptr && dn->digits==0) set->status|=DEC_Invalid_operation;
   #endif
   return;
   } /* decCheckInexact  */
@@ -8144,7 +8144,7 @@ static void *decMalloc(size_t n) {
   uInt  uiwork;                    /* for macros  */
 
   alloc=malloc(size);              /* -> allocated storage  */
-  if (alloc==NULL) return NULL;    /* out of strorage  */
+  if (alloc==nullptr) return nullptr;    /* out of strorage  */
   b0=(uByte *)alloc;               /* as bytes  */
   decAllocBytes+=n;                /* account for storage  */
   UBFROMUI(alloc, n);              /* save n  */
@@ -8171,7 +8171,7 @@ static void decFree(void *alloc) {
   uByte *b, *b0;                   /* work  */
   uInt  uiwork;                    /* for macros  */
 
-  if (alloc==NULL) return;         /* allowed; it's a nop  */
+  if (alloc==nullptr) return;         /* allowed; it's a nop  */
   b0=(uByte *)alloc;               /* as bytes  */
   b0-=8;                           /* -> true start of storage  */
   n=UBTOUI(b0);                    /* lift length  */

@@ -38,7 +38,7 @@ Permission Error
 statement error
 SET enable_external_access=true;
 ----
-Cannot change enable_external_access setting while database is running
+Cannot enable external access while database is running
 
 # sniffer also respects external access flag
 statement error

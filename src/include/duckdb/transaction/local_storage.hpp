@@ -8,21 +8,32 @@
 
 #pragma once
 
-#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/optimistic_data_writer.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
+class Allocator;
+class BoundConstraint;
 class Catalog;
+class CollectionScanState;
+class ColumnDefinition;
+class DataChunk;
 class DataTable;
+class DuckTransaction;
+class Expression;
+class ExpressionExecutor;
+class RowGroupCollection;
 class StorageCommitState;
 class Transaction;
+class Vector;
 class WriteAheadLog;
+struct ColumnFetchState;
 struct LocalAppendState;
+struct DataTableInfo;
+struct ParallelCollectionScanState;
 struct TableAppendState;
 
 class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
@@ -61,8 +72,6 @@ public:
 	//! The main optimistic data writer associated with this table.
 	OptimisticDataWriter optimistic_writer;
 
-	//! Whether or not storage was merged
-	bool merged_storage = false;
 	//! Whether or not the storage was dropped
 	bool is_dropped = false;
 
@@ -74,7 +83,8 @@ public:
 	void Rollback();
 	idx_t EstimatedSize();
 
-	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, bool append_to_table);
+	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
+	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
 	                          const vector<LogicalType> &table_types, row_t &start_row);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
@@ -90,6 +100,7 @@ public:
 	OptimisticDataWriter &GetOptimisticWriter();
 
 	RowGroupCollection &GetCollection();
+	OptimisticWriteCollection &GetPrimaryCollection();
 
 private:
 	mutex collections_lock;

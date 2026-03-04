@@ -2,9 +2,6 @@
 # description: test join elimination
 # group: [optimizer]
 
-# FIXME: bug in piecewise merge join
-require nothreadsan
-
 statement ok
 PRAGMA enable_verification;
 

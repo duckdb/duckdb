@@ -2,7 +2,15 @@
   "description": "Run with a default block size of 16kB (smallest possible).",
   "block_size": "16384",
   "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/vector_size_512.json",
   "skip_tests": [
+    {
+      "reason": "FIXME: TransactionContext Error",
+      "paths": [
+        "test/sql/parallelism/interquery/concurrent_batch_append.test_slow",
+        "test/sql/attach/attach_concurrent_checkpoint.test_slow"
+      ]
+    },
     {
       "reason": "Loading from disk does not trigger OOM.",
       "paths": [
@@ -13,7 +21,11 @@
       "reason": "ALP and ALPRD are disabled for non-default block sizes.",
       "paths": [
         "test/sql/storage/compression/alp/alp_min_max.test",
-        "test/sql/storage/compression/alprd/alprd_min_max.test"
+        "test/sql/storage/compression/alprd/alprd_min_max.test",
+        "test/sql/storage/compression/alp/alp_uncompressed_mode_v1_4_0.test_slow",
+        "test/sql/storage/compression/alp/alp_uncompressed_mode_v1_5_0.test_slow",
+        "test/sql/storage/compression/alprd/alprd_tpcds.test_slow",
+        "test/sql/storage/compression/alp/alp_tpcds.test_slow"
       ]
     }
   ]

@@ -11,7 +11,7 @@
 namespace duckdb {
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context) : context(&context) {
-	debug_vector_verification = DBConfig::GetSetting<DebugVerifyVectorSetting>(context);
+	debug_vector_verification = Settings::Get<DebugVerifyVectorSetting>(context);
 }
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression *expression)
@@ -85,7 +85,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 		ExecuteExpression(i, result.data[i]);
 	}
 	result.SetCardinality(input ? input->size() : 1);
-	result.Verify();
+	result.Verify(context ? context->db : nullptr);
 }
 
 void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
@@ -162,7 +162,8 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
-			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::AGGREGATE_STATE) {
+			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE ||
+			        type.id() == LogicalTypeId::AGGREGATE_STATE) {
 				    return true;
 			    }
 			    if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {

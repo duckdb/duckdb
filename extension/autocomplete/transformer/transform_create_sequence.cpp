@@ -174,7 +174,7 @@ string PEGTransformerFactory::TransformSeqMinOrMax(PEGTransformer &transformer,
 }
 
 pair<string, unique_ptr<SequenceOption>>
-PEGTransformerFactory::TransformNoMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+PEGTransformerFactory::TransformSeqNoMinMax(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto rule_name = transformer.TransformEnum<string>(list_pr.Child<ListParseResult>(1));
 	auto seq_info = rule_name == "minvalue" ? SequenceInfo::SEQ_MIN : SequenceInfo::SEQ_MAX;

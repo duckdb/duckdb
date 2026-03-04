@@ -41,9 +41,11 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		break;
 	}
 	case MergeActionType::MERGE_DELETE: {
-		result->op =
-		    planner.Make<PhysicalDelete>(std::move(return_types), op.table, op.table.GetStorage(),
-		                                 std::move(bound_constraints), op.row_id_start, cardinality, op.return_chunk);
+		// Use delete_return_columns if available (for optimized RETURNING path)
+		vector<idx_t> return_columns = op.delete_return_columns;
+		result->op = planner.Make<PhysicalDelete>(std::move(return_types), op.table, op.table.GetStorage(),
+		                                          std::move(bound_constraints), op.row_id_start, cardinality,
+		                                          op.return_chunk, std::move(return_columns));
 		break;
 	}
 	case MergeActionType::MERGE_INSERT: {

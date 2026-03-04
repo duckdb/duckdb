@@ -650,6 +650,12 @@ typedef struct _duckdb_bind_info {
 	void *internal_ptr;
 } * duckdb_bind_info;
 
+//! Additional function initialization info.
+//! When setting this info, it is necessary to pass a destroy-callback function.
+typedef struct _duckdb_init_info {
+	void *internal_ptr;
+} * duckdb_init_info;
+
 //===--------------------------------------------------------------------===//
 // Scalar function types
 //===--------------------------------------------------------------------===//
@@ -666,6 +672,9 @@ typedef struct _duckdb_scalar_function_set {
 
 //! The bind function callback of the scalar function.
 typedef void (*duckdb_scalar_function_bind_t)(duckdb_bind_info info);
+
+//! The thread-local initialization function of the scalar function.
+typedef void (*duckdb_scalar_function_init_t)(duckdb_init_info info);
 
 //! The function to execute the scalar function on an input chunk.
 typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output);
@@ -718,12 +727,6 @@ typedef void (*duckdb_aggregate_finalize_t)(duckdb_function_info info, duckdb_ag
 typedef struct _duckdb_table_function {
 	void *internal_ptr;
 } * duckdb_table_function;
-
-//! Additional function initialization info.
-//! When setting this info, it is necessary to pass a destroy-callback function.
-typedef struct _duckdb_init_info {
-	void *internal_ptr;
-} * duckdb_init_info;
 
 //! The bind function of the table function.
 typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);

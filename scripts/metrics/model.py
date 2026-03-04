@@ -16,11 +16,23 @@ class MetricDef:
     collection_method: Optional[str] = None
     child: Optional[str] = None
     description: str = None
+    enum_value: Optional[int] = None
 
 
 class MetricIndex:
-    def __init__(self, defs: Iterable[MetricDef], optimizers: List[str]):
+    # Values 26-90 are reserved for optimizer metrics (auto-assigned sequentially).
+    # Non-optimizer metrics must use values in [0, 25] or [91, 255].
+    OPTIMIZER_RANGE_START = 26
+    OPTIMIZER_RANGE_END = 90
+
+    def __init__(self, defs: Iterable[MetricDef], optimizers: List[Tuple[str, int]]):
         self.defs: List[MetricDef] = list(defs)
+
+        # Build name -> explicit value mapping
+        self._value_of: Dict[str, int] = {}
+        for d in self.defs:
+            if d.enum_value is not None:
+                self._value_of[d.name] = d.enum_value
 
         # Build group → names (existing contract for emitters)
         by_group: Dict[str, List[str]] = defaultdict(list)
@@ -29,9 +41,39 @@ class MetricIndex:
         for g in by_group:
             by_group[g].sort()
 
-        # Add optimizer group (names only)
-        optimizer_names = [f"OPTIMIZER_{o}" for o in optimizers]
+        # Add optimizer group — derive MetricType values from OptimizerType numeric values
+        if not optimizers:
+            raise ValueError("No optimizers found in optimizer_type.hpp")
+        # OptimizerType values start at 1 (EXPRESSION_REWRITER); INVALID = 0 is excluded.
+        first_opt_value = 1
+        optimizer_names = []
+        for opt_name, opt_value in optimizers:
+            metric_name = f"OPTIMIZER_{opt_name}"
+            metric_value = self.OPTIMIZER_RANGE_START + (opt_value - first_opt_value)
+            self._value_of[metric_name] = metric_value
+            optimizer_names.append(metric_name)
         by_group["optimizer"] = optimizer_names
+        value_to_name: Dict[int, str] = {}
+        for name, val in self._value_of.items():
+            if val < 0 or val > 255:
+                raise ValueError(f"MetricType value {val} for '{name}' is outside uint8_t range (0-255)")
+            if name in value_to_name.values():
+                continue
+            if val in value_to_name:
+                raise ValueError(f"Duplicate MetricType value {val}: '{value_to_name[val]}' and '{name}'")
+            is_optimizer = name.startswith("OPTIMIZER_")
+            if is_optimizer and not (self.OPTIMIZER_RANGE_START <= val <= self.OPTIMIZER_RANGE_END):
+                raise ValueError(
+                    f"Optimizer metric '{name}' has value {val}, "
+                    f"must be in [{self.OPTIMIZER_RANGE_START}, {self.OPTIMIZER_RANGE_END}]"
+                )
+            if not is_optimizer and self.OPTIMIZER_RANGE_START <= val <= self.OPTIMIZER_RANGE_END:
+                raise ValueError(
+                    f"Non-optimizer metric '{name}' has value {val}, "
+                    f"which is in the reserved optimizer range [{self.OPTIMIZER_RANGE_START}, {self.OPTIMIZER_RANGE_END}]. "
+                    f"New non-optimizer metrics should use values >= {self.OPTIMIZER_RANGE_END + 1}."
+                )
+            value_to_name[val] = name
 
         # Add "all"
         all_set = set().union(*by_group.values()) if by_group else set()
@@ -118,8 +160,11 @@ class MetricIndex:
                 return d.description
         return None
 
+    def metric_value(self, metric: str) -> Optional[int]:
+        return self._value_of.get(metric)
 
-def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> MetricIndex:
+
+def build_all_metrics(metrics_json: list[dict], optimizers: list[tuple[str, int]]) -> MetricIndex:
     defs: list[MetricDef] = []
     for group in metrics_json:
         gname = group.get("group")
@@ -132,6 +177,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
             collection_method = metric.get("collection_method")
             child = metric.get("child")
             description = metric.get("description", "")
+            enum_value = metric.get("enum_value")
             defs.append(
                 MetricDef(
                     name=name,
@@ -142,6 +188,7 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[str]) -> Metric
                     collection_method=collection_method,
                     child=child,
                     description=description,
+                    enum_value=enum_value,
                 )
             )
     return MetricIndex(defs, optimizers)

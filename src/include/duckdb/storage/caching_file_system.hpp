@@ -8,22 +8,25 @@
 
 #pragma once
 
-#include "duckdb/common/winapi.hpp"
+#include "duckdb/common/enums/cache_validation_mode.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 
 namespace duckdb {
 
-class ClientContext;
-class QueryContext;
 class BufferHandle;
+class ClientContext;
+class DatabaseInstance;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
+class StorageLockKey;
+class QueryContext;
 class CachingFileSystem;
 
 struct CachingFileHandle {
@@ -34,7 +37,7 @@ public:
 
 public:
 	DUCKDB_API CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
-	                             FileOpenFlags flags, CachedFile &cached_file);
+	                             FileOpenFlags flags, optional_ptr<FileOpener> opener, CachedFile &cached_file);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -88,8 +91,10 @@ private:
 	OpenFileInfo path;
 	//! Flags used to open the file
 	FileOpenFlags flags;
-	//! Whether to validate the cache entry
-	bool validate;
+	//! File opener, which contains file open context.
+	optional_ptr<FileOpener> opener;
+	//! Cache validation mode for this file
+	CacheValidationMode validate;
 	//! The associated CachedFile with cached ranges
 	CachedFile &cached_file;
 
@@ -118,13 +123,16 @@ public:
 public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
-	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags);
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	                                                  optional_ptr<FileOpener> opener = nullptr);
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(QueryContext context, const OpenFileInfo &path,
-	                                                  FileOpenFlags flags);
+	                                                  FileOpenFlags flags, optional_ptr<FileOpener> opener = nullptr);
 
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
 	FileSystem &file_system;
+	//! The DatabaseInstance.
+	DatabaseInstance &db;
 	//! The External File Cache that caches the files
 	ExternalFileCache &external_file_cache;
 };

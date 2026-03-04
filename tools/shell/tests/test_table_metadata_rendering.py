@@ -100,3 +100,14 @@ def test_search_path_influences_table_name(shell):
 
     result = test.run()
     result.check_not_exist("mydb.s2")
+
+
+def test_qualified_show_tables(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table t1 as from range(10)")
+        .statement('show tables from memory.main')
+    )
+
+    result = test.run()
+    result.check_stdout("t1")

@@ -9,16 +9,10 @@
 #pragma once
 
 #include "duckdb/common/likely.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
@@ -133,7 +127,7 @@ public:
 			auto end = handle.Ptr() + *dictionary_end;
 
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
+			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 			// Unknown string, continue
 			// non-null value, check if we can fit it within the block
@@ -142,8 +136,7 @@ public:
 			// determine whether or not we have space in the block for this string
 			bool use_overflow_block = false;
 			idx_t required_space = string_length;
-			if (DUCKDB_UNLIKELY(required_space >=
-			                    StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()))) {
+			if (DUCKDB_UNLIKELY(required_space >= StringUncompressed::GetStringBlockLimit(segment.GetBlockSize()))) {
 				// string exceeds block limit, store in overflow block and only write a marker here
 				required_space = BIG_STRING_MARKER_SIZE;
 				use_overflow_block = true;
@@ -174,7 +167,7 @@ public:
 				// note: for overflow strings we write negative value
 
 				// dictionary_size is an uint32_t value, so we can cast up.
-				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockSize());
 				result_data[target_idx] = -NumericCast<int32_t>((*dictionary_size));
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
@@ -186,13 +179,13 @@ public:
 				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
 				// dictionary_size is an uint32_t value, so we can cast up.
-				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockManager().GetBlockSize());
+				D_ASSERT(NumericCast<idx_t>(*dictionary_size) <= segment.GetBlockSize());
 				// Place the dictionary offset into the set of vectors.
 				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
-			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockManager().GetBlockSize());
+			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockSize());
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
+			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 		}
 		segment.count += count;
@@ -226,7 +219,7 @@ public:
 
 	inline static string_t FetchStringFromDict(ColumnSegment &segment, uint32_t dict_end_offset, Vector &result,
 	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
-		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
+		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockSize()));
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
 			// regular string - fetch from dictionary
 			auto dict_end = base_ptr + dict_end_offset;

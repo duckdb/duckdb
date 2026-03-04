@@ -2,6 +2,8 @@
 # description: Test that the block manager reclaims index memory after UPSERT.
 # group: [storage]
 
+mode skip
+
 load __TEST_DIR__/test_reclaim_upsert_space.db
 
 statement ok

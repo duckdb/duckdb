@@ -19,25 +19,42 @@ def extract_declarations(setting) -> str:
         f"    static constexpr const char *Description = \"{setting.description}\";\n"
         f"    static constexpr const char *InputType = \"{setting.sql_type}\";\n"
     )
-    if setting.scope == "GLOBAL" or setting.scope == "GLOBAL_LOCAL":
-        definition += f"    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);\n"
-        definition += f"    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);\n"
-        if setting.on_set:
-            definition += f"static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
-        if setting.on_reset:
-            definition += f"static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);\n"
-    if setting.scope == "LOCAL" or setting.scope == "GLOBAL_LOCAL":
-        definition += f"    static void SetLocal(ClientContext &context, const Value &parameter);\n"
-        definition += f"    static void ResetLocal(ClientContext &context);\n"
-        if setting.on_set:
-            definition += f"static bool OnLocalSet(ClientContext &context, const Value &input);\n"
-        if setting.on_reset:
-            definition += f"static bool OnLocalReset(ClientContext &context);\n"
-    if setting.scope is not None:
-        definition += f"    static Value GetSetting(const ClientContext &context);\n"
+    if not setting.is_generic_setting:
+        # non-generic setting
+        if setting.scope == "GLOBAL" or setting.scope == "GLOBAL_LOCAL":
+            definition += (
+                f"    static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);\n"
+            )
+            definition += f"    static void ResetGlobal(DatabaseInstance *db, DBConfig &config);\n"
+            if setting.on_set:
+                definition += f"static bool OnGlobalSet(DatabaseInstance *db, DBConfig &config, const Value &input);\n"
+            if setting.on_reset:
+                definition += f"static bool OnGlobalReset(DatabaseInstance *db, DBConfig &config);\n"
+        if setting.scope == "LOCAL" or setting.scope == "GLOBAL_LOCAL":
+            definition += f"    static void SetLocal(ClientContext &context, const Value &parameter);\n"
+            definition += f"    static void ResetLocal(ClientContext &context);\n"
+            if setting.on_set:
+                definition += f"static bool OnLocalSet(ClientContext &context, const Value &input);\n"
+            if setting.on_reset:
+                definition += f"static bool OnLocalReset(ClientContext &context);\n"
+        if setting.scope is not None:
+            definition += f"    static Value GetSetting(const ClientContext &context);\n"
     if setting.is_generic_setting:
+        if setting.conditional_defaults is not None:
+            for condition, default_val in setting.conditional_defaults.items():
+                definition += f"{condition}\n"
+                definition += f"    static constexpr const char *DefaultValue = \"{default_val}\";\n"
+            definition += "#else\n"
         definition += f"    static constexpr const char *DefaultValue = \"{setting.default_value}\";\n"
-        definition += f"    static constexpr SetScope DefaultScope = SetScope::{setting.default_scope};\n"
+        if setting.conditional_defaults is not None:
+            definition += "#endif\n"
+        if setting.default_scope is not None:
+            definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.default_scope}_DEFAULT;\n"
+        else:
+            definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.scope}_ONLY;\n"
+        if setting.setting_index is None:
+            raise Exception("Setting index was not set")
+        definition += f"    static constexpr idx_t SettingIndex = {setting.setting_index};\n"
         if setting.on_set:
             definition += f"    static void OnSet(SettingCallbackInfo &info, Value &input);\n"
 
@@ -58,6 +75,17 @@ def generate_content(header_file_path):
     end_section = SEPARATOR + source_code[end_index:]
 
     new_content = "".join(extract_declarations(setting) for setting in SettingsList)
+    max_setting_index = (
+        max([setting.setting_index for setting in SettingsList if setting.setting_index is not None]) + 1
+    )
+    new_content += '''
+struct GeneratedSettingInfo {
+	static constexpr idx_t MaxSettingIndex = %s;
+};
+
+''' % (
+        max_setting_index,
+    )
     return start_section + new_content + end_section
 
 

@@ -3,6 +3,7 @@ add_subdirectory(dependency)
 add_library_unity(
   duckdb_catalog_entries
   OBJECT
+  aggregate_function_catalog_entry.cpp
   copy_function_catalog_entry.cpp
   duck_index_entry.cpp
   duck_schema_entry.cpp

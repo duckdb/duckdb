@@ -17,29 +17,57 @@ struct BitState {
 	T value;
 };
 
+template <class T>
+LogicalType GetBitStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
+
+	LogicalType value_type = function.return_type;
+	child_types.emplace_back("value", value_type);
+
+	return LogicalType::STRUCT(std::move(child_types));
+}
+
+LogicalType GetBitStringStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> child_types;
+	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
+	child_types.emplace_back("value", function.return_type);
+	return LogicalType::STRUCT(std::move(child_types));
+}
+
 template <class OP>
 AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, int8_t, int8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, int8_t, int8_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uint8_t>);
 	case LogicalTypeId::SMALLINT:
-		return AggregateFunction::UnaryAggregate<BitState<uint16_t>, int16_t, int16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint16_t>, int16_t, int16_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uint16_t>);
 	case LogicalTypeId::INTEGER:
-		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, int32_t, int32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, int32_t, int32_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uint32_t>);
 	case LogicalTypeId::BIGINT:
-		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, int64_t, int64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, int64_t, int64_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uint64_t>);
 	case LogicalTypeId::HUGEINT:
-		return AggregateFunction::UnaryAggregate<BitState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<hugeint_t>);
 	case LogicalTypeId::UTINYINT:
-		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, uint8_t, uint8_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint8_t>, uint8_t, uint8_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uint8_t>);
 	case LogicalTypeId::USMALLINT:
-		return AggregateFunction::UnaryAggregate<BitState<uint16_t>, uint16_t, uint16_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint16_t>, uint16_t, uint16_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uint16_t>);
 	case LogicalTypeId::UINTEGER:
-		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, uint32_t, uint32_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uint32_t>);
 	case LogicalTypeId::UBIGINT:
-		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, uint64_t, uint64_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uint64_t>);
 	case LogicalTypeId::UHUGEINT:
-		return AggregateFunction::UnaryAggregate<BitState<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<BitState<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type)
+		    .SetStructStateExport(GetBitStateType<uhugeint_t>);
 	default:
 		throw InternalException("Unimplemented bitfield type for unary aggregate");
 	}
@@ -202,9 +230,11 @@ AggregateFunctionSet BitAndFun::GetFunctions() {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
 
-	bit_and.AddFunction(
+	auto bit_string_fun =
 	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringAndOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	        LogicalType::BIT, LogicalType::BIT);
+	bit_string_fun.SetStructStateExport(GetBitStringStateType);
+	bit_and.AddFunction(bit_string_fun);
 	return bit_and;
 }
 
@@ -213,9 +243,11 @@ AggregateFunctionSet BitOrFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
-	bit_or.AddFunction(
+	auto bit_string_fun =
 	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringOrOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	        LogicalType::BIT, LogicalType::BIT);
+	bit_string_fun.SetStructStateExport(GetBitStringStateType);
+	bit_or.AddFunction(bit_string_fun);
 	return bit_or;
 }
 
@@ -224,9 +256,11 @@ AggregateFunctionSet BitXorFun::GetFunctions() {
 	for (auto &type : LogicalType::Integral()) {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
-	bit_xor.AddFunction(
+	auto bit_string_fun =
 	    AggregateFunction::UnaryAggregateDestructor<BitState<string_t>, string_t, string_t, BitStringXorOperation>(
-	        LogicalType::BIT, LogicalType::BIT));
+	        LogicalType::BIT, LogicalType::BIT);
+	bit_string_fun.SetStructStateExport(GetBitStringStateType);
+	bit_xor.AddFunction(bit_string_fun);
 	return bit_xor;
 }
 

@@ -3,6 +3,9 @@
 # group: [zstd]
 
 statement ok
+SET default_block_size = '16384';
+
+statement ok
 SET storage_compatibility_version='v1.2.0'
 
 # load the DB from disk

@@ -14,8 +14,7 @@ set allow_parser_override_extension=strict;
 statement ok
 SET threads=1;
 
-statement error
+query I
 select 1;
 ----
-Not implemented Error: Parser override has not yet implemented this transformer rule.
-Original error: No transformer function found for rule 'SelectStatement'
+1

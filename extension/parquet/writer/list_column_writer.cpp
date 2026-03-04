@@ -146,7 +146,12 @@ ColumnWriter &ListColumnWriter::GetChildWriter() {
 	return *child_writers[0];
 }
 
-void ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+const ColumnWriter &ListColumnWriter::GetChildWriter() const {
+	D_ASSERT(child_writers.size() == 1);
+	return *child_writers[0];
+}
+
+idx_t ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = column_schema;
@@ -189,7 +194,7 @@ void ListColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &sch
 		//! Instead, the "key_value" struct will be marked as REPEATED
 		D_ASSERT(GetChildWriter().Schema().repetition_type == FieldRepetitionType::REPEATED);
 	}
-	GetChildWriter().FinalizeSchema(schemas);
+	return GetChildWriter().FinalizeSchema(schemas);
 }
 
 } // namespace duckdb

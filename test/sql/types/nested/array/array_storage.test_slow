@@ -18,14 +18,14 @@ INSERT INTO t1 VALUES(1, [1, 2, 3]::INT[3]);
 statement ok
 checkpoint;
 
-query IIIIIIIIIIIIIII rowsort
-SELECT * EXCLUDE additional_block_ids FROM pragma_storage_info('t1');
+query IIIIIIIIIIIIII rowsort
+SELECT * EXCLUDE (additional_block_ids, stats) FROM pragma_storage_info('t1');
 ----
-0	a	1	[1, 0]		0	VALIDITY	0	1	Constant		[Has Null: false, Has No Null: true]					false	true	-1	0	(empty)
-0	a	1	[1, 1, 0]	0	VALIDITY	0	3	Constant		[Has Null: false, Has No Null: true]					false	true	-1	0	(empty)
-0	a	1	[1, 1]		0	INTEGER		0	3	Uncompressed	[Min: 1, Max: 3][Has Null: false, Has No Null: true]	false	true	1	0	(empty)
-0	i	0	[0, 0]		0	VALIDITY	0	1	Constant		[Has Null: false, Has No Null: true]					false	true	-1	0	(empty)
-0	i	0	[0]			0	INTEGER		0	1	Constant		[Min: 1, Max: 1][Has Null: false, Has No Null: true]	false	true	-1	0	(empty)
+0	a	1	[1, 0]		0	VALIDITY	0	1	Constant		false	true	-1	0	(empty)
+0	a	1	[1, 1, 0]	0	VALIDITY	0	3	Constant		false	true	-1	0	(empty)
+0	a	1	[1, 1]		0	INTEGER		0	3	Uncompressed	false	true	1	0	(empty)
+0	i	0	[0, 0]		0	VALIDITY	0	1	Constant		false	true	-1	0	(empty)
+0	i	0	[0]			0	INTEGER		0	1	Constant		false	true	-1	0	(empty)
 
 
 statement ok

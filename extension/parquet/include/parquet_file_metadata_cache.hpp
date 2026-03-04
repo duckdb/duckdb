@@ -40,11 +40,11 @@ public:
 public:
 	static string ObjectType();
 	string GetObjectType() override;
+	optional_idx GetEstimatedCacheMemory() const override;
 
 	bool IsValid(CachingFileHandle &new_handle) const;
-	//! Check if a cache entry is valid based ONLY on the OpenFileInfo (without doing any file system calls)
-	//! If the OpenFileInfo does not have enough information this can return UNKNOWN
-	ParquetCacheValidity IsValid(const OpenFileInfo &info) const;
+	//! Return if a cache entry is valid.
+	ParquetCacheValidity IsValid(const OpenFileInfo &info, ClientContext &context) const;
 
 private:
 	bool validate;

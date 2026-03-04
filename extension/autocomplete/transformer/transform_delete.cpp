@@ -10,7 +10,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeleteStatement(PEGTran
 	auto result = make_uniq<DeleteStatement>();
 	auto with_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_opt.HasResult()) {
-		throw NotImplementedException("WITH for DeleteStatement not yet implemented");
+		result->cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
 	}
 	result->table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(3));
 	transformer.TransformOptional<vector<unique_ptr<TableRef>>>(list_pr, 4, result->using_clauses);

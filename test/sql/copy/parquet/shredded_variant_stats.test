@@ -1,0 +1,208 @@
+# name: test/sql/copy/parquet/shredded_variant_stats.test
+# group: [parquet]
+
+require parquet
+
+# Primitive
+
+statement ok
+COPY (SELECT * from (VALUES
+        (21::VARIANT),
+        (42::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_primitive.parquet'
+
+query IIIII
+select s.shredding_state, s.fully_shredded.stats.min, s.fully_shredded.stats.max, s.fully_shredded.stats.has_null, s.fully_shredded.stats.has_no_null FROM (select stats(col) s from '__TEST_DIR__/fully_shredded_primitive.parquet' limit 1);
+----
+SHREDDED	21	42	false	true
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        (21::VARIANT),
+        (NULL::VARIANT),
+        (42::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_primitive_with_nulls.parquet'
+
+query IIIII
+select s.shredding_state, s.fully_shredded.stats.min, s.fully_shredded.stats.max, s.fully_shredded.stats.has_null, s.fully_shredded.stats.has_no_null from (select stats(col) s from '__TEST_DIR__/fully_shredded_primitive_with_nulls.parquet' limit 1);
+----
+SHREDDED	21	42	true	true
+
+# partially shredded stats
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        (21::VARIANT),
+        (42::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_primitive.parquet'
+
+query IIIII
+select s.shredding_state, s.partially_shredded.stats.min, s.partially_shredded.stats.max, s.partially_shredded.stats.has_null, s.partially_shredded.stats.has_no_null from (select stats(col) s from '__TEST_DIR__/not_fully_shredded_primitive.parquet' limit 1);
+----
+SHREDDED	21	42	true	true
+
+# ARRAY
+
+# FIXME: has_null for top-level variant is wrong (true even though there are no NULL values)
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        ([21]::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_list.parquet'
+
+query III
+select s.shredding_state, s.has_null, s.has_no_null from (select stats(col) s from '__TEST_DIR__/fully_shredded_list.parquet' limit 1);
+----
+SHREDDED	true	true
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        (NULL::VARIANT),
+        (['test']::VARIANT),
+        ([21]::VARIANT),
+        (NULL::VARIANT)
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_list_with_nulls.parquet'
+
+query III
+select s.shredding_state, s.has_null, s.has_no_null from (select stats(col) s from '__TEST_DIR__/fully_shredded_list_with_nulls.parquet' limit 1);
+----
+SHREDDED	true	true
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        (NULL::VARIANT),
+        (['test']::VARIANT),
+        (['hello', 'world']::VARIANT),
+        (21::VARIANT),
+        (NULL::VARIANT)
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_list.parquet'
+
+query III
+select s.shredding_state, s.has_null, s.has_no_null from (select stats(col) s from '__TEST_DIR__/not_fully_shredded_list.parquet' limit 1);
+----
+SHREDDED	true	true
+
+# ARRAY - Element
+
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        (['hello']::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_list_element.parquet'
+
+# check element stats
+query IIII
+select s.min, s.max, s.has_null, s.has_no_null from (select stats(col).fully_shredded.child_stats.stats s from '__TEST_DIR__/fully_shredded_list_element.parquet' limit 1);
+----
+hello	test	false	true
+
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        (['hello', NULL, 'world']::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_list_element_with_nulls.parquet'
+
+query IIII
+select s.min, s.max, s.has_null, s.has_no_null from (select stats(col).fully_shredded.child_stats.stats s from '__TEST_DIR__/fully_shredded_list_element_with_nulls.parquet' limit 1);
+----
+hello	world	true	true
+
+statement ok
+COPY (SELECT * from (VALUES
+        (['test']::VARIANT),
+        (['hello'::VARIANT, NULL, 21]::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_list_element.parquet'
+
+# element is inconsistent - no stats
+query I
+select s.fully_shredded from (select stats(col) s from '__TEST_DIR__/not_fully_shredded_list_element.parquet' limit 1);
+----
+NULL
+
+# OBJECT
+
+statement ok
+COPY (SELECT * from (VALUES
+        ({'a': 42, 'b': true}::VARIANT),
+        ({'a': 21, 'c': 'test'}::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_object.parquet'
+
+query II
+select s.fully_shredded.a.stats, s.fully_shredded.c.stats from (select stats(col) s from '__TEST_DIR__/fully_shredded_object.parquet' limit 1);
+----
+{'min': 21, 'max': 42, 'has_null': false, 'has_no_null': true}	{'min': test, 'max': test, 'has_unicode': true, 'has_null': true, 'has_no_null': true}
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        ({'a': 42, 'b': true}::VARIANT),
+        (NULL::VARIANT),
+        ({'a': 21, 'c': 'test'}::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_object_with_nulls.parquet'
+
+query II
+select s.fully_shredded.a.stats, s.fully_shredded.c.stats from (select stats(col) s from '__TEST_DIR__/fully_shredded_object_with_nulls.parquet' limit 1);
+----
+{'min': 21, 'max': 42, 'has_null': true, 'has_no_null': true}	{'min': test, 'max': test, 'has_unicode': true, 'has_null': true, 'has_no_null': true}
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        ({'a': 42, 'b': true}::VARIANT),
+        (NULL::VARIANT),
+        ({'a': 21, 'c': 'test'}::VARIANT),
+        (42::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_object.parquet'
+
+# mixed - no shredding information
+query I
+select s.fully_shredded from (select stats(col) s from '__TEST_DIR__/not_fully_shredded_object.parquet' limit 1);
+----
+NULL
+
+# OBJECT - field
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        ({'a': 42, 'b': true}::VARIANT),
+        (NULL::VARIANT),
+        ({'a': 'test', 'c': 'test'}::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/not_fully_shredded_object_field.parquet'
+
+# a is inconsistent - so no fully shredded stats
+query II
+select s.fully_shredded.a, s.fully_shredded.c.stats from (select stats(col) s from '__TEST_DIR__/not_fully_shredded_object_field.parquet' limit 1);
+----
+NULL	{'min': test, 'max': test, 'has_unicode': true, 'has_null': true, 'has_no_null': true}
+
+statement ok
+COPY (SELECT * from (VALUES
+        (NULL::VARIANT),
+        ({'a': 42, 'b': true}::VARIANT),
+        (NULL::VARIANT),
+        ({'a': NULL, 'c': 'test'}::VARIANT),
+    ) t(col)
+) to '__TEST_DIR__/fully_shredded_object_field_with_nulls.parquet'
+
+# a is consistent again here
+query IIII
+select s.fully_shredded.a.type, s.fully_shredded.a.stats, s.fully_shredded.c.type, s.fully_shredded.c.stats from (select stats(col) s from '__TEST_DIR__/fully_shredded_object_field_with_nulls.parquet' limit 1);
+----
+INTEGER	{'min': 42, 'max': 42, 'has_null': true, 'has_no_null': true}	VARCHAR	{'min': test, 'max': test, 'has_unicode': true, 'has_null': true, 'has_no_null': true}

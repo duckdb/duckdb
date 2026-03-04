@@ -1,10 +1,10 @@
 #include "duckdb/storage/block_allocator.hpp"
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 #if defined(_WIN32)
 #include "duckdb/common/windows.hpp"
@@ -223,7 +223,11 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
 BlockAllocator::~BlockAllocator() {
 	GetBlockAllocatorThreadLocalState(*this).Clear();
 	if (IsActive()) {
-		FreeVirtualMemory(virtual_memory_space, virtual_memory_size);
+		try {
+			FreeVirtualMemory(virtual_memory_space, virtual_memory_size);
+		} catch (...) {
+			// Not allowed to throw in destructor!
+		}
 	}
 }
 

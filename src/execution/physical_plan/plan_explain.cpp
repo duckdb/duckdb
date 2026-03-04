@@ -3,8 +3,8 @@
 #include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_explain.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -21,7 +21,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	// Format the plan and set the output of the EXPLAIN.
 	op.physical_plan = plan.ToString(op.explain_format);
 	vector<string> keys, values;
-	switch (ClientConfig::GetConfig(context).explain_output_type) {
+	switch (Settings::Get<ExplainOutputSetting>(context)) {
 	case ExplainOutputType::OPTIMIZED_ONLY:
 		keys = {"logical_opt"};
 		values = {logical_plan_opt};

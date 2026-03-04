@@ -28,8 +28,12 @@ public:
 public:
 	//! Map for every value what type it is
 	variant_type_map type_map = {};
+	uint32_t decimal_width;
+	uint32_t decimal_scale;
+	bool decimal_consistent = false;
+	idx_t total_count = 0;
+
 	//! Map for every decimal value what physical type it has
-	array<idx_t, 3> decimal_type_map = {};
 	unique_ptr<ObjectAnalyzeData> object_data = nullptr;
 	unique_ptr<ArrayAnalyzeData> array_data = nullptr;
 };
@@ -72,7 +76,7 @@ public:
 	~VariantColumnWriter() override = default;
 
 public:
-	void FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
+	idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) override;
 	unique_ptr<ParquetAnalyzeSchemaState> AnalyzeSchemaInit() override;
 	void AnalyzeSchema(ParquetAnalyzeSchemaState &state, Vector &input, idx_t count) override;
 	void AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state) override;
@@ -80,7 +84,7 @@ public:
 	bool HasTransform() override {
 		return true;
 	}
-	LogicalType TransformedType() override {
+	LogicalType TransformedType() const override {
 		child_list_t<LogicalType> children;
 		for (auto &writer : child_writers) {
 			auto &child_name = writer->Schema().name;

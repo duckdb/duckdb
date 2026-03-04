@@ -60,9 +60,9 @@ enum FastDtoaMode {
 
 // FastDtoa will produce at most kFastDtoaMaximalLength digits. This does not
 // include the terminating '\0' character.
-// static const int kFastDtoaMaximalLength = 17;
+static const int kFastDtoaMaximalLength = 17;
 // Same for single-precision numbers.
-// static const int kFastDtoaMaximalSingleLength = 9;
+static const int kFastDtoaMaximalSingleLength = 9;
 
 // Provides a decimal representation of v.
 // The result should be interpreted as buffer * 10^(point - length).

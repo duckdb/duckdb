@@ -44,7 +44,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTrans
 	OnEntryNotFound not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 
 	auto catalog_name = list_pr.Child<IdentifierParseResult>(2).identifier;
-	auto new_name = list_pr.Child<IdentifierParseResult>(5).identifier;
+	auto new_name = list_pr.Child<IdentifierParseResult>(6).identifier;
 	auto result = make_uniq<RenameDatabaseInfo>(catalog_name, new_name, not_found);
 	return std::move(result);
 }
@@ -150,8 +150,11 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(PEGTransformer &tr
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	AddColumnEntry new_column;
 	new_column.column_path = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(0));
-	new_column.type = transformer.Transform<LogicalType>(list_pr.Child<ListParseResult>(1));
-	auto constraints_opt = list_pr.Child<OptionalParseResult>(2);
+	transformer.TransformOptional<LogicalType>(list_pr, 1, new_column.type);
+	if (list_pr.Child<OptionalParseResult>(2).HasResult()) {
+		throw ParserException("Adding generated columns after table creation is not supported yet");
+	}
+	auto constraints_opt = list_pr.Child<OptionalParseResult>(3);
 	if (!constraints_opt.HasResult()) {
 		return new_column;
 	}

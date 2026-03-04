@@ -187,6 +187,8 @@ public:
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	//! The maximum number of rows to analyze in order to determine column widths in DuckBox mode
+	idx_t max_analyze_rows = 0;
 	//! Decimal separator (if any)
 	char decimal_separator = '\0';
 	//! Thousand separator (if any)
@@ -245,8 +247,14 @@ public:
 	*/
 	static constexpr idx_t MAX_PROMPT_SIZE = 20;
 	unique_ptr<Prompt> main_prompt;
-	char continuePrompt[MAX_PROMPT_SIZE];         /* Continuation prompt. default: "   ...> " */
-	char continuePromptSelected[MAX_PROMPT_SIZE]; /* Selected continuation prompt. default: "   ...> " */
+	//! Continuation prompt
+	char continuePrompt[MAX_PROMPT_SIZE];
+	//! Selected continuation prompt
+	char continuePromptSelected[MAX_PROMPT_SIZE];
+	//! Prompt showing there is more text available up
+	char scrollUpPrompt[MAX_PROMPT_SIZE];
+	//! Prompt showing there is more text available down
+	char scrollDownPrompt[MAX_PROMPT_SIZE];
 	//! Progress bar used to render the components that are displayed when query status / progress is rendered
 	unique_ptr<ShellProgressBar> progress_bar;
 	//! User-configured highlight elements
@@ -294,6 +302,7 @@ public:
 	MetadataResult DisplayEntries(const vector<string> &args, char type);
 	MetadataResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
+	void ClearInterrupt();
 
 	static idx_t RenderLength(const char *str, idx_t str_len);
 	static idx_t RenderLength(duckdb::string_t str);
@@ -383,6 +392,7 @@ public:
 	static bool StringLike(const char *zPattern, const char *zStr, unsigned int esc);
 	static void Sleep(idx_t ms);
 	void PrintUsage();
+	void DetectDarkLightMode();
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
 	static string Win32UnicodeToUtf8(const std::wstring &zWideText);
@@ -401,8 +411,9 @@ public:
 	ExecuteSQLSingleValueResult ExecuteSQLSingleValue(duckdb::Connection &con, const string &sql, string &result_value);
 	//! Execute a SQL query and renders the result using the given renderer.
 	//! On fail - prints the error and returns FAILURE
-	SuccessState RenderQuery(ShellRenderer &renderer, const string &query);
-	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result);
+	SuccessState RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite);
+	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result,
+	                               PagerMode pager_overwrite = PagerMode::PAGER_AUTOMATIC);
 	bool HighlightErrors() const;
 	bool HighlightResults() const;
 

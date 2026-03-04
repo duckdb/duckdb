@@ -90,6 +90,7 @@ struct ComputePartitionIndicesFunctor {
 			UnaryExecutor::Execute<hash_t, hash_t>(hashes, partition_indices, append_count,
 			                                       [&](hash_t hash) { return CONSTANTS::ApplyMask(hash); });
 		} else {
+			partition_indices.SetVectorType(VectorType::FLAT_VECTOR);
 			// We could just slice the "hashes" vector and use the UnaryExecutor
 			// But slicing a dictionary vector causes SelectionData to be allocated
 			// Instead, we just directly compute the partition indices using the selection vectors
@@ -231,6 +232,7 @@ void RadixPartitionedTupleData::ComputePartitionIndices(Vector &row_locations, i
 		utility_vector = make_uniq<Vector>(LogicalType::HASH);
 	}
 	Vector &intermediate = *utility_vector;
+	intermediate.SetVectorType(VectorType::FLAT_VECTOR);
 	partitions[0]->Gather(row_locations, *FlatVector::IncrementalSelectionVector(), count, hash_col_idx, intermediate,
 	                      *FlatVector::IncrementalSelectionVector(), nullptr);
 	RadixBitsSwitch<ComputePartitionIndicesFunctor, void>(radix_bits, intermediate, partition_indices, count,

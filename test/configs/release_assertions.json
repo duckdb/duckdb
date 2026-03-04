@@ -1,0 +1,79 @@
+{
+  "description": "Config for NightlyTests Release Assertions that skips tests that take too long.",
+  "skip_tests": [
+    {
+      "reason": "FIXME: Catalog Error",
+      "paths": [
+        "test/sql/storage/encryption/temp_files/encrypt_asof_join_merge.test_slow"
+      ]
+    },
+    {
+      "reason": "Takes too long.",
+      "paths": [
+        "test/optimizer/sampling_pushdown.test_slow",
+        "test/sql/aggregate/distinct/grouped/distinct_grouping_tpch.test_slow",
+        "test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow",
+        "test/sql/storage/types/variant/tpch_sf1.test_slow",
+        "test/sql/storage/types/variant/tpcds_sf1.test_slow",
+        "test/sql/storage/tpch/tpch_storage.test_slow",
+        "test/sql/storage/all_types_storage_large.test_slow",
+        "test/sql/storage/compression/roaring/roaring_bool_various_distributions.test_slow",
+        "test/sql/storage/compression/alp/alp_stress_test.test_slow",
+        "test/sql/storage/compression/alprd/alprd_stress_test.test_slow",
+        "test/sql/storage/compression/bitpacking/bitpacking_compression_ratio_hugeint.test_slow",
+        "test/sql/storage/tpcds/tpcds_storage.test_slow",
+        "test/issues/general/test_3091.test_slow",
+        "test/sql/tpch/test_tpch_options.test_slow",
+        "test/sql/join/asof/test_asof_join.test_slow",
+        "test/sql/storage/compression/alp/alp_tpch.test_slow",
+        "test/sql/storage/compression/alp/alp_tpcds.test_slow",
+        "test/sql/storage/compression/alprd/alprd_tpcds.test_slow",
+        "test/sql/storage/compression/alprd/alprd_tpch.test_slow",
+        "test/sql/storage/parallel/reclaim_space_batch_insert.test_slow",
+        "test/sql/storage/parallel/reclaim_space_primary_key_optimistic.test_slow",
+        "test/sql/storage/vacuum/vacuum_deletes_cleanup.test_slow",
+        "test/sql/storage/temp_directory/offloading_block_files.test_slow",
+        "test/sql/index/art/memory/test_art_varchar.test_slow",
+        "test/sql/json/test_json_struct_projection_pushdown.test_slow",
+        "test/sql/tpch/gzip_csv_auto_detect.test_slow",
+        "test/sql/outofcore/out_of_core_aggregation.test_slow",
+        "test/sql/outofcore/out_of_core_hash_join.test_slow",
+        "test/sql/outofcore/out_of_core_sort.test_slow",
+        "test/sql/outofcore/out_of_core_window.test_slow",
+        "test/sql/outofcore/out_of_core_asof_join.test_slow",
+        "test/sql/outofcore/out_of_core_ie_join.test_slow",
+        "test/sql/window/test_quantile_window.test_slow",
+        "test/sql/merge/merge_into_tpch.test_slow",
+        "test/sql/window/test_window_sort.test_slow",
+        "test/sql/copy/csv/parallel/csv_parallel_tpcds.test_slow",
+        "test/sql/parallelism/interquery/concurrent_checkpoint_wal_optimistic_index.test_slow",
+        "test/sql/json/tpch_round_trip.test_slow",
+        "test/sql/tpch/tpch_topn.test_slow",
+        "test/sql/storage/compression/roaring/roaring_compression_ratio.test_slow ",
+        "test/sql/storage/external_file_cache/external_file_cache_parquet_tpcds.test_slow",
+        "test/sql/index/art/types/test_art_bigint.test_slow",
+        "test/sql/index/art/types/test_art_integer.test_slow",
+        "test/sql/index/art/types/test_art_smallint.test_slow",
+        "test/sql/outofcore/leftover_temp_files_issue_6420.test_slow",
+        "test/sql/index/art/multi_column/test_art_multi_column.test_slow",
+        "test/sql/copy/csv/batched_write/csv_write_memory_limit.test_slow",
+        "test/sql/copy/csv/csv_memory_management.test_slow",
+        "test/sql/copy/csv/test_multiple_big_compressed_csvs.test_slow",
+        "test/sql/copy/csv/test_skip.test_slow",
+        "test/sql/copy/parquet/writer/parquet_write_tpcds.test_slow",
+        "test/sql/storage/compression/roaring/roaring_compression_ratio.test_slow",
+        "test/sql/storage/types/struct/struct_reclaim_space_drop.test_slow",
+        "test/sql/storage/parallel/memory_limit_batch_load.test_slow",
+        "test/sql/storage/encryption/temp_files/encrypted_tpch_join.test_slow",
+        "test/sql/window/test_window_distinct.test_slow"
+      ]
+    },
+    {
+      "reason": "Extension test takes too long.",
+      "paths": [
+        "test/sql/copy/csv/test_csv_remote.test_slow",
+        "test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow"
+      ]
+    }
+  ]
+}

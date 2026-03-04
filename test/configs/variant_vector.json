@@ -6,7 +6,9 @@
 		{
 			"reason": "Runs with memory constraints",
 			"paths": [
-				"test/parquet/constant_dictionary_vector_parquet.test"
+				"test/parquet/constant_dictionary_vector_parquet.test",
+				"test/sql/types/type/test_make_get_type.test",
+				"test/parquet/constant_dictionary_vector_parquet.test_slow"
 			]
 		}
 	]

@@ -1,4 +1,5 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -82,6 +83,8 @@ LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
 		return LogicalTypeId::STRING_LITERAL;
 	case DUCKDB_TYPE_INTEGER_LITERAL:
 		return LogicalTypeId::INTEGER_LITERAL;
+	case DUCKDB_TYPE_TIME_NS:
+		return LogicalTypeId::TIME_NS;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
@@ -170,6 +173,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 		return DUCKDB_TYPE_STRING_LITERAL;
 	case LogicalTypeId::INTEGER_LITERAL:
 		return DUCKDB_TYPE_INTEGER_LITERAL;
+	case LogicalTypeId::TIME_NS:
+		return DUCKDB_TYPE_TIME_NS;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
@@ -208,6 +213,8 @@ idx_t GetCTypeSize(const duckdb_type type) {
 		return sizeof(duckdb_date);
 	case DUCKDB_TYPE_TIME:
 		return sizeof(duckdb_time);
+	case DUCKDB_TYPE_TIME_NS:
+		return sizeof(duckdb_time_ns);
 	case DUCKDB_TYPE_TIMESTAMP:
 	case DUCKDB_TYPE_TIMESTAMP_TZ:
 	case DUCKDB_TYPE_TIMESTAMP_S:
@@ -511,4 +518,15 @@ const char *duckdb_string_t_data(duckdb_string_t *string_p) {
 	              "duckdb_string_t should have the same memory layout as duckdb::string_t");
 	auto &string = *reinterpret_cast<duckdb::string_t *>(string_p);
 	return string.GetData();
+}
+
+duckdb_error_data duckdb_valid_utf8_check(const char *str, idx_t len) {
+	duckdb::UnicodeInvalidReason reason;
+	size_t pos;
+	auto utf_type = duckdb::Utf8Proc::Analyze(str, len, &reason, &pos);
+	if (utf_type == duckdb::UnicodeType::INVALID) {
+		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
+		                                "invalid Unicode detected, str must be valid UTF-8");
+	}
+	return nullptr;
 }

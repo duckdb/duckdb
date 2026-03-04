@@ -1,0 +1,48 @@
+# name: test/sql/parallelism/interquery/concurrent_pk_mix_updates_inserts.test_slow
+# description: Test concurrent inserts into primary key table
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers (i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO integers FROM range(100);
+
+# table starts with values 0..100
+# threads 0-5 insert values 100..200
+# threads 5-10 update random values from within the table to other random values from within the table
+# this can randomly leave some batches
+concurrentloop threadid 0 10
+
+loop x 0 100
+
+onlyif threadid<5
+statement maybe
+INSERT INTO integers VALUES (100 + ${x})
+----
+violat
+
+
+onlyif threadid>=5
+statement maybe
+UPDATE integers SET i = (random() * 199)::INTEGER WHERE i = (random() * 99)::INTEGER
+----
+
+endloop
+
+endloop
+
+
+# insert any missing values
+loop x 0 200
+
+statement maybe
+INSERT INTO integers VALUES (${x})
+----
+
+endloop
+
+query II
+SELECT COUNT(*), COUNT(DISTINCT i) FROM integers
+----
+200	200

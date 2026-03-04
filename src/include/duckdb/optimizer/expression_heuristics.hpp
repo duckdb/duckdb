@@ -46,6 +46,6 @@ private:
 	static idx_t ExpressionCost(BoundFunctionExpression &expr);
 	static idx_t ExpressionCost(BoundOperatorExpression &expr, ExpressionType expr_type);
 	static idx_t ExpressionCost(PhysicalType return_type, idx_t multiplier);
-	static idx_t Cost(TableFilter &filter);
+	static idx_t Cost(const TableFilter &filter);
 };
 } // namespace duckdb

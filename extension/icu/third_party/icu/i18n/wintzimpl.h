@@ -11,14 +11,14 @@
 ********************************************************************************
 */
 
-#ifndef __WINTZIMPL_H
-#define __WINTZIMPL_H
+#ifndef __WINTZIMPL
+#define __WINTZIMPL
 
 #include "unicode/utypes.h"
 
 #if U_PLATFORM_USES_ONLY_WIN32_API
 /**
- * \file
+ * \file 
  * \brief C API: Utilities for dealing w/ Windows time zones.
  */
 U_CDECL_BEGIN

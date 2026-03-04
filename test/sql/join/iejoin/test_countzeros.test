@@ -1,0 +1,52 @@
+# name: test/sql/join/iejoin/test_countzeros.test
+# description: CountZeros boundary cases
+# group: [iejoin]
+
+require no_alternative_verify
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok 
+set merge_join_threshold=0;
+
+statement ok 
+set prefer_range_joins=True;
+
+statement ok
+create or replace table states as
+	select 
+		i // 100 as k,
+		'2024-01-01'::TIMESTAMP + INTERVAL (i // 1) seconds as b,
+		b + INTERVAL 1 second as e,
+	from range(100_000) as tbl(i);
+
+# Verify NextValid last line fencepost fix
+query I
+with joined as (
+	select lhs.k l, rhs.k r
+	from states lhs 
+	inner join states rhs
+	   on lhs.b < rhs.e
+	  and rhs.b < lhs.e
+	  and lhs.k = rhs.k
+)
+select count(*) 
+from joined
+----
+100000
+
+query II
+explain
+with joined as (
+	select lhs.k l, rhs.k r
+	from states lhs 
+	inner join states rhs
+	   on lhs.b < rhs.e
+	  and rhs.b < lhs.e
+	  and lhs.k = rhs.k
+)
+select count(*) 
+from joined
+----
+physical_plan	<REGEX>:.*IE_JOIN.*

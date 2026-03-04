@@ -40,10 +40,16 @@ from b;
 ----
 [foo, bar]
 
-# Create a table with a USER[] type qualified with a schema and a catalog
-statement error
-create table B (
+# Create a table with a USER[] type qualified with a schema and a catalog (should work!)
+statement ok
+create table C (
 	vis db2.schema3.bar[]
 );
+
+statement ok
+insert into C values ([true]);
+
+query I
+select typeof(vis) from C;
 ----
-Catalog Error: Type with name bar does not exist!
+BOOLEAN[]

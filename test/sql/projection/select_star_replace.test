@@ -53,3 +53,28 @@ statement error
 SELECT * EXCLUDE (i) REPLACE (i+100 AS i) FROM integers
 ----
 <REGEX>:.*Parser Error.*cannot occur in both.*
+
+# Test: REPLACE with quoted string constant (ColLabel parser support)
+statement ok
+CREATE TABLE test_star(id INTEGER, col1 VARCHAR, col2 VARCHAR, col3 INTEGER);
+
+statement ok
+INSERT INTO test_star VALUES (1, 'val1', 'val2', 42);
+
+# Test: REPLACE with quoted string and arithmetic expression (binding verification)
+query IIII
+SELECT test_star.* REPLACE ('computed: ' || (id * 2)::VARCHAR AS col1) FROM test_star;
+----
+1	computed: 2	val2	42
+
+# Test: Full combo EXCLUDE + REPLACE (arithmetic) + RENAME (unified HandleRename, qualified)
+query III
+SELECT test_star.* EXCLUDE (col2) REPLACE (id * 2 AS col1) RENAME (col3 AS final3) FROM test_star;
+----
+1	2	42
+
+# Test: Combo with quoted REPLACE, EXCLUDE, and qualified RENAME (parser + binder integration)
+query III
+SELECT test_star.* EXCLUDE (col2) REPLACE ('replaced: ' || col3::VARCHAR AS col1) RENAME (id AS renamed_id, col3 AS final3) FROM test_star;
+----
+1	replaced: 42	42

@@ -12,7 +12,7 @@ void SomeTableFunc(duckdb::ClientContext &, duckdb::TableFunctionInput &, duckdb
 
 TEST_CASE("Test catalog versioning", "[catalog]") {
 	DBConfig config;
-	config.options.allow_unsigned_extensions = true;
+	config.SetOptionByName("allow_unsigned_extensions", true);
 	DuckDB db(nullptr, &config);
 	Connection con1(db);
 

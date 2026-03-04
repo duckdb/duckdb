@@ -1,7 +1,9 @@
 #include "duckdb/planner/operator/logical_update.hpp"
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 

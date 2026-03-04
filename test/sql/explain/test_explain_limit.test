@@ -1,0 +1,24 @@
+# name: test/sql/explain/test_explain_limit.test
+# description: Test that LIMIT and OFFSET values are exposed in EXPLAIN output
+# group: [explain]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(100) tbl(i)
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM integers LIMIT 10
+----
+physical_plan	<REGEX>:.*"Limit":\s*"10".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM integers LIMIT 10 OFFSET 5
+----
+physical_plan	<REGEX>:.*"Limit":\s*"10".*"Offset":\s*"5".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT * FROM integers LIMIT 10%
+----
+physical_plan	<REGEX>:.*"Limit":\s*"10\.0+%".*

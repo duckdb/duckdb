@@ -163,6 +163,11 @@ void KeyValueSecretReader::Initialize(const char **secret_types, idx_t secret_ty
 	}
 }
 
+KeyValueSecretReader::KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {
+	db = opener_p.TryGetDatabase();
+	context = opener_p.TryGetClientContext();
+}
+
 KeyValueSecretReader::KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info,
                                            const char **secret_types, idx_t secret_types_len) {
 	db = opener_p.TryGetDatabase();

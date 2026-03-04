@@ -1,0 +1,20 @@
+# name: test/sql/peg_parser/transformer/statement_length.test
+# description: Test setting the statement length and offset
+# group: [transformer]
+
+require autocomplete
+
+statement ok
+SET allow_parser_override_extension = strict;
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok 
+ATTACH ':memory:' AS memory_compressed (COMPRESS);
+
+statement ok 
+ATTACH ':memory:' AS memory_comp;
+
+statement ok 
+COPY FROM DATABASE memory_comp TO memory_compressed;

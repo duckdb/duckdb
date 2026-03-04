@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -21,7 +22,8 @@ JoinOrderOptimizer JoinOrderOptimizer::CreateChildOptimizer() {
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
                                                          optional_ptr<RelationStats> stats) {
-	if (depth > query_graph_manager.context.config.max_expression_depth) {
+	auto max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(query_graph_manager.context);
+	if (depth > max_expression_depth) {
 		// Very deep plans will eventually consume quite some stack space
 		// Returning the current plan is always a valid choice
 		return plan;

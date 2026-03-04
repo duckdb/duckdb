@@ -30,7 +30,7 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(TaiwanCalendar)
 
 static const int32_t kTaiwanEraStart = 1911;  // 1911 (Gregorian)
 
-static const int32_t taiwncal_kGregorianEpoch = 1970;
+static const int32_t kGregorianEpoch = 1970; 
 
 TaiwanCalendar::TaiwanCalendar(const Locale& aLocale, UErrorCode& success)
 :   GregorianCalendar(aLocale, success)
@@ -67,11 +67,11 @@ int32_t TaiwanCalendar::handleGetExtendedYear()
 {
     // EXTENDED_YEAR in TaiwanCalendar is a Gregorian year
     // The default value of EXTENDED_YEAR is 1970 (Minguo 59)
-    int32_t year = taiwncal_kGregorianEpoch;
+    int32_t year = kGregorianEpoch;
 
     if (newerField(UCAL_EXTENDED_YEAR, UCAL_YEAR) == UCAL_EXTENDED_YEAR
         && newerField(UCAL_EXTENDED_YEAR, UCAL_ERA) == UCAL_EXTENDED_YEAR) {
-        year = internalGet(UCAL_EXTENDED_YEAR, taiwncal_kGregorianEpoch);
+        year = internalGet(UCAL_EXTENDED_YEAR, kGregorianEpoch);
     } else {
         int32_t era = internalGet(UCAL_ERA, MINGUO);
         if(era == MINGUO) {
@@ -135,19 +135,19 @@ void TaiwanCalendar::timeToFields(UDate theTime, UBool quick, UErrorCode& status
 
 /**
  * The system maintains a static default century start date and Year.  They are
- * initialized the first time they are used.  Once the system default century date
+ * initialized the first time they are used.  Once the system default century date 
  * and year are set, they do not change.
  */
-static UDate           taiwncal_gSystemDefaultCenturyStart       = DBL_MIN;
-static int32_t         taiwncal_gSystemDefaultCenturyStartYear   = -1;
-static icu::UInitOnce  taiwncal_gSystemDefaultCenturyInit        = U_INITONCE_INITIALIZER;
+static UDate           gSystemDefaultCenturyStart       = DBL_MIN;
+static int32_t         gSystemDefaultCenturyStartYear   = -1;
+static icu::UInitOnce  gSystemDefaultCenturyInit        {};
 
 UBool TaiwanCalendar::haveDefaultCentury() const
 {
-    return TRUE;
+    return true;
 }
 
-static void U_CALLCONV taiwncal_initializeSystemDefaultCentury()
+static void U_CALLCONV initializeSystemDefaultCentury()
 {
     // initialize systemDefaultCentury and systemDefaultCenturyYear based
     // on the current time.  They'll be set to 80 years before
@@ -159,8 +159,8 @@ static void U_CALLCONV taiwncal_initializeSystemDefaultCentury()
         calendar.setTime(Calendar::getNow(), status);
         calendar.add(UCAL_YEAR, -80, status);
 
-        taiwncal_gSystemDefaultCenturyStart = calendar.getTime(status);
-        taiwncal_gSystemDefaultCenturyStartYear = calendar.get(UCAL_YEAR, status);
+        gSystemDefaultCenturyStart = calendar.getTime(status);
+        gSystemDefaultCenturyStartYear = calendar.get(UCAL_YEAR, status);
     }
     // We have no recourse upon failure unless we want to propagate the failure
     // out.
@@ -168,14 +168,14 @@ static void U_CALLCONV taiwncal_initializeSystemDefaultCentury()
 
 UDate TaiwanCalendar::defaultCenturyStart() const {
     // lazy-evaluate systemDefaultCenturyStart
-    umtx_initOnce(taiwncal_gSystemDefaultCenturyInit, &taiwncal_initializeSystemDefaultCentury);
-    return taiwncal_gSystemDefaultCenturyStart;
+    umtx_initOnce(gSystemDefaultCenturyInit, &initializeSystemDefaultCentury);
+    return gSystemDefaultCenturyStart;
 }
 
 int32_t TaiwanCalendar::defaultCenturyStartYear() const {
     // lazy-evaluate systemDefaultCenturyStartYear
-    umtx_initOnce(taiwncal_gSystemDefaultCenturyInit, &taiwncal_initializeSystemDefaultCentury);
-    return taiwncal_gSystemDefaultCenturyStartYear;
+    umtx_initOnce(gSystemDefaultCenturyInit, &initializeSystemDefaultCentury);
+    return gSystemDefaultCenturyStartYear;
 }
 
 U_NAMESPACE_END

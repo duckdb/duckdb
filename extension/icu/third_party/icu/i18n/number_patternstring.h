@@ -22,6 +22,18 @@ namespace impl {
 // Forward declaration
 class PatternParser;
 
+// Note: the order of fields in this enum matters for parsing.
+enum PatternSignType {
+    /** Render using normal positive subpattern rules */
+    PATTERN_SIGN_TYPE_POS,
+    /** Render using rules to force the display of a plus sign */
+    PATTERN_SIGN_TYPE_POS_SIGN,
+    /** Render using negative subpattern rules */
+    PATTERN_SIGN_TYPE_NEG,
+    /** Count for looping over the possibilities */
+    PATTERN_SIGN_TYPE_COUNT
+};
+
 // Exported as U_I18N_API because it is a public member field of exported ParsedSubpatternInfo
 struct U_I18N_API Endpoints {
     int32_t start = 0;
@@ -50,6 +62,7 @@ struct U_I18N_API ParsedSubpatternInfo {
     bool hasPercentSign = false;
     bool hasPerMilleSign = false;
     bool hasCurrencySign = false;
+    bool hasCurrencyDecimal = false;
     bool hasMinusSign = false;
     bool hasPlusSign = false;
 
@@ -67,30 +80,32 @@ struct U_I18N_API ParsedPatternInfo : public AffixPatternProvider, public UMemor
     ParsedPatternInfo()
             : state(this->pattern), currentSubpattern(nullptr) {}
 
-    ~ParsedPatternInfo() U_OVERRIDE = default;
+    ~ParsedPatternInfo() override = default;
 
     // Need to declare this explicitly because of the destructor
-    ParsedPatternInfo& operator=(ParsedPatternInfo&& src) U_NOEXCEPT = default;
+    ParsedPatternInfo& operator=(ParsedPatternInfo&& src) noexcept = default;
 
     static int32_t getLengthFromEndpoints(const Endpoints& endpoints);
 
-    char16_t charAt(int32_t flags, int32_t index) const U_OVERRIDE;
+    char16_t charAt(int32_t flags, int32_t index) const override;
 
-    int32_t length(int32_t flags) const U_OVERRIDE;
+    int32_t length(int32_t flags) const override;
 
-    UnicodeString getString(int32_t flags) const U_OVERRIDE;
+    UnicodeString getString(int32_t flags) const override;
 
-    bool positiveHasPlusSign() const U_OVERRIDE;
+    bool positiveHasPlusSign() const override;
 
-    bool hasNegativeSubpattern() const U_OVERRIDE;
+    bool hasNegativeSubpattern() const override;
 
-    bool negativeHasMinusSign() const U_OVERRIDE;
+    bool negativeHasMinusSign() const override;
 
-    bool hasCurrencySign() const U_OVERRIDE;
+    bool hasCurrencySign() const override;
 
-    bool containsSymbolType(AffixPatternType type, UErrorCode& status) const U_OVERRIDE;
+    bool containsSymbolType(AffixPatternType type, UErrorCode& status) const override;
 
-    bool hasBody() const U_OVERRIDE;
+    bool hasBody() const override;
+
+    bool currencyAsDecimal() const override;
 
   private:
     struct U_I18N_API ParserState {
@@ -100,15 +115,20 @@ struct U_I18N_API ParsedPatternInfo : public AffixPatternProvider, public UMemor
         explicit ParserState(const UnicodeString& _pattern)
                 : pattern(_pattern) {}
 
-        ParserState& operator=(ParserState&& src) U_NOEXCEPT {
+        ParserState& operator=(ParserState&& src) noexcept {
             // Leave pattern reference alone; it will continue to point to the same place in memory,
             // which gets overwritten by ParsedPatternInfo's implicit move assignment.
             offset = src.offset;
             return *this;
         }
 
+        /** Returns the next code point, or -1 if string is too short. */
         UChar32 peek();
 
+        /** Returns the code point after the next code point, or -1 if string is too short. */
+        UChar32 peek2();
+
+        /** Returns the next code point and then steps forward. */
         UChar32 next();
 
         // TODO: We don't currently do anything with the message string.
@@ -233,7 +253,7 @@ class U_I18N_API PatternStringUtils {
      *
      * This test is needed for both NumberPropertyMapper::oldToNew and 
      * PatternStringUtils::propertiesToPatternString. In Java it cannot be
-     * exported by NumberPropertyMapper (package provate) so it is in
+     * exported by NumberPropertyMapper (package private) so it is in
      * PatternStringUtils, do the same in C.
      *
      * @param roundIncr
@@ -295,9 +315,14 @@ class U_I18N_API PatternStringUtils {
      * substitution, and plural forms for CurrencyPluralInfo.
      */
     static void patternInfoToStringBuilder(const AffixPatternProvider& patternInfo, bool isPrefix,
-                                           Signum signum, UNumberSignDisplay signDisplay,
-                                           StandardPlural::Form plural, bool perMilleReplacesPercent,
+                                           PatternSignType patternSignType,
+                                           bool approximately,
+                                           StandardPlural::Form plural,
+                                           bool perMilleReplacesPercent,
+                                           bool dropCurrencySymbols,
                                            UnicodeString& output);
+
+    static PatternSignType resolveSignDisplay(UNumberSignDisplay signDisplay, Signum signum);
 
   private:
     /** @return The number of chars inserted. */

@@ -13,15 +13,10 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 
 #include "duckdb/storage/compression/chimp/algorithm/flag_buffer.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp"
@@ -192,7 +187,7 @@ public:
 		// Load the offset indicating where a groups data starts
 		metadata_ptr -= sizeof(uint32_t);
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < segment.GetBlockManager().GetBlockSize());
+		D_ASSERT(data_byte_offset < segment.GetBlockSize());
 		//  Only used for point queries
 		(void)data_byte_offset;
 

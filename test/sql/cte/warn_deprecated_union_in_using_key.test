@@ -1,0 +1,71 @@
+# name: test/sql/cte/warn_deprecated_union_in_using_key.test
+# description: Test warnings are outputted correctly
+# group: [cte]
+
+# If logging level > warning (ie. debug or fatal) don't log
+statement ok
+CALL enable_logging(level='error');
+
+query II
+WITH RECURSIVE cte(x,y) USING KEY (x) AS (
+  SELECT 1, 0
+    UNION
+  SELECT x, y+1
+  FROM   cte
+  WHERE  y < 10
+) TABLE cte;
+----
+1	10
+
+query II
+SELECT log_level, message[0:42] FROM duckdb_logs
+----
+
+
+statement ok
+CALL truncate_duckdb_logs();
+
+
+# Else log warning
+statement ok
+CALL enable_logging(level='warning');
+
+query II
+WITH RECURSIVE cte(x,y) USING KEY (x) AS (
+  SELECT 1, 0
+    UNION
+  SELECT x, y+1
+  FROM   cte
+  WHERE  y < 10
+) TABLE cte;
+----
+1	10
+
+query II
+SELECT log_level, message[0:42] FROM duckdb_logs
+----
+WARNING	Deprecated UNION in USING KEY CTE detected
+
+statement ok
+CALL truncate_duckdb_logs();
+
+
+# Enable UNION as UNION ALL interpretation, should not log.
+statement ok
+SET deprecated_using_key_syntax='UNION_AS_UNION_ALL';
+
+# UNION now doesn't throw a warning
+query II
+WITH RECURSIVE cte(x,y) USING KEY (x) AS (
+  SELECT 1, 0
+    UNION
+  SELECT x, y+1
+  FROM   cte
+  WHERE  y < 10
+) TABLE cte;
+----
+1	10
+
+query II
+SELECT log_level, message[0:42] FROM duckdb_logs
+----

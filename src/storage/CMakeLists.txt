@@ -20,6 +20,7 @@ add_library_unity(
   data_pointer.cpp
   data_table.cpp
   external_file_cache.cpp
+  external_file_cache_util.cpp
   index.cpp
   local_storage.cpp
   magic_bytes.cpp
@@ -32,6 +33,7 @@ add_library_unity(
   optimistic_data_writer.cpp
   partial_block_manager.cpp
   single_file_block_manager.cpp
+  storage_index.cpp
   storage_info.cpp
   storage_lock.cpp
   wal_replay.cpp)

@@ -10,8 +10,6 @@
 
 #include "unicode/ufieldpositer.h"
 
-#ifndef U_HIDE_DRAFT_API
-
 /**
  * \file
  * \brief C API: Abstract operations for localized strings.
@@ -31,41 +29,41 @@
  * categories 2^28 and higher or below zero (with the highest bit turned on)
  * are private-use and will not be used by ICU in the future.
  *
- * @draft ICU 64
+ * @stable ICU 64
  */
 typedef enum UFieldCategory {
     /**
      * For an undefined field category.
      * 
-     * @draft ICU 64
+     * @stable ICU 64
      */
     UFIELD_CATEGORY_UNDEFINED = 0,
 
     /**
      * For fields in UDateFormatField (udat.h), from ICU 3.0.
      *
-     * @draft ICU 64
+     * @stable ICU 64
      */
     UFIELD_CATEGORY_DATE,
 
     /**
      * For fields in UNumberFormatFields (unum.h), from ICU 49.
      *
-     * @draft ICU 64
+     * @stable ICU 64
      */
     UFIELD_CATEGORY_NUMBER,
 
     /**
      * For fields in UListFormatterField (ulistformatter.h), from ICU 63.
      *
-     * @draft ICU 64
+     * @stable ICU 64
      */
     UFIELD_CATEGORY_LIST,
 
     /**
      * For fields in URelativeDateTimeFormatterField (ureldatefmt.h), from ICU 64.
      *
-     * @draft ICU 64
+     * @stable ICU 64
      */
     UFIELD_CATEGORY_RELATIVE_DATETIME,
 
@@ -84,16 +82,23 @@ typedef enum UFieldCategory {
     /**
      * Category for spans in a list.
      *
-     * @draft ICU 64
+     * @stable ICU 64
      */
     UFIELD_CATEGORY_LIST_SPAN = 0x1000 + UFIELD_CATEGORY_LIST,
 
     /**
      * Category for spans in a date interval.
      *
-     * @draft ICU 64
+     * @stable ICU 64
      */
     UFIELD_CATEGORY_DATE_INTERVAL_SPAN = 0x1000 + UFIELD_CATEGORY_DATE_INTERVAL,
+
+    /**
+     * Category for spans in a number range.
+     *
+     * @stable ICU 69
+     */
+    UFIELD_CATEGORY_NUMBER_RANGE_SPAN = 0x1000 + UFIELD_CATEGORY_NUMBER,
 
 } UFieldCategory;
 
@@ -108,7 +113,7 @@ struct UConstrainedFieldPosition;
  *   2. It allows you to set constraints to use when iterating over field positions.
  *   3. It is used for the newer FormattedValue APIs.
  *
- * @draft ICU 64
+ * @stable ICU 64
  */
 typedef struct UConstrainedFieldPosition UConstrainedFieldPosition;
 
@@ -120,9 +125,9 @@ typedef struct UConstrainedFieldPosition UConstrainedFieldPosition;
  *
  * @param ec Set if an error occurs.
  * @return The new object, or NULL if an error occurs.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT UConstrainedFieldPosition* U_EXPORT2
+U_CAPI UConstrainedFieldPosition* U_EXPORT2
 ucfpos_open(UErrorCode* ec);
 
 
@@ -133,9 +138,9 @@ ucfpos_open(UErrorCode* ec);
  *
  * @param ucfpos The instance of UConstrainedFieldPosition.
  * @param ec Set if an error occurs.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT void U_EXPORT2
+U_CAPI void U_EXPORT2
 ucfpos_reset(
     UConstrainedFieldPosition* ucfpos,
     UErrorCode* ec);
@@ -145,9 +150,9 @@ ucfpos_reset(
  * Destroys a UConstrainedFieldPosition and releases its memory.
  *
  * @param ucfpos The instance of UConstrainedFieldPosition.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT void U_EXPORT2
+U_CAPI void U_EXPORT2
 ucfpos_close(UConstrainedFieldPosition* ucfpos);
 
 
@@ -174,9 +179,9 @@ ucfpos_close(UConstrainedFieldPosition* ucfpos);
  * @param ucfpos The instance of UConstrainedFieldPosition.
  * @param category The field category to fix when iterating.
  * @param ec Set if an error occurs.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT void U_EXPORT2
+U_CAPI void U_EXPORT2
 ucfpos_constrainCategory(
     UConstrainedFieldPosition* ucfpos,
     int32_t category,
@@ -207,9 +212,9 @@ ucfpos_constrainCategory(
  * @param category The field category to fix when iterating.
  * @param field The field to fix when iterating.
  * @param ec Set if an error occurs.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT void U_EXPORT2
+U_CAPI void U_EXPORT2
 ucfpos_constrainField(
     UConstrainedFieldPosition* ucfpos,
     int32_t category,
@@ -222,14 +227,14 @@ ucfpos_constrainField(
  *
  * If a category or field constraint was set, this function returns the constrained
  * category. Otherwise, the return value is well-defined only after
- * ufmtval_nextPosition returns TRUE.
+ * ufmtval_nextPosition returns true.
  *
  * @param ucfpos The instance of UConstrainedFieldPosition.
  * @param ec Set if an error occurs.
  * @return The field category saved in the instance.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT int32_t U_EXPORT2
+U_CAPI int32_t U_EXPORT2
 ucfpos_getCategory(
     const UConstrainedFieldPosition* ucfpos,
     UErrorCode* ec);
@@ -240,14 +245,14 @@ ucfpos_getCategory(
  *
  * If a field constraint was set, this function returns the constrained
  * field. Otherwise, the return value is well-defined only after
- * ufmtval_nextPosition returns TRUE.
+ * ufmtval_nextPosition returns true.
  *
  * @param ucfpos The instance of UConstrainedFieldPosition.
  * @param ec Set if an error occurs.
  * @return The field saved in the instance.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT int32_t U_EXPORT2
+U_CAPI int32_t U_EXPORT2
 ucfpos_getField(
     const UConstrainedFieldPosition* ucfpos,
     UErrorCode* ec);
@@ -256,15 +261,15 @@ ucfpos_getField(
 /**
  * Gets the INCLUSIVE start and EXCLUSIVE end index stored for the current position.
  *
- * The output values are well-defined only after ufmtval_nextPosition returns TRUE.
+ * The output values are well-defined only after ufmtval_nextPosition returns true.
  *
  * @param ucfpos The instance of UConstrainedFieldPosition.
  * @param pStart Set to the start index saved in the instance. Ignored if nullptr.
  * @param pLimit Set to the end index saved in the instance. Ignored if nullptr.
  * @param ec Set if an error occurs.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT void U_EXPORT2
+U_CAPI void U_EXPORT2
 ucfpos_getIndexes(
     const UConstrainedFieldPosition* ucfpos,
     int32_t* pStart,
@@ -282,9 +287,9 @@ ucfpos_getIndexes(
  * @param ucfpos The instance of UConstrainedFieldPosition.
  * @param ec Set if an error occurs.
  * @return The current iteration context from ucfpos_setInt64IterationContext.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT int64_t U_EXPORT2
+U_CAPI int64_t U_EXPORT2
 ucfpos_getInt64IterationContext(
     const UConstrainedFieldPosition* ucfpos,
     UErrorCode* ec);
@@ -298,9 +303,9 @@ ucfpos_getInt64IterationContext(
  * @param ucfpos The instance of UConstrainedFieldPosition.
  * @param context The new iteration context.
  * @param ec Set if an error occurs.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT void U_EXPORT2
+U_CAPI void U_EXPORT2
 ucfpos_setInt64IterationContext(
     UConstrainedFieldPosition* ucfpos,
     int64_t context,
@@ -317,9 +322,9 @@ ucfpos_setInt64IterationContext(
  * @param category The category to test.
  * @param field The field to test.
  * @param ec Set if an error occurs.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT UBool U_EXPORT2
+U_CAPI UBool U_EXPORT2
 ucfpos_matchesField(
     const UConstrainedFieldPosition* ucfpos,
     int32_t category,
@@ -341,9 +346,9 @@ ucfpos_matchesField(
  * @param start The new inclusive start index.
  * @param limit The new exclusive end index.
  * @param ec Set if an error occurs.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT void U_EXPORT2
+U_CAPI void U_EXPORT2
 ucfpos_setState(
     UConstrainedFieldPosition* ucfpos,
     int32_t category,
@@ -358,7 +363,7 @@ struct UFormattedValue;
  * An abstract formatted value: a string with associated field attributes.
  * Many formatters format to types compatible with UFormattedValue.
  *
- * @draft ICU 64
+ * @stable ICU 64
  */
 typedef struct UFormattedValue UFormattedValue;
 
@@ -374,9 +379,9 @@ typedef struct UFormattedValue UFormattedValue;
  * @param pLength Output variable for the length of the string. Ignored if NULL.
  * @param ec Set if an error occurs.
  * @return A NUL-terminated char16 string owned by the UFormattedValue.
- * @draft ICU 64
+ * @stable ICU 64
  */
-U_DRAFT const UChar* U_EXPORT2
+U_CAPI const UChar* U_EXPORT2
 ufmtval_getString(
     const UFormattedValue* ufmtval,
     int32_t* pLength,
@@ -403,10 +408,10 @@ ufmtval_getString(
  *         see ucfpos_constrainCategory
  *         and ucfpos_constrainField.
  * @param ec Set if an error occurs.
- * @return TRUE if another position was found; FALSE otherwise.
- * @draft ICU 64
+ * @return true if another position was found; false otherwise.
+ * @stable ICU 64
  */
-U_DRAFT UBool U_EXPORT2
+U_CAPI UBool U_EXPORT2
 ufmtval_nextPosition(
     const UFormattedValue* ufmtval,
     UConstrainedFieldPosition* ucfpos,
@@ -426,7 +431,7 @@ U_NAMESPACE_BEGIN
  *     LocalUConstrainedFieldPositionPointer ucfpos(ucfpos_open(ec));
  *     // no need to explicitly call ucfpos_close()
  *
- * @draft ICU 64
+ * @stable ICU 64
  */
 U_DEFINE_LOCAL_OPEN_POINTER(LocalUConstrainedFieldPositionPointer,
     UConstrainedFieldPosition,
@@ -436,6 +441,5 @@ U_NAMESPACE_END
 #endif // U_SHOW_CPLUSPLUS_API
 
 
-#endif  /* U_HIDE_DRAFT_API */
 #endif /* #if !UCONFIG_NO_FORMATTING */
 #endif // __UFORMATTEDVALUE_H__

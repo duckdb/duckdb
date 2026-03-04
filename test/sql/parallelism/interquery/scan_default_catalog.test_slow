@@ -1,0 +1,14 @@
+# name: test/sql/parallelism/interquery/scan_default_catalog.test_slow
+# description: Test initialization and scanning of default catalog
+# group: [interquery]
+
+concurrentloop threadid 0 10
+
+loop x 0 10
+
+statement ok
+SELECT * FROM pg_class
+
+endloop
+
+endloop

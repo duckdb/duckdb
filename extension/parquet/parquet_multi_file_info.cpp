@@ -299,7 +299,7 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 		}
 
 		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
-		auto is_valid = metadata_entry->IsValid(file);
+		const auto is_valid = metadata_entry->IsValid(file, context);
 		if (is_valid != ParquetCacheValidity::VALID) {
 			return result;
 		}
@@ -360,8 +360,7 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 		return true;
 	}
 	if (key == "debug_use_openssl") {
-		options.debug_use_openssl = GetBooleanArgument(key, values);
-		return true;
+		return true; // deprecated
 	}
 	if (key == "encryption_config") {
 		if (values.size() != 1) {
@@ -402,8 +401,7 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 		return true;
 	}
 	if (key == "debug_use_openssl") {
-		options.debug_use_openssl = BooleanValue::Get(val);
-		return true;
+		return true; // deprecated
 	}
 	if (key == "can_have_nan") {
 		options.can_have_nan = BooleanValue::Get(val);
@@ -455,7 +453,6 @@ void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, Bin
 	info.type = ScanType::PARQUET;
 	info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_options.binary_as_string));
 	info.InsertOption("file_row_number", Value::BOOLEAN(parquet_options.file_row_number));
-	info.InsertOption("debug_use_openssl", Value::BOOLEAN(parquet_options.debug_use_openssl));
 }
 
 optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,
@@ -525,17 +522,18 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
 
 shared_ptr<BaseUnionData> ParquetReader::GetUnionData(idx_t file_idx) {
 	auto result = make_uniq<ParquetUnionData>(file);
+	result->names.reserve(columns.size());
+	result->types.reserve(columns.size());
 	for (auto &column : columns) {
 		result->names.push_back(column.name);
 		result->types.push_back(column.type);
 	}
+
+	result->options = parquet_options;
+	result->metadata = metadata;
 	if (file_idx == 0) {
-		result->options = parquet_options;
-		result->metadata = metadata;
 		result->reader = shared_from_this();
 	} else {
-		result->options = std::move(parquet_options);
-		result->metadata = std::move(metadata);
 		result->root_schema = std::move(root_schema);
 	}
 	return std::move(result);

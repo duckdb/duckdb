@@ -1,0 +1,44 @@
+# name: test/sql/index/art/constraints/test_art_tx_over_eager.test
+# description: Verify that, also with background transactions, we can immediately re-insert deleted keys after the delete is committed
+# group: [constraints]
+
+statement ok
+SET immediate_transaction_mode=true;
+
+statement ok
+CREATE TABLE tbl(i INT PRIMARY KEY, v VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'row 1'), (2, 'row 2'), (3, 'row 3');
+
+statement ok con1
+BEGIN
+
+statement ok con2
+DELETE FROM tbl WHERE i=2;
+
+query II con1
+SELECT * FROM tbl WHERE i=2
+----
+2	row 2
+
+statement ok con2
+INSERT INTO tbl VALUES (2, 'new row');
+
+query II con1
+SELECT * FROM tbl WHERE i=2
+----
+2	row 2
+
+query II con2
+SELECT * FROM tbl WHERE i=2
+----
+2	new row
+
+statement ok con1
+COMMIT
+
+query II con1
+SELECT * FROM tbl WHERE i=2
+----
+2	new row

@@ -1,0 +1,58 @@
+# name: test/sql/catalog/view/test_loosely_qualified_view_sql.test
+# group: [view]
+
+# Create db1
+statement ok
+attach ':memory:' as db1;
+
+# Create db2
+statement ok
+attach ':memory:' as db2;
+
+statement ok
+create schema db1.s1;
+
+statement ok
+create schema db2.s1;
+
+# Create a table inside the schema
+statement ok
+create table db1.s1.t1 as select 1 col;
+
+foreach view_version base_table subquery_ref subquery_expr
+
+# Perform a USE so the paths inside the VIEW implicitly refer to db1
+statement ok
+use db1;
+
+onlyif view_version=base_table
+statement ok
+create or replace view v1 as
+from s1.t1;
+
+onlyif view_version=subquery_ref
+statement ok
+create or replace view v1 as
+from (select col+5 from s1.t1);
+
+onlyif view_version=subquery_expr
+statement ok
+create or replace view v1 as
+select (from s1.t1)
+
+query I nosort expected_res
+from db1.v1;
+----
+
+statement ok
+use db2.s1;
+
+# Try selecting from the v1 view (querying db1.s1.t1)
+query I nosort expected_res
+from db1.v1;
+----
+
+reset label expected_res
+
+# view_version
+endloop

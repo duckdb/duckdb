@@ -1,0 +1,18 @@
+# name: test/optimizer/stats_non_numeric_cast.test
+# description: test statistics propagation for non-numeric cast
+# group: [optimizer]
+
+statement ok
+pragma disabled_optimizers='expression_rewriter';
+
+statement ok
+CREATE TABLE t(n_name VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('FRANCE'), ('GERMANY');
+
+query II
+SELECT * FROM t a JOIN t b ON ( (a.n_name = 'FRANCE' AND b.n_name = 'GERMANY') OR (a.n_name = 'GERMANY' AND b.n_name = 'FRANCE'));
+----
+GERMANY	FRANCE
+FRANCE	GERMANY

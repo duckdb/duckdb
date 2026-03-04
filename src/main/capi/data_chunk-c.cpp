@@ -1,7 +1,8 @@
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
-#include "duckdb/common/type_visitor.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <string.h>
 
@@ -137,10 +138,39 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 }
 
 void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
-	duckdb_vector_assign_string_element_len(vector, index, str, strlen(str));
+	if (!vector) {
+		return;
+	}
+	auto str_len = strlen(str);
+	auto error = duckdb_valid_utf8_check(str, str_len);
+	if (error != nullptr) {
+		duckdb_destroy_error_data(&error);
+		duckdb_vector_ensure_validity_writable(vector);
+		duckdb_validity_set_row_invalid(duckdb_vector_get_validity(vector), index);
+		return;
+	}
+	duckdb_unsafe_vector_assign_string_element_len(vector, index, str, str_len);
 }
 
 void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {
+	if (!vector) {
+		return;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	// UTF-8 validation for VARCHAR vectors.
+	if (v->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
+		auto error = duckdb_valid_utf8_check(str, str_len);
+		if (error != nullptr) {
+			duckdb_destroy_error_data(&error);
+			duckdb_vector_ensure_validity_writable(vector);
+			duckdb_validity_set_row_invalid(duckdb_vector_get_validity(vector), index);
+			return;
+		}
+	}
+	duckdb_unsafe_vector_assign_string_element_len(vector, index, str, str_len);
+}
+
+void duckdb_unsafe_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {
 	if (!vector) {
 		return;
 	}

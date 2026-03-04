@@ -1,5 +1,5 @@
 // © 2019 and later: Unicode, Inc. and others.
-// License & terms of use: http://www.unicode.org/copyright.html#License
+// License & terms of use: http://www.unicode.org/copyright.html
 
 // localeprioritylist.cpp
 // created: 2019jul11 Markus W. Scherer
@@ -18,33 +18,6 @@
 
 U_NAMESPACE_BEGIN
 
-struct LocaleAndWeight {
-    Locale *locale;
-    int32_t weight;  // 0..1000 = 0.0..1.0
-    int32_t index;  // force stable sort
-
-    int32_t compare(const LocaleAndWeight &other) const {
-        int32_t diff = other.weight - weight;  // descending: other-this
-        if (diff != 0) { return diff; }
-        return index - other.index;
-    }
-};
-
-/**
- * Nothing but a wrapper over a MaybeStackArray of LocaleAndWeight.
- *
- * This wrapper exists (and is not in an anonymous namespace)
- * so that we can forward-declare it in the header file and
- * don't have to expose the MaybeStackArray specialization and
- * the LocaleAndWeight to code (like the test) that #includes localeprioritylist.h.
- * Also, otherwise we would have to do a platform-specific
- * template export declaration of some kind for the MaybeStackArray specialization
- * to be properly exported from the common DLL.
- */
-struct LocaleAndWeightArray : public UMemory {
-    MaybeStackArray<LocaleAndWeight, 20> array;
-};
-
 namespace {
 
 int32_t hashLocale(const UHashTok token) {
@@ -59,6 +32,18 @@ UBool compareLocales(const UHashTok t1, const UHashTok t2) {
 }
 
 constexpr int32_t WEIGHT_ONE = 1000;
+
+struct LocaleAndWeight {
+    Locale *locale;
+    int32_t weight;  // 0..1000 = 0.0..1.0
+    int32_t index;  // force stable sort
+
+    int32_t compare(const LocaleAndWeight &other) const {
+        int32_t diff = other.weight - weight;  // descending: other-this
+        if (diff != 0) { return diff; }
+        return index - other.index;
+    }
+};
 
 int32_t U_CALLCONV
 compareLocaleAndWeight(const void * /*context*/, const void *left, const void *right) {
@@ -110,6 +95,21 @@ int32_t parseWeight(const char *&p, const char *limit) {
 
 }  // namespace
 
+/**
+ * Nothing but a wrapper over a MaybeStackArray of LocaleAndWeight.
+ *
+ * This wrapper exists (and is not in an anonymous namespace)
+ * so that we can forward-declare it in the header file and
+ * don't have to expose the MaybeStackArray specialization and
+ * the LocaleAndWeight to code (like the test) that #includes localeprioritylist.h.
+ * Also, otherwise we would have to do a platform-specific
+ * template export declaration of some kind for the MaybeStackArray specialization
+ * to be properly exported from the common DLL.
+ */
+struct LocaleAndWeightArray : public UMemory {
+    MaybeStackArray<LocaleAndWeight, 20> array;
+};
+
 LocalePriorityList::LocalePriorityList(StringPiece s, UErrorCode &errorCode) {
     if (U_FAILURE(errorCode)) { return; }
     list = new LocaleAndWeightArray();
@@ -133,7 +133,7 @@ LocalePriorityList::LocalePriorityList(StringPiece s, UErrorCode &errorCode) {
         if (U_FAILURE(errorCode)) { return; }
         Locale locale = Locale(tag.data());
         if (locale.isBogus()) {
-            errorCode = U_MEMORY_ALLOCATION_ERROR;
+            errorCode = U_ILLEGAL_ARGUMENT_ERROR;
             return;
         }
         int32_t weight = WEIGHT_ONE;
@@ -187,17 +187,18 @@ bool LocalePriorityList::add(const Locale &locale, int32_t weight, UErrorCode &e
         if (U_FAILURE(errorCode)) { return false; }
     }
     LocalPointer<Locale> clone;
-    int32_t index = uhash_geti(map, &locale);
-    if (index != 0) {
+    UBool found = false;
+    int32_t index = uhash_getiAndFound(map, &locale, &found);
+    if (found) {
         // Duplicate: Remove the old item and append it anew.
-        LocaleAndWeight &lw = list->array[index - 1];
+        LocaleAndWeight &lw = list->array[index];
         clone.adoptInstead(lw.locale);
         lw.locale = nullptr;
         lw.weight = 0;
         ++numRemoved;
     }
     if (weight <= 0) {  // do not add q=0
-        if (index != 0) {
+        if (found) {
             // Not strictly necessary but cleaner.
             uhash_removei(map, &locale);
         }
@@ -217,7 +218,7 @@ bool LocalePriorityList::add(const Locale &locale, int32_t weight, UErrorCode &e
             return false;
         }
     }
-    uhash_puti(map, clone.getAlias(), listLength + 1, &errorCode);
+    uhash_putiAllowZero(map, clone.getAlias(), listLength, &errorCode);
     if (U_FAILURE(errorCode)) { return false; }
     LocaleAndWeight &lw = list->array[listLength];
     lw.locale = clone.orphan();
@@ -233,7 +234,7 @@ void LocalePriorityList::sort(UErrorCode &errorCode) {
     // The comparator forces a stable sort via the item index.
     if (U_FAILURE(errorCode) || getLength() <= 1 || !hasWeights) { return; }
     uprv_sortArray(list->array.getAlias(), listLength, sizeof(LocaleAndWeight),
-                   compareLocaleAndWeight, nullptr, FALSE, &errorCode);
+                   compareLocaleAndWeight, nullptr, false, &errorCode);
 }
 
 U_NAMESPACE_END

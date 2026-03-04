@@ -233,7 +233,7 @@ public:
 
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-	static void PopulateArrowTableSchema(DBConfig &config, ArrowTableSchema &arrow_table,
+	static void PopulateArrowTableSchema(ClientContext &context, ArrowTableSchema &arrow_table,
 	                                     const ArrowSchema &arrow_schema);
 
 protected:

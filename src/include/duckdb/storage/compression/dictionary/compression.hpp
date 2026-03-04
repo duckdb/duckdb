@@ -4,7 +4,6 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/compression/dictionary/common.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
@@ -40,7 +39,7 @@ public:
 
 public:
 	ColumnDataCheckpointData &checkpoint_data;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;

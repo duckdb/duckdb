@@ -31,9 +31,11 @@ struct DuckCleanupInfo {
 
 struct ActiveCheckpointWrapper {
 	explicit ActiveCheckpointWrapper(DuckTransactionManager &manager);
-	~ActiveCheckpointWrapper();
+
+	void Clear();
 
 	DuckTransactionManager &manager;
+	bool is_cleared;
 };
 
 //! The Transaction Manager is responsible for creating and managing
@@ -79,6 +81,8 @@ public:
 	//! Try to obtain an exclusive checkpoint lock
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
+	unique_ptr<StorageLockKey> SharedVacuumLock();
+	unique_ptr<StorageLockKey> TryGetVacuumLock();
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	DUCKDB_API idx_t GetCatalogVersion(Transaction &transaction);
@@ -109,6 +113,11 @@ private:
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
 	                                 const UndoBufferProperties &properties);
+	//! Get the checkpoint type of an automatic checkpoint
+	CheckpointDecision GetCheckpointType(DuckTransaction &transaction, const UndoBufferProperties &undo_properties);
+
+	bool HasOtherTransactions(DuckTransaction &transaction);
+	void CleanupTransactions();
 
 private:
 	//! The current start timestamp used by transactions
@@ -131,6 +140,8 @@ private:
 	mutex transaction_lock;
 	//! The checkpoint lock
 	StorageLock checkpoint_lock;
+	//! The vacuum lock - necessary to start vacuum operations
+	StorageLock vacuum_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
 

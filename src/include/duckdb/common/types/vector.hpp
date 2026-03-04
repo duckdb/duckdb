@@ -134,6 +134,7 @@ class Vector {
 	friend struct UnionVector;
 	friend struct SequenceVector;
 	friend struct ArrayVector;
+	friend struct ShreddedVector;
 
 	friend class DataChunk;
 	friend class VectorCacheBuffer;
@@ -227,6 +228,9 @@ public:
 	//! Turn the vector into a sequence vector
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
 
+	//! Turn the vector into a shredded variant vector
+	DUCKDB_API void Shred(Vector &shredded_data);
+
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	DUCKDB_API void Verify(idx_t count);
@@ -294,6 +298,9 @@ private:
 	static Value GetValue(const Vector &v, idx_t index);
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValueInternal(const Vector &v, idx_t index);
+
+	//! Flatten a constant vector
+	void FlattenConstant(idx_t count);
 
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
@@ -539,6 +546,8 @@ struct ListVector {
 	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
 	//! Share the entry of the other list vector
 	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
+	//! Returns the total number of entries in the list
+	DUCKDB_API static idx_t GetTotalEntryCount(Vector &list, idx_t count);
 
 private:
 	template <class T>
@@ -673,6 +682,30 @@ struct VariantVector {
 	//! Gets a reference to the binary blob 'value', which encodes the data of the row
 	DUCKDB_API static Vector &GetData(Vector &vec);
 	DUCKDB_API static Vector &GetData(const Vector &vec);
+};
+
+struct ShreddedVector {
+	static void VerifyShreddedVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::SHREDDED_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+			throw InternalException("Operation requires a shredded vector but a non-shredded vector was encountered");
+		}
+#endif
+	}
+	//! Get the underlying vector holding the unshredded data
+	DUCKDB_API static const Vector &GetUnshreddedVector(const Vector &vec);
+	//! Get the underlying vector holding the unshredded data
+	DUCKDB_API static Vector &GetUnshreddedVector(Vector &vec);
+	//! Get the underlying vector holding the shredded data
+	DUCKDB_API static const Vector &GetShreddedVector(const Vector &vec);
+	//! Get the underlying vector holding the shredded data
+	DUCKDB_API static Vector &GetShreddedVector(Vector &vec);
+
+	//! Unshred a shredded vector
+	DUCKDB_API static void Unshred(Vector &vec, idx_t count);
+	DUCKDB_API static void Unshred(Vector &vec, const SelectionVector &sel, idx_t count);
 };
 
 enum class UnionInvalidReason : uint8_t {

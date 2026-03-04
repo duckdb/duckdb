@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 #include "duckdb/common/assert.hpp"
-#include "duckdb.h"
+#include "duckdb/common/typedefs.hpp"
+
+#include <cstdint>
 
 namespace duckdb {
 

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -39,6 +38,8 @@ struct EncryptionOptions {
 	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 	//! User key pointer (to StorageOptions)
 	shared_ptr<string> user_key;
+	//! Version of duckdb-encryption
+	EncryptionTypes::EncryptionVersion encryption_version = EncryptionTypes::NONE;
 };
 
 struct StorageManagerOptions {
@@ -61,6 +62,7 @@ class SingleFileBlockManager : public BlockManager {
 
 public:
 	SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p, const StorageManagerOptions &options_p);
+	~SingleFileBlockManager() override;
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
@@ -156,6 +158,8 @@ private:
 	static void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id);
 	static void StoreDBIdentifier(MainHeader &main_header, const data_ptr_t db_identifier);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
+	template <typename T>
+	static void WriteEncryptionData(MemoryStream &stream, const T &val);
 
 	//! Check and adding Encryption Keys
 	void CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key);
@@ -174,6 +178,8 @@ private:
 	void AddStorageVersionTag();
 
 	block_id_t GetFreeBlockIdInternal(FreeBlockType type);
+	//! Adds a free block to the free_list, returns true if it was added to the regular free_list
+	bool AddFreeBlock(unique_lock<mutex> &lock, block_id_t block_id);
 
 private:
 	AttachedDatabase &db;
@@ -208,6 +214,6 @@ private:
 	//! The storage manager options
 	StorageManagerOptions options;
 	//! Lock for performing various operations in the single file block manager
-	mutex block_lock;
+	mutex single_file_block_lock;
 };
 } // namespace duckdb

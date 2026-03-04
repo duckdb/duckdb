@@ -1,0 +1,151 @@
+# name: test/sql/constraints/check/test_update_check_non_updated_columns.test
+# description: test UPDATE with CHECK constraints which reference non-updated columns
+# group: [check]
+
+# enable query verification
+statement ok
+PRAGMA enable_verification
+
+# Reproducing original query from issue
+statement ok
+CREATE TABLE v0 (
+    v3 INTEGER,
+    v2 INTEGER,
+    v4 INTEGER,
+    v1 INTEGER,
+    CHECK ( ( ( NOT (v2 = v1) = v3 - 0 ) > (18 = 10) ) ),
+    CHECK ( v3 = v4 )
+);
+
+# Only v4 is provided; other columns are NULL
+statement ok
+INSERT INTO v0 (v4) VALUES (2), (1);
+
+# This UPDATE used to trigger the internal assertion
+statement ok
+UPDATE v0 SET v4 = 44;
+
+# Table shape is not important here; just ensure it executed
+query II
+SELECT COUNT(*), MIN(v4) FROM v0;
+----
+2	44
+
+# Simple case: CHECK on non-updated column still enforced
+
+statement ok
+CREATE TABLE v1 (
+    a INTEGER,
+    b INTEGER,
+    c INTEGER,
+    CHECK (a = b),
+    CHECK (b = c)
+);
+
+statement ok
+INSERT INTO v1 VALUES (1, 1, 1);
+
+# UPDATE touching only c but violating CHECK(b = c) must fail,
+# and must not trigger internal errors
+statement error
+UPDATE v1 SET c = 2;
+----
+CHECK constraint failed on table v1
+
+# Table remains unchanged
+query III
+SELECT a, b, c FROM v1;
+----
+1	1	1
+
+# UPDATE with WHERE filter: constraint violation on subset
+
+statement ok
+CREATE TABLE v2 (
+    x INTEGER,
+    y INTEGER,
+    z INTEGER,
+    CHECK (x + y = z)
+);
+
+statement ok
+INSERT INTO v2 VALUES (1, 2, 3);
+
+statement ok
+INSERT INTO v2 VALUES (2, 3, 5);
+
+# This violates CHECK(x + y = z) for the row x=2 and must fail
+statement error
+UPDATE v2 SET z = 7 WHERE x = 2;
+----
+CHECK constraint failed on table v2
+
+# Data unchanged
+query III
+SELECT x, y, z FROM v2 ORDER BY x;
+----
+1	2	3
+2	3	5
+
+# UPDATE non-checked column only; CHECK column untouched
+
+statement ok
+CREATE TABLE v3 (
+    id INTEGER,
+    payload INTEGER,
+    flag BOOLEAN,
+    CHECK (flag IS NOT NULL)
+);
+
+statement ok
+INSERT INTO v3 VALUES (1, 42, TRUE);
+
+# UPDATE only payload; CHECK(flag IS NOT NULL) should be re-evaluated
+statement ok
+UPDATE v3 SET payload = 99;
+
+query III
+SELECT id, payload, flag FROM v3;
+----
+1	99	TRUE
+
+# VARCHAR: CHECK on text content
+
+statement ok
+CREATE TABLE v_char (
+    username VARCHAR,
+    status   VARCHAR,
+    CHECK (length(username) >= 3),
+    CHECK (status IN ('active', 'inactive'))
+);
+
+# Valid row: username long enough, status allowed
+statement ok
+INSERT INTO v_char VALUES ('alice', 'active');
+
+# Invalid: username too short
+statement error
+INSERT INTO v_char VALUES ('ab', 'active');
+----
+CHECK constraint failed on table v_char
+
+# Invalid: status not in allowed set
+statement error
+INSERT INTO v_char VALUES ('charlie', 'pending');
+----
+CHECK constraint failed on table v_char
+
+# UPDATE that violates CHECK(status IN (...)) must fail
+statement error
+UPDATE v_char SET status = 'deleted' WHERE username = 'alice';
+----
+CHECK constraint failed on table v_char
+
+# UPDATE that keeps constraints satisfied must succeed
+statement ok
+UPDATE v_char SET status = 'inactive' WHERE username = 'alice';
+
+query II
+SELECT username, status FROM v_char;
+----
+alice	inactive

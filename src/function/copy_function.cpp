@@ -37,11 +37,17 @@ vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType ret
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
 		return {LogicalType::BIGINT, LogicalType::LIST(LogicalType::VARCHAR)};
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS:
-		return {LogicalType::VARCHAR,
+		return {//! filename
+		        LogicalType::VARCHAR,
+		        //! count
 		        LogicalType::UBIGINT,
+		        //! file size bytes
 		        LogicalType::UBIGINT,
+		        //! footer size bytes
 		        LogicalType::UBIGINT,
+		        //! column_path (potentially nested) -> map(stats_type -> value)
 		        LogicalType::MAP(LogicalType::VARCHAR, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)),
+		        //! partition key -> value
 		        LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)};
 	default:
 		throw NotImplementedException("Unknown CopyFunctionReturnType");

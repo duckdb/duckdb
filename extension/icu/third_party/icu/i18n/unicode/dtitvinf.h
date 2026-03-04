@@ -45,7 +45,7 @@ U_NAMESPACE_BEGIN
  * <P>
  * For power users, who want to create their own date interval patterns,
  * or want to re-set date interval patterns, they could do so by
- * directly creating DateIntervalInfo and manupulating it.
+ * directly creating DateIntervalInfo and manipulating it.
  *
  * <P>
  * Logically, the interval patterns are mappings
@@ -114,7 +114,7 @@ U_NAMESPACE_BEGIN
  * the first date in the interval pattern for this locale is earlier date.
  * If the fallback format is &quot;{1} - {0}&quot;, it means the first date is the
  * later date.
- * For a particular interval pattern, the default order can be overriden
+ * For a particular interval pattern, the default order can be overridden
  * by prefixing &quot;latestFirst:&quot; or &quot;earliestFirst:&quot; to the interval pattern.
  * For example, if the fallback format is &quot;{0}-{1}&quot;,
  * but for skeleton &quot;yMMMd&quot;, the interval pattern when day is different is
@@ -137,8 +137,8 @@ U_NAMESPACE_BEGIN
  * After a DateIntervalInfo object is created, clients may modify
  * the interval patterns using setIntervalPattern function as so desired.
  * Currently, users can only set interval patterns when the following
- * calendar fields are different: ERA, YEAR, MONTH, DATE,  DAY_OF_MONTH,
- * DAY_OF_WEEK, AM_PM,  HOUR, HOUR_OF_DAY, and MINUTE.
+ * calendar fields are different: ERA, YEAR, MONTH, DATE, DAY_OF_MONTH,
+ * DAY_OF_WEEK, AM_PM, HOUR, HOUR_OF_DAY, MINUTE, SECOND, and MILLISECOND.
  * Interval patterns when other calendar fields are different is not supported.
  * <P>
  * DateIntervalInfo objects are cloneable.
@@ -151,7 +151,7 @@ U_NAMESPACE_BEGIN
  * calendar; non-Gregorian calendars are supported from ICU 4.4.1.
  * @stable ICU 4.0
 **/
-class U_I18N_API DateIntervalInfo U_FINAL : public UObject {
+class U_I18N_API DateIntervalInfo final : public UObject {
 public:
     /**
      * Default constructor.
@@ -245,7 +245,7 @@ public:
      * Restriction:
      * Currently, users can only set interval patterns when the following
      * calendar fields are different: ERA, YEAR, MONTH, DATE,  DAY_OF_MONTH,
-     * DAY_OF_WEEK, AM_PM,  HOUR, HOUR_OF_DAY, and MINUTE.
+     * DAY_OF_WEEK, AM_PM,  HOUR, HOUR_OF_DAY, MINUTE, SECOND and MILLISECOND.
      * Interval patterns when other calendar fields are different are
      * not supported.
      *
@@ -307,8 +307,8 @@ public:
 
     /** Get default order -- whether the first date in pattern is later date
                              or not.
-     * return default date ordering in interval pattern. TRUE if the first date
-     *        in pattern is later date, FALSE otherwise.
+     * return default date ordering in interval pattern. true if the first date
+     *        in pattern is later date, false otherwise.
      * @stable ICU 4.0
      */
     UBool getDefaultOrder() const;
@@ -319,7 +319,7 @@ public:
      *
      * @stable ICU 4.0
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
     /**
      * ICU "poor man's RTTI", returns a UClassID for this class.
@@ -343,12 +343,12 @@ private:
     /**
      * Internal struct used to load resource bundle data.
      */
-    struct DateIntervalSink;
+    struct U_HIDDEN DateIntervalSink;
 
     /**
      * Following is for saving the interval patterns.
      * We only support interval patterns on
-     * ERA, YEAR, MONTH, DAY, AM_PM, HOUR, and MINUTE
+     * ERA, YEAR, MONTH, DAY, AM_PM, HOUR, MINUTE, SECOND and MILLISECOND.
      */
     enum IntervalPatternIndex
     {
@@ -360,6 +360,7 @@ private:
         kIPI_HOUR,
         kIPI_MINUTE,
         kIPI_SECOND,
+        kIPI_MILLISECOND,
         kIPI_MAX_INDEX
     };
 public:
@@ -405,7 +406,7 @@ private:
      * and the best match skeleton.
      *
      * TODO (xji): set field weight or
-     *             isolate the funtionality in DateTimePatternGenerator
+     *             isolate the functionality in DateTimePatternGenerator
      * @param  skeleton               input skeleton
      * @param  bestMatchDistanceInfo  the difference between input skeleton
      *                                and best match skeleton.
@@ -453,8 +454,8 @@ private:
      * hash table.
      *
      * Since we only support the following calendar fields:
-     * ERA, YEAR, MONTH, DATE,  DAY_OF_MONTH, DAY_OF_WEEK,
-     * AM_PM,  HOUR, HOUR_OF_DAY, and MINUTE,
+     * ERA, YEAR, MONTH, DATE, DAY_OF_MONTH, DAY_OF_WEEK,
+     * AM_PM, HOUR, HOUR_OF_DAY, MINUTE, SECOND, and MILLISECOND.
      * We reserve only 4 interval patterns for a skeleton.
      *
      * @param field    calendar field

@@ -1,0 +1,67 @@
+# name: test/sql/parallelism/interquery/concurrent_update_multiple_updaters.test_slow
+# description: Test concurrent updates with a single updater
+# group: [interquery]
+
+statement ok
+CREATE TABLE accounts(id INTEGER, money INTEGER)
+
+# 10 accounts
+# 10 money per account
+statement ok
+INSERT INTO accounts SELECT i + 1 AS id, 10 AS money FROM range(10) t(i)
+
+concurrentloop threadid 0 11
+
+# reader thread
+loop x 0 2000
+
+onlyif threadid=0
+query I
+SELECT SUM(money) FROM accounts
+----
+100
+
+endloop
+
+# updater threads
+loop i 0 1000
+
+onlyif threadid>0
+statement ok
+BEGIN TRANSACTION
+
+onlyif threadid>0
+statement ok
+UPDATE accounts SET money = money + ${i} * 2 WHERE id = ${threadid}
+
+onlyif threadid>0
+statement ok
+UPDATE accounts SET money = money - ${i} WHERE id = ${threadid}
+
+onlyif threadid>0
+statement ok
+UPDATE accounts SET money = money - ${i} * 2 WHERE id = ${threadid}
+
+onlyif threadid>0
+statement ok
+UPDATE accounts SET money = money + ${i} WHERE id = ${threadid}
+
+# we test both commit and rollback
+# the result of both should be the same since the updates have a
+# net-zero effect
+onlyif threadid>5
+statement ok
+COMMIT
+
+onlyif threadid>0&&threadid<=5
+statement ok
+ROLLBACK
+
+endloop
+
+endloop
+
+query I
+SELECT SUM(money) FROM accounts
+----
+100

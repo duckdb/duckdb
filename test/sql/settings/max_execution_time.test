@@ -1,0 +1,167 @@
+# name: test/sql/settings/max_execution_time.test
+# description: Test max_execution_time setting
+# group: [settings]
+
+# verify default is 0 (no limit)
+query I
+SELECT current_setting('max_execution_time')
+----
+0
+
+# set and verify
+statement ok
+SET max_execution_time=5000
+
+query I
+SELECT current_setting('max_execution_time')
+----
+5000
+
+# reset and verify
+statement ok
+RESET max_execution_time
+
+query I
+SELECT current_setting('max_execution_time')
+----
+0
+
+# test that setting appears in duckdb_settings()
+query III
+SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'max_execution_time'
+----
+max_execution_time	0	BIGINT
+
+# set small value and verify it shows
+statement ok
+SET max_execution_time=100
+
+query III
+SELECT name, value, input_type FROM duckdb_settings() WHERE name = 'max_execution_time'
+----
+max_execution_time	100	BIGINT
+
+# test timeout triggers (50ms timeout on slow cross-product query)
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT COUNT(*) FROM range(100000000) t1, range(1000) t2
+----
+Interrupt
+
+# increase timeout so RESET can succeed  
+statement ok
+SET max_execution_time=5000
+
+# verify the increased timeout
+query I
+SELECT current_setting('max_execution_time')
+----
+5000
+
+# now reset should work fine
+statement ok
+RESET max_execution_time
+
+# verify reset worked
+query I
+SELECT current_setting('max_execution_time')
+----
+0
+
+# simple query succeeds with no timeout
+statement ok
+SELECT 1
+
+# Recursive CTE (tight loop in ExecuteRecursivePipelines)
+statement ok
+SET max_execution_time=100
+
+statement error
+WITH RECURSIVE cte AS (
+    SELECT 1 as n
+    UNION ALL
+    SELECT n+1 FROM cte WHERE n < 10000000
+)
+SELECT COUNT(*) FROM cte
+----
+Interrupt
+
+statement ok
+SET max_execution_time=5000
+
+# Complex aggregation with many groups (hash table operations)
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT i % 10000000 as g, COUNT(*) FROM range(100000000) t(i) GROUP BY 1
+----
+Interrupt
+
+statement ok
+SET max_execution_time=5000
+
+# Large sort operation
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT * FROM range(50000000) ORDER BY random()
+----
+Interrupt
+
+statement ok
+SET max_execution_time=5000
+
+# Window functions with partitioning (creates many partitions)
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT i, SUM(i) OVER (PARTITION BY i % 1000000 ORDER BY i) FROM range(10000000) t(i)
+----
+Interrupt
+
+statement ok
+SET max_execution_time=5000
+
+# Complex expression evaluation (nested CASE statements)
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT 
+    CASE WHEN i % 2 = 0 THEN
+        CASE WHEN i % 3 = 0 THEN
+            CASE WHEN i % 5 = 0 THEN 'FizzBuzz'
+            ELSE 'Fizz' END
+        ELSE CASE WHEN i % 5 = 0 THEN 'Buzz'
+        ELSE i::VARCHAR END END
+    ELSE i::VARCHAR END as result,
+    COUNT(*) 
+FROM range(100000000) t(i) 
+GROUP BY 1
+----
+Interrupt
+
+statement ok
+SET max_execution_time=5000
+
+# DISTINCT with many unique values (hash table)
+statement ok
+SET max_execution_time=50
+
+statement error
+SELECT DISTINCT i FROM range(50000000) t(i)
+----
+Interrupt
+
+statement ok
+RESET max_execution_time
+
+# Verify everything works without timeout
+statement ok
+SELECT COUNT(*) FROM range(1000)
+

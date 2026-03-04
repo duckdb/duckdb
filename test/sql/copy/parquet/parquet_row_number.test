@@ -54,10 +54,10 @@ select row_group_id, row_group_num_rows, stats_min, stats_max from parquet_metad
 8	1000	8000	8999
 9	1000	9000	9999
 
-query I
-select stats(seq) from parquet_scan('{DATA_DIR}/parquet-testing/file_row_number.parquet') limit 1
+query IIII
+select s.min, s.max, s.has_null, s.has_no_null from (select stats(seq) s from parquet_scan('{DATA_DIR}/parquet-testing/file_row_number.parquet') limit 1)
 ----
-[Min: 0, Max: 9999][Has Null: false, Has No Null: true]
+0	9999	false	true
 
 query III
 select min(file_row_number), max(file_row_number), count(*) from parquet_scan('{DATA_DIR}/parquet-testing/file_row_number.parquet', file_row_number=1) where seq > 6500;
@@ -66,10 +66,10 @@ select min(file_row_number), max(file_row_number), count(*) from parquet_scan('{
 
 
 # stats tests
-query I
-select first(stats(file_row_number)) from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1);
+query IIII
+select s.min, s.max, s.has_null, s.has_no_null from (select first(stats(file_row_number)) s from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1));
 ----
-[Min: 0, Max: 10000][Has Null: false, Has No Null: true]
+0	10000	false	true
 
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;

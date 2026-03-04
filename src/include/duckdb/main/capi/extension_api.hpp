@@ -632,9 +632,19 @@ typedef struct {
 	idx_t (*duckdb_scalar_function_bind_get_argument_count)(duckdb_bind_info info);
 	duckdb_expression (*duckdb_scalar_function_bind_get_argument)(duckdb_bind_info info, idx_t index);
 	void (*duckdb_scalar_function_set_bind_data_copy)(duckdb_bind_info info, duckdb_copy_callback_t copy);
+	// New functions to configure local states for scalar functions
+
+	void *(*duckdb_scalar_function_get_state)(duckdb_function_info info);
+	void (*duckdb_scalar_function_set_init)(duckdb_scalar_function scalar_function, duckdb_scalar_function_init_t init);
+	void (*duckdb_scalar_function_init_set_error)(duckdb_init_info info, const char *error);
+	void (*duckdb_scalar_function_init_set_state)(duckdb_init_info info, void *state, duckdb_delete_callback_t destroy);
+	void (*duckdb_scalar_function_init_get_client_context)(duckdb_init_info info, duckdb_client_context *out_context);
+	void *(*duckdb_scalar_function_init_get_bind_data)(duckdb_init_info info);
+	void *(*duckdb_scalar_function_init_get_extra_info)(duckdb_init_info info);
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
+	duckdb_error_data (*duckdb_valid_utf8_check)(const char *str, idx_t len);
 	// New functions around the table description
 
 	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
@@ -662,6 +672,8 @@ typedef struct {
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
 	                               idx_t src_offset, idx_t dst_offset);
+	void (*duckdb_unsafe_vector_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
+	                                                       idx_t str_len);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -1188,7 +1200,15 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_scalar_function_bind_get_argument_count = duckdb_scalar_function_bind_get_argument_count;
 	result.duckdb_scalar_function_bind_get_argument = duckdb_scalar_function_bind_get_argument;
 	result.duckdb_scalar_function_set_bind_data_copy = duckdb_scalar_function_set_bind_data_copy;
+	result.duckdb_scalar_function_get_state = duckdb_scalar_function_get_state;
+	result.duckdb_scalar_function_set_init = duckdb_scalar_function_set_init;
+	result.duckdb_scalar_function_init_set_error = duckdb_scalar_function_init_set_error;
+	result.duckdb_scalar_function_init_set_state = duckdb_scalar_function_init_set_state;
+	result.duckdb_scalar_function_init_get_client_context = duckdb_scalar_function_init_get_client_context;
+	result.duckdb_scalar_function_init_get_bind_data = duckdb_scalar_function_init_get_bind_data;
+	result.duckdb_scalar_function_init_get_extra_info = duckdb_scalar_function_init_get_extra_info;
 	result.duckdb_value_to_string = duckdb_value_to_string;
+	result.duckdb_valid_utf8_check = duckdb_valid_utf8_check;
 	result.duckdb_table_description_get_column_count = duckdb_table_description_get_column_count;
 	result.duckdb_table_description_get_column_type = duckdb_table_description_get_column_type;
 	result.duckdb_table_function_get_client_context = duckdb_table_function_get_client_context;
@@ -1205,6 +1225,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
 	result.duckdb_vector_copy_sel = duckdb_vector_copy_sel;
+	result.duckdb_unsafe_vector_assign_string_element_len = duckdb_unsafe_vector_assign_string_element_len;
 	return result;
 }
 

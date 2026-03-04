@@ -49,12 +49,13 @@
  * ANSI C headers:
  * stddef.h defines wchar_t
  */
+#include <stdbool.h>
 #include <stddef.h>
 
 /*==========================================================================*/
-/* For C wrappers, we use the symbol U_STABLE.                                */
+/* For C wrappers, we use the symbol U_CAPI.                                */
 /* This works properly if the includer is C or C++.                         */
-/* Functions are declared   U_STABLE return-type U_EXPORT2 function-name()... */
+/* Functions are declared   U_CAPI return-type U_EXPORT2 function-name()... */
 /*==========================================================================*/
 
 /**
@@ -107,38 +108,16 @@
 
 /** This is used to declare a function as a public ICU C API @stable ICU 2.0*/
 #define U_CAPI U_CFUNC U_EXPORT
-/** This is used to declare a function as a stable public ICU C API*/
+/** Obsolete/same as U_CAPI; was used to declare a function as a stable public ICU C API*/
 #define U_STABLE U_CAPI
-/** This is used to declare a function as a draft public ICU C API  */
+/** Obsolete/same as U_CAPI; was used to declare a function as a draft public ICU C API  */
 #define U_DRAFT  U_CAPI
 /** This is used to declare a function as a deprecated public ICU C API  */
 #define U_DEPRECATED U_CAPI U_ATTRIBUTE_DEPRECATED
-/** This is used to declare a function as an obsolete public ICU C API  */
+/** Obsolete/same as U_CAPI; was used to declare a function as an obsolete public ICU C API  */
 #define U_OBSOLETE U_CAPI
-/** This is used to declare a function as an internal ICU C API  */
+/** Obsolete/same as U_CAPI; was used to declare a function as an internal ICU C API  */
 #define U_INTERNAL U_CAPI
-
-/**
- * \def U_OVERRIDE
- * Defined to the C++11 "override" keyword if available.
- * Denotes a class or member which is an override of the base class.
- * May result in an error if it applied to something not an override.
- * @internal
- */
-#ifndef U_OVERRIDE
-#define U_OVERRIDE override
-#endif
-
-/**
- * \def U_FINAL
- * Defined to the C++11 "final" keyword if available.
- * Denotes a class or member which may not be overridden in subclasses.
- * May result in an error if subclasses attempt to override.
- * @internal
- */
-#if !defined(U_FINAL) || defined(U_IN_DOXYGEN)
-#define U_FINAL final
-#endif
 
 // Before ICU 65, function-like, multi-statement ICU macros were just defined as
 // series of statements wrapped in { } blocks and the caller could choose to
@@ -170,11 +149,11 @@
 
 /**
  * \def UPRV_BLOCK_MACRO_END
- * Defined as "while (FALSE)" by default.
+ * Defined as "while (false)" by default.
  * @internal
  */
 #ifndef UPRV_BLOCK_MACRO_END
-#define UPRV_BLOCK_MACRO_END while (FALSE)
+#define UPRV_BLOCK_MACRO_END while (false)
 #endif
 
 /*==========================================================================*/
@@ -257,18 +236,53 @@
 /* Boolean data type                                                        */
 /*==========================================================================*/
 
-/** The ICU boolean type @stable ICU 2.0 */
+/**
+ * The ICU boolean type, a signed-byte integer.
+ * ICU-specific for historical reasons: The C and C++ standards used to not define type bool.
+ * Also provides a fixed type definition, as opposed to
+ * type bool whose details (e.g., sizeof) may vary by compiler and between C and C++.
+ *
+ * @stable ICU 2.0
+ */
 typedef int8_t UBool;
 
+/**
+ * \def U_DEFINE_FALSE_AND_TRUE
+ * Normally turns off defining macros FALSE=0 & TRUE=1 in public ICU headers.
+ * These obsolete macros sometimes break compilation of other code that
+ * defines enum constants or similar with these names.
+ * C++ has long defined bool/false/true.
+ * C99 also added definitions for these, although as macros; see stdbool.h.
+ *
+ * You may transitionally define U_DEFINE_FALSE_AND_TRUE=1 if you need time to migrate code.
+ *
+ * @internal ICU 68
+ */
+#ifdef U_DEFINE_FALSE_AND_TRUE
+    // Use the predefined value.
+#else
+    // Default to avoiding collision with non-macro definitions of FALSE & TRUE.
+#   define U_DEFINE_FALSE_AND_TRUE 0
+#endif
+
+#if U_DEFINE_FALSE_AND_TRUE || defined(U_IN_DOXYGEN)
 #ifndef TRUE
-/** The TRUE value of a UBool @stable ICU 2.0 */
+/**
+ * The TRUE value of a UBool.
+ *
+ * @deprecated ICU 68 Use standard "true" instead.
+ */
 #   define TRUE  1
 #endif
 #ifndef FALSE
-/** The FALSE value of a UBool @stable ICU 2.0 */
+/**
+ * The FALSE value of a UBool.
+ *
+ * @deprecated ICU 68 Use standard "false" instead.
+ */
 #   define FALSE 0
 #endif
-
+#endif  // U_DEFINE_FALSE_AND_TRUE
 
 /*==========================================================================*/
 /* Unicode data types                                                       */
@@ -312,7 +326,7 @@ typedef int8_t UBool;
 
 /* UChar and UChar32 definitions -------------------------------------------- */
 
-/** Number of bytes in a UChar. @stable ICU 2.0 */
+/** Number of bytes in a UChar (always 2). @stable ICU 2.0 */
 #define U_SIZEOF_UCHAR 2
 
 /**
@@ -320,11 +334,7 @@ typedef int8_t UBool;
  * If 1, then char16_t is a typedef and not a real type (yet)
  * @internal
  */
-#if (U_PLATFORM == U_PF_AIX) && defined(__cplusplus) &&(U_CPLUSPLUS_VERSION < 11)
-// for AIX, uchar.h needs to be included
-# include <uchar.h>
-# define U_CHAR16_IS_TYPEDEF 1
-#elif defined(_MSC_VER) && (_MSC_VER < 1900)
+#if defined(_MSC_VER) && (_MSC_VER < 1900)
 // Versions of Visual Studio/MSVC below 2015 do not support char16_t as a real type,
 // and instead use a typedef.  https://msdn.microsoft.com/library/bb531344.aspx
 # define U_CHAR16_IS_TYPEDEF 1
@@ -372,10 +382,10 @@ typedef int8_t UBool;
     typedef char16_t UChar;
 #elif defined(UCHAR_TYPE)
     typedef UCHAR_TYPE UChar;
-#elif defined(__cplusplus)
-    typedef char16_t UChar;
+#elif U_CPLUSPLUS_VERSION != 0
+    typedef char16_t UChar;  // C++
 #else
-    typedef uint16_t UChar;
+    typedef uint16_t UChar;  // C
 #endif
 
 /**

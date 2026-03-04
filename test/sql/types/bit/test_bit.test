@@ -111,10 +111,10 @@ INSERT INTO bits VALUES('1A10')
 ----
 <REGEX>:Conversion Error.*Invalid character encountered.*
 
-statement error
+query I
 SELECT ('0101011'::BIT(10))
 ----
-<REGEX>:Parser Error.*Type BIT does not support any modifiers!.*
+0101011
 
 # bit null test and empty values
 query I

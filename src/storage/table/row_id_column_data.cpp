@@ -1,6 +1,5 @@
 #include "duckdb/storage/table/row_id_column_data.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 
@@ -37,11 +36,6 @@ void RowIdColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 
 idx_t RowIdColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                             idx_t scan_count) {
-	return ScanCommitted(vector_index, state, result, true, scan_count);
-}
-
-idx_t RowIdColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-                                     idx_t scan_count) {
 	return ScanCount(state, result, scan_count, 0);
 }
 
@@ -98,11 +92,6 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 
 void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              SelectionVector &sel, idx_t count) {
-	SelectCommitted(vector_index, state, result, sel, count, true);
-}
-
-void RowIdColumnData::SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                                      idx_t count, bool allow_updates) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<row_t>(result);
 	auto row_start = state.parent->row_group->GetRowStart();
@@ -116,8 +105,8 @@ idx_t RowIdColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 	throw InternalException("Fetch is not supported for row id columns");
 }
 
-void RowIdColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                               idx_t result_idx) {
+void RowIdColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                               row_t row_id, Vector &result, idx_t result_idx) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto data = FlatVector::GetData<row_t>(result);
 	auto row_start = state.row_group->GetRowStart();
@@ -166,7 +155,8 @@ unique_ptr<ColumnCheckpointState> RowIdColumnData::CreateCheckpointState(const R
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 
-unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) {
+unique_ptr<ColumnCheckpointState> RowIdColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+                                                              const BaseStatistics &old_stats) {
 	throw InternalException("RowIdColumnData cannot be checkpointed");
 }
 

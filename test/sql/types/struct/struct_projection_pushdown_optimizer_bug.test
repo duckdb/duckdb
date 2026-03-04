@@ -1,0 +1,32 @@
+# name: test/sql/types/struct/struct_projection_pushdown_optimizer_bug.test
+# group: [struct]
+
+statement ok
+CREATE TABLE tbl(
+	-- 0
+	s1 STRUCT(
+		i SMALLINT
+	),
+	-- 1
+	s2 STRUCT(
+		f DATE
+	),
+	-- 2
+	id INT
+);
+
+statement ok
+INSERT INTO tbl VALUES
+	(ROW(1), ROW(DATE '2024-01-30'), 0);
+
+query III
+WITH subq AS
+  (FROM tbl) -- project 0,1,2
+SELECT 
+       id, -- 2
+       min(subq.s1.i), -- 0.0
+       min(subq.s2.f) -- 1.0
+FROM subq
+GROUP BY id;
+----
+0	1	2024-01-30

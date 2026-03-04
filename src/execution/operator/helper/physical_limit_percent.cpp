@@ -164,4 +164,18 @@ SourceResultType PhysicalLimitPercent::GetDataInternal(ExecutionContext &context
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
+InsertionOrderPreservingMap<string> PhysicalLimitPercent::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	if (limit_val.Type() == LimitNodeType::CONSTANT_PERCENTAGE) {
+		result["Limit"] = to_string(limit_val.GetConstantPercentage()) + "%";
+	}
+	if (offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
+		auto offset = offset_val.GetConstantValue();
+		if (offset > 0) {
+			result["Offset"] = to_string(offset);
+		}
+	}
+	return result;
+}
+
 } // namespace duckdb

@@ -14,9 +14,11 @@
 
 namespace duckdb {
 
+struct ParquetOperatorPageState;
+
 struct PrimitiveCastOperator {
 	template <class SRC, class TGT>
-	static TGT Operation(SRC input) {
+	static TGT Operation(SRC input, ParquetOperatorPageState *state) {
 		return TGT(input);
 	}
 	template <class SRC, class TGT>

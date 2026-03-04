@@ -802,7 +802,6 @@ static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
 static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"json", "json"},
     {"inet", "inet"},
-    {"geometry", "spatial"}
 }; // END_OF_EXTENSION_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -906,7 +905,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "postgres_scanner",
     "tpcds",
     "tpch",
-    "uc_catalog",
+    "unity_catalog",
     "ui"
 }; // END_OF_AUTOLOADABLE_EXTENSIONS
 

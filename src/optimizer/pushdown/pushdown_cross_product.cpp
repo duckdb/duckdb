@@ -46,15 +46,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		// join conditions found: turn into inner join
 		// extract join conditions
 		vector<JoinCondition> conditions;
-		vector<unique_ptr<Expression>> arbitrary_expressions;
 		const auto join_type = JoinType::INNER;
 		LogicalComparisonJoin::ExtractJoinConditions(GetContext(), join_type, join_ref_type, op->children[0],
 		                                             op->children[1], left_bindings, right_bindings, join_expressions,
-		                                             conditions, arbitrary_expressions);
+		                                             conditions);
 		// create the join from the join conditions
-		auto new_op = LogicalComparisonJoin::CreateJoin(GetContext(), join_type, join_ref_type,
-		                                                std::move(op->children[0]), std::move(op->children[1]),
-		                                                std::move(conditions), std::move(arbitrary_expressions));
+		auto new_op = LogicalComparisonJoin::CreateJoin(join_type, join_ref_type, std::move(op->children[0]),
+		                                                std::move(op->children[1]), std::move(conditions));
 
 		// possible cases are: AnyJoin, ComparisonJoin, or Filter + ComparisonJoin
 		if (op->has_estimated_cardinality) {

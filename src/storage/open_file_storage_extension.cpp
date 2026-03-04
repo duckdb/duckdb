@@ -71,8 +71,8 @@ unique_ptr<TransactionManager> OpenFileStorageTransactionManager(optional_ptr<St
 	return make_uniq<DuckTransactionManager>(db);
 }
 
-unique_ptr<StorageExtension> OpenFileStorageExtension::Create() {
-	auto result = make_uniq<StorageExtension>();
+shared_ptr<StorageExtension> OpenFileStorageExtension::Create() {
+	auto result = make_shared_ptr<StorageExtension>();
 	result->attach = OpenFileStorageAttach;
 	result->create_transaction_manager = OpenFileStorageTransactionManager;
 	return result;

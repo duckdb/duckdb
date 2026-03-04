@@ -42,46 +42,77 @@ bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal, const uint8_t
 // Iterator
 //===--------------------------------------------------------------------===//
 
-bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t> &row_ids, const bool equal) {
+template <typename Output>
+ARTScanResult Iterator::Scan(const ARTKey &upper_bound, Output &output, bool equal) {
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.
 		if (!upper_bound.Empty()) {
 			if (status == GateStatus::GATE_NOT_SET || entered_nested_leaf) {
 				if (current_key.GreaterThan(upper_bound, equal, nested_depth)) {
-					return true;
+					return ARTScanResult::COMPLETED;
 				}
 			}
 		}
 
+		// Set the current key in the output policy.
+		D_ASSERT(current_key.Size() >= nested_depth);
+		auto key_len = current_key.Size() - nested_depth;
+		output.SetKey(current_key, key_len);
+
 		switch (last_leaf.GetType()) {
-		case NType::LEAF_INLINED:
-			if (row_ids.size() + 1 > max_count) {
-				return false;
+		case NType::LEAF_INLINED: {
+			if (output.IsFull()) {
+				return ARTScanResult::PAUSED;
 			}
-			row_ids.insert(last_leaf.GetRowId());
+			output.Add(last_leaf.GetRowId());
 			break;
-		case NType::LEAF:
-			if (!Leaf::DeprecatedGetRowIds(art, last_leaf, row_ids, max_count)) {
-				return false;
+		}
+		case NType::LEAF: {
+			D_ASSERT(nested_depth == 0);
+			if (!resume_state.has_cached_row_ids) {
+				resume_state.cached_row_ids.clear();
+				Leaf::DeprecatedGetRowIds(art, last_leaf, resume_state.cached_row_ids, NumericLimits<idx_t>::Maximum());
+				resume_state.cached_row_ids_it = resume_state.cached_row_ids.begin();
+				resume_state.has_cached_row_ids = true;
 			}
+			// Try to output the next entry in the deprecated leaf chain.
+			while (resume_state.cached_row_ids_it != resume_state.cached_row_ids.end()) {
+				if (output.IsFull()) {
+					// If we pause here, then scanning will resume at cached_row_ids_it.
+					return ARTScanResult::PAUSED;
+				}
+				output.Add(*resume_state.cached_row_ids_it);
+				++resume_state.cached_row_ids_it;
+			}
+			resume_state.has_cached_row_ids = false;
 			break;
+		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF: {
-			uint8_t byte = 0;
-			while (last_leaf.GetNextByte(art, byte)) {
-				if (row_ids.size() + 1 > max_count) {
-					return false;
+			// If we haven't traversed this leaf yet, set nested_started to true (allows us to pick up iteration again
+			// in case we fill the output with capacity.
+			if (!resume_state.nested_started) {
+				resume_state.nested_byte = 0;
+				resume_state.nested_started = true;
+			}
+			// Try to output the next inlined leaf.
+			while (last_leaf.GetNextByte(art, resume_state.nested_byte)) {
+				if (output.IsFull()) {
+					// If we pause here, then scanning will resume at nested_byte in the current leaf.
+					return ARTScanResult::PAUSED;
 				}
-				row_id[ROW_ID_SIZE - 1] = byte;
-				ARTKey key(&row_id[0], ROW_ID_SIZE);
-				row_ids.insert(key.GetRowId());
-				if (byte == NumericLimits<uint8_t>::Maximum()) {
+				row_id[ROW_ID_SIZE - 1] = resume_state.nested_byte;
+				ARTKey rid_key(&row_id[0], ROW_ID_SIZE);
+				output.Add(rid_key.GetRowId());
+
+				if (resume_state.nested_byte == NumericLimits<uint8_t>::Maximum()) {
 					break;
 				}
-				byte++;
+				resume_state.nested_byte++;
 			}
+			resume_state.nested_started = false;
 			break;
 		}
 		default:
@@ -91,8 +122,12 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 		entered_nested_leaf = false;
 		has_next = Next();
 	} while (has_next);
-	return true;
+	return ARTScanResult::COMPLETED;
 }
+
+// Explicit template instantiations for the two output policies.
+template ARTScanResult Iterator::Scan<RowIdSetOutput>(const ARTKey &, RowIdSetOutput &, bool);
+template ARTScanResult Iterator::Scan<KeyRowIdOutput>(const ARTKey &, KeyRowIdOutput &, bool);
 
 void Iterator::FindMinimum(const Node &node) {
 	reference<const Node> ref(node);
@@ -115,7 +150,7 @@ void Iterator::FindMinimum(const Node &node) {
 		// Traverse the prefix.
 		if (ref.get().GetType() == NType::PREFIX) {
 			Prefix prefix(art, ref.get());
-			for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+			for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 				current_key.Push(prefix.data[i]);
 				if (status == GateStatus::GATE_SET) {
 					row_id[nested_depth] = prefix.data[i];
@@ -195,13 +230,13 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 
 		// Push back all prefix bytes.
 		Prefix prefix(art, ref.get());
-		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+		for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
 		nodes.emplace(ref.get(), 0);
 
 		// We compare the prefix bytes with the key bytes.
-		for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
+		for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
 			// We found a prefix byte that is less than its corresponding key byte.
 			// I.e., the subsequent node is lesser than the key. Thus, the next node
 			// is the lower bound.
@@ -219,7 +254,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 		}
 
 		// The prefix matches the key. Move to the child and update depth.
-		depth += prefix.data[Prefix::Count(art)];
+		depth += prefix.data[art.PrefixCount()];
 		ref = *prefix.ptr;
 	}
 	// Should always have a node with metadata.
@@ -278,7 +313,7 @@ void Iterator::PopNode() {
 	} else {
 		// Pop all prefix bytes and the node.
 		Prefix prefix(art, nodes.top().node);
-		auto prefix_byte_count = prefix.data[Prefix::Count(art)];
+		auto prefix_byte_count = prefix.data[art.PrefixCount()];
 		current_key.Pop(prefix_byte_count);
 
 		if (status == GateStatus::GATE_SET) {

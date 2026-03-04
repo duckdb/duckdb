@@ -26,6 +26,7 @@ struct AlterTableInfo;
 struct CreateIndexInfo;
 struct CreateFunctionInfo;
 struct CreateCollationInfo;
+struct CreateCoordinateSystemInfo;
 struct CreateViewInfo;
 struct BoundCreateTableInfo;
 struct CreatePragmaFunctionInfo;
@@ -80,6 +81,12 @@ public:
 	                                                        CreatePragmaFunctionInfo &info) = 0;
 	//! Create a collation within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) = 0;
+	//! Create a coordiante system within the given schema
+	virtual optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
+	                                                          CreateCoordinateSystemInfo &info) {
+		throw NotImplementedException("Coordinate systems are not supported in schema '%s'", name);
+	}
+
 	//! Create a enum within the given schema
 	virtual optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info) = 0;
 

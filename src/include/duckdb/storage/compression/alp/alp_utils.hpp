@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/patas/patas.hpp"
 

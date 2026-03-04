@@ -30,8 +30,7 @@ DROP TABLE t1
 statement ok
 CREATE TABLE t1(i DATE)
 
-# querying the view fails because the column types don't match the expected types
-statement error
+query I
 SELECT * FROM v1
 ----
 
@@ -43,7 +42,7 @@ statement ok
 CREATE TABLE t1(i INTEGER, j INTEGER)
 
 # again querying the view fails: there are extra columns present
-statement error
+query II
 SELECT * FROM v1
 ----
 
@@ -55,10 +54,9 @@ statement ok
 CREATE TABLE t1(k INTEGER)
 
 # names returned by the view have changed
-statement error
+query I
 SELECT * FROM v1
 ----
-Binder Error: Contents of view were altered: names don't match!
 
 statement ok
 DROP TABLE t1
@@ -75,10 +73,9 @@ SELECT * FROM v1
 statement ok
 ALTER TABLE t1 ALTER i TYPE VARCHAR;
 
-statement error
+query I
 select * from v1;
 ----
-Binder Error: Contents of view were altered: types don't match!
 
 # reverting the types fixes the issue
 statement ok
@@ -92,7 +89,6 @@ SELECT * FROM v1
 statement ok
 ALTER TABLE t1 RENAME i TO j
 
-statement error
+query I
 SELECT * FROM v1
 ----
-Binder Error: Contents of view were altered: names don't match!

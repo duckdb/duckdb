@@ -2,10 +2,16 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/settings.hpp"
 #include "shell_state.hpp"
 #include "duckdb/parser/tableref/column_data_ref.hpp"
+#include "shell_renderer.hpp"
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifndef DUCKDB_API_CLI
+#define DUCKDB_API_CLI "cli"
+#endif
 
 namespace duckdb {
 
@@ -22,8 +28,7 @@ static void GetEnvFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 static unique_ptr<FunctionData> GetEnvBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(context)) {
 		throw PermissionException("getenv is disabled through configuration");
 	}
 	return nullptr;
@@ -48,6 +53,7 @@ void ShellExtension::Load(ExtensionLoader &loader) {
 	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind));
 
 	auto &config = duckdb::DBConfig::GetConfig(loader.GetDatabaseInstance());
+	config.SetOptionByName("duckdb_api", DUCKDB_API_CLI);
 	config.replacement_scans.push_back(duckdb::ReplacementScan(duckdb::ShellScanLastResult));
 }
 

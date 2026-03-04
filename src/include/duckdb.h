@@ -650,6 +650,12 @@ typedef struct _duckdb_bind_info {
 	void *internal_ptr;
 } * duckdb_bind_info;
 
+//! Additional function initialization info.
+//! When setting this info, it is necessary to pass a destroy-callback function.
+typedef struct _duckdb_init_info {
+	void *internal_ptr;
+} * duckdb_init_info;
+
 //===--------------------------------------------------------------------===//
 // Scalar function types
 //===--------------------------------------------------------------------===//
@@ -666,6 +672,9 @@ typedef struct _duckdb_scalar_function_set {
 
 //! The bind function callback of the scalar function.
 typedef void (*duckdb_scalar_function_bind_t)(duckdb_bind_info info);
+
+//! The thread-local initialization function of the scalar function.
+typedef void (*duckdb_scalar_function_init_t)(duckdb_init_info info);
 
 //! The function to execute the scalar function on an input chunk.
 typedef void (*duckdb_scalar_function_t)(duckdb_function_info info, duckdb_data_chunk input, duckdb_vector output);
@@ -718,12 +727,6 @@ typedef void (*duckdb_aggregate_finalize_t)(duckdb_function_info info, duckdb_ag
 typedef struct _duckdb_table_function {
 	void *internal_ptr;
 } * duckdb_table_function;
-
-//! Additional function initialization info.
-//! When setting this info, it is necessary to pass a destroy-callback function.
-typedef struct _duckdb_init_info {
-	void *internal_ptr;
-} * duckdb_init_info;
 
 //! The bind function of the table function.
 typedef void (*duckdb_table_function_bind_t)(duckdb_bind_info info);
@@ -1669,6 +1672,16 @@ Get a pointer to the string data of a string_t
 */
 DUCKDB_C_API const char *duckdb_string_t_data(duckdb_string_t *string);
 
+/*!
+Checks if a string is valid UTF-8.
+
+* @param str The string to check
+* @param len The length of the string (in bytes)
+* @return nullptr if the string is valid UTF-8. Otherwise, a duckdb_error_data containing error information. Must be
+destroyed with `duckdb_destroy_error_data`.
+*/
+DUCKDB_C_API duckdb_error_data duckdb_valid_utf8_check(const char *str, idx_t len);
+
 //----------------------------------------------------------------------------------------------------------------------
 // Date Time Timestamp Helpers
 //----------------------------------------------------------------------------------------------------------------------
@@ -2014,6 +2027,8 @@ DUCKDB_C_API duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_s
 
 /*!
 Binds a value to the prepared statement at the specified index.
+
+Supersedes all type-specific bind functions (e.g., `duckdb_bind_varchar`, `duckdb_bind_int64`, etc.).
 */
 DUCKDB_C_API duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_value val);
@@ -2132,12 +2147,16 @@ DUCKDB_C_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepare
 
 /*!
 Binds a null-terminated varchar value to the prepared statement at the specified index.
+
+Superseded by `duckdb_bind_value`.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                               const char *val);
 
 /*!
 Binds a varchar value to the prepared statement at the specified index.
+
+Superseded by `duckdb_bind_value`.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                                      const char *val, idx_t length);
@@ -2377,7 +2396,9 @@ Destroys the value and de-allocates all memory allocated for that type.
 DUCKDB_C_API void duckdb_destroy_value(duckdb_value *value);
 
 /*!
-Creates a value from a null-terminated string
+Creates a value from a null-terminated string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
+
+Superseded by `duckdb_create_varchar_length`.
 
 * @param text The null-terminated string
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2385,7 +2406,7 @@ Creates a value from a null-terminated string
 DUCKDB_C_API duckdb_value duckdb_create_varchar(const char *text);
 
 /*!
-Creates a value from a string
+Creates a value from a string. Returns nullptr if the string is not valid UTF-8 or other invalid input.
 
 * @param text The text
 * @param length The length of the text
@@ -3454,7 +3475,10 @@ This allows NULL values to be written to the vector, regardless of whether a val
 DUCKDB_C_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
 /*!
-Assigns a string element in the vector at the specified location.
+Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8;
+if invalid, a NULL value is assigned at that index.
+
+Superseded by `duckdb_unsafe_vector_assign_string_element_len`, optionally combined with `duckdb_valid_utf8_check`.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -3463,7 +3487,10 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_C_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
+Assigns a string element in the vector at the specified location. For VARCHAR vectors, the input is validated as UTF-8;
+if invalid, a NULL value is assigned at that index. For BLOB vectors, no validation is performed.
+
+Superseded by `duckdb_unsafe_vector_assign_string_element_len`, optionally combined with `duckdb_valid_utf8_check`.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -3472,6 +3499,20 @@ Assigns a string element in the vector at the specified location. You may also u
 */
 DUCKDB_C_API void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
                                                           idx_t str_len);
+
+/*!
+Assigns a string element in the vector at the specified location without UTF-8 validation. The caller is responsible for
+ensuring the input is valid UTF-8. Use `duckdb_valid_utf8_check` to validate strings before calling this function if
+needed. If the input is known to be valid UTF-8, this function can be called directly for better performance, avoiding
+the overhead of redundant validation.
+
+* @param vector The vector to alter
+* @param index The row position in the vector to assign the string to
+* @param str The string
+* @param str_len The length of the string (in bytes)
+*/
+DUCKDB_C_API void duckdb_unsafe_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str,
+                                                                 idx_t str_len);
 
 /*!
 Retrieves the child vector of a list vector.
@@ -3869,6 +3910,67 @@ Returns the input argument at index of the scalar function.
 * @return The input argument at index. Must be destroyed with `duckdb_destroy_expression`.
 */
 DUCKDB_C_API duckdb_expression duckdb_scalar_function_bind_get_argument(duckdb_bind_info info, idx_t index);
+
+/*!
+Retrieves the state pointer of the function info.
+
+* @param info The function info object.
+* @return The state pointer.
+*/
+DUCKDB_C_API void *duckdb_scalar_function_get_state(duckdb_function_info info);
+
+/*!
+Sets the (optional) state init function of the scalar function.
+This is called once for each worker thread that begins executing the function
+* @param scalar_function The scalar function.
+* @param init The init function.
+*/
+DUCKDB_C_API void duckdb_scalar_function_set_init(duckdb_scalar_function scalar_function,
+                                                  duckdb_scalar_function_init_t init);
+
+/*!
+Report that an error has occurred while calling init on a scalar function.
+
+* @param info The init info object.
+* @param error The error message.
+*/
+DUCKDB_C_API void duckdb_scalar_function_init_set_error(duckdb_init_info info, const char *error);
+
+/*!
+Sets the state pointer in the init info of the scalar function.
+
+* @param info The init info object.
+* @param state The state pointer.
+* @param destroy The callback to destroy the state (if any).
+*/
+DUCKDB_C_API void duckdb_scalar_function_init_set_state(duckdb_init_info info, void *state,
+                                                        duckdb_delete_callback_t destroy);
+
+/*!
+Retrieves the client context of the init info of a scalar function.
+
+* @param info The init info object of the scalar function.
+* @param out_context The client context of the init info. Must be destroyed with `duckdb_destroy_client_context`.
+*/
+DUCKDB_C_API void duckdb_scalar_function_init_get_client_context(duckdb_init_info info,
+                                                                 duckdb_client_context *out_context);
+
+/*!
+Gets the scalar function's bind data set by `duckdb_scalar_function_set_bind_data`.
+Note that the bind data is read-only.
+
+* @param info The init info object.
+* @return The bind data object.
+*/
+DUCKDB_C_API void *duckdb_scalar_function_init_get_bind_data(duckdb_init_info info);
+
+/*!
+Retrieves the extra info of the function as set in the init info.
+
+* @param info The init info object.
+* @return The extra info.
+*/
+DUCKDB_C_API void *duckdb_scalar_function_init_get_extra_info(duckdb_init_info info);
 
 //----------------------------------------------------------------------------------------------------------------------
 // Selection Vector Interface

@@ -1,55 +1,20 @@
-diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
-index a925782..b1d8f9d 100644
---- a/src/spatial/index/rtree/rtree_index.cpp
-+++ b/src/spatial/index/rtree/rtree_index.cpp
-@@ -284,8 +284,12 @@ bool RTreeIndex::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
- void RTreeIndex::Vacuum(IndexLock &state) {
- }
- 
--string RTreeIndex::VerifyAndToString(IndexLock &state, const bool only_verify) {
--	throw NotImplementedException("RTreeIndex::VerifyAndToString() not implemented");
-+void RTreeIndex::Verify(IndexLock &l) {
-+	throw NotImplementedException("RTreeIndex::Verify() not implemented");
-+}
-+
-+string RTreeIndex::ToString(IndexLock &l, bool display_ascii) {
-+	throw NotImplementedException("RTreeIndex::ToString() not implemented");
- }
- 
- void RTreeIndex::VerifyAllocations(IndexLock &state) {
-diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
-index 202a6c7..243a476 100644
---- a/src/spatial/index/rtree/rtree_index.hpp
-+++ b/src/spatial/index/rtree/rtree_index.hpp
-@@ -61,8 +61,13 @@ public:
- 	//! Traverses an RTreeIndex and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
- 	void Vacuum(IndexLock &state) override;
- 
--	//! Returns the string representation of the RTreeIndex, or only traverses and verifies the index
--	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
-+	//! Traverses and verifies the index.
-+	//! Currently not implemented.
-+	void Verify(IndexLock &l) override;
-+
-+	//! Returns the string representation of an index.
-+	//! Currently not implemented.
-+	string ToString(IndexLock &l, bool display_ascii = false) override;
- 
- 	//! Ensures that the node allocation counts match the node counts.
- 	void VerifyAllocations(IndexLock &state) override;
-diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index 60ca737..a44cfc7 100644
---- a/src/spatial/modules/main/spatial_functions_scalar.cpp
-+++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
-@@ -9243,6 +9243,11 @@ struct ST_MMin : VertexAggFunctionBase<ST_MMin, VertexMinAggOp> {
- 	static constexpr auto ORDINATE = VertexOrdinate::M;
- };
- 
-+constexpr const char * ST_M::NAME;
-+constexpr const char * ST_X::NAME;
-+constexpr const char * ST_Y::NAME;
-+constexpr const char * ST_Z::NAME;
-+
- } // namespace
- 
- // Helper to access the constant distance from the bind data
+diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
+index e46d5ad..7c08e82 100644
+--- a/src/spatial/operators/spatial_join_optimizer.cpp
++++ b/src/spatial/operators/spatial_join_optimizer.cpp
+@@ -167,7 +167,6 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+ 	spatial_join->types = std::move(cmp_join.types);
+ 	spatial_join->left_projection_map = std::move(cmp_join.left_projection_map);
+ 	spatial_join->right_projection_map = std::move(cmp_join.right_projection_map);
+-	spatial_join->join_stats = std::move(cmp_join.join_stats);
+ 	spatial_join->mark_index = cmp_join.mark_index;
+ 	spatial_join->has_estimated_cardinality = cmp_join.has_estimated_cardinality;
+ 	spatial_join->estimated_cardinality = cmp_join.estimated_cardinality;
+@@ -274,7 +273,6 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+ 	spatial_join->types = std::move(any_join.types);
+ 	spatial_join->left_projection_map = std::move(any_join.left_projection_map);
+ 	spatial_join->right_projection_map = std::move(any_join.right_projection_map);
+-	spatial_join->join_stats = std::move(any_join.join_stats);
+ 	spatial_join->mark_index = any_join.mark_index;
+ 	spatial_join->has_estimated_cardinality = any_join.has_estimated_cardinality;
+ 	spatial_join->estimated_cardinality = any_join.estimated_cardinality;

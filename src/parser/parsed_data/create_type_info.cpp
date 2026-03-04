@@ -41,13 +41,6 @@ string CreateTypeInfo::ToString() const {
 		// CREATE TYPE mood AS ENUM (SELECT 'happy')
 		D_ASSERT(query);
 		result += " AS ENUM (" + query->ToString() + ")";
-	} else if (type.id() == LogicalTypeId::USER) {
-		result += " AS ";
-		auto extra_info = type.AuxInfo();
-		D_ASSERT(extra_info);
-		D_ASSERT(extra_info->type == ExtraTypeInfoType::USER_TYPE_INFO);
-		auto &user_info = extra_info->Cast<UserTypeInfo>();
-		result += QualifierToString(user_info.catalog, user_info.schema, user_info.user_type_name);
 	} else {
 		result += " AS ";
 		result += type.ToString();

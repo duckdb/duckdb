@@ -30,7 +30,8 @@ enum class VectorBufferType : uint8_t {
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
 	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
-	ARRAY_BUFFER         // array buffer, holds a single flatvector child
+	ARRAY_BUFFER,        // array buffer, holds a single flatvector child
+	SHREDDED_BUFFER      // holds data for a shredded variant vector
 };
 
 enum class VectorAuxiliaryDataType : uint8_t {
@@ -349,4 +350,18 @@ private:
 	BufferHandle handle;
 };
 
+//! The DictionaryBuffer holds a selection vector
+class ShreddedVectorBuffer : public VectorBuffer {
+public:
+	explicit ShreddedVectorBuffer(Vector &shredded_data);
+	~ShreddedVectorBuffer() override;
+
+public:
+	Vector &GetChild() {
+		return *shredded_data;
+	}
+
+private:
+	unique_ptr<Vector> shredded_data;
+};
 } // namespace duckdb

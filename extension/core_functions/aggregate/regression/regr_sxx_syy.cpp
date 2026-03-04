@@ -4,27 +4,27 @@
 // Returns REGR_COUNT(y, x) * VAR_POP(y) for non-null pairs.
 
 #include "core_functions/aggregate/regression/regr_count.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
 
 namespace duckdb {
 
 namespace {
 struct RegrSState {
-	size_t count;
+	uint64_t count;
 	StddevState var_pop;
 };
 
 struct RegrBaseOperation {
 	template <class STATE>
 	static void Initialize(STATE &state) {
-		RegrCountFunction::Initialize<size_t>(state.count);
+		RegrCountFunction::Initialize<uint64_t>(state.count);
 		STDDevBaseOperation::Initialize<StddevState>(state.var_pop);
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
-		RegrCountFunction::Combine<size_t, OP>(source.count, target.count, aggr_input_data);
+		RegrCountFunction::Combine<uint64_t, OP>(source.count, target.count, aggr_input_data);
 		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, target.var_pop, aggr_input_data);
 	}
 
@@ -38,7 +38,7 @@ struct RegrBaseOperation {
 		if (!Value::DoubleIsFinite(var_pop)) {
 			throw OutOfRangeException("VARPOP is out of range!");
 		}
-		RegrCountFunction::Finalize<T, size_t>(state.count, target, finalize_data);
+		RegrCountFunction::Finalize<T, uint64_t>(state.count, target, finalize_data);
 		target *= var_pop;
 	}
 
@@ -50,7 +50,7 @@ struct RegrBaseOperation {
 struct RegrSXXOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, y, x, idata);
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, uint64_t, OP>(state.count, y, x, idata);
 		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, x);
 	}
 };
@@ -58,21 +58,30 @@ struct RegrSXXOperation : RegrBaseOperation {
 struct RegrSYYOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, y, x, idata);
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, uint64_t, OP>(state.count, y, x, idata);
 		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, y);
 	}
 };
+
+LogicalType GetRegrSStateType(const AggregateFunction &) {
+	child_list_t<LogicalType> state_children;
+	state_children.emplace_back("count", LogicalType::UBIGINT);
+	state_children.emplace_back("var_pop", VarPopFun::GetFunction().GetStateType());
+	return LogicalType::STRUCT(std::move(state_children));
+}
 
 } // namespace
 
 AggregateFunction RegrSXXFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSXXOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrSStateType);
 }
 
 AggregateFunction RegrSYYFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSState, double, double, double, RegrSYYOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrSStateType);
 }
 
 } // namespace duckdb

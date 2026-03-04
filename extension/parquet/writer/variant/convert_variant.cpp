@@ -5,6 +5,7 @@
 #include "reader/variant/variant_binary_decoder.hpp"
 #include "parquet_shredding.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -41,17 +42,13 @@ static uint8_t EncodeMetadataHeader(idx_t byte_length) {
 }
 
 static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, idx_t count) {
-	auto &keys = variant.keys;
-	auto keys_data = variant.keys_data;
-
 	//! NOTE: the parquet variant is limited to a max dictionary size of NumericLimits<uint32_t>::Maximum()
 	//! Whereas we can have NumericLimits<uint32_t>::Maximum() *per* string in DuckDB
 	auto metadata_data = FlatVector::GetData<string_t>(metadata);
 	for (idx_t row = 0; row < count; row++) {
 		uint64_t dictionary_count = 0;
 		if (variant.RowIsValid(row)) {
-			auto list_entry = keys_data[keys.sel->get_index(row)];
-			dictionary_count = list_entry.length;
+			dictionary_count = variant.GetKeysCount(row);
 		}
 		idx_t dictionary_size = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
@@ -71,19 +68,19 @@ static void CreateMetadata(UnifiedVariantVectorData &variant, Vector &metadata, 
 		auto metadata_blob_data = metadata_blob.GetDataWriteable();
 
 		metadata_blob_data[0] = EncodeMetadataHeader(byte_length);
-		memcpy(metadata_blob_data + 1, reinterpret_cast<data_ptr_t>(&dictionary_count), byte_length);
+		memcpy(metadata_blob_data + 1, const_data_ptr_cast(&dictionary_count), byte_length);
 
 		auto offset_ptr = metadata_blob_data + 1 + byte_length;
 		auto string_ptr = metadata_blob_data + 1 + byte_length + ((dictionary_count + 1) * byte_length);
 		idx_t total_offset = 0;
 		for (idx_t i = 0; i < dictionary_count; i++) {
-			memcpy(offset_ptr + (i * byte_length), reinterpret_cast<data_ptr_t>(&total_offset), byte_length);
+			memcpy(offset_ptr + (i * byte_length), const_data_ptr_cast(&total_offset), byte_length);
 			auto &key = variant.GetKey(row, i);
 
 			memcpy(string_ptr + total_offset, key.GetData(), key.GetSize());
 			total_offset += key.GetSize();
 		}
-		memcpy(offset_ptr + (dictionary_count * byte_length), reinterpret_cast<data_ptr_t>(&total_offset), byte_length);
+		memcpy(offset_ptr + (dictionary_count * byte_length), const_data_ptr_cast(&total_offset), byte_length);
 		D_ASSERT(offset_ptr + ((dictionary_count + 1) * byte_length) == string_ptr);
 		D_ASSERT(string_ptr + total_offset == metadata_blob_data + total_length);
 		metadata_blob.SetSizeAndFinalize(total_length, total_length);
@@ -162,9 +159,18 @@ private:
 };
 
 struct ParquetVariantShredding : public VariantShredding {
+	ParquetVariantShredding() {
+		// for parquet untyped ("value") comes before typed ("typed_value")
+		untyped_value_index = 0;
+		typed_value_index = 1;
+	}
+
 	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
 	                        optional_ptr<const SelectionVector> value_index_sel,
 	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
+
+protected:
+	void WriteMissingField(Vector &vector, idx_t index) override;
 };
 
 } // namespace
@@ -728,6 +734,11 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
 	}
 }
 
+void ParquetVariantShredding::WriteMissingField(Vector &vector, idx_t index) {
+	//! The field is missing, set it to null
+	FlatVector::SetNull(vector, index, true);
+}
+
 void ParquetVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,
                                                  optional_ptr<const SelectionVector> sel,
                                                  optional_ptr<const SelectionVector> value_index_sel,
@@ -809,7 +820,7 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	}
 }
 
-void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
+idx_t VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) {
 	idx_t schema_idx = schemas.size();
 
 	auto &schema = Schema();
@@ -817,6 +828,7 @@ void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &
 
 	auto &repetition_type = schema.repetition_type;
 	auto &name = schema.name;
+	auto &field_id = schema.field_id;
 
 	// variant group
 	duckdb_parquet::SchemaElement top_element;
@@ -829,11 +841,17 @@ void VariantColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement> &
 	top_element.__isset.num_children = true;
 	top_element.__isset.repetition_type = true;
 	top_element.name = name;
+	if (field_id.IsValid()) {
+		top_element.__isset.field_id = true;
+		top_element.field_id = field_id.GetIndex();
+	}
 	schemas.push_back(std::move(top_element));
 
+	idx_t unique_columns = 0;
 	for (auto &child_writer : child_writers) {
-		child_writer->FinalizeSchema(schemas);
+		unique_columns += child_writer->FinalizeSchema(schemas);
 	}
+	return unique_columns;
 }
 
 LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType &type) {
@@ -865,7 +883,7 @@ LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType 
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::ARRAY:
-		throw BinderException("'%s' can't appear inside the a 'typed_value' shredded type!", type.ToString());
+		throw BinderException("'%s' can't appear inside a 'typed_value' shredded type!", type.ToString());
 	default:
 		return type;
 	}
@@ -875,7 +893,7 @@ static LogicalType GetParquetVariantType(optional_ptr<LogicalType> shredding = n
 	child_list_t<LogicalType> children;
 	children.emplace_back("metadata", LogicalType::BLOB);
 	children.emplace_back("value", LogicalType::BLOB);
-	if (shredding) {
+	if (shredding && shredding->id() != LogicalTypeId::VARIANT) {
 		children.emplace_back("typed_value", VariantColumnWriter::TransformTypedValueRecursive(*shredding));
 	}
 	auto res = LogicalType::STRUCT(std::move(children));
@@ -906,7 +924,7 @@ static unique_ptr<FunctionData> BindTransform(ClientContext &context, ScalarFunc
 		if (type_str.IsNull()) {
 			throw BinderException("Optional second argument 'shredding' can not be NULL");
 		}
-		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>());
+		auto shredded_type = TransformStringToLogicalType(type_str.GetValue<string>(), context);
 		bound_function.SetReturnType(GetParquetVariantType(shredded_type));
 	} else {
 		bound_function.SetReturnType(GetParquetVariantType());

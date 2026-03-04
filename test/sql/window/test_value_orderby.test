@@ -45,3 +45,55 @@ FROM DATA
 2.0
 2.0
 4.0
+
+# All null handling
+statement ok
+CREATE TABLE all_nulls (order_col int,value_col float,partition_col int);
+
+statement ok
+INSERT INTO all_nulls VALUES (2,NULL,10);
+
+statement ok
+INSERT INTO all_nulls VALUES (1,NULL,10);
+
+query I
+SELECT first_value(value_col ORDER BY order_col IGNORE NULLS) over (PARTITION BY partition_col) 
+FROM all_nulls;
+----
+NULL
+NULL
+
+query I
+SELECT last_value(value_col ORDER BY order_col IGNORE NULLS) over (PARTITION BY partition_col) 
+FROM all_nulls;
+----
+NULL
+NULL
+
+query I
+SELECT nth_value(value_col, 1 ORDER BY order_col IGNORE NULLS) over (PARTITION BY partition_col) 
+FROM all_nulls;
+----
+NULL
+NULL
+
+# Single element frame
+# Note the sort (from the oririnal issue) is underspecified, 
+# so only the single row can be checked.
+query IIII
+WITH t(a,b) AS (
+  VALUES 
+    (0, 'a'), (0, 'b'),
+    (1, 'c'),
+    (2, 'd'), (2, 'e'), (2, 'f')
+), framed AS (
+	SELECT a, b,
+		   nth_value(b, 1)            OVER w AS b1,
+		   nth_value(b, 1 ORDER BY b) OVER w AS b1_ordered,
+	FROM t
+	WINDOW w AS (ORDER BY a RANGE BETWEEN CURRENT ROW AND CURRENT ROW)
+)
+FROM framed
+where a = 1
+----
+1	c	c	c

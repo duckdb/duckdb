@@ -252,7 +252,7 @@ public:
 class KeyValueSecretReader {
 public:
 	//! Manually pass in a secret reference
-	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {};
+	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p);
 
 	//! Initializes the KeyValueSecretReader by fetching the secret automatically
 	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,

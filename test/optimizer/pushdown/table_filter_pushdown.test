@@ -52,7 +52,7 @@ SELECT k FROM integers where j%50=j
 query II
 EXPLAIN SELECT k FROM integers where j%50=j
 ----
-logical_opt	<REGEX>:.*FILTER.*
+logical_opt	<!REGEX>:.*FILTER.*
 
 # test different data types
 foreach type <numeric>

@@ -1,5 +1,4 @@
 #include "duckdb/storage/compression/dict_fsst/compression.hpp"
-#include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "fsst.h"
 #include "duckdb/common/fsst.hpp"

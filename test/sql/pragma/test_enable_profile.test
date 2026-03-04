@@ -12,11 +12,14 @@ Parser Error: syntax error at or near ")"
 statement error
 PRAGMA enable_profiling='unsupported'
 ----
-Parser Error: Unrecognized print format unsupported, supported formats: [json, query_tree, query_tree_optimizer, no_output]
+Parser Error: Unrecognized print format unsupported, supported formats: [json, query_tree, query_tree_optimizer, no_output, html, graphviz]
 
 statement error
 PRAGMA profiling_output
 ----
+
+statement ok
+PRAGMA enable_profiling='json'
 
 # select the location of where to save the profiling output (instead of printing to stdout)
 statement ok

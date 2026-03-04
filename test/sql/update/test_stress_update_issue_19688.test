@@ -1,0 +1,53 @@
+# name: test/sql/update/test_stress_update_issue_19688.test
+# description: Concurrent stress test: UPDATE/DELETE/INSERT
+# group: [update]
+
+statement ok
+DROP TABLE IF EXISTS test_stress_update_issue_19688
+
+statement ok
+CREATE TABLE test_stress_update_issue_19688 (
+    id INTEGER,
+    val INTEGER
+)
+
+# Insert 1000 initial rows
+statement ok
+INSERT INTO test_stress_update_issue_19688 SELECT range AS id, range * 1000 AS val FROM range(1000)
+
+# Verify initial count
+query I
+SELECT COUNT(*) FROM test_stress_update_issue_19688
+----
+1000
+
+# Launch 8 concurrent workers to perform UPDATE/DELETE/INSERT operations on the same rows
+concurrentloop threadid 0 8
+
+# Each worker operates on all 1000 rows
+loop i 0 1000
+
+statement maybe
+UPDATE test_stress_update_issue_19688 SET val = (${threadid} * 10000 + ${i}) WHERE id = ${i}
+----
+TransactionContext Error
+
+statement maybe
+DELETE FROM test_stress_update_issue_19688 WHERE id = ${i}
+----
+TransactionContext Error
+
+statement maybe
+INSERT INTO test_stress_update_issue_19688 VALUES (${i}, ${threadid} * 10000 + ${i})
+----
+TransactionContext Error
+
+endloop
+
+endloop
+
+# Verify all IDs from 0-999 are present
+query I
+SELECT COUNT(DISTINCT id) FROM test_stress_update_issue_19688
+----
+1000

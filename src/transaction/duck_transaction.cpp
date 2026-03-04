@@ -200,6 +200,10 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 	if (db.IsSystem()) {
 		return false;
 	}
+	if (db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
+		// WAL writes are explicitly disabled
+		return false;
+	}
 	auto &storage_manager = db.GetStorageManager();
 	if (!storage_manager.HasWAL()) {
 		return false;
@@ -246,13 +250,9 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 	return error_data;
 }
 
-ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id,
+ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
                                   unique_ptr<StorageCommitState> commit_state) noexcept {
-	// "checkpoint" parameter indicates if the caller will checkpoint. If checkpoint ==
-	//    true: Then this function will NOT write to the WAL or flush/persist.
-	//          This method only makes commit in memory, expecting caller to checkpoint/flush.
-	//    false: Then this function WILL write to the WAL and Flush/Persist it.
-	this->commit_id = new_commit_id;
+	this->commit_id = commit_info.commit_id;
 	if (!ChangesMade()) {
 		// no need to flush anything if we made no changes
 		return ErrorData();
@@ -262,7 +262,10 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit
 	UndoBuffer::IteratorState iterator_state;
 	try {
 		storage->Commit(commit_state.get());
-		undo_buffer.Commit(iterator_state, commit_id);
+		undo_buffer.Commit(iterator_state, commit_info);
+		// if (DebugForceAbortCommit()) {
+		// 	throw InvalidInputException("Force revert");
+		// }
 		if (commit_state) {
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();
@@ -293,31 +296,36 @@ void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
 }
 
 void DuckTransaction::SetModifications(DatabaseModificationType type) {
-	if (write_lock) {
-		// already have a write lock
-		return;
-	}
-	bool require_write_lock = false;
-	require_write_lock = require_write_lock || type.InsertDataWithIndex();
-	require_write_lock = require_write_lock || type.DeleteData();
-	require_write_lock = require_write_lock || type.UpdateData();
-	require_write_lock = require_write_lock || type.AlterTable();
-	require_write_lock = require_write_lock || type.CreateCatalogEntry();
-	require_write_lock = require_write_lock || type.DropCatalogEntry();
-	require_write_lock = require_write_lock || type.Sequence();
-	require_write_lock = require_write_lock || type.CreateIndex();
+	if (!checkpoint_lock) {
+		bool require_write_lock = false;
+		require_write_lock = require_write_lock || type.UpdateData();
+		require_write_lock = require_write_lock || type.AlterTable();
+		require_write_lock = require_write_lock || type.CreateCatalogEntry();
+		require_write_lock = require_write_lock || type.DropCatalogEntry();
+		require_write_lock = require_write_lock || type.Sequence();
+		require_write_lock = require_write_lock || type.CreateIndex();
 
-	if (require_write_lock) {
-		// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
-		write_lock = GetTransactionManager().SharedCheckpointLock();
+		if (require_write_lock) {
+			// obtain a shared checkpoint lock to prevent concurrent checkpoints while this transaction is running
+			checkpoint_lock = GetTransactionManager().SharedCheckpointLock();
+		}
+	}
+	if (!vacuum_lock) {
+		bool require_vacuum_lock = false;
+		require_vacuum_lock = require_vacuum_lock || type.InsertData();
+		require_vacuum_lock = require_vacuum_lock || type.DeleteData();
+
+		if (require_vacuum_lock) {
+			vacuum_lock = GetTransactionManager().SharedVacuumLock();
+		}
 	}
 }
 
 unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
-	if (!write_lock) {
+	if (!checkpoint_lock) {
 		return GetTransactionManager().TryGetCheckpointLock();
 	} else {
-		return GetTransactionManager().TryUpgradeCheckpointLock(*write_lock);
+		return GetTransactionManager().TryUpgradeCheckpointLock(*checkpoint_lock);
 	}
 }
 

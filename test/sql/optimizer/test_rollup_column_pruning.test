@@ -1,0 +1,87 @@
+# name: test/sql/optimizer/test_rollup_column_pruning.test
+# description: Test that column pruning works correctly with ROLLUP/CUBE
+# group: [optimizer]
+
+statement ok
+CREATE TABLE events(
+    col1 INT, 
+    col2 INT, 
+    col3 INT,
+    unused1 INT,
+    unused2 INT,
+    unused3 INT
+);
+
+statement ok
+INSERT INTO events VALUES 
+    (1, 1, 1, 100, 200, 300),
+    (1, 2, 2, 100, 200, 300),
+    (2, 1, 3, 100, 200, 300);
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# Test 1: ROLLUP with unused columns should prune them from table scan
+query II
+EXPLAIN SELECT col1, COUNT(*) FROM events GROUP BY ROLLUP(col1);
+----
+logical_opt	<!REGEX>:.*unused.*
+
+# Test 2: ROLLUP with join - ensure join column replacement is disabled
+# but column pruning still works for truly unused columns
+statement ok
+CREATE TABLE t2(col4 INT);
+
+statement ok
+INSERT INTO t2 VALUES (1), (2);
+
+query II
+EXPLAIN SELECT col1, col2, col4 
+FROM events JOIN t2 ON events.col1 = t2.col4 
+GROUP BY ROLLUP(col1, col2, col4);
+----
+logical_opt	<!REGEX>:.*unused.*
+
+# Test 3: CTE + ROLLUP should allow column pruning in outer table scan
+query II
+EXPLAIN WITH limited AS (
+    SELECT col1, col2 FROM events WHERE col3 = 1 LIMIT 10
+)
+SELECT e.col1, COUNT(*) 
+FROM events e
+WHERE e.col1 IN (SELECT col1 FROM limited)
+GROUP BY ROLLUP(e.col1);
+----
+logical_opt	<!REGEX>:.*unused.*
+
+statement ok
+PRAGMA explain_output='all';
+
+# Test 4: Verify results are correct with ROLLUP + JOIN
+query IIII rowsort
+SELECT col1, col2, col4, COUNT(*) 
+FROM events JOIN t2 ON events.col1 = t2.col4 
+GROUP BY ROLLUP(col1, col2, col4);
+----
+1	1	1	1
+1	1	NULL	1
+1	2	1	1
+1	2	NULL	1
+1	NULL	NULL	2
+2	1	2	1
+2	1	NULL	1
+2	NULL	NULL	1
+NULL	NULL	NULL	3
+
+# Test 5: Verify results with CTE + ROLLUP
+query II rowsort
+WITH limited AS (
+    SELECT col1, col2 FROM events WHERE col3 = 1 LIMIT 10
+)
+SELECT e.col1, COUNT(*) 
+FROM events e
+WHERE e.col1 IN (SELECT col1 FROM limited)
+GROUP BY ROLLUP(e.col1);
+----
+1	2
+NULL	2

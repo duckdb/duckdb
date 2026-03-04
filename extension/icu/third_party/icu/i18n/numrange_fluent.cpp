@@ -7,13 +7,12 @@
 
 // Allow implicit conversion from char16_t* to UnicodeString for this file:
 // Helpful in toString methods and elsewhere.
-#ifndef UNISTR_FROM_STRING_EXPLICIT
 #define UNISTR_FROM_STRING_EXPLICIT
-#endif
 
 #include "numrange_impl.h"
 #include "util.h"
 #include "number_utypes.h"
+#include "number_decnum.h"
 
 using namespace icu;
 using namespace icu::number;
@@ -192,68 +191,69 @@ LocalizedNumberRangeFormatter NumberRangeFormatter::withLocale(const Locale& loc
 }
 
 
-template<typename T> using numrange_fluent_NFS = NumberRangeFormatterSettings<T>;
-using numrange_fluent_LNF = LocalizedNumberRangeFormatter;
-using numrange_fluent_UNF = UnlocalizedNumberRangeFormatter;
+template<typename T> using NFS = NumberRangeFormatterSettings<T>;
+using LNF = LocalizedNumberRangeFormatter;
+using UNF = UnlocalizedNumberRangeFormatter;
 
-UnlocalizedNumberRangeFormatter::UnlocalizedNumberRangeFormatter(const numrange_fluent_UNF& other)
-        : numrange_fluent_UNF(static_cast<const numrange_fluent_NFS<numrange_fluent_UNF>&>(other)) {}
+UnlocalizedNumberRangeFormatter::UnlocalizedNumberRangeFormatter(const UNF& other)
+        : UNF(static_cast<const NFS<UNF>&>(other)) {}
 
-UnlocalizedNumberRangeFormatter::UnlocalizedNumberRangeFormatter(const numrange_fluent_NFS<numrange_fluent_UNF>& other)
-        : numrange_fluent_NFS<numrange_fluent_UNF>(other) {
+UnlocalizedNumberRangeFormatter::UnlocalizedNumberRangeFormatter(const NFS<UNF>& other)
+        : NFS<UNF>(other) {
     // No additional fields to assign
 }
 
 // Make default copy constructor call the NumberRangeFormatterSettings copy constructor.
-UnlocalizedNumberRangeFormatter::UnlocalizedNumberRangeFormatter(numrange_fluent_UNF&& src) U_NOEXCEPT
-        : numrange_fluent_UNF(static_cast<numrange_fluent_NFS<numrange_fluent_UNF>&&>(src)) {}
+UnlocalizedNumberRangeFormatter::UnlocalizedNumberRangeFormatter(UNF&& src) noexcept
+        : UNF(static_cast<NFS<UNF>&&>(src)) {}
 
-UnlocalizedNumberRangeFormatter::UnlocalizedNumberRangeFormatter(numrange_fluent_NFS<numrange_fluent_UNF>&& src) U_NOEXCEPT
-        : numrange_fluent_NFS<numrange_fluent_UNF>(std::move(src)) {
+UnlocalizedNumberRangeFormatter::UnlocalizedNumberRangeFormatter(NFS<UNF>&& src) noexcept
+        : NFS<UNF>(std::move(src)) {
     // No additional fields to assign
 }
 
-UnlocalizedNumberRangeFormatter& UnlocalizedNumberRangeFormatter::operator=(const numrange_fluent_UNF& other) {
-    numrange_fluent_NFS<numrange_fluent_UNF>::operator=(static_cast<const numrange_fluent_NFS<numrange_fluent_UNF>&>(other));
+UnlocalizedNumberRangeFormatter& UnlocalizedNumberRangeFormatter::operator=(const UNF& other) {
+    NFS<UNF>::operator=(static_cast<const NFS<UNF>&>(other));
     // No additional fields to assign
     return *this;
 }
 
-UnlocalizedNumberRangeFormatter& UnlocalizedNumberRangeFormatter::operator=(numrange_fluent_UNF&& src) U_NOEXCEPT {
-    numrange_fluent_NFS<numrange_fluent_UNF>::operator=(static_cast<numrange_fluent_NFS<numrange_fluent_UNF>&&>(src));
+UnlocalizedNumberRangeFormatter& UnlocalizedNumberRangeFormatter::operator=(UNF&& src) noexcept {
+    NFS<UNF>::operator=(static_cast<NFS<UNF>&&>(src));
     // No additional fields to assign
     return *this;
 }
 
 // Make default copy constructor call the NumberRangeFormatterSettings copy constructor.
-LocalizedNumberRangeFormatter::LocalizedNumberRangeFormatter(const numrange_fluent_LNF& other)
-        : numrange_fluent_LNF(static_cast<const numrange_fluent_NFS<numrange_fluent_LNF>&>(other)) {}
+LocalizedNumberRangeFormatter::LocalizedNumberRangeFormatter(const LNF& other)
+        : LNF(static_cast<const NFS<LNF>&>(other)) {}
 
-LocalizedNumberRangeFormatter::LocalizedNumberRangeFormatter(const numrange_fluent_NFS<numrange_fluent_LNF>& other)
-        : numrange_fluent_NFS<numrange_fluent_LNF>(other) {
+LocalizedNumberRangeFormatter::LocalizedNumberRangeFormatter(const NFS<LNF>& other)
+        : NFS<LNF>(other) {
     // No additional fields to assign
 }
 
-LocalizedNumberRangeFormatter::LocalizedNumberRangeFormatter(LocalizedNumberRangeFormatter&& src) U_NOEXCEPT
-        : numrange_fluent_LNF(static_cast<numrange_fluent_NFS<numrange_fluent_LNF>&&>(src)) {}
+LocalizedNumberRangeFormatter::LocalizedNumberRangeFormatter(LocalizedNumberRangeFormatter&& src) noexcept
+        : LNF(static_cast<NFS<LNF>&&>(src)) {}
 
-LocalizedNumberRangeFormatter::LocalizedNumberRangeFormatter(numrange_fluent_NFS<numrange_fluent_LNF>&& src) U_NOEXCEPT
-        : numrange_fluent_NFS<numrange_fluent_LNF>(std::move(src)) {
+LocalizedNumberRangeFormatter::LocalizedNumberRangeFormatter(NFS<LNF>&& src) noexcept
+        : NFS<LNF>(std::move(src)) {
     // Steal the compiled formatter
-    numrange_fluent_LNF&& _src = static_cast<numrange_fluent_LNF&&>(src);
+    LNF&& _src = static_cast<LNF&&>(src);
     auto* stolen = _src.fAtomicFormatter.exchange(nullptr);
     delete fAtomicFormatter.exchange(stolen);
 }
 
-LocalizedNumberRangeFormatter& LocalizedNumberRangeFormatter::operator=(const numrange_fluent_LNF& other) {
-    numrange_fluent_NFS<numrange_fluent_LNF>::operator=(static_cast<const numrange_fluent_NFS<numrange_fluent_LNF>&>(other));
+LocalizedNumberRangeFormatter& LocalizedNumberRangeFormatter::operator=(const LNF& other) {
+    if (this == &other) { return *this; }  // self-assignment: no-op
+    NFS<LNF>::operator=(static_cast<const NFS<LNF>&>(other));
     // Do not steal; just clear
     delete fAtomicFormatter.exchange(nullptr);
     return *this;
 }
 
-LocalizedNumberRangeFormatter& LocalizedNumberRangeFormatter::operator=(numrange_fluent_LNF&& src) U_NOEXCEPT {
-    numrange_fluent_NFS<numrange_fluent_LNF>::operator=(static_cast<numrange_fluent_NFS<numrange_fluent_LNF>&&>(src));
+LocalizedNumberRangeFormatter& LocalizedNumberRangeFormatter::operator=(LNF&& src) noexcept {
+    NFS<LNF>::operator=(static_cast<NFS<LNF>&&>(src));
     // Steal the compiled formatter
     auto* stolen = src.fAtomicFormatter.exchange(nullptr);
     delete fAtomicFormatter.exchange(stolen);
@@ -336,7 +336,7 @@ void LocalizedNumberRangeFormatter::formatImpl(
     results.getStringRef().writeTerminator(status);
 }
 
-const icu::number::impl::NumberRangeFormatterImpl*
+const impl::NumberRangeFormatterImpl*
 LocalizedNumberRangeFormatter::getFormatter(UErrorCode& status) const {
     // TODO: Move this into umutex.h? (similar logic also in decimfmt.cpp)
     // See ICU-20146
@@ -354,6 +354,7 @@ LocalizedNumberRangeFormatter::getFormatter(UErrorCode& status) const {
     // Try computing the formatter on our own
     auto* temp = new NumberRangeFormatterImpl(fMacros, status);
     if (U_FAILURE(status)) {
+        delete temp;
         return nullptr;
     }
     if (temp == nullptr) {
@@ -375,47 +376,6 @@ LocalizedNumberRangeFormatter::getFormatter(UErrorCode& status) const {
     }
 
 }
-
-
-UPRV_FORMATTED_VALUE_SUBCLASS_AUTO_IMPL(FormattedNumberRange)
-
-#define UPRV_NOARG
-
-UBool FormattedNumberRange::nextFieldPosition(FieldPosition& fieldPosition, UErrorCode& status) const {
-    UPRV_FORMATTED_VALUE_METHOD_GUARD(FALSE)
-    // NOTE: MSVC sometimes complains when implicitly converting between bool and UBool
-    return fData->nextFieldPosition(fieldPosition, status);
-}
-
-void FormattedNumberRange::getAllFieldPositions(FieldPositionIterator& iterator, UErrorCode& status) const {
-    FieldPositionIteratorHandler fpih(&iterator, status);
-    getAllFieldPositionsImpl(fpih, status);
-}
-
-void FormattedNumberRange::getAllFieldPositionsImpl(
-        FieldPositionIteratorHandler& fpih, UErrorCode& status) const {
-    UPRV_FORMATTED_VALUE_METHOD_GUARD(UPRV_NOARG)
-    fData->getAllFieldPositions(fpih, status);
-}
-
-UnicodeString FormattedNumberRange::getFirstDecimal(UErrorCode& status) const {
-    UPRV_FORMATTED_VALUE_METHOD_GUARD(ICU_Utility::makeBogusString())
-    return fData->quantity1.toScientificString();
-}
-
-UnicodeString FormattedNumberRange::getSecondDecimal(UErrorCode& status) const {
-    UPRV_FORMATTED_VALUE_METHOD_GUARD(ICU_Utility::makeBogusString())
-    return fData->quantity2.toScientificString();
-}
-
-UNumberRangeIdentityResult FormattedNumberRange::getIdentityResult(UErrorCode& status) const {
-    UPRV_FORMATTED_VALUE_METHOD_GUARD(UNUM_IDENTITY_RESULT_NOT_EQUAL)
-    return fData->identityResult;
-}
-
-
-UFormattedNumberRangeData::~UFormattedNumberRangeData() = default;
-
 
 
 #endif /* #if !UCONFIG_NO_FORMATTING */

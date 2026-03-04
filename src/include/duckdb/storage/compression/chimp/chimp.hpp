@@ -9,12 +9,6 @@
 #pragma once
 
 #include "duckdb/storage/compression/chimp/algorithm/chimp128.hpp"
-#include "duckdb/common/assert.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/helper.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
-#include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
 

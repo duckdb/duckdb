@@ -113,6 +113,9 @@ def filename_to_upper_camel(file):
     return ''.join(p.capitalize() for p in parts)
 
 
+with open(os.path.join(statements_dir, "common.gram"), 'r') as f:
+    contents += f.read() + "\n"
+
 for file in os.listdir(keywords_dir):
     if not file.endswith('.list'):
         continue
@@ -126,8 +129,9 @@ for file in os.listdir(keywords_dir):
 for file in os.listdir(statements_dir):
     if not file.endswith('.gram'):
         raise Exception(f"File {file} does not end with .gram")
-    with open(os.path.join(statements_dir, file), 'r') as f:
-        contents += f.read() + "\n"
+    if not file == "common.gram":
+        with open(os.path.join(statements_dir, file), 'r') as f:
+            contents += f.read() + "\n"
 
 if args.print:
     print(contents)

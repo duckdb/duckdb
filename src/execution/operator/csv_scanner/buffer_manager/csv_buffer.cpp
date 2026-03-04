@@ -69,7 +69,7 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 
 shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	if (!block || (!is_pipe && block->IsUnloaded())) {
+	if (!block || (!is_pipe && block->GetMemory().IsUnloaded())) {
 		// We have to reload it from disk
 		block = nullptr;
 		Reload(file_handle);

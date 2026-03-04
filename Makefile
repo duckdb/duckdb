@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke
 
 all: release
 opt: release
@@ -23,6 +23,10 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
+SMOKE_UNITTEST ?= build/relassert/test/unittest
+
+# Allow setting extra unit test parameters using `make smoke T=...`.
+T ?=
 
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
@@ -49,8 +53,8 @@ endif
 ifeq (${DISABLE_VPTR_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
 endif
-ifeq (${FORCE_SANITIZER}, 1)
-	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DFORCE_SANITIZER=1
+ifeq (${RELEASE_SANITIZER}, 1)
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DRELEASE_SANITIZER=1
 endif
 ifeq (${THREADSAN}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DENABLE_THREAD_SANITIZER=1
@@ -287,14 +291,21 @@ ifeq (${OVERRIDE_NEW_DELETE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_NEW_DELETE=1
 endif
 ifeq (${MAIN_BRANCH_VERSIONING}, 0)
-        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
+	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
 endif
 ifeq (${MAIN_BRANCH_VERSIONING}, 1)
-        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
+	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
 endif
 ifeq (${STANDALONE_DEBUG}, 1)
-        CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
+	CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
 endif
+ifneq (${DUCKDB_PREBUILT_LIBRARY}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DPREBUILT_BINARY=${DUCKDB_PREBUILT_LIBRARY}
+endif
+ifdef REDUCE_SYMBOLS
+	CMAKE_VARS:=${CMAKE_VARS} -DREDUCE_SYMBOLS=1
+endif
+
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )
@@ -392,6 +403,9 @@ unittest_release: release
 unittestci:
 	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 
+smoke:
+	$(PYTHON) scripts/ci/run_tests.py --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
@@ -417,6 +431,11 @@ relassert: ${EXTENSION_CONFIG_STEP}
 	cd build/relassert && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
+
+.PHONY: relassert-artifact
+
+relassert-artifact:
+	bash scripts/prepare_relassert_artifact.sh
 
 benchmark:
 	mkdir -p ./build/release && \
@@ -518,7 +537,6 @@ generate-files:
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_metric_enums.py
 	$(PYTHON) scripts/generate_enum_util.py
-	$(PYTHON) scripts/generate_builtin_types.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
@@ -528,9 +546,16 @@ bundle-setup:
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
+	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
 	mkdir -p vcpkg_installed && \
 	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
+	mkdir -p _deps && \
+	if [ -f linked_libs.txt ]; then \
+		while IFS= read -r libline || [ -n "$$libline" ]; do \
+			find _deps -path "*/$$libline" -exec cp {} bundle/. \; 2>/dev/null || true; \
+		done < linked_libs.txt; \
+	fi && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
 	find . -name '*.a' -execdir ${AR} -x {} \;
@@ -552,4 +577,5 @@ gather-libs: release
 	mkdir -p libs && \
 	cp src/libduckdb_static.a libs/. && \
 	cp third_party/*/libduckdb_*.a libs/. && \
+	cp extension/libduckdb_generated_extension_loader.a libs/. && \
 	cp extension/*/lib*_extension.a libs/.

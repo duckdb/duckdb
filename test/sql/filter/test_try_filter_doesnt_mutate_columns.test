@@ -1,0 +1,157 @@
+# name: test/sql/filter/test_try_filter_doesnt_mutate_columns.test
+# description: Test to ensure TRY inside a filter does not mutate the output data
+# group: [filter]
+
+# Reproduction of the bug
+statement ok
+CREATE TABLE t0(c0 INT, c1 INT);
+
+statement ok
+INSERT INTO t0(c0, c1) VALUES (1819832341, -2039202523);
+
+statement ok
+INSERT INTO t0(c0) VALUES (517438920);
+
+# Filter using TRY in the WHERE clause, WHERE must not mutate c1
+query II
+SELECT t0.c1, t0.c0
+FROM t0
+WHERE TRY(t0.c1 - t0.c0) IS NULL
+ORDER BY t0.c0;
+----
+NULL	517438920
+-2039202523	1819832341
+
+# Additional test cases for multiple rows and non-NULL TRY
+
+statement ok
+CREATE TABLE t1(c0 INT, c1 INT);
+
+statement ok
+INSERT INTO t1 VALUES (10, 5);
+
+statement ok
+INSERT INTO t1 VALUES (NULL, 3);
+
+statement ok
+INSERT INTO t1 VALUES (20, NULL);
+
+statement ok
+INSERT INTO t1 VALUES (30, 1000000000);
+
+# Rows where TRY(c1 - c0) IS NULL (due to NULLs)
+query II
+SELECT c0, c1
+FROM t1
+WHERE TRY(c1 - c0) IS NULL
+ORDER BY c0 NULLS LAST;
+----
+20	NULL
+NULL	3
+
+# Rows where TRY(c1 - c0) IS NOT NULL, values must remain unchanged
+query III
+SELECT c0, c1, TRY(c1 - c0)
+FROM t1
+WHERE TRY(c1 - c0) IS NOT NULL
+ORDER BY c0;
+----
+10	5	-5
+30	1000000000	999999970
+
+# BIGINT and overflow behavior
+
+statement ok
+CREATE TABLE t_big(c0 BIGINT, c1 BIGINT);
+
+# Large positive + negative, plus a NULL
+
+statement ok
+INSERT INTO t_big VALUES (9223372036854775807, -1);
+
+statement ok
+INSERT INTO t_big VALUES (NULL, 5);
+
+statement ok
+INSERT INTO t_big VALUES (10, NULL);
+
+# Filter with TRY; rows with NULL inputs yield NULL predicate, but values stay unchanged
+query II
+SELECT c0, c1
+FROM t_big
+WHERE TRY(c1 - c0) IS NULL
+ORDER BY c0 NULLS LAST;
+----
+10	NULL
+NULL	5
+
+# DOUBLE values
+
+statement ok
+CREATE TABLE t_double(c0 DOUBLE, c1 DOUBLE);
+
+statement ok
+INSERT INTO t_double VALUES (1.5, 2.5);
+
+statement ok
+INSERT INTO t_double VALUES (NULL, 3.0);
+
+statement ok
+INSERT INTO t_double VALUES (4.0, NULL);
+
+# Filter where TRY(c1 - c0) IS NULL
+query II
+SELECT c0, c1
+FROM t_double
+WHERE TRY(c1 - c0) IS NULL
+ORDER BY c0 NULLS LAST;
+----
+4.0	NULL
+NULL	3.0
+
+# DECIMAL and division by zero
+
+statement ok
+CREATE TABLE t_decimal(c0 DECIMAL(10,2), c1 DECIMAL(10,2));
+
+statement ok
+INSERT INTO t_decimal VALUES (1.00, 2.00);
+
+statement ok
+INSERT INTO t_decimal VALUES (0.00, 5.00);
+
+statement ok
+INSERT INTO t_decimal VALUES (NULL, 7.00);
+
+# Filter where TRY(c1 / c0) IS NULL (errors or NULL inputs)
+query II
+SELECT c0, c1
+FROM t_decimal
+WHERE TRY(c1 / c0) IS NULL
+ORDER BY c0 NULLS LAST;
+----
+NULL	7.00
+
+# VARCHAR with failing cast
+
+statement ok
+CREATE TABLE t_varchar(c0 VARCHAR, c1 VARCHAR);
+
+statement ok
+INSERT INTO t_varchar VALUES ('10', '5');
+
+statement ok
+INSERT INTO t_varchar VALUES ('abc', '3');
+
+statement ok
+INSERT INTO t_varchar VALUES (NULL, '7');
+
+# Filter where TRY(c1::INTEGER - c0::INTEGER) IS NULL
+query II
+SELECT c0, c1
+FROM t_varchar
+WHERE TRY(c1::INTEGER - c0::INTEGER) IS NULL
+ORDER BY c0 NULLS LAST;
+----
+abc	3
+NULL	7

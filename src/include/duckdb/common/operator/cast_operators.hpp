@@ -1070,6 +1070,24 @@ bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, Vector &res
 template <>
 bool TryCastBlobToUUID::Operation(string_t input, hugeint_t &result, bool strict);
 
+struct CastFromUUIDToUHugeint {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast from uuid to uhugeint could not be performed!");
+	}
+};
+template <>
+duckdb::uhugeint_t CastFromUUIDToUHugeint::Operation(duckdb::hugeint_t input);
+
+struct CastFromUHugeintToUUID {
+	template <class SRC, class DST>
+	static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast from uhugeint to uuid could not be performed!");
+	}
+};
+template <>
+duckdb::hugeint_t CastFromUHugeintToUUID::Operation(duckdb::uhugeint_t input);
+
 //===--------------------------------------------------------------------===//
 // GEOMETRY
 //===--------------------------------------------------------------------===//
@@ -1094,5 +1112,17 @@ struct CastFromPointer {
 };
 template <>
 duckdb::string_t CastFromPointer::Operation(uintptr_t input, Vector &vector);
+
+//===--------------------------------------------------------------------===//
+// Types
+//===--------------------------------------------------------------------===//
+struct CastFromType {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from pointer could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromType::Operation(string_t input, Vector &vector);
 
 } // namespace duckdb

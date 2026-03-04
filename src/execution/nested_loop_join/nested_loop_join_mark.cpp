@@ -160,7 +160,7 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ColumnDataCollection &right, b
 	while (right.Scan(scan_state, scan_chunk)) {
 		for (idx_t i = 0; i < conditions.size(); i++) {
 			MarkJoinComparisonSwitch(left.data[i], scan_chunk.data[i], left.size(), scan_chunk.size(), found_match,
-			                         conditions[i].comparison);
+			                         conditions[i].GetComparisonType());
 		}
 	}
 }

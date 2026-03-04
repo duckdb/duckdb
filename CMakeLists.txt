@@ -36,6 +36,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
     find_program(COMPILER_LAUNCHER NAMES ccache sccache)
@@ -116,6 +117,12 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
+# Enable Clang thread-safety annotations when using Clang compiler
+# TODO(hjiang): enable error for thread annotation warnings, because of certain extensions.
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wthread-safety")
+endif()
+
 if (DUCKDB_EXPLICIT_PLATFORM)
     add_definitions(-DDUCKDB_CUSTOM_PLATFORM=${DUCKDB_EXPLICIT_PLATFORM})
 endif()
@@ -157,12 +164,12 @@ endif()
 
 if(APPLE)
   set(OS_NAME "osx")
-endif()
-if(WIN32)
+elseif(WIN32)
   set(OS_NAME "windows")
-endif()
-if(UNIX AND NOT APPLE)
+elseif(UNIX)
   set(OS_NAME "linux") # sorry BSD
+else()
+  set(OS_NAME "unknown")
 endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
@@ -177,6 +184,7 @@ option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
 option(DISABLE_VPTR_SANITIZER "Disable vptr sanitizer; work-around for sanitizer false positive on Macbook M1" FALSE)
 option(STANDALONE_DEBUG "add clang compile option -fstandalone-debug" FALSE)
+option(RELEASE_SANITIZER "Enable address sanitizer in release mode." FALSE)
 
 if(${ENABLE_THREAD_SANITIZER})
   if(${ENABLE_SANITIZER})
@@ -188,15 +196,14 @@ if(${ENABLE_THREAD_SANITIZER})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_THREAD_SANITIZER")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
 elseif(${ENABLE_SANITIZER})
-  if(FORCE_ASSERT)
+  if(FORCE_ASSERT OR RELEASE_SANITIZER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
   else()
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
   endif()
 endif()
 
-if (${DISABLE_VPTR_SANITIZER})
-else()
+if (NOT ${DISABLE_VPTR_SANITIZER})
   if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     if("${CMAKE_CXX_COMPILER_VERSION}" VERSION_GREATER 14.0)
       message(
@@ -256,7 +263,6 @@ if(${MAIN_BRANCH_VERSIONING})
 endif()
 
 if (UNSAFE_NUMERIC_CAST)
-  message(status "UNSAFE_NUMERIC_CAST")
   add_definitions(-DUNSAFE_NUMERIC_CAST=1)
 endif()
 if (ENABLE_EXTENSION_AUTOLOADING)
@@ -462,6 +468,7 @@ option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code pat
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
+option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -594,42 +601,50 @@ endif()
 
 
 if(NOT MSVC)
+  set(CXX_EXTRA_DEBUG
+          "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic"
+  )
+
   if(${FORCE_WARN_UNUSED})
     set(CXX_EXTRA "${CXX_EXTRA} -Wunused")
   endif()
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CXX_EXTRA "${CXX_EXTRA} -Werror")
   endif()
+  if (FORCE_DEBUG)
+    set(CXX_EXTRA "${CXX_EXTRA} -Wall ${CXX_EXTRA_DEBUG}")
+  endif()
+
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
+          VERSION_GREATER 8.0)
+    if(REDUCE_SYMBOLS)
+      set(CXX_EXTRA "${CXX_EXTRA} -g1 -gsplit-dwarf")
+    endif()
+  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
+          AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
+    if(REDUCE_SYMBOLS)
+      set(CXX_EXTRA "${CXX_EXTRA} -gline-tables-only")
+    endif()
+  else()
+    message(WARNING "Please use a recent compiler for debug builds")
+  endif()
+
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+
   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=${CMAKE_LTO}")
   elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
   endif()
+
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
-
-  set(CXX_EXTRA_DEBUG
-      "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic"
-  )
-
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
-                                                   VERSION_GREATER 8.0)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
-  elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$"
-         AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${CXX_EXTRA_DEBUG}")
-  else()
-    message(WARNING "Please use a recent compiler for debug builds")
-  endif()
 else()
-  # we don't use "constexpr static std::mutex", so we can use the
-  # _DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR definition that is required
-  # to keep the compatibility with C++ stdlib version 14.29 from MSVC 2019
   set(CMAKE_CXX_WINDOWS_FLAGS
-      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR /utf-8")
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
@@ -763,18 +778,32 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+# Capture the current dir so the below function also works when included in a different project
+set(_DUCKDB_PROJECT_SRC_DIR ${PROJECT_SOURCE_DIR})
+set(_DUCKDB_PROJECT_BIN_DIR ${PROJECT_BINARY_DIR})
 
 function(add_third_party NAME)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/third_party/${NAME} ${CMAKE_BINARY_DIR}/third_party/${NAME})
+    add_subdirectory(${_DUCKDB_PROJECT_SRC_DIR}/third_party/${NAME} ${_DUCKDB_PROJECT_BIN_DIR}/third_party/${NAME})
 endfunction()
 
 # this depends on disable_target_warnings so the order matters
-include(extension/extension_build_tools.cmake)
+include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
-if (BUILD_MAIN_DUCKDB_LIBRARY)
- add_subdirectory(src)
- add_subdirectory(tools)
- add_subdirectory(extension)
+if(PREBUILT_BINARY)
+  message("Using pre-built static library from file ${PREBUILT_BINARY}")
+  add_library(duckdb_static STATIC IMPORTED GLOBAL)
+  get_filename_component(PREBUILT_BASENAME "${PREBUILT_BINARY}" NAME)
+  file(COPY ${PREBUILT_BINARY} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+  file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/${PREBUILT_BASENAME} ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
+  set_property(TARGET duckdb_static PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
+
+  add_subdirectory(tools)
+  add_subdirectory(extension)
+elseif (BUILD_MAIN_DUCKDB_LIBRARY)
+  add_subdirectory(src)
+
+  add_subdirectory(tools)
+  add_subdirectory(extension)
 endif()
 
 add_third_party(fastpforlib)
@@ -785,10 +814,10 @@ add_third_party(libpg_query)
 add_third_party(mbedtls)
 add_third_party(miniz)
 add_third_party(re2)
+add_third_party(skiplist)
 add_third_party(utf8proc)
 add_third_party(yyjson)
 add_third_party(zstd)
-
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)

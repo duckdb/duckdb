@@ -1,7 +1,6 @@
 #include "terminal.hpp"
 #include "history.hpp"
 #include "linenoise.hpp"
-#include "duckdb/common/operator/numeric_cast.hpp"
 #if defined(_WIN32) || defined(WIN32)
 #include <io.h>
 #define STDIN_FILENO  0
@@ -105,7 +104,7 @@ int Terminal::EnableRawMode() {
 	raw.c_iflag |= IUTF8;
 #endif
 	raw.c_cflag |= CS8;
-	/* local modes - choing off, canonical off, no extended functions,
+	/* local modes - echoing off, canonical off, no extended functions,
 	 * no signal chars (^Z,^C) */
 	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 	/* control chars - set return condition: min number of bytes and timer.
@@ -237,10 +236,9 @@ int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
 
-	// no timeout: return immediately
 	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = NumericCast<int>(timeout_micros);
+	tv.tv_sec = static_cast<time_t>(timeout_micros / 1000000);
+	tv.tv_usec = static_cast<int>(timeout_micros % 1000000);
 	return select(1, &rfds, NULL, NULL, &tv);
 #endif
 }
@@ -355,16 +353,19 @@ TerminalSize Terminal::TryMeasureTerminalSize() {
 
 bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
 	/* Parse it. */
-	// expected format is: rgb:1e1e/1e1e/1e1e
-	idx_t offset = 0;
-	// find "rgb:"
-	for (; offset + 4 < buflen; offset++) {
-		if (memcmp(buf + offset, (const void *)"rgb:", 4) == 0) {
+	// expected format is: \x1b]11;rgb:1e1e/1e1e/1e1e
+	static const char rgb_format[] = "\x1b]11;rgb:";
+	idx_t rgb_length = sizeof(rgb_format) - 1;
+	idx_t offset;
+	for (offset = 0; offset + rgb_length < buflen; offset++) {
+		if (memcmp(buf + offset, rgb_format, rgb_length) == 0) {
 			break;
 		}
+		// not part of the rgb code - buffer the keypress
+		BufferedKeyPresses::BufferKeyPress((KEY_ACTION)buf[offset]);
 	}
 	// now parse the actual r/g/b values
-	offset += 4;
+	offset += rgb_length;
 	if (offset >= buflen) {
 		return false;
 	}
@@ -415,7 +416,26 @@ bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
 	return true;
 }
 
+void Terminal::BufferAvailableInput() {
+	// consume available input and add it to the buffer
+	int ifd = STDIN_FILENO;
+	while (HasMoreData(ifd)) {
+		char buf[1];
+		if (read(ifd, buf, 1) != 1) {
+			break;
+		}
+		BufferedKeyPresses::BufferKeyPress((KEY_ACTION)buf[0]);
+	}
+}
+
 bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
+#if defined(_WIN32) || defined(WIN32)
+	// FIXME: always emit black background on Windows
+	color.r = 0;
+	color.g = 0;
+	color.b = 0;
+	return true;
+#else
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;
 
@@ -426,33 +446,34 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 	bool success = false;
 	if (write(ofd, "\x1b]11;?\007", 7) == 7) {
 		// Read the response: until \a or until we fill up our buffer
-		char buf[64];
-		idx_t i = 0;
-		while (i < sizeof(buf) - 1) {
+		string buf;
+		char read_buf[1];
+		while (true) {
 			// check if we have data to read
-			// wait up till 1ms
-			if (!HasMoreData(ifd, 10000)) {
+			// wait up till 1s
+			if (!HasMoreData(ifd, 1000000)) {
 				// no more data available - done
 				break;
 			}
-			if (read(ifd, buf + i, 1) != 1) {
+			if (read(ifd, read_buf, 1) != 1) {
 				break;
 			}
-			if (buf[i] == '\a') {
+			char c = read_buf[0];
+			if (c == '\a') {
 				break;
 			}
-			if (i > 2 && buf[i - 1] == '\e' && buf[i] == '\\') {
-				i--;
+			if (!buf.empty() && buf.back() == '\x1b' && c == '\\') {
+				buf.pop_back();
 				break;
 			}
-			i++;
+			buf += c;
 		}
-		buf[i] = '\0';
 
-		success = ParseTerminalColor(color, buf, i);
+		success = ParseTerminalColor(color, buf.c_str(), buf.size());
 	}
 	Terminal::DisableRawMode();
 	return success;
+#endif
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80

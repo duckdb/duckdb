@@ -66,11 +66,13 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	auto relation_id = relations.size();
 
 	auto table_indexes = op.GetTableIndex();
+	bool is_mark = op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+	               op.Cast<LogicalComparisonJoin>().join_type == JoinType::MARK;
 	bool get_all_child_bindings = op.type == LogicalOperatorType::LOGICAL_UNNEST;
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		get_all_child_bindings = !op.children.empty();
 	}
-	if (table_indexes.empty()) {
+	if (table_indexes.empty() || is_mark) {
 		// relation represents a non-reorderable relation, most likely a join relation
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
 		// This should all table references, even if there are nested non-reorderable joins.
@@ -155,15 +157,28 @@ bool ExpressionContainsColumnRef(const Expression &root_expr) {
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
-	} else if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	}
+
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
+
+		// TODO: SEMI/ANTI joins with residual predicates are not supported
+		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
+			for (auto &cond : join.conditions) {
+				if (!cond.IsComparison()) {
+					return false;
+				}
+			}
+		}
+
 		switch (join.join_type) {
 		case JoinType::INNER:
 		case JoinType::SEMI:
 		case JoinType::LEFT:
 		case JoinType::ANTI:
 			for (auto &cond : join.conditions) {
-				if (ExpressionContainsColumnRef(*cond.left) && ExpressionContainsColumnRef(*cond.right)) {
+				if (cond.IsComparison() && ExpressionContainsColumnRef(cond.GetLHS()) &&
+				    ExpressionContainsColumnRef(cond.GetRHS())) {
 					return true;
 				}
 			}
@@ -810,9 +825,12 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 					// the relations from the conditions in the conjunction expression, we can prevent invalid
 					// reordering.
 					for (auto &cond : join.conditions) {
-						auto comparison = make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left),
-						                                                       std::move(cond.right));
-						conjunction_expression->children.push_back(std::move(comparison));
+						if (cond.IsComparison()) {
+							auto comparison = make_uniq<BoundComparisonExpression>(cond.GetComparisonType(),
+							                                                       cond.GetLHS().Copy(),
+							                                                       cond.GetRHS().Copy());
+							conjunction_expression->children.push_back(std::move(comparison));
+						}
 					}
 					auto leftover_exprs =
 					    CreateFilterInfoFromExpression(std::move(conjunction_expression), set_manager, join.join_type);
@@ -824,16 +842,36 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 				D_ASSERT(join.join_type == JoinType::INNER);
 				for (idx_t i = 0; i < join.conditions.size(); i++) {
 					auto &condition = join.conditions[i];
-					auto expr = make_uniq<BoundComparisonExpression>(condition.comparison, std::move(condition.left),
-					                                                 std::move(condition.right));
-					auto leftover_exprs = CreateFilterInfoFromExpression(std::move(expr), set_manager, join.join_type);
-					// since this is a join, there should not be leftover expressions
-					// TODO: handle a case like select * from t1 JOIN t2 on t1.a = t1.b; (i.e filter is only on t1)
-					D_ASSERT(leftover_exprs.empty());
+					if (condition.IsComparison()) {
+						auto expr = make_uniq<BoundComparisonExpression>(condition.GetComparisonType(),
+						                                                 condition.GetLHS().Copy(),
+						                                                 condition.GetRHS().Copy());
+						if (filter_set.find(*expr) == filter_set.end()) {
+							filter_set.insert(*expr);
+							auto leftover_exprs =
+							    CreateFilterInfoFromExpression(std::move(expr), set_manager, join.join_type);
+							D_ASSERT(leftover_exprs.empty());
+						}
+					} else {
+						// residual predicate (non-comparison join condition)
+						auto expr = condition.GetJoinExpression().Copy();
+						if (filter_set.find(*expr) == filter_set.end()) {
+							filter_set.insert(*expr);
+							unordered_set<idx_t> bindings;
+							ExtractColumnBindingsFromExpression(*expr, bindings);
+							optional_ptr<JoinRelationSet> set = &set_manager.GetJoinRelation(bindings);
+							optional_ptr<JoinRelationSet> empty_set = set_manager.GetEmptyJoinRelationSet();
+							auto new_filter = make_uniq<FilterInfo>(std::move(expr), set, filter_infos_.size(),
+							                                        join.join_type, empty_set, empty_set);
+							new_filter->from_residual_predicate = true;
+							filter_infos_.push_back(std::move(new_filter));
+						}
+					}
 				}
 				break;
 			}
 			}
+
 			join.conditions.clear();
 		} else {
 			// handle filters from logical filters

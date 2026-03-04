@@ -33,5 +33,18 @@
     "categories": ["geometry"],
     "type": "scalar_function",
     "aliases": ["&&"]
+  },
+  {
+    "name": "st_crs",
+    "parameters": "geom",
+    "description": "Returns the Coordinate Reference System (CRS) identifier of the geometry",
+    "categories": ["geometry"],
+    "type": "scalar_function"
+  },
+  {
+    "name": "st_setcrs",
+    "parameters": "geom,crs",
+    "description": "Sets the Coordinate Reference System (CRS) identifier of the geometry",
+    "type": "scalar_function"
   }
 ]

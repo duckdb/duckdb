@@ -45,6 +45,7 @@ static const TestConfigOption test_config_options[] = {
     {"test_env", "The test variables",
      LogicalType::LIST(LogicalType::STRUCT({{"env_name", LogicalType::VARCHAR}, {"env_value", LogicalType::VARCHAR}})),
      nullptr},
+    {"inherit_skip_tests", "Path of config to inherit 'skip_tests' from", LogicalType::VARCHAR},
     {"skip_tests", "Tests to be skipped",
      LogicalType::LIST(
          LogicalType::STRUCT({{"reason", LogicalType::VARCHAR}, {"paths", LogicalType::LIST(LogicalType::VARCHAR)}})),
@@ -243,6 +244,11 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 }
 
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
+	if (test_name.find('/') == 0) {
+		// Full path specified, strip down to base path so the extension config lookup still works
+		const string stripped_test_name = test_name.c_str() + test_name.find("test/sql");
+		return tests_to_be_skipped.count(stripped_test_name);
+	}
 	return tests_to_be_skipped.count(test_name);
 }
 
@@ -362,7 +368,20 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 		for (auto &entry : json_values) {
 			ParseOption(entry.first, Value(entry.second));
 		}
+		auto inherit_entry = options.find("inherit_skip_tests");
+		if (inherit_entry != options.end()) {
+			auto path_value = inherit_entry->second;
+			D_ASSERT(path_value.type().id() == LogicalTypeId::VARCHAR);
+			D_ASSERT(!path_value.IsNull());
+			auto cwd = TestGetCurrentDirectory();
+			auto path = TestJoinPath(cwd, path_value.ToString());
+			TestConfiguration inherit_config;
+			inherit_config.LoadConfig(path);
 
+			tests_to_be_skipped.insert(inherit_config.tests_to_be_skipped.begin(),
+			                           inherit_config.tests_to_be_skipped.end());
+		}
+		bool found_duplicate_tests = false;
 		// Convert to unordered_set<string> the list of tests to be skipped
 		auto entry = options.find("skip_tests");
 		if (entry != options.end()) {
@@ -371,10 +390,18 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 				auto children = StructValue::GetChildren(value);
 				auto skip_list = ListValue::GetChildren(children[1]);
 				for (const auto &skipped_test : skip_list) {
-					tests_to_be_skipped.insert(skipped_test.GetValue<string>());
+					auto skipped_test_str = skipped_test.GetValue<string>();
+					auto insert_result = tests_to_be_skipped.insert(skipped_test_str);
+					if (!insert_result.second) {
+						Printer::PrintF("* Test \"%s\" was already present in skipped test list", skipped_test_str);
+						found_duplicate_tests = true;
+					}
 				}
 			}
 			options.erase("skip_tests");
+		}
+		if (found_duplicate_tests) {
+			Printer::PrintF("Run python3 scripts/cleanup_config_skip_tests.py to clean up");
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
@@ -468,7 +495,8 @@ vector<ConfigSetting> TestConfiguration::GetConfigSettings() {
 }
 
 string TestConfiguration::GetTestEnv(const string &key, const string &default_value) {
-	if (test_env.empty() && options.find("test_env") != options.end()) {
+	if (!test_env_from_config_loaded && options.find("test_env") != options.end()) {
+		test_env_from_config_loaded = true;
 		auto entry = options["test_env"];
 		auto list_children = ListValue::GetChildren(entry);
 		for (const auto &value : list_children) {

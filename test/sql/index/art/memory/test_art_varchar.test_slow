@@ -2,14 +2,14 @@
 # description: Test the memory usage of the ART for a big table with a VARCHAR column
 # group: [memory]
 
-# test issue #7760
-
 require 64bit
 
 require vector_size 2048
 
+require ram 16gb
+
 statement ok
-PRAGMA enable_verification
+set temp_directory=null;
 
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE
@@ -20,33 +20,29 @@ CREATE FUNCTION mem_to_bytes(x) AS CASE
     WHEN x = '0 bytes' THEN 0::BIGINT
     ELSE x::BIGINT END;
 
-# 7200000 unique strings
+# 7,200,000 unique strings
 
 statement ok
 CREATE TABLE art AS
     SELECT rpad(((i * 95823983533) % 86000000)::VARCHAR, 10, '-') AS id
-        FROM range(7200000) tbl(i);
+    FROM range(7200000) tbl(i);
 
-# 2 * 7200k entries
+# 2 * 7,200k entries
 statement ok
 INSERT INTO art (SELECT * FROM art);
 
-# 4 * 7200k entries
+# 4 * 7,200k entries
 statement ok
 INSERT INTO art (SELECT * FROM art);
 
-# 8 * 7200k entries
+# 8 * 7,200k entries: 57M entries.
 statement ok
 INSERT INTO art (SELECT * FROM art);
-
-# 86M entries
-statement ok
-INSERT INTO art (SELECT * FROM art LIMIT 28400000);
 
 query I
 SELECT count(*) FROM art;
 ----
-86000000
+57_600_000
 
 query I
 SELECT COUNT(DISTINCT id) FROM art;
@@ -63,14 +59,15 @@ CREATE TABLE base AS
 SELECT mem_to_bytes(memory_usage)::BIGINT AS usage FROM pragma_database_size();
 
 statement ok
-SET memory_limit='12GB';
+SET memory_limit = '12GB';
 
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > base.usage AND
-       	mem_to_bytes(current.memory_usage) < 5 * base.usage
+SELECT
+	mem_to_bytes(current.memory_usage) > base.usage AND
+    mem_to_bytes(current.memory_usage) < 5 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1

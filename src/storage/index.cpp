@@ -1,6 +1,5 @@
 #include "duckdb/storage/index.hpp"
 #include "duckdb/common/radix.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 

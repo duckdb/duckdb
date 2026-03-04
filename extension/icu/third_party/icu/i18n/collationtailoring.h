@@ -24,6 +24,8 @@
 #include "collationsettings.h"
 #include "uhash.h"
 #include "umutex.h"
+#include "unifiedcache.h"
+ 
 
 struct UDataMemory;
 struct UResourceBundle;
@@ -50,9 +52,9 @@ struct U_I18N_API CollationTailoring : public SharedObject {
     virtual ~CollationTailoring();
 
     /**
-     * Returns TRUE if the constructor could not initialize properly.
+     * Returns true if the constructor could not initialize properly.
      */
-    UBool isBogus() { return settings == NULL; }
+    UBool isBogus() { return settings == nullptr; }
 
     UBool ensureOwnedData(UErrorCode &errorCode);
 
@@ -89,13 +91,13 @@ private:
      * No copy constructor: A CollationTailoring cannot be copied.
      * It is immutable, and the data trie cannot be copied either.
      */
-    CollationTailoring(const CollationTailoring &other);
+    CollationTailoring(const CollationTailoring &other) = delete;
 };
 
-struct CollationCacheEntry : public SharedObject {
+struct U_I18N_API CollationCacheEntry : public SharedObject {
     CollationCacheEntry(const Locale &loc, const CollationTailoring *t)
             : validLocale(loc), tailoring(t) {
-        if(t != NULL) {
+        if(t != nullptr) {
             t->addRef();
         }
     }
@@ -105,6 +107,10 @@ struct CollationCacheEntry : public SharedObject {
     const CollationTailoring *tailoring;
 };
 
+template<> U_I18N_API
+const CollationCacheEntry *
+LocaleCacheKey<CollationCacheEntry>::createObject(const void *creationContext,
+                                                  UErrorCode &errorCode) const;
 U_NAMESPACE_END
 
 #endif  // !UCONFIG_NO_COLLATION

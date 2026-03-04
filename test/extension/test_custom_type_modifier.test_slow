@@ -100,12 +100,12 @@ CREATE TYPE user_type AS INTEGER
 statement error
 CREATE TABLE t4 (i user_type(NULL));
 ----
-Binder Error: Type 'user_type' does not take any type modifiers
+Binder Error: Type 'user_type' does not take any type parameters
 
 statement error
 SELECT 1::BOUNDED(NULL)
 ----
-BOUNDED type modifier must be integer
+Binder Error: BOUNDED type modifier cannot be NULL
 
 statement error
 SELECT 1::BOUNDED(900000000000000000)
@@ -147,7 +147,7 @@ SELECT 10::MINMAX('foob', 10);
 Binder Error: MINMAX type modifiers must be integers
 
 statement error
-SELECT 10::MINMAX(10, NULL::INTEGER);
+SELECT 10::MINMAX(10, (NULL::INTEGER));
 ----
 Parser Error: Expected a constant as type modifier
 

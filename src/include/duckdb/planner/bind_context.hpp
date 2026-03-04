@@ -46,7 +46,8 @@ public:
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
-	optional_ptr<Binding> GetMatchingBinding(const string &column_name);
+	optional_ptr<Binding> GetMatchingBinding(const string &column_name,
+	                                         QueryErrorContext context = QueryErrorContext());
 	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
 	//! return a list of all the matching ones
 	vector<reference<Binding>> GetMatchingBindings(const string &column_name);

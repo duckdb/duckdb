@@ -55,7 +55,7 @@ void PhysicalExpressionScan::EvaluateExpressionInternal(ClientContext &context, 
                                                         DataChunk &temp_chunk) const {
 	ExpressionExecutor executor(context, expressions[expression_idx]);
 	if (child_chunk) {
-		child_chunk->Verify();
+		child_chunk->Verify(context.db);
 		executor.Execute(*child_chunk, temp_chunk);
 	} else {
 		executor.Execute(temp_chunk);

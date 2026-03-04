@@ -54,6 +54,8 @@
 
 #include "unicode/utypes.h"
 
+#if U_SHOW_CPLUSPLUS_API
+
 #if !UCONFIG_NO_COLLATION
 
 #include "unicode/uobject.h"
@@ -234,21 +236,21 @@ public:
     // Collator public methods --------------------------------------------
 
     /**
-     * Returns TRUE if "other" is the same as "this".
+     * Returns true if "other" is the same as "this".
      *
-     * The base class implementation returns TRUE if "other" has the same type/class as "this":
+     * The base class implementation returns true if "other" has the same type/class as "this":
      * `typeid(*this) == typeid(other)`.
      *
      * Subclass implementations should do something like the following:
      *
-     *     if (this == &other) { return TRUE; }
-     *     if (!Collator::operator==(other)) { return FALSE; }  // not the same class
+     *     if (this == &other) { return true; }
+     *     if (!Collator::operator==(other)) { return false; }  // not the same class
      *
      *     const MyCollator &o = (const MyCollator&)other;
      *     (compare this vs. o's subclass fields)
      *
      * @param other Collator object to be compared
-     * @return TRUE if other is the same as this.
+     * @return true if other is the same as this.
      * @stable ICU 2.0
      */
     virtual bool operator==(const Collator& other) const;
@@ -257,7 +259,7 @@ public:
      * Returns true if "other" is not the same as "this".
      * Calls ! operator==(const Collator&) const which works for all subclasses.
      * @param other Collator object to be compared
-     * @return TRUE if other is not the same as this.
+     * @return true if other is not the same as this.
      * @stable ICU 2.0
      */
     virtual bool operator!=(const Collator& other) const;
@@ -302,7 +304,7 @@ public:
      * Starting with ICU 54, collation attributes can be specified via locale keywords as well,
      * in the old locale extension syntax ("el@colCaseFirst=upper")
      * or in language tag syntax ("el-u-kf-upper").
-     * See <a href="http://userguide.icu-project.org/collation/api">User Guide: Collation API</a>.
+     * See <a href="https://unicode-org.github.io/icu/userguide/collation/api">User Guide: Collation API</a>.
      *
      * The UErrorCode& err parameter is used to return status information to the user.
      * To check whether the construction succeeded or not, you should check
@@ -623,7 +625,7 @@ public:
     /**
      * Retrieves the reordering codes for this collator.
      * @param dest The array to fill with the script ordering.
-     * @param destCapacity The length of dest. If it is 0, then dest may be NULL and the function
+     * @param destCapacity The length of dest. If it is 0, then dest may be nullptr and the function
      *  will only return the length of the result without writing any codes (pre-flighting).
      * @param status A reference to an error code value, which must not indicate
      * a failure before the function call.
@@ -643,7 +645,7 @@ public:
      * Sets the ordering of scripts for this collator.
      *
      * <p>The reordering codes are a combination of script codes and reorder codes.
-     * @param reorderCodes An array of script codes in the new order. This can be NULL if the
+     * @param reorderCodes An array of script codes in the new order. This can be nullptr if the
      * length is also set to 0. An empty array will clear any reordering codes on the collator.
      * @param reorderCodesLength The length of reorderCodes.
      * @param status error code
@@ -666,7 +668,7 @@ public:
      *
      * @param reorderCode The reorder code to determine equivalence for.
      * @param dest The array to fill with the script equivalence reordering codes.
-     * @param destCapacity The length of dest. If it is 0, then dest may be NULL and the
+     * @param destCapacity The length of dest. If it is 0, then dest may be nullptr and the
      * function will only return the length of the result without writing any codes (pre-flighting).
      * @param status A reference to an error code value, which must not indicate
      * a failure before the function call.
@@ -748,7 +750,7 @@ public:
      * ucol_getKeywords. If any other keyword is passed in, status is set
      * to U_ILLEGAL_ARGUMENT_ERROR.
      * @param status input-output error code
-     * @return a string enumeration over collation keyword values, or NULL
+     * @return a string enumeration over collation keyword values, or nullptr
      * upon error. The caller is responsible for deleting the result.
      * @stable ICU 3.0
      */
@@ -786,7 +788,7 @@ public:
      * applications who wish to cache collators, or otherwise reuse
      * collators when possible.  The functional equivalent may change
      * over time.  For more information, please see the <a
-     * href="http://userguide.icu-project.org/locale#TOC-Locales-and-Services">
+     * href="https://unicode-org.github.io/icu/userguide/locale#locales-and-services">
      * Locales and Services</a> section of the ICU User Guide.
      * @param keyword a particular keyword as enumerated by
      * ucol_getKeywords.
@@ -839,7 +841,7 @@ public:
      * Collator::createInstance to avoid undefined behavior.
      * @param key the registry key returned by a previous call to registerInstance
      * @param status the in/out status code, no special meanings are assigned
-     * @return TRUE if the collator for the key was successfully unregistered
+     * @return true if the collator for the key was successfully unregistered
      * @stable ICU 2.6
      */
     static UBool U_EXPORT2 unregister(URegistryKey key, UErrorCode& status);
@@ -862,7 +864,7 @@ public:
      *         IDs.
      * @stable ICU 2.0
      */
-    virtual UClassID getDynamicClassID(void) const = 0;
+    virtual UClassID getDynamicClassID(void) const override = 0;
 
     /**
      * Universal attribute setter
@@ -1006,7 +1008,7 @@ public:
      * For more details, see the ICU User Guide.
      *
      * @param source string to be processed.
-     * @param result buffer to store result in. If NULL, number of bytes needed
+     * @param result buffer to store result in. If nullptr, number of bytes needed
      *        will be returned.
      * @param resultLength length of the result buffer. If if not enough the
      *        buffer will be filled to capacity.
@@ -1029,7 +1031,7 @@ public:
      * @param sourceLength length of string to be processed.
      *        If -1, the string is 0 terminated and length will be decided by the
      *        function.
-     * @param result buffer to store result in. If NULL, number of bytes needed
+     * @param result buffer to store result in. If nullptr, number of bytes needed
      *        will be returned.
      * @param resultLength length of the result buffer. If if not enough the
      *        buffer will be filled to capacity.
@@ -1092,7 +1094,7 @@ protected:
     /**
     * Default constructor.
     * Constructor is different from the old default Collator constructor.
-    * The task for determing the default collation strength and normalization
+    * The task for determining the default collation strength and normalization
     * mode is left to the child class.
     * @stable ICU 2.0
     */
@@ -1137,13 +1139,13 @@ public:
      *  This string will be normalized.
      *  The structure and the syntax of the string is defined in the "Naming collators"
      *  section of the users guide:
-     *  http://userguide.icu-project.org/collation/concepts#TOC-Collator-naming-scheme
+     *  https://unicode-org.github.io/icu/userguide/collation/concepts#collator-naming-scheme
      *  This function supports preflighting.
      *
      *  This is internal, and intended to be used with delegate converters.
      *
      *  @param locale a locale that will appear as a collators locale in the resulting
-     *                short string definition. If NULL, the locale will be harvested
+     *                short string definition. If nullptr, the locale will be harvested
      *                from the collator.
      *  @param buffer space to hold the resulting string
      *  @param capacity capacity of the buffer
@@ -1200,7 +1202,7 @@ private:
     /**
      * Assignment operator. Private for now.
      */
-    Collator& operator=(const Collator& other);
+    Collator& operator=(const Collator& other) = delete;
 
     friend class CFactory;
     friend class SimpleCFactory;
@@ -1247,9 +1249,9 @@ public:
 
     /**
      * Return a collator for the provided locale.  If the locale
-     * is not supported, return NULL.
+     * is not supported, return nullptr.
      * @param loc the locale identifying the collator to be created.
-     * @return a new collator if the locale is supported, otherwise NULL.
+     * @return a new collator if the locale is supported, otherwise nullptr.
      * @stable ICU 2.6
      */
     virtual Collator* createCollator(const Locale& loc) = 0;
@@ -1286,5 +1288,7 @@ public:
 U_NAMESPACE_END
 
 #endif /* #if !UCONFIG_NO_COLLATION */
+
+#endif /* U_SHOW_CPLUSPLUS_API */
 
 #endif

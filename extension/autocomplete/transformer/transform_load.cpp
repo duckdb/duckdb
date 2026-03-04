@@ -10,6 +10,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransf
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
 	info->load_type = LoadType::LOAD;
+	info->repo_is_alias = false;
 	info->filename = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
 	result->info = std::move(info);
 	return std::move(result);
@@ -22,7 +23,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(PEGTra
 	auto info = make_uniq<LoadInfo>();
 	auto opt_force = list_pr.Child<OptionalParseResult>(0).HasResult();
 	info->load_type = opt_force ? LoadType::FORCE_INSTALL : LoadType::INSTALL;
-	info->filename = list_pr.Child<IdentifierParseResult>(2).identifier;
+	auto extension_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	info->filename = extension_name.name;
 	info->repo_is_alias = false;
 	auto &from_source_opt = list_pr.Child<OptionalParseResult>(3);
 	if (from_source_opt.HasResult()) {

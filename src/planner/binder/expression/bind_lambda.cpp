@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
+static idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 	idx_t count = 0;
 	for (auto &binding : lambda_bindings) {
 		count += binding.GetColumnCount();
@@ -20,8 +20,8 @@ idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 	return count;
 }
 
-idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
-                          const BoundLambdaRefExpression &bound_lambda_ref_expr) {
+static idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
+                                 const BoundLambdaRefExpression &bound_lambda_ref_expr) {
 	D_ASSERT(bound_lambda_ref_expr.lambda_idx < lambda_bindings.size());
 	idx_t offset = 0;
 	// count the remaining lambda parameters BEFORE the current lambda parameter,
@@ -35,7 +35,8 @@ idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLamb
 	return offset;
 }
 
-void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
+static void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names,
+                             vector<string> &column_aliases) {
 	auto &column_ref = expr.Cast<ColumnRefExpression>();
 	if (column_ref.IsQualified()) {
 		throw BinderException(LambdaExpression::InvalidParametersErrorMessage());
@@ -45,7 +46,7 @@ void ExtractParameter(const ParsedExpression &expr, vector<string> &column_names
 	column_aliases.push_back(column_ref.ToString());
 }
 
-void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
+static void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vector<string> &column_aliases) {
 	// extract the lambda parameters, which are a single column
 	// reference, or a list of column references (ROW function)
 	string error_message;

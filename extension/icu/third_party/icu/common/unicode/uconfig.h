@@ -37,6 +37,10 @@
 #define UCONFIG_NO_CONVERSION 1
 #endif
 
+#ifndef U_CHARSET_IS_UTF8
+#define U_CHARSET_IS_UTF8 1
+#endif
+
 #ifndef UCONFIG_NO_TRANSLITERATION
 #define UCONFIG_NO_TRANSLITERATION 1
 #endif
@@ -51,6 +55,10 @@
 
 #ifndef U_SHOW_CPLUSPLUS_API
 #define U_SHOW_CPLUSPLUS_API 1
+#endif
+
+#ifndef U_I18N_IMPLEMENTATION
+#define U_I18N_IMPLEMENTATION 1
 #endif
 
 /*!
@@ -86,9 +94,9 @@
  *
  * @internal ICU 4.0
  */
-// #if defined(UCONFIG_USE_LOCAL)
-// #include "uconfig_local.h"
-// #endif
+#if defined(UCONFIG_USE_LOCAL)
+#include "uconfig_local.h"
+#endif
 
 /**
  * \def U_DEBUG
@@ -125,6 +133,24 @@
  */
 #ifndef U_DISABLE_RENAMING
 #define U_DISABLE_RENAMING 0
+#endif
+
+/**
+ * \def U_NO_DEFAULT_INCLUDE_UTF_HEADERS
+ * Determines whether utypes.h includes utf.h, utf8.h, utf16.h and utf_old.h.
+ * utypes.h includes those headers if this macro is defined to 0.
+ * Otherwise, each those headers must be included explicitly when using one of their macros.
+ * Defaults to 0 for backward compatibility, except inside ICU.
+ * @stable ICU 49
+ */
+#ifdef U_NO_DEFAULT_INCLUDE_UTF_HEADERS
+    /* Use the predefined value. */
+#elif defined(U_COMBINED_IMPLEMENTATION) || defined(U_COMMON_IMPLEMENTATION) || defined(U_I18N_IMPLEMENTATION) || \
+      defined(U_IO_IMPLEMENTATION) || defined(U_LAYOUT_IMPLEMENTATION) || defined(U_LAYOUTEX_IMPLEMENTATION) || \
+      defined(U_TOOLUTIL_IMPLEMENTATION)
+#   define U_NO_DEFAULT_INCLUDE_UTF_HEADERS 1
+#else
+#   define U_NO_DEFAULT_INCLUDE_UTF_HEADERS 0
 #endif
 
 /**
@@ -338,6 +364,16 @@
  */
 #ifndef UCONFIG_NO_NORMALIZATION
 #   define UCONFIG_NO_NORMALIZATION 0
+#endif
+
+/**
+ * \def UCONFIG_USE_ML_PHRASE_BREAKING
+ * This switch turns on BudouX ML phrase-based line breaking, rather than using the dictionary.
+ *
+ * @internal
+ */
+#ifndef UCONFIG_USE_ML_PHRASE_BREAKING
+#   define UCONFIG_USE_ML_PHRASE_BREAKING 0
 #endif
 
 #if UCONFIG_NO_NORMALIZATION

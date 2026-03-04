@@ -193,7 +193,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	vector<string> return_names;
 	auto constexpr ordinality_name = "ordinality";
 	string ordinality_column_name = ordinality_name;
-	idx_t ordinality_column_id;
+	optional_idx ordinality_column_id;
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref);
@@ -463,7 +463,10 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		                                std::move(input_table_types), std::move(input_table_names));
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
-		error.AddQueryLocation(ref);
+		// if the error does not already contain a query location, add one
+		if (error.ExtraInfo().count("position") == 0) {
+			error.AddQueryLocation(ref);
+		}
 		error.Throw();
 	}
 

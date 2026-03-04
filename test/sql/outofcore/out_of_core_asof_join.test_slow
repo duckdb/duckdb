@@ -1,0 +1,66 @@
+# name: test/sql/outofcore/out_of_core_asof_join.test_slow
+# description: Test out of core ASOF join
+# group: [outofcore]
+
+require tpch
+
+load __TEST_DIR__/out_of_core_asof_join.db
+
+statement ok
+CALL dbgen(sf=1);
+
+query I
+SELECT bit_xor(hash(*COLUMNS(*)))
+FROM lineitem;
+----
+3944753436594036139
+
+foreach mem 300MiB 600MiB
+
+foreach threads 1 2 8
+
+statement ok
+SET memory_limit='${mem}';
+
+statement ok
+SET threads=${threads};
+
+query II
+WITH cte AS (
+    WITH l1 AS (
+        SELECT COLUMNS(*) AS "l1_\0", (l_orderkey * 1000 + l_linenumber) AS rowkey
+        FROM lineitem
+    ), l2 AS (
+        SELECT COLUMNS(*) AS "l2_\0", (l_orderkey * 1000 + l_linenumber) AS rowkey
+        FROM lineitem
+    )
+    SELECT *
+    FROM l1
+    ASOF JOIN l2
+    ON l1.rowkey >= l2.rowkey
+)
+SELECT bit_xor(hash(*COLUMNS('^l1_.*'))), bit_xor(hash(*COLUMNS('^l2_.*')))
+FROM cte;
+----
+3944753436594036139	3944753436594036139
+
+endloop
+
+endloop
+
+# the asof join should not be optimized away, of course!
+query II
+EXPLAIN
+WITH l1 AS (
+    SELECT COLUMNS(*) AS "l1_\0", (l_orderkey * 1000 + l_linenumber) AS rowkey
+    FROM lineitem
+), l2 AS (
+    SELECT COLUMNS(*) AS "l2_\0", (l_orderkey * 1000 + l_linenumber) AS rowkey
+    FROM lineitem
+)
+SELECT *
+FROM l1
+ASOF JOIN l2
+ON l1.rowkey >= l2.rowkey;
+----
+physical_plan	<REGEX>:.*ASOF_JOIN.*

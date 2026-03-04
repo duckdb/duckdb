@@ -1,0 +1,57 @@
+# name: test/sql/json/issues/issue17135.test
+# description: Test issue 17135 - read_json fails to read integers exceeding BIGINT range
+# group: [issues]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# value exactly at 2^63 (exceeds BIGINT max of 2^63-1)
+statement ok
+copy (select * from (values ('{"id":9223372036854775808}'))) to '__TEST_DIR__/ubigint.json' (format csv, quote '', header 0)
+
+query II
+select typeof(id), id from read_json('__TEST_DIR__/ubigint.json')
+----
+HUGEINT	9223372036854775808
+
+# max UBIGINT value
+statement ok
+copy (select * from (values ('{"id":18446744073709551615}'))) to '__TEST_DIR__/ubigint_max.json' (format csv, quote '', header 0)
+
+query II
+select typeof(id), id from read_json('__TEST_DIR__/ubigint_max.json')
+----
+HUGEINT	18446744073709551615
+
+# json_structure should still detect UBIGINT for large values
+query T
+select json_structure('{"id":9223372036854775808}')
+----
+{"id":"UBIGINT"}
+
+# json_structure detects UBIGINT for small positive integers too (yyjson tags all positive ints as UINT)
+query T
+select json_structure('{"id":42}')
+----
+{"id":"UBIGINT"}
+
+# small positive integers should still be BIGINT from read_json
+statement ok
+copy (select * from (values ('{"id":42}'))) to '__TEST_DIR__/bigint.json' (format csv, quote '', header 0)
+
+query II
+select typeof(id), id from read_json('__TEST_DIR__/bigint.json')
+----
+BIGINT	42
+
+# mixed negative and large unsigned values should use HUGEINT
+statement ok
+copy (select * from (values ('{"id":-5}'), ('{"id":9223372036854775808}'))) to '__TEST_DIR__/mixed.json' (format csv, quote '', header 0)
+
+query II
+select typeof(id), id from read_json('__TEST_DIR__/mixed.json')
+----
+HUGEINT	-5
+HUGEINT	9223372036854775808

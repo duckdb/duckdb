@@ -12,6 +12,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
+#include "duckdb/common/enums/active_transaction_state.hpp"
 
 namespace duckdb {
 class CheckpointLock;
@@ -22,6 +23,11 @@ class StorageLockKey;
 class StorageCommitState;
 struct DataTableInfo;
 struct UndoBufferProperties;
+
+struct CommitInfo {
+	transaction_t commit_id;
+	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
+};
 
 class DuckTransaction : public Transaction {
 public:
@@ -58,7 +64,7 @@ public:
 	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
-	ErrorData Commit(AttachedDatabase &db, transaction_t commit_id,
+	ErrorData Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	                 unique_ptr<StorageCommitState> commit_state) noexcept;
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
 	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
@@ -83,9 +89,6 @@ public:
 	}
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
-	bool HasWriteLock() const {
-		return write_lock.get();
-	}
 
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
@@ -99,8 +102,10 @@ private:
 	UndoBuffer undo_buffer;
 	//! The set of uncommitted appends for the transaction
 	unique_ptr<LocalStorage> storage;
-	//! Write lock
-	unique_ptr<StorageLockKey> write_lock;
+	//! Lock that prevents checkpoints from starting
+	unique_ptr<StorageLockKey> checkpoint_lock;
+	//! Lock that prevents vacuums from starting
+	unique_ptr<StorageLockKey> vacuum_lock;
 	//! Lock for accessing sequence_usage
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction

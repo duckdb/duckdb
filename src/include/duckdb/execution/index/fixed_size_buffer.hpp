@@ -117,19 +117,7 @@ private:
 class SegmentHandle {
 public:
 	SegmentHandle() = delete;
-	SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : buffer_ptr(buffer_p) {
-		lock_guard<mutex> l(buffer_ptr->lock);
-
-		if (!buffer_ptr->InMemory() && !buffer_ptr->loaded) {
-			buffer_ptr->LoadFromDisk();
-		}
-		if (!buffer_ptr->InMemory() && buffer_ptr->loaded) {
-			buffer_ptr->block_manager.buffer_manager.Pin(buffer_ptr->block_handle);
-		}
-
-		ptr = buffer_ptr->buffer_handle.Ptr() + offset;
-		buffer_ptr->readers++;
-	}
+	SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset);
 
 	~SegmentHandle() {
 		if (!buffer_ptr) {
@@ -152,6 +140,10 @@ public:
 	}
 	SegmentHandle &operator=(SegmentHandle &&other) noexcept {
 		if (this != &other) {
+			// Decrement reader count for existing handle if it exists
+			if (buffer_ptr) {
+				buffer_ptr->readers--;
+			}
 			buffer_ptr = other.buffer_ptr;
 			ptr = other.ptr;
 			other.buffer_ptr = nullptr;

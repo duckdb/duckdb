@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb.h"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #ifdef DEBUG

@@ -12,6 +12,12 @@
       "paths": [
         "test/sql/copy/csv/zstd_crash.test"
       ]
+    },
+    {
+      "reason": "Involves reading incorrect_index_page_offsets.parquet",
+      "paths": [
+        "test/parquet/variant/variant_roundtrip.test_slow"
+      ]
     }
   ]
 }

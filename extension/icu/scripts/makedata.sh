@@ -11,13 +11,13 @@ set -e
 mkdir -p build
 pushd build
 
-# download ICU 66
-code_version=66-1
+# download ICU 74-2
+code_version=74-2
 wget -nc ${icu/version/$code_version}
 unzip -o ${zip_file/version/$code_version}
 
-# download ICU 72 (replace with latest version)
-data_version=72-1
+# download ICU 77-1 (replace with latest version)
+data_version=77-1
 wget -nc ${icu/version/$data_version}
 unzip -o ${zip_file/version/$data_version}
 
@@ -26,7 +26,7 @@ find ${data_path/version/$data_version} -type f ! -iname "*.txt" -delete
 cp -r ${data_path/version/$data_version} ${source_path/version/$code_version}
 
 # download IANA and copy the latest Time Zone Data
-tz_version=2025b
+tz_version=2025c
 rm -rf icu-data
 git clone git@github.com:unicode-org/icu-data.git || true
 cp icu-data/tzdata/icunew/${tz_version}/44/*.txt ${data_path/version/$code_version}/misc

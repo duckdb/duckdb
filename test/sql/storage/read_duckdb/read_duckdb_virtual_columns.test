@@ -16,7 +16,7 @@ DETACH rd
 endloop
 
 query III
-SELECT rowid, (filename.replace('\', '/').split('/'))[3], * FROM read_duckdb('__TEST_DIR__/read_duckdb_virt[1-2].db') ORDER BY filename, rowid
+SELECT rowid, (filename.replace('\', '/').split('/')[-1]), * FROM read_duckdb('__TEST_DIR__/read_duckdb_virt[1-2].db') ORDER BY filename, rowid
 ----
 0	read_duckdb_virt1.db	42
 0	read_duckdb_virt2.db	42

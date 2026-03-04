@@ -1,6 +1,7 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
@@ -8,8 +9,8 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -18,8 +19,9 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 

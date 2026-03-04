@@ -1,0 +1,26 @@
+# name: test/sql/constraints/foreignkey/test_fk_pk_multi_transaction_delete.test
+# description: Verify foreign key constraints remain consistent also when dealing with multiple transactions
+# group: [foreignkey]
+
+statement ok
+CREATE TABLE primary_table (id INT PRIMARY KEY)
+
+statement ok
+CREATE TABLE secondary_table (primary_id INT, FOREIGN KEY (primary_id) REFERENCES primary_table(id))
+
+statement ok
+INSERT INTO primary_table VALUES (42)
+
+statement ok con1
+BEGIN
+
+statement ok con1
+SELECT id FROM primary_table LIMIT 1
+
+statement ok con2
+DELETE FROM primary_table WHERE id = 42
+
+statement error con2
+INSERT INTO secondary_table VALUES (42)
+----
+Violates foreign key constraint because key

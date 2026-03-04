@@ -16,6 +16,20 @@ namespace duckdb {
 //! Struct column data represents a struct
 class StructColumnData : public ColumnData {
 public:
+	struct StructColumnDataChild {
+	public:
+		StructColumnDataChild(ColumnData &col, optional_idx vector_index, ColumnScanState &child, bool should_scan)
+		    : col(col), vector_index(vector_index), state(child), should_scan(should_scan) {
+		}
+
+	public:
+		ColumnData &col;
+		optional_idx vector_index;
+		ColumnScanState &state;
+		bool should_scan;
+	};
+
+public:
 	StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                 ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
@@ -27,10 +41,10 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
+	vector<StructColumnDataChild> GetStructChildren(ColumnScanState &state) const;
+
 	idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	           idx_t scan_count) override;
-	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
-	                    idx_t scan_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
@@ -39,8 +53,8 @@ public:
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
-	void FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-	              idx_t result_idx) override;
+	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
+	              Vector &result, idx_t result_idx) override;
 	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
 	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
@@ -52,7 +66,8 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
+	                                             const BaseStatistics &old_stats) override;
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
@@ -66,6 +81,9 @@ public:
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(idx_t i, shared_ptr<ColumnData> child_column_p);
+	const ColumnData &GetChildColumn(idx_t index) const;
+
+	const BaseStatistics &GetChildStats(const ColumnData &child) const override;
 
 protected:
 	//! The sub-columns of the struct
