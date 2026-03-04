@@ -150,6 +150,12 @@ jobs:
       - linux-debug
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
+    env:
+      # Disabling ODR violation checks is required because relassert has:
+      # - EXPORT_DYNAMIC_SYMBOLS: 1
+      # - EXTENSION_STATIC_BUILD: 0
+      ASAN_OPTIONS: "detect_odr_violation=0"
+
     steps:
     - uses: actions/checkout@v4
 
