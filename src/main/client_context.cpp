@@ -693,7 +693,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		parser.ParseQuery(query);
 
 		PragmaHandler handler(*this);
-		handler.HandlePragmaStatements(lock, parser.statements);
+		handler.HandlePragmaStatements(lock, parser.statements, transaction.HasActiveTransaction());
 
 		return std::move(parser.statements);
 	} catch (std::exception &ex) {
@@ -707,7 +707,7 @@ void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 	auto lock = LockContext();
 
 	PragmaHandler handler(*this);
-	handler.HandlePragmaStatements(*lock, statements);
+	handler.HandlePragmaStatements(*lock, statements, transaction.HasActiveTransaction());
 }
 
 unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {

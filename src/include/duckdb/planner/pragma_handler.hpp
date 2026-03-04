@@ -23,7 +23,8 @@ class PragmaHandler {
 public:
 	explicit PragmaHandler(ClientContext &context);
 
-	void HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements);
+	void HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
+	                            bool is_in_active_transaction);
 
 private:
 	ClientContext &context;
@@ -33,6 +34,7 @@ private:
 	//! contains the statement(s) to replace the current one
 	bool HandlePragma(SQLStatement &statement, string &resulting_query);
 
-	void HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatement>> &statements);
+	void HandlePragmaStatementInternal(unique_ptr<SQLStatement> &statements,
+	                                   vector<unique_ptr<SQLStatement>> &new_statements);
 };
 } // namespace duckdb
