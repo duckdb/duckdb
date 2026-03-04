@@ -101,8 +101,6 @@ jobs:
       CXX: g++
       DUCKDB_LINKER: mold
       TREAT_WARNINGS_AS_ERRORS: 1
-      EXTENSION_STATIC_BUILD: 0
-      EXPORT_DYNAMIC_SYMBOLS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
       FORCE_DEBUG: 1
@@ -149,12 +147,6 @@ jobs:
       - prepare
       - linux-debug
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-
-    env:
-      # Disabling ODR violation checks is required because relassert has:
-      # - EXPORT_DYNAMIC_SYMBOLS: 1
-      # - EXTENSION_STATIC_BUILD: 0
-      ASAN_OPTIONS: "detect_odr_violation=0"
 
     steps:
     - uses: actions/checkout@v4
