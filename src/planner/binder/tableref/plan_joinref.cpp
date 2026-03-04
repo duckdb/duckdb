@@ -268,7 +268,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		default:
 			break;
 		}
-
 		idx_t asof_idx = comparison_conditions.size();
 		for (size_t c = 0; c < comparison_conditions.size(); ++c) {
 			auto &cond = comparison_conditions[c];

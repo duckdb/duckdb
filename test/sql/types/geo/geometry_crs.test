@@ -1,6 +1,9 @@
 # name: test/sql/types/geo/geometry_crs.test
 # group: [geo]
 
+# TODO: Requires minimum storage version v1.5.0, which is not the default
+require no_force_storage
+
 query I
 select st_crs(NULL);
 ----

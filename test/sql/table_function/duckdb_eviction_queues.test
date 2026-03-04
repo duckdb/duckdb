@@ -4,6 +4,10 @@
 
 load __TEST_DIR__/eviction_queues.db
 
+# limit threads to limit memory usage
+statement ok
+SET threads=4
+
 # fudge factor for approximate_size drift
 statement ok
 CREATE MACRO fudge() AS (20);
