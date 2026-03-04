@@ -59,22 +59,6 @@ query IIII nosort res6
 SELECT finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
-# more aggregates
-
-# we skip these for now as argmin/argmax now has a custom binder (so that it can work with extension types like JSON)
-# otherwise we get "Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders"
-mode skip
-
-query II nosort res7
-select argmin(a,b), argmax(a,b) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
-----
-
-query II nosort res7
-select FINALIZE(argmin(a,b) EXPORT_STATE), FINALIZE(argmax(a,b) EXPORT_STATE) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
-----
-
-mode unskip
-
 # you're holding it wrong:
 
 statement error

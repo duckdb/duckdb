@@ -20,6 +20,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -585,6 +586,44 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 	return nullptr;
 }
 
+unique_ptr<FunctionData> IntegerNegateBind(ClientContext &context, ScalarFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(arguments.size() == 1);
+	if (arguments[0]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return nullptr;
+	}
+	auto &const_expr = arguments[0]->Cast<BoundConstantExpression>();
+	if (const_expr.value.IsNull()) {
+		return nullptr;
+	}
+	auto &type = bound_function.arguments[0];
+	// only need to promote if the constant exactly equals the type's minimum value
+	if (const_expr.value != Value::MinimumValue(type)) {
+		return nullptr;
+	}
+	LogicalType promoted_type;
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		promoted_type = LogicalType::SMALLINT;
+		break;
+	case LogicalTypeId::SMALLINT:
+		promoted_type = LogicalType::INTEGER;
+		break;
+	case LogicalTypeId::INTEGER:
+		promoted_type = LogicalType::BIGINT;
+		break;
+	case LogicalTypeId::BIGINT:
+		promoted_type = LogicalType::HUGEINT;
+		break;
+	default:
+		return nullptr;
+	}
+	bound_function.arguments[0] = promoted_type;
+	bound_function.SetReturnType(promoted_type);
+	bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<NegateOperator>(promoted_type));
+	return nullptr;
+}
+
 struct NegatePropagateStatistics {
 	template <class T>
 	static bool Operation(const LogicalType &type, BaseStatistics &istats, Value &new_min, Value &new_max) {
@@ -655,8 +694,8 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 		return func;
 	} else {
 		D_ASSERT(type.IsNumeric());
-		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), nullptr,
-		                    nullptr, NegateBindStatistics);
+		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type),
+		                    IntegerNegateBind, nullptr, NegateBindStatistics);
 		func.SetFallible();
 		return func;
 	}
