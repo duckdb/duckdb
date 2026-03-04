@@ -1,0 +1,36 @@
+# name: test/sql/aggregate/distinct/distinct_limit.test
+# description: Test DISTINCT with LIMIT early termination
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT i % 100 FROM range(1000000) t(i) LIMIT 10)
+----
+10
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT i % 100 FROM range(1000000) t(i) LIMIT 5 OFFSET 3)
+----
+5
+
+# limit larger than number of distinct values
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT i % 10 FROM range(1000000) t(i) LIMIT 100)
+----
+10
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT i FROM range(1000000) t(i) LIMIT 0)
+----
+0
+
+# multiple columns
+statement ok
+CREATE TABLE t1 AS SELECT i, i % 10 AS j FROM range(100000) t(i)
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT i, j FROM t1 LIMIT 15)
+----
+15
