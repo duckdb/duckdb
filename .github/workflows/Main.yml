@@ -180,6 +180,11 @@ jobs:
     secrets: inherit
     needs: linux-debug
 
+ code-quality:
+    uses: ./.github/workflows/CodeQuality.yml
+    secrets: inherit
+    needs: prepare
+
  extensions:
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
