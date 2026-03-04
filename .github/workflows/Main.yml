@@ -26,7 +26,7 @@ on:
       - '!.github/config/extensions/fts.cmake'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -56,7 +56,9 @@ env:
 jobs:
  prepare:
     # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    if: |
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
     runs-on: ubuntu-latest
     outputs:
       runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
