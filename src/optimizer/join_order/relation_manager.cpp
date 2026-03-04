@@ -812,26 +812,25 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 			case JoinType::SEMI:
 			case JoinType::ANTI:
 			case JoinType::LEFT: {
-				if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-					auto conjunction_expression =
-					    make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-					// create a conjunction expression for the semi join.
-					// It's possible multiple LHS relations have a condition in
-					// this semi join. Suppose we have ((A ⨝ B) ⋉ C). (example in test_4950.test)
-					// If the semi join condition has A.x = C.y AND B.x = C.z then we need to prevent a reordering
-					// that looks like ((A ⋉ C) ⨝ B)), since all columns from C will be lost after it joins with A,
-					// and the condition B.x = C.z will no longer be possible.
-					// if we make a conjunction expressions and populate the left set and right set with all
-					// the relations from the conditions in the conjunction expression, we can prevent invalid
-					// reordering.
-					for (auto &cond : join.conditions) {
-						if (cond.IsComparison()) {
-							auto comparison = make_uniq<BoundComparisonExpression>(cond.GetComparisonType(),
-							                                                       cond.GetLHS().Copy(),
-							                                                       cond.GetRHS().Copy());
-							conjunction_expression->children.push_back(std::move(comparison));
-						}
+				auto conjunction_expression = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+				// create a conjunction expression for the semi/anti/left join.
+				// It's possible multiple LHS relations have a condition in
+				// this join. Suppose we have ((A ⨝ B) ⋉ C). (example in test_4950.test)
+				// If the semi join condition has A.x = C.y AND B.x = C.z then we need to prevent a reordering
+				// that looks like ((A ⋉ C) ⨝ B)), since all columns from C will be lost after it joins with A,
+				// and the condition B.x = C.z will no longer be possible.
+				// if we make a conjunction expression and populate the left set and right set with all
+				// the relations from the conditions in the conjunction expression, we can prevent invalid
+				// reordering. The same logic applies to LEFT joins.
+				for (auto &cond : join.conditions) {
+					if (cond.IsComparison()) {
+						auto comparison = make_uniq<BoundComparisonExpression>(cond.GetComparisonType(),
+						                                                       cond.GetLHS().Copy(),
+						                                                       cond.GetRHS().Copy());
+						conjunction_expression->children.push_back(std::move(comparison));
 					}
+				}
+				if (!conjunction_expression->children.empty()) {
 					auto leftover_exprs =
 					    CreateFilterInfoFromExpression(std::move(conjunction_expression), set_manager, join.join_type);
 					D_ASSERT(leftover_exprs.empty());
