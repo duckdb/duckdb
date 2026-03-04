@@ -91,7 +91,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 		if (expression->HasSubquery()) {
 			throw ParserException("subqueries prohibited in CHECK constraints");
 		}
-		return make_uniq<CheckConstraint>(TransformExpression(constraint.raw_expr));
+		return make_uniq<CheckConstraint>(std::move(expression));
 	}
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
 		return TransformForeignKeyConstraint(constraint);

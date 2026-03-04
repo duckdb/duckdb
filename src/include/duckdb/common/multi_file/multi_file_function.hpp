@@ -635,7 +635,7 @@ public:
 			}
 			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 				// Loop back to the same block
-				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					continue;
 				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
@@ -648,14 +648,14 @@ public:
 			}
 
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				if (scan_chunk.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					gstate.finished = true;
 					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				} else {
 					data_p.async_result = SourceResultType::FINISHED;
 				}
 			} else {
-				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					continue;
 				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;

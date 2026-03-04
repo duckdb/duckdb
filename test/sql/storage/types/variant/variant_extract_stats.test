@@ -3,7 +3,7 @@
 
 require noforcestorage
 
-load __TEST_DIR__/variant_extract_stats_propagation.db
+load __TEST_DIR__/variant_extract_stats_propagation.db readwrite v1.5.0
 
 statement ok
 SET variant_minimum_shredding_size = 0;

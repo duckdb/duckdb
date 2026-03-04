@@ -41,7 +41,8 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
 }
 
-unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
+unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db,
+                                                                const CompressionFunction &function,
                                                                 const LogicalType &type, const idx_t segment_size,
                                                                 BlockManager &block_manager) {
 	// Allocate a buffer for the uncompressed segment.
@@ -57,9 +58,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 // Construct/Destruct
 //===--------------------------------------------------------------------===//
 ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block_p, const LogicalType &type,
-                             const ColumnSegmentType segment_type, const idx_t count, CompressionFunction &function_p,
-                             BaseStatistics statistics, const block_id_t block_id_p, const idx_t offset,
-                             const idx_t segment_size_p, const unique_ptr<ColumnSegmentState> segment_state_p)
+                             const ColumnSegmentType segment_type, const idx_t count,
+                             const CompressionFunction &function_p, BaseStatistics statistics,
+                             const block_id_t block_id_p, const idx_t offset, const idx_t segment_size_p,
+                             const unique_ptr<ColumnSegmentState> segment_state_p)
 
     : SegmentBase<ColumnSegment>(count), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
       segment_type(segment_type), stats(std::move(statistics)), block(std::move(block_p)), function(function_p),

@@ -26,6 +26,12 @@
       ]
     },
     {
+      "reason": "No stats",
+      "paths": [
+        "test/sql/types/geo/geometry_shred_types.test_slow"
+      ]
+    },
+    {
       "reason": "FIXME: crash/error in test",
       "paths": [
         "test/sql/storage/compression/roaring/roaring_bool_run_simple_w_null.test",
