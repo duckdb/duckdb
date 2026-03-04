@@ -11,26 +11,30 @@ PRAGMA enable_verification
 statement ok
 COPY (SELECT 1 AS id, NULL::VARCHAR AS x, NULL::DOUBLE AS y) TO '__TEST_DIR__/test_21160_single.parquet' (FORMAT parquet);
 
+foreach null_order LAST FIRST
+
 # Original regression tests: single row, all-null sort columns
 query I
-SELECT id FROM read_parquet('__TEST_DIR__/test_21160_single.parquet') WHERE x IS NULL ORDER BY y;
+SELECT id FROM read_parquet('__TEST_DIR__/test_21160_single.parquet') WHERE x IS NULL ORDER BY y NULLS ${null_order};
 ----
 1
 
 query I
-SELECT id FROM read_parquet('__TEST_DIR__/test_21160_single.parquet') WHERE x IS NULL ORDER BY y LIMIT 10;
+SELECT id FROM read_parquet('__TEST_DIR__/test_21160_single.parquet') WHERE x IS NULL ORDER BY y NULLS ${null_order} LIMIT 10;
 ----
 1
 
 query I
-SELECT id FROM read_parquet('__TEST_DIR__/test_21160_single.parquet') WHERE x IS NULL ORDER BY x;
+SELECT id FROM read_parquet('__TEST_DIR__/test_21160_single.parquet') WHERE x IS NULL ORDER BY x NULLS ${null_order};
 ----
 1
 
 query I
-SELECT id FROM read_parquet('__TEST_DIR__/test_21160_single.parquet') WHERE x IS NULL ORDER BY x LIMIT 10;
+SELECT id FROM read_parquet('__TEST_DIR__/test_21160_single.parquet') WHERE x IS NULL ORDER BY x NULLS ${null_order} LIMIT 10;
 ----
 1
+
+endloop
 
 # Write multi-row parquet (mixed NULL and non-NULL values)
 statement ok

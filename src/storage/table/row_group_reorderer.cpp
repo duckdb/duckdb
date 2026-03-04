@@ -203,7 +203,7 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 		}
 	}
 	if (column_type == OrderByColumnType::STRING) {
-		if (!stats.CanHaveNoNull() || !StringStats::HasMaxStringLength(stats)) {
+		if (!stats.CanHaveNoNull()) {
 			// No non-null values exist in this row group - stats are meaningless for ordering
 			return Value();
 		}
