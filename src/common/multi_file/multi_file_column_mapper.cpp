@@ -1035,8 +1035,20 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 }
 
 void SetIndexToZero(unique_ptr<Expression> &root_expr) {
+#ifdef DEBUG
+	optional_idx index;
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(root_expr, [&](BoundReferenceExpression &ref,
+	                                                                                    unique_ptr<Expression> &expr) {
+		if (index.IsValid() && index.GetIndex() != ref.index) {
+			throw InternalException("Expected an expression that only references a single column, but found multiple!");
+		}
+		index = ref.index;
+		ref.index = 0;
+	});
+#else
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
 	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index = 0; });
+#endif
 }
 
 bool CanPropagateCast(const MultiFileIndexMapping &mapping, const LogicalType &local_type,

@@ -1546,6 +1546,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	idx_t new_total_rows = 0;
 	bool skipped_row_groups = false;
+	unordered_set<idx_t> columns_with_incomplete_stats;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
 		if (!entry) {
@@ -1589,10 +1590,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 			auto pointer =
 			    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
-
 			if (debug_verify_blocks) {
 				pointer_copy = pointer;
 			}
+			// for any columns that are not yet loaded add them to the list of columns with incomplete stats
+			auto unloaded_columns = row_group_writer->GetUnloadedColumns();
+			for (auto &column_idx : unloaded_columns) {
+				columns_with_incomplete_stats.insert(column_idx);
+			}
+
 			writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		} else {
 			debug_verify_blocks = false;
@@ -1711,6 +1717,16 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException("Reloading deletes blocks just written does not yield same blocks: " +
 				                        oss.str());
 			}
+		}
+	}
+	if (!columns_with_incomplete_stats.empty()) {
+		// for any columns that have incomplete stats we need to merge in the previous global stats to ensure the stats
+		// are correct
+		auto lock = global_stats.GetLock();
+		for (auto &column_idx : columns_with_incomplete_stats) {
+			auto stats_lock = stats.GetLock();
+			auto &column_stats = stats.GetStats(*stats_lock, column_idx);
+			global_stats.MergeStats(*lock, column_idx, column_stats.Statistics());
 		}
 	}
 	l.Release();
