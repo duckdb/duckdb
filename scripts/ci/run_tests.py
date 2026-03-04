@@ -60,9 +60,7 @@ class BatchRunState:
         return batch_info["attempt"] < config.retry and self.retry_count < config.max_retries
 
     def should_stop(self, config: TestRunnerConfig):
-        return self.stop_launching or (
-            config.max_failures is not None and self.failed_count >= config.max_failures
-        )
+        return self.stop_launching or config.max_failures is not None and self.failed_count >= config.max_failures
 
 
 def chunked(items, n):
