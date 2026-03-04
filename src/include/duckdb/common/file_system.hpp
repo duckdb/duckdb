@@ -20,6 +20,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/path.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -133,106 +134,6 @@ public:
 	FileOpenFlags flags;
 
 	shared_ptr<Logger> logger;
-};
-
-//
-// Parsed representation of a path string, covering posix, windows, URI, and UNC forms.
-//
-// FromString(raw) parses and normalizes the input; ToString() reconstructs it as
-// scheme + authority + anchor + join(segments, sep).
-//
-// Treat as immutable once constructed: fields are public for convenient read access
-// but should not be modified directly. Use Join() and Parent() to derive new paths.
-//
-// Supported input forms and their parsed fields:
-//
-//   Input                         scheme        authority      anchor   segments      is_absolute
-//   ----------------------------  ------------  -----------    -------  ------------  -----------
-//   "a/b"                         ""            ""             ""       "a/b"         false
-//   ""  (empty)                   ""            ""             ""       "."           false
-//   "/"                           ""            ""             "/"      ""            true
-//   "/a/b"                        ""            ""             "/"      "a/b"         true
-//   "/a/b/"                       ""            ""             "/"      "a/b"         true   (has_trailing_separator)
-//   "file:/a/b"                   "file:"       ""             "/"      "a/b"         true
-//   "file:///a/b"                 "file://"     ""             "/"      "a/b"         true
-//   "file://localhost/a/b"        "file://"     "localhost"    "/"      "a/b"         true
-//   "s3://bucket/bar/baz"         "s3://"       "bucket"       "/"      "bar/baz"     true
-//   "C:\foo" (win)                ""            ""             "C:\"    "foo"         true
-//   "C:relpath" (win)             ""            ""             "C:"     "relpath"     false
-//   "\\server\share\p" (win)      "\\"          "server\share" "\"      "p"           true
-//   "\\?\UNC\server\share" (win)  "\\?\UNC\"    "server\share" "\"      ""            true
-//   "\\?\C:\foo" (win)            "\\?"         ""             "C:\"    "foo"         true
-//
-// has_trailing_separator is set when raw input ends with '/' or '\'. ToString() re-emits the
-// separator after the last segment (skipped when segments is empty — anchor already ends with it).
-// Join() inherits it from rhs. Useful (and semantically meaningful) in distinguishing
-// e.g. '/foo/*/' from '/foo/*'.
-//
-// Windows local paths may use '/' or '\\' -- whichever is found first will be applied to
-// remainder of the normalized path; defaults to '/'.
-//
-struct Path {
-	string scheme;           // e.g. "s3://", "file://", "" — normalized lowercase
-	string authority;        // e.g. "bucket", "localhost", ""
-	string anchor;           // e.g. "/", "C:/", "C:\\", "\\"
-	vector<string> segments; // normalized path components; empty = bare anchor or "."
-	char separator = '/';
-	bool is_absolute = false;
-	bool has_trailing_separator = false; // true when raw input ended with '/' or '\'
-
-	// Primary Constructor
-	static Path FromString(const string &raw);
-
-	string ToString() const;
-
-	string GetBase() const; // scheme + authority + anchor
-	string GetPath() const; // relative path segments: join(segments, sep), or "." for empty relative
-
-	Path Join(const Path &rhs) const;
-	Path Join(const string &rhs) const;
-	Path Parent(int n = 1) const;
-
-	bool HasScheme() const {
-		return !scheme.empty();
-	}
-	bool HasAuthority() const {
-		return !authority.empty();
-	}
-	bool HasAnchor() const {
-		return !anchor.empty();
-	}
-	bool HasDrive() const;
-	char GetDriveChar() const;
-
-	bool IsAbsolute() const {
-		return is_absolute;
-	}
-
-	bool HasTrailingSeparator() const {
-		return has_trailing_separator;
-	}
-
-	// true for all relative paths, /*,  c:/* (not c:foo), file:/*, \\?\C:\*
-	bool IsLocal() const {
-		// note: HasDrive() covers UNC locals too!
-		return (!IsAbsolute() || !HasScheme() || HasDrive() || StringUtil::StartsWith(scheme, "file:"));
-	};
-
-	bool IsRemote() const {
-		return !IsLocal();
-	}
-
-	const vector<string> &GetPathSegments() const {
-		return segments;
-	}
-
-	// public convenience - string-to-string normalize
-	static string Normalize(const string &input) {
-		return FromString(input).ToString();
-	}
-
-private:
-	void NormalizeSegments(const string &raw, size_t path_offset);
 };
 
 class FileSystem {

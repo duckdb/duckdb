@@ -1391,7 +1391,7 @@ string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<File
 		// (referencing D: while in $PWD in C:); In this case, default as if PWD is
 		// root of drive, e.g. "C:\"
 		// NOTE: should this error? pushdir("c:") && getcwd() && popdir()?
-		parsed_wd = Path::FromString(parsed.GetBase() + parsed.separator);
+		parsed_wd = Path::FromString(parsed.GetBase() + parsed.GetSeparator());
 	}
 	return parsed_wd.Join(parsed.GetPath()).ToString();
 }
@@ -1709,7 +1709,6 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 	}
 }
 
-// XXX: skipped merge here, rebase doesn't make sense since rewritten -- manually reintegrate before landing
 bool LocalGlobResult::ExpandNextPath() const {
 	if (finished) {
 		return false;

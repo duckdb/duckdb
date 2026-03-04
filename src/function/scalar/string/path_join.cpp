@@ -28,6 +28,7 @@ public:
 // Process one output row; returns false if any input is NULL.
 static bool ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs, idx_t col_count, FileSystem &fs,
                        string &out_result) {
+	Path out_path;
 	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
 		auto &vdata = inputs[col_idx];
 		auto idx = vdata.sel->get_index(row_idx);
@@ -36,11 +37,12 @@ static bool ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs,
 		}
 		auto input_value = UnifiedVectorFormat::GetData<string_t>(vdata)[idx].GetString();
 		if (col_idx == 0) {
-			out_result = input_value;
+			out_path = Path::FromString(input_value);
 		} else {
-			out_result = fs.JoinPath(out_result, input_value);
+			out_path = out_path.Join(input_value);
 		}
 	}
+	out_result = out_path.ToString();
 	return true;
 }
 

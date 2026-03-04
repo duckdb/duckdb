@@ -487,80 +487,80 @@ TEST_CASE("Path parses and correctly structures fields", "[file_system]") {
 
 	SECTION("local files") {
 		output = Path::FromString("a/b");
-		CHECK(output.scheme == "");
-		CHECK(output.authority == "");
-		CHECK(output.anchor == "");
-		CHECK(output.is_absolute == false);
+		CHECK(output.GetScheme() == "");
+		CHECK(output.GetAuthority() == "");
+		CHECK(output.GetAnchor() == "");
+		CHECK(output.IsAbsolute() == false);
 		CHECK(output.GetPath() == "a/b");
 
 		output = Path::FromString("/..////a/./b/../c");
-		CHECK(output.scheme == "");
-		CHECK(output.authority == "");
-		CHECK(output.anchor == "/");
+		CHECK(output.GetScheme() == "");
+		CHECK(output.GetAuthority() == "");
+		CHECK(output.GetAnchor() == "/");
 		CHECK(output.GetPath() == "a/c");
-		CHECK(output.is_absolute == true);
+		CHECK(output.IsAbsolute() == true);
 	}
 
 	SECTION("file schemes") {
 		output = Path::FromString("file:/a/b");
-		CHECK(output.scheme == "file:");
-		CHECK(output.authority == "");
-		CHECK(output.anchor == "/");
-		CHECK(output.is_absolute == true);
+		CHECK(output.GetScheme() == "file:");
+		CHECK(output.GetAuthority() == "");
+		CHECK(output.GetAnchor() == "/");
+		CHECK(output.IsAbsolute() == true);
 		CHECK(output.GetPath() == "a/b");
 
 		output = Path::FromString("file://localhost/a/b");
-		CHECK(output.scheme == "file://");
-		CHECK(output.authority == "localhost");
-		CHECK(output.anchor == "/");
-		CHECK(output.is_absolute == true);
+		CHECK(output.GetScheme() == "file://");
+		CHECK(output.GetAuthority() == "localhost");
+		CHECK(output.GetAnchor() == "/");
+		CHECK(output.IsAbsolute() == true);
 		CHECK(output.GetPath() == "a/b");
 
 		output = Path::FromString("file:///a/b");
-		CHECK(output.scheme == "file://");
-		CHECK(output.authority == "");
-		CHECK(output.anchor == "/");
-		CHECK(output.is_absolute == true);
+		CHECK(output.GetScheme() == "file://");
+		CHECK(output.GetAuthority() == "");
+		CHECK(output.GetAnchor() == "/");
+		CHECK(output.IsAbsolute() == true);
 		CHECK(output.GetPath() == "a/b");
 
 		output = Path::FromString("file://LOCALHOST/a/b");
-		CHECK(output.scheme == "file://");
-		CHECK(output.authority == "LOCALHOST");
-		CHECK(output.anchor == "/");
+		CHECK(output.GetScheme() == "file://");
+		CHECK(output.GetAuthority() == "LOCALHOST");
+		CHECK(output.GetAnchor() == "/");
 		CHECK(output.GetPath() == "a/b");
 
 #if defined(_WIN32)
 		output = Path::FromString(R"(c:..\foo)");
-		CHECK(output.scheme == "");
-		CHECK(output.authority == "");
-		CHECK(output.anchor == "C:");
-		CHECK(output.is_absolute == false);
+		CHECK(output.GetScheme() == "");
+		CHECK(output.GetAuthority() == "");
+		CHECK(output.GetAnchor() == "C:");
+		CHECK(output.IsAbsolute() == false);
 		CHECK(output.GetPath() == R"(..\foo)");
 
 		output = Path::FromString(R"(c:\..\foo)");
-		CHECK(output.scheme == "");
-		CHECK(output.authority == "");
-		CHECK(output.anchor == R"(C:\)");
-		CHECK(output.is_absolute == true);
+		CHECK(output.GetScheme() == "");
+		CHECK(output.GetAuthority() == "");
+		CHECK(output.GetAnchor() == R"(C:\)");
+		CHECK(output.IsAbsolute() == true);
 		CHECK(output.GetPath() == "foo");
 #endif
 	}
 
 	SECTION("URI schemes") {
 		output = Path::FromString("az://container/b/c");
-		CHECK(output.scheme == "az://");
-		CHECK(output.authority == "container");
-		CHECK(output.anchor == "/");
-		CHECK(output.is_absolute);
+		CHECK(output.GetScheme() == "az://");
+		CHECK(output.GetAuthority() == "container");
+		CHECK(output.GetAnchor() == "/");
+		CHECK(output.IsAbsolute());
 		CHECK(output.GetPath() == "b/c");
 	}
 
 #if defined(_WIN32)
 	SECTION("UNC schemes") {
 		output = Path::FromString(R"(\\foo\bar)");
-		CHECK(output.scheme == R"(\\)");
-		CHECK(output.authority == R"(foo\bar)");
-		CHECK(output.anchor == R"(\)");
+		CHECK(output.GetScheme() == R"(\\)");
+		CHECK(output.GetAuthority() == R"(foo\bar)");
+		CHECK(output.GetAnchor() == R"(\)");
 		CHECK(output.GetPath().empty());
 
 		CHECK_THROWS(Path::FromString(R"(\\\\ab)"));
@@ -602,6 +602,11 @@ TEST_CASE("Path::FromString/ToString round-trips", "[file_system]") {
 		    make_tuple(OK_, "/a",       "/a"),
 		    make_tuple(OK_, "/a/b",     "/a/b"),
 		    make_tuple(OK_, "/a/b/",    "/a/b/"),
+
+		    // backslash ok separator on all platforms; confirm output sep = first sep in input
+		    make_tuple(OK_, R"(a\b)",             "a/b"),
+		    make_tuple(OK_, R"(/a\b\c)",          "/a/b/c"),
+		    make_tuple(OK_, R"(/data\csv\*.csv)", "/data/csv/*.csv"),
 
 		    make_tuple(OK_, "foo/bar://baz",  "foo/bar:/baz"),
 		    make_tuple(OK_, "/foo/bar://baz", "/foo/bar:/baz"),
@@ -930,6 +935,25 @@ TEST_CASE("Path attributes", "[file_system]") {
 		CHECK(L(Path::FromString("a/b/").Join("c/").ToString()) == L("a/b/c/"));
 		CHECK(L(Path::FromString("a/b/").Join("c").ToString())  == L("a/b/c"));
 	}
+
+	SECTION("GetTrailingSeparator") {
+		// has segments + trailing sep → string(1, separator)
+		CHECK(Path::FromString("/foo/bar/").GetTrailingSeparator()  == "/");
+		CHECK(Path::FromString("foo/bar/").GetTrailingSeparator()   == "/");
+		CHECK(Path::FromString("s3://b/p/").GetTrailingSeparator()  == "/");
+		// has segments, no trailing sep → ""
+		CHECK(Path::FromString("/foo/bar").GetTrailingSeparator()   == "");
+		CHECK(Path::FromString("foo/bar").GetTrailingSeparator()    == "");
+		CHECK(Path::FromString("s3://b/p").GetTrailingSeparator()   == "");
+		// no segments (bare anchors): anchor already ends with sep, no double-emit
+		CHECK(Path::FromString("/").GetTrailingSeparator()          == "");
+		CHECK(Path::FromString("").GetTrailingSeparator()           == "");
+		CHECK(Path::FromString("s3://b/").GetTrailingSeparator()    == "");
+#if defined(_WIN32)
+		CHECK(L(Path::FromString(R"(C:\foo\)").GetTrailingSeparator()) == L("/"));
+		CHECK(Path::FromString(R"(C:\)").GetTrailingSeparator()        == "");  // no segments
+#endif
+	}
 	// clang-format on
 }
 
@@ -942,4 +966,12 @@ TEST_CASE("Path one-off tests", "[file_system]") {
 	auto dotdot_a = Path::FromString("../a");
 	CHECK(dotdot_a.Parent().ToString() == "..");
 	CHECK(dotdot_a.Join("..").ToString() == "..");
+
+	CHECK(Path::FromString("a").Join("b").ToString() == "a/b");
+	CHECK(Path::FromString("a").Join("b", "c").ToString() == "a/b/c");
+	CHECK(Path::FromString("a").Join("b", "c", "d").ToString() == "a/b/c/d");
+
+	CHECK(Path::FromString("a").Join(std::vector<string>()).ToString() == "a");
+	CHECK(Path::FromString("a").Join(std::vector<string>({"b"})).ToString() == "a/b");
+	CHECK(Path::FromString("a").Join(std::vector<string>({"b", "c"})).ToString() == "a/b/c");
 }
