@@ -46,7 +46,9 @@ void UnPackMultiStatementIntoTransaction(unique_ptr<MultiStatement> &multi_state
 		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
 	}
 #endif
-	if (is_in_active_transaction) {
+	// if first sub-statement is SELECT, it is a PIVOT multistatement,
+	// so we skip transaction wrapping to not break the PIVOT
+	if (is_in_active_transaction || multi_statement->statements[0]->type == StatementType::SELECT_STATEMENT) {
 		// add sub-statements
 		for (auto &stmt : multi_statement->statements) {
 			new_statements.push_back(std::move(stmt));
