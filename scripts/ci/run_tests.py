@@ -396,8 +396,8 @@ def main():
         max_failures = 1
     retry = max(0, args.retry)
     if retry == 0 and os.environ.get("CI"):
-        retry = 1
-        print("CI detected, enabling retry=1")
+        retry = 2
+        print("CI detected, enabling retry=2 per batch")
     max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
     batch_size = 1 if args.track_runtime is not None else args.batch_size
