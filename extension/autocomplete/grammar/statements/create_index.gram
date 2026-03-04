@@ -10,6 +10,6 @@ IndexType <- 'USING' Identifier
 RelOption <- RelOptionName RelOptionArgumentOpt?
 RelOptionName <- DottedIdentifier / StringLiteral
 RelOptionArgumentOpt <- '=' DefArg
-DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
+DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
 ReservedKeywordValue <- ReservedKeyword
 NoneLiteral <- 'NONE'

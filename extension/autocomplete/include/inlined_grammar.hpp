@@ -1052,7 +1052,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"RelOption <- RelOptionName RelOptionArgumentOpt?\n"
 	"RelOptionName <- DottedIdentifier / StringLiteral\n"
 	"RelOptionArgumentOpt <- '=' DefArg\n"
-	"DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression\n"
+	"DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression\n"
 	"ReservedKeywordValue <- ReservedKeyword\n"
 	"NoneLiteral <- 'NONE'\n"
 	"LoadStatement <- 'LOAD' ColIdOrString\n"

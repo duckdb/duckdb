@@ -138,7 +138,7 @@ PEGTransformerFactory::TransformRelOptionArgumentOpt(PEGTransformer &transformer
 		return make_uniq<ConstantExpression>(Value(keyword));
 	} else if (def_arg_choice->name == "StringLiteral") {
 		return make_uniq<ConstantExpression>(Value(transformer.Transform<string>(def_arg_choice)));
-	} else if (def_arg_choice->name == "NoneLiteral") {
+	} else if (def_arg_choice->name == "NoneLiteral" || def_arg_choice->name == "NullLiteral") {
 		return make_uniq<ConstantExpression>(Value());
 	} else if (def_arg_choice->name == "NumberLiteral" || def_arg_choice->name == "Expression") {
 		return transformer.Transform<unique_ptr<ParsedExpression>>(def_arg_choice);
