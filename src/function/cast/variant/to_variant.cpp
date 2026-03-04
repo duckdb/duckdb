@@ -169,7 +169,9 @@ static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count)
 		auto &typed_value = *StructVector::GetEntries(result)[0];
 		// copy over the validity
 		// we need to flatten in order to reference the validity
-		source.Flatten(count);
+		if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
+			source.Flatten(count);
+		}
 		FlatVector::Validity(typed_value) = FlatVector::Validity(source);
 		// now recurse into the children of both
 		auto &source_entries = StructVector::GetEntries(source);
