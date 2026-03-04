@@ -1,4 +1,4 @@
-# name: test/optimizer/pushdown/filter_pushdown_on_expressions_with_error.test
+# name: test/optimizer/pushdown/filter_pushdown_on_expressions_with_error.test_slow
 # description: Test Filter push down on expressions that can throw errors
 # group: [pushdown]
 

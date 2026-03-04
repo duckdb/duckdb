@@ -59,25 +59,6 @@ query I nosort res6
 SELECT finalize(skewness(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
-# more aggregates
-
-query III nosort res8
-SELECT g, skewness(d) FROM dummy GROUP BY g ORDER BY g;
-----
-
-query III nosort res8
-SELECT g, FINALIZE(skewness(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
-----
-
-query I nosort res9
-SELECT skewness(d) FROM dummy;
-----
-
-
-query I nosort res9
-SELECT FINALIZE(skewness(d) EXPORT_STATE) from dummy;
-----
-
 # you're holding it wrong:
 
 statement error

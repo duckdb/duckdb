@@ -111,7 +111,8 @@
         "test/sql/copy/csv/glob/copy_csv_glob.test",
         "test/sql/select/test_select_locking.test",
         "test/sql/window/test_ignore_nulls.test",
-        "test/sql/function/tokenize/simple_tokenize.test"
+        "test/sql/function/tokenize/simple_tokenize.test",
+        "test/sql/subquery/scalar/test_scalar_subquery_cte.test"
       ]
     },
     {

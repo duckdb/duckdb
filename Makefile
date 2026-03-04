@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke
 
 all: release
 opt: release
@@ -23,6 +23,10 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
+SMOKE_UNITTEST ?= build/relassert/test/unittest
+
+# Allow setting extra unit test parameters using `make smoke T=...`.
+T ?=
 
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
@@ -399,6 +403,9 @@ unittest_release: release
 unittestci:
 	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 
+smoke:
+	$(PYTHON) scripts/ci/run_tests.py --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
@@ -424,6 +431,11 @@ relassert: ${EXTENSION_CONFIG_STEP}
 	cd build/relassert && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
+
+.PHONY: relassert-artifact
+
+relassert-artifact:
+	bash scripts/prepare_relassert_artifact.sh
 
 benchmark:
 	mkdir -p ./build/release && \

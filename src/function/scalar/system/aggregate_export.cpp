@@ -659,7 +659,8 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 
 	// combine
 	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type &&
-	    arguments[1]->return_type.id() != LogicalTypeId::BLOB) {
+	    arguments[1]->return_type.id() != LogicalTypeId::BLOB &&
+	    arguments[1]->return_type.id() != LogicalTypeId::STRUCT) {
 		throw BinderException("Cannot COMBINE aggregate states from different functions, %s <> %s",
 		                      arguments[0]->return_type.ToString(), arguments[1]->return_type.ToString());
 	}
@@ -669,6 +670,11 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 	} else {
 		D_ASSERT(bound_function.name == "combine");
 		bound_function.SetReturnType(arguments[0]->return_type);
+		// When the second argument is a STRUCT (e.g. from a parquet round-trip), prevent casting to AGGREGATE_STATE by
+		// matching the declared parameter type to the actual argument type.
+		if (arguments.size() == 2 && arguments[1]->return_type.id() == LogicalTypeId::STRUCT) {
+			bound_function.arguments[1] = arguments[1]->return_type;
+		}
 	}
 
 	return std::move(bind_data);

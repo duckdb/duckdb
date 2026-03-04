@@ -101,6 +101,7 @@ public:
 	const Catalog &ParentCatalog() const override;
 	bool HasStorageManager() const;
 	StorageManager &GetStorageManager();
+	const StorageManager &GetStorageManager() const;
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
 	DatabaseInstance &GetDatabase() {
