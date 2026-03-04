@@ -1,6 +1,9 @@
 # name: test/geoparquet/mixed.test
 # group: [geoparquet]
 
+# TODO: "Force storage" will use default storage version, but geometry requires v1.5.0, so skip for now
+require no_force_storage
+
 require parquet
 
 #------------------------------------------------------------------------------

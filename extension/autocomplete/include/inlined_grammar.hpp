@@ -1349,7 +1349,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName\n"
 	"AlterSequenceOptions <- RenameAlter / SetSequenceOption\n"
 	"SetSequenceOption <- List(SequenceOption)\n"
-	"AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'RENAME' 'TO' Identifier\n"
+	"AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier\n"
 	"CreateSequenceStmt <- 'SEQUENCE' IfNotExists? QualifiedName SequenceOption*\n"
 	"SequenceOption <-\n"
 	"	SeqSetCycle /\n"
