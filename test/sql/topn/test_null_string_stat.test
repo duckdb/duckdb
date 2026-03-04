@@ -1,0 +1,22 @@
+# name: test/sql/topn/test_null_string_stat.test
+# description: Test Top-N on strings with no stats (https://github.com/duckdb/duckdb/issues/21160)
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE t (id INTEGER, x VARCHAR, y DOUBLE);
+
+statement ok
+INSERT INTO t VALUES (1, NULL, NULL);
+
+query I
+SELECT id FROM t WHERE x IS NULL ORDER BY x;
+----
+1
+
+query I
+SELECT id FROM t WHERE x IS NULL ORDER BY x LIMIT 10;
+----
+1

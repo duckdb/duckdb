@@ -203,6 +203,9 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 		}
 	}
 	if (column_type == OrderByColumnType::STRING) {
+		if (!stats.CanHaveNoNull()) {
+			return Value();
+		}
 		switch (order_by) {
 		case OrderByStatistics::MIN:
 			return StringStats::Min(stats);
