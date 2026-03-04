@@ -168,23 +168,20 @@ jobs:
         path: build
 
     - name: Extract relassert build artifact
-      shell: bash
       run: |
         rm -rf build/relassert
         tar -xzf build/relassert-artifact.tar.gz -C build
         ls -lh build/relassert/test/unittest
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-      shell: bash
       run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
 
     - name: Test DUCKDB_INSTALL_LIB variable
       run: echo $DUCKDB_INSTALL_LIB
 
     - name: Test
-      shell: bash
       run: |
-        python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --tests-per-invocation 100 --timeout 300
+        make allunit_relassert
 
  regression:
     uses: ./.github/workflows/Regression.yml

@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests
 
 all: release
 opt: release
@@ -400,18 +400,24 @@ unittest: debug
 unittest_release: release
 	build/release/test/unittest
 
-unittestci:
-	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
+allunit_relassert:
+	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
 smoke:
-	$(PYTHON) scripts/ci/run_tests.py --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+
+runnertests:
+	python3 -m unittest scripts.ci.test_run_tests
 
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
 
-allunit: release # uses release build because otherwise allunit takes forever
-	build/release/test/unittest "*"
+allunit:
+	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
+ifndef CI
+allunit: release
+endif
 
 docs:
 	mkdir -p ./build/docs && \
