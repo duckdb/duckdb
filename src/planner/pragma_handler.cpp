@@ -55,15 +55,18 @@ void UnPackMultiStatementIntoTransaction(unique_ptr<MultiStatement> &multi_state
 		}
 	} else {
 		// inject BEGIN
-		auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION);
+		auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION,
+		                                             TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
 		new_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
+
 		// add sub-statements
 		for (auto &stmt : multi_statement->statements) {
 			new_statements.push_back(std::move(stmt));
 		}
 
 		// inject COMMIT
-		auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT);
+		auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT,
+		                                              TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
 		new_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
 	}
 }

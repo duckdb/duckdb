@@ -633,6 +633,15 @@ void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result
 	active_query->executor->WaitForTask();
 }
 
+bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
+	switch (transaction.GetInvalidationPolicy()) {
+	case TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION:
+		return true;
+	case TransactionInvalidationPolicy::STANDARD_POLICY:
+		return Exception::InvalidatesTransaction(type);
+	}
+}
+
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
                                                           bool dry_run) {
 	D_ASSERT(active_query);
@@ -657,10 +666,10 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			} else {
 				// Interrupted by an exception caused in a worker thread
 				error = executor.GetError();
-				invalidate_transaction = Exception::InvalidatesTransaction(error.Type());
+				invalidate_transaction = ErrorInvalidatesTransaction(error.Type());
 				result.SetError(error);
 			}
-		} else if (!Exception::InvalidatesTransaction(error.Type())) {
+		} else if (!ErrorInvalidatesTransaction(error.Type())) {
 			invalidate_transaction = false;
 		} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			// fatal exceptions invalidate the entire database
@@ -960,7 +969,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		}
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
-		if (!Exception::InvalidatesTransaction(error.Type())) {
+		if (!ErrorInvalidatesTransaction(error.Type())) {
 			// standard exceptions do not invalidate the current transaction
 			invalidate_query = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
@@ -1222,7 +1231,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		bool invalidates_transaction = true;
-		if (!Exception::InvalidatesTransaction(error.Type())) {
+		if (!ErrorInvalidatesTransaction(error.Type())) {
 			// standard exceptions don't invalidate the transaction
 			invalidates_transaction = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {

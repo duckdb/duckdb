@@ -6,8 +6,9 @@ namespace duckdb {
 TransactionInfo::TransactionInfo() : ParseInfo(TYPE) {
 }
 
-TransactionInfo::TransactionInfo(TransactionType type)
-    : ParseInfo(TYPE), type(type), modifier(TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER) {
+TransactionInfo::TransactionInfo(TransactionType type, TransactionInvalidationPolicy invalidation_policy)
+    : ParseInfo(TYPE), type(type), modifier(TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER),
+      invalidation_policy(invalidation_policy) {
 }
 
 string TransactionInfo::ToString() const {

@@ -311,6 +311,8 @@ private:
 	                                                                  unique_ptr<SQLStatement> statement,
 	                                                                  PendingQueryParameters parameters);
 
+	bool ErrorInvalidatesTransaction(ExceptionType type);
+
 private:
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
