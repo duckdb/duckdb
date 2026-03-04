@@ -148,7 +148,6 @@ private:
 
 	void DeleteImpl(typename EntryMap::iterator iter) {
 		current_total_weight -= iter->second.payload_weight;
-		D_ASSERT(current_total_weight >= 0);
 		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
 	}

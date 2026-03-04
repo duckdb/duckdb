@@ -1,6 +1,7 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -14,8 +15,8 @@ static constexpr idx_t N_BITS = 4;                      // the number of bits to
 void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	BufferManager &buffer_manager = BufferManager::GetBufferManager(context_p);
 
-	const idx_t min_bits = std::max<idx_t>(MIN_NUM_BITS, number_of_rows * MIN_NUM_BITS_PER_KEY);
-	num_sectors = std::min(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
+	const idx_t min_bits = MaxValue(MIN_NUM_BITS, number_of_rows * MIN_NUM_BITS_PER_KEY);
+	num_sectors = MinValue(NextPowerOfTwo(min_bits) >> LOG_SECTOR_SIZE, MAX_NUM_SECTORS);
 	bitmask = num_sectors - 1;
 
 	buf_ = buffer_manager.GetBufferAllocator().Allocate(64 + num_sectors * sizeof(uint64_t));
@@ -64,7 +65,7 @@ inline void BloomFilter::InsertOne(const hash_t hash) const {
 	D_ASSERT(initialized);
 	const uint64_t bf_offset = hash & bitmask;
 	const uint64_t mask = GetMask(hash);
-	std::atomic<uint64_t> &slot = *reinterpret_cast<std::atomic<uint64_t> *>(&bf[bf_offset]);
+	atomic<uint64_t> &slot = *reinterpret_cast<atomic<uint64_t> *>(&bf[bf_offset]);
 
 	slot.fetch_or(mask, std::memory_order_relaxed);
 }
@@ -147,10 +148,11 @@ static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, con
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Invalid stats
 	}
 	T range_typed;
-	if (!TrySubtractOperator::Operation(max, min, range_typed) || range_typed > 2048) {
+	idx_t range;
+	if (!TrySubtractOperator::Operation(max, min, range_typed) || !TryCast::Operation(range_typed, range) ||
+	    range >= DEFAULT_STANDARD_VECTOR_SIZE) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Overflow or too wide of a range
 	}
-	const auto range = NumericCast<idx_t>(range_typed);
 
 	T val = min;
 	idx_t hits = 0;
@@ -195,11 +197,13 @@ FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) cons
 	}
 }
 
-bool BFTableFilter::Equals(const TableFilter &other) const {
-	if (!TableFilter::Equals(other)) {
+bool BFTableFilter::Equals(const TableFilter &other_p) const {
+	if (!TableFilter::Equals(other_p)) {
 		return false;
 	}
-	return false;
+	auto &other = other_p.Cast<BFTableFilter>();
+	return RefersToSameObject(filter, other.filter) && filters_null_values == other.filters_null_values &&
+	       key_column_name == other.key_column_name && key_type == other.key_type;
 }
 unique_ptr<TableFilter> BFTableFilter::Copy() const {
 	return make_uniq<BFTableFilter>(this->filter, this->filters_null_values, this->key_column_name, this->key_type);

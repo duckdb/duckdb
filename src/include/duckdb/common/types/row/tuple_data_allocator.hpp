@@ -22,6 +22,7 @@ class ContinuousIdSet;
 struct TupleDataBlock {
 public:
 	TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx_t capacity_p);
+	TupleDataBlock(shared_ptr<BlockHandle> handle, idx_t capacity_p);
 
 	//! Disable copy constructors
 	TupleDataBlock(const TupleDataBlock &other) = delete;
@@ -118,9 +119,9 @@ private:
 	                                          buffer_handle_map_t &handles, const ContinuousIdSet &block_ids,
 	                                          unsafe_arena_vector<TupleDataBlock> &blocks,
 	                                          TupleDataPinProperties properties);
-	//! Create a row/heap block, extend the pinned handles in the segment accordingly
-	void CreateRowBlock(TupleDataSegment &segment);
-	void CreateHeapBlock(TupleDataSegment &segment, idx_t size);
+	//! Create a row/heap block, store the handle in pin_state so the block stays pinned
+	void CreateRowBlock(TupleDataSegment &segment, TupleDataPinState &pin_state);
+	void CreateHeapBlock(TupleDataSegment &segment, TupleDataPinState &pin_state, idx_t size);
 	//! Pins the given row block
 	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Pins the given heap block

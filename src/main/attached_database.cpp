@@ -235,6 +235,13 @@ StorageManager &AttachedDatabase::GetStorageManager() {
 	return *storage;
 }
 
+const StorageManager &AttachedDatabase::GetStorageManager() const {
+	if (!storage) {
+		throw InternalException("Internal system catalog does not have storage");
+	}
+	return *storage;
+}
+
 Catalog &AttachedDatabase::GetCatalog() {
 	return *catalog;
 }

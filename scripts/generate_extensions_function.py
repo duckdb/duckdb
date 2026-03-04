@@ -802,7 +802,6 @@ static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
 static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"json", "json"},
     {"inet", "inet"},
-    {"geometry", "spatial"}
 }; // END_OF_EXTENSION_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -900,7 +899,6 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "json",
     "motherduck",
     "mysql_scanner",
-    "odbc_scanner",
     "parquet",
     "sqlite_scanner",
     "sqlsmith",

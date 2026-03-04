@@ -82,6 +82,11 @@ string TypeExpression::ToString() const {
 		}
 	}
 
+	if (result.empty() && StringUtil::CIEquals(type_name, "INTERVAL") && !params.empty()) {
+		// We ignore interval types parameters.
+		return "INTERVAL";
+	}
+
 	result += KeywordHelper::WriteOptionallyQuoted(type_name, '"', true, KeywordCategory::KEYWORD_COL_NAME);
 
 	if (!params.empty()) {

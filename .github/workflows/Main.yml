@@ -11,9 +11,15 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/shell/**'
+      - '!tools/juliapkg/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '!.github/workflows/Swift.yml'
+      - '!.github/workflows/Windows.yml'
+      - '!.github/workflows/Regression.yml'
+      - '!.github/workflows/Extensions.yml'
+      - '!.github/workflows/LinuxRelease.yml'
       - '.github/config/extensions/*.cmake'
       - '.github/patches/extensions/**/*.patch'
       - '!.github/patches/extensions/fts/*.patch' # fts used in some jobs
@@ -25,9 +31,15 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/shell/**'
+      - '!tools/juliapkg/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '!.github/workflows/Swift.yml'
+      - '!.github/workflows/Windows.yml'
+      - '!.github/workflows/Regression.yml'
+      - '!.github/workflows/Extensions.yml'
+      - '!.github/workflows/LinuxRelease.yml'
       - '.github/config/extensions/*.cmake'
       - '.github/patches/extensions/**/*.patch'
       - '!.github/patches/extensions/fts/*.patch' # fts used in some jobs
@@ -42,19 +54,46 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
- check-draft:
+ prepare:
     # We run all other jobs on PRs only if they are not draft PR
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    outputs:
+      runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
+      runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
+      runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
+      runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
     steps:
-      - name: Preliminary checks on CI 
+      - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
+
+      - name: Select CI runner
+        id: select_runner
+        run: |
+          # Fall back to GitHub-native runners for forks.
+          if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
+            {
+              echo "runner_linux_x64=namespace-profile-linux-x64"
+              echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
+              echo "runner_linux_arm64=namespace-profile-linux-arm64"
+              echo "runner_macos_arm64=namespace-profile-macos-arm64"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "runner_linux_x64=ubuntu-latest"
+              echo "runner_linux_22_x64=ubuntu-22.04"
+              echo "runner_linux_arm64=ubuntu-24.04-arm"
+              echo "runner_macos_arm64=macos-14"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+          grep runner_ "$GITHUB_OUTPUT"
 
  linux-debug:
     name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
-    needs: check-draft
-    runs-on: ubuntu-22.04
+    needs: prepare
+    runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
     env:
       CC: gcc-10
       CXX: g++-10
@@ -71,9 +110,22 @@ jobs:
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
-    - name: Install
+    - name: Install tools
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: |
+        if ! command -v ninja >/dev/null 2>&1; then
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq ninja-build
+        fi
+
+        if ! command -v g++-10 >/dev/null 2>&1; then
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq g++-10
+        fi
+
+        ls -lh /usr/bin/gcc* /usr/bin/g++*
+        gcc --version
+        g++ --version
 
     - uses: ./.github/actions/ccache-action
 
@@ -81,9 +133,46 @@ jobs:
       shell: bash
       run:  make relassert
 
+    - name: Smoke tests
+      run: make smoke
+
     - name: Output version info
       shell: bash
       run: ./build/relassert/duckdb -c "PRAGMA version;"
+
+    - name: Prepare relassert artifact
+      shell: bash
+      run: make relassert-artifact
+
+    - name: Upload relassert build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-debug-relassert-build
+        path: build/relassert-artifact.tar.gz
+        if-no-files-found: error
+
+ linux-debug-tests:
+    name: Linux Debug Tests
+    needs:
+      - prepare
+      - linux-debug
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download relassert build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-debug-relassert-build
+        path: build
+
+    - name: Extract relassert build artifact
+      shell: bash
+      run: |
+        rm -rf build/relassert
+        tar -xzf build/relassert-artifact.tar.gz -C build
+        ls -lh build/relassert/test/unittest
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -96,6 +185,20 @@ jobs:
       shell: bash
       run: |
         python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --tests-per-invocation 100 --timeout 300
+
+ regression:
+    uses: ./.github/workflows/Regression.yml
+    secrets: inherit
+    needs: linux-debug
+
+ extensions:
+    uses: ./.github/workflows/Extensions.yml
+    secrets: inherit
+    needs: linux-debug
+    with:
+      git_ref: ${{ github.sha }}
+      skip_tests: 'false'
+      run_all: 'true'
 
  linux-release:
     name: Linux Release (full suite)
@@ -123,6 +226,28 @@ jobs:
     - name: Test
       shell: bash
       run: make allunit
+
+ linux-cli:
+    uses: ./.github/workflows/LinuxRelease.yml
+    secrets: inherit
+    needs: linux-debug
+    with:
+      git_ref: ${{ github.sha }}
+      skip_tests: 'false'
+
+ swift:
+    uses: ./.github/workflows/Swift.yml
+    secrets: inherit
+    needs: linux-debug
+
+ windows:
+    uses: ./.github/workflows/Windows.yml
+    secrets: inherit
+    needs: linux-debug
+    with:
+      git_ref: ${{ github.sha }}
+      skip_tests: 'false'
+      run_all: 'true'
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
@@ -451,18 +576,6 @@ jobs:
       run: |
         ./build/release/test/unittest --test-config test/configs/prefetch_all_storage.json
 
-    - name: Test PEG parser on fallback mode
-      if: (success() || failure()) && steps.build.conclusion == 'success'
-      shell: bash
-      run: |
-        ./build/release/test/unittest --test-config test/configs/peg_parser.json
-
-    - name: Test PEG parser on strict when supported mode
-      if: (success() || failure()) && steps.build.conclusion == 'success'
-      shell: bash
-      run: |
-        ./build/release/test/unittest --test-config test/configs/peg_parser_strict.json
-
     - name: Forwards compatibility tests
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
@@ -473,6 +586,7 @@ jobs:
     # TODO: clean this up: we should probably be able to run this whole test suite with httpfs
     # We want to run the remainder of tests with httpfs
     - name: Setup vcpkg
+      if: (success() || failure()) && steps.build.conclusion == 'success'
       uses: lukka/run-vcpkg@v11.1
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
@@ -494,3 +608,15 @@ jobs:
       shell: bash
       run: |
         ./build/release/test/unittest --test-config test/configs/encryption.json
+
+    - name: Test PEG parser on fallback mode
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/peg_parser.json
+
+    - name: Test PEG parser on strict when supported mode
+      if: (success() || failure()) && steps.build.conclusion == 'success'
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/peg_parser_strict.json
