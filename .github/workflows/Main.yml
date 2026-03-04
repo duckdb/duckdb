@@ -337,7 +337,7 @@ jobs:
       - name: Test
         shell: bash
         run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --time_execution
+          python3 scripts/ci/run_tests.py build/reldebug/test/unittest '*'
 
  valgrind:
     name: Valgrind
@@ -404,13 +404,13 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage --force-reload
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
+          python3 scripts/ci/run_tests.py build/reldebug/test/unittest '*'
+          python3 scripts/ci/run_tests.py build/reldebug/test/unittest "[intraquery]"
+          python3 scripts/ci/run_tests.py build/reldebug/test/unittest "[interquery]"
+          python3 scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage -f {test_list}" build/reldebug/test/unittest "[interquery]"
+          python3 scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage --force-reload -f {test_list}" build/reldebug/test/unittest "[interquery]"
+          python3 scripts/ci/run_tests.py build/reldebug/test/unittest "[detailed_profiler]"
+          python3 scripts/ci/run_tests.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
  amalgamation-tests:
     name: Amalgamation Tests
