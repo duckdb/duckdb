@@ -94,7 +94,9 @@ public:
 			throw InternalException("Transformer for rule '" + parse_result->name + "' returned an unexpected type.");
 		}
 
-		return std::move(typed_result_ptr->value);
+		auto result = std::move(typed_result_ptr->value);
+		SetResultLocation(result, parse_result->offset);
+		return result;
 	}
 
 	template <typename T>
@@ -147,6 +149,23 @@ public:
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 	bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end);
 	unique_ptr<WindowExpression> GetWindowClause(const string &window_name);
+	void SetQueryLocation(ParsedExpression &expr, optional_idx query_location);
+	void SetQueryLocation(TableRef &ref, optional_idx query_location);
+
+private:
+	template <typename T>
+	void SetResultLocation(T &, optional_idx) {
+	}
+	void SetResultLocation(unique_ptr<ParsedExpression> &expr, optional_idx offset) {
+		if (offset.IsValid() && !expr->GetQueryLocation().IsValid()) {
+			SetQueryLocation(*expr, offset);
+		}
+	}
+	void SetResultLocation(unique_ptr<TableRef> &ref, optional_idx offset) {
+		if (offset.IsValid() && !ref->query_location.IsValid()) {
+			SetQueryLocation(*ref, offset.GetIndex());
+		}
+	}
 
 public:
 	ArenaAllocator &allocator;

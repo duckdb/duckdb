@@ -158,4 +158,12 @@ unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const string &windo
 	return unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
 }
 
+void PEGTransformer::SetQueryLocation(ParsedExpression &expr, optional_idx query_location) {
+	expr.SetQueryLocation(query_location);
+}
+
+void PEGTransformer::SetQueryLocation(TableRef &ref, optional_idx query_location) {
+	ref.query_location = query_location;
+}
+
 } // namespace duckdb
