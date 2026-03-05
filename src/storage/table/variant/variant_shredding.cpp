@@ -428,6 +428,8 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 		if (child_types.empty()) {
 			return false;
 		}
+		// always set objects as not being fully consistent
+		fully_consistent = false;
 		auto shredded_type = LogicalType::STRUCT(child_types);
 		out_type = SetShreddedType(shredded_type, fully_consistent);
 		return true;

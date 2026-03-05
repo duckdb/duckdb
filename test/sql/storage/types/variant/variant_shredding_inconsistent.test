@@ -1,0 +1,27 @@
+# name: test/sql/storage/types/variant/variant_shredding_inconsistent.test
+# group: [variant]
+
+require json
+
+load __TEST_DIR__/variant_shredding_inconsistent.db readwrite v1.5.0
+
+# Always shred
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+create table bluesky (col VARIANT)
+
+statement ok
+insert into bluesky from read_ndjson_objects('{DATA_DIR}/json/bluesky.json')
+
+statement ok
+checkpoint
+
+query III
+SELECT col.operation, col.record, col.did
+FROM bluesky
+EXCEPT ALL
+SELECT json.operation::VARIANT, json.record::VARIANT, json.did::VARIANT
+FROM read_ndjson_objects('{DATA_DIR}/json/bluesky.json')
+----

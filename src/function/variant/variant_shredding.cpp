@@ -207,16 +207,28 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 		                              nested_data.get(), all_valid_validity, count);
 
 		if (!lookup_validity.AllValid()) {
-			auto &child_variant_vectors = StructVector::GetEntries(child_vec);
+			optional_ptr<Vector> typed_value_vector;
+			optional_ptr<Vector> untyped_value_vector;
+			if (child_vec.GetType().id() == LogicalTypeId::STRUCT) {
+				// this is a STRUCT(typed_value .., [untyped_value UINT])
+				auto &child_variant_vectors = StructVector::GetEntries(child_vec);
+				typed_value_vector = child_variant_vectors[typed_value_index];
+				if (child_variant_vectors.size() >= 2) {
+					untyped_value_vector = child_variant_vectors[untyped_value_index];
+				}
+			} else {
+				// this is a primitive type
+				typed_value_vector = child_vec;
+			}
 
 			//! For some of the rows the field is missing, adjust the selection vector to exclude these rows.
 			idx_t child_count = 0;
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
 					//! The field is missing, set the untyped value index to 0
-					WriteMissingField(*child_variant_vectors[untyped_value_index], result_sel[i]);
-					if (child_variant_vectors.size() >= 2) {
-						FlatVector::SetNull(*child_variant_vectors[typed_value_index], result_sel[i], true);
+					FlatVector::SetNull(*typed_value_vector, result_sel[i], true);
+					if (untyped_value_vector) {
+						WriteMissingField(*untyped_value_vector, result_sel[i]);
 					}
 					continue;
 				}
