@@ -216,6 +216,7 @@ jobs:
         export PWD=`pwd`
         docker run   \
         -v$PWD:$PWD  \
+        -e CI=1      \
         alpine:3.22                                                         \
         sh -c "
           set -e
