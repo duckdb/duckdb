@@ -32,4 +32,4 @@ ORDER BY sumsales NULLS FIRST,
          ss_customer_sk NULLS FIRST
 LIMIT 100;
 ----
-logical_opt	<!REGEX>:.*[LEFT|RIGHT].*
+logical_opt	<!REGEX>:.*(LEFT|RIGHT).*
