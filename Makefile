@@ -421,10 +421,10 @@ endif
 unittest_threadsan: unittest_reldebug
 	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[intraquery]" $(T)
 	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[interquery]" $(T)
-	$(PYTHON) scripts/ci/run_tests.py --test-flags=--force-storage build/reldebug/test/unittest "[interquery]" $(T)
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--force-storage --force-reload" build/reldebug/test/unittest "[interquery]" $(T)
-	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[detailed_profiler]" $(T)
-	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow $(T)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--force-storage" --batch-size=1 --workers=50% --batch-timeout=1800 --track-runtime=300 build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--force-storage --force-reload" --batch-size=1 --workers=50% --batch-timeout=1800 --track-runtime=300 build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest --batch-timeout=1800 --track-runtime=300 "[detailed_profiler]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest --batch-timeout=1800 --track-runtime=300 test/sql/tpch/tpch_sf01.test_slow $(T)
 
 docs:
 	mkdir -p ./build/docs && \
