@@ -1223,28 +1223,19 @@ Recursive <- 'RECURSIVE'
 SelectClause <- 'SELECT' DistinctClause? TargetList
 TargetList <- List(AliasedExpression)
 ColumnAliases <- Parens(List(ColIdOrString))
-ColumnAliasPrefixClause <- ColIdOrString ColumnAliases ':'
 
 DistinctClause <- DistinctOn / DistinctAll
 DistinctAll <- 'ALL'
 DistinctOn <- 'DISTINCT' DistinctOnTargets?
 DistinctOnTargets <- 'ON' Parens(List(Expression))
 
-InnerTableRef <- ColumnAliasPrefixTableRef / ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
-ColumnAliasPrefixTableRef <- ColumnAliasPrefixClause ColumnAliasPrefixTarget
-ColumnAliasPrefixTarget <- ColumnAliasPrefixFunction / ColumnAliasPrefixBaseTable / ColumnAliasPrefixSubquery / ColumnAliasPrefixParensTable
-ColumnAliasPrefixFunction <- QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
-ColumnAliasPrefixBaseTable <- BaseTableName AtClause? SampleClause?
-ColumnAliasPrefixSubquery <- SubqueryReference SampleClause?
-ColumnAliasPrefixParensTable <- Parens(TableRef) SampleClause?
+InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot* TableAlias?
-TableSubquery <- TableSubqueryLateralOpt / TableSubqueryAliasColon
-TableSubqueryLateralOpt <- Lateral? SubqueryReference TableAlias?
-TableSubqueryAliasColon <- TableAliasColon SubqueryReference SampleClause?
+TableSubquery <- TableAliasColon? Lateral? SubqueryReference SampleClause?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 TableAliasColon <- ColIdOrString ColumnAliases? ':'
-ValuesRef <- ValuesClause TableAlias?
+ValuesRef <- TableAliasColon? ValuesClause
 ParensTableRef <- TableAliasColon? Parens(TableRef) SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
@@ -1594,3 +1585,4 @@ UseStatement <- 'USE' UseTarget
 UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName
 
 CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
+

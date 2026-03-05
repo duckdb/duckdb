@@ -148,3 +148,11 @@ query I
 select i from j(x) : (a join c using(i))
 ----
 42
+
+query III
+select left_t.left_i, fn_t.n, sub_t.sub_i
+from left_t(left_i) : a
+join fn_t(n) : range(1, 2) on true
+join sub_t(sub_i) : (select i from c) on left_t.left_i = sub_t.sub_i
+----
+42	1	42

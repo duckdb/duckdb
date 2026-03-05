@@ -23,6 +23,9 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$select i from j(x) : (a join c using(i))$TEST_PEG_PARSER$);
 
 statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$select left_t.left_i, fn_t.n, sub_t.sub_i from left_t(left_i) : a join fn_t(n) : range(1, 2) on true join sub_t(sub_i) : (select i from c) on left_t.left_i = sub_t.sub_i$TEST_PEG_PARSER$);
+
+statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$with cte1 as MATERIALIZED (Select i as j from a) select x from cte1 t1(x);$TEST_PEG_PARSER$);
 
 statement ok
