@@ -420,9 +420,9 @@ endif
 
 unittest_threadsan: unittest_reldebug
 	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[intraquery]"
-	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[interquery]" --batch-timeout=1800
-	$(PYTHON) scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage -f {test_list}" build/reldebug/test/unittest "[interquery]" --batch-timeout=1800
-	$(PYTHON) scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage --force-reload -f {test_list}" build/reldebug/test/unittest "[interquery]" --batch-timeout=1800
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[interquery]"
+	$(PYTHON) scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage -f {test_list}" build/reldebug/test/unittest "[interquery]"
+	$(PYTHON) scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage --force-reload -f {test_list}" build/reldebug/test/unittest "[interquery]"
 	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[detailed_profiler]"
 	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
