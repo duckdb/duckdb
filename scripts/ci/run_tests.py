@@ -32,6 +32,7 @@ def enable_line_buffering():
 class TestRunnerConfig:
     test_list: Path
     unittest_bin: str
+    test_flags: str
     pattern: str
     test_command: str
     workers: int
@@ -119,8 +120,10 @@ def load_tests(path: Path):
 
 
 def build_test_command(config: TestRunnerConfig, test_list: str):
+    flags = shlex.join(shlex.split(config.test_flags))
     return config.test_command.format(
         binary=shlex.quote(config.unittest_bin),
+        flags=flags,
         test_list=test_list,
     )
 
@@ -177,10 +180,10 @@ def resolve_workers(workers: str):
     return max(1, int(workers))
 
 
-def generate_test_list(test_file, unittest_bin: str, pattern: str):
+def generate_test_list(test_file, unittest_bin: str, test_flags: str, pattern: str):
     # Catch can return a non-zero status code for list commands when tests
     # are found, so we accept non-zero if stdout still contains test output.
-    command = [unittest_bin, "--list-tests", pattern]
+    command = [unittest_bin, *shlex.split(test_flags), "--list-tests", pattern]
     print(f"generated test list using: {shlex.join(command)}")
     proc = subprocess.run(
         command,
@@ -199,14 +202,14 @@ def generate_test_list(test_file, unittest_bin: str, pattern: str):
 
 
 @contextlib.contextmanager
-def open_test_list(test_list: Path | None, unittest_bin: str, pattern: str):
+def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, pattern: str):
     if test_list is not None:
         with test_list.open("r", encoding="utf8") as test_file:
             yield Path(test_file.name)
         return
 
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as test_file:
-        generate_test_list(test_file, unittest_bin, pattern)
+        generate_test_list(test_file, unittest_bin, test_flags, pattern)
         yield Path(test_file.name)
 
 
@@ -378,12 +381,17 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-list", type=Path)
     parser.add_argument("--workers", default=DEFAULT_WORKERS)
+    parser.add_argument(
+        "--test-flags",
+        default="",
+        help="additional flags appended to the unittest binary for listing and execution",
+    )
     parser.add_argument("unittest_bin")
     parser.add_argument("pattern", nargs="?", default="")
     parser.add_argument(
         "--test-command",
-        default="{binary} --use-colour yes -f {test_list}",
-        help="shell command template used to run a test batch; supports {binary} and {test_list}",
+        default="{binary} {flags} --use-colour yes -f {test_list}",
+        help="shell command template used to run a test batch; supports {binary}, {flags}, and {test_list}",
     )
     parser.add_argument(
         "--track-runtime",
@@ -422,10 +430,11 @@ def main():
     max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
     batch_size = 1 if args.track_runtime is not None else args.batch_size
-    with open_test_list(args.test_list, args.unittest_bin, args.pattern) as test_file:
+    with open_test_list(args.test_list, args.unittest_bin, args.test_flags, args.pattern) as test_file:
         config = TestRunnerConfig(
             test_list=test_file,
             unittest_bin=args.unittest_bin,
+            test_flags=args.test_flags,
             pattern=args.pattern,
             test_command=args.test_command,
             workers=workers,
