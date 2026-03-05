@@ -5,6 +5,7 @@
 #include "duckdb/planner/planner_extension.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/planner/extension_callback.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,8 @@ struct ExtensionCallbackRegistry {
 	case_insensitive_map_t<shared_ptr<StorageExtension>> storage_extensions;
 	//! Set of callbacks that can be installed by extensions
 	vector<shared_ptr<ExtensionCallback>> extension_callbacks;
+	//! Shell command extensions registered by extensions
+	vector<ShellCommandExtension> shell_command_extensions;
 };
 
 ExtensionCallbackManager &ExtensionCallbackManager::Get(ClientContext &context) {
@@ -82,6 +85,13 @@ void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension)
 	callback_registry.atomic_store(new_registry);
 }
 
+void ExtensionCallbackManager::Register(ShellCommandExtension extension) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->shell_command_extensions.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
+}
+
 template <class T>
 ExtensionCallbackIteratorHelper<T>::ExtensionCallbackIteratorHelper(
     const vector<T> &vec, shared_ptr<ExtensionCallbackRegistry> callback_registry)
@@ -120,6 +130,12 @@ ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallback
 	auto registry = callback_registry.atomic_load();
 	auto &extension_callbacks = registry->extension_callbacks;
 	return ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>(extension_callbacks, std::move(registry));
+}
+
+ExtensionCallbackIteratorHelper<ShellCommandExtension> ExtensionCallbackManager::ShellCommandExtensions() const {
+	auto registry = callback_registry.atomic_load();
+	auto &shell_command_extensions = registry->shell_command_extensions;
+	return ExtensionCallbackIteratorHelper<ShellCommandExtension>(shell_command_extensions, std::move(registry));
 }
 
 optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {
@@ -165,10 +181,15 @@ void StorageExtension::Register(DBConfig &config, const string &extension_name,
 	config.GetCallbackManager().Register(extension_name, std::move(extension));
 }
 
+void ShellCommandExtension::Register(DBConfig &config, ShellCommandExtension extension) {
+	config.GetCallbackManager().Register(std::move(extension));
+}
+
 template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
 template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
 template class ExtensionCallbackIteratorHelper<ParserExtension>;
 template class ExtensionCallbackIteratorHelper<PlannerExtension>;
+template class ExtensionCallbackIteratorHelper<ShellCommandExtension>;
 
 } // namespace duckdb

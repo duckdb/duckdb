@@ -16,6 +16,8 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 namespace duckdb {
 
@@ -235,6 +237,10 @@ void ExtensionLoader::RegisterCastFunction(const LogicalType &source, const Logi
 	auto &config = DBConfig::GetConfig(db);
 	auto &casts = config.GetCastFunctions();
 	casts.RegisterCastFunction(source, target, std::move(function), implicit_cast_cost);
+}
+
+void ExtensionLoader::RegisterShellCommand(ShellCommandExtension extension) {
+	DBConfig::GetConfig(db).GetCallbackManager().Register(std::move(extension));
 }
 
 } // namespace duckdb

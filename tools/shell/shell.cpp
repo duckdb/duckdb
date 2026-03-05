@@ -2442,9 +2442,14 @@ int ShellState::DoMetaCommand(const string &zLine) {
 	string error_msg;
 	auto metadata_command = FindMetadataCommand(args[0], error_msg);
 	if (!metadata_command) {
-		// command not found
-		PrintDatabaseError(error_msg);
-		rc = 1;
+		// command not found in built-ins — try extension commands
+		int ext_rc;
+		if (TryRunExtensionCommand(args, ext_rc)) {
+			rc = ext_rc;
+		} else {
+			PrintDatabaseError(error_msg);
+			rc = 1;
+		}
 	} else {
 		auto &command = *metadata_command;
 		MetadataResult result = MetadataResult::PRINT_USAGE;
