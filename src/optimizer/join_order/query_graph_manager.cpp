@@ -219,6 +219,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				               f->join_type == JoinType::ANTI)) {
 					std::swap(join->children[0], join->children[1]);
 					std::swap(left, right);
+					invert = false;
 				}
 
 				if (condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
