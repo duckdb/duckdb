@@ -227,9 +227,10 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 				if (!lookup_validity.RowIsValid(i)) {
 					//! The field is missing, set the untyped value index to 0
 					FlatVector::SetNull(*typed_value_vector, result_sel[i], true);
-					if (untyped_value_vector) {
-						WriteMissingField(*untyped_value_vector, result_sel[i]);
+					if (!untyped_value_vector) {
+						throw InternalException("Field is missing but untyped_value_index is not set");
 					}
+					WriteMissingField(*untyped_value_vector, result_sel[i]);
 					continue;
 				}
 

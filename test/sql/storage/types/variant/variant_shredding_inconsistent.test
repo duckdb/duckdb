@@ -13,15 +13,18 @@ statement ok
 create table bluesky (col VARIANT)
 
 statement ok
-insert into bluesky from read_ndjson_objects('{DATA_DIR}/json/bluesky.json')
+insert into bluesky from read_ndjson_objects('{DATA_DIR}/json/bluesky.json.gz')
 
 statement ok
 checkpoint
 
-query III
-SELECT col.operation, col.record, col.did
-FROM bluesky
-EXCEPT ALL
-SELECT json.operation::VARIANT, json.record::VARIANT, json.did::VARIANT
-FROM read_ndjson_objects('{DATA_DIR}/json/bluesky.json')
+query I
+SELECT STRING_AGG(CASE WHEN v=j THEN NULL ELSE CONCAT('v: ', v, '
+j: ', j) END, '
+')
+FROM (
+	SELECT variant_normalize(col)::JSON AS v, variant_normalize(json::VARIANT)::JSON AS j
+	FROM bluesky POSITIONAL JOIN read_ndjson_objects('{DATA_DIR}/json/bluesky.json.gz')
+)
 ----
+NULL
