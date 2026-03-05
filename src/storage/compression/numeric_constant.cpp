@@ -58,7 +58,8 @@ void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
-		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (result.GetType().InternalType() == PhysicalType::STRUCT ||
+		    result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 		} else {
@@ -168,6 +169,10 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bf = filter.Cast<BFTableFilter>();
 		filters_nulls = bf.FiltersNullValues();
+		break;
+	}
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+		filters_nulls = true;
 		break;
 	}
 	default:

@@ -16,6 +16,7 @@ add_library_unity(
   duckdb_log_contexts.cpp
   duckdb_indexes.cpp
   duckdb_memory.cpp
+  duckdb_eviction_queues.cpp
   duckdb_optimizers.cpp
   duckdb_schemas.cpp
   duckdb_secrets.cpp

@@ -1169,6 +1169,25 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 	return static_cast<CompressedMaterializationDirection>(StringUtil::StringToEnum(GetCompressedMaterializationDirectionValues(), 3, "CompressedMaterializationDirection", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCompressionFunctionSetLoadResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::ALREADY_LOADED_BEFORE_LOCK), "ALREADY_LOADED_BEFORE_LOCK" },
+		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::ALREADY_LOADED_AFTER_LOCK), "ALREADY_LOADED_AFTER_LOCK" },
+		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::LAZILY_LOADED), "LAZILY_LOADED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CompressionFunctionSetLoadResult>(CompressionFunctionSetLoadResult value) {
+	return StringUtil::EnumToString(GetCompressionFunctionSetLoadResultValues(), 3, "CompressionFunctionSetLoadResult", static_cast<uint32_t>(value));
+}
+
+template<>
+CompressionFunctionSetLoadResult EnumUtil::FromString<CompressionFunctionSetLoadResult>(const char *value) {
+	return static_cast<CompressionFunctionSetLoadResult>(StringUtil::StringToEnum(GetCompressionFunctionSetLoadResultValues(), 3, "CompressionFunctionSetLoadResult", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "AUTO" },
@@ -2318,6 +2337,48 @@ GateStatus EnumUtil::FromString<GateStatus>(const char *value) {
 	return static_cast<GateStatus>(StringUtil::StringToEnum(GetGateStatusValues(), 2, "GateStatus", value));
 }
 
+const StringUtil::EnumStringLiteral *GetGeometryStorageTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(GeometryStorageType::SPATIAL), "SPATIAL" },
+		{ static_cast<uint32_t>(GeometryStorageType::WKB), "WKB" },
+		{ static_cast<uint32_t>(GeometryStorageType::POINT_XY), "POINT_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::LINESTRING_XY), "LINESTRING_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::POLYGON_XY), "POLYGON_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOINT_XY), "MULTIPOINT_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTILINESTRING_XY), "MULTILINESTRING_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOLYGON_XY), "MULTIPOLYGON_XY" },
+		{ static_cast<uint32_t>(GeometryStorageType::POINT_XYZ), "POINT_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::LINESTRING_XYZ), "LINESTRING_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::POLYGON_XYZ), "POLYGON_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOINT_XYZ), "MULTIPOINT_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTILINESTRING_XYZ), "MULTILINESTRING_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOLYGON_XYZ), "MULTIPOLYGON_XYZ" },
+		{ static_cast<uint32_t>(GeometryStorageType::POINT_XYM), "POINT_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::LINESTRING_XYM), "LINESTRING_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::POLYGON_XYM), "POLYGON_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOINT_XYM), "MULTIPOINT_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTILINESTRING_XYM), "MULTILINESTRING_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOLYGON_XYM), "MULTIPOLYGON_XYM" },
+		{ static_cast<uint32_t>(GeometryStorageType::POINT_XYZM), "POINT_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::LINESTRING_XYZM), "LINESTRING_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::POLYGON_XYZM), "POLYGON_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOINT_XYZM), "MULTIPOINT_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTILINESTRING_XYZM), "MULTILINESTRING_XYZM" },
+		{ static_cast<uint32_t>(GeometryStorageType::MULTIPOLYGON_XYZM), "MULTIPOLYGON_XYZM" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<GeometryStorageType>(GeometryStorageType value) {
+	return StringUtil::EnumToString(GetGeometryStorageTypeValues(), 26, "GeometryStorageType", static_cast<uint32_t>(value));
+}
+
+template<>
+GeometryStorageType EnumUtil::FromString<GeometryStorageType>(const char *value) {
+	return static_cast<GeometryStorageType>(StringUtil::StringToEnum(GetGeometryStorageTypeValues(), 26, "GeometryStorageType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetGeometryTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(GeometryType::INVALID), "INVALID" },
@@ -3137,7 +3198,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN), "OPTIMIZER_JOIN_FILTER_PUSHDOWN" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_EXTENSION), "OPTIMIZER_EXTENSION" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_MATERIALIZED_CTE), "OPTIMIZER_MATERIALIZED_CTE" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_SUM_REWRITER), "OPTIMIZER_SUM_REWRITER" },
+		{ static_cast<uint32_t>(MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER), "OPTIMIZER_AGGREGATE_FUNCTION_REWRITER" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_LATE_MATERIALIZATION), "OPTIMIZER_LATE_MATERIALIZATION" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_ROW_GROUP_PRUNER), "OPTIMIZER_ROW_GROUP_PRUNER" },
@@ -3415,7 +3476,7 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::JOIN_FILTER_PUSHDOWN), "JOIN_FILTER_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::EXTENSION), "EXTENSION" },
 		{ static_cast<uint32_t>(OptimizerType::MATERIALIZED_CTE), "MATERIALIZED_CTE" },
-		{ static_cast<uint32_t>(OptimizerType::SUM_REWRITER), "SUM_REWRITER" },
+		{ static_cast<uint32_t>(OptimizerType::AGGREGATE_FUNCTION_REWRITER), "AGGREGATE_FUNCTION_REWRITER" },
 		{ static_cast<uint32_t>(OptimizerType::LATE_MATERIALIZATION), "LATE_MATERIALIZATION" },
 		{ static_cast<uint32_t>(OptimizerType::CTE_INLINING), "CTE_INLINING" },
 		{ static_cast<uint32_t>(OptimizerType::ROW_GROUP_PRUNER), "ROW_GROUP_PRUNER" },
@@ -4910,19 +4971,20 @@ const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 		{ static_cast<uint32_t>(TableFilterType::IN_FILTER), "IN_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::DYNAMIC_FILTER), "DYNAMIC_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::BLOOM_FILTER), "BLOOM_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::BLOOM_FILTER), "BLOOM_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::PERFECT_HASH_JOIN_FILTER), "PERFECT_HASH_JOIN_FILTER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
-	return StringUtil::EnumToString(GetTableFilterTypeValues(), 11, "TableFilterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableFilterTypeValues(), 12, "TableFilterType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
-	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 11, "TableFilterType", value));
+	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 12, "TableFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {

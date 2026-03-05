@@ -41,6 +41,7 @@ public:
 		bind_data->is_index_scan = is_index_scan;
 		bind_data->is_create_index = is_create_index;
 		bind_data->column_ids = column_ids;
+		bind_data->order_options = order_options ? make_uniq<RowGroupOrderOptions>(*order_options) : nullptr;
 		return std::move(bind_data);
 	}
 };

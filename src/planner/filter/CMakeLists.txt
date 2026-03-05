@@ -10,6 +10,7 @@ add_library_unity(
   null_filter.cpp
   struct_filter.cpp
   optional_filter.cpp
+  perfect_hash_join_filter.cpp
   selectivity_optional_filter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner_filter>

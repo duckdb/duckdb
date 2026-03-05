@@ -7,7 +7,9 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -19,6 +21,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 namespace duckdb {
 
@@ -316,9 +319,30 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		ColumnBinding group_binding(aggr.group_index, group_idx);
 		statistics_map[group_binding] = std::move(stats);
 	}
+
+	// Set up an expression matcher that detects COUNT(x)
+	FunctionBinder function_binder(context);
+	const auto count_fun = CountStarFun::GetFunction();
+	const auto count_matcher = make_uniq<AggregateExpressionMatcher>();
+	count_matcher->function = make_uniq<SpecificFunctionMatcher>("count");
+	count_matcher->policy = SetMatcher::Policy::ORDERED;
+	count_matcher->matchers.push_back(make_uniq<ExpressionMatcher>());
+
 	// propagate statistics in the aggregates
 	for (idx_t aggregate_idx = 0; aggregate_idx < aggr.expressions.size(); aggregate_idx++) {
-		auto stats = PropagateExpression(aggr.expressions[aggregate_idx]);
+		auto &expr = aggr.expressions[aggregate_idx];
+
+		// Rewrite COUNT(x) to COUNT(*) if x cannot be NULL
+		vector<reference<Expression>> bindings;
+		if (count_matcher->Match(*expr, bindings)) {
+			auto &aggr_expr = expr->Cast<BoundAggregateExpression>();
+			const auto child_stats = PropagateExpression(aggr_expr.children[0]);
+			if (child_stats && !child_stats->CanHaveNull()) {
+				expr = function_binder.BindAggregateFunction(count_fun, {}, nullptr, AggregateType::NON_DISTINCT);
+			}
+		}
+
+		auto stats = PropagateExpression(expr);
 		if (!stats) {
 			continue;
 		}

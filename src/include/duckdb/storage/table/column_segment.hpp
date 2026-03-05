@@ -40,7 +40,7 @@ class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	//! Construct a column segment.
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
-	              const ColumnSegmentType segment_type, const idx_t count, CompressionFunction &function_p,
+	              const ColumnSegmentType segment_type, const idx_t count, const CompressionFunction &function_p,
 	              BaseStatistics statistics, const block_id_t block_id_p, const idx_t offset,
 	              const idx_t segment_size_p, unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
 	//! Construct a column segment from another column segment.
@@ -54,7 +54,7 @@ public:
 	                                                         idx_t count, CompressionType compression_type,
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
-	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
+	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const CompressionFunction &function,
 	                                                        const LogicalType &type, const idx_t segment_size,
 	                                                        BlockManager &block_manager);
 
@@ -146,7 +146,7 @@ public:
 
 private:
 	//! The compression function
-	reference<CompressionFunction> function;
+	reference<const CompressionFunction> function;
 	//! The block id that this segment relates to (persistent segment only)
 	block_id_t block_id;
 	//! The offset into the block (persistent segment only)

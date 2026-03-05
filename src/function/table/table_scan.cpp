@@ -466,7 +466,8 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 		in_filters.push_back(filter.Cast<InFilter>());
 		return true;
 	}
-	case TableFilterType::BLOOM_FILTER: {
+	case TableFilterType::BLOOM_FILTER:
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
 		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
 	}
 	case TableFilterType::CONJUNCTION_AND: {

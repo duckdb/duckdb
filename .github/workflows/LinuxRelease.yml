@@ -19,32 +19,6 @@ on:
       skip_tests:
         description: 'Pass "true" to skip tests'
         type: string
-  push:
-    branches-ignore:
-      - 'main'
-      - 'feature'
-      - 'v*.*-*'
-    paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '!tools/juliapkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/LinuxRelease.yml'
-  merge_group:
-  pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
-    paths-ignore:
-      - '**.md'
-      - 'test/configs/**'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '!tools/juliapkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/LinuxRelease.yml'
 
 
 concurrency:
