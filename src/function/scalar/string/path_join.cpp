@@ -49,8 +49,7 @@ static bool ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs,
 void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &bind = func_expr.bind_info->Cast<PathJoinBindData>();
-	auto col_count = bind.path_count;
+	auto col_count = args.ColumnCount();
 	auto &context = state.GetContext();
 	auto &fs = FileSystem::GetFileSystem(context);
 
@@ -96,21 +95,8 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 } // namespace
 
-unique_ptr<FunctionData> PathJoinBind(ClientContext &context, ScalarFunction &bound_function,
-                                      vector<unique_ptr<Expression>> &arguments) {
-	if (arguments.empty()) {
-		throw BinderException("path_join requires at least one argument");
-	}
-	idx_t path_count = arguments.size();
-	vector<LogicalType> arg_types(arguments.size(), LogicalType::VARCHAR);
-	bound_function.arguments = std::move(arg_types);
-	bound_function.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
-	return make_uniq<PathJoinBindData>(path_count);
-}
-
 ScalarFunction PathJoinFun::GetFunction() {
 	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
-	path_join.bind = PathJoinBind;
 	path_join.varargs = LogicalType::VARCHAR;
 	path_join.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	return path_join;
