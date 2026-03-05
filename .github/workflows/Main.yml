@@ -394,7 +394,7 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: linux-debug
     env:
       CC: clang
@@ -402,18 +402,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ github.ref }}
 
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1
-      with:
-        version: "14.0"
 
     - name: Generate Amalgamation
       shell: bash
