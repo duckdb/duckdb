@@ -188,6 +188,11 @@
         "name": "seed",
         "type": "int64_t",
         "serialize_property": "GetSeed()"
+      },
+      {
+        "id": 104,
+        "name": "repeatable",
+        "type": "bool"
       }
     ],
     "constructor": ["seed"]

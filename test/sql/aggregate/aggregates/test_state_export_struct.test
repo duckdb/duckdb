@@ -33,6 +33,27 @@ query I nosort res_corr0
 SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM dummy;
 ----
 
+# covar_pop and var_pop (struct state export)
+query I
+SELECT covar_pop(d, d+1) FROM dummy;
+----
+833.25
+
+query I
+SELECT finalize(covar_pop(d, d+1) EXPORT_STATE) FROM dummy;
+----
+833.25
+
+query I
+SELECT var_pop(d) FROM dummy;
+----
+833.25
+
+query I
+SELECT finalize(var_pop(d) EXPORT_STATE) FROM dummy;
+----
+833.25
+
 # Regression aggregates: ungrouped direct vs EXPORT_STATE + finalize
 query I
 SELECT regr_count(d, d+1) FROM dummy;
@@ -187,14 +208,24 @@ SELECT g, finalize(slope_state), finalize(count_state) FROM state_regr ORDER BY 
 
 # Regression: struct shape for state export
 query T
-SELECT (regr_count(1, 2) export_state)::struct(count bigint);
+SELECT (regr_count(1, 2) export_state)::struct(count ubigint);
 ----
 {'count': 1}
 
 query T
-SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count bigint);
+SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);
 ----
 {'sum': 2.0, 'count': 1}
+
+query T
+SELECT (covar_pop(1.0, 2.0) export_state)::struct(count ubigint, meanx double, meany double, co_moment double);
+----
+{'count': 1, 'meanx': 2.0, 'meany': 1.0, 'co_moment': 0.0}
+
+query T
+SELECT (var_pop(42.0) export_state)::struct(count ubigint, mean double, dsquared double);
+----
+{'count': 1, 'mean': 42.0, 'dsquared': 0.0}
 
 query IIIIIIIII nosort res1
 SELECT g, sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;

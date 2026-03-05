@@ -4,7 +4,7 @@
 // Returns REGR_COUNT(y, x) * VAR_POP(y) for non-null pairs.
 
 #include "core_functions/aggregate/regression/regr_count.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
 
 namespace duckdb {
@@ -66,11 +66,7 @@ struct RegrSYYOperation : RegrBaseOperation {
 LogicalType GetRegrSStateType(const AggregateFunction &) {
 	child_list_t<LogicalType> state_children;
 	state_children.emplace_back("count", LogicalType::UBIGINT);
-	child_list_t<LogicalType> var_pop_children;
-	var_pop_children.emplace_back("count", LogicalType::UBIGINT);
-	var_pop_children.emplace_back("mean", LogicalType::DOUBLE);
-	var_pop_children.emplace_back("dsquared", LogicalType::DOUBLE);
-	state_children.emplace_back("var_pop", LogicalType::STRUCT(std::move(var_pop_children)));
+	state_children.emplace_back("var_pop", VarPopFun::GetFunction().GetStateType());
 	return LogicalType::STRUCT(std::move(state_children));
 }
 

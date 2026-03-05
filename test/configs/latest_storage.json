@@ -38,6 +38,12 @@
       "paths": [
         "test/fuzzer/sqlsmith/current_schemas_null.test"
       ]
+    },
+    {
+      "reason": "Make explicit use of the memory catalog.",
+      "paths": [
+        "test/sql/types/geo/geometry_compatability.test"
+      ]
     }
   ]
 }
