@@ -245,7 +245,7 @@ size_t Path::ParseURIScheme(const string &input, Path &parsed) {
 
 	const size_t path_begin = input.find('/', auth_begin);
 	D_ASSERT(path_begin == string::npos || path_begin > auth_begin);
-	parsed.authority = input.substr(auth_begin, (path_begin - auth_begin));
+	parsed.authority = input.substr(auth_begin, path_begin == string::npos ? string::npos : path_begin - auth_begin);
 	parsed.anchor = '/';
 	return path_begin == string::npos ? input.size() : path_begin + 1;
 }
@@ -348,7 +348,7 @@ size_t Path::ParseUNCScheme(const string &input, Path &parsed) {
 	}
 
 	parsed.scheme = extended_unc ? extended_unc_prefix : R"(\\)";
-	parsed.authority = input.substr(server_begin, share_begin + share_len + -server_begin);
+	parsed.authority = input.substr(server_begin, share_begin + share_len - server_begin);
 	parsed.anchor = '\\';
 	parsed.is_absolute = true;
 	return (pos == string::npos || pos + 1 >= input.size()) ? input.size() : pos + 1;

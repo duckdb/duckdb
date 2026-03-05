@@ -2,7 +2,6 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -48,7 +47,6 @@ static bool ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs,
 
 void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto col_count = args.ColumnCount();
 	auto &context = state.GetContext();
 	auto &fs = FileSystem::GetFileSystem(context);
