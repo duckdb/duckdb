@@ -756,14 +756,12 @@ vector<unique_ptr<Expression>> RelationManager::CreateFilterInfoFromExpression(u
 			}
 		} else if (expr->expression_class == ExpressionClass::BOUND_COMPARISON) {
 			auto &comp = expr->Cast<BoundComparisonExpression>();
-			auto new_comp =
-			    make_uniq<BoundComparisonExpression>(comp.type, std::move(comp.left), std::move(comp.right));
-			GetColumnBindingsFromExpression(*new_comp->left, left_bindings);
-			GetColumnBindingsFromExpression(*new_comp->right, right_bindings);
+			GetColumnBindingsFromExpression(*comp.left, left_bindings);
+			GetColumnBindingsFromExpression(*comp.right, right_bindings);
 			left_set = GetJoinRelations(left_bindings, set_manager);
 			right_set = GetJoinRelations(right_bindings, set_manager);
 			set = set_manager.Union(*left_set, *right_set);
-			new_expression = unique_ptr_cast<BoundComparisonExpression, Expression>(std::move(new_comp));
+			new_expression = std::move(expr);
 		} else {
 			// filter is something like `t1.a is null` or `not t1.a`
 			// or t1.a IN (1, 4, 9)
