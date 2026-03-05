@@ -1413,6 +1413,13 @@ void ShellState::FinishPagerDisplay() {
 
 unique_ptr<PagerState> ShellState::SetupPager() {
 #if defined(_WIN32) || defined(WIN32)
+	auto win_utf8_mode_restore = WindowsUtf8ModeRestore::DO_NOT_RESTORE;
+	if (pager_command == "more") { // UTF-8 mode must be used with "more" pager
+		if (!win_utf8_mode) {
+			win_utf8_mode_restore = WindowsUtf8ModeRestore::RESTORE_AS_DISABLED;
+		}
+		win_utf8_mode = true;
+	}
 	if (win_utf8_mode) {
 		SetConsoleCP(CP_UTF8);
 	}
@@ -1428,7 +1435,11 @@ unique_ptr<PagerState> ShellState::SetupPager() {
 	pager_is_active = true;
 	out = pager_out;
 	outfile = "|" + pager_command;
+#if defined(_WIN32) || defined(WIN32)
+	return make_uniq<PagerState>(*this, win_utf8_mode_restore);
+#else
 	return make_uniq<PagerState>(*this);
+#endif
 }
 /*
 ** Change the output file back to stdout.
