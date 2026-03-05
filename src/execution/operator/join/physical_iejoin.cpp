@@ -957,8 +957,8 @@ public:
 
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
 	    : gsource(gsource), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
-	      left_executor(client), right_executor(client), pred_executor(client), left_matches(nullptr),
-	      right_matches(nullptr)
+	      left_executor(client), right_executor(client), simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client),
+	      left_matches(nullptr), right_matches(nullptr)
 
 	{
 		auto &op = gsource.op;
@@ -1089,6 +1089,9 @@ public:
 	DataChunk right_keys;
 
 	DataChunk unprojected;
+
+	//! Simple join subselection
+	SelectionVector simple_sel;
 
 	//! Arbitrary expressions
 	ExpressionExecutor pred_executor;
@@ -1333,8 +1336,8 @@ const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	}
 
 	if (tail_count < result_count) {
-		lpayload.Slice(*sel, result_count);
-		rpayload.Slice(*sel, result_count);
+		lpayload.Slice(*sel, tail_count);
+		rpayload.Slice(*sel, tail_count);
 	}
 
 	return sel;
@@ -1377,20 +1380,22 @@ void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChun
 			}
 
 			//	Strip out remaining left side duplicates
-			idx_t unique_count = 1;
+			idx_t unique_count = 0;
+			simple_sel.set_index(unique_count++, 0);
 			for (idx_t i = 1; i < result_count; ++i) {
-				const auto idx = sel->get_index(i - 1);
-				if (lsel[i] == lsel[idx]) {
+				const auto iprev = sel->get_index(i - 1);
+				const auto icurr = sel->get_index(i - 0);
+				if (lsel[icurr] == lsel[iprev]) {
 					continue;
 				}
-				true_sel.set_index(unique_count, idx);
-				lsel[unique_count++] = lsel[idx];
+				simple_sel.set_index(unique_count, i);
+				lsel[unique_count++] = lsel[icurr];
 			}
 			lsel.resize(unique_count);
 
 			//	Slice the LHS down to the unique rows
 			if (unique_count < result_count) {
-				lpayload.Slice(true_sel, unique_count);
+				lpayload.Slice(simple_sel, unique_count);
 				result_count = unique_count;
 			}
 		} else {
@@ -1455,6 +1460,10 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		                      *right_scan_state);
 
 		auto sel = ApplyTailConditions();
+		result_count = lpayload.size();
+		if (!result_count) {
+			continue;
+		}
 
 		//	Merge the payloads
 		chunk.Reset();
@@ -1470,6 +1479,9 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		//	Apply any arbitrary predicate
 		if (op.predicate) {
 			result_count = pred_executor.SelectExpression(chunk, pred_matches);
+			if (!result_count) {
+				continue;
+			}
 			chunk.Slice(pred_matches, result_count);
 			sel = &pred_matches;
 		}
