@@ -24,15 +24,26 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 
 void CardinalityEstimator::AddRelationStats(FilterInfo &filter_info) {
 	D_ASSERT(!filter_info.set->Empty());
+	// Use whichever binding is valid: prefer left_binding, fall back to right_binding.
+	// left_binding may be INVALID_INDEX when left_relation_set is empty (e.g. residual predicates
+	// or single-column filters where only the right side references a relation).
+	auto binding = filter_info.left_binding;
+	if (binding.table_index == DConstants::INVALID_INDEX) {
+		binding = filter_info.right_binding;
+	}
+	if (binding.table_index == DConstants::INVALID_INDEX) {
+		// No valid binding (EmptyFilter), nothing to record
+		return;
+	}
 	for (const RelationsSetToStats &r2tdom : relation_set_stats) {
 		auto &i_set = r2tdom.equivalent_relations;
-		if (i_set.find(filter_info.left_binding) != i_set.end()) {
+		if (i_set.find(binding) != i_set.end()) {
 			// found an equivalent filter
 			return;
 		}
 	}
 
-	auto key = ColumnBinding(filter_info.left_binding.table_index, filter_info.left_binding.column_index);
+	auto key = ColumnBinding(binding.table_index, binding.column_index);
 	RelationsSetToStats new_r2tdom(column_binding_set_t({key}));
 
 	relation_set_stats.emplace_back(new_r2tdom);
