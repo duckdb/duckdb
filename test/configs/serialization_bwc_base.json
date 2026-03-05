@@ -271,7 +271,8 @@
     {
       "reason": "No files found that match the pattern",
       "paths": [
-        "test/sql/copy/parquet/parquet_glob.test"
+        "test/sql/copy/parquet/parquet_glob.test",
+        "test/sql/copy/per_thread_output.test"
       ]
     },
     {
