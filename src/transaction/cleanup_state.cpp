@@ -62,6 +62,11 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 		// deleted_rows_in_use
 		return;
 	}
+	if (!info.table->IsMainTable()) {
+		// the table has been dropped or altered since we committed - no need to clean up index entries
+		// as the indexes are going away with the table
+		return;
+	}
 	index_data_remover.PushDelete(info);
 }
 
