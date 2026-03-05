@@ -1163,7 +1163,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / TableName\n"
 	"SchemaReservedTable <- SchemaQualification ReservedTableName\n"
 	"CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName\n"
-	"TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon\n"
+	"TableFunction <- TableFunctionAliasColon / TableFunctionLateralOpt\n"
 	"TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?\n"
 	"TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?\n"
 	"WithOrdinality <- 'WITH' 'ORDINALITY'\n"
