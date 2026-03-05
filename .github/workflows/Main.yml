@@ -398,19 +398,10 @@ jobs:
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      shell: bash
       run: THREADSAN=1 make reldebug
 
     - name: Test
-      shell: bash
-      run: |
-          python3 scripts/ci/run_tests.py build/reldebug/test/unittest '*'
-          python3 scripts/ci/run_tests.py build/reldebug/test/unittest "[intraquery]"
-          python3 scripts/ci/run_tests.py build/reldebug/test/unittest "[interquery]"
-          python3 scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage -f {test_list}" build/reldebug/test/unittest "[interquery]"
-          python3 scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage --force-reload -f {test_list}" build/reldebug/test/unittest "[interquery]"
-          python3 scripts/ci/run_tests.py build/reldebug/test/unittest "[detailed_profiler]"
-          python3 scripts/ci/run_tests.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
+      run: make unittest_threadsan
 
  amalgamation-tests:
     name: Amalgamation Tests

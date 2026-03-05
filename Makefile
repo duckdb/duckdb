@@ -392,7 +392,10 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
-	build/debug/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest $(T)
+
+unittest_reldebug:
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest $(T)
 
 unittest_release: release
 	build/release/test/unittest
@@ -409,12 +412,19 @@ runnertests:
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
-
 allunit:
 	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
 ifndef CI
 allunit: release
 endif
+
+unittest_threadsan: unittest_reldebug
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[intraquery]"
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[interquery]" --batch-timeout=1800
+	$(PYTHON) scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage -f {test_list}" build/reldebug/test/unittest "[interquery]" --batch-timeout=1800
+	$(PYTHON) scripts/ci/run_tests.py --test-command "{binary} --use-colour yes --force-storage --force-reload -f {test_list}" build/reldebug/test/unittest "[interquery]" --batch-timeout=1800
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest "[detailed_profiler]"
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
 docs:
 	mkdir -p ./build/docs && \
