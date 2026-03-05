@@ -6,12 +6,64 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_TESTS = REPO_ROOT / "scripts" / "ci" / "run_tests.py"
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def test_generate_list(self):
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as listed_tests:
+            listed_tests.write("name\tgroup\n")
+            listed_tests.write("test/sql/slow.test\t[.][slow]\n")
+            listed_tests.write("test/sql/fast.test\t[fast]\n")
+            listed_tests.flush()
+            listed_tests_path = Path(listed_tests.name)
+
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as list_helper:
+            list_helper.write("#!/bin/sh\n")
+            # run_tests.py calls: <helper> --list-tests <pattern>
+            list_helper.write('if [ "$1" != "--list-tests" ]; then\n')
+            list_helper.write("  exit 2\n")
+            list_helper.write("fi\n")
+            list_helper.write('cat "$2"\n')
+            list_helper.write("exit 2\n")
+            list_helper.flush()
+            list_helper_path = Path(list_helper.name)
+
+        os.chmod(list_helper_path, 0o755)
+
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(RUN_TESTS),
+                    "--workers",
+                    "1",
+                    "--batch-size",
+                    "2",
+                    "--track-runtime",
+                    "0",
+                    "--test-command",
+                    "echo fake-run {test_list}",
+                    str(list_helper_path),
+                    str(listed_tests_path),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        finally:
+            listed_tests_path.unlink(missing_ok=True)
+            list_helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("generated test list using:", proc.stdout)
+        self.assertIn("found 2 tests", proc.stdout)
+        self.assertIn("test/sql/slow.test took", proc.stdout)
+        self.assertIn("test/sql/fast.test took", proc.stdout)
+        self.assertIn("all tests passed.", proc.stdout)
+
     def test_runs_with_echo_test_command(self):
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
             test_list.write("test/sql/a.test\n")

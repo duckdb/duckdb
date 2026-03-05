@@ -44,6 +44,12 @@ class TestRunnerConfig:
     max_failures: int | None
 
 
+@dataclass(frozen=True)
+class TestCase:
+    name: str
+    is_slow: bool
+
+
 class BatchRunState:
     def __init__(self):
         self.failed_count = 0
@@ -64,18 +70,17 @@ class BatchRunState:
 
 
 def chunked(items, n):
-    # Keep input order, cap batches at n entries, and isolate .test_slow
-    # files so each batch contains at most one slow test.
+    # Keep input order, cap batches at n entries, and isolate slow tests so
+    # each batch contains at most one slow test.
     batch = []
     slow_count = 0
     for item in items:
-        item_is_slow = item.endswith(".test_slow")
-        if batch and (len(batch) >= n or (item_is_slow and slow_count >= 1)):
+        if batch and (len(batch) >= n or (item.is_slow and slow_count >= 1)):
             yield batch
             batch = []
             slow_count = 0
-        batch.append(item)
-        if item_is_slow:
+        batch.append(item.name)
+        if item.is_slow:
             slow_count += 1
     if batch:
         yield batch
@@ -91,10 +96,25 @@ def load_tests(path: Path):
     tests = []
     with path.open("r", encoding="utf8") as f:
         for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
+            line = line.rstrip("\n")
+
+            # Skip header row from `--list-tests`.
+            if line == "name\tgroup":
                 continue
-            tests.append(line)
+
+            if "\t" not in line:
+                name = line
+                is_slow = line.endswith(".test_slow")
+            else:
+                columns = line.split("\t")
+                assert len(columns) == 2, repr(columns)
+
+                name, group = columns
+                is_slow = "[.]" in group
+                assert not name.endswith(".test_slow") or is_slow, name
+
+            tests.append(TestCase(name=name, is_slow=is_slow))
+
     return tests
 
 
@@ -158,9 +178,9 @@ def resolve_workers(workers: str):
 
 
 def generate_test_list(test_file, unittest_bin: str, pattern: str):
-    # Catch returns the number of matching tests from --list-test-names-only,
-    # so a non-zero exit code here is expected when tests are found.
-    command = [unittest_bin, "--list-test-names-only", pattern]
+    # Catch can return a non-zero status code for list commands when tests
+    # are found, so we accept non-zero if stdout still contains test output.
+    command = [unittest_bin, "--list-tests", pattern]
     print(f"generated test list using: {shlex.join(command)}")
     proc = subprocess.run(
         command,
@@ -168,10 +188,11 @@ def generate_test_list(test_file, unittest_bin: str, pattern: str):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    if proc.stderr:
+    if proc.returncode != 0 and not proc.stdout:
         if proc.stdout:
             print(proc.stdout, end="")
-        print(proc.stderr, end="", file=sys.stderr)
+        if proc.stderr:
+            print(proc.stderr, end="", file=sys.stderr)
         raise RuntimeError(f"failed to generate test list from {unittest_bin}")
     test_file.write(proc.stdout)
     test_file.flush()
