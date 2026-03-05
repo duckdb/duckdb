@@ -223,8 +223,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	UpdateTopmostBindings(window_idx, op, group_projection_idxs, topmost_bindings, new_bindings, replacer);
 	replacer.stop_operator = op.get();
 
-	RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
-	unused_optimizer.VisitOperator(*op);
+	RemoveUnusedColumns unused_optimizer(optimizer, true);
+	unused_optimizer.VisitOperator(op);
 
 	return unique_ptr<LogicalOperator>(std::move(op));
 }
