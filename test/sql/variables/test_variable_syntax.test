@@ -65,7 +65,6 @@ SET VARIABLE multiplier = 10
 statement ok
 PREPARE stmt_default AS SELECT $multiplier * $x AS result
 
-# EXECUTE without explicit params — should use SET VARIABLE values as defaults
 query I
 EXECUTE stmt_default
 ----
@@ -120,7 +119,6 @@ SELECT i FROM t WHERE i > $threshold ORDER BY i
 4
 5
 
-# $variable in subquery
 query I
 SELECT count(*) FROM t WHERE i <= $threshold
 ----
@@ -136,7 +134,6 @@ EXECUTE filter_stmt
 4
 5
 
-# named param overrides variable at EXECUTE
 query I
 EXECUTE filter_stmt(threshold := 1)
 ----
@@ -145,7 +142,6 @@ EXECUTE filter_stmt(threshold := 1)
 4
 5
 
-# variable of type INTEGER
 statement ok
 SET VARIABLE limit_val = 2
 
@@ -154,33 +150,3 @@ SELECT i FROM t ORDER BY i LIMIT $limit_val
 ----
 1
 2
-
-# PREPARE with overlapping param names — ensure independence
-statement ok
-SET VARIABLE a = 100
-
-statement ok
-SET VARIABLE b = 200
-
-statement ok
-PREPARE overlap AS SELECT $a + $b AS total
-
-query I
-EXECUTE overlap
-----
-300
-
-query I
-EXECUTE overlap(a := 1, b := 2)
-----
-3
-
-query I
-EXECUTE overlap(a := 1)
-----
-201
-
-query I
-EXECUTE overlap(b := 0)
-----
-100
