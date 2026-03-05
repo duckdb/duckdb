@@ -214,6 +214,9 @@ jobs:
     - name: Build
       run: make release
 
+    - name: Smoke tests
+      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
+
     - name: Prepare release artifact
       shell: bash
       run: make release-artifact
