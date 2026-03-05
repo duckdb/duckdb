@@ -170,8 +170,7 @@ ShellCommandResult ToggleEcho(BaseShellState &base_state, const vector<string> &
 	return ShellCommandResult::SUCCESS;
 }
 
-ShellCommandResult ExitProcess(BaseShellState &base_state, const vector<string> &args) {
-	auto &state = static_cast<ShellState &>(base_state);
+ShellCommandResult ExitProcess(BaseShellState &, const vector<string> &args) {
 	if (args.size() > 2) {
 		return ShellCommandResult::PRINT_USAGE;
 	}
@@ -574,8 +573,7 @@ ShellCommandResult ToggleCompletionRendering(BaseShellState &base_state, const v
 	return ShellCommandResult::SUCCESS;
 }
 
-ShellCommandResult ToggleMultiLine(BaseShellState &base_state, const vector<string> &args) {
-	auto &state = static_cast<ShellState &>(base_state);
+ShellCommandResult ToggleMultiLine(BaseShellState &, const vector<string> &args) {
 	if (!args.empty()) {
 		return ShellCommandResult::PRINT_USAGE;
 	}
@@ -583,8 +581,7 @@ ShellCommandResult ToggleMultiLine(BaseShellState &base_state, const vector<stri
 	return ShellCommandResult::SUCCESS;
 }
 
-ShellCommandResult ToggleSingleLine(BaseShellState &base_state, const vector<string> &args) {
-	auto &state = static_cast<ShellState &>(base_state);
+ShellCommandResult ToggleSingleLine(BaseShellState &, const vector<string> &args) {
 	if (!args.empty()) {
 		return ShellCommandResult::PRINT_USAGE;
 	}
