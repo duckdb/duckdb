@@ -18,6 +18,7 @@ namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
+class Optimizer;
 
 struct ReferencedExtractComponent {
 public:
