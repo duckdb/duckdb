@@ -104,6 +104,59 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertIn("fake failure", proc.stdout)
         self.assertIn("all tests passed.", proc.stdout)
 
+    def test_retries_timed_out_sleep_job(self):
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
+            test_list.write("test/sql/a.test\n")
+            test_list.flush()
+            test_list_path = Path(test_list.name)
+
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as state_file:
+            state_file_path = Path(state_file.name)
+
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as helper:
+            helper.write("#!/bin/sh\n")
+            helper.write(f"if [ ! -f {state_file_path} ]; then\n")
+            helper.write(f"  touch {state_file_path}\n")
+            helper.write("  sleep 2\n")
+            helper.write("fi\n")
+            helper.write("echo fake success\n")
+            helper.write("exit 0\n")
+            helper.flush()
+            helper_path = Path(helper.name)
+
+        os.chmod(helper_path, 0o755)
+        state_file_path.unlink(missing_ok=True)
+
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(RUN_TESTS),
+                    "--retry",
+                    "1",
+                    "--batch-timeout",
+                    "1",
+                    "--test-list",
+                    str(test_list_path),
+                    "--test-command",
+                    f"{helper_path} {{test_list}}",
+                    "unused-binary",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+            state_file_path.unlink(missing_ok=True)
+            helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("batch timed out after 1 seconds", proc.stdout)
+        self.assertIn("retrying failed test", proc.stdout)
+        self.assertIn("all tests passed.", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
