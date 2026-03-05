@@ -212,8 +212,10 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 			if (child_vec.GetType().id() == LogicalTypeId::STRUCT) {
 				// this is a STRUCT(typed_value .., [untyped_value UINT])
 				auto &child_variant_vectors = StructVector::GetEntries(child_vec);
-				typed_value_vector = child_variant_vectors[typed_value_index];
-				if (child_variant_vectors.size() >= 2) {
+				if (typed_value_index < child_variant_vectors.size()) {
+					typed_value_vector = child_variant_vectors[typed_value_index];
+				}
+				if (untyped_value_index < child_variant_vectors.size()) {
 					untyped_value_vector = child_variant_vectors[untyped_value_index];
 				}
 			} else {
@@ -226,7 +228,9 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
 					//! The field is missing, set the untyped value index to 0
-					FlatVector::SetNull(*typed_value_vector, result_sel[i], true);
+					if (typed_value_vector) {
+						FlatVector::SetNull(*typed_value_vector, result_sel[i], true);
+					}
 					if (!untyped_value_vector) {
 						throw InternalException("Field is missing but untyped_value_index is not set");
 					}
