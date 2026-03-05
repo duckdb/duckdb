@@ -5,4 +5,4 @@
 statement error
 SELECT DISTINCT MAP { * : ? IN ( SELECT TRUE ) } ;
 ----
-Invalid Input Error: Values were not provided for the following prepared statement parameters: 1
+Invalid Input Error: Values were not provided for the following parameters: 1

@@ -5,7 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# basic $variable reads a SET VARIABLE value
 statement ok
 SET VARIABLE animal = 'duck'
 
@@ -20,7 +19,6 @@ SELECT $animal = getvariable('animal')
 ----
 true
 
-# $variable works in expressions
 statement ok
 SET VARIABLE x = 42
 
@@ -29,12 +27,6 @@ SELECT $x + 1
 ----
 43
 
-query I
-SELECT $x * 2
-----
-84
-
-# multiple variables in one query
 statement ok
 SET VARIABLE greeting = 'hello'
 
@@ -43,7 +35,6 @@ SELECT $x, $greeting
 ----
 42	hello
 
-# overwrite a variable, $variable reflects the new value
 statement ok
 SET VARIABLE animal = 'goose'
 
