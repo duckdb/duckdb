@@ -98,6 +98,10 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
                                         idx_t count, idx_t path_index = 0) {
 	if (path_index >= components.size()) {
 		// reached the end of the path - shred
+		if (input.GetType().IsNested()) {
+			// we only support this for non-nested types for now
+			return false;
+		}
 		// create the shredded vector with an empty unshredded part
 		auto shredded_type = VariantUtils::ShreddedType(input.GetType());
 		Vector shredded_vector(shredded_type, count);

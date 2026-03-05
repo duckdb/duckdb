@@ -172,6 +172,7 @@ static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count)
 		if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
 			source.Flatten(count);
 		}
+		FlatVector::Validity(result) = FlatVector::Validity(source);
 		FlatVector::Validity(typed_value) = FlatVector::Validity(source);
 		// now recurse into the children of both
 		auto &source_entries = StructVector::GetEntries(source);
@@ -195,7 +196,6 @@ static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &top_shredded = StructVector::GetEntries(shredded_vector);
 	auto &shredded_child = *top_shredded[1];
 	ShreddedVectorReference(source, shredded_child, count);
-
 	result.Shred(shredded_vector);
 	return true;
 }
