@@ -170,8 +170,7 @@ jobs:
       run: echo $DUCKDB_INSTALL_LIB
 
     - name: Test
-      run: |
-        make allunit_relassert
+      run: make unittest_relassert
 
  regression:
     uses: ./.github/workflows/Regression.yml
@@ -291,24 +290,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        shell: bash
         run: make relassert
 
       - name: Test
-        shell: bash
-        run: build/relassert/test/unittest
+        run: make unittest_relassert
 
  vector-sizes:
     name: Vector Sizes

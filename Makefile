@@ -400,7 +400,7 @@ unittest_reldebug:
 unittest_release: release
 	build/release/test/unittest
 
-allunit_relassert:
+unittest_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
 smoke:
