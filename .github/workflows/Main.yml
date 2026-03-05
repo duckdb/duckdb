@@ -319,25 +319,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        shell: bash
         run: STANDARD_VECTOR_SIZE=2 make reldebug
 
       - name: Test
-        shell: bash
-        run: |
-          python3 scripts/ci/run_tests.py build/reldebug/test/unittest '*'
+        run: make unittest_reldebug
 
  valgrind:
     name: Valgrind
