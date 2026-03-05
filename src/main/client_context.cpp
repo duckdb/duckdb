@@ -637,7 +637,7 @@ bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 	switch (transaction.GetInvalidationPolicy()) {
 	case TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION:
 		return true;
-	case TransactionInvalidationPolicy::STANDARD_POLICY:
+	default:
 		return Exception::InvalidatesTransaction(type);
 	}
 }
