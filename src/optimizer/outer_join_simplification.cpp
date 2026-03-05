@@ -1,8 +1,21 @@
 #include "duckdb/optimizer/outer_join_simplification.hpp"
 
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 
 namespace duckdb {
+
+OuterJoinSimplification::OuterJoinSimplification() {
+}
+
+void OuterJoinSimplification::HandleExpression(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return;
+	}
+	auto &colref = expr.Cast<BoundColumnRefExpression>();
+	null_filtered.insert(colref.binding);
+}
 
 void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
@@ -20,14 +33,8 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 				    condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					continue; // Predicate does not filter NULL values
 				}
-				if (condition.GetLHS().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
-					null_filtered.insert(colref.binding);
-				}
-				if (condition.GetRHS().GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
-					null_filtered.insert(colref.binding);
-				}
+				HandleExpression(condition.GetLHS());
+				HandleExpression(condition.GetRHS());
 			}
 			VisitOperatorChildren(op);
 			return;
@@ -57,9 +64,9 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 			}
 
 			if (can_reduce[0]) {
-				join.join_type = JoinType::LEFT;
-			} else if (can_reduce[1]) {
 				join.join_type = JoinType::RIGHT;
+			} else if (can_reduce[1]) {
+				join.join_type = JoinType::LEFT;
 			}
 			VisitOperatorChildren(op);
 			return;
@@ -82,17 +89,42 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 			if (null_filtered.find(binding) == null_filtered.end()) {
 				continue;
 			}
-			null_filtered.insert(binding);
+			null_filtered.insert(expr.Cast<BoundColumnRefExpression>().binding);
 		}
 		VisitOperatorChildren(op);
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_FILTER:
-		// Passthrough supported. TODO: could add more bindings if the filter rejects non-NULL
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		// Passthrough supported. Handle expressions that filter NULLs. TODO: add more
+		auto &filter = op.Cast<LogicalFilter>();
+		filter.SplitPredicates(filter.expressions);
+		for (const auto &expr : filter.expressions) {
+			if (expr->GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
+			    expr->GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
+				const auto &is_not_null = expr->Cast<BoundOperatorExpression>();
+				HandleExpression(*is_not_null.children[0]);
+			} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+				switch (expr->GetExpressionType()) {
+				case ExpressionType::COMPARE_EQUAL:
+				case ExpressionType::COMPARE_NOTEQUAL:
+				case ExpressionType::COMPARE_LESSTHAN:
+				case ExpressionType::COMPARE_GREATERTHAN:
+				case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+				case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+					break;
+				default:
+					continue;
+				}
+				const auto &comparison = expr->Cast<BoundComparisonExpression>();
+				HandleExpression(*comparison.left);
+				HandleExpression(*comparison.right);
+			}
+		}
 		VisitOperatorChildren(op);
 		return;
+	}
 	default:
-		// Passthrough not supported. TODO: could also pass through LOGICAL_UNION
+		// Passthrough not supported. TODO: could pass through more operators like LOGICAL_UNION
 		break;
 	}
 

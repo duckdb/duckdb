@@ -16,11 +16,13 @@ namespace duckdb {
 //! Simplifies FULL OUTER -> LEFT/RIGHT OUTER -> INNER if NULLs are filtered anyway
 class OuterJoinSimplification : public LogicalOperatorVisitor {
 public:
-	OuterJoinSimplification() {
-	}
+	OuterJoinSimplification();
 
 public:
 	void VisitOperator(LogicalOperator &op) override;
+
+private:
+	void HandleExpression(const Expression &expr);
 
 private:
 	//! Column bindings that have their NULL values filtered
