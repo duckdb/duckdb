@@ -145,6 +145,8 @@ public:
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 	void PivotEntryCheck(const string &type);
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
+	bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end);
+	unique_ptr<WindowExpression> GetWindowClause(const string &window_name);
 
 public:
 	ArenaAllocator &allocator;
@@ -740,6 +742,8 @@ private:
 	static unique_ptr<ParsedExpression> TransformOtherOperatorExpression(PEGTransformer &transformer,
 	                                                                     optional_ptr<ParseResult> parse_result);
 	static string TransformOtherOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformQualifiedOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static string TransformAnyOp(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformStringOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformJsonOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static string TransformInetOperator(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

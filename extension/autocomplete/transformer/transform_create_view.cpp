@@ -17,8 +17,8 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 		return node;
 	}
 
-	if (set_node.children.size() != 2) {
-		throw ParserException("Expected exactly two children to set operation node in recursive CTE");
+	if (set_node.children.size() < 2) {
+		throw ParserException("Expected at least two children to set operation node in recursive CTE");
 	}
 
 	auto recursive_node = make_uniq<RecursiveCTENode>();
@@ -27,9 +27,21 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 	recursive_node->aliases = aliases;
 
 	auto owned_set_node = unique_ptr_cast<QueryNode, SetOperationNode>(std::move(node));
-	recursive_node->left = std::move(owned_set_node->children[0]);
-	recursive_node->right = std::move(owned_set_node->children[1]);
 	recursive_node->union_all = owned_set_node->setop_all;
+	if (owned_set_node->children.size() == 2) {
+		recursive_node->left = std::move(owned_set_node->children[0]);
+		recursive_node->right = std::move(owned_set_node->children[1]);
+	} else {
+		// N-ary flattened node: split into binary (left = all but last, right = last)
+		// This matches the left-recursive binary tree structure from the grammar
+		recursive_node->right = std::move(owned_set_node->children.back());
+		owned_set_node->children.pop_back();
+		if (owned_set_node->children.size() == 1) {
+			recursive_node->left = std::move(owned_set_node->children[0]);
+		} else {
+			recursive_node->left = std::move(owned_set_node);
+		}
+	}
 	for (auto &key : key_targets) {
 		recursive_node->key_targets.emplace_back(key->Copy());
 	}

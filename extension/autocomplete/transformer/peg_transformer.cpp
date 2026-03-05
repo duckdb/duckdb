@@ -144,4 +144,18 @@ void PEGTransformer::ExtractCTEsRecursive(CommonTableExpressionMap &cte_map) {
 	}
 }
 
+bool PEGTransformer::IsWindowFrameDefault(WindowBoundary start, WindowBoundary end) {
+	bool start_is_default = (start == WindowBoundary::UNBOUNDED_PRECEDING);
+	bool end_is_default = (end == WindowBoundary::CURRENT_ROW_RANGE);
+	return start_is_default && end_is_default;
+}
+
+unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const string &window_name) {
+	auto it = window_clauses.find(string(window_name));
+	if (it == window_clauses.end()) {
+		throw ParserException("window \"%s\" does not exist", window_name);
+	}
+	return unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
+}
+
 } // namespace duckdb

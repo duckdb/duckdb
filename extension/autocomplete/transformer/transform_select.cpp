@@ -3,6 +3,7 @@
 #include "ast/join_qualifier.hpp"
 #include "ast/limit_percent_result.hpp"
 #include "ast/table_alias.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -41,6 +42,22 @@ PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transfor
 	for (auto &result_modifier : result_modifiers) {
 		select_statement->node->modifiers.push_back(std::move(result_modifier));
 	}
+	if (select_statement->node->type != QueryNodeType::SELECT_NODE) {
+		return select_statement;
+	}
+	auto &select_node = select_statement->node->Cast<SelectNode>();
+	if (select_node.from_table->type != TableReferenceType::SHOW_REF) {
+		return select_statement;
+	}
+	auto &show_ref = select_node.from_table->Cast<ShowRef>();
+	if (!select_statement->node->cte_map.map.empty()) {
+		throw ParserException("%s with CTE not allowed - wrap the statement in a subquery instead",
+		                      EnumUtil::ToString(show_ref.show_type));
+	}
+	if (!select_statement->node->modifiers.empty()) {
+		throw ParserException("%s with ORDER BY not allowed - wrap the statement in a subquery instead",
+		                      EnumUtil::ToString(show_ref.show_type));
+	}
 	return select_statement;
 }
 
@@ -57,6 +74,16 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(PEG
 		auto setop_list = setop->Cast<ListParseResult>();
 		auto setop_result = transformer.Transform<unique_ptr<SetOperationNode>>(setop_list.Child<ListParseResult>(0));
 		auto right_select = transformer.Transform<unique_ptr<SelectStatement>>(setop_list.Child<ListParseResult>(1));
+		if (select->node->type == QueryNodeType::SET_OPERATION_NODE && select->node->modifiers.empty() &&
+		    select->node->cte_map.map.empty()) {
+			auto &existing = select->node->Cast<SetOperationNode>();
+			if (existing.setop_type == setop_result->setop_type && existing.setop_all == setop_result->setop_all &&
+			    (existing.setop_type == SetOperationType::UNION ||
+			     existing.setop_type == SetOperationType::UNION_BY_NAME)) {
+				existing.children.push_back(std::move(right_select->node));
+				continue;
+			}
+		}
 		setop_result->children.push_back(std::move(select->node));
 		setop_result->children.push_back(std::move(right_select->node));
 		select->node = std::move(setop_result);
@@ -1077,7 +1104,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 		subquery->column_name_alias = table_alias.column_name_alias;
 	}
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 3, subquery->sample);
-	return subquery;
+	return std::move(subquery);
 }
 
 unique_ptr<AtClause> PEGTransformerFactory::TransformAtClause(PEGTransformer &transformer,

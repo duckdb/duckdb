@@ -350,6 +350,7 @@ public:
 			}
 			return make_uniq<ConstantExpression>(Value(escaped_result));
 		}
+		return make_uniq<ConstantExpression>(Value(result));
 	}
 
 	string result;
