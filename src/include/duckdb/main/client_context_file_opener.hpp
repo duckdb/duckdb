@@ -29,7 +29,7 @@ public:
 		return &context;
 	}
 	optional_ptr<DatabaseInstance> TryGetDatabase() override;
-	shared_ptr<HTTPUtil> &GetHTTPUtil() override;
+	HTTPUtil &GetHTTPUtil() override;
 
 private:
 	ClientContext &context;
