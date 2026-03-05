@@ -887,9 +887,13 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
-	case VectorType::SHREDDED_VECTOR:
-		// FIXME: print shredded info
+	case VectorType::SHREDDED_VECTOR: {
+		auto &shredded_vector = ShreddedVector::GetShreddedVector(*this);
+		auto &unshredded_vector = ShreddedVector::GetUnshreddedVector(*this);
+		retval += "Shredded: " + shredded_vector.ToString(count);
+		retval += ", Unshredded: " + unshredded_vector.ToString(count);
 		break;
+	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
@@ -937,9 +941,14 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 	}
 	case PhysicalType::STRUCT: {
 		idx_t total_size = 0;
-		auto &children = StructVector::GetEntries(*this);
-		for (auto &child : children) {
-			total_size += child->GetAllocationSize(cardinality);
+		if (vector_type == VectorType::SHREDDED_VECTOR) {
+			total_size += ShreddedVector::GetShreddedVector(*this).GetAllocationSize(cardinality);
+			total_size += ShreddedVector::GetUnshreddedVector(*this).GetAllocationSize(cardinality);
+		} else {
+			auto &children = StructVector::GetEntries(*this);
+			for (auto &child : children) {
+				total_size += child->GetAllocationSize(cardinality);
+			}
 		}
 		return total_size;
 	}
@@ -3184,6 +3193,7 @@ void ShreddedVector::Unshred(Vector &vec, idx_t count) {
 }
 
 void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t count) {
+	VerifyShreddedVector(vec);
 	// slice the underlying shredded buffer
 	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
 	Vector sliced_shredded_buffer(shredded_buffer.GetChild(), sel, count);
@@ -3191,6 +3201,14 @@ void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t coun
 	Vector unshredded_vector(LogicalType::VARIANT());
 	VariantUtils::UnshredVariantData(sliced_shredded_buffer, unshredded_vector, count);
 	vec.Reference(unshredded_vector);
+}
+
+bool ShreddedVector::IsFullyShredded(Vector &vec) {
+	auto &unshredded_vector = GetUnshreddedVector(vec);
+	if (unshredded_vector.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(unshredded_vector)) {
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb
