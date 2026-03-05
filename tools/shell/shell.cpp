@@ -933,11 +933,6 @@ ShellState &ShellState::Get() {
 }
 
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
-	if (!statement->named_param_map.empty()) {
-		PrintDatabaseError("Prepared statement parameters cannot be used directly\nTo use prepared "
-		                   "statement parameters, use PREPARE to prepare a statement, followed by EXECUTE");
-		return SuccessState::FAILURE;
-	}
 	auto &con = *conn;
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
