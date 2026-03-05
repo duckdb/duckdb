@@ -34,11 +34,8 @@ VariantColumnData::VariantColumnData(BlockManager &block_manager, DataTableInfo 
 }
 
 bool FindShreddedColumnInternal(const ColumnData &shredded, reference<const BaseStatistics> &stats,
-                                reference<const StorageIndex> &path_iter, ColumnIndex &out) {
-	auto &path = path_iter.get();
-	D_ASSERT(!path.HasPrimaryIndex());
-	auto &field_name = path.GetFieldName();
-	if (!path.HasChildren()) {
+                                optional_ptr<const StorageIndex> path_iter, ColumnIndex &out, LogicalType &root_type) {
+	if (!path_iter) {
 		// end of the line
 		if (!VariantShreddedStats::IsFullyShredded(stats.get())) {
 			//! Child isn't fully shredded, can't use it
@@ -52,6 +49,9 @@ bool FindShreddedColumnInternal(const ColumnData &shredded, reference<const Base
 		}
 		return true;
 	}
+	auto &path = *path_iter;
+	D_ASSERT(!path.HasPrimaryIndex());
+	auto &field_name = path.GetFieldName();
 	if (shredded.type.id() != LogicalTypeId::STRUCT) {
 		// we're looking for a sub-field but this is a primitive type - not a match
 		return false;
@@ -98,8 +98,17 @@ bool FindShreddedColumnInternal(const ColumnData &shredded, reference<const Base
 	auto &child_column = typed_value_index.GetChildIndex(0);
 
 	// recurse
-	path_iter = path.GetChildIndex(0);
-	return FindShreddedColumnInternal(object_field, stats, path_iter, child_column);
+	optional_ptr<const StorageIndex> next_path;
+	if (path.HasChildren()) {
+		next_path = path.GetChildIndex(0);
+	}
+	if (!FindShreddedColumnInternal(object_field, stats, next_path, child_column, root_type)) {
+		return false;
+	}
+	if (!next_path && path.HasType()) {
+		root_type = path.GetType();
+	}
+	return true;
 }
 
 bool VariantColumnData::PushdownShreddedFieldExtract(const StorageIndex &variant_extract,
@@ -118,8 +127,8 @@ bool VariantColumnData::PushdownShreddedFieldExtract(const StorageIndex &variant
 	ColumnIndex column_index(0);
 
 	reference<const BaseStatistics> shredded_stats(VariantStats::GetShreddedStats(variant_stats));
-	reference<const StorageIndex> path_iter(variant_extract);
-	if (!FindShreddedColumnInternal(shredded, shredded_stats, path_iter, column_index)) {
+	LogicalType root_type;
+	if (!FindShreddedColumnInternal(shredded, shredded_stats, variant_extract, column_index, root_type)) {
 		return false;
 	}
 	if (shredded_stats.get().GetType().IsNested()) {
@@ -127,8 +136,10 @@ bool VariantColumnData::PushdownShreddedFieldExtract(const StorageIndex &variant
 		//! (Since the shredded representation for OBJECT/ARRAY is interleaved with 'untyped_value_index' fields)
 		return false;
 	}
+	if (root_type.id() != LogicalTypeId::INVALID) {
+		column_index.SetPushdownExtractType(shredded.type, root_type);
+	}
 
-	column_index.SetPushdownExtractType(shredded.type, path_iter.get().GetType());
 	out_struct_extract = StorageIndex::FromColumnIndex(column_index);
 	return true;
 }
