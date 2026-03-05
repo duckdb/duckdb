@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests
 
 all: release
 opt: release
@@ -101,11 +101,8 @@ endif
 ifeq (${DISABLE_MAIN_DUCKDB_LIBRARY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_MAIN_DUCKDB_LIBRARY=0
 endif
-ifeq (${EXTENSION_STATIC_BUILD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
-endif
-ifeq (${EXTENSION_STATIC_BUILD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
+ifneq (${EXTENSION_STATIC_BUILD}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
@@ -275,8 +272,8 @@ endif
 ifeq (${OSX_BUILD_UNIVERSAL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_UNIVERSAL=1
 endif
-ifneq ("${CUSTOM_LINKER}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DCUSTOM_LINKER=${CUSTOM_LINKER}
+ifneq ("${DUCKDB_LINKER}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_LINKER=${DUCKDB_LINKER}
 endif
 ifdef SKIP_PLATFORM_UTIL
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_PLATFORM_UTIL=1
@@ -400,18 +397,24 @@ unittest: debug
 unittest_release: release
 	build/release/test/unittest
 
-unittestci:
-	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
+allunit_relassert:
+	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
 smoke:
-	$(PYTHON) scripts/ci/run_tests.py --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
+
+runnertests:
+	python3 -m unittest scripts.ci.test_run_tests
 
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
 
-allunit: release # uses release build because otherwise allunit takes forever
-	build/release/test/unittest "*"
+allunit:
+	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
+ifndef CI
+allunit: release
+endif
 
 docs:
 	mkdir -p ./build/docs && \
@@ -435,7 +438,23 @@ relassert: ${EXTENSION_CONFIG_STEP}
 .PHONY: relassert-artifact
 
 relassert-artifact:
-	bash scripts/prepare_relassert_artifact.sh
+	bash scripts/prepare_build_artifact.sh relassert
+
+.PHONY: release-artifact
+
+release-artifact:
+	bash scripts/prepare_build_artifact.sh release
+
+.PHONY: toolsci
+
+toolsci:
+	if ! command -v ninja >/dev/null 2>&1 || ! command -v mold >/dev/null 2>&1; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq ninja-build mold; \
+	fi
+	ls -lh /usr/bin/gcc* /usr/bin/g++*
+	gcc --version
+	g++ --version
 
 benchmark:
 	mkdir -p ./build/release && \
