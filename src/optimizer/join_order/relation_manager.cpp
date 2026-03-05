@@ -829,9 +829,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 				// reordering. The same logic applies to LEFT joins.
 				for (auto &cond : join.conditions) {
 					if (cond.IsComparison()) {
-						auto comparison = make_uniq<BoundComparisonExpression>(cond.GetComparisonType(),
-						                                                       cond.GetLHS().Copy(),
-						                                                       cond.GetRHS().Copy());
+						auto comparison = make_uniq<BoundComparisonExpression>(
+						    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy());
 						conjunction_expression->children.push_back(std::move(comparison));
 					}
 				}
@@ -847,9 +846,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 				for (idx_t i = 0; i < join.conditions.size(); i++) {
 					auto &condition = join.conditions[i];
 					if (condition.IsComparison()) {
-						auto expr = make_uniq<BoundComparisonExpression>(condition.GetComparisonType(),
-						                                                 condition.GetLHS().Copy(),
-						                                                 condition.GetRHS().Copy());
+						auto expr = make_uniq<BoundComparisonExpression>(
+						    condition.GetComparisonType(), condition.GetLHS().Copy(), condition.GetRHS().Copy());
 						if (filter_set.find(*expr) == filter_set.end()) {
 							filter_set.insert(*expr);
 							auto leftover_exprs =

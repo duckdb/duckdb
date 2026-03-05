@@ -31,7 +31,6 @@ struct GenerateJoinRelation {
 	unique_ptr<LogicalOperator> op;
 };
 
-
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
 //! from the logical plan and creating the intermediate structures needed by the plan enumerator.
 //! When the plan enumerator finishes, the Query Graph Manger can then recreate the logical plan.
