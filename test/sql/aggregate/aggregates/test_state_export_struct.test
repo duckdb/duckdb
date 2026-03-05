@@ -227,8 +227,8 @@ SELECT (var_pop(42.0) export_state)::struct(count ubigint, mean double, dsquared
 ----
 {'count': 1, 'mean': 42.0, 'dsquared': 0.0}
 
-query IIIIIIIII nosort res1
-SELECT g, sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
+query IIIIIIIIIIIII nosort res1
+SELECT g, sum(d), avg(d)::integer, count(d), min(d), max(d), stddev(d)::integer, first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIIIIIIIII nosort res1

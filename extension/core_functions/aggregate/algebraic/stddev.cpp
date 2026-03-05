@@ -16,7 +16,6 @@ LogicalType GetStddevStateType(const AggregateFunction &) {
 
 } // namespace
 
-
 AggregateFunction StdDevSampFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevSampOperation>(LogicalType::DOUBLE,
 	                                                                                           LogicalType::DOUBLE)
