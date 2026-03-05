@@ -2,7 +2,7 @@
 # description: Test nested struct projection pushdown
 # group: [struct]
 
-load __TEST_DIR__/nested_struct_projection_pushdown.db
+load __TEST_DIR__/nested_struct_projection_pushdown.db readwrite v1.5.0
 
 require parquet
 

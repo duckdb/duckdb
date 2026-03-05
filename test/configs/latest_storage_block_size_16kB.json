@@ -30,6 +30,12 @@
       "paths": [
         "test/sql/storage/compression/alp/alp_min_max.test"
       ]
+    },
+    {
+      "reason": "Make explicit use of the memory catalog.",
+      "paths": [
+        "test/sql/types/geo/geometry_compatability.test"
+      ]
     }
   ]
 }

@@ -2,7 +2,7 @@
 
 #include "core_functions/aggregate/regression_functions.hpp"
 #include "core_functions/aggregate/regression/regr_slope.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "core_functions/aggregate/algebraic_functions.hpp"
 
 namespace duckdb {
 
@@ -65,21 +65,10 @@ LogicalType GetRegrInterceptStateType(const AggregateFunction &) {
 	state_children.emplace_back("count", LogicalType::UBIGINT);
 	state_children.emplace_back("sum_x", LogicalType::DOUBLE);
 	state_children.emplace_back("sum_y", LogicalType::DOUBLE);
-
 	child_list_t<LogicalType> slope_children;
-	child_list_t<LogicalType> cov_pop_children;
-	cov_pop_children.emplace_back("count", LogicalType::UBIGINT);
-	cov_pop_children.emplace_back("meanx", LogicalType::DOUBLE);
-	cov_pop_children.emplace_back("meany", LogicalType::DOUBLE);
-	cov_pop_children.emplace_back("co_moment", LogicalType::DOUBLE);
-	slope_children.emplace_back("cov_pop", LogicalType::STRUCT(std::move(cov_pop_children)));
-	child_list_t<LogicalType> var_pop_children;
-	var_pop_children.emplace_back("count", LogicalType::UBIGINT);
-	var_pop_children.emplace_back("mean", LogicalType::DOUBLE);
-	var_pop_children.emplace_back("dsquared", LogicalType::DOUBLE);
-	slope_children.emplace_back("var_pop", LogicalType::STRUCT(std::move(var_pop_children)));
+	slope_children.emplace_back("cov_pop", CovarPopFun::GetFunction().GetStateType());
+	slope_children.emplace_back("var_pop", VarPopFun::GetFunction().GetStateType());
 	state_children.emplace_back("slope", LogicalType::STRUCT(std::move(slope_children)));
-
 	return LogicalType::STRUCT(std::move(state_children));
 }
 
