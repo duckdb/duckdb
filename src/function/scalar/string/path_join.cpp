@@ -59,14 +59,7 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	}
 
 	// constant fast path
-	bool all_constant = true;
-	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
-		if (args.data[col_idx].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			all_constant = false;
-			break;
-		}
-	}
-	if (all_constant && count > 0) {
+	if (args.AllConstant() && count > 0) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto &validity = ConstantVector::Validity(result);
 		auto result_data = ConstantVector::GetData<string_t>(result);
