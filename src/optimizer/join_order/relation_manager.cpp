@@ -38,6 +38,11 @@ void FilterInfo::SetRightSet(optional_ptr<JoinRelationSet> right_set_new) {
 }
 
 bool FilterInfo::SingleColumnFilter() {
+	// Return true only when exactly one side has relations (single-column predicate on one side).
+	// When both sides are empty, this is an EmptyFilter - handled separately.
+	if (left_relation_set->Empty() && right_relation_set->Empty()) {
+		return false;
+	}
 	return left_relation_set->Empty() || right_relation_set->Empty();
 }
 
