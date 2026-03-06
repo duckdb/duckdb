@@ -458,22 +458,27 @@ relassert-artifact:
 release-artifact:
 	bash scripts/prepare_build_artifact.sh release
 
+define ensure_apt_commands
+	missing=0; \
+	for cmd in $(1); do \
+		command -v $$cmd >/dev/null 2>&1 || missing=1; \
+	done; \
+	if [ $$missing -eq 1 ]; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq $(2); \
+	fi
+endef
+
 .PHONY: toolsci format_tools
 
 toolsci:
-	if ! command -v ninja >/dev/null 2>&1 || ! command -v mold >/dev/null 2>&1; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq ninja-build mold; \
-	fi
+	$(call ensure_apt_commands,ninja mold ccache,ninja-build mold ccache)
 	ls -lh /usr/bin/gcc* /usr/bin/g++*
 	gcc --version
 	g++ --version
 
 format_tools:
-	if ! command -v ninja >/dev/null 2>&1 || ! command -v clang-format >/dev/null 2>&1; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq ninja-build clang-format-11; \
-	fi
+	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
 	sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
 
 benchmark:
