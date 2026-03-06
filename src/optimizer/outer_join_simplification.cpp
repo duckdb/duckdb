@@ -10,6 +10,7 @@ OuterJoinSimplification::OuterJoinSimplification() {
 }
 
 void OuterJoinSimplification::HandleExpression(const Expression &expr) {
+	// TODO: could unwrap casts or basic arithmetic
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		return;
 	}

@@ -5,6 +5,109 @@
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
+# First a bunch of plan checks
+query II
+EXPLAIN SELECT l.i, r.i
+FROM range(3) l(i)
+FULL OUTER JOIN range(2) r(i) ON l.i = r.i
+WHERE r.i IS NOT NULL
+ORDER BY 2;
+----
+logical_opt	<!REGEX>:.*FULL.*
+
+query II
+EXPLAIN SELECT l.i, r.i
+FROM range(2) l(i)
+FULL OUTER JOIN range(3) r(i) ON l.i = r.i
+WHERE l.i IS NOT NULL
+ORDER BY 1;
+----
+logical_opt	<!REGEX>:.*FULL.*
+
+query II
+EXPLAIN SELECT l.i, r.i
+FROM range(3) l(i)
+FULL OUTER JOIN range(3) r(i) ON l.i = r.i
+WHERE l.i IS NOT NULL AND r.i IS NOT NULL
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*INNER.*
+
+query II
+EXPLAIN SELECT l.i, r.i
+FROM range(3) l(i)
+LEFT JOIN range(3) r(i) ON l.i = r.i AND r.i = 1
+ORDER BY 1;
+----
+logical_opt	<REGEX>:.*LEFT.*
+
+query II
+EXPLAIN SELECT t.li, x.j
+FROM (
+    SELECT l.i AS li, r.i AS ri
+    FROM range(4) l(i)
+    LEFT JOIN range(2) r(i) ON l.i = r.i
+) t
+INNER JOIN range(2) x(j) ON t.ri = x.j
+ORDER BY 1;
+----
+logical_opt	<!REGEX>:.*LEFT.*
+
+# Then a bunch of correct result checks
+query II
+SELECT l.i, r.i
+FROM range(3) l(i)
+FULL OUTER JOIN range(2) r(i) ON l.i = r.i
+WHERE r.i IS NOT NULL
+ORDER BY 2;
+----
+0	0
+1	1
+
+query II
+SELECT l.i, r.i
+FROM range(2) l(i)
+FULL OUTER JOIN range(3) r(i) ON l.i = r.i
+WHERE l.i IS NOT NULL
+ORDER BY 1;
+----
+0	0
+1	1
+
+query II
+SELECT l.i, r.i
+FROM range(3) l(i)
+FULL OUTER JOIN range(3) r(i) ON l.i = r.i
+WHERE l.i IS NOT NULL AND r.i IS NOT NULL
+ORDER BY 1;
+----
+0	0
+1	1
+2	2
+
+query II
+SELECT l.i, r.i
+FROM range(3) l(i)
+LEFT JOIN range(3) r(i) ON l.i = r.i AND r.i = 1
+ORDER BY 1;
+----
+0	NULL
+1	1
+2	NULL
+
+query II
+SELECT t.li, x.j
+FROM (
+    SELECT l.i AS li, r.i AS ri
+    FROM range(4) l(i)
+    LEFT JOIN range(2) r(i) ON l.i = r.i
+) t
+INNER JOIN range(2) x(j) ON t.ri = x.j
+ORDER BY 1;
+----
+0	0
+1	1
+
 require tpcds
 
 statement ok
