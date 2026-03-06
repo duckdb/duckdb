@@ -219,6 +219,7 @@ jobs:
  main_julia:
     name: Julia ${{ matrix.version }}
     needs: linux-release-cli
+    if: ${{ github.ref_name == 'main' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
