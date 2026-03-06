@@ -30,6 +30,15 @@ UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
 
+ifeq ($(CI),1)
+CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
+CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+ifndef CMAKE_BUILD_PARALLEL_LEVEL
+CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
+endif
+export CMAKE_BUILD_PARALLEL_LEVEL
+endif
+
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
