@@ -905,20 +905,20 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 		return ReaderInitializeType::INITIALIZED;
 	}
 	auto &global_to_local = mapping.global_to_local;
-	for (auto &it : global_filters->filters) {
-		auto &global_index = it.first;
-		auto &global_filter = it.second;
+	for (auto &it : *global_filters) {
+		auto global_index = it.ColumnIndex();
+		auto &global_filter = it.Filter();
 
-		auto local_it = global_to_local.find(it.first);
+		auto local_it = global_to_local.find(global_index);
 		if (local_it != global_to_local.end()) {
 			//! File has this column, filter needs to be evaluated later
-			remaining_filters.emplace(global_index, *global_filter);
+			remaining_filters.emplace(global_index, global_filter);
 			continue;
 		}
 
 		//! FIXME: this does not check for filters against struct fields that are not present in the file
 		auto constant_value = GetConstantValue(global_index);
-		if (!EvaluateFilterAgainstConstant(*global_filter, constant_value)) {
+		if (!EvaluateFilterAgainstConstant(global_filter, constant_value)) {
 			return ReaderInitializeType::SKIP_READING_FILE;
 		}
 	}
@@ -1093,10 +1093,10 @@ unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, refer
 		}
 		if (local_filter) {
 			// succeeded in casting - push the local filter
-			result->filters.emplace(local_id, std::move(local_filter));
+			result->SetFilterByColumnIndex(local_id, std::move(local_filter));
 		} else {
 			// failed to cast - copy the global filter and evaluate the conversion expression in the reader
-			result->filters.emplace(local_id, global_filter.Copy());
+			result->SetFilterByColumnIndex(local_id, global_filter.Copy());
 
 			// add the expression to the expression map - we are now evaluating this inside the reader directly
 			// we need to set the index of the references inside the expression to 0

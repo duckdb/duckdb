@@ -611,14 +611,16 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 
 	//! for each filter that was pushed down - convert them into an expression
 	vector<unique_ptr<Expression>> filter_expressions;
-	for (auto &filter : get.table_filters.filters) {
-		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter.first);
-		auto column_type = get.GetColumnType(ColumnIndex(filter.first));
+	for (auto &entry : get.table_filters) {
+		auto filter_idx = entry.ColumnIndex();
+		auto &filter = entry.Filter();
+		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter_idx);
+		auto column_type = get.GetColumnType(ColumnIndex(filter_idx));
 
 		ColumnBinding filter_binding(get.table_index, index);
 		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 		//! Convert the filter to an expression, so we can visit it
-		auto filter_expr = filter.second->ToExpression(*column_ref);
+		auto filter_expr = filter.ToExpression(*column_ref);
 		if (filter_expr->IsScalar()) {
 			filter_expr = std::move(column_ref);
 		}
@@ -697,7 +699,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		auto filter = make_uniq_base<LogicalOperator, LogicalFilter>();
 		filter->expressions = std::move(filter_expressions);
 		filter->children.push_back(std::move(op_ref));
-		get.table_filters.filters.clear();
+		get.table_filters.ClearFilters();
 		// push the final result in the operator
 		op_ref = std::move(filter);
 		return;

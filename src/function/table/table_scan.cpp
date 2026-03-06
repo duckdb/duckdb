@@ -526,7 +526,7 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
 	}
 }
 
-vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, unique_ptr<TableFilter> &filter,
+vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, TableFilter &filter,
                                                         idx_t storage_idx) {
 	ColumnBinding binding(0, storage_idx);
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
@@ -535,14 +535,14 @@ vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &
 	vector<unique_ptr<Expression>> expressions;
 	vector<reference<ConstantFilter>> comparisons;
 	vector<reference<InFilter>> in_filters;
-	if (ExtractComparisonsAndInFilters(*filter, comparisons, in_filters)) {
+	if (ExtractComparisonsAndInFilters(filter, comparisons, in_filters)) {
 		// Deduplicate/deal with conflicting filters, then convert to expressions
 		ExtractExpressionsFromValues(GetUniqueValues(comparisons, in_filters), *bound_ref, expressions);
 	}
 
 	// Attempt matching the top-level filter to the index expression.
 	if (expressions.empty()) {
-		auto filter_expr = filter->ToExpression(*bound_ref);
+		auto filter_expr = filter.ToExpression(*bound_ref);
 		expressions.push_back(std::move(filter_expr));
 	}
 
@@ -613,8 +613,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	}
 
 	// Try to find a matching filter for the column.
-	auto filter = filter_set.filters.find(storage_index.GetIndex());
-	if (filter == filter_set.filters.end()) {
+	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index.GetIndex());
+	if (!filter) {
 		return false;
 	}
 
@@ -628,7 +628,7 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 		arts_to_scan.push_back(entry.added_data_during_checkpoint->Cast<ART>());
 	}
 
-	auto expressions = ExtractFilterExpressions(col, filter->second, storage_index.GetIndex());
+	auto expressions = ExtractFilterExpressions(col, *filter, storage_index.GetIndex());
 	for (const auto &filter_expr : expressions) {
 		for (auto &art_ref : arts_to_scan) {
 			auto &art_to_scan = art_ref.get();
@@ -666,7 +666,7 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	//		1.2. Find + scan one ART for b = 24.
 	//		1.3. Return the intersecting row IDs.
 	// 2. (Reorder and) scan a single ART with a compound key of (a, b).
-	if (filter_set.filters.size() != 1) {
+	if (filter_set.FilterCount() != 1) {
 		return DuckTableScanInitGlobal(context, input, storage, bind_data);
 	}
 

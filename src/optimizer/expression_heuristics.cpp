@@ -273,10 +273,10 @@ vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_
 	};
 	vector<FilterCost> filter_costs;
 	idx_t filter_index = 0;
-	for (auto &entry : table_filters.filters) {
+	for (auto &entry : table_filters) {
 		FilterCost cost;
 		cost.index = filter_index;
-		cost.cost = Cost(*entry.second);
+		cost.cost = Cost(entry.Filter());
 		filter_costs.push_back(cost);
 		filter_index++;
 	}

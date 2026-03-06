@@ -117,8 +117,8 @@ bool Deliminator::HasSelection(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		for (const auto &filter : get.table_filters.filters) {
-			if (filter.second->filter_type != TableFilterType::IS_NOT_NULL) {
+		for (const auto &entry : get.table_filters) {
+			if (entry.Filter().filter_type != TableFilterType::IS_NOT_NULL) {
 				return true;
 			}
 		}
