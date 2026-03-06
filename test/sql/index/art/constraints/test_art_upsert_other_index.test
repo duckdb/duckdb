@@ -31,10 +31,10 @@ INSERT OR REPLACE INTO kvp VALUES ('/key', 'value', 10000000, false);
 query IIII
 SELECT key, value, expiration, cache FROM kvp;
 ----
-/key	value	0	false
+/key	value	10000000	false
 
 statement ok
-INSERT INTO kvp VALUES ('/key', 'value', 10000000, false)
+INSERT INTO kvp VALUES ('/key', 'value', 20000000, false)
 ON CONFLICT DO UPDATE SET
 	value = excluded.value,
 	expiration = excluded.expiration,
@@ -43,4 +43,4 @@ ON CONFLICT DO UPDATE SET
 query IIII
 SELECT key, value, expiration, cache FROM kvp;
 ----
-/key	value	10000000	false
+/key	value	20000000	false
