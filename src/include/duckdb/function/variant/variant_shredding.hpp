@@ -51,7 +51,8 @@ public:
 	LogicalType GetShreddedType() const;
 
 private:
-	bool GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type) const;
+	bool GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type,
+	                             optional_idx parent_count = optional_idx()) const;
 
 private:
 	//! Nested type analysis
