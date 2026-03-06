@@ -102,7 +102,6 @@ private:
 	// check the existence of a cached db, but do not connect
 	// can be used to test accessing data from a different db in a non-persistent connection
 	bool cache_no_connect = false;
-	std::vector<string> extensions;
 	InsertionOrderPreservingMap<idx_t> extensions_map;
 	InsertionOrderPreservingMap<idx_t> load_extensions_map;
 

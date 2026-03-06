@@ -164,9 +164,7 @@ void InterpretedBenchmark::AddExtension(const string &extension, bool load_only)
 	if (it != map.end()) {
 		return;
 	}
-	auto index = extensions.size();
-	extensions.push_back(extension);
-	map.insert(extension, index);
+	map.insert(extension, map.size());
 }
 
 void InterpretedBenchmark::ProcessFile(const string &path) {
@@ -492,7 +490,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 void InterpretedBenchmark::LoadExtensions(InterpretedBenchmarkState &state, bool is_load_set) {
 	auto &map = is_load_set ? load_extensions_map : extensions_map;
 	for (auto &it : map) {
-		auto &extension = extensions[it.second];
+		auto &extension = it.first;
 		auto result = ExtensionHelper::LoadExtension(state.db, extension);
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 			throw InvalidInputException("Unknown extension " + extension);
