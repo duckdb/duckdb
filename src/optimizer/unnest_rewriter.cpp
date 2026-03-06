@@ -139,16 +139,16 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 				auto &pre_proj = curr_op->get()->Cast<LogicalProjection>();
 				for (idx_t i = 0; i < pre_columns.size(); i++) {
 					auto &col_bind = pre_columns[i];
-					if (col_bind.table_index == pre_tbl_idx) {
-						if (pre_proj.expressions[col_bind.column_index]->GetExpressionClass() !=
-						    ExpressionClass::BOUND_COLUMN_REF) {
-							return;
-						}
+					auto is_unnest_column = col_bind.table_index == pre_tbl_idx;
+					auto is_column_ref = pre_proj.expressions[col_bind.column_index]->GetExpressionClass() ==
+					                     ExpressionClass::BOUND_COLUMN_REF;
+					if (is_unnest_column && !is_column_ref) {
+						return;
 					}
 				}
 			}
 			auto unnest_get = std::move(delim_join.children[other_idx]);
-			unnest_get->ResolveOperatorTypes();
+			// ResolveOperatorTypes() already called in the pre-check above
 			ColumnBindingReplacer replacer;
 			auto unnest_get_column = unnest_get->GetColumnBindings();
 			auto &proj = curr_op->get()->Cast<LogicalProjection>();
@@ -161,6 +161,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 				D_ASSERT(col_bind.table_index == unnest_get->GetTableIndex()[0] ||
 				         col_bind.table_index == proj.table_index);
 				if (col_bind.table_index == unnest_get->GetTableIndex()[0]) {
+					// Guaranteed by the pre-check above: all these expressions are BOUND_COLUMN_REF
 					D_ASSERT(proj.expressions[col_bind.column_index]->GetExpressionClass() ==
 					         ExpressionClass::BOUND_COLUMN_REF);
 					auto &bind_col = proj.expressions[col_bind.column_index]->Cast<BoundColumnRefExpression>();
