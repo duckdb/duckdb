@@ -861,9 +861,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 					auto full_set = &set_manager.GetJoinRelation(all_bindings);
 					optional_ptr<JoinRelationSet> empty_set = set_manager.GetEmptyJoinRelationSet();
 					for (auto &nc_expr : non_comparison_exprs) {
-						auto new_filter =
-						    make_uniq<FilterInfo>(std::move(nc_expr), full_set, filter_infos_.size(),
-						                         join.join_type, empty_set, empty_set);
+						auto new_filter = make_uniq<FilterInfo>(std::move(nc_expr), full_set, filter_infos_.size(),
+						                                        join.join_type, empty_set, empty_set);
 						new_filter->from_residual_predicate = true;
 						filter_infos_.push_back(std::move(new_filter));
 					}
@@ -884,18 +883,28 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 							D_ASSERT(leftover_exprs.empty());
 						}
 					} else {
-						// residual predicate (non-comparison join condition)
+						// non-comparison join condition (e.g. a+b = c where a,b,c span both children)
 						auto expr = condition.GetJoinExpression().Copy();
 						if (filter_set.find(*expr) == filter_set.end()) {
 							filter_set.insert(*expr);
-							unordered_set<idx_t> bindings;
-							ExtractColumnBindingsFromExpression(*expr, bindings);
-							optional_ptr<JoinRelationSet> set = &set_manager.GetJoinRelation(bindings);
-							optional_ptr<JoinRelationSet> empty_set = set_manager.GetEmptyJoinRelationSet();
-							auto new_filter = make_uniq<FilterInfo>(std::move(expr), set, filter_infos_.size(),
-							                                        join.join_type, empty_set, empty_set);
-							new_filter->from_residual_predicate = true;
-							filter_infos_.push_back(std::move(new_filter));
+							if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+								// Even though this condition is stored as non-comparison in the JoinCondition
+								// (because its LHS/RHS span both join children), the expression itself is a
+								// comparison. Extract left/right bindings to create proper hyper-graph edges.
+								auto leftover_exprs =
+								    CreateFilterInfoFromExpression(std::move(expr), set_manager, join.join_type);
+								D_ASSERT(leftover_exprs.empty());
+							} else {
+								// Truly non-comparison expression - store as residual
+								unordered_set<idx_t> bindings;
+								ExtractColumnBindingsFromExpression(*expr, bindings);
+								optional_ptr<JoinRelationSet> set = &set_manager.GetJoinRelation(bindings);
+								optional_ptr<JoinRelationSet> empty_set = set_manager.GetEmptyJoinRelationSet();
+								auto new_filter = make_uniq<FilterInfo>(std::move(expr), set, filter_infos_.size(),
+								                                        join.join_type, empty_set, empty_set);
+								new_filter->from_residual_predicate = true;
+								filter_infos_.push_back(std::move(new_filter));
+							}
 						}
 					}
 				}
