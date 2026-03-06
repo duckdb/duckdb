@@ -200,6 +200,16 @@ static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastP
 	return true;
 }
 
+static void SetVectorConstant(Vector &vector) {
+	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &entries = StructVector::GetEntries(vector);
+		for (auto &entry : entries) {
+			SetVectorConstant(*entry);
+		}
+	}
+	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+}
+
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	if (!count) {
 		return true;
@@ -208,7 +218,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	if (TryToShreddedCast(source, result, count, parameters)) {
 		if (is_constant) {
 			result.Flatten(1);
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			SetVectorConstant(result);
 		}
 		return true;
 	}
