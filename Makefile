@@ -402,6 +402,9 @@ unittest_reldebug:
 unittest_release: release
 	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest $(T)
 
+unittest_release_tag:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/test/unittest $(T)
+
 unittest_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
