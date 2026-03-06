@@ -40,14 +40,13 @@ private:
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
 		D_ASSERT(min_val <= max_val);
-		min = UnsafeNumericCast<U>(min_val.GetValueUnsafe<T>());
-		span = (UnsafeNumericCast<U>(max_val.GetValueUnsafe<T>()) - min);
+		min = static_cast<U>(min_val.GetValueUnsafe<T>());
+		span = (static_cast<U>(max_val.GetValueUnsafe<T>()) - min);
 		shift = 0;
 
 		if (span >= CAP_BITS) {
-			const auto q =
-			    UnsafeNumericCast<uint64_t>((span /* + CAP_BITS*/) >> MAX_PREFIX_LENGTH); // ceil(span/CAP_BITS
-			shift = (q <= 1) ? 0 : (64 - CountLeadingZeros(q - 1));                       // ceil_log2(q)
+			const auto q = static_cast<uint64_t>((span /* + CAP_BITS*/) >> MAX_PREFIX_LENGTH); // ceil(span/CAP_BITS
+			shift = (q <= 1) ? 0 : (64 - CountLeadingZeros(q - 1));                            // ceil_log2(q)
 		}
 
 		const idx_t buckets = (span >> shift) + 1;
@@ -71,7 +70,7 @@ public:
 		if (validity_mask.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
 				const idx_t data_idx = vector_data.sel->get_index(i);
-				const U &key = UnsafeNumericCast<U>(key_data[data_idx]);
+				const U &key = static_cast<U>(key_data[data_idx]);
 				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
 				const U idx = y >> shift;
@@ -83,7 +82,7 @@ public:
 				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
 					continue;
 				}
-				const U &key = UnsafeNumericCast<U>(key_data[data_idx]);
+				const U &key = static_cast<U>(key_data[data_idx]);
 				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
 				const U idx = y >> shift;
@@ -93,7 +92,7 @@ public:
 	}
 
 	void InsertOne(const Value &k) const override {
-		const U &key = UnsafeNumericCast<U>(k.GetValueUnsafe<T>());
+		const U &key = static_cast<U>(k.GetValueUnsafe<T>());
 		const U y = key - min;
 		// All x are in-range by construction, so range check can be omitted here.
 		const U idx = y >> shift;
@@ -101,7 +100,7 @@ public:
 	}
 
 	inline idx_t LookupOne(const T &k) const {
-		const U &key = UnsafeNumericCast<U>(k);
+		const U &key = static_cast<U>(k);
 		const U y = key - min;
 		const U bit_idx = y >> shift;
 		const uint8_t in_range = y <= span;
@@ -151,8 +150,8 @@ public:
 		const auto lb = lower_bound.GetValueUnsafe<T>();
 		const auto ub = upper_bound.GetValueUnsafe<T>();
 
-		const auto min_t = UnsafeNumericCast<T>(min);
-		const auto max_t = UnsafeNumericCast<T>(min + span);
+		const auto min_t = static_cast<T>(min);
+		const auto max_t = static_cast<T>(min + span);
 		if (ub < min_t || lb > max_t) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
@@ -160,11 +159,11 @@ public:
 		const auto adjusted_lb = std::max(lb, min_t);
 		const auto adjusted_ub = std::min(ub, max_t);
 
-		const auto lb_y = UnsafeNumericCast<U>(adjusted_lb - min_t);
+		const auto lb_y = static_cast<U>(adjusted_lb - min_t);
 		const U lb_bit_idx = lb_y >> shift;
 		const U lb_word_idx = lb_bit_idx >> 6;
 
-		const auto ub_y = UnsafeNumericCast<U>(adjusted_ub - min_t);
+		const auto ub_y = static_cast<U>(adjusted_ub - min_t);
 		const U ub_bit_idx = ub_y >> shift;
 		const U ub_word_idx = ub_bit_idx >> 6;
 
@@ -184,7 +183,7 @@ public:
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 
-		for (idx_t i = UnsafeNumericCast<idx_t>(lb_word_idx) + 1; i < UnsafeNumericCast<idx_t>(ub_word_idx); i++) {
+		for (idx_t i = static_cast<idx_t>(lb_word_idx) + 1; i < static_cast<idx_t>(ub_word_idx); i++) {
 			if (bitmap[i]) {
 				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			}
