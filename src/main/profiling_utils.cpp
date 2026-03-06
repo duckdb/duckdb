@@ -62,6 +62,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
+	case MetricType::PARSER:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
 	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:
@@ -113,6 +114,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
+	case MetricType::PARSER:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
 	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:
