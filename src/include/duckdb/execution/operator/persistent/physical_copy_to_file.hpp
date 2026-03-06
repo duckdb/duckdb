@@ -18,6 +18,8 @@
 
 namespace duckdb {
 
+struct GlobalFileState;
+
 struct CopyToFileInfo {
 	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
 	}
@@ -46,8 +48,9 @@ private:
 	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,
 	                                               StorageLockKey &global_lock) const;
 	bool Rotate() const;
-	void FlushBatch(ExecutionContext &context, OperatorSinkInput &input, unique_ptr<GlobalFunctionData> &file_state_ptr,
-	                bool needs_lock) const;
+	bool RotateNow(GlobalFileState &global_state) const;
+	void FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
+	                unique_ptr<ColumnDataCollection> batch) const;
 	SinkFinalizeType FinalizeInternal(ClientContext &context, GlobalSinkState &gstate) const;
 
 public:
@@ -109,8 +112,8 @@ public:
 	//! Fine-grained control over writes
 	optional_idx batch_size;
 	optional_idx batch_size_bytes;
-	optional_idx file_size_bytes;
 	optional_idx batches_per_file;
+	optional_idx file_size_bytes;
 
 	//! Whether to write to a temp file before writing to the file at "file_path"
 	bool use_tmp_file;

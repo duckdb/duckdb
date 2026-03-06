@@ -441,15 +441,18 @@ void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalF
 }
 
 //===--------------------------------------------------------------------===//
-// File rotation
+// Default Batch Size Bytes
 //===--------------------------------------------------------------------===//
-bool WriteCSVRotateFiles(FunctionData &, const optional_idx &file_size_bytes) {
-	return file_size_bytes.IsValid();
+optional_idx WriteCSVDefaultBatchSizeBytes() {
+	return WriteCSVData({}).flush_size;
 }
 
-bool WriteCSVRotateNextFile(GlobalFunctionData &gstate, FunctionData &, const optional_idx &file_size_bytes) {
+//===--------------------------------------------------------------------===//
+// File Size Bytes
+//===--------------------------------------------------------------------===//
+idx_t WriteCSVFileSizeBytes(GlobalFunctionData &gstate) {
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
-	return file_size_bytes.IsValid() && global_state.FileSize() > file_size_bytes.GetIndex();
+	return global_state.FileSize();
 }
 
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
@@ -462,10 +465,11 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_to_combine = WriteCSVCombine;
 	info.copy_to_finalize = WriteCSVFinalize;
 	info.execution_mode = WriteCSVExecutionMode;
+
 	info.prepare_batch = WriteCSVPrepareBatch;
 	info.flush_batch = WriteCSVFlushBatch;
-	info.rotate_files = WriteCSVRotateFiles;
-	info.rotate_next_file = WriteCSVRotateNextFile;
+	info.default_batch_size_bytes = WriteCSVDefaultBatchSizeBytes;
+	info.file_size_bytes = WriteCSVFileSizeBytes;
 
 	info.copy_from_bind = MultiFileFunction<CSVMultiFileInfo>::MultiFileBindCopy;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();

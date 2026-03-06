@@ -153,12 +153,12 @@ typedef unique_ptr<PreparedBatchData> (*copy_prepare_batch_t)(ClientContext &con
                                                               unique_ptr<ColumnDataCollection> collection);
 typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                                    PreparedBatchData &batch);
+
+typedef optional_idx (*copy_default_batch_size_t)();
+typedef optional_idx (*copy_default_batch_size_bytes_t)();
+typedef idx_t (*copy_file_size_bytes_t)(GlobalFunctionData &gstate);
+
 typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
-
-typedef bool (*copy_rotate_files_t)(FunctionData &bind_data, const optional_idx &file_size_bytes);
-
-typedef bool (*copy_rotate_next_file_t)(GlobalFunctionData &gstate, FunctionData &bind_data,
-                                        const optional_idx &file_size_bytes);
 
 typedef void (*copy_to_get_written_statistics_t)(ClientContext &context, FunctionData &bind_data,
                                                  GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics);
@@ -203,10 +203,12 @@ public:
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;
-	copy_desired_batch_size_t desired_batch_size;
 
-	copy_rotate_files_t rotate_files;
-	copy_rotate_next_file_t rotate_next_file;
+	copy_default_batch_size_t default_batch_size;
+	copy_default_batch_size_bytes_t default_batch_size_bytes;
+	copy_file_size_bytes_t file_size_bytes;
+
+	copy_desired_batch_size_t desired_batch_size;
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;

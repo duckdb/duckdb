@@ -191,9 +191,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
-			if (!function.rotate_files) {
-				throw NotImplementedException("FILE_SIZE_BYTES not implemented for FORMAT \"%s\"", stmt.info->format);
-			}
 			file_size_bytes = ParseBytesArg(loption, option.second[0]);
 		} else if (loption == "batches_per_file" || loption == "row_groups_per_file") {
 			if (option.second.empty()) {
@@ -306,11 +303,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
-	const auto rotate = function.rotate_files && function.rotate_files(*function_data, file_size_bytes);
+	const auto rotate = file_size_bytes.IsValid() || batches_per_file.IsValid();
 	if (rotate) {
-		if (!function.rotate_next_file) {
-			throw InternalException("rotate_next_file not implemented for \"%s\"", function.extension);
-		}
 		if (user_set_use_tmp_file) {
 			throw NotImplementedException(
 			    "Can't combine USE_TMP_FILE and file rotation (e.g., ROW_GROUPS_PER_FILE) for COPY");
@@ -342,8 +336,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->per_thread_output = per_thread_output;
 	copy->batch_size = batch_size;
 	copy->batch_size_bytes = batch_size_bytes;
-	copy->file_size_bytes = file_size_bytes;
 	copy->batches_per_file = batches_per_file;
+	copy->file_size_bytes = file_size_bytes;
 	copy->rotate = rotate;
 	copy->partition_output = !partition_cols.empty();
 	copy->write_partition_columns = write_partition_columns;

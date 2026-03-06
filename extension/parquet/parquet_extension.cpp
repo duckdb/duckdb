@@ -702,6 +702,13 @@ static void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_da
 }
 
 //===--------------------------------------------------------------------===//
+// Default Batch Size
+//===--------------------------------------------------------------------===//
+static optional_idx ParquetWriteDefaultBatchSize() {
+	return DEFAULT_ROW_GROUP_SIZE;
+}
+
+//===--------------------------------------------------------------------===//
 // Desired Batch Size
 //===--------------------------------------------------------------------===//
 static idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_data_p) {
@@ -710,25 +717,11 @@ static idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &
 }
 
 //===--------------------------------------------------------------------===//
-// File rotation
+// File Size Bytes
 //===--------------------------------------------------------------------===//
-static bool ParquetWriteRotateFiles(FunctionData &bind_data_p, const optional_idx &file_size_bytes) {
-	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	return file_size_bytes.IsValid() || bind_data.row_groups_per_file.IsValid();
-}
-
-static bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_data_p,
-                                       const optional_idx &file_size_bytes) {
+static idx_t ParquetWriteFileSizeBytes(GlobalFunctionData &gstate) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	if (file_size_bytes.IsValid() && global_state.writer->FileSize() > file_size_bytes.GetIndex()) {
-		return true;
-	}
-	if (bind_data.row_groups_per_file.IsValid() &&
-	    global_state.writer->NumberOfRowGroups() >= bind_data.row_groups_per_file.GetIndex()) {
-		return true;
-	}
-	return false;
+	return global_state.writer->FileSize();
 }
 
 //===--------------------------------------------------------------------===//
@@ -893,11 +886,14 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.initialize_operator = ParquetWriteInitializeOperator;
 	function.copy_from_bind = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindCopy;
 	function.copy_from_function = scan_fun.functions[0];
+
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
+	function.default_batch_size = ParquetWriteDefaultBatchSize;
+	function.file_size_bytes = ParquetWriteFileSizeBytes;
+
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
-	function.rotate_files = ParquetWriteRotateFiles;
-	function.rotate_next_file = ParquetWriteRotateNextFile;
+
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
 
