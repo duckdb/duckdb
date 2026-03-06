@@ -382,6 +382,12 @@ def parse_args():
     parser.add_argument("--test-list", type=Path)
     parser.add_argument("--workers", default=DEFAULT_WORKERS)
     parser.add_argument(
+        "--test-config",
+        action="append",
+        default=[],
+        help="path to test config; may be passed multiple times and is appended to test flags",
+    )
+    parser.add_argument(
         "--test-flags",
         default="",
         help="additional flags appended to the unittest binary for listing and execution",
@@ -420,6 +426,10 @@ def parse_args():
 def main():
     enable_line_buffering()
     args = parse_args()
+    test_flags = args.test_flags
+    for config in args.test_config:
+        config_flag = f"--test-config={shlex.quote(config)}"
+        test_flags = " ".join(flag for flag in [test_flags, config_flag] if flag)
     max_failures = args.max_failures
     if args.fail_fast:
         max_failures = 1
@@ -434,11 +444,11 @@ def main():
         batch_size = 1
     else:
         batch_size = args.batch_size
-    with open_test_list(args.test_list, args.unittest_bin, args.test_flags, args.pattern) as test_file:
+    with open_test_list(args.test_list, args.unittest_bin, test_flags, args.pattern) as test_file:
         config = TestRunnerConfig(
             test_list=test_file,
             unittest_bin=args.unittest_bin,
-            test_flags=args.test_flags,
+            test_flags=test_flags,
             pattern=args.pattern,
             test_command=args.test_command,
             workers=workers,
