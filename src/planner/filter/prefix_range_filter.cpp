@@ -105,7 +105,7 @@ public:
 		const U y = key - min;
 		const U bit_idx = y >> shift;
 		const uint8_t in_range = y <= span;
-		const uint32_t word_idx = (bit_idx >> 6) & in_range_masks[in_range];
+		const uint32_t word_idx = (bit_idx >> 6) & (0U - in_range);
 		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & 63ULL)) & 1ULL;
 		return bit & in_range;
 	}
@@ -205,7 +205,6 @@ public:
 private:
 	static constexpr idx_t MAX_PREFIX_LENGTH = 20;
 	static constexpr size_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;
-	static constexpr uint32_t in_range_masks[2] = {0, 4294967295};
 
 	bool initialized = false;
 	U min;
