@@ -17,6 +17,19 @@
 
 namespace duckdb {
 
+static void WrapInTransaction(vector<unique_ptr<SQLStatement>> &new_statements,
+                              const std::function<void()> &emit_body) {
+	auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION,
+	                                             TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+	new_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
+
+	emit_body();
+
+	auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT,
+	                                              TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+	new_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
+}
+
 StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(context) {
 }
 
@@ -54,20 +67,11 @@ void UnpackMultiStatement(unique_ptr<MultiStatement> &multi_statement, bool is_i
 			new_statements.push_back(std::move(stmt));
 		}
 	} else {
-		// inject BEGIN
-		auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION,
-		                                             TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-		new_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
-
-		// add sub-statements
-		for (auto &stmt : multi_statement->statements) {
-			new_statements.push_back(std::move(stmt));
-		}
-
-		// inject COMMIT
-		auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT,
-		                                              TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-		new_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
+		WrapInTransaction(new_statements, [&] {
+			for (auto &stmt : multi_statement->statements) {
+				new_statements.push_back(std::move(stmt));
+			}
+		});
 	}
 }
 
@@ -78,21 +82,12 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
 			if (is_in_active_transaction) {
-				context.RunFunctionInTransactionInternal(lock, [&]() { ExpandPragma(statements[i], new_statements); });
+				context.RunFunctionInTransactionInternal(lock, [&] { ExpandPragma(statements[i], new_statements); });
 				break;
 			}
-			// inject BEGIN
-			auto begin_info = make_uniq<TransactionInfo>(
-			    TransactionType::BEGIN_TRANSACTION, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-			new_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
-
-			// add pragma statement
-			context.RunFunctionInTransactionInternal(lock, [&]() { ExpandPragma(statements[i], new_statements); });
-
-			// inject COMMIT
-			auto commit_info = make_uniq<TransactionInfo>(
-			    TransactionType::COMMIT, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-			new_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
+			WrapInTransaction(new_statements, [&] {
+				context.RunFunctionInTransactionInternal(lock, [&] { ExpandPragma(statements[i], new_statements); });
+			});
 			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
