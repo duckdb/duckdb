@@ -69,6 +69,9 @@ public:
 	JSONStructureNode &GetOrCreateChild();
 	JSONStructureNode &GetOrCreateChild(const char *key_ptr, size_t key_size);
 	JSONStructureNode &GetOrCreateChild(yyjson_val *key, yyjson_val *val, bool ignore_errors);
+	//! Case-insensitive lookup: returns the first child whose key matches key_ptr/key_size
+	//! case-insensitively, or nullptr if none exists.
+	JSONStructureNode *FindChildCI(const char *key_ptr, size_t key_size);
 
 public:
 	//! Type of this description
