@@ -5,25 +5,26 @@
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include <cstdint>
 
 namespace duckdb {
 
 namespace {
 
 template <typename T>
-idx_t CountLeadingZeros(const T &value) {
-	using U = typename std::make_unsigned<T>::type;
-	U v = UnsafeNumericCast<U>(value);
+idx_t CountLeadingZeros(const T &v) {
+	D_ASSERT(std::is_unsigned<T>());
 	const idx_t bit_size = sizeof(v) * 8;
 	if (v == 0) {
 		return bit_size;
 	}
 
 	idx_t count = 0;
-	U mask = U(1) << (bit_size - 1);
+	T mask = T(1) << (bit_size - 1);
 
 	while ((v & mask) == 0) {
 		++count;
@@ -34,10 +35,14 @@ idx_t CountLeadingZeros(const T &value) {
 
 template <typename T>
 class NumericPrefixRangeFilter : public PrefixRangeFilter {
+private:
+	using U = typename MakeUnsigned<T>::type;
+
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
-		min = min_val.GetValueUnsafe<T>();
-		span = (max_val.GetValueUnsafe<T>() - min);
+		D_ASSERT(min_val <= max_val);
+		min = UnsafeNumericCast<U>(min_val.GetValueUnsafe<T>());
+		span = (UnsafeNumericCast<U>(max_val.GetValueUnsafe<T>() - min));
 		shift = 0;
 
 		if (span >= CAP_BITS) {
@@ -63,13 +68,14 @@ public:
 		keys.ToUnifiedFormat(count, vector_data);
 		const auto key_data = UnifiedVectorFormat::GetData<const T>(vector_data);
 		const auto &validity_mask = vector_data.validity;
+
 		if (validity_mask.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
-				const auto data_idx = vector_data.sel->get_index(i);
-				const auto &key = key_data[data_idx];
-				const auto y = UnsafeNumericCast<idx_t>(key - min);
+				const idx_t data_idx = vector_data.sel->get_index(i);
+				const U &key = UnsafeNumericCast<U>(key_data[data_idx]);
+				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
-				const auto idx = y >> shift;
+				const U idx = y >> shift;
 				bitmap[idx >> 6] |= 1ULL << (idx & 63u);
 			}
 		} else {
@@ -78,28 +84,30 @@ public:
 				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
 					continue;
 				}
-				const auto &key = key_data[data_idx];
-				const auto y = UnsafeNumericCast<idx_t>(key - min);
+				const U &key = UnsafeNumericCast<U>(key_data[data_idx]);
+				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
-				const auto idx = y >> shift;
+				const U idx = y >> shift;
 				bitmap[idx >> 6] |= 1ULL << (idx & 63u);
 			}
 		}
 	}
 
-	void InsertOne(const Value &key) const override {
-		const auto y = UnsafeNumericCast<idx_t>(key.GetValueUnsafe<T>() - min);
+	void InsertOne(const Value &k) const override {
+		const U &key = UnsafeNumericCast<U>(k.GetValueUnsafe<T>());
+		const U y = key - min;
 		// All x are in-range by construction, so range check can be omitted here.
-		const auto idx = y >> shift;
+		const U idx = y >> shift;
 		bitmap[idx >> 6] |= 1ULL << (idx & 63u);
 	}
 
-	inline idx_t LookupOne(const T &key) const {
-		const auto y = key - min;
-		const auto bit_idx = UnsafeNumericCast<idx_t>(y >> shift);
-		const auto in_range = y <= span;
-		const auto word_idx = (bit_idx >> 6) & in_range_masks[in_range];
-		const auto bit = (bitmap[word_idx] >> (bit_idx & 63ULL)) & 1ULL;
+	inline idx_t LookupOne(const T &k) const {
+		const U &key = UnsafeNumericCast<U>(k);
+		const U y = key - min;
+		const U bit_idx = y >> shift;
+		const uint8_t in_range = y <= span;
+		const uint32_t word_idx = (bit_idx >> 6) & in_range_masks[in_range];
+		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & 63ULL)) & 1ULL;
 		return bit & in_range;
 	}
 
@@ -118,8 +126,8 @@ public:
 			for (idx_t i = 0; i < count; i++) {
 				const auto data_idx = vector_data.sel->get_index(i);
 				const auto &key = data[data_idx];
-				result_sel.set_index(found_count, i);
 				found_count += LookupOne(key);
+				result_sel.set_index(found_count, i);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
@@ -129,8 +137,8 @@ public:
 				}
 
 				const auto &key = data[data_idx];
-				result_sel.set_index(found_count, i);
 				found_count += LookupOne(key);
+				result_sel.set_index(found_count, i);
 			}
 		}
 
@@ -142,8 +150,8 @@ public:
 	}
 
 	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
-		const auto lb = lower_bound.GetValueUnsafe<T>();
-		const auto ub = upper_bound.GetValueUnsafe<T>();
+		const auto lb = UnsafeNumericCast<U>(lower_bound.GetValueUnsafe<T>());
+		const auto ub = UnsafeNumericCast<U>(upper_bound.GetValueUnsafe<T>());
 
 		if (ub < min || lb > min + span) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -188,8 +196,8 @@ private:
 	static constexpr uint32_t in_range_masks[2] = {0, 4294967295};
 
 	bool initialized = false;
-	T min;
-	T span;
+	U min;
+	U span;
 	idx_t shift;
 	AllocatedData buf_;
 	uint64_t *bitmap;
