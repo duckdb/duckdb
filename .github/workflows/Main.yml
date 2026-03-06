@@ -65,7 +65,13 @@ jobs:
       runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
       runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
     steps:
+      - uses: actions/checkout@v4
+
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
@@ -90,6 +96,24 @@ jobs:
           fi
 
           grep runner_ "$GITHUB_OUTPUT"
+
+      - name: Install tools
+        run: make format_tools
+
+      - name: List Installed Packages
+        run: pip3 freeze
+
+      - name: Check format
+        run: |
+          clang-format --version
+          clang-format --dump-config
+          black --version
+          make format-check-silent
+
+      - name: Check generated files
+        run: |
+          make generate-files
+          git diff --exit-code
 
  linux-debug:
     name: Linux Debug

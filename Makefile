@@ -458,7 +458,7 @@ relassert-artifact:
 release-artifact:
 	bash scripts/prepare_build_artifact.sh release
 
-.PHONY: toolsci
+.PHONY: toolsci format_tools
 
 toolsci:
 	if ! command -v ninja >/dev/null 2>&1 || ! command -v mold >/dev/null 2>&1; then \
@@ -468,6 +468,13 @@ toolsci:
 	ls -lh /usr/bin/gcc* /usr/bin/g++*
 	gcc --version
 	g++ --version
+
+format_tools:
+	if ! command -v ninja >/dev/null 2>&1 || ! command -v clang-format >/dev/null 2>&1; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq ninja-build clang-format-11; \
+	fi
+	sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
 
 benchmark:
 	mkdir -p ./build/release && \
