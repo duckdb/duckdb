@@ -190,7 +190,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          build/release/test/unittest "*"
+          make allunit
 
   release-assert-clang:
     name: Release Assertions with Clang
