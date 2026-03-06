@@ -30,18 +30,7 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
- check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI
-        run: echo "Event name is ${{ github.event_name }}"
-
  linux-release-cli:
-    needs:
-      - check-draft
-
     strategy:
       fail-fast: false
       matrix:
@@ -131,9 +120,6 @@ jobs:
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  linux-musl-release-cli:
-    needs:
-      - check-draft
-
     strategy:
       fail-fast: false
       matrix:
