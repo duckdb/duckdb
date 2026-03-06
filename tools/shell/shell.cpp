@@ -432,6 +432,22 @@ bool ShellState::IsDigit(char c) {
 	return isdigit(c);
 }
 
+PagerState::~PagerState() {
+#if defined(_WIN32) || defined(WIN32)
+	if (win_console_cp_before_pager > 0 && win_console_cp_before_pager != CP_UTF8) {
+		SetConsoleCP(win_console_cp_before_pager);
+		if (state) {
+			state->win_utf8_mode = false;
+		}
+	}
+#endif
+	if (state) {
+		state->ResetOutput();
+		ShellState::FinishPagerDisplay();
+		state = nullptr;
+	}
+}
+
 /*
 ** Compute a string length that is limited to what can be stored in
 ** lower 30 bits of a 32-bit signed integer.
@@ -1412,16 +1428,19 @@ void ShellState::FinishPagerDisplay() {
 }
 
 unique_ptr<PagerState> ShellState::SetupPager() {
+	uint32_t win_console_cp_before_pager = 0;
 #if defined(_WIN32) || defined(WIN32)
-	auto win_utf8_mode_restore = WindowsUtf8ModeRestore::DO_NOT_RESTORE;
-	if (pager_command == "more") { // UTF-8 mode must be used with "more" pager
-		if (!win_utf8_mode) {
-			win_utf8_mode_restore = WindowsUtf8ModeRestore::RESTORE_AS_DISABLED;
+	// We expect that CP_UTF8 code page is set when win_utf8_mode is enabled,
+	// so after the pager completes we restore both code page and mode
+	// based on the saved code page value.
+	win_console_cp_before_pager = GetConsoleCP();
+	if (win_console_cp_before_pager > 0) {
+		if (pager_command == "more") { // UTF-8 mode must be used with "more" pager
+			win_utf8_mode = true;
 		}
-		win_utf8_mode = true;
-	}
-	if (win_utf8_mode) {
-		SetConsoleCP(CP_UTF8);
+		if (win_utf8_mode && win_console_cp_before_pager != CP_UTF8) {
+			SetConsoleCP(CP_UTF8);
+		}
 	}
 #endif
 	StartPagerDisplay();
@@ -1435,11 +1454,7 @@ unique_ptr<PagerState> ShellState::SetupPager() {
 	pager_is_active = true;
 	out = pager_out;
 	outfile = "|" + pager_command;
-#if defined(_WIN32) || defined(WIN32)
-	return make_uniq<PagerState>(*this, win_utf8_mode_restore);
-#else
-	return make_uniq<PagerState>(*this);
-#endif
+	return make_uniq<PagerState>(*this, win_console_cp_before_pager);
 }
 /*
 ** Change the output file back to stdout.

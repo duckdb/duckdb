@@ -433,33 +433,14 @@ private:
 	~ShellState();
 };
 
-#if defined(_WIN32) || defined(WIN32)
-enum class WindowsUtf8ModeRestore { RESTORE_AS_DISABLED, DO_NOT_RESTORE };
-#endif
-
 struct PagerState {
-#if defined(_WIN32) || defined(WIN32)
-	WindowsUtf8ModeRestore win_utf8_mode_restore = WindowsUtf8ModeRestore::DO_NOT_RESTORE;
-	PagerState(ShellState &state, WindowsUtf8ModeRestore win_utf8_mode_restore_p)
-	    : state(state), win_utf8_mode_restore(win_utf8_mode_restore_p) {
+	explicit PagerState(ShellState &state, uint32_t win_console_cp_before_pager_p = 0)
+	    : state(state), win_console_cp_before_pager(win_console_cp_before_pager_p) {
 	}
-#endif
-	explicit PagerState(ShellState &state) : state(state) {
-	}
-	~PagerState() {
-		if (state) {
-#if defined(_WIN32) || defined(WIN32)
-			if (win_utf8_mode_restore == WindowsUtf8ModeRestore::RESTORE_AS_DISABLED) {
-				state->win_utf8_mode = false;
-			}
-#endif
-			state->ResetOutput();
-			ShellState::FinishPagerDisplay();
-			state = nullptr;
-		}
-	}
+	~PagerState();
 
 	optional_ptr<ShellState> state;
+	uint32_t win_console_cp_before_pager = 0;
 };
 
 } // namespace duckdb_shell
