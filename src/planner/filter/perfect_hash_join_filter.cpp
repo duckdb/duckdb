@@ -32,7 +32,7 @@ static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecu
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Overflow or too wide of a range
 	}
 
-	Vector range_vec(stats.GetType(), DEFAULT_STANDARD_VECTOR_SIZE);
+	Vector range_vec(stats.GetType());
 	auto range_data = FlatVector::GetData<T>(range_vec);
 	T val = min;
 	for (; val < max; val += 1) {
