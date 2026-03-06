@@ -138,24 +138,20 @@ jobs:
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
-      shell: bash
       run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      shell: bash
-      run:  make relassert
+      run: make relassert
 
     - name: Smoke tests
       run: make smoke
 
     - name: Output version info
-      shell: bash
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Prepare relassert artifact
-      shell: bash
       run: make relassert-artifact
 
     - name: Upload relassert build artifact
