@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 DEFAULT_BATCH_SIZE = 10
@@ -467,13 +467,15 @@ def main():
         tests = load_tests(config.test_list)
         batch_size = compute_batch_size(len(tests), config)
 
-        print(
-            f"found {len(tests)} tests, batch_size={batch_size}, workers={config.workers}, "
-            f"retry={config.retry}, "
-            f"runtime_threshold={config.runtime_threshold_seconds}s, "
-            f"rss_memory_threshold={config.rss_memory_threshold_mib}MiB, "
-            f"batch_timeout={config.batch_timeout_seconds}s"
-        )
+        print(f"found {len(tests)} tests")
+        config_values = asdict(config)
+        config_values["batch_size"] = batch_size
+        config_values.pop("test_list", None)
+        config_values.pop("unittest_bin", None)
+        config_values.pop("test_command", None)
+        config_values = {k: v for k, v in config_values.items() if v is not None and v != "" and v != []}
+        config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
+        print(f"config: {config_output}")
 
         batches = list(chunked(tests, batch_size))
         return run_tests(config, batches)
