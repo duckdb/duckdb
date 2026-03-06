@@ -25,6 +25,8 @@ struct CreateAggregateFunctionInfo;
 struct CreateScalarFunctionInfo;
 struct CreateTableFunctionInfo;
 
+class ShellCommandExtension;
+
 class ExtensionLoader {
 	friend class DuckDB;
 	friend class ExtensionHelper;
@@ -93,6 +95,9 @@ public:
 
 	//! Registers a new secret type
 	DUCKDB_API void RegisterSecretType(SecretType secret_type);
+
+	//! Registers a shell dot-command provided by this extension
+	DUCKDB_API void RegisterShellCommand(ShellCommandExtension extension);
 
 	//! Registers a cast between two types
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target,

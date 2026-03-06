@@ -18,6 +18,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
 #include "duckdb.hpp"
 
 namespace duckdb_shell {
@@ -402,6 +403,10 @@ public:
 	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
 	optional_ptr<const MetadataCommand> FindMetadataCommand(const string &option, string &error_msg) const;
 	static vector<string> GetMetadataCompletions(const char *zLine, idx_t nLine);
+	bool TryRunExtensionCommand(const vector<string> &args, int &rc);
+	bool InvokeExtensionCallback(duckdb::shell_command_callback_t cb,
+	                             duckdb::shell_exclusive_command_callback_t excl_cb, const vector<string> &args,
+	                             duckdb::optional_ptr<duckdb::ShellCommandExtensionInfo> info, int &rc);
 
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE

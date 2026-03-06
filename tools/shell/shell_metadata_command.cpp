@@ -3,6 +3,8 @@
 #include "shell_prompt.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_renderer.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -1031,6 +1033,32 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 			}
 		}
 	}
+	// add extension commands
+	if (db) {
+		auto &mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+		for (auto &ext : mgr.ShellCommandExtensions()) {
+			if (!glob_pattern.empty() && !ShellState::StringGlob(glob_pattern.c_str(), ext.command.c_str())) {
+				continue;
+			}
+			if (ext.sub_commands.empty()) {
+				PrintCommandInfo pi;
+				pi.command_name = StringUtil::Format(".%s", ext.command);
+				pi.first_part = ext.usage.empty() ? "" : StringUtil::Format(" %s", ext.usage);
+				pi.second_part = ext.description;
+				pi.first_part_highlight = HighlightElementType::STRING_CONSTANT;
+				print_info_list.push_back(std::move(pi));
+			} else {
+				for (auto &sub : ext.sub_commands) {
+					PrintCommandInfo pi;
+					pi.command_name = StringUtil::Format(".%s %s", ext.command, sub.sub_command);
+					pi.first_part = sub.usage.empty() ? "" : StringUtil::Format(" %s", sub.usage);
+					pi.second_part = sub.description;
+					pi.first_part_highlight = HighlightElementType::STRING_CONSTANT;
+					print_info_list.push_back(std::move(pi));
+				}
+			}
+		}
+	}
 	// figure out alignment based on the total first part print size
 	idx_t max_lhs_size = 0;
 	for (auto &print_info : print_info_list) {
@@ -1065,26 +1093,35 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 	return print_info_list.size();
 }
 
-vector<string> ShellState::GetMetadataCompletions(const char *zLine, idx_t nLine) {
+static void AppendDotCompletion(vector<string> &result, const char *command, const char *zLine, idx_t nLine) {
 	char zBuf[1000];
+	bool found_match = true;
+	idx_t line_pos;
+	zBuf[0] = '.';
+	for (line_pos = 0; !ShellState::IsSpace(command[line_pos]) && command[line_pos] && line_pos + 2 < sizeof(zBuf);
+	     line_pos++) {
+		zBuf[line_pos + 1] = command[line_pos];
+		if (line_pos + 1 < nLine && command[line_pos] != zLine[line_pos + 1]) {
+			found_match = false;
+			break;
+		}
+	}
+	zBuf[line_pos + 1] = '\0';
+	if (found_match && line_pos + 1 >= nLine) {
+		result.push_back(zBuf);
+	}
+}
+
+vector<string> ShellState::GetMetadataCompletions(const char *zLine, idx_t nLine) {
 	vector<string> result;
 	for (idx_t c = 0; metadata_commands[c].command; c++) {
-		auto &command = metadata_commands[c];
-		auto &line = command.command;
-		bool found_match = true;
-		idx_t line_pos;
-		zBuf[0] = '.';
-		for (line_pos = 0; !IsSpace(line[line_pos]) && line[line_pos] && line_pos + 2 < sizeof(zBuf); line_pos++) {
-			zBuf[line_pos + 1] = line[line_pos];
-			if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
-				// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
-				found_match = false;
-				break;
-			}
-		}
-		zBuf[line_pos + 1] = '\0';
-		if (found_match && line_pos + 1 >= nLine) {
-			result.push_back(zBuf);
+		AppendDotCompletion(result, metadata_commands[c].command, zLine, nLine);
+	}
+	auto &state = ShellState::Get();
+	if (state.db) {
+		auto &mgr = duckdb::ExtensionCallbackManager::Get(*state.db->instance);
+		for (auto &ext : mgr.ShellCommandExtensions()) {
+			AppendDotCompletion(result, ext.command.c_str(), zLine, nLine);
 		}
 	}
 	return result;
@@ -1108,10 +1145,123 @@ optional_ptr<const MetadataCommand> ShellState::FindMetadataCommand(const string
 		auto &command = metadata_commands[command_idx];
 		command_names.push_back(string(".") + command.command);
 	}
+	if (db) {
+		auto &mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+		for (auto &ext : mgr.ShellCommandExtensions()) {
+			command_names.push_back("." + ext.command);
+		}
+	}
 	auto candidates_msg = StringUtil::CandidatesErrorMessage(command_names, option, "Did you mean");
 	error_msg += candidates_msg + "\n";
 	error_msg += "Run '.help' for more information.";
 	return nullptr;
+}
+
+bool ShellState::InvokeExtensionCallback(duckdb::shell_command_callback_t cb,
+                                         duckdb::shell_exclusive_command_callback_t excl_cb, const vector<string> &args,
+                                         duckdb::optional_ptr<duckdb::ShellCommandExtensionInfo> info, int &rc) {
+	duckdb::ShellCommandResult result = duckdb::ShellCommandResult::FAIL;
+	try {
+		if (excl_cb) {
+			// Exclusive mode: close DB, call with path, reopen
+			string saved_path = zDbFilename;
+			last_result.reset();
+			conn.reset();
+			db.reset();
+			result = excl_cb(saved_path, args, info);
+			OpenDB(ShellOpenFlags::KEEP_ALIVE_ON_FAILURE);
+		} else if (cb) {
+			result = cb(*db->instance, args, info);
+		} else {
+			return false;
+		}
+		rc = static_cast<int>(result);
+		return true;
+	} catch (std::exception &ex) {
+		duckdb::ErrorData error(ex);
+		PrintDatabaseError(error.Message());
+		if (excl_cb && !db) {
+			OpenDB(ShellOpenFlags::KEEP_ALIVE_ON_FAILURE);
+		}
+		rc = 1;
+		return true;
+	} catch (...) {
+		PrintDatabaseError("Unknown error in extension command");
+		if (excl_cb && !db) {
+			OpenDB(ShellOpenFlags::KEEP_ALIVE_ON_FAILURE);
+		}
+		rc = 1;
+		return true;
+	}
+}
+
+bool ShellState::TryRunExtensionCommand(const vector<string> &args, int &rc) {
+	if (safe_mode || !db) {
+		return false;
+	}
+
+	auto &mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+	for (auto &ext : mgr.ShellCommandExtensions()) {
+		if (!duckdb::StringUtil::CIEquals(ext.command, args[0])) {
+			continue;
+		}
+
+		bool has_sub_commands = !ext.sub_commands.empty();
+		bool has_top_level = ext.callback || ext.exclusive_callback;
+
+		// Try sub-command dispatch first (if args[1] exists and sub-commands registered)
+		if (has_sub_commands && args.size() >= 2) {
+			const string &sub_name = args[1];
+			for (auto &sub : ext.sub_commands) {
+				if (!duckdb::StringUtil::CIEquals(sub.sub_command, sub_name)) {
+					continue;
+				}
+				if (InvokeExtensionCallback(sub.callback, sub.exclusive_callback, args, ext.info.get(), rc)) {
+					if (rc == static_cast<int>(duckdb::ShellCommandResult::PRINT_USAGE)) {
+						string usage_str =
+						    sub.usage.empty()
+						        ? StringUtil::Format("Usage: '.%s %s'", ext.command, sub.sub_command)
+						        : StringUtil::Format("Usage: '.%s %s %s'", ext.command, sub.sub_command, sub.usage);
+						PrintDatabaseError(usage_str);
+						rc = 1;
+					}
+					return true;
+				}
+				PrintF(PrintOutput::STDERR, "Sub-command '.%s %s' has no callback\n", ext.command.c_str(),
+				       sub.sub_command.c_str());
+				rc = 1;
+				return true;
+			}
+			// Sub-command name didn't match — fall through to top-level
+		}
+
+		// Top-level callback (simple command or fallback)
+		if (has_top_level) {
+			if (InvokeExtensionCallback(ext.callback, ext.exclusive_callback, args, ext.info.get(), rc)) {
+				if (rc == static_cast<int>(duckdb::ShellCommandResult::PRINT_USAGE)) {
+					string usage_str = ext.usage.empty()
+					                       ? StringUtil::Format("Usage: '.%s'", ext.command)
+					                       : StringUtil::Format("Usage: '.%s %s'", ext.command, ext.usage);
+					PrintDatabaseError(usage_str);
+					rc = 1;
+				}
+				return true;
+			}
+		}
+
+		// No callback handled it — show available sub-commands
+		if (has_sub_commands) {
+			PrintF("Usage:\n");
+			for (auto &sub : ext.sub_commands) {
+				PrintF("  .%s %-20s %s\n", ext.command.c_str(), sub.sub_command.c_str(), sub.description.c_str());
+			}
+		} else {
+			PrintDatabaseError(StringUtil::Format("Extension command '.%s' has no callbacks registered", ext.command));
+		}
+		rc = 1;
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb_shell
