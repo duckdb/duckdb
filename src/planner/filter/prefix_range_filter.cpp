@@ -156,14 +156,14 @@ public:
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 
-		const auto adjusted_lb = std::max(lb, min_t);
-		const auto adjusted_ub = std::min(ub, max_t);
+		const auto adjusted_lb = static_cast<U>(std::max(lb, min_t));
+		const auto adjusted_ub = static_cast<U>(std::min(ub, max_t));
 
-		const auto lb_y = static_cast<U>(adjusted_lb - min_t);
+		const auto lb_y = static_cast<U>(adjusted_lb - static_cast<U>(min_t));
 		const U lb_bit_idx = lb_y >> shift;
 		const U lb_word_idx = lb_bit_idx >> 6;
 
-		const auto ub_y = static_cast<U>(adjusted_ub - min_t);
+		const auto ub_y = static_cast<U>(adjusted_ub - static_cast<U>(min_t));
 		const U ub_bit_idx = ub_y >> shift;
 		const U ub_word_idx = ub_bit_idx >> 6;
 
