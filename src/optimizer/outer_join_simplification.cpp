@@ -14,7 +14,7 @@ void OuterJoinSimplification::HandleExpression(const Expression &expr) {
 		return;
 	}
 	auto &colref = expr.Cast<BoundColumnRefExpression>();
-	null_filtered.insert(colref.binding);
+	null_filtered_columns.insert(colref.binding);
 }
 
 void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
@@ -42,32 +42,37 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 		case JoinType::LEFT:
 		case JoinType::RIGHT:
 		case JoinType::OUTER: {
-			// Check which sides of the join we can reduce
-			bool can_reduce[2] = {join.join_type == JoinType::LEFT, join.join_type == JoinType::RIGHT};
+			// Try to simplify joins
+			bool preserves_null_extended_rows[2] = {
+			    join.join_type == JoinType::LEFT || join.join_type == JoinType::OUTER,
+			    join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER};
 			for (idx_t child_idx = 0; child_idx < 2; child_idx++) {
-				if (can_reduce[child_idx]) {
-					continue;
-				}
 				for (const auto &binding : join.children[child_idx]->GetColumnBindings()) {
-					if (null_filtered.find(binding) != null_filtered.end()) {
-						can_reduce[child_idx] = true;
+					if (null_filtered_columns.find(binding) != null_filtered_columns.end()) {
+						// Rejecting NULLS in one child removes preservation of NULL extended rows for the other child
+						preserves_null_extended_rows[1 - child_idx] = false;
 						break;
 					}
 				}
 			}
 
-			if (can_reduce[0] && can_reduce[1]) {
+			if (!preserves_null_extended_rows[0] && !preserves_null_extended_rows[1]) {
 				join.join_type = JoinType::INNER;
-				// Re-enter because we just created another INNER join
-				VisitOperator(op);
+				VisitOperator(op); // Re-enter because we just created another (NULL-filtering!) INNER join
 				return;
 			}
 
-			if (can_reduce[0]) {
-				join.join_type = JoinType::RIGHT;
-			} else if (can_reduce[1]) {
+			if (preserves_null_extended_rows[0] && !preserves_null_extended_rows[1]) {
+				D_ASSERT(join.join_type == JoinType::LEFT || join.join_type == JoinType::OUTER);
 				join.join_type = JoinType::LEFT;
+			} else if (!preserves_null_extended_rows[0] && preserves_null_extended_rows[1]) {
+				D_ASSERT(join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER);
+				join.join_type = JoinType::RIGHT;
+			} else {
+				D_ASSERT(join.join_type == JoinType::OUTER);
+				join.join_type = JoinType::OUTER;
 			}
+
 			VisitOperatorChildren(op);
 			return;
 		}
@@ -86,16 +91,16 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 				continue;
 			}
 			const ColumnBinding binding(projection.table_index, col_idx);
-			if (null_filtered.find(binding) == null_filtered.end()) {
+			if (null_filtered_columns.find(binding) == null_filtered_columns.end()) {
 				continue;
 			}
-			null_filtered.insert(expr.Cast<BoundColumnRefExpression>().binding);
+			null_filtered_columns.insert(expr.Cast<BoundColumnRefExpression>().binding);
 		}
 		VisitOperatorChildren(op);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
-		// Passthrough supported. Handle expressions that filter NULLs. TODO: add more
+		// Passthrough supported. Handle expressions that filter NULLs
 		auto &filter = op.Cast<LogicalFilter>();
 		filter.SplitPredicates(filter.expressions);
 		for (const auto &expr : filter.expressions) {
@@ -104,15 +109,8 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 				const auto &is_not_null = expr->Cast<BoundOperatorExpression>();
 				HandleExpression(*is_not_null.children[0]);
 			} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-				switch (expr->GetExpressionType()) {
-				case ExpressionType::COMPARE_EQUAL:
-				case ExpressionType::COMPARE_NOTEQUAL:
-				case ExpressionType::COMPARE_LESSTHAN:
-				case ExpressionType::COMPARE_GREATERTHAN:
-				case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-				case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-					break;
-				default:
+				if (expr->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+				    expr->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					continue;
 				}
 				const auto &comparison = expr->Cast<BoundComparisonExpression>();

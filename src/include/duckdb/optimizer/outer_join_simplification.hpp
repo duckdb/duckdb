@@ -25,8 +25,8 @@ private:
 	void HandleExpression(const Expression &expr);
 
 private:
-	//! Column bindings that have their NULL values filtered
-	column_binding_set_t null_filtered;
+	//! Columns that have their NULL values filtered
+	column_binding_set_t null_filtered_columns;
 };
 
 } // namespace duckdb
