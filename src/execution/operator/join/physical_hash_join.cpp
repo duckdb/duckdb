@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
@@ -21,6 +23,8 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -940,6 +944,16 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	return true;
 }
 
+bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
+                                                     const PhysicalComparisonJoin &op,
+                                                     const ExpressionType &cmp) const {
+	if (!CanUseBloomFilter(context, op, cmp, ht)) {
+		return false;
+	}
+
+	return PrefixRangeTableFilter::SupportedType(ht->conditions[0].GetLHS().return_type);
+}
+
 void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht,
                                              const JoinFilterPushdownFilter &info,
                                              ProjectionIndex filter_col_idx) const {
@@ -962,6 +976,34 @@ void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &o
 	auto filter = make_uniq_base<TableFilter, PerfectHashJoinFilter>(perfect_join_executor, key_name);
 	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::PHJ);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+}
+
+void JoinFilterPushdownInfo::PushPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
+                                                   JoinHashTable &ht, const PhysicalOperator &op, idx_t filter_col_idx,
+                                                   const Value &min_val, const Value &max_val) const {
+	const auto key_type = ht.conditions[0].GetLHS().return_type;
+	auto prefix_filter = PrefixRangeFilter::CreatePrefixRangeFilter(key_type);
+	prefix_filter->Initialize(context, ht.Count(), min_val, max_val);
+
+	Vector tuples_addresses(LogicalType::POINTER, ht.Count());
+	Vector build_vector(key_type, ht.Count());
+	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, 0);
+
+	// FIXME: Make this multi-threaded!
+	prefix_filter->InsertKeys(build_vector, key_count);
+
+	ht.SetPrefixRangeFilter(std::move(prefix_filter));
+
+	// If the nulls are equal, we let nulls pass. If not, we filter them
+	auto filters_null_values = !ht.NullValuesAreEqual(0);
+	const auto key_name = ht.conditions[0].GetRHS().ToString();
+	auto rf_filter =
+	    make_uniq<PrefixRangeTableFilter>(ht.GetPrefixRangeFilter(), filters_null_values, key_name, key_type);
+
+	// TODO: Experimentally find suitable selectivity threshold
+	auto opt_rf_filter =
+	    make_uniq<SelectivityOptionalFilter>(std::move(rf_filter), 0.8f, SelectivityOptionalFilter::BF_CHECK_N);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_rf_filter));
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalState &gstate) const {
@@ -1047,8 +1089,37 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				default:
 					break;
 				}
+
+				// FIXME: Better generalize this over different types
+				bool use_prefix_range_filter = false;
+				// Get the values back in case they were moved
+				min_val = final_min_max->data[min_idx].GetValue(0);
+				max_val = final_min_max->data[max_idx].GetValue(0);
+				switch (min_val.type().id()) {
+				case LogicalTypeId::UTINYINT:
+				case LogicalTypeId::USMALLINT:
+				case LogicalTypeId::UINTEGER:
+				case LogicalTypeId::UBIGINT: {
+					auto max_val_cast = max_val;
+					auto min_val_cast = min_val;
+					if (max_val_cast.TryCastAs(context, LogicalTypeId::UBIGINT) &&
+					    min_val_cast.TryCastAs(context, LogicalTypeId::UBIGINT)) {
+						const auto span =
+						    max_val_cast.GetValueUnsafe<uint64_t>() - min_val_cast.GetValueUnsafe<uint64_t>();
+						use_prefix_range_filter = span <= 1048576 || (ht && ht->Count() <= 524288);
+					} else {
+						use_prefix_range_filter = ht && ht->Count() <= 524288;
+					}
+					break;
+				}
+				default:
+					break;
+				}
+
 				if (perfect_join_executor) {
 					PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
+				} else if (use_prefix_range_filter && CanUsePrefixRangeFilter(context, ht, op, cmp)) {
+					PushPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val, max_val);
 				} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(op, *ht, info, filter_col_idx);
 				}

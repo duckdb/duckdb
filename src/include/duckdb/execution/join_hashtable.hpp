@@ -8,17 +8,19 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
 
 namespace duckdb {
 
@@ -370,6 +372,8 @@ private:
 	BloomFilter bloom_filter;
 	bool should_build_bloom_filter = false;
 
+	unique_ptr<PrefixRangeFilter> prefix_range_filter;
+
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
 
@@ -455,6 +459,14 @@ public:
 
 	BloomFilter &GetBloomFilter() {
 		return bloom_filter;
+	}
+
+	void SetPrefixRangeFilter(unique_ptr<PrefixRangeFilter> filter) {
+		prefix_range_filter = std::move(filter);
+	}
+
+	optional_ptr<PrefixRangeFilter> GetPrefixRangeFilter() {
+		return prefix_range_filter;
 	}
 
 	//! Get total size of HT if all partitions would be built

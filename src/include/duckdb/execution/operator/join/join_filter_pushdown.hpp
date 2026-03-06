@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -90,10 +91,15 @@ private:
 	                     ProjectionIndex filter_col_idx) const;
 	void PushPerfectHashJoinFilter(const PhysicalOperator &op, PerfectHashJoinExecutor &perfect_join_executor,
 	                               const JoinFilterPushdownFilter &info, ProjectionIndex filter_col_idx) const;
+	void PushPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context, JoinHashTable &ht,
+	                           const PhysicalOperator &op, idx_t filter_col_idx, const Value &min_val,
+	                           const Value &max_val) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,
 	                       optional_ptr<JoinHashTable> ht = nullptr) const;
+	bool CanUsePrefixRangeFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
+	                             const PhysicalComparisonJoin &op, const ExpressionType &cmp) const;
 };
 
 } // namespace duckdb
