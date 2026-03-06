@@ -197,6 +197,8 @@ public:
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::DEFAULT;
 	//! The command to execute when `-ui` is passed in
 	string ui_command = "CALL start_ui()";
+	//! Cached session ID for .llm command (generated on first use)
+	string llm_session_id;
 	idx_t last_changes = 0;
 	idx_t total_changes = 0;
 	bool readStdin = true;

@@ -3,6 +3,7 @@
 #include "shell_prompt.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_renderer.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -441,6 +442,102 @@ MetadataResult RunShellCommand(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult RunLLMCommand(ShellState &state, const vector<string> &args) {
+	if (state.safe_mode) {
+		state.Print(PrintOutput::STDERR, ".llm cannot be used in -safe mode\n");
+		return MetadataResult::FAIL;
+	}
+
+	bool is_in_memory = (state.zDbFilename.empty() || state.zDbFilename == ":memory:");
+
+	// Gather attached database info before closing the connection
+	string system_prompt;
+	system_prompt +=
+	    "The DuckDB CLI executable is located at: " + StringUtil::Replace(string(state.program_name), "\"", "\\\"") +
+	    "\\n";
+	if (!is_in_memory) {
+		system_prompt =
+		    "You are working on a DuckDB database located at: " + StringUtil::Replace(state.zDbFilename, "\"", "\\\"") +
+		    "\\n";
+	}
+	if (state.conn) {
+		auto result = state.conn->Query("SELECT database_name, path, readonly, type, options "
+		                                "FROM duckdb_databases() "
+		                                "WHERE NOT internal ORDER BY database_name");
+		if (result && !result->HasError()) {
+			for (auto &row : *result) {
+				auto db_name = row.GetValue<string>(0);
+				auto db_path = row.GetValue<string>(1);
+				bool readonly = row.GetValue<bool>(2);
+				auto db_type = row.GetValue<string>(3);
+
+				string attach_cmd = "ATTACH '" + StringUtil::Replace(db_path, "'", "''") + "'";
+				attach_cmd += " AS " + db_name;
+
+				// Collect options
+				vector<string> opts;
+				if (readonly) {
+					opts.push_back("READ_ONLY");
+				}
+				if (db_type != "duckdb") {
+					opts.push_back("TYPE " + db_type);
+				}
+				// Include any extra attach options from the options map
+				auto options_val = row.GetValue<string>(4);
+				if (!options_val.empty() && options_val != "{}") {
+					opts.push_back(options_val);
+				}
+				if (!opts.empty()) {
+					attach_cmd += " (" + StringUtil::Join(opts, ", ") + ")";
+				}
+				attach_cmd += ";";
+				system_prompt += "Attached database: " + attach_cmd + "\\n";
+			}
+		}
+	}
+
+	if (is_in_memory) {
+		state.Print(PrintOutput::STDERR, "Warning: in-memory database cannot be sent to the LLM. "
+		                                 "The database will remain open during the LLM session.\n");
+	} else {
+		state.last_result.reset();
+		state.db.reset();
+		state.conn.reset();
+	}
+
+	// First invocation: generate a new session ID; subsequent: resume it
+	string cmd;
+	if (state.llm_session_id.empty()) {
+		auto uuid = duckdb::UUID::GenerateRandomUUID();
+		state.llm_session_id = duckdb::UUID::ToString(uuid);
+		cmd = "claude --session-id " + state.llm_session_id;
+	} else {
+		cmd = "claude --resume " + state.llm_session_id;
+	}
+	if (!system_prompt.empty()) {
+		cmd += " --append-system-prompt \"" + system_prompt + "\"";
+	}
+
+	for (idx_t i = 1; i < args.size(); i++) {
+		cmd += " ";
+		cmd += StringUtil::Contains(args[i], ' ') ? args[i] : ("\"" + args[i] + "\"");
+	}
+
+	// system() inherits stdin/stdout/stderr — terminal is already in
+	// cooked mode (linenoise disables raw mode before returning)
+	int rc = system(cmd.c_str());
+	if (rc != 0) {
+		state.PrintF(PrintOutput::STDERR, "LLM command exited with code %d\n", rc);
+	}
+
+	// Reopen database if we closed it
+	if (!is_in_memory) {
+		state.OpenDB(ShellOpenFlags::KEEP_ALIVE_ON_FAILURE);
+	}
+
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ShowConfiguration(ShellState &state, const vector<string> &args) {
 	state.ShowConfiguration();
 	return MetadataResult::SUCCESS;
@@ -854,6 +951,10 @@ static const MetadataCommand metadata_commands[] = {
      "DEPRECATED: Sets the syntax highlighting color used for keywords", 0, nullptr},
 #endif
     {"last", 1, RenderLastResult, "", "Render the last result without truncating", 0, ""},
+    {"llm", 0, RunLLMCommand, "?ARGS?", "Start an interactive LLM session (claude)", 0,
+     "Launches claude CLI with a persistent session ID.\n"
+     "\tOn-disk databases are closed before and reopened after\n"
+     "\tthe LLM session to release file locks."},
     {"large_number_rendering", 2, SetLargeNumberRendering, "MODE",
      "Toggle readable rendering of large numbers (duckbox only)", 0, "Mode: all|footer|off"},
     {"log", 2, ToggleLog, "FILE|off", "Turn logging on or off.  FILE can be stderr/stdout", 0, ""},
