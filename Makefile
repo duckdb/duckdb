@@ -400,7 +400,7 @@ unittest_reldebug:
 	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest $(T)
 
 unittest_release: release
-	build/release/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest $(T)
 
 unittest_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
@@ -412,7 +412,7 @@ runnertests:
 	python3 -m unittest scripts.ci.test_run_tests
 
 unittestarrow:
-	build/debug/test/unittest "[arrow]"
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest "[arrow]"
 
 allunit:
 	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
@@ -534,7 +534,7 @@ third_party/sqllogictest:
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
-	./build/release/test/unittest "[sqlitelogic]"
+	$(PYTHON) scripts/ci/run_tests.py ./build/release/test/unittest "[sqlitelogic]"
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:

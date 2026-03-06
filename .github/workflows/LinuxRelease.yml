@@ -119,12 +119,12 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        python3 scripts/ci/run_tests.py build/release/test/unittest "*"
+        make allunit
 
     - name: Release specific tests
       shell: bash
       run: |
-        ./build/release/test/unittest --select-tag release
+        python3 scripts/ci/run_tests.py --test-flags="--select-tag=release" ./build/release/test/unittest
 
     - name: Tools Tests
       shell: bash
@@ -222,13 +222,14 @@ jobs:
           set -e
           cat /etc/os-release
           apk add      \
+            make       \
             python3    \
             py3-pytest
           cd $PWD
           echo Tests
-          python3 scripts/ci/run_tests.py build/release/test/unittest \"*\"
+          make allunit
           echo Release specific tests
-          ./build/release/test/unittest --select-tag release
+          python3 scripts/ci/run_tests.py --test-flags=\"--select-tag=release\" ./build/release/test/unittest
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
