@@ -2,6 +2,8 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -173,6 +175,11 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 	}
 	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
 		filters_nulls = true;
+		break;
+	}
+	case duckdb::TableFilterType::PREFIX_RANGE_FILTER: {
+		auto &prf = filter.Cast<PrefixRangeTableFilter>();
+		filters_nulls = prf.FiltersNullValues();
 		break;
 	}
 	default:
