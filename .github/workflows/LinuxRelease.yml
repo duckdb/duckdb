@@ -41,9 +41,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+
+    - name: Install tools
+      run: make toolsci
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -51,8 +51,9 @@ jobs:
       run: |
         python3 -m pip install pytest
 
+    - uses: ./.github/actions/ccache-action
+
     - name: Build
-      shell: bash
       run: |
         export PWD=`pwd`
         docker run                                                             \
@@ -80,11 +81,9 @@ jobs:
         "
 
     - name: Print platform
-      shell: bash
       run: ./build/release/duckdb -c "PRAGMA platform;"
 
     - name: Deploy
-      shell: bash
       env:
         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
@@ -130,11 +129,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+
+    - name: Install tools
+      run: make toolsci
 
     - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
