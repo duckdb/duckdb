@@ -613,7 +613,7 @@ ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenc
 		    config,
 		    [&benchmark](ClientConfig &config) {
 			    config.get_result_collector = [&benchmark](ClientContext &context,
-			                                               PreparedStatementData &data) -> PhysicalOperator & {
+			                                               PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
 				    return PhysicalArrowCollector::Create(context, data, benchmark.ArrowBatchSize());
 			    };
 		    },
