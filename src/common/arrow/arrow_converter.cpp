@@ -14,7 +14,36 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/main/client_context.hpp"
+
+#include "yyjson.hpp"
+
+using namespace duckdb_yyjson; // NOLINT
+
 namespace duckdb {
+
+//! Serialize ENUM values to a JSON array string using yyjson.
+static string SerializeEnumValuesToJson(const LogicalType &type) {
+	auto &values = EnumType::GetValuesInsertOrder(type);
+	auto enum_size = EnumType::GetSize(type);
+	auto *doc = yyjson_mut_doc_new(nullptr);
+	auto *arr = yyjson_mut_arr(doc);
+	yyjson_mut_doc_set_root(doc, arr);
+	for (idx_t i = 0; i < enum_size; i++) {
+		auto val = values.GetValue(i).ToString();
+		yyjson_mut_arr_add_strcpy(doc, arr, val.c_str());
+	}
+	yyjson_write_err err;
+	size_t json_len = 0;
+	auto *json_cstr = yyjson_mut_write_opts(doc, YYJSON_WRITE_NOFLAG, nullptr, &json_len, &err);
+	if (!json_cstr) {
+		yyjson_mut_doc_free(doc);
+		throw SerializationException("Failed to serialize ENUM values to JSON: %s", err.msg);
+	}
+	string result(json_cstr, json_len);
+	free(json_cstr);
+	yyjson_mut_doc_free(doc);
+	return result;
+}
 
 void ArrowConverter::ToArrowArray(
     DataChunk &input, ArrowArray *out_array, ClientProperties options,
@@ -380,7 +409,6 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::ENUM: {
-		// TODO what do we do with pointer enums here?
 		switch (EnumType::GetPhysicalType(type)) {
 		case PhysicalType::UINT8:
 			child.format = "C";
@@ -401,6 +429,14 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		InitializeChild(root_holder.nested_children.back()[0], root_holder);
 		child.dictionary = root_holder.nested_children_ptr.back()[0];
 		child.dictionary->format = "u";
+		if (options.arrow_lossless_conversion) {
+			auto json = SerializeEnumValuesToJson(type);
+			ArrowSchemaMetadata schema_metadata;
+			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.duckdb.enum");
+			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, json);
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+		}
 		break;
 	}
 	default: {

@@ -328,6 +328,11 @@ unique_ptr<ArrowType> ArrowType::CreateListType(ClientContext &context, ArrowSch
 
 LogicalType ArrowType::GetDuckType(bool use_dictionary) const {
 	if (use_dictionary && dictionary_type) {
+		// ENUM extension types store the real ENUM type in `type` — return it directly
+		// instead of resolving to the dictionary value type (VARCHAR).
+		if (type.id() == LogicalTypeId::ENUM) {
+			return type;
+		}
 		return dictionary_type->GetDuckType();
 	}
 	if (!use_dictionary) {
@@ -424,6 +429,11 @@ ArrowTypeExtensionData::GetExtensionTypes(ClientContext &context, const vector<L
 	unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_types;
 	const auto &db_config = DBConfig::GetConfig(context);
 	for (idx_t i = 0; i < duckdb_types.size(); i++) {
+		// Skip ENUM — the appender handles ENUM natively as dictionary encoding;
+		// the arrow.duckdb.enum extension is only used on the import side.
+		if (duckdb_types[i].id() == LogicalTypeId::ENUM) {
+			continue;
+		}
 		if (db_config.HasArrowExtension(duckdb_types[i])) {
 			extension_types.insert({i, db_config.GetArrowExtension(duckdb_types[i]).GetTypeExtension()});
 		}
