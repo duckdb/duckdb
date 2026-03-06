@@ -300,8 +300,10 @@ jobs:
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
-    runs-on: ubuntu-24.04
-    needs: linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    needs:
+      - prepare
+      - linux-debug
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
@@ -328,8 +330,10 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
-    runs-on: ubuntu-22.04
-    needs: linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: gcc-10
       CXX: g++-10
@@ -386,8 +390,10 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
-    needs: linux-debug
-    runs-on: ubuntu-24.04
+    needs:
+      - prepare
+      - linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: clang
       CXX: clang++
