@@ -9,7 +9,6 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include <cstdint>
 
 namespace duckdb {
 
@@ -42,7 +41,7 @@ public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
 		D_ASSERT(min_val <= max_val);
 		min = UnsafeNumericCast<U>(min_val.GetValueUnsafe<T>());
-		span = (UnsafeNumericCast<U>(max_val.GetValueUnsafe<T>() - min));
+		span = (UnsafeNumericCast<U>(max_val.GetValueUnsafe<T>()) - min);
 		shift = 0;
 
 		if (span >= CAP_BITS) {
@@ -157,7 +156,7 @@ public:
 		}
 
 		const auto adjusted_lb = std::max(lb, min);
-		const auto adjusted_ub = std::min(ub, UnsafeNumericCast<T>(min + span));
+		const auto adjusted_ub = std::min(ub, UnsafeNumericCast<U>(min + span));
 
 		const auto lb_y = adjusted_lb - min;
 		const auto lb_bit_idx = lb_y >> shift;
@@ -214,12 +213,16 @@ unique_ptr<PrefixRangeFilter> PrefixRangeFilter::CreatePrefixRangeFilter(const L
 		return make_uniq<NumericPrefixRangeFilter<uint32_t>>();
 	case PhysicalType::UINT64:
 		return make_uniq<NumericPrefixRangeFilter<uint64_t>>();
-	case PhysicalType::UINT128:
 	case PhysicalType::INT8:
+		return make_uniq<NumericPrefixRangeFilter<int8_t>>();
 	case PhysicalType::INT16:
+		return make_uniq<NumericPrefixRangeFilter<int16_t>>();
 	case PhysicalType::INT32:
+		return make_uniq<NumericPrefixRangeFilter<int32_t>>();
 	case PhysicalType::INT64:
+		return make_uniq<NumericPrefixRangeFilter<int64_t>>();
 	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
 	default:
 		throw NotImplementedException("Prefix range filter is not implemented for type %s", key_type.ToString());
 	}
@@ -231,13 +234,13 @@ bool PrefixRangeTableFilter::SupportedType(const LogicalType &type) {
 	case PhysicalType::UINT16:
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
-		return true;
-	case PhysicalType::UINT128:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
 	case PhysicalType::INT128:
+		return true;
+	case PhysicalType::UINT128:
 	default:
 		return false;
 	}
