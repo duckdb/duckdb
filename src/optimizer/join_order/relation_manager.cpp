@@ -825,17 +825,48 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 				// if we make a conjunction expression and populate the left set and right set with all
 				// the relations from the conditions in the conjunction expression, we can prevent invalid
 				// reordering. The same logic applies to LEFT joins.
+				//
+				// Non-comparison conditions (e.g. l.val > 1 stored as a residual in the ON clause)
+				// are NOT added to the conjunction to avoid contaminating the edge binding analysis.
+				// Instead they are stored as residual predicates below.
+				vector<unique_ptr<Expression>> non_comparison_exprs;
 				for (auto &cond : join.conditions) {
 					if (cond.IsComparison()) {
 						auto comparison = make_uniq<BoundComparisonExpression>(
 						    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy());
 						conjunction_expression->children.push_back(std::move(comparison));
+					} else {
+						non_comparison_exprs.push_back(cond.GetJoinExpression().Copy());
 					}
 				}
 				if (!conjunction_expression->children.empty()) {
 					auto leftover_exprs =
 					    CreateFilterInfoFromExpression(std::move(conjunction_expression), set_manager, join.join_type);
 					D_ASSERT(leftover_exprs.empty());
+				}
+				// Store non-comparison ON-clause conditions as residual predicates.
+				// We use the full relation set of the join (union of all condition bindings) so
+				// they are attached to the reconstructed LEFT/SEMI/ANTI join node, not pushed to
+				// child scans.
+				if (!non_comparison_exprs.empty()) {
+					unordered_set<idx_t> all_bindings;
+					for (auto &cond : join.conditions) {
+						if (cond.IsComparison()) {
+							ExtractColumnBindingsFromExpression(cond.GetLHS(), all_bindings);
+							ExtractColumnBindingsFromExpression(cond.GetRHS(), all_bindings);
+						} else {
+							ExtractColumnBindingsFromExpression(cond.GetJoinExpression(), all_bindings);
+						}
+					}
+					auto full_set = &set_manager.GetJoinRelation(all_bindings);
+					optional_ptr<JoinRelationSet> empty_set = set_manager.GetEmptyJoinRelationSet();
+					for (auto &nc_expr : non_comparison_exprs) {
+						auto new_filter =
+						    make_uniq<FilterInfo>(std::move(nc_expr), full_set, filter_infos_.size(),
+						                         join.join_type, empty_set, empty_set);
+						new_filter->from_residual_predicate = true;
+						filter_infos_.push_back(std::move(new_filter));
+					}
 				}
 				break;
 			}
