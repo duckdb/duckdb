@@ -205,7 +205,11 @@ DuckTransactionManager::GetCheckpointType(DuckTransaction &transaction, const Un
 		if (checkpoint_type == CheckpointType::CONCURRENT_CHECKPOINT) {
 			return CheckpointDecision("Cannot vacuum, and compression is disabled for in-memory table");
 		}
-		return CheckpointDecision(CheckpointType::VACUUM_ONLY);
+		if (!undo_properties.has_updates) {
+			return CheckpointDecision(CheckpointType::VACUUM_ONLY);
+		}
+		// when updates exist, UpdateSegment StringHeaps may have accumulated
+		// orphaned strings - a full checkpoint rewrites row groups, freeing them
 	}
 	return CheckpointDecision(checkpoint_type);
 }

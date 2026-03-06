@@ -16,6 +16,8 @@
 #include "duckdb/transaction/rollback_state.hpp"
 #include "duckdb/transaction/wal_write_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/update_info.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -132,9 +134,12 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 	IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags entry_type, data_ptr_t data) {
 		switch (entry_type) {
-		case UndoFlags::UPDATE_TUPLE:
+		case UndoFlags::UPDATE_TUPLE: {
 			properties.has_updates = true;
+			auto info = reinterpret_cast<UpdateInfo *>(data);
+			properties.estimated_size += info->segment->GetStringHeap().AllocationSize();
 			break;
+		}
 		case UndoFlags::DELETE_TUPLE: {
 			auto info = reinterpret_cast<DeleteInfo *>(data);
 			if (info->is_consecutive) {
