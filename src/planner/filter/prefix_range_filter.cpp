@@ -124,10 +124,10 @@ public:
 		idx_t found_count = 0;
 		if (validity_mask.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
+				result_sel.set_index(found_count, i);
 				const auto data_idx = vector_data.sel->get_index(i);
 				const auto &key = data[data_idx];
 				found_count += LookupOne(key);
-				result_sel.set_index(found_count, i);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
@@ -135,10 +135,9 @@ public:
 				if (!validity_mask.RowIsValidUnsafe(data_idx)) {
 					continue;
 				}
-
+				result_sel.set_index(found_count, i);
 				const auto &key = data[data_idx];
 				found_count += LookupOne(key);
-				result_sel.set_index(found_count, i);
 			}
 		}
 
