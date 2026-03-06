@@ -1,10 +1,11 @@
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 
 namespace duckdb {
 
 TableFilterSet::ConstTableFilterIteratorEntry::ConstTableFilterIteratorEntry(
     map<idx_t, unique_ptr<TableFilter>>::const_iterator it)
-    : iterator(std::move(it)) {
+    : iterator(it) {
 }
 
 idx_t TableFilterSet::ConstTableFilterIteratorEntry::ColumnIndex() const {
@@ -16,7 +17,7 @@ const TableFilter &TableFilterSet::ConstTableFilterIteratorEntry::Filter() const
 }
 
 TableFilterSet::TableFilterIteratorEntry::TableFilterIteratorEntry(map<idx_t, unique_ptr<TableFilter>>::iterator it)
-    : iterator(std::move(it)) {
+    : iterator(it) {
 }
 
 idx_t TableFilterSet::TableFilterIteratorEntry::ColumnIndex() const {
