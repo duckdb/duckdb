@@ -1253,7 +1253,7 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, nullptr);
 
-		if (ht.non_equality_predicates.empty()) {
+		if (ht.non_equality_predicates.empty() && !ht.residual_predicate) {
 			// we only have equality predicates - the match is found for the entire chain
 			for (idx_t i = 0; i < result_count; i++) {
 				const auto idx = chain_match_sel_vector.get_index(i);
