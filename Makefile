@@ -24,6 +24,8 @@ PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
 SMOKE_UNITTEST ?= build/relassert/test/unittest
+UNITTEST_SLOW_FLAGS ?= --batch-timeout=1800 --track-runtime=300
+UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
@@ -392,12 +394,15 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
-	build/debug/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest $(T)
+
+unittest_reldebug:
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest $(T)
 
 unittest_release: release
 	build/release/test/unittest
 
-allunit_relassert:
+unittest_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
 smoke:
@@ -409,12 +414,19 @@ runnertests:
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
-
 allunit:
 	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
 ifndef CI
 allunit: release
 endif
+
+unittest_threadsan: unittest_reldebug
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[intraquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/test/unittest "[detailed_profiler]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow $(T)
 
 docs:
 	mkdir -p ./build/docs && \
