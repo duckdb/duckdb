@@ -447,8 +447,8 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 	return std::move(g_state);
 }
 
-bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<ConstantFilter>> &comparisons,
-                                    vector<reference<InFilter>> &in_filters) {
+bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_reference<ConstantFilter>> &comparisons,
+                                    vector<const_reference<InFilter>> &in_filters) {
 	switch (filter.filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &comparison = filter.Cast<ConstantFilter>();
@@ -484,7 +484,8 @@ bool ExtractComparisonsAndInFilters(TableFilter &filter, vector<reference<Consta
 	}
 }
 
-value_set_t GetUniqueValues(vector<reference<ConstantFilter>> &comparisons, vector<reference<InFilter>> &in_filters) {
+value_set_t GetUniqueValues(const vector<const_reference<ConstantFilter>> &comparisons,
+                            const vector<const_reference<InFilter>> &in_filters) {
 	// Get the combined unique values of the IN filters.
 	value_set_t unique_values;
 	for (idx_t filter_idx = 0; filter_idx < in_filters.size(); filter_idx++) {
@@ -526,15 +527,15 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
 	}
 }
 
-vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, TableFilter &filter,
+vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, const TableFilter &filter,
                                                         idx_t storage_idx) {
 	ColumnBinding binding(0, storage_idx);
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 
 	// Extract all comparisons and IN filters from nested filters
 	vector<unique_ptr<Expression>> expressions;
-	vector<reference<ConstantFilter>> comparisons;
-	vector<reference<InFilter>> in_filters;
+	vector<const_reference<ConstantFilter>> comparisons;
+	vector<const_reference<InFilter>> in_filters;
 	if (ExtractComparisonsAndInFilters(filter, comparisons, in_filters)) {
 		// Deduplicate/deal with conflicting filters, then convert to expressions
 		ExtractExpressionsFromValues(GetUniqueValues(comparisons, in_filters), *bound_ref, expressions);

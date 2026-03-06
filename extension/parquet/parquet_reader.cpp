@@ -1066,7 +1066,7 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 }
 
 static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
-                                                      TableFilter &filter) {
+                                                      const TableFilter &filter) {
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_filter = filter.Cast<ConjunctionAndFilter>();
@@ -1096,7 +1096,7 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 }
 
 static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
-                                                     TableFilter &filter) {
+                                                     const TableFilter &filter) {
 	// floating point values can have values in the [min, max] domain AND nan values
 	// check both stats against the filter
 	auto &type = reader.Type();

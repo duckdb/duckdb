@@ -165,7 +165,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		auto &stats = *entry->second;
 
 		// fetch the table filter
-		auto &filter = get.table_filters.GetFilterByColumnIndex(table_filter_column);
+		auto &filter = get.table_filters.GetFilterByColumnIndexMutable(table_filter_column);
 		auto propagate_result = PropagateTableFilter(stats_binding, stats, filter);
 		switch (propagate_result) {
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:

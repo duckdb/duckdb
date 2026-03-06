@@ -23,9 +23,11 @@ public:
 	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);
 	bool HasFilters() const;
 	idx_t FilterCount() const;
-	bool HasFilter(idx_t col_idx);
-	TableFilter &GetFilterByColumnIndex(idx_t col_idx);
-	optional_ptr<TableFilter> TryGetFilterByColumnIndex(idx_t col_idx);
+	bool HasFilter(idx_t col_idx) const;
+	TableFilter &GetFilterByColumnIndexMutable(idx_t col_idx);
+	optional_ptr<TableFilter> TryGetFilterByColumnIndexMutable(idx_t col_idx);
+	const TableFilter &GetFilterByColumnIndex(idx_t col_idx) const;
+	optional_ptr<const TableFilter> TryGetFilterByColumnIndex(idx_t col_idx) const;
 	void SetFilterByColumnIndex(idx_t col_idx, unique_ptr<TableFilter> filter);
 	void RemoveFilterByColumnIndex(idx_t col_idx);
 	void ClearFilters();

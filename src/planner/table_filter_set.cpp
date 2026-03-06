@@ -41,11 +41,11 @@ bool TableFilterSet::HasFilters() const {
 idx_t TableFilterSet::FilterCount() const {
 	return filters.size();
 }
-bool TableFilterSet::HasFilter(idx_t col_idx) {
+bool TableFilterSet::HasFilter(idx_t col_idx) const {
 	return filters.find(col_idx) != filters.end();
 }
 
-TableFilter &TableFilterSet::GetFilterByColumnIndex(idx_t col_idx) {
+const TableFilter &TableFilterSet::GetFilterByColumnIndex(idx_t col_idx) const {
 	auto filter = TryGetFilterByColumnIndex(col_idx);
 	if (!filter) {
 		throw InternalException("Table filter set does not have a filter for column idx %d", col_idx);
@@ -53,7 +53,23 @@ TableFilter &TableFilterSet::GetFilterByColumnIndex(idx_t col_idx) {
 	return *filter;
 }
 
-optional_ptr<TableFilter> TableFilterSet::TryGetFilterByColumnIndex(idx_t col_idx) {
+optional_ptr<const TableFilter> TableFilterSet::TryGetFilterByColumnIndex(idx_t col_idx) const {
+	auto entry = filters.find(col_idx);
+	if (entry == filters.end()) {
+		return nullptr;
+	}
+	return *entry->second;
+}
+
+TableFilter &TableFilterSet::GetFilterByColumnIndexMutable(idx_t col_idx) {
+	auto filter = TryGetFilterByColumnIndexMutable(col_idx);
+	if (!filter) {
+		throw InternalException("Table filter set does not have a filter for column idx %d", col_idx);
+	}
+	return *filter;
+}
+
+optional_ptr<TableFilter> TableFilterSet::TryGetFilterByColumnIndexMutable(idx_t col_idx) {
 	auto entry = filters.find(col_idx);
 	if (entry == filters.end()) {
 		return nullptr;
