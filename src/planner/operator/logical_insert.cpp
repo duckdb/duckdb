@@ -8,7 +8,7 @@
 namespace duckdb {
 
 BoundOnConflictInfo::BoundOnConflictInfo()
-    : action_type(OnConflictAction::THROW), update_is_del_and_insert(false), excluded_table_index(0) {
+    : action_type(OnConflictAction::THROW), excluded_table_index(0), update_is_del_and_insert(false) {
 }
 
 LogicalInsert::LogicalInsert(TableCatalogEntry &table, TableIndex table_index)
@@ -50,7 +50,7 @@ void LogicalInsert::ResolveTypes() {
 string LogicalInsert::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

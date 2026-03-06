@@ -13,7 +13,7 @@ LogicalAggregate::LogicalAggregate(TableIndex group_index, TableIndex aggregate_
 }
 
 void LogicalAggregate::ResolveTypes() {
-	D_ASSERT(groupings_index != DConstants::INVALID_INDEX || grouping_functions.empty());
+	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	for (auto &expr : groups) {
 		types.push_back(expr->return_type);
 	}
@@ -27,7 +27,7 @@ void LogicalAggregate::ResolveTypes() {
 }
 
 vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
-	D_ASSERT(groupings_index != DConstants::INVALID_INDEX || grouping_functions.empty());
+	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	vector<ColumnBinding> result;
 	result.reserve(groups.size() + expressions.size() + grouping_functions.size());
 	for (idx_t i = 0; i < groups.size(); i++) {
@@ -84,8 +84,8 @@ vector<TableIndex> LogicalAggregate::GetTableIndex() const {
 string LogicalAggregate::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() +
-		       StringUtil::Format(" #%llu, #%llu, #%llu", group_index, aggregate_index, groupings_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu, #%llu, #%llu", group_index.index,
+		                                                       aggregate_index.index, groupings_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

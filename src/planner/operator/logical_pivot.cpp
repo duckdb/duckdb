@@ -32,7 +32,7 @@ void LogicalPivot::ResolveTypes() {
 string LogicalPivot::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", pivot_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", pivot_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

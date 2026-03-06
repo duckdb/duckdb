@@ -42,7 +42,7 @@ vector<TableIndex> LogicalJoin::GetTableIndex() const {
 string LogicalJoin::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings && join_type == JoinType::MARK) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", mark_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", mark_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

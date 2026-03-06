@@ -26,7 +26,7 @@ vector<TableIndex> LogicalWindow::GetTableIndex() const {
 string LogicalWindow::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", window_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", window_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

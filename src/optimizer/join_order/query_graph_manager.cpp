@@ -308,7 +308,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	} else {
 		// base node, get the entry from the list of extracted relations
 		D_ASSERT(node->set.count == 1);
-		D_ASSERT(extracted_relations[node->set.relations[0]]);
+		D_ASSERT(extracted_relations[node->set.relations[0].index]);
 		result_relation = &node->set;
 		result_operator = std::move(extracted_relations[result_relation->relations[0].index]);
 	}

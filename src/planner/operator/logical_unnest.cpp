@@ -26,7 +26,7 @@ vector<TableIndex> LogicalUnnest::GetTableIndex() const {
 string LogicalUnnest::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", unnest_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", unnest_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

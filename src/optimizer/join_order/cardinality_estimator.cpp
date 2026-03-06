@@ -500,10 +500,10 @@ void CardinalityEstimator::AddRelationNamesToRelationStats(vector<RelationStats>
 #ifdef DEBUG
 	for (auto &total_domain : relation_set_stats) {
 		for (auto &binding : total_domain.equivalent_relations) {
-			D_ASSERT(binding.table_index < stats.size());
+			D_ASSERT(binding.table_index.index < stats.size());
 			string column_name;
-			if (binding.column_index < stats[binding.table_index].column_names.size()) {
-				column_name = stats[binding.table_index].column_names[binding.column_index];
+			if (binding.column_index < stats[binding.table_index.index].column_names.size()) {
+				column_name = stats[binding.table_index.index].column_names[binding.column_index];
 			} else {
 				column_name = "[unknown]";
 			}

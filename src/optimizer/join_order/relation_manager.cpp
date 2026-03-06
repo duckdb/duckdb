@@ -124,18 +124,19 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 
 bool ExpressionContainsColumnRef(const Expression &root_expr) {
 	bool contains_column_ref = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &colref) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
+	                                                              [&](const BoundColumnRefExpression &colref) {
 	// Here you have a filter on a single column in a table. Return a binding for the column
 	// being filtered on so the filter estimator knows what HLL count to pull
 #ifdef DEBUG
-		    (void)colref.depth;
-		    D_ASSERT(colref.depth == 0);
-		    D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		                                                              (void)colref.depth;
+		                                                              D_ASSERT(colref.depth == 0);
+		                                                              D_ASSERT(colref.binding.table_index.IsValid());
 #endif
-		    // map the base table index to the relation index used by the JoinOrderOptimizer
-		    contains_column_ref = true;
-	    });
+		                                                              // map the base table index to the relation index
+		                                                              // used by the JoinOrderOptimizer
+		                                                              contains_column_ref = true;
+	                                                              });
 	return contains_column_ref;
 }
 

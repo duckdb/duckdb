@@ -100,7 +100,7 @@ private:
 					if (it != to_canonical_table_index.end()) {
 						continue; // We've seen this table index before
 					}
-					const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size();
+					TableIndex canonical(CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size());
 					D_ASSERT(to_canonical_table_index.find(original) == to_canonical_table_index.end());
 					D_ASSERT(restore_original_table_index.find(canonical) == restore_original_table_index.end());
 					to_canonical_table_index.emplace(make_pair(original, canonical));
