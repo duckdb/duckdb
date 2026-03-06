@@ -1096,6 +1096,10 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				min_val = final_min_max->data[min_idx].GetValue(0);
 				max_val = final_min_max->data[max_idx].GetValue(0);
 				switch (min_val.type().id()) {
+				case LogicalTypeId::TINYINT:
+				case LogicalTypeId::SMALLINT:
+				case LogicalTypeId::INTEGER:
+				case LogicalTypeId::BIGINT:
 				case LogicalTypeId::UTINYINT:
 				case LogicalTypeId::USMALLINT:
 				case LogicalTypeId::UINTEGER:

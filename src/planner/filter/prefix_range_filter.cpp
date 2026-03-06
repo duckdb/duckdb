@@ -148,27 +148,41 @@ public:
 	}
 
 	FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const override {
-		const auto lb = UnsafeNumericCast<U>(lower_bound.GetValueUnsafe<T>());
-		const auto ub = UnsafeNumericCast<U>(upper_bound.GetValueUnsafe<T>());
+		const auto lb = lower_bound.GetValueUnsafe<T>();
+		const auto ub = upper_bound.GetValueUnsafe<T>();
 
-		if (ub < min || lb > min + span) {
+		const auto min_t = UnsafeNumericCast<T>(min);
+		const auto max_t = UnsafeNumericCast<T>(min + span);
+		if (ub < min_t || lb > max_t) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 
-		const auto adjusted_lb = std::max(lb, min);
-		const auto adjusted_ub = std::min(ub, UnsafeNumericCast<U>(min + span));
+		const auto adjusted_lb = std::max(lb, min_t);
+		const auto adjusted_ub = std::min(ub, max_t);
 
-		const auto lb_y = adjusted_lb - min;
-		const auto lb_bit_idx = lb_y >> shift;
-		const auto lb_word_idx = lb_bit_idx >> 6;
-		const auto lb_word_mask = (~0ULL << lb_bit_idx) & 63;
+		const auto lb_y = UnsafeNumericCast<U>(adjusted_lb - min_t);
+		const U lb_bit_idx = lb_y >> shift;
+		const U lb_word_idx = lb_bit_idx >> 6;
+
+		const auto ub_y = UnsafeNumericCast<U>(adjusted_ub - min_t);
+		const U ub_bit_idx = ub_y >> shift;
+		const U ub_word_idx = ub_bit_idx >> 6;
+
+		const auto lb_bit_off = lb_bit_idx & 63u;
+		const auto ub_bit_off = ub_bit_idx & 63u;
+
+		if (lb_word_idx == ub_word_idx) {
+			const auto range_mask = ((~0ULL << lb_bit_off) & (~0ULL >> (63u - ub_bit_off)));
+			if (bitmap[lb_word_idx] & range_mask) {
+				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			}
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+
+		const auto lb_word_mask = (~0ULL << lb_bit_off);
 		if (bitmap[lb_word_idx] & lb_word_mask) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-
-		const auto ub_y = adjusted_ub - min;
-		const auto ub_bit_idx = ub_y >> shift;
-		const auto ub_word_idx = ub_bit_idx >> 6;
 
 		for (idx_t i = UnsafeNumericCast<idx_t>(lb_word_idx) + 1; i < UnsafeNumericCast<idx_t>(ub_word_idx); i++) {
 			if (bitmap[i]) {
@@ -176,7 +190,7 @@ public:
 			}
 		}
 
-		const auto ub_word_mask = (1ULL << (ub_bit_idx & 63)) - 1;
+		const auto ub_word_mask = ~0ULL >> (63u - ub_bit_off);
 		if (bitmap[ub_word_idx] & ub_word_mask) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
