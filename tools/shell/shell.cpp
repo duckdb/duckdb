@@ -343,17 +343,12 @@ void ShellState::Print(PrintOutput output, const char *str, idx_t len) {
 	}
 
 #if defined(_WIN32) || defined(WIN32)
-	if ((stdout_is_console && (out == stdout || out == stderr) || pager_is_active) && !win_utf8_mode) {
-		if (pager_is_active) {
-			auto mbcs_text = ShellState::Win32Utf8ToMbcs(str, true);
-			fputs(mbcs_text.c_str(), output == PrintOutput::STDOUT ? out : stderr);
-		} else {
-			// convert from utf8 to utf16
-			auto unicode_text = ShellState::Win32Utf8ToUnicode(str);
-			auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-			// use WriteConsoleW to write the unicode codepoints to the console
-			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
-		}
+	if ((stdout_is_console && (out == stdout || out == stderr)) && !pager_is_active) {
+		// convert from utf8 to utf16
+		auto unicode_text = ShellState::Win32Utf8ToUnicode(str);
+		auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+		// use WriteConsoleW to write the unicode codepoints to the console
+		WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
 		return;
 	}
 #endif
@@ -436,9 +431,6 @@ PagerState::~PagerState() {
 #if defined(_WIN32) || defined(WIN32)
 	if (win_console_cp_before_pager > 0 && win_console_cp_before_pager != CP_UTF8) {
 		SetConsoleCP(win_console_cp_before_pager);
-		if (state) {
-			state->win_utf8_mode = false;
-		}
 	}
 #endif
 	if (state) {
@@ -1430,15 +1422,9 @@ void ShellState::FinishPagerDisplay() {
 unique_ptr<PagerState> ShellState::SetupPager() {
 	uint32_t win_console_cp_before_pager = 0;
 #if defined(_WIN32) || defined(WIN32)
-	// We expect that CP_UTF8 code page is set when win_utf8_mode is enabled,
-	// so after the pager completes we restore both code page and mode
-	// based on the saved code page value.
-	win_console_cp_before_pager = GetConsoleCP();
-	if (win_console_cp_before_pager > 0) {
-		if (pager_command == "more") { // UTF-8 mode must be used with "more" pager
-			win_utf8_mode = true;
-		}
-		if (win_utf8_mode && win_console_cp_before_pager != CP_UTF8) {
+	if (pager_command == "more") { // UTF-8 mode must be used with "more" pager
+		win_console_cp_before_pager = GetConsoleCP();
+		if (win_console_cp_before_pager > 0 && win_console_cp_before_pager != CP_UTF8) {
 			SetConsoleCP(CP_UTF8);
 		}
 	}
