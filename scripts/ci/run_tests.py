@@ -428,7 +428,8 @@ def main():
     args = parse_args()
     test_flags = args.test_flags
     for config in args.test_config:
-        config_flag = f"--test-config={shlex.quote(config)}"
+        # The unittest binary parses "--test-config" as a separate option + value pair.
+        config_flag = f"--test-config {shlex.quote(config)}"
         test_flags = " ".join(flag for flag in [test_flags, config_flag] if flag)
     max_failures = args.max_failures
     if args.fail_fast:
