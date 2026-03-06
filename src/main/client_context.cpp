@@ -43,7 +43,7 @@
 #include "duckdb/parser/tableref/column_data_ref.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
@@ -701,8 +701,8 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		Parser parser(GetParserOptions());
 		parser.ParseQuery(query);
 
-		PragmaHandler handler(*this);
-		handler.HandlePragmaStatements(lock, parser.statements, transaction.HasActiveTransaction());
+		StatementPreprocessor preprocessor(*this);
+		preprocessor.Preprocess(lock, parser.statements, transaction.HasActiveTransaction());
 
 		return std::move(parser.statements);
 	} catch (std::exception &ex) {
@@ -712,11 +712,11 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 	}
 }
 
-void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
+void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &statements) {
 	auto lock = LockContext();
 
-	PragmaHandler handler(*this);
-	handler.HandlePragmaStatements(*lock, statements, transaction.HasActiveTransaction());
+	StatementPreprocessor preprocessor(*this);
+	preprocessor.Preprocess(*lock, statements, transaction.HasActiveTransaction());
 }
 
 unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {

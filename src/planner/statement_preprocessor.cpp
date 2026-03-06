@@ -1,4 +1,4 @@
-#include "duckdb/planner/pragma_handler.hpp"
+#include "duckdb/planner/statement_preprocessor.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/parser.hpp"
 
@@ -17,14 +17,14 @@
 
 namespace duckdb {
 
-PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
+StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(context) {
 }
 
-void PragmaHandler::HandlePragmaStatementInternal(unique_ptr<SQLStatement> &statement,
-                                                  vector<unique_ptr<SQLStatement>> &new_statements) {
-	PragmaHandler handler(context);
+void StatementPreprocessor::ExpandPragma(unique_ptr<SQLStatement> &statement,
+                                         vector<unique_ptr<SQLStatement>> &new_statements) {
+	StatementPreprocessor handler(context);
 	string new_query;
-	bool expanded = handler.HandlePragma(*statement, new_query);
+	bool expanded = handler.TryExpandPragma(*statement, new_query);
 	if (expanded) {
 		// this PRAGMA statement gets replaced by a new query string
 		// push the new query string through the parser again and add it to the transformer
@@ -39,8 +39,8 @@ void PragmaHandler::HandlePragmaStatementInternal(unique_ptr<SQLStatement> &stat
 	}
 }
 
-void UnPackMultiStatementIntoTransaction(unique_ptr<MultiStatement> &multi_statement, bool is_in_active_transaction,
-                                         vector<unique_ptr<SQLStatement>> &new_statements) {
+void UnpackMultiStatement(unique_ptr<MultiStatement> &multi_statement, bool is_in_active_transaction,
+                          vector<unique_ptr<SQLStatement>> &new_statements) {
 #ifdef DEBUG // MultiStatement should not contain transaction statements
 	for (auto &sub_statement : multi_statement->statements) {
 		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
@@ -71,15 +71,14 @@ void UnPackMultiStatementIntoTransaction(unique_ptr<MultiStatement> &multi_state
 	}
 }
 
-void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-                                           bool is_in_active_transaction) {
+void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
+                                       bool is_in_active_transaction) {
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
 			if (is_in_active_transaction) {
-				context.RunFunctionInTransactionInternal(
-				    lock, [&]() { HandlePragmaStatementInternal(statements[i], new_statements); });
+				context.RunFunctionInTransactionInternal(lock, [&]() { ExpandPragma(statements[i], new_statements); });
 				break;
 			}
 			// inject BEGIN
@@ -88,8 +87,7 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 			new_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
 
 			// add pragma statement
-			context.RunFunctionInTransactionInternal(
-			    lock, [&]() { HandlePragmaStatementInternal(statements[i], new_statements); });
+			context.RunFunctionInTransactionInternal(lock, [&]() { ExpandPragma(statements[i], new_statements); });
 
 			// inject COMMIT
 			auto commit_info = make_uniq<TransactionInfo>(
@@ -99,7 +97,7 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 		}
 		case StatementType::MULTI_STATEMENT: {
 			auto multi_statement = unique_ptr<MultiStatement>(static_cast<MultiStatement *>(statements[i].release()));
-			UnPackMultiStatementIntoTransaction(multi_statement, is_in_active_transaction, new_statements);
+			UnpackMultiStatement(multi_statement, is_in_active_transaction, new_statements);
 			break;
 		}
 		case StatementType::TRANSACTION_STATEMENT: {
@@ -122,7 +120,7 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 	statements = std::move(new_statements);
 }
 
-bool PragmaHandler::HandlePragma(SQLStatement &statement, string &resulting_query) {
+bool StatementPreprocessor::TryExpandPragma(SQLStatement &statement, string &resulting_query) {
 	auto info = statement.Cast<PragmaStatement>().info->Copy();
 	QueryErrorContext error_context(statement.stmt_location);
 	auto binder = Binder::CreateBinder(context);
