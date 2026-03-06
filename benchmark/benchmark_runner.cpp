@@ -131,6 +131,17 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	duckdb::unique_ptr<BenchmarkState> state;
 	try {
 		state = benchmark->Initialize(configuration);
+
+		// Set up local extension repository if environment variable is set
+		auto local_repo = getenv("LOCAL_EXTENSION_REPO");
+		if (local_repo) {
+			auto &db = state->db->GetDatabase();
+			auto &context = *state->context;
+			context.Query("SET autoinstall_extension_repository='" + string(local_repo) + "'", false);
+			context.Query("SET autoinstall_known_extensions=true", false);
+			context.Query("SET autoload_known_extensions=true", false);
+		}
+
 		benchmark->Assert(state.get());
 	} catch (std::exception &ex) {
 		Log(StringUtil::Format("%s\t1\t", benchmark->name));
