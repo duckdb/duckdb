@@ -81,6 +81,8 @@ private:
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 	//! Whether or not we are currently binding a window definition
 	bool in_window_definition = false;
+	//! Whether the current statement has any ? or # type of parameters
+	bool has_anonymous_parameters = false;
 
 	void Clear();
 	bool InWindowDefinition();
@@ -91,7 +93,7 @@ private:
 	void ClearParameters();
 	void SetParam(const string &name, idx_t index, PreparedParamType type);
 	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
-
+	void SetAnonymousParameter(PreparedParamType param_type);
 	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column,
 	                   unique_ptr<QueryNode> subquery, bool has_parameters);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
