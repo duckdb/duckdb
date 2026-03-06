@@ -480,6 +480,7 @@ def main():
 
 
 def run_tests(config: TestRunnerConfig, batches):
+    start = time.monotonic()
     state = BatchRunState()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
@@ -505,11 +506,12 @@ def run_tests(config: TestRunnerConfig, batches):
             if not state.stop_launching:
                 next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
+    elapsed = time.monotonic() - start
     if state.failed_count:
-        print(f"error: found {state.failed_count} test batch failures")
+        print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")
         return 1
 
-    print("all tests passed.")
+    print(f"all tests passed in {elapsed:.0f}s")
     return 0
 
 
