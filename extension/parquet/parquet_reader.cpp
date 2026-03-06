@@ -1422,7 +1422,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		vector<bool> need_to_read(column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
-		D_ASSERT(!filters || state.scan_filters.size() == filters->filters.size());
+		D_ASSERT(!filters || state.scan_filters.size() == filters->FilterCount());
 
 		bool is_first_filter = true;
 		if (deletion_filter) {
