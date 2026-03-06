@@ -33,7 +33,7 @@ class TestRunnerConfig:
     test_list: Path
     unittest_bin: str
     test_flags: str
-    pattern: str
+    patterns: list[str]
     test_command: str
     workers: int
     retry: int
@@ -180,10 +180,10 @@ def resolve_workers(workers: str):
     return max(1, int(workers))
 
 
-def generate_test_list(test_file, unittest_bin: str, test_flags: str, pattern: str):
+def generate_test_list(test_file, unittest_bin: str, test_flags: str, patterns: list[str]):
     # Catch can return a non-zero status code for list commands when tests
     # are found, so we accept non-zero if stdout still contains test output.
-    command = [unittest_bin, *shlex.split(test_flags), "--list-tests", pattern]
+    command = [unittest_bin, *shlex.split(test_flags), "--list-tests", *patterns]
     print(f"generated test list using: {shlex.join(command)}")
     proc = subprocess.run(
         command,
@@ -202,14 +202,14 @@ def generate_test_list(test_file, unittest_bin: str, test_flags: str, pattern: s
 
 
 @contextlib.contextmanager
-def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, pattern: str):
+def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, patterns: list[str]):
     if test_list is not None:
         with test_list.open("r", encoding="utf8") as test_file:
             yield Path(test_file.name)
         return
 
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as test_file:
-        generate_test_list(test_file, unittest_bin, test_flags, pattern)
+        generate_test_list(test_file, unittest_bin, test_flags, patterns)
         yield Path(test_file.name)
 
 
@@ -393,7 +393,7 @@ def parse_args():
         help="additional flags appended to the unittest binary for listing and execution",
     )
     parser.add_argument("unittest_bin")
-    parser.add_argument("pattern", nargs="?", default="")
+    parser.add_argument("patterns", nargs="*")
     parser.add_argument(
         "--test-command",
         default="{binary} {flags} --use-colour yes -f {test_list}",
@@ -420,7 +420,9 @@ def parse_args():
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
-    return parser.parse_args()
+    # Accept options interleaved with positional patterns, e.g.:
+    #   run_tests.py bin "[tag]" --fail-fast test/sql/foo.test
+    return parser.parse_intermixed_args()
 
 
 def main():
@@ -445,12 +447,12 @@ def main():
         batch_size = 1
     else:
         batch_size = args.batch_size
-    with open_test_list(args.test_list, args.unittest_bin, test_flags, args.pattern) as test_file:
+    with open_test_list(args.test_list, args.unittest_bin, test_flags, args.patterns) as test_file:
         config = TestRunnerConfig(
             test_list=test_file,
             unittest_bin=args.unittest_bin,
             test_flags=test_flags,
-            pattern=args.pattern,
+            patterns=args.patterns,
             test_command=args.test_command,
             workers=workers,
             retry=retry,
