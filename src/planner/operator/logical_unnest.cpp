@@ -19,8 +19,8 @@ void LogicalUnnest::ResolveTypes() {
 	}
 }
 
-vector<idx_t> LogicalUnnest::GetTableIndex() const {
-	return vector<idx_t> {unnest_index};
+vector<TableIndex> LogicalUnnest::GetTableIndex() const {
+	return vector<TableIndex> {unnest_index};
 }
 
 string LogicalUnnest::GetName() const {

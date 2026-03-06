@@ -19,8 +19,8 @@ void LogicalWindow::ResolveTypes() {
 	}
 }
 
-vector<idx_t> LogicalWindow::GetTableIndex() const {
-	return vector<idx_t> {window_index};
+vector<TableIndex> LogicalWindow::GetTableIndex() const {
+	return vector<TableIndex> {window_index};
 }
 
 string LogicalWindow::GetName() const {

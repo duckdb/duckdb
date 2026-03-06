@@ -6,8 +6,8 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(DelimGetRef &ref) {
 	// Have to add bindings
-	idx_t tbl_idx = GenerateTableIndex();
-	string internal_name = "__internal_delim_get_ref_" + std::to_string(tbl_idx);
+	auto tbl_idx = GenerateTableIndex();
+	string internal_name = "__internal_delim_get_ref_" + std::to_string(tbl_idx.index);
 
 	BoundStatement result;
 	result.types = std::move(ref.types);

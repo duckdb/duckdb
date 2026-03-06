@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-vector<idx_t> LogicalDelimGet::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalDelimGet::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 string LogicalDelimGet::GetName() const {

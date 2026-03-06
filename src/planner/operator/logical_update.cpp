@@ -27,7 +27,7 @@ vector<ColumnBinding> LogicalUpdate::GetColumnBindings() {
 	if (return_chunk) {
 		return GenerateColumnBindings(table_index, table.GetTypes().size());
 	}
-	return {ColumnBinding(0, 0)};
+	return {ColumnBinding(TableIndex(0), 0)};
 }
 
 void LogicalUpdate::ResolveTypes() {

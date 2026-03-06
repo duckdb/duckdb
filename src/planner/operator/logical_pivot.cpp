@@ -7,7 +7,7 @@ namespace duckdb {
 LogicalPivot::LogicalPivot() : LogicalOperator(LogicalOperatorType::LOGICAL_PIVOT) {
 }
 
-LogicalPivot::LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info_p)
+LogicalPivot::LogicalPivot(TableIndex pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_PIVOT), pivot_index(pivot_idx), bound_pivot(std::move(info_p)) {
 	D_ASSERT(plan);
 	children.push_back(std::move(plan));
@@ -21,8 +21,8 @@ vector<ColumnBinding> LogicalPivot::GetColumnBindings() {
 	return result;
 }
 
-vector<idx_t> LogicalPivot::GetTableIndex() const {
-	return vector<idx_t> {pivot_index};
+vector<TableIndex> LogicalPivot::GetTableIndex() const {
+	return vector<TableIndex> {pivot_index};
 }
 
 void LogicalPivot::ResolveTypes() {

@@ -31,8 +31,8 @@ vector<ColumnBinding> LogicalJoin::GetColumnBindings() {
 	return left_bindings;
 }
 
-vector<idx_t> LogicalJoin::GetTableIndex() const {
-	vector<idx_t> result;
+vector<TableIndex> LogicalJoin::GetTableIndex() const {
+	vector<TableIndex> result;
 	if (join_type == JoinType::MARK) {
 		result.emplace_back(mark_index);
 	}
@@ -68,14 +68,14 @@ void LogicalJoin::ResolveTypes() {
 	types.insert(types.end(), right_types.begin(), right_types.end());
 }
 
-void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings) {
+void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<TableIndex> &bindings) {
 	auto column_bindings = op.GetColumnBindings();
 	for (auto binding : column_bindings) {
 		bindings.insert(binding.table_index);
 	}
 }
 
-void LogicalJoin::GetExpressionBindings(const Expression &root_expr, unordered_set<idx_t> &bindings) {
+void LogicalJoin::GetExpressionBindings(const Expression &root_expr, unordered_set<TableIndex> &bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
 	                                                              [&](const BoundColumnRefExpression &colref) {
 		                                                              D_ASSERT(colref.depth == 0);

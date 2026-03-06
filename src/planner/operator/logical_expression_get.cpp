@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-vector<idx_t> LogicalExpressionGet::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalExpressionGet::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 string LogicalExpressionGet::GetName() const {

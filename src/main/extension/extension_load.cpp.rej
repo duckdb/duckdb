@@ -1,0 +1,10 @@
+diff a/src/main/extension/extension_load.cpp b/src/main/extension/extension_load.cpp	(rejected hunks)
+@@ -534,7 +537,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
+ 		}
+ 
+ 		try {
+-			ExtensionLoader loader(db, extension);
++			ExtensionLoader loader(*info);
+ 			(*init_fun)(loader);
+ 			loader.FinalizeLoad();
+ 		} catch (std::exception &e) {

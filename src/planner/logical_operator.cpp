@@ -28,10 +28,10 @@ LogicalOperator::~LogicalOperator() {
 }
 
 vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
-	return {ColumnBinding(0, 0)};
+	return {ColumnBinding(TableIndex(0), 0)};
 }
 
-idx_t LogicalOperator::GetRootIndex() {
+TableIndex LogicalOperator::GetRootIndex() {
 	auto bindings = GetColumnBindings();
 	if (bindings.empty()) {
 		throw InternalException("Empty bindings in GetRootIndex");
@@ -101,7 +101,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 	D_ASSERT(types.size() == GetColumnBindings().size());
 }
 
-vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
+vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(TableIndex table_idx, idx_t column_count) {
 	vector<ColumnBinding> result;
 	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
@@ -232,8 +232,8 @@ void LogicalOperator::Print() {
 	Printer::Print(ToString());
 }
 
-vector<idx_t> LogicalOperator::GetTableIndex() const {
-	return vector<idx_t> {};
+vector<TableIndex> LogicalOperator::GetTableIndex() const {
+	return vector<TableIndex> {};
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {

@@ -5,9 +5,10 @@
 
 namespace duckdb {
 
-LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
+LogicalAggregate::LogicalAggregate(TableIndex group_index, TableIndex aggregate_index,
+                                   vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, std::move(select_list)),
-      group_index(group_index), aggregate_index(aggregate_index), groupings_index(DConstants::INVALID_INDEX),
+      group_index(group_index), aggregate_index(aggregate_index),
       distinct_validity(TupleDataValidityType::CAN_HAVE_NULL_VALUES) {
 }
 
@@ -72,9 +73,9 @@ idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {
 	return LogicalOperator::EstimateCardinality(context);
 }
 
-vector<idx_t> LogicalAggregate::GetTableIndex() const {
-	vector<idx_t> result {group_index, aggregate_index};
-	if (groupings_index != DConstants::INVALID_INDEX) {
+vector<TableIndex> LogicalAggregate::GetTableIndex() const {
+	vector<TableIndex> result {group_index, aggregate_index};
+	if (groupings_index.IsValid()) {
 		result.push_back(groupings_index);
 	}
 	return result;

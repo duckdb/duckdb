@@ -223,8 +223,8 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 	bound_views.insert(view);
 }
 
-idx_t Binder::GenerateTableIndex() {
-	return global_binder_state->bound_tables++;
+TableIndex Binder::GenerateTableIndex() {
+	return TableIndex(global_binder_state->bound_tables++);
 }
 
 StatementProperties &Binder::GetStatementProperties() {
@@ -505,7 +505,7 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-                                     const string &alias, idx_t update_table_index,
+                                     const string &alias, TableIndex update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 	vector<LogicalType> types;
 	vector<string> names;

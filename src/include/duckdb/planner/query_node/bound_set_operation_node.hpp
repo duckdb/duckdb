@@ -27,10 +27,10 @@ public:
 	vector<shared_ptr<Binder>> child_binders;
 
 	//! Index used by the set operation
-	idx_t setop_index;
+	TableIndex setop_index;
 
 public:
-	idx_t GetRootIndex() override {
+	TableIndex GetRootIndex() override {
 		return setop_index;
 	}
 };

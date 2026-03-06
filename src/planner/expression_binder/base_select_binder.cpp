@@ -24,8 +24,8 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	auto &expr = *expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr);
-	if (group_index != DConstants::INVALID_INDEX) {
-		return BindGroup(expr, depth, group_index);
+	if (group_index.IsValid()) {
+		return BindGroup(expr, depth, group_index.GetIndex());
 	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
@@ -39,7 +39,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	}
 }
 
-idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
+optional_idx BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
@@ -63,7 +63,7 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 		D_ASSERT(!expr.Equals(map_entry.first.get()));
 	}
 #endif
-	return DConstants::INVALID_INDEX;
+	return optional_idx();
 }
 
 BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -85,10 +85,10 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 	for (auto &child : op.children) {
 		ExpressionBinder::QualifyColumnNames(binder, child);
 		auto idx = TryBindGroup(*child);
-		if (idx == DConstants::INVALID_INDEX) {
+		if (!idx.IsValid()) {
 			return BindResult(BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
 		}
-		group_indexes.push_back(idx);
+		group_indexes.push_back(idx.GetIndex());
 	}
 	auto col_idx = node.grouping_functions.size();
 	node.grouping_functions.push_back(std::move(group_indexes));

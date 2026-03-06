@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-vector<idx_t> LogicalDummyScan::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalDummyScan::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 string LogicalDummyScan::GetName() const {
