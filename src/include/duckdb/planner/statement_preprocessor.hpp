@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/pragma_handler.hpp
+// duckdb/planner/statement_preprocessor.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -18,12 +18,13 @@ class ClientContextLock;
 class SQLStatement;
 struct PragmaInfo;
 
-//! Pragma handler is responsible for converting certain pragma statements into new queries
-class PragmaHandler {
+//! Preprocesses parsed statements: expands pragmas, unpacks multi-statements, and wraps in transactions
+class StatementPreprocessor {
 public:
-	explicit PragmaHandler(ClientContext &context);
+	explicit StatementPreprocessor(ClientContext &context);
 
-	void HandlePragmaStatements(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements);
+	void Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
+	                bool is_in_active_transaction);
 
 private:
 	ClientContext &context;
@@ -31,8 +32,8 @@ private:
 private:
 	//! Handles a pragma statement, returns whether the statement was expanded, if it was expanded the 'resulting_query'
 	//! contains the statement(s) to replace the current one
-	bool HandlePragma(SQLStatement &statement, string &resulting_query);
+	bool TryExpandPragma(SQLStatement &statement, string &resulting_query);
 
-	void HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatement>> &statements);
+	void ExpandPragma(unique_ptr<SQLStatement> &statements, vector<unique_ptr<SQLStatement>> &new_statements);
 };
 } // namespace duckdb

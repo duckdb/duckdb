@@ -100,7 +100,11 @@ copy from database memory to backup;
 <REGEX>:TransactionContext Error: Attempting to write to database .* in a transaction that has already modified database .*
 
 statement ok
-drop sequence memory.backup.seq cascade;
+rollback
 
 statement ok
-drop sequence backup.backup.seq cascade;
+drop sequence memory.backup.seq cascade;
+
+query IIIIIIIIIIIIIIII
+from duckdb_sequences()
+----

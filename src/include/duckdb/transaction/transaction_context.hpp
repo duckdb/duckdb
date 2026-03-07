@@ -13,6 +13,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/parser/parsed_data/transaction_info.hpp"
 
 namespace duckdb {
 
@@ -55,9 +56,17 @@ public:
 	void ResetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
+	void SetInvalidationPolicy(TransactionInvalidationPolicy new_invalidation_policy) {
+		invalidation_policy = new_invalidation_policy;
+	};
+	TransactionInvalidationPolicy GetInvalidationPolicy() {
+		return invalidation_policy;
+	};
+
 private:
 	ClientContext &context;
 	bool auto_commit;
+	TransactionInvalidationPolicy invalidation_policy;
 
 	unique_ptr<MetaTransaction> current_transaction;
 

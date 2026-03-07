@@ -21,7 +21,7 @@ add_library_unity(
   binder.cpp
   bind_context.cpp
   planner.cpp
-  pragma_handler.cpp
+  statement_preprocessor.cpp
   logical_operator_deep_copy.cpp
   logical_operator_visitor.cpp
   table_filter.cpp
