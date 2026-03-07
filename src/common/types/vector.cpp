@@ -602,9 +602,26 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		case VectorType::SHREDDED_VECTOR: {
 			// FIXME: this is extremely inefficient
 			Vector copy(LogicalType::VARIANT());
-			copy.Reference(*vector);
-			copy.Flatten(index + 1);
-			return copy.GetValue(index);
+			SelectionVector sel(1);
+			sel.set_index(0, index);
+			auto &shredded = ShreddedVector::GetShreddedVector(v_p);
+			auto &unshredded = ShreddedVector::GetUnshreddedVector(v_p);
+
+			Vector sliced_shredded(shredded, sel, 1);
+			Vector sliced_unshredded(unshredded, sel, 1);
+			sliced_shredded.Flatten(1);
+			sliced_unshredded.Flatten(1);
+
+			child_list_t<LogicalType> shredded_subtypes;
+			shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
+			shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
+			Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
+			StructVector::GetEntries(new_shredded)[0]->Reference(sliced_unshredded);
+			StructVector::GetEntries(new_shredded)[1]->Reference(sliced_shredded);
+
+			copy.Shred(new_shredded);
+			copy.Flatten(1);
+			return copy.GetValue(0);
 		}
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
