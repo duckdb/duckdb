@@ -1246,7 +1246,7 @@ private:
 	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformTableFunctionAliasColon(PEGTransformer &transformer,
 	                                                             optional_ptr<ParseResult> parse_result);
-	static string TransformTableAliasColon(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
+	static TableAlias TransformTableAliasColon(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 	static QualifiedName TransformQualifiedTableFunction(PEGTransformer &transformer,
 	                                                     optional_ptr<ParseResult> parse_result);
 	static unique_ptr<TableRef> TransformTableSubquery(PEGTransformer &transformer,

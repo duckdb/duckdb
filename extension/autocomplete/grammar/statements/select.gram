@@ -43,10 +43,10 @@ DistinctOnTargets <- 'ON' Parens(List(Expression))
 InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot* TableAlias?
-TableSubquery <- Lateral? SubqueryReference TableAlias?
+TableSubquery <- TableAliasColon? Lateral? SubqueryReference SampleClause?
 BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
-TableAliasColon <- ColIdOrString ':'
-ValuesRef <- ValuesClause TableAlias?
+TableAliasColon <- ColIdOrString ColumnAliases? ':'
+ValuesRef <- TableAliasColon? ValuesClause
 ParensTableRef <- TableAliasColon? Parens(TableRef) SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
@@ -67,7 +67,7 @@ BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / TableName
 SchemaReservedTable <- SchemaQualification ReservedTableName
 CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
 
-TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
+TableFunction <- TableFunctionAliasColon / TableFunctionLateralOpt
 TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
 TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
 WithOrdinality <- 'WITH' 'ORDINALITY'

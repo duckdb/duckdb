@@ -246,30 +246,51 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
+		MatchResultType best_result = MatchResultType::FAIL;
+		idx_t best_token_index = state.token_index;
 		for (auto &child_matcher : matchers) {
 			MatchState choice_state(state);
 			auto child_result = child_matcher.get().Match(choice_state);
 			if (child_result != MatchResultType::FAIL) {
-				// we matched this child - propagate upwards
-				state.token_index = choice_state.token_index;
-				return child_result;
+				if (best_result == MatchResultType::FAIL || choice_state.token_index > best_token_index) {
+					best_result = child_result;
+					best_token_index = choice_state.token_index;
+				}
+				if (choice_state.token_index == state.tokens.size()) {
+					break;
+				}
 			}
 		}
-		return MatchResultType::FAIL;
+		if (best_result != MatchResultType::FAIL) {
+			state.token_index = best_token_index;
+		}
+		return best_result;
 	}
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		optional_ptr<ParseResult> best_result;
+		idx_t best_idx = 0;
+		idx_t best_token_index = state.token_index;
 		for (idx_t i = 0; i < matchers.size(); i++) {
 			MatchState choice_state(state);
 			auto child_result = matchers[i].get().MatchParseResult(choice_state);
 			if (child_result != nullptr) {
-				// we matched this child - propagate upwards
-				state.token_index = choice_state.token_index;
-				auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(child_result, i));
-				return result;
+				if (!best_result || choice_state.token_index > best_token_index) {
+					best_result = child_result;
+					best_idx = i;
+					best_token_index = choice_state.token_index;
+				}
+				if (choice_state.token_index == state.tokens.size()) {
+					break;
+				}
 			}
 		}
-		return nullptr;
+		if (!best_result) {
+			return nullptr;
+		}
+		state.token_index = best_token_index;
+		auto result = state.allocator.Allocate(make_uniq<ChoiceParseResult>(best_result, best_idx));
+		return result;
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
