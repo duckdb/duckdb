@@ -185,6 +185,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			return;
 		}
 	}
+	MarkRequiresRebind();
 
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;

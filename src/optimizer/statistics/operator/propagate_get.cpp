@@ -1,5 +1,7 @@
 #include "duckdb/common/helper.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
@@ -14,6 +16,10 @@
 #include "duckdb/function/scalar/generic_functions.hpp"
 
 namespace duckdb {
+
+void StatisticsPropagator::MarkRequiresRebind() {
+	optimizer.binder.SetAlwaysRequireRebind();
+}
 
 static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, string &alias) {
 	if (expr->type == ExpressionType::BOUND_REF) {
@@ -170,6 +176,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		auto propagate_result = PropagateTableFilter(stats_binding, stats, *filter);
 		switch (propagate_result) {
 		case FilterPropagateResult::FILTER_ALWAYS_TRUE:
+			MarkRequiresRebind();
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			get.table_filters.filters.erase(table_filter_column);
@@ -179,12 +186,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			    !CanReplaceConstantOrNull(*get.table_filters.filters[table_filter_column])) {
 				break;
 			}
+			MarkRequiresRebind();
 			// filter is true or null; we can replace this with a not null filter
 			get.table_filters.filters[table_filter_column] = make_uniq<IsNotNullFilter>();
 			break;
 		}
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
 		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
+			MarkRequiresRebind();
 			// filter is always false; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(node_ptr);
 			return make_uniq<NodeStatistics>(0U, 0U);

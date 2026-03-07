@@ -109,6 +109,8 @@ private:
 	//! Try to execute aggregates using only the statistics if possible
 	void TryExecuteAggregates(LogicalAggregate &op, unique_ptr<LogicalOperator> &node_ptr);
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
+	//! Mark that the optimized plan is snapshot-sensitive and should not be reused without rebind
+	void MarkRequiresRebind();
 
 	bool ExpressionIsConstant(Expression &expr, const Value &val);
 	bool ExpressionIsConstantOrNull(Expression &expr, const Value &val);
