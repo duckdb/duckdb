@@ -15,6 +15,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '!.github/workflows/Swift.yml'
+      - '!.github/workflows/Windows.yml'
       - '!.github/workflows/Regression.yml'
       - '!.github/workflows/Extensions.yml'
       - '!.github/workflows/LinuxRelease.yml'
@@ -24,7 +26,7 @@ on:
       - '!.github/config/extensions/fts.cmake'
   merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -33,6 +35,8 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '!.github/workflows/Swift.yml'
+      - '!.github/workflows/Windows.yml'
       - '!.github/workflows/Regression.yml'
       - '!.github/workflows/Extensions.yml'
       - '!.github/workflows/LinuxRelease.yml'
@@ -52,20 +56,50 @@ env:
 jobs:
  prepare:
     # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
+    if: |
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
+      (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
+    runs-on: ubuntu-latest
+    outputs:
+      runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
+      runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
+      runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
+      runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
     steps:
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
+
+      - name: Select CI runner
+        id: select_runner
+        run: |
+          # Fall back to GitHub-native runners for forks.
+          if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
+            {
+              echo "runner_linux_x64=namespace-profile-linux-x64"
+              echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
+              echo "runner_linux_arm64=namespace-profile-linux-arm64"
+              echo "runner_macos_arm64=namespace-profile-macos-arm64"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "runner_linux_x64=ubuntu-latest"
+              echo "runner_linux_22_x64=ubuntu-22.04"
+              echo "runner_linux_arm64=ubuntu-24.04-arm"
+              echo "runner_macos_arm64=macos-14"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+          grep runner_ "$GITHUB_OUTPUT"
 
  linux-debug:
     name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
     needs: prepare
-    runs-on: ubuntu-22.04
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
+      DUCKDB_LINKER: mold
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -79,19 +113,18 @@ jobs:
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
-    - name: Install ninja-build if missing
+    - name: Install tools
       shell: bash
-      run: |
-        if ! command -v ninja >/dev/null 2>&1; then
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq ninja-build
-        fi
+      run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
       run:  make relassert
+
+    - name: Smoke tests
+      run: make smoke
 
     - name: Output version info
       shell: bash
@@ -113,7 +146,7 @@ jobs:
     needs:
       - prepare
       - linux-debug
-    runs-on: ubuntu-22.04
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
     - uses: actions/checkout@v4
@@ -125,28 +158,29 @@ jobs:
         path: build
 
     - name: Extract relassert build artifact
-      shell: bash
       run: |
         rm -rf build/relassert
         tar -xzf build/relassert-artifact.tar.gz -C build
         ls -lh build/relassert/test/unittest
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
-      shell: bash
       run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
 
     - name: Test DUCKDB_INSTALL_LIB variable
       run: echo $DUCKDB_INSTALL_LIB
 
     - name: Test
-      shell: bash
-      run: |
-        python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --tests-per-invocation 100 --timeout 300
+      run: make unittest_relassert
 
  regression:
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
     needs: linux-debug
+
+ code-quality:
+    uses: ./.github/workflows/CodeQuality.yml
+    secrets: inherit
+    needs: prepare
 
  extensions:
     uses: ./.github/workflows/Extensions.yml
@@ -158,11 +192,12 @@ jobs:
       run_all: 'true'
 
  linux-release:
-    name: Linux Release (full suite)
-    needs: linux-debug
-    runs-on: ubuntu-24.04
+    name: Linux Release
+    needs: prepare
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: ninja
+      DUCKDB_LINKER: mold
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
@@ -170,18 +205,51 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+    - name: Install tools
+      run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      shell: bash
       run: make release
 
-    - name: Test
+    - name: Smoke tests
+      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
+
+    - name: Prepare release artifact
       shell: bash
+      run: make release-artifact
+
+    - name: Upload release build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-release-build
+        path: build/release-artifact.tar.gz
+        if-no-files-found: error
+
+ linux-release-tests:
+    name: Linux Release Tests
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download release build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-release-build
+        path: build
+
+    - name: Extract release build artifact
+      shell: bash
+      run: |
+        rm -rf build/release
+        tar -xzf build/release-artifact.tar.gz -C build
+
+    - name: Test
       run: make allunit
 
  linux-cli:
@@ -191,6 +259,20 @@ jobs:
     with:
       git_ref: ${{ github.sha }}
       skip_tests: 'false'
+
+ swift:
+    uses: ./.github/workflows/Swift.yml
+    secrets: inherit
+    needs: linux-debug
+
+ windows:
+    uses: ./.github/workflows/Windows.yml
+    secrets: inherit
+    needs: linux-debug
+    with:
+      git_ref: ${{ github.sha }}
+      skip_tests: 'false'
+      run_all: 'true'
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
@@ -208,24 +290,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        shell: bash
         run: make relassert
 
       - name: Test
-        shell: bash
-        run: build/relassert/test/unittest
+        run: make unittest_relassert
 
  vector-sizes:
     name: Vector Sizes
@@ -239,25 +314,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        shell: bash
         run: STANDARD_VECTOR_SIZE=2 make reldebug
 
       - name: Test
-        shell: bash
-        run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --time_execution
+        run: make unittest_reldebug
 
  valgrind:
     name: Valgrind
@@ -308,33 +375,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
+      run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      shell: bash
       run: THREADSAN=1 make reldebug
 
     - name: Test
-      shell: bash
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage --force-reload
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
+      run: make unittest_threadsan
 
  amalgamation-tests:
     name: Amalgamation Tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: linux-debug
     env:
       CC: clang
@@ -342,18 +397,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ github.ref }}
 
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1
-      with:
-        version: "14.0"
 
     - name: Generate Amalgamation
       shell: bash

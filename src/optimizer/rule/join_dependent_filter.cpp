@@ -1,10 +1,9 @@
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 
-#include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 namespace duckdb {
 
@@ -52,9 +51,30 @@ static inline void ExtractConjunctedExpressions(Expression &expression,
 
 unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                       bool &changes_made, bool is_root) {
-	// Only applies to top-level FILTER expressions
-	if ((op.type != LogicalOperatorType::LOGICAL_FILTER && op.type != LogicalOperatorType::LOGICAL_ANY_JOIN) ||
-	    !is_root) {
+	// Only applies to top-level expressions
+	if (!is_root) {
+		return nullptr;
+	}
+
+	// Only applies to these operators
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_FILTER:
+		break;
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+		// Only applies to these join types
+		const auto &join = op.Cast<LogicalJoin>();
+		switch (join.join_type) {
+		case JoinType::INNER:
+		case JoinType::SEMI:
+			break;
+		default:
+			return nullptr;
+		}
+		break;
+	}
+	default:
 		return nullptr;
 	}
 
