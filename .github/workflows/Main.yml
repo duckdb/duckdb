@@ -170,8 +170,7 @@ jobs:
       run: echo $DUCKDB_INSTALL_LIB
 
     - name: Test
-      run: |
-        make allunit_relassert
+      run: make unittest_relassert
 
  regression:
     uses: ./.github/workflows/Regression.yml
@@ -213,6 +212,9 @@ jobs:
 
     - name: Build
       run: make release
+
+    - name: Smoke tests
+      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
 
     - name: Prepare release artifact
       shell: bash
@@ -288,24 +290,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        shell: bash
         run: make relassert
 
       - name: Test
-        shell: bash
-        run: build/relassert/test/unittest
+        run: make unittest_relassert
 
  vector-sizes:
     name: Vector Sizes
@@ -319,25 +314,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
 
       - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        shell: bash
         run: STANDARD_VECTOR_SIZE=2 make reldebug
 
       - name: Test
-        shell: bash
-        run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --time_execution
+        run: make unittest_reldebug
 
  valgrind:
     name: Valgrind
@@ -388,33 +375,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
+      run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      shell: bash
       run: THREADSAN=1 make reldebug
 
     - name: Test
-      shell: bash
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage --force-reload
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
+      run: make unittest_threadsan
 
  amalgamation-tests:
     name: Amalgamation Tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: linux-debug
     env:
       CC: clang
@@ -422,18 +397,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ github.ref }}
 
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1
-      with:
-        version: "14.0"
 
     - name: Generate Amalgamation
       shell: bash

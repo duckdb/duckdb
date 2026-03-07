@@ -119,7 +119,7 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
+        python3 scripts/ci/run_tests.py build/release/test/unittest "*"
 
     - name: Release specific tests
       shell: bash
@@ -216,6 +216,7 @@ jobs:
         export PWD=`pwd`
         docker run   \
         -v$PWD:$PWD  \
+        -e CI=1      \
         alpine:3.22                                                         \
         sh -c "
           set -e
@@ -225,7 +226,7 @@ jobs:
             py3-pytest
           cd $PWD
           echo Tests
-          python3 scripts/run_tests_one_by_one.py build/release/test/unittest \"*\" --time_execution
+          python3 scripts/ci/run_tests.py build/release/test/unittest \"*\"
           echo Release specific tests
           ./build/release/test/unittest --select-tag release
           echo Tools Tests
