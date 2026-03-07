@@ -76,6 +76,7 @@ class IndexVector;
 
 enum class BindingMode : uint8_t {
 	STANDARD_BINDING,
+	PREPARE,
 	EXTRACT_NAMES,
 	EXTRACT_REPLACEMENT_SCANS,
 	EXTRACT_QUALIFIED_NAMES

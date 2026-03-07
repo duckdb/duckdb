@@ -23,6 +23,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 		// Avoid overriding a previous move with nothing
 		result->named_param_map = transformer.named_parameter_map;
 	}
+	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
 	return result;
 }
 

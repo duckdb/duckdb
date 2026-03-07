@@ -59,6 +59,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNo
 		// Avoid overriding a previous move with nothing
 		result->named_param_map = named_param_map;
 	}
+	result->has_anonymous_parameters = has_anonymous_parameters;
 	return result;
 }
 
@@ -91,7 +92,9 @@ void Transformer::SetParamCount(idx_t new_count) {
 void Transformer::ClearParameters() {
 	auto &root = RootTransformer();
 	root.prepared_statement_parameter_index = 0;
+	root.last_param_type = PreparedParamType::INVALID;
 	root.named_param_map.clear();
+	root.has_anonymous_parameters = false;
 }
 
 static void ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type) {
@@ -128,6 +131,13 @@ bool Transformer::GetParam(const string &identifier, idx_t &index, PreparedParam
 	}
 	index = entry->second;
 	return true;
+}
+
+void Transformer::SetAnonymousParameter(PreparedParamType param_type) {
+	auto &root = RootTransformer();
+	if (param_type == PreparedParamType::AUTO_INCREMENT || param_type == PreparedParamType::POSITIONAL) {
+		root.has_anonymous_parameters = true;
+	}
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgquery::PGNode &stmt) {

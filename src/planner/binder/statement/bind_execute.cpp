@@ -8,6 +8,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -26,6 +27,19 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	// this happens if the catalog changes, since in this case e.g. tables we relied on may have been deleted
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
+
+	// For any named parameter not supplied by the caller, check if a user variable with the same
+	// name exists and use it as a default. This makes named params optional when a variable provides
+	// a default value — the caller's explicit values always take precedence.
+	auto &user_variables = ClientConfig::GetConfig(context).user_variables;
+	for (auto &kv : named_param_map) {
+		if (stmt.named_values.count(kv.first) == 0) {
+			auto var_it = user_variables.find(kv.first);
+			if (var_it != user_variables.end()) {
+				stmt.named_values[kv.first] = make_uniq<ConstantExpression>(var_it->second);
+			}
+		}
+	}
 
 	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map);
 
