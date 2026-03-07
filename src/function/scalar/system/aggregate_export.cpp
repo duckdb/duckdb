@@ -1,8 +1,8 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -323,6 +323,44 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 	}
 }
 
+#ifdef DEBUG
+// Internal verification: for each row, export state to struct, import back, finalize again, and compare to
+// the main path result. Catches serialization/deserialization bugs for struct-based aggregate state.
+static void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const Vector &state_vec, idx_t count,
+                                       const UnifiedVectorFormat &state_data, const data_ptr_t *state_vec_ptr,
+                                       const Vector &result, const ExportAggregateBindData &bind_data,
+                                       AggregateInputData &aggr_input_data) {
+	Vector one_row_struct(state_vec.GetType(), 1);
+	Vector result_roundtrip(result.GetType(), 1);
+	unsafe_unique_array<data_t> temp_state_buf(make_unsafe_uniq_array<data_t>(layout.aligned_state_size));
+	Vector addresses_single(LogicalType::POINTER);
+	auto address_single_ptr = FlatVector::GetData<data_ptr_t>(addresses_single);
+	address_single_ptr[0] = temp_state_buf.get();
+
+	for (idx_t i = 0; i < count; i++) {
+		auto state_idx = state_data.sel->get_index(i);
+		if (!state_data.validity.RowIsValid(state_idx)) {
+			continue;
+		}
+		data_ptr_t state_ptr = state_vec_ptr[i];
+		SerializeStructFields(layout, one_row_struct, 1, &state_ptr);
+
+		UnifiedVectorFormat one_row_format;
+		one_row_struct.ToUnifiedFormat(1, one_row_format);
+		DeserializeStructFields(layout, layout.aligned_state_size, one_row_struct, one_row_format, 1,
+		                        temp_state_buf.get());
+
+		bind_data.aggr.GetStateFinalizeCallback()(addresses_single, aggr_input_data, result_roundtrip, 1, 0);
+
+		Value v_orig = result.GetValue(i);
+		Value v_roundtrip = result_roundtrip.GetValue(0);
+		bool ok = Value::DefaultValuesAreEqual(v_orig, v_roundtrip);
+		D_ASSERT(ok && "Struct state roundtrip failed: finalize(serialize->deserialize(state)) != finalize(state). "
+		               "Check SerializeStructFields/DeserializeStructFields for this aggregate.");
+	}
+}
+#endif
+
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
@@ -416,6 +454,13 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 			FlatVector::SetNull(result, i, true);
 		}
 	}
+
+#ifdef DEBUG
+	if (layout.is_struct) {
+		VerifyStructStateRoundtrip(layout, input.data[0], input.size(), state_data, state_vec_ptr, result, bind_data,
+		                          aggr_input_data);
+	}
+#endif
 }
 
 void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &result) {
