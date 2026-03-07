@@ -24,6 +24,8 @@ PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
 SMOKE_UNITTEST ?= build/relassert/test/unittest
+UNITTEST_SLOW_FLAGS ?= --batch-timeout=1800 --track-runtime=300
+UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
@@ -101,11 +103,8 @@ endif
 ifeq (${DISABLE_MAIN_DUCKDB_LIBRARY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_MAIN_DUCKDB_LIBRARY=0
 endif
-ifeq (${EXTENSION_STATIC_BUILD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
-endif
-ifeq (${EXTENSION_STATIC_BUILD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
+ifneq (${EXTENSION_STATIC_BUILD}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
@@ -275,8 +274,8 @@ endif
 ifeq (${OSX_BUILD_UNIVERSAL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_UNIVERSAL=1
 endif
-ifneq ("${CUSTOM_LINKER}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DCUSTOM_LINKER=${CUSTOM_LINKER}
+ifneq ("${DUCKDB_LINKER}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_LINKER=${DUCKDB_LINKER}
 endif
 ifdef SKIP_PLATFORM_UTIL
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_PLATFORM_UTIL=1
@@ -395,12 +394,15 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
-	build/debug/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest $(T)
+
+unittest_reldebug:
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest $(T)
 
 unittest_release: release
 	build/release/test/unittest
 
-allunit_relassert:
+unittest_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
 smoke:
@@ -412,12 +414,19 @@ runnertests:
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
 
-
 allunit:
 	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
 ifndef CI
 allunit: release
 endif
+
+unittest_threadsan: unittest_reldebug
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[intraquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/test/unittest "[detailed_profiler]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -441,7 +450,23 @@ relassert: ${EXTENSION_CONFIG_STEP}
 .PHONY: relassert-artifact
 
 relassert-artifact:
-	bash scripts/prepare_relassert_artifact.sh
+	bash scripts/prepare_build_artifact.sh relassert
+
+.PHONY: release-artifact
+
+release-artifact:
+	bash scripts/prepare_build_artifact.sh release
+
+.PHONY: toolsci
+
+toolsci:
+	if ! command -v ninja >/dev/null 2>&1 || ! command -v mold >/dev/null 2>&1; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq ninja-build mold; \
+	fi
+	ls -lh /usr/bin/gcc* /usr/bin/g++*
+	gcc --version
+	g++ --version
 
 benchmark:
 	mkdir -p ./build/release && \
