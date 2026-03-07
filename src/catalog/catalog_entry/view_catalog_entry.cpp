@@ -17,14 +17,19 @@ namespace duckdb {
 void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
-	if (!info.types.empty() && !info.names.empty()) {
+	if (!info.types.empty()) {
 		bind_state = ViewBindState::BOUND;
 		view_columns = make_shared_ptr<ViewColumnInfo>();
 		view_columns->types = info.types;
 		view_columns->names = info.names;
-		if (info.types.size() != info.names.size()) {
-			throw InternalException("Error creating view %s - view types / names size mismatch (%d types, %d names)",
-			                        name, info.types.size(), info.names.size());
+		if (view_columns->names.empty()) {
+			// DuckDB v0.9.2 and below store their names in the "aliases" field
+			view_columns->names = info.aliases;
+		}
+		if (view_columns->types.size() != view_columns->names.size()) {
+			throw InvalidInputException(
+			    "Error creating view %s - view types / names size mismatch (%d types, %d names)", name,
+			    view_columns->types.size(), view_columns->names.size());
 		}
 	}
 	this->temporary = info.temporary;
