@@ -32,6 +32,7 @@ def enable_line_buffering():
 class TestRunnerConfig:
     test_list: Path
     unittest_bin: str
+    test_flags: str
     pattern: str
     test_command: str
     workers: int
@@ -42,6 +43,12 @@ class TestRunnerConfig:
     rss_memory_threshold_mib: int | None
     runtime_threshold_seconds: int | None
     max_failures: int | None
+
+
+@dataclass(frozen=True)
+class TestCase:
+    name: str
+    is_slow: bool
 
 
 class BatchRunState:
@@ -64,18 +71,17 @@ class BatchRunState:
 
 
 def chunked(items, n):
-    # Keep input order, cap batches at n entries, and isolate .test_slow
-    # files so each batch contains at most one slow test.
+    # Keep input order, cap batches at n entries, and isolate slow tests so
+    # each batch contains at most one slow test.
     batch = []
     slow_count = 0
     for item in items:
-        item_is_slow = item.endswith(".test_slow")
-        if batch and (len(batch) >= n or (item_is_slow and slow_count >= 1)):
+        if batch and (len(batch) >= n or (item.is_slow and slow_count >= 1)):
             yield batch
             batch = []
             slow_count = 0
-        batch.append(item)
-        if item_is_slow:
+        batch.append(item.name)
+        if item.is_slow:
             slow_count += 1
     if batch:
         yield batch
@@ -91,16 +97,33 @@ def load_tests(path: Path):
     tests = []
     with path.open("r", encoding="utf8") as f:
         for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
+            line = line.rstrip("\n")
+
+            # Skip header row from `--list-tests`.
+            if line == "name\tgroup":
                 continue
-            tests.append(line)
+
+            if "\t" not in line:
+                name = line
+                is_slow = line.endswith(".test_slow")
+            else:
+                columns = line.split("\t")
+                assert len(columns) == 2, repr(columns)
+
+                name, group = columns
+                is_slow = "[.]" in group
+                assert not name.endswith(".test_slow") or is_slow, name
+
+            tests.append(TestCase(name=name, is_slow=is_slow))
+
     return tests
 
 
 def build_test_command(config: TestRunnerConfig, test_list: str):
+    flags = shlex.join(shlex.split(config.test_flags))
     return config.test_command.format(
         binary=shlex.quote(config.unittest_bin),
+        flags=flags,
         test_list=test_list,
     )
 
@@ -157,10 +180,10 @@ def resolve_workers(workers: str):
     return max(1, int(workers))
 
 
-def generate_test_list(test_file, unittest_bin: str, pattern: str):
-    # Catch returns the number of matching tests from --list-test-names-only,
-    # so a non-zero exit code here is expected when tests are found.
-    command = [unittest_bin, "--list-test-names-only", pattern]
+def generate_test_list(test_file, unittest_bin: str, test_flags: str, pattern: str):
+    # Catch can return a non-zero status code for list commands when tests
+    # are found, so we accept non-zero if stdout still contains test output.
+    command = [unittest_bin, *shlex.split(test_flags), "--list-tests", pattern]
     print(f"generated test list using: {shlex.join(command)}")
     proc = subprocess.run(
         command,
@@ -168,24 +191,25 @@ def generate_test_list(test_file, unittest_bin: str, pattern: str):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    if proc.stderr:
+    if proc.returncode != 0 and not proc.stdout:
         if proc.stdout:
             print(proc.stdout, end="")
-        print(proc.stderr, end="", file=sys.stderr)
+        if proc.stderr:
+            print(proc.stderr, end="", file=sys.stderr)
         raise RuntimeError(f"failed to generate test list from {unittest_bin}")
     test_file.write(proc.stdout)
     test_file.flush()
 
 
 @contextlib.contextmanager
-def open_test_list(test_list: Path | None, unittest_bin: str, pattern: str):
+def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, pattern: str):
     if test_list is not None:
         with test_list.open("r", encoding="utf8") as test_file:
             yield Path(test_file.name)
         return
 
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as test_file:
-        generate_test_list(test_file, unittest_bin, pattern)
+        generate_test_list(test_file, unittest_bin, test_flags, pattern)
         yield Path(test_file.name)
 
 
@@ -357,12 +381,17 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-list", type=Path)
     parser.add_argument("--workers", default=DEFAULT_WORKERS)
+    parser.add_argument(
+        "--test-flags",
+        default="",
+        help="additional flags appended to the unittest binary for listing and execution",
+    )
     parser.add_argument("unittest_bin")
     parser.add_argument("pattern", nargs="?", default="")
     parser.add_argument(
         "--test-command",
-        default="{binary} --use-colour yes -f {test_list}",
-        help="shell command template used to run a test batch; supports {binary} and {test_list}",
+        default="{binary} {flags} --use-colour yes -f {test_list}",
+        help="shell command template used to run a test batch; supports {binary}, {flags}, and {test_list}",
     )
     parser.add_argument(
         "--track-runtime",
@@ -400,11 +429,16 @@ def main():
         print("CI detected, enabling retry=2 per batch")
     max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
-    batch_size = 1 if args.track_runtime is not None else args.batch_size
-    with open_test_list(args.test_list, args.unittest_bin, args.pattern) as test_file:
+    if args.track_runtime is not None:
+        print("enabling runtime tracking forces batch_size=1")
+        batch_size = 1
+    else:
+        batch_size = args.batch_size
+    with open_test_list(args.test_list, args.unittest_bin, args.test_flags, args.pattern) as test_file:
         config = TestRunnerConfig(
             test_list=test_file,
             unittest_bin=args.unittest_bin,
+            test_flags=args.test_flags,
             pattern=args.pattern,
             test_command=args.test_command,
             workers=workers,

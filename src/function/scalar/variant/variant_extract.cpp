@@ -94,8 +94,74 @@ static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, Scala
 	}
 }
 
+static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
+                                        idx_t count, idx_t path_index = 0) {
+	if (path_index >= components.size()) {
+		// reached the end of the path - shred
+		if (input.GetType().IsNested()) {
+			// we only support this for non-nested types for now
+			return false;
+		}
+		// create the shredded vector with an empty unshredded part
+		auto shredded_type = VariantUtils::ShreddedType(input.GetType());
+		Vector shredded_vector(shredded_type, count);
+		auto &top_shredded = StructVector::GetEntries(shredded_vector);
+		// NULL out everything in the unshredded part
+		auto &unshredded_child = *top_shredded[0];
+		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
+			unshredded_entry->SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(*unshredded_entry, true);
+		}
+		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(unshredded_child, true);
+		auto &shredded_child = *top_shredded[1];
+		shredded_child.Reference(input);
+
+		result.Shred(shredded_vector);
+		return true;
+	}
+	auto &component = components[path_index];
+	if (component.lookup_mode != VariantChildLookupMode::BY_KEY) {
+		// only by key supported
+		return false;
+	}
+	// first entry is "typed_value"
+	auto &typed_entries = StructVector::GetEntries(input);
+	auto &typed_value = *typed_entries[0];
+
+	// find the type in the struct type
+	auto &child_types = StructType::GetChildTypes(typed_value.GetType());
+	auto &child_entries = StructVector::GetEntries(typed_value);
+	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+		auto &entry = child_types[child_idx];
+		if (StringUtil::CIEquals(entry.first, component.key)) {
+			// key found - move onto next component
+			return TryShreddedExtractRecursive(*child_entries[child_idx], components, result, count, path_index + 1);
+		}
+	}
+	// key not found - bail (FIXME: could we emit constant NULL here?)
+	return false;
+}
+
+static bool TryFromShreddedExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
+                                   idx_t count) {
+	if (variant_vec.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+		// input vector is not shredded
+		return false;
+	}
+	if (!ShreddedVector::IsFullyShredded(variant_vec)) {
+		// input vector is not fully shredded
+		return false;
+	}
+	auto &shredded_vec = ShreddedVector::GetShreddedVector(variant_vec);
+	return TryShreddedExtractRecursive(shredded_vec, components, result, count);
+}
+
 void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
                                   idx_t count) {
+	if (TryFromShreddedExtract(variant_vec, components, result, count)) {
+		return;
+	}
 	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
