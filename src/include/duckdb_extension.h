@@ -706,6 +706,7 @@ typedef struct {
 	duckdb_logical_type (*duckdb_prepared_statement_column_logical_type)(duckdb_prepared_statement prepared_statement,
 	                                                                     idx_t col_idx);
 	duckdb_type (*duckdb_prepared_statement_column_type)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
+	const char *(*duckdb_prepared_column_origin_table)(duckdb_prepared_statement prepared_statement, idx_t col_idx);
 #endif
 
 // New query execution functions
@@ -1328,6 +1329,7 @@ typedef struct {
 #define duckdb_prepared_statement_column_name         duckdb_ext_api.duckdb_prepared_statement_column_name
 #define duckdb_prepared_statement_column_logical_type duckdb_ext_api.duckdb_prepared_statement_column_logical_type
 #define duckdb_prepared_statement_column_type         duckdb_ext_api.duckdb_prepared_statement_column_type
+#define duckdb_prepared_column_origin_table           duckdb_ext_api.duckdb_prepared_column_origin_table
 
 // Version unstable_new_query_execution_functions
 #define duckdb_result_get_arrow_options duckdb_ext_api.duckdb_result_get_arrow_options

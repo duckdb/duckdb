@@ -2017,6 +2017,20 @@ Returns `DUCKDB_TYPE_INVALID` if the column is out of range.
 DUCKDB_C_API duckdb_type duckdb_prepared_statement_column_type(duckdb_prepared_statement prepared_statement,
                                                                idx_t col_idx);
 
+/*!
+Returns the fully qualified origin table name for the column at the given index.
+The format is "catalog.schema.table_name".
+Returns an empty string if the column has no single-table origin.
+Returns nullptr on error.
+The result must be freed with `duckdb_free`.
+
+* @param prepared_statement The prepared statement.
+* @param col_idx The column index.
+* @return The fully qualified origin table name, or nullptr on error.
+*/
+DUCKDB_C_API const char *duckdb_prepared_column_origin_table(duckdb_prepared_statement prepared_statement,
+                                                             idx_t col_idx);
+
 //----------------------------------------------------------------------------------------------------------------------
 // Bind Values to Prepared Statements
 //----------------------------------------------------------------------------------------------------------------------
