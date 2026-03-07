@@ -7,99 +7,118 @@ namespace duckdb_shell {
 #define SEP_Unit   "\x1F"
 #define SEP_Record "\x1E"
 
+using duckdb::BaseShellState;
+using duckdb::ShellCommandResult;
+
 template <RenderMode output_mode>
-MetadataResult ToggleOutputMode(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleOutputMode(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.cMode = state.mode = output_mode;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleASCIIMode(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleASCIIMode(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.cMode = state.mode = RenderMode::ASCII;
 	state.colSeparator = SEP_Unit;
 	state.rowSeparator = SEP_Record;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleCSVMode(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleCSVMode(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.cMode = state.mode = RenderMode::CSV;
 	state.colSeparator = ",";
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult EnableBail(ShellState &state, const vector<string> &args) {
+ShellCommandResult EnableBail(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.bail_on_error = true;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult EnableBatch(ShellState &state, const vector<string> &args) {
+ShellCommandResult EnableBatch(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.stdin_is_interactive = false;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult DisableBatch(ShellState &state, const vector<string> &args) {
+ShellCommandResult DisableBatch(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.stdin_is_interactive = true;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetReadOnlyMode(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetReadOnlyMode(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.config.options.access_mode = duckdb::AccessMode::READ_ONLY;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 template <bool HEADER>
-MetadataResult ToggleHeader(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleHeader(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.showHeader = HEADER;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult DisableStdin(ShellState &state, const vector<string> &args) {
+ShellCommandResult DisableStdin(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.readStdin = false;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult EnableEcho(ShellState &state, const vector<string> &args) {
+ShellCommandResult EnableEcho(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.ShellSetFlag(ShellFlags::SHFLG_Echo);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult AllowUnredacted(ShellState &state, const vector<string> &args) {
+ShellCommandResult AllowUnredacted(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.config.SetOptionByName("allow_unredacted_secrets", true);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
+ShellCommandResult AllowUnsigned(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.config.SetOptionByName("allow_unsigned_extensions", true);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ShowVersionAndExit(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShowVersionAndExit(BaseShellState &, const vector<string> &args) {
 	printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
 	       duckdb::DuckDB::SourceID());
-	return MetadataResult::EXIT;
+	return ShellCommandResult::EXIT;
 }
 
-MetadataResult PrintHelpAndExit(ShellState &state, const vector<string> &args) {
+ShellCommandResult PrintHelpAndExit(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.PrintUsage();
-	return MetadataResult::EXIT;
+	return ShellCommandResult::EXIT;
 }
 
-MetadataResult LaunchUI(ShellState &state, const vector<string> &args) {
+ShellCommandResult LaunchUI(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	// run the UI command
 	auto rc = state.RunInitialCommand((char *)state.ui_command.c_str(), true);
 	if (rc != 0) {
 		exit(rc);
-		return MetadataResult::EXIT;
+		return ShellCommandResult::EXIT;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetNewlineSeparator(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetNewlineSeparator(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	// run the UI command
 	state.rowSeparator = args[1];
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetStorageVersion(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	auto &storage_version = args[1];
 	try {
 		state.config.options.serialization_compatibility =
@@ -108,31 +127,34 @@ MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) 
 		duckdb::ErrorData error(ex);
 		state.PrintF(PrintOutput::STDERR, "%s: Error: unknown argument (%s) for '-storage-version': %s\n",
 		             state.program_name, storage_version.c_str(), error.Message().c_str());
-		return MetadataResult::EXIT;
+		return ShellCommandResult::EXIT;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
+ShellCommandResult ProcessFile(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.readStdin = false;
 	auto old_bail = state.bail_on_error;
 	state.bail_on_error = true;
 	auto &file = args[1];
 	if (!state.ProcessFile(file)) {
 		exit(1);
-		return MetadataResult::EXIT;
+		return ShellCommandResult::EXIT;
 	}
 	state.bail_on_error = old_bail;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetInitFile(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetInitFile(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.initFile = args[1];
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 template <bool EXIT>
-MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
+ShellCommandResult RunCommand(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (EXIT) {
 		state.readStdin = false;
 	}
@@ -142,9 +164,9 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	auto rc = state.RunInitialCommand(cmd.c_str(), bail);
 	if (rc != 0) {
 		exit(rc);
-		return MetadataResult::EXIT;
+		return ShellCommandResult::EXIT;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 static const CommandLineOption command_line_options[] = {
