@@ -18,10 +18,11 @@ Parser Error: Only VARCHAR columns can have collations!
 statement ok
 CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)
 
+# Error depends on PEG parser or PostgreSQL parser used
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 1)
 ----
-Parser Error: syntax error at or near "1"
+<REGEX>:(.*Parser Error: syntax error at or near "1".*|.*Catalog Error.*Collation with name 1 does not exist!.*)
 
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')
