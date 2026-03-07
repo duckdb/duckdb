@@ -1,3 +1,38 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 1af2a74..6491baf 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -613,7 +613,7 @@ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+ //------------------------------------------------------------------------------
+ // Can rewrite index expression?
+ //------------------------------------------------------------------------------
+-static void TryBindIndexExpressionInternal(Expression &expr, idx_t table_idx, const vector<column_t> &index_columns,
++static void TryBindIndexExpressionInternal(Expression &expr, TableIndex table_idx, const vector<column_t> &index_columns,
+                                            const vector<ColumnIndex> &table_columns, bool &success, bool &found) {
+ 
+ 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index 783db2a..df1a2c6 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -183,7 +183,7 @@ InsertionOrderPreservingMap<string> PhysicalHNSWIndexJoin::ParamsToString() cons
+ 
+ class LogicalHNSWIndexJoin final : public LogicalExtensionOperator {
+ public:
+-	explicit LogicalHNSWIndexJoin(const idx_t table_index_p, DuckTableEntry &table_p, HNSWIndex &hnsw_index_p,
++	explicit LogicalHNSWIndexJoin(const TableIndex table_index_p, DuckTableEntry &table_p, HNSWIndex &hnsw_index_p,
+ 	                              const idx_t limit_p)
+ 	    : table_index(table_index_p), table(table_p), hnsw_index(hnsw_index_p), limit(limit_p) {
+ 	}
+@@ -198,7 +198,7 @@ public:
+ 	idx_t EstimateCardinality(ClientContext &context) override;
+ 
+ public:
+-	idx_t table_index;
++	TableIndex table_index;
+ 
+ 	DuckTableEntry &table;
+ 	HNSWIndex &hnsw_index;
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
 index 84dbda7..e325c7f 100644
 --- a/src/hnsw/hnsw_optimize_scan.cpp

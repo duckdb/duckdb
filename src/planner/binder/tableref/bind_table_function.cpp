@@ -198,7 +198,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get(), this, table_function, ref);
 		if (table_function.bind_operator) {
-			auto new_plan = table_function.bind_operator(context, bind_input, bind_index.index, return_names);
+			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
 			if (new_plan) {
 				new_plan->ResolveOperatorTypes();
 				if (new_plan->types.size() != return_names.size()) {
