@@ -117,7 +117,7 @@ private:
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public BaseColumnPruner {
 public:
-	RemoveUnusedColumns(Optimizer &optimizer, bool is_root = false);
+	explicit RemoveUnusedColumns(Optimizer &optimizer, bool is_root = false);
 
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
