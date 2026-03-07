@@ -73,6 +73,19 @@ ORDER BY 1
 ----
 physical_plan	<REGEX>:.*IE_JOIN.*
 
+# Don't use IEJoin for arbitrary predicates
+query II
+EXPLAIN
+SELECT l.id, l.start, l.stop
+FROM left_small l
+SEMI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
+physical_plan	<!REGEX>:.*IE_JOIN.*
+
 foreach prefer false true
 
 statement ok
@@ -147,6 +160,9 @@ ORDER BY id;
 ----
 physical_plan	<REGEX>:.*IE_JOIN.*
 
+#
+# Verify tail comparisons
+#
 query II
 EXPLAIN
 FROM wide_ranges l
