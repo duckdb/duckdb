@@ -1,4 +1,5 @@
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 
 namespace duckdb {
 
