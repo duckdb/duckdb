@@ -458,7 +458,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 #ifdef DEBUG
 	if (layout.is_struct) {
 		VerifyStructStateRoundtrip(layout, input.data[0], input.size(), state_data, state_vec_ptr, result, bind_data,
-		                          aggr_input_data);
+		                           aggr_input_data);
 	}
 #endif
 }
