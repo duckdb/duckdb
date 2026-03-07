@@ -1,0 +1,139 @@
+# name: test/sql/function/string/path_join.test
+# group: [string]
+
+# NOTE: far more complete tests available under test/common/test_file_system.cpp ; these largely test SQL specifics
+
+query I
+SELECT path_join('dir//subdir/', './file');
+----
+dir/subdir/file
+
+query I
+SELECT path_join('dir/subdir', '../sibling');
+----
+dir/sibling
+
+statement error
+SELECT path_join('dir', '/abs/path');
+----
+incompatible paths
+
+query I
+SELECT path_join('dir///', 'nested///child');
+----
+dir/nested/child
+
+query I
+SELECT path_join('dir', 'subdir', 'file.txt');
+----
+dir/subdir/file.txt
+
+query I
+SELECT path_join('dir/..', '../..');
+----
+../..
+
+query I
+SELECT path_join('/usr/local', '../..');
+----
+/
+
+query I
+SELECT path_join('/', 'usr/local');
+----
+/usr/local
+
+query I
+SELECT path_join('file:/usr/local', '../bin');
+----
+file:/usr/bin
+
+query I
+SELECT path_join('s3://foo', 'bar/baz');
+----
+s3://foo/bar/baz
+
+query I
+SELECT path_join('s3://foo', '..');
+----
+s3://foo/
+
+query I
+SELECT path_join('s3://foo', '../..');
+----
+s3://foo/
+
+statement error
+SELECT path_join('s3://foo', '/foo');
+----
+incompatible paths
+
+statement error
+SELECT path_join('/foo', 's3://foo');
+----
+incompatible paths
+
+statement error
+SELECT path_join('s3://foo', 'az://foo');
+----
+incompatible paths
+
+statement error
+SELECT path_join('dir', '/abs/path');
+----
+incompatible paths
+
+# empty and NULL checks
+
+statement error
+SELECT path_join();
+----
+No function matches
+
+# base relative path normalized to '.'
+query I
+SELECT path_join('');
+----
+.
+
+query I
+SELECT path_join('', '');
+----
+.
+
+query I
+SELECT path_join(NULL);
+----
+NULL
+
+query I
+SELECT path_join(NULL, NULL);
+----
+NULL
+
+query I
+SELECT path_join(NULL, 'dir');
+----
+NULL
+
+query I
+SELECT path_join('dir', NULL);
+----
+NULL
+
+query I
+SELECT path_join('base', NULL, 'dir');
+----
+NULL
+
+# Other misc tests
+query I
+SELECT path_join('asdfoijasdofijasdofijasüîø✅xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy-/QQQQ/', 
+	'IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII');
+----
+asdfoijasdofijasdofijasüîø✅xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy-/QQQQ/IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+
+query I
+SELECT path_join(A, B, C, B, A) FROM (SELECT A:'a', B: 'b', C: 'c');
+----
+a/b/c/b/a

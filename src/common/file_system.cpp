@@ -189,11 +189,14 @@ string FileSystem::GetEnvVariable(const string &env) {
 }
 
 static bool StartsWithSingleBackslash(const string &path) {
-	if (path.size() < 2) {
+	if (path.empty()) {
 		return false;
 	}
 	if (path[0] != '/' && path[0] != '\\') {
 		return false;
+	}
+	if (path.size() == 1) {
+		return true;
 	}
 	if (path[1] == '/' || path[1] == '\\') {
 		return false;
@@ -281,8 +284,7 @@ string FileSystem::GetWorkingDirectory() {
 #endif
 
 string FileSystem::JoinPath(const string &a, const string &b) {
-	// FIXME: sanitize paths
-	return a.empty() ? b : a + PathSeparator(a) + b;
+	return Path::FromString(a).Join(b).ToString();
 }
 
 string FileSystem::ConvertSeparators(const string &path) {
@@ -503,35 +505,25 @@ void FileSystem::CreateDirectoriesRecursive(const string &path, optional_ptr<Fil
 	// we construct the list of directories to be created depth-first. This avoids calling DirectoryExists on a parent
 	// dir that is not in the allowed_directories list
 
-	auto sep = PathSeparator(path);
+	// Walk up from the full path until we find a prefix that already exists, collecting
+	// non-existing ancestors along the way. Stop descending when segments are exhausted
+	// (to avoid Path::Parent() generating ".." paths past the root/base).
+	auto parsed = Path::FromString(path);
 	vector<string> dirs_to_create;
-
-	string current_prefix = path;
-
-	StringUtil::RTrim(current_prefix, sep);
-
-	// Strip directories from the path until we hit a directory that exists
-	while (!current_prefix.empty() && !DirectoryExists(current_prefix)) {
-		auto found = current_prefix.find_last_of(sep);
-
-		// Push back the root dir
-		if (found == string::npos || found == 0) {
-			dirs_to_create.push_back(current_prefix);
-			current_prefix = "";
-			break;
-		}
-
-		// Add the directory to the directories to be created
-		dirs_to_create.push_back(current_prefix.substr(found, current_prefix.size() - found));
-
-		// Update the current prefix to remove the current dir
-		current_prefix = current_prefix.substr(0, found);
+	while (!parsed.GetPathSegments().empty() && !DirectoryExists(parsed.ToString())) {
+		dirs_to_create.push_back(parsed.ToString());
+		parsed = parsed.Parent();
+	}
+	// If all segments were non-existing, also check the base itself (e.g. "C:/" on an unknown drive)
+	if (!parsed.GetPathSegments().empty()) {
+		// broke because DirectoryExists returned true — nothing more needed
+	} else if (!DirectoryExists(parsed.ToString())) {
+		dirs_to_create.push_back(parsed.ToString());
 	}
 
-	// Create the directories one by one
-	for (vector<string>::reverse_iterator riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
-		current_prefix += *riter;
-		CreateDirectory(current_prefix);
+	// Create directories shallowest to deepest
+	for (auto riter = dirs_to_create.rbegin(); riter != dirs_to_create.rend(); ++riter) {
+		CreateDirectory(*riter);
 	}
 }
 
@@ -914,7 +906,8 @@ bool FileSystem::IsRemoteFile(const string &path, string &extension) {
 }
 
 string FileSystem::CanonicalizePath(const string &path_p, optional_ptr<FileOpener> opener) {
-	if (IsRemoteFile(path_p)) {
+	// TODO: @benfleis - integrate this properly with Path (needs additional work)
+	if (IsRemoteFile(path_p) || !Path::FromString(path_p).IsLocal()) {
 		// don't canonicalize remote paths
 		return path_p;
 	}
