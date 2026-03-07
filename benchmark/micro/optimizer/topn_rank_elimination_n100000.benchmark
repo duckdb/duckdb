@@ -1,0 +1,16 @@
+# name: benchmark/micro/optimizer/topn_rank_elimination_n100000.benchmark
+# description: Benchmark of top n rank window elimination with limit 100000
+# group: [optimizer]
+
+name TopN Rank Elimination N100000
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE rank_bench AS (
+	SELECT k, v, v % 1000 AS v2, v % 100 AS v3
+	FROM range(0, 1000000) vals(v), range(0, 100) keys(k)
+);
+
+run
+SELECT * FROM (SELECT rank() OVER (PARTITION BY k ORDER BY v DESC) rk, k, v FROM rank_bench) WHERE rk <= 100000;

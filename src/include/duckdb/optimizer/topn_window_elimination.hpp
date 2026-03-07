@@ -12,6 +12,7 @@
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
@@ -24,10 +25,17 @@ struct TopNWindowEliminationParameters {
 	int64_t limit;
 	//! How we fetch the payload columns
 	TopNPayloadType payload_type;
-	//! Whether to include row numbers
-	bool include_row_number;
+	//! Whether to include the window function column (e.g., ROW_NUMBER or RANK)
+	bool include_window_column;
 	//! Whether the val or arg column contains null values
 	bool can_be_null = false;
+	//! The type of window function (ROW_NUMBER, RANK)
+	ExpressionType window_function_type = ExpressionType::WINDOW_ROW_NUMBER;
+
+	//! Whether to include ties (true for RANK, false for ROW_NUMBER)
+	bool IncludeTies() const {
+		return window_function_type != ExpressionType::WINDOW_ROW_NUMBER;
+	}
 };
 
 class TopNWindowElimination : public BaseColumnPruner {
@@ -57,7 +65,12 @@ private:
 	                                                 const TopNWindowEliminationParameters &params) const;
 	unique_ptr<Expression> CreateRowNumberGenerator(unique_ptr<Expression> aggregate_column_ref) const;
 	void AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
-	                           const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const;
+	                           const Expression &source_expr) const;
+	unique_ptr<Expression> CreateStructExtractExpr(const Expression &source_expr, const LogicalType &struct_type,
+	                                               const string &field_name) const;
+	void AddWindowColumnExpr(vector<unique_ptr<Expression>> &exprs, const TopNWindowEliminationParameters &params,
+	                         const unique_ptr<LogicalOperator> &op, const LogicalType &aggregate_type,
+	                         const Expression &aggregate_column_ref) const;
 	static void UpdateTopmostBindings(idx_t window_idx, const unique_ptr<LogicalOperator> &op,
 	                                  const map<idx_t, idx_t> &group_idxs,
 	                                  const vector<ColumnBinding> &topmost_bindings,

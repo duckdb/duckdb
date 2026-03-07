@@ -55,6 +55,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"@>", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"^", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"^@", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"__internal_arg_max_rank_nulls_last", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"__internal_arg_min_rank_nulls_last", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"abs", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"acos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"acosh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},

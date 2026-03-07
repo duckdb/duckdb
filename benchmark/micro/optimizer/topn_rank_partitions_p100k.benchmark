@@ -1,0 +1,13 @@
+# name: benchmark/micro/optimizer/topn_rank_partitions_p100k.benchmark
+# description: Benchmark of top n rank window elimination with 100K partitions (100 rows per partition)
+# group: [optimizer]
+
+name TopN Rank Partitions P100K
+group micro
+subgroup optimizer
+
+load
+CREATE TABLE rank_p100k AS (SELECT k, v FROM range(0, 100) vals(v), range(0, 100000) keys(k));
+
+run
+SELECT * FROM (SELECT rank() OVER (PARTITION BY k ORDER BY v DESC) rk, k, v FROM rank_p100k) WHERE rk <= 3;

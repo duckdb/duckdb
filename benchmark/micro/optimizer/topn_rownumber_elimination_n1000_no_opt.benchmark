@@ -1,0 +1,19 @@
+# name: benchmark/micro/optimizer/topn_rownumber_elimination_n1000_no_opt.benchmark
+# description: Benchmark of top n row_number window elimination with limit 1000 (optimization disabled)
+# group: [optimizer]
+
+name TopN RowNumber Elimination N1000 No Opt
+group micro
+subgroup optimizer
+
+init
+SET disabled_optimizers TO 'top_n_window_elimination';
+
+load
+CREATE TABLE rank_bench AS (
+	SELECT k, v, v % 1000 AS v2, v % 100 AS v3
+	FROM range(0, 1000000) vals(v), range(0, 100) keys(k)
+);
+
+run
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY k ORDER BY v DESC) rk, k, v FROM rank_bench) WHERE rk <= 1000;

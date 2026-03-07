@@ -109,6 +109,26 @@ struct ArgMaxNullsLastFun {
 	static AggregateFunctionSet GetFunctions();
 };
 
+struct InternalArgMinRankNullsLastFun {
+	static constexpr const char *Name = "__internal_arg_min_rank_nulls_last";
+	static constexpr const char *Parameters = "arg,val,N";
+	static constexpr const char *Description = "Internal only. Finds the rows with N minimum vals including ties and nulls. Returns LIST of STRUCT(arg, rank).";
+	static constexpr const char *Example = "__internal_arg_min_rank_nulls_last(A, B, N)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
+struct InternalArgMaxRankNullsLastFun {
+	static constexpr const char *Name = "__internal_arg_max_rank_nulls_last";
+	static constexpr const char *Parameters = "arg,val,N";
+	static constexpr const char *Description = "Internal only. Finds the rows with N maximum vals including ties and nulls. Returns LIST of STRUCT(arg, rank).";
+	static constexpr const char *Example = "__internal_arg_max_rank_nulls_last(A, B, N)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
 struct BitAndFun {
 	static constexpr const char *Name = "bit_and";
 	static constexpr const char *Parameters = "arg";
