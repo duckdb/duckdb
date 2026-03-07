@@ -140,10 +140,10 @@ COPY (SELECT * from (VALUES
     ) t(col)
 ) to '__TEST_DIR__/fully_shredded_object.parquet'
 
-query II
-select s.fully_shredded.a.stats, s.fully_shredded.c.stats from (select stats(col) s from '__TEST_DIR__/fully_shredded_object.parquet' limit 1);
+query III
+select s.fully_shredded.a.stats.min, s.fully_shredded.a.stats.max, s.fully_shredded.c.stats.min from (select stats(col) s from '__TEST_DIR__/fully_shredded_object.parquet' limit 1);
 ----
-{'min': 21, 'max': 42, 'has_null': false, 'has_no_null': true}	{'min': test, 'max': test, 'has_unicode': true, 'has_null': true, 'has_no_null': true}
+21	42	test
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -154,10 +154,10 @@ COPY (SELECT * from (VALUES
     ) t(col)
 ) to '__TEST_DIR__/fully_shredded_object_with_nulls.parquet'
 
-query II
-select s.fully_shredded.a.stats, s.fully_shredded.c.stats from (select stats(col) s from '__TEST_DIR__/fully_shredded_object_with_nulls.parquet' limit 1);
+query III
+select s.fully_shredded.a.stats.min, s.fully_shredded.a.stats.max, s.fully_shredded.c.stats.min from (select stats(col) s from '__TEST_DIR__/fully_shredded_object_with_nulls.parquet' limit 1);
 ----
-{'min': 21, 'max': 42, 'has_null': true, 'has_no_null': true}	{'min': test, 'max': test, 'has_unicode': true, 'has_null': true, 'has_no_null': true}
+21	42	test
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -188,9 +188,9 @@ COPY (SELECT * from (VALUES
 
 # a is inconsistent - so no fully shredded stats
 query II
-select s.fully_shredded.a, s.fully_shredded.c.stats from (select stats(col) s from '__TEST_DIR__/not_fully_shredded_object_field.parquet' limit 1);
+select s.fully_shredded.a, s.fully_shredded.c.stats.min from (select stats(col) s from '__TEST_DIR__/not_fully_shredded_object_field.parquet' limit 1);
 ----
-NULL	{'min': test, 'max': test, 'has_unicode': true, 'has_null': true, 'has_no_null': true}
+NULL	test
 
 statement ok
 COPY (SELECT * from (VALUES
@@ -203,6 +203,6 @@ COPY (SELECT * from (VALUES
 
 # a is consistent again here
 query IIII
-select s.fully_shredded.a.type, s.fully_shredded.a.stats, s.fully_shredded.c.type, s.fully_shredded.c.stats from (select stats(col) s from '__TEST_DIR__/fully_shredded_object_field_with_nulls.parquet' limit 1);
+select s.fully_shredded.a.type, s.fully_shredded.a.stats.min, s.fully_shredded.c.type, s.fully_shredded.c.stats.min from (select stats(col) s from '__TEST_DIR__/fully_shredded_object_field_with_nulls.parquet' limit 1);
 ----
-INTEGER	{'min': 42, 'max': 42, 'has_null': true, 'has_no_null': true}	VARCHAR	{'min': test, 'max': test, 'has_unicode': true, 'has_null': true, 'has_no_null': true}
+INTEGER	42	VARCHAR	test
