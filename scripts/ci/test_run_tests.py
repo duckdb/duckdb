@@ -62,7 +62,7 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertIn("found 2 tests", proc.stdout)
         self.assertIn("test/sql/slow.test took", proc.stdout)
         self.assertIn("test/sql/fast.test took", proc.stdout)
-        self.assertIn("all tests passed.", proc.stdout)
+        self.assertIn("all tests passed in ", proc.stdout)
 
     def test_runs_with_echo_test_command(self):
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
@@ -96,7 +96,7 @@ class RunTestsScriptTest(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("found 2 tests", proc.stdout)
-        self.assertIn("all tests passed.", proc.stdout)
+        self.assertIn("all tests passed in ", proc.stdout)
 
     def test_retries_failed_fake_job(self):
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
@@ -154,7 +154,7 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("retrying failed test batch 0 (attempt 1/1, retry 1/4)", proc.stdout)
         self.assertIn("fake failure", proc.stdout)
-        self.assertIn("all tests passed.", proc.stdout)
+        self.assertIn("all tests passed in ", proc.stdout)
 
     def test_retries_timed_out_sleep_job(self):
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_list:
@@ -207,7 +207,7 @@ class RunTestsScriptTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("batch timed out after 1 seconds", proc.stdout)
         self.assertIn("retrying failed test", proc.stdout)
-        self.assertIn("all tests passed.", proc.stdout)
+        self.assertIn("all tests passed in ", proc.stdout)
 
 
 if __name__ == "__main__":

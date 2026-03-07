@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 DEFAULT_BATCH_SIZE = 10
@@ -33,7 +33,7 @@ class TestRunnerConfig:
     test_list: Path
     unittest_bin: str
     test_flags: str
-    pattern: str
+    patterns: list[str]
     test_command: str
     workers: int
     retry: int
@@ -180,10 +180,10 @@ def resolve_workers(workers: str):
     return max(1, int(workers))
 
 
-def generate_test_list(test_file, unittest_bin: str, test_flags: str, pattern: str):
+def generate_test_list(test_file, unittest_bin: str, test_flags: str, patterns: list[str]):
     # Catch can return a non-zero status code for list commands when tests
     # are found, so we accept non-zero if stdout still contains test output.
-    command = [unittest_bin, *shlex.split(test_flags), "--list-tests", pattern]
+    command = [unittest_bin, *shlex.split(test_flags), "--list-tests", *patterns]
     print(f"generated test list using: {shlex.join(command)}")
     proc = subprocess.run(
         command,
@@ -202,14 +202,14 @@ def generate_test_list(test_file, unittest_bin: str, test_flags: str, pattern: s
 
 
 @contextlib.contextmanager
-def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, pattern: str):
+def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, patterns: list[str]):
     if test_list is not None:
         with test_list.open("r", encoding="utf8") as test_file:
             yield Path(test_file.name)
         return
 
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as test_file:
-        generate_test_list(test_file, unittest_bin, test_flags, pattern)
+        generate_test_list(test_file, unittest_bin, test_flags, patterns)
         yield Path(test_file.name)
 
 
@@ -382,12 +382,18 @@ def parse_args():
     parser.add_argument("--test-list", type=Path)
     parser.add_argument("--workers", default=DEFAULT_WORKERS)
     parser.add_argument(
+        "--test-config",
+        action="append",
+        default=[],
+        help="path to test config; may be passed multiple times and is appended to test flags",
+    )
+    parser.add_argument(
         "--test-flags",
         default="",
         help="additional flags appended to the unittest binary for listing and execution",
     )
     parser.add_argument("unittest_bin")
-    parser.add_argument("pattern", nargs="?", default="")
+    parser.add_argument("patterns", nargs="*")
     parser.add_argument(
         "--test-command",
         default="{binary} {flags} --use-colour yes -f {test_list}",
@@ -414,12 +420,19 @@ def parse_args():
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--batch-timeout", type=int, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
-    return parser.parse_args()
+    # Accept options interleaved with positional patterns, e.g.:
+    #   run_tests.py bin "[tag]" --fail-fast test/sql/foo.test
+    return parser.parse_intermixed_args()
 
 
 def main():
     enable_line_buffering()
     args = parse_args()
+    test_flags = args.test_flags
+    for config in args.test_config:
+        # The unittest binary parses "--test-config" as a separate option + value pair.
+        config_flag = f"--test-config {shlex.quote(config)}"
+        test_flags = " ".join(flag for flag in [test_flags, config_flag] if flag)
     max_failures = args.max_failures
     if args.fail_fast:
         max_failures = 1
@@ -434,12 +447,12 @@ def main():
         batch_size = 1
     else:
         batch_size = args.batch_size
-    with open_test_list(args.test_list, args.unittest_bin, args.test_flags, args.pattern) as test_file:
+    with open_test_list(args.test_list, args.unittest_bin, test_flags, args.patterns) as test_file:
         config = TestRunnerConfig(
             test_list=test_file,
             unittest_bin=args.unittest_bin,
-            test_flags=args.test_flags,
-            pattern=args.pattern,
+            test_flags=test_flags,
+            patterns=args.patterns,
             test_command=args.test_command,
             workers=workers,
             retry=retry,
@@ -454,19 +467,22 @@ def main():
         tests = load_tests(config.test_list)
         batch_size = compute_batch_size(len(tests), config)
 
-        print(
-            f"found {len(tests)} tests, batch_size={batch_size}, workers={config.workers}, "
-            f"retry={config.retry}, "
-            f"runtime_threshold={config.runtime_threshold_seconds}s, "
-            f"rss_memory_threshold={config.rss_memory_threshold_mib}MiB, "
-            f"batch_timeout={config.batch_timeout_seconds}s"
-        )
+        print(f"found {len(tests)} tests")
+        config_values = asdict(config)
+        config_values["batch_size"] = batch_size
+        config_values.pop("test_list", None)
+        config_values.pop("unittest_bin", None)
+        config_values.pop("test_command", None)
+        config_values = {k: v for k, v in config_values.items() if v is not None and v != "" and v != []}
+        config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
+        print(f"config: {config_output}")
 
         batches = list(chunked(tests, batch_size))
         return run_tests(config, batches)
 
 
 def run_tests(config: TestRunnerConfig, batches):
+    start = time.monotonic()
     state = BatchRunState()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
@@ -492,11 +508,12 @@ def run_tests(config: TestRunnerConfig, batches):
             if not state.stop_launching:
                 next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
+    elapsed = time.monotonic() - start
     if state.failed_count:
-        print(f"error: found {state.failed_count} test batch failures")
+        print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")
         return 1
 
-    print("all tests passed.")
+    print(f"all tests passed in {elapsed:.0f}s")
     return 0
 
 
