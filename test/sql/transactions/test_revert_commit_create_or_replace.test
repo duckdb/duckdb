@@ -1,0 +1,51 @@
+# name: test/sql/transactions/test_revert_commit_create_or_replace.test
+# description: Revert commit must not crash when index entries reference a dropped table (via CREATE OR REPLACE)
+# group: [transactions]
+
+load __TEST_DIR__/test_revert_commit_create_or_replace.db
+
+statement ok
+CREATE TABLE t1 (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t1 SELECT i, i * 10 FROM range(1000) tbl(i)
+
+statement ok
+CREATE TABLE t2 (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t2 SELECT i, i * 10 FROM range(1000) tbl(i)
+
+statement ok
+SET immediate_transaction_mode=true
+
+# Tx A: DELETE from t1, CREATE OR REPLACE t1 (same tx), DELETE from t2
+statement ok con1
+BEGIN
+
+statement ok con1
+DELETE FROM t1 WHERE id < 500
+
+statement ok con1
+CREATE OR REPLACE TABLE t1 (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok con1
+DELETE FROM t2 WHERE id < 500
+
+# Tx B: CREATE OR REPLACE t2 — marks old t2 DataTable as DROPPED
+statement ok con2
+CREATE OR REPLACE TABLE t2 (id INTEGER PRIMARY KEY, val INTEGER)
+
+# Tx A COMMIT fails: old t2 was dropped by Tx B.
+# RevertCommit must handle DELETE_TUPLE entries on old t1 after its SetAsDropped().
+statement error con1
+COMMIT
+----
+another transaction has dropped this table
+
+# Verify the database is still functional after the failed commit.
+query I
+SELECT COUNT(*) FROM t2
+----
+0
+
