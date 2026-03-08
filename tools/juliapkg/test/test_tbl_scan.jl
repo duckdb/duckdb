@@ -320,20 +320,18 @@ end
     )
 
     DuckDB.register_table(con, my_tbl, "my_tbl")
-    results = DBInterface.execute(con, "SELECT * FROM my_tbl")
-    df = columntable(results)
-    @test isequal(df.id, [1, 2, 3])
-    @test isequal(df.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
+    results = DBInterface.execute(con, "SELECT * FROM my_tbl") |> columntable
+    @test typeof(results) == typeof(my_tbl)
+    @test isequal(results.id, [1, 2, 3])
+    @test isequal(results.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
 
     # projection pushdown: select only struct column
-    results = DBInterface.execute(con, "SELECT s FROM my_tbl")
-    df = columntable(results)
-    @test isequal(df.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
+    results = DBInterface.execute(con, "SELECT s FROM my_tbl") |> columntable
+    @test isequal(results.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
 
     # SQL access to struct fields
-    results = DBInterface.execute(con, "SELECT s.a FROM my_tbl")
-    df = columntable(results)
-    @test isequal(df.a, [10, 20, 30])
+    results = DBInterface.execute(con, "SELECT s.a FROM my_tbl") |> columntable
+    @test isequal(results.a, [10, 20, 30])
 
     DBInterface.close!(con)
 end
@@ -350,15 +348,14 @@ end
     )
 
     DuckDB.register_table(con, my_tbl, "my_tbl")
-    results = DBInterface.execute(con, "SELECT * FROM my_tbl")
-    df = columntable(results)
-    @test isequal(df.s[1], (x = 1, inner = (a = 10, b = 20)))
-    @test isequal(df.s[2], (x = 2, inner = (a = 30, b = 40)))
+    results = DBInterface.execute(con, "SELECT * FROM my_tbl") |> columntable
+    @test typeof(results) == typeof(my_tbl)
+    @test isequal(results.s[1], (x = 1, inner = (a = 10, b = 20)))
+    @test isequal(results.s[2], (x = 2, inner = (a = 30, b = 40)))
 
     # SQL access to nested struct fields
-    results = DBInterface.execute(con, "SELECT s.inner.a FROM my_tbl")
-    df = columntable(results)
-    @test isequal(df.a, [10, 30])
+    results = DBInterface.execute(con, "SELECT s.inner.a FROM my_tbl") |> columntable
+    @test isequal(results.a, [10, 30])
 
     DBInterface.close!(con)
 end

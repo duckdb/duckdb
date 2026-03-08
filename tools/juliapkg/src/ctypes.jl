@@ -436,13 +436,9 @@ function duckdb_type_to_julia_type(x)
         return Vector{Union{Missing, duckdb_type_to_julia_type(get_list_child_type(x))}}
     elseif type_id == DUCKDB_TYPE_STRUCT
         child_count = get_struct_child_count(x)
-        struct_names::Vector{Symbol} = Vector()
-        for i in 1:child_count
-            child_name::Symbol = Symbol(get_struct_child_name(x, i))
-            push!(struct_names, child_name)
-        end
-        struct_names_tuple = Tuple(x for x in struct_names)
-        return Union{Missing, NamedTuple{struct_names_tuple}}
+        struct_names = ntuple(i -> Symbol(get_struct_child_name(x, UInt64(i))), child_count)
+        struct_types = ntuple(i -> duckdb_type_to_julia_type(get_struct_child_type(x, UInt64(i))), child_count)
+        return NamedTuple{struct_names, Tuple{struct_types...}}
     elseif type_id == DUCKDB_TYPE_UNION
         member_count = get_union_member_count(x)
         member_types::Vector{DataType} = Vector()
