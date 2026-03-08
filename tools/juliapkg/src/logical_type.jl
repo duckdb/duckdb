@@ -43,6 +43,7 @@ create_logical_type(::Type{T}) where {T <: Date} = DuckDB.LogicalType(DuckDB.DUC
 create_logical_type(::Type{T}) where {T <: Time} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIME)
 create_logical_type(::Type{T}) where {T <: DateTime} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIMESTAMP)
 create_logical_type(::Type{T}) where {T <: AbstractString} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_VARCHAR)
+create_logical_type(::Type{Vector{UInt8}}) = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BLOB)
 function create_logical_type(::Type{T}) where {T <: FixedDecimal}
     int_type = T.parameters[1]
     width = 0
