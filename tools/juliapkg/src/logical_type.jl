@@ -61,6 +61,23 @@ function create_logical_type(::Type{T}) where {T <: FixedDecimal}
     return DuckDB.LogicalType(duckdb_create_decimal_type(width, scale))
 end
 
+function _logical_type_for_field(::Type{Missing})
+    return LogicalType(DUCKDB_TYPE_INTEGER)
+end
+function _logical_type_for_field(::Type{T}) where {T}
+    return create_logical_type(Base.nonmissingtype(T))
+end
+
+function create_logical_type(::Type{NamedTuple{names, T}}) where {names, T <: Tuple}
+    n = length(names)
+    child_types = [_logical_type_for_field(fieldtype(T, i)) for i in 1:n]
+    member_types = [lt.handle for lt in child_types]
+    member_names = [string(nm) for nm in names]
+    return LogicalType(duckdb_create_struct_type(member_types, member_names, n))
+end
+
+create_logical_type(::Type{Union{Missing, T}}) where {T} = create_logical_type(T)
+
 function create_logical_type(::Type{T}) where {T}
     throw(NotImplementedException("Unsupported type for create_logical_type"))
 end

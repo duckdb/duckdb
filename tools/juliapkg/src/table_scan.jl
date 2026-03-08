@@ -22,6 +22,7 @@ julia_to_duck_type(::Type{Date}) = Int32
 julia_to_duck_type(::Type{Time}) = Int64
 julia_to_duck_type(::Type{DateTime}) = Int64
 julia_to_duck_type(::Type{T}) where {T} = T
+julia_to_duck_type(::Type{T}) where {T <: NamedTuple} = Cvoid
 
 value_to_duckdb(val::Date) = convert(Int32, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
 value_to_duckdb(val::Time) = convert(Int64, Dates.value(val) / 1000)
@@ -33,17 +34,7 @@ value_to_duckdb(val::AbstractString) = throw(
 )
 value_to_duckdb(val) = val
 
-function tbl_scan_column(
-    input_column::AbstractVector{JL_TYPE},
-    row_offset::Int64,
-    col_idx::Int64,
-    result_idx::Int64,
-    scan_count::Int64,
-    output::DuckDB.DataChunk,
-    ::Type{DUCK_TYPE},
-    ::Type{JL_TYPE}
-) where {DUCK_TYPE, JL_TYPE}
-    vector::Vec = DuckDB.get_vector(output, result_idx)
+function _scan_into_vector!(vector::Vec, input_column::AbstractVector, row_offset::Int64, scan_count::Int64, ::Type{DUCK_TYPE}) where {DUCK_TYPE}
     result_array::Vector{DUCK_TYPE} = DuckDB.get_array(vector, DUCK_TYPE)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
@@ -56,17 +47,7 @@ function tbl_scan_column(
     end
 end
 
-function tbl_scan_string_column(
-    input_column::AbstractVector{JL_TYPE},
-    row_offset::Int64,
-    col_idx::Int64,
-    result_idx::Int64,
-    scan_count::Int64,
-    output::DuckDB.DataChunk,
-    ::Type{DUCK_TYPE},
-    ::Type{JL_TYPE}
-) where {DUCK_TYPE, JL_TYPE}
-    vector::Vec = DuckDB.get_vector(output, result_idx)
+function _scan_string_into_vector!(vector::Vec, input_column::AbstractVector, row_offset::Int64, scan_count::Int64)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
         val = getindex(input_column, row_offset + i)
@@ -78,10 +59,69 @@ function tbl_scan_string_column(
     end
 end
 
+function tbl_scan_column(
+    input_column::AbstractVector{JL_TYPE},
+    row_offset::Int64,
+    col_idx::Int64,
+    result_idx::Int64,
+    scan_count::Int64,
+    output::DuckDB.DataChunk,
+    ::Type{DUCK_TYPE},
+    ::Type{JL_TYPE}
+) where {DUCK_TYPE, JL_TYPE}
+    _scan_into_vector!(DuckDB.get_vector(output, result_idx), input_column, row_offset, scan_count, DUCK_TYPE)
+end
+
+function tbl_scan_string_column(
+    input_column::AbstractVector{JL_TYPE},
+    row_offset::Int64,
+    col_idx::Int64,
+    result_idx::Int64,
+    scan_count::Int64,
+    output::DuckDB.DataChunk,
+    ::Type{DUCK_TYPE},
+    ::Type{JL_TYPE}
+) where {DUCK_TYPE, JL_TYPE}
+    _scan_string_into_vector!(DuckDB.get_vector(output, result_idx), input_column, row_offset, scan_count)
+end
+
+function tbl_scan_struct_column(
+    input_column,
+    row_offset::Int64,
+    col_idx::Int64,
+    result_idx::Int64,
+    scan_count::Int64,
+    output::DuckDB.DataChunk,
+    ::Type{DUCK_TYPE},
+    ::Type{JL_TYPE}
+) where {DUCK_TYPE, JL_TYPE}
+    vector::Vec = DuckDB.get_vector(output, result_idx)
+    # No missing support within struct columns for now.
+    _scan_struct_vector!(vector, input_column, row_offset, scan_count)
+end
+
+function _scan_struct_vector!(vector::Vec, child_columns::NamedTuple, row_offset::Int64, scan_count::Int64)
+    for (field_idx, child_col) in enumerate(values(child_columns))
+        child_vector = DuckDB.struct_child(vector, UInt64(field_idx))
+        child_type = eltype(child_col)
+        if child_type <: NamedTuple
+            # columntable(): free for columnar arrays like StructArrays; for other arrays, single-copy.
+            nested_children = columntable(child_col)
+            _scan_struct_vector!(child_vector, nested_children, row_offset, scan_count)
+        elseif child_type <: AbstractString
+            _scan_string_into_vector!(child_vector, child_col, row_offset, scan_count)
+        else
+            _scan_into_vector!(child_vector, child_col, row_offset, scan_count, julia_to_duck_type(child_type))
+        end
+    end
+end
+
 function tbl_scan_function(tbl, entry)
     result_type = table_result_type(tbl, entry)
     if result_type <: AbstractString
         return tbl_scan_string_column
+    elseif result_type <: NamedTuple
+        return tbl_scan_struct_column
     end
     return tbl_scan_column
 end
@@ -106,8 +146,15 @@ function tbl_bind_function(info::DuckDB.BindInfo)
     for entry in Tables.columnnames(tbl)
         result_type = table_result_type(tbl, entry)
         scan_function = tbl_scan_function(tbl, entry)
-        push!(input_columns, tbl[entry])
-        push!(scan_types, eltype(tbl[entry]))
+        col = tbl[entry]
+        if result_type <: NamedTuple
+            # Convert struct column to columnar format at bind time.
+            # Free for columnar arrays like StructArrays; for other arrays, single-copy.
+            push!(input_columns, columntable(col))
+        else
+            push!(input_columns, col)
+        end
+        push!(scan_types, eltype(col))
         push!(result_types, julia_to_duck_type(result_type))
         push!(scan_functions, scan_function)
 

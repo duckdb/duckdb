@@ -307,6 +307,62 @@ end
     DBInterface.close!(con)
 end
 
+@testset "Test table scan with structs" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    my_tbl = (
+        id = [1, 2, 3],
+        s = @NamedTuple{a::Int32, b::String}[
+            (a = Int32(10), b = "hello"),
+            (a = Int32(20), b = "world"),
+            (a = Int32(30), b = "foo"),
+        ]
+    )
+
+    DuckDB.register_table(con, my_tbl, "my_tbl")
+    results = DBInterface.execute(con, "SELECT * FROM my_tbl")
+    df = columntable(results)
+    @test isequal(df.id, [1, 2, 3])
+    @test isequal(df.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
+
+    # projection pushdown: select only struct column
+    results = DBInterface.execute(con, "SELECT s FROM my_tbl")
+    df = columntable(results)
+    @test isequal(df.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
+
+    # SQL access to struct fields
+    results = DBInterface.execute(con, "SELECT s.a FROM my_tbl")
+    df = columntable(results)
+    @test isequal(df.a, [10, 20, 30])
+
+    DBInterface.close!(con)
+end
+
+@testset "Test table scan with nested structs" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    my_tbl = (
+        s = @NamedTuple{x::Int32, inner::@NamedTuple{a::Int32, b::Int32}}[
+            (x = Int32(1), inner = (a = Int32(10), b = Int32(20))),
+            (x = Int32(2), inner = (a = Int32(30), b = Int32(40))),
+        ],
+        id = [1, 2]
+    )
+
+    DuckDB.register_table(con, my_tbl, "my_tbl")
+    results = DBInterface.execute(con, "SELECT * FROM my_tbl")
+    df = columntable(results)
+    @test isequal(df.s[1], (x = 1, inner = (a = 10, b = 20)))
+    @test isequal(df.s[2], (x = 2, inner = (a = 30, b = 40)))
+
+    # SQL access to nested struct fields
+    results = DBInterface.execute(con, "SELECT s.inner.a FROM my_tbl")
+    df = columntable(results)
+    @test isequal(df.a, [10, 30])
+
+    DBInterface.close!(con)
+end
+
 @testset "Test large table scan" begin
     for tblf in [Tables.columntable, Tables.rowtable]
         con = DBInterface.connect(DuckDB.DB)
