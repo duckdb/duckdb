@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 
 namespace duckdb {
 
@@ -62,6 +63,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case CatalogType::TABLE_MACRO_ENTRY:
 		result = CreateMacroInfo::Deserialize(deserializer);
+		break;
+	case CatalogType::TRIGGER_ENTRY:
+		result = CreateTriggerInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::TYPE_ENTRY:
 		result = CreateTypeInfo::Deserialize(deserializer);
@@ -182,6 +186,33 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys", result->partition_keys);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", result->sort_keys);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", result->options);
+	return std::move(result);
+}
+
+void CreateTriggerInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "trigger_name", trigger_name);
+	serializer.WritePropertyWithDefault<string>(201, "table_name", table_name);
+	serializer.WritePropertyWithDefault<string>(202, "table_catalog", table_catalog);
+	serializer.WritePropertyWithDefault<string>(203, "table_schema", table_schema);
+	serializer.WriteProperty<TriggerTiming>(204, "timing", timing);
+	serializer.WriteProperty<TriggerEventType>(205, "event_type", event_type);
+	serializer.WritePropertyWithDefault<vector<string>>(206, "columns", columns);
+	serializer.WritePropertyWithDefault<bool>(207, "for_each_row", for_each_row);
+	serializer.WritePropertyWithDefault<string>(208, "sql_body_text", sql_body_text);
+}
+
+unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateTriggerInfo>(new CreateTriggerInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "trigger_name", result->trigger_name);
+	deserializer.ReadPropertyWithDefault<string>(201, "table_name", result->table_name);
+	deserializer.ReadPropertyWithDefault<string>(202, "table_catalog", result->table_catalog);
+	deserializer.ReadPropertyWithDefault<string>(203, "table_schema", result->table_schema);
+	deserializer.ReadProperty<TriggerTiming>(204, "timing", result->timing);
+	deserializer.ReadProperty<TriggerEventType>(205, "event_type", result->event_type);
+	deserializer.ReadPropertyWithDefault<vector<string>>(206, "columns", result->columns);
+	deserializer.ReadPropertyWithDefault<bool>(207, "for_each_row", result->for_each_row);
+	deserializer.ReadPropertyWithDefault<string>(208, "sql_body_text", result->sql_body_text);
 	return std::move(result);
 }
 

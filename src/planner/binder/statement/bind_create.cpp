@@ -649,6 +649,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 	}
+	case CatalogType::TRIGGER_ENTRY:
+		throw NotImplementedException("CREATE TRIGGER is not yet supported");
 	default:
 		throw InternalException("Unrecognized type!");
 	}
