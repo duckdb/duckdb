@@ -25,10 +25,14 @@
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include <utility>
 
 namespace duckdb {
 
+RemoveUnusedColumns::RemoveUnusedColumns(Optimizer &optimizer, bool is_root)
+    : optimizer(optimizer), binder(optimizer.binder), context(optimizer.context), everything_referenced(is_root) {
+}
 idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs == column_references.end()) {
@@ -90,7 +94,8 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 	}
 }
 
-void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
+void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
+	auto &op = *op_ref;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// aggregate
@@ -111,9 +116,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// Note: We allow all optimizations (join column replacement, column pruning) to run below ROLLUP
 		// The duplicate groups optimizer will be responsible for not breaking ROLLUP by skipping when
 		// multiple grouping sets are present
-		RemoveUnusedColumns remove(binder, context, everything_referenced);
+		RemoveUnusedColumns remove(optimizer, everything_referenced);
 		remove.VisitOperatorExpressions(op);
-		remove.VisitOperator(*op.children[0]);
+		remove.VisitOperator(op.children[0]);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
@@ -190,7 +195,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			setop.column_count = entries.size();
 
 			for (idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
-				RemoveUnusedColumns remove(binder, context, true);
+				RemoveUnusedColumns remove(optimizer, true);
 				auto &child = op.children[child_idx];
 
 				// we push a projection under this child that references the required columns of the union
@@ -209,13 +214,13 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				new_projection->children.push_back(std::move(child));
 				op.children[child_idx] = std::move(new_projection);
 
-				remove.VisitOperator(*op.children[child_idx]);
+				remove.VisitOperator(op.children[child_idx]);
 			}
 			return;
 		}
 		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
+			RemoveUnusedColumns remove(optimizer, true);
+			remove.VisitOperator(child);
 		}
 		return;
 	}
@@ -223,8 +228,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
 		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
 		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
+			RemoveUnusedColumns remove(optimizer, true);
+			remove.VisitOperator(child);
 		}
 		return;
 	}
@@ -244,9 +249,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		// then recurse into the children of this projection
-		RemoveUnusedColumns remove(binder, context);
+		RemoveUnusedColumns remove(optimizer);
 		remove.VisitOperatorExpressions(op);
-		remove.VisitOperator(*op.children[0]);
+		remove.VisitOperator(op.children[0]);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT:
@@ -258,20 +263,20 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		//! on top of them can select from only the table values being inserted.
 		//! TODO: Push down the projections from the returning statement
 		//! TODO: Be careful because you might be adding expressions when a user returns *
-		RemoveUnusedColumns remove(binder, context, true);
+		RemoveUnusedColumns remove(optimizer, true);
 		remove.VisitOperatorExpressions(op);
-		remove.VisitOperator(*op.children[0]);
+		remove.VisitOperator(op.children[0]);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		auto &get = op.Cast<LogicalGet>();
-		RemoveColumnsFromLogicalGet(get);
+		RemoveColumnsFromLogicalGet(get, op_ref);
 		if (!op.children.empty()) {
 			// Some LOGICAL_GET operators (e.g., table in out functions) may have a
 			// child operator. So we recurse into it if it exists.
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*op.children[0]);
+			RemoveUnusedColumns remove(optimizer, true);
+			remove.VisitOperator(op.children[0]);
 		}
 		return;
 	}
@@ -404,7 +409,6 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 		auto &component = struct_extract.components[depth];
 		auto &expr = component.cast ? *component.cast : component.extract;
 
-		optional_ptr<LogicalType> cast_type;
 		auto return_type = expr->return_type;
 
 		auto &colref = col.bindings[struct_extract.bindings_idx];
@@ -572,7 +576,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 	}
 }
 
-void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
+void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref) {
 	if (everything_referenced) {
 		return;
 	}
@@ -605,14 +609,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	// Clear unused ids, exclude filter columns that are projected out immediately
 	ClearUnusedExpressions(proj_sel, get.table_index, false);
 
-	//! FIXME: pushdown extract is disabled when a struct field is referenced by a filter,
-	//! because that would involve rewriting the existing TableFilterSet
-	SetMode(BaseColumnPrunerMode::DISABLE_PUSHDOWN_EXTRACT);
-
-	// for every table filter, push a column binding into the column references map to prevent the column from
-	// being projected out
-
-	//! NOTE: This vector is required to keep the referenced Expressions alive
+	//! for each filter that was pushed down - convert them into an expression
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &filter : get.table_filters.filters) {
 		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter.first);
@@ -636,6 +633,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	// Clear unused ids, include filter columns that are projected out immediately
 	ClearUnusedExpressions(col_sel, get.table_index);
 
+	bool has_pushdown_extract = false;
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto &col_sel_idx : col_sel) {
 		auto &column_type = get.GetColumnType(old_column_ids[col_sel_idx]);
@@ -669,16 +667,17 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			    new_index.SetPushdownExtractType(column_type, cast_type);
 
 			    auto column_binding_index = new_column_ids.size();
-			    auto entry = child_map.find(new_index);
-			    if (entry == child_map.end()) {
+			    auto child_entry = child_map.find(new_index);
+			    if (child_entry == child_map.end()) {
 				    //! Adds the binding for the child only if it doesn't exist yet
-				    entry = child_map.emplace(new_index, column_binding_index).first;
+				    child_entry = child_map.emplace(new_index, column_binding_index).first;
 				    created_bindings[new_index.GetPrimaryIndex()]++;
 
 				    new_column_ids.emplace_back(std::move(new_index));
 				    original_ids.emplace_back(col_sel_idx);
 			    }
-			    return entry->second;
+			    has_pushdown_extract = true;
+			    return child_entry->second;
 		    });
 	}
 	if (new_column_ids.empty()) {
@@ -690,6 +689,19 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		new_column_ids.emplace_back(any_column);
 	}
 	get.SetColumnIds(std::move(new_column_ids));
+
+	if (has_pushdown_extract && !filter_expressions.empty()) {
+		// if we have performed pushdown extract and we have filter expressions we might have adjusted the filter
+		// expressions remove the table filters and push a filter, then try to re-push the filters with the new set of
+		// projections
+		auto filter = make_uniq_base<LogicalOperator, LogicalFilter>();
+		filter->expressions = std::move(filter_expressions);
+		filter->children.push_back(std::move(op_ref));
+		get.table_filters.filters.clear();
+		// push the final result in the operator
+		op_ref = std::move(filter);
+		return;
+	}
 
 	if (!get.function.filter_prune) {
 		return;

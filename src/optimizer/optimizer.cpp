@@ -232,8 +232,8 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// removes unused columns
 	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
-		RemoveUnusedColumns unused(binder, context, true);
-		unused.VisitOperator(*plan);
+		RemoveUnusedColumns unused(*this, true);
+		unused.VisitOperator(plan);
 	});
 
 	// Remove duplicate groups from aggregates
