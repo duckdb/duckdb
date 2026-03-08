@@ -1,6 +1,7 @@
 # name: test/sql/json/table/read_json_unnest_heterogeneous_struct.test
 # description: Test UNNEST of heterogeneous struct arrays from read_json_auto
 # group: [table]
+
 # Regression test for https://github.com/duckdb/duckdb/pull/21209
 # Cross-join UNNEST of a deeply nested array of objects with different keys
 # caused INTERNAL Error in the UnnestRewriter optimizer when read_json_auto
