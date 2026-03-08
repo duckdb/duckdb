@@ -109,7 +109,7 @@ EXPLAIN SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM large_structs WHERE i.a > 15000
 ----
 physical_plan	<REGEX>:.*Filters:.*i\.a>150000.*
 
-endloop
+mode unskip
 
 query III
 SELECT MIN(i.a), MAX(i.a), COUNT(*) FROM large_structs WHERE i.a > 150000;
