@@ -50,7 +50,7 @@ No files found that match the pattern "{DATA_DIR}/csv/real/non_ecziste.csv"
 query IIIIIIIIIIII
 FROM sniff_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', sample_size=1);
 ----
-,	(empty)	(empty)	\n	(empty)	0	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': VARCHAR}]	NULL	NULL	sample_size=1	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
+,	"	(empty)	\n	(empty)	0	0	[{'name': column0, 'type': BIGINT}, {'name': column1, 'type': VARCHAR}]	NULL	NULL	sample_size=1	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='', new_line='\n', skip=0, comment='', header=false, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
 
 statement error
 FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='"', new_line='\n', skip=0, header=0, columns={'column0': 'BIGINT', 'column1': 'VARCHAR'}, sample_size=1);
@@ -60,12 +60,12 @@ Conversion Error: CSV Error on Line: 2176
 query IIIIIIIIIIII
 FROM sniff_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', sample_size=10000);
 ----
-,	(empty)	(empty)	\n	(empty)	0	1	[{'name': 1, 'type': VARCHAR}, {'name': A, 'type': VARCHAR}]	NULL	NULL	sample_size=10000	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=10000);
+,	"	(empty)	\n	(empty)	0	1	[{'name': 1, 'type': VARCHAR}, {'name': A, 'type': VARCHAR}]	NULL	NULL	sample_size=10000	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='', new_line='\n', skip=0, comment='', header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=10000);
 
 query IIIIIIIIIIII
 FROM sniff_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', sample_size=-1);
 ----
-,	(empty)	(empty)	\n	(empty)	0	1	[{'name': 1, 'type': VARCHAR}, {'name': A, 'type': VARCHAR}]	NULL	NULL	sample_size=-1	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='', escape='', new_line='\n', skip=0, comment='', header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=-1);
+,	"	(empty)	\n	(empty)	0	1	[{'name': 1, 'type': VARCHAR}, {'name': A, 'type': VARCHAR}]	NULL	NULL	sample_size=-1	FROM read_csv('{DATA_DIR}/csv/error/mismatch/big_bad.csv', auto_detect=false, delim=',', quote='"', escape='', new_line='\n', skip=0, comment='', header=true, columns={'1': 'VARCHAR', 'A': 'VARCHAR'}, sample_size=-1);
 
 # Test with defined time and timestamp
 query IIIIIIIIIIII

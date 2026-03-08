@@ -561,14 +561,26 @@ void CSVSniffer::RefineCandidates() {
 	}
 	if (candidates.size() > 1) {
 		successful_candidates = std::move(candidates);
+		const bool no_quote_in_sample = !successful_candidates[0]->ever_quoted;
+		const bool comma_delimited =
+		    successful_candidates[0]->state_machine->state_machine_options.delimiter.GetValue() == ",";
+		if (!successful_candidates.empty() && no_quote_in_sample && comma_delimited) {
+			// no quoting seen in the sample, use quote='"' as default for comma delimited CSVs
+			for (idx_t i = 0; i < successful_candidates.size(); i++) {
+				if (successful_candidates[i]->state_machine->state_machine_options.quote.GetValue() == '"') {
+					candidates.push_back(std::move(successful_candidates[i]));
+					return;
+				}
+			}
+		}
 		for (idx_t i = 0; i < successful_candidates.size(); i++) {
 			if (successful_candidates[i]->state_machine->state_machine_options.quote ==
 			    successful_candidates[i]->state_machine->state_machine_options.escape) {
-				candidates.push_back(std::move(std::move(successful_candidates[i])));
+				candidates.push_back(std::move(successful_candidates[i]));
 				return;
 			}
 		}
-		candidates.push_back(std::move(std::move(successful_candidates[0])));
+		candidates.push_back(std::move(successful_candidates[0]));
 	}
 }
 

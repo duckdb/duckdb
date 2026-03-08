@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/test_21000.test
+# description: Test when quoted field is beyond sample_size rows (issue #21000)
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT escape, quote, delimiter FROM sniff_csv('{DATA_DIR}/csv/quotes_after_sample.csv');
+----
+(empty)	"	,
+
+query II
+SELECT name, company FROM read_csv('{DATA_DIR}/csv/quotes_after_sample.csv') WHERE name = 'Bob';
+----
+Bob	Beth, Bens. Co.
