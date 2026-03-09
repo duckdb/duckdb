@@ -1,0 +1,12 @@
+{
+  "description": "Failed tests from backwards compatibility testing with v1.4.4.",
+  "skip_tests": [
+    {
+      "reason": "Profiling result type mismatch",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_blocked_thread_time.test",
+        "test/sql/pragma/profiling/test_profiling_fs.test"
+      ]
+    }
+  ]
+}
