@@ -3,6 +3,8 @@
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
 // #define PEG_PARSER_SOURCE_FILE "extension/autocomplete/include/inlined_grammar.gram"
 
+#include <mutex>
+
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -19,6 +21,12 @@
 #endif
 
 namespace duckdb {
+
+namespace {
+std::mutex s_root_matcher_mutex;
+Matcher *s_cached_root_matcher = nullptr;  // NOLINT: non-const static is intentional
+MatcherAllocator s_root_matcher_allocator; // NOLINT: non-const static is intentional
+} // namespace
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);
@@ -1314,18 +1322,35 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	return CreateMatcher(parser, root_rule);
 }
 
-Matcher &Matcher::RootMatcher(MatcherAllocator &allocator) {
-	MatcherFactory factory(allocator);
+Matcher &Matcher::RootMatcher() {
+	// Fast path: check without lock first (benign race on pointer read)
+	if (s_cached_root_matcher) {
+		return *s_cached_root_matcher;
+	}
+	// Cache miss: acquire lock to build
+	std::unique_lock<std::mutex> lock(s_root_matcher_mutex);
+	// Double-check after acquiring lock
+	if (s_cached_root_matcher) {
+		return *s_cached_root_matcher;
+	}
+	MatcherFactory factory(s_root_matcher_allocator);
 #ifdef PEG_PARSER_SOURCE_FILE
 	std::ifstream t(PEG_PARSER_SOURCE_FILE);
 	std::stringstream buffer;
 	buffer << t.rdbuf();
-	auto string = buffer.str();
+	auto grammar_string = buffer.str();
 
-	return factory.CreateMatcher(string.c_str(), "Statement");
+	s_cached_root_matcher = &factory.CreateMatcher(grammar_string.c_str(), "Statement");
 #else
-	return factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
+	s_cached_root_matcher = &factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
 #endif
+	return *s_cached_root_matcher;
+}
+
+void Matcher::InvalidateRootMatcher() {
+	std::unique_lock<std::mutex> lock(s_root_matcher_mutex);
+	s_cached_root_matcher = nullptr;
+	s_root_matcher_allocator = MatcherAllocator();
 }
 
 } // namespace duckdb

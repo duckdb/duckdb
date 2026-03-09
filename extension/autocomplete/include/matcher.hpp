@@ -182,7 +182,8 @@ public:
 	virtual string ToString() const = 0;
 	void Print() const;
 
-	static Matcher &RootMatcher(MatcherAllocator &allocator);
+	static Matcher &RootMatcher();
+	static void InvalidateRootMatcher();
 
 	MatcherType Type() const {
 		return type;

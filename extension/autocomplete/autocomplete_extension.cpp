@@ -629,8 +629,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	if (state.suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
-		MatcherAllocator allocator;
-		auto &matcher = Matcher::RootMatcher(allocator);
+		auto &matcher = Matcher::RootMatcher();
 		matcher.Match(state);
 	}
 	if (state.suggestions.empty()) {
@@ -855,8 +854,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		idx_t max_token_index = 0;
 		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
-		MatcherAllocator allocator;
-		auto &matcher = Matcher::RootMatcher(allocator);
+		auto &matcher = Matcher::RootMatcher();
 		auto match_result = matcher.Match(state);
 		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
 			string token_list;
