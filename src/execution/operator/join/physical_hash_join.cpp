@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value_map.hpp"
@@ -944,10 +945,30 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	return true;
 }
 
-bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
-                                                     const PhysicalComparisonJoin &op,
-                                                     const ExpressionType &cmp) const {
+bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, optional_ptr<JoinHashTable> ht,
+                                                     const PhysicalComparisonJoin &op, const ExpressionType &cmp,
+                                                     Value &min, Value &max) const {
 	if (!CanUseBloomFilter(context, op, cmp, ht)) {
+		return false;
+	}
+
+	static constexpr idx_t BUILD_SIZE_THRESHOLD = 524288;
+	bool ht_is_small = ht->Count() <= BUILD_SIZE_THRESHOLD;
+	bool span_is_small = false;
+
+	if (min.type().IsIntegral()) {
+		static const auto SPAN_THRESHOLD = Hugeint::Convert(1048576);
+		if (max.TryCastAs(context, LogicalTypeId::HUGEINT) && min.TryCastAs(context, LogicalTypeId::HUGEINT)) {
+			const auto max_value = max.GetValueUnsafe<hugeint_t>();
+			const auto min_value = min.GetValueUnsafe<hugeint_t>();
+			hugeint_t span;
+			if (TrySubtractOperator::Operation(max_value, min_value, span)) {
+				span_is_small = span <= SPAN_THRESHOLD;
+			}
+		}
+	}
+
+	if (!ht_is_small && !span_is_small) {
 		return false;
 	}
 
@@ -1059,8 +1080,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				// min = max - single value
 				// generate a "one-sided" comparison filter for the LHS
 				// Note that this also works for equalities.
-				info.dynamic_filters->PushFilter(op, filter_col_idx,
-				                                 make_uniq<ConstantFilter>(cmp, std::move(min_val)));
+				info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ConstantFilter>(cmp, min_val));
 			} else {
 				// min != max - generate a range filter or bloom filter + optional range filter
 				// for non-equalities, the range must be half-open
@@ -1071,7 +1091,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					CreateDynamicMinMaxFilter(
 					    op, info, filter_col_idx,
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val)));
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, min_val));
 					break;
 				}
 				default:
@@ -1083,37 +1103,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 					CreateDynamicMinMaxFilter(
 					    op, info, filter_col_idx,
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val)));
-					break;
-				}
-				default:
-					break;
-				}
-
-				// FIXME: Better generalize this over different types
-				bool use_prefix_range_filter = false;
-				// Get the values back in case they were moved
-				min_val = final_min_max->data[min_idx].GetValue(0);
-				max_val = final_min_max->data[max_idx].GetValue(0);
-				switch (min_val.type().id()) {
-				case LogicalTypeId::TINYINT:
-				case LogicalTypeId::SMALLINT:
-				case LogicalTypeId::INTEGER:
-				case LogicalTypeId::BIGINT:
-				case LogicalTypeId::UTINYINT:
-				case LogicalTypeId::USMALLINT:
-				case LogicalTypeId::UINTEGER:
-				case LogicalTypeId::UBIGINT: {
-					auto max_val_cast = max_val;
-					auto min_val_cast = min_val;
-					if (max_val_cast.TryCastAs(context, LogicalTypeId::UBIGINT) &&
-					    min_val_cast.TryCastAs(context, LogicalTypeId::UBIGINT)) {
-						const auto span =
-						    max_val_cast.GetValueUnsafe<uint64_t>() - min_val_cast.GetValueUnsafe<uint64_t>();
-						use_prefix_range_filter = span <= 1048576 || (ht && ht->Count() <= 524288);
-					} else {
-						use_prefix_range_filter = ht && ht->Count() <= 524288;
-					}
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val));
 					break;
 				}
 				default:
@@ -1122,7 +1112,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 
 				if (perfect_join_executor) {
 					PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
-				} else if (use_prefix_range_filter && CanUsePrefixRangeFilter(context, ht, op, cmp)) {
+				} else if (CanUsePrefixRangeFilter(context, ht, op, cmp, min_val, max_val)) {
 					PushPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val, max_val);
 				} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(op, *ht, info, filter_col_idx);

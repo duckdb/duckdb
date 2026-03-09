@@ -98,8 +98,9 @@ private:
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,
 	                       optional_ptr<JoinHashTable> ht = nullptr) const;
-	bool CanUsePrefixRangeFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht,
-	                             const PhysicalComparisonJoin &op, const ExpressionType &cmp) const;
+	bool CanUsePrefixRangeFilter(ClientContext &context, optional_ptr<JoinHashTable> ht,
+	                             const PhysicalComparisonJoin &op, const ExpressionType &cmp, Value &min,
+	                             Value &max) const;
 };
 
 } // namespace duckdb

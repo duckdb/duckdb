@@ -250,8 +250,8 @@ bool PrefixRangeTableFilter::SupportedType(const LogicalType &type) {
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
-	case PhysicalType::INT128:
 		return true;
+	case PhysicalType::INT128:
 	case PhysicalType::UINT128:
 	default:
 		return false;
