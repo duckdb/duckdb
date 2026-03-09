@@ -170,6 +170,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Install tools
+      run: make toolsci
 
     - name: Download relassert build artifact
       uses: actions/download-artifact@v4
@@ -256,6 +258,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Install tools
+      run: make toolsci
 
     - name: Download release build artifact
       uses: actions/download-artifact@v4
@@ -368,7 +372,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind clang
+      run: make toolsci && sudo apt-get install -y -qq valgrind clang
 
     - uses: ./.github/actions/ccache-action
 
@@ -454,7 +458,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+      run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 
