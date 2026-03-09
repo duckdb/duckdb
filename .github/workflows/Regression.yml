@@ -43,7 +43,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
+        run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install requests
 
       - uses: ./.github/actions/ccache-action
 
@@ -174,7 +174,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+        run: make toolsci && pip install requests
 
       - uses: ./.github/actions/ccache-action
 
@@ -250,7 +250,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+        run: make toolsci && pip install requests
 
       - uses: ./.github/actions/ccache-action
 
@@ -288,7 +288,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install tqdm
+        run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install tqdm
 
       - uses: ./.github/actions/ccache-action
 
