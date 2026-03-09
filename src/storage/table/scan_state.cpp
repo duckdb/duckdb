@@ -54,16 +54,16 @@ ScanFilter::ScanFilter(ClientContext &context, idx_t index, const vector<Storage
 
 void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
                                 const vector<StorageIndex> &column_ids) {
-	D_ASSERT(!filters.filters.empty());
+	D_ASSERT(filters.HasFilters());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
-	filter_list.reserve(filters.filters.size());
-	for (auto &entry : filters.filters) {
-		filter_list.emplace_back(context, entry.first, column_ids, *entry.second);
+	filter_list.reserve(filters.FilterCount());
+	for (auto &entry : filters) {
+		filter_list.emplace_back(context, entry.ColumnIndex(), column_ids, entry.Filter());
 	}
 	column_has_filter.reserve(column_ids.size());
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		bool has_filter = table_filters->filters.find(col_idx) != table_filters->filters.end();
+		bool has_filter = table_filters->HasFilter(col_idx);
 		column_has_filter.push_back(has_filter);
 	}
 	base_column_has_filter = column_has_filter;

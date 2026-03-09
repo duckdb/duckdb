@@ -141,7 +141,7 @@ public:
 	PredicateVisitor(const vector<string> &column_names, optional_ptr<TableFilterSet> filters);
 
 private:
-	unordered_map<string, TableFilter *> column_filters;
+	unordered_map<string, optional_ptr<const TableFilter>> column_filters;
 
 	static uintptr_t VisitPredicate(PredicateVisitor *predicate, ffi::KernelExpressionVisitorState *state);
 

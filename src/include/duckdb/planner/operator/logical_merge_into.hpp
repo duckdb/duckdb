@@ -46,7 +46,7 @@ public:
 	//! The base table to merge into
 	TableCatalogEntry &table;
 	//! projection index
-	idx_t table_index;
+	TableIndex table_index;
 	vector<unique_ptr<Expression>> bound_defaults;
 	idx_t row_id_start;
 	optional_idx source_marker;
@@ -65,7 +65,7 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	idx_t EstimateCardinality(ClientContext &context) override;
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;

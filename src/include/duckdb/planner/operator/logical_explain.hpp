@@ -50,7 +50,7 @@ protected:
 		types = {LogicalType::VARCHAR, LogicalType::VARCHAR};
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
-		return {ColumnBinding(0, 0), ColumnBinding(0, 1)};
+		return {ColumnBinding(TableIndex(0), 0), ColumnBinding(TableIndex(0), 1)};
 	}
 };
 } // namespace duckdb

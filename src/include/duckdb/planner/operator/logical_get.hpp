@@ -10,7 +10,7 @@
 
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
@@ -22,12 +22,12 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+	LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
 	           vector<LogicalType> returned_types, vector<string> returned_names,
 	           virtual_column_map_t virtual_columns = virtual_column_map_t());
 
 	//! The table index in the current bind context
-	idx_t table_index;
+	TableIndex table_index;
 	//! The function that is called
 	TableFunction function;
 	//! The bind data of the function
@@ -85,7 +85,7 @@ public:
 	bool TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const;
 	void SetScanOrder(unique_ptr<RowGroupOrderOptions> options);
 
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {
 		return function.verify_serialization;

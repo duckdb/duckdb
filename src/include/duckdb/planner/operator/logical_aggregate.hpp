@@ -23,14 +23,14 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
 
 public:
-	LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list);
+	LogicalAggregate(TableIndex group_index, TableIndex aggregate_index, vector<unique_ptr<Expression>> select_list);
 
 	//! The table index for the groups of the LogicalAggregate
-	idx_t group_index;
+	TableIndex group_index;
 	//! The table index for the aggregates of the LogicalAggregate
-	idx_t aggregate_index;
+	TableIndex aggregate_index;
 	//! The table index for the GROUPING function calls of the LogicalAggregate
-	idx_t groupings_index;
+	TableIndex groupings_index;
 	//! The set of groups (optional).
 	vector<unique_ptr<Expression>> groups;
 	//! The set of grouping sets (optional).
@@ -50,7 +50,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	idx_t EstimateCardinality(ClientContext &context) override;
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

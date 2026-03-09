@@ -1,0 +1,64 @@
+diff --git a/src/include/postgres_filter_pushdown.hpp b/src/include/postgres_filter_pushdown.hpp
+index d3dc0b6..471bc4c 100644
+--- a/src/include/postgres_filter_pushdown.hpp
++++ b/src/include/postgres_filter_pushdown.hpp
+@@ -8,7 +8,7 @@
+ 
+ #pragma once
+ 
+-#include "duckdb/planner/table_filter.hpp"
++#include "duckdb/planner/table_filter_set.hpp"
+ #include "duckdb/planner/filter/conjunction_filter.hpp"
+ #include "duckdb/planner/filter/constant_filter.hpp"
+ 
+diff --git a/src/postgres_filter_pushdown.cpp b/src/postgres_filter_pushdown.cpp
+index c2f981a..fcdcf3e 100644
+--- a/src/postgres_filter_pushdown.cpp
++++ b/src/postgres_filter_pushdown.cpp
+@@ -127,20 +127,20 @@ string PostgresFilterPushdown::TransformFilter(string &column_name, TableFilter
+ 
+ string PostgresFilterPushdown::TransformFilters(const vector<column_t> &column_ids,
+                                                 optional_ptr<TableFilterSet> filters, const vector<string> &names) {
+-	if (!filters || filters->filters.empty()) {
++	if (!filters || !filters->HasFilters()) {
+ 		// no filters
+ 		return string();
+ 	}
+ 	string result;
+-	for (auto &entry : filters->filters) {
++	for (auto &entry : *filters) {
+ 		string column_name;
+-		auto column_id = column_ids[entry.first];
++		auto column_id = column_ids[entry.ColumnIndex()];
+ 		if (IsVirtualColumn(column_id)) {
+ 			column_name = "ctid";
+ 		} else {
+ 			column_name = KeywordHelper::WriteQuoted(names[column_id], '"');
+ 		}
+-		auto &filter = *entry.second;
++		auto &filter = entry.Filter();
+ 		auto filter_text = TransformFilter(column_name, filter, column_id);
+ 
+ 		if (filter_text.empty()) {
+diff --git a/src/storage/postgres_merge_into.cpp b/src/storage/postgres_merge_into.cpp
+index 03188d6..7bcab80 100644
+--- a/src/storage/postgres_merge_into.cpp
++++ b/src/storage/postgres_merge_into.cpp
+@@ -51,7 +51,7 @@ unique_ptr<MergeIntoOperator> PostgresPlanMergeIntoAction(PostgresCatalog &catal
+ 		break;
+ 	}
+ 	case MergeActionType::MERGE_DELETE: {
+-		LogicalDelete delete_op(op.table, 0);
++		LogicalDelete delete_op(op.table, TableIndex(0));
+ 		auto ref = make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, op.row_id_start);
+ 		delete_op.expressions.push_back(std::move(ref));
+ 		delete_op.bound_constraints = std::move(bound_constraints);
+@@ -59,7 +59,7 @@ unique_ptr<MergeIntoOperator> PostgresPlanMergeIntoAction(PostgresCatalog &catal
+ 		break;
+ 	}
+ 	case MergeActionType::MERGE_INSERT: {
+-		LogicalInsert insert_op(op.table, 0);
++		LogicalInsert insert_op(op.table, TableIndex(0));
+ 		insert_op.bound_constraints = std::move(bound_constraints);
+ 		for (auto &def : op.bound_defaults) {
+ 			insert_op.bound_defaults.push_back(def->Copy());
