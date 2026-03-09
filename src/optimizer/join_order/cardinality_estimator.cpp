@@ -243,8 +243,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 			}
 		});
 		if (comparison_type == ExpressionType::INVALID) {
-			new_denom *= filter.has_distinct_count_hll ? static_cast<double>(filter.distinct_count_hll)
-			                                           : static_cast<double>(filter.distinct_count_no_hll);
+			new_denom *= filter.GetDistinctCount();
 			// no comparison is taking place, so the denominator is just the product of the left and right
 			return new_denom;
 		}
@@ -255,8 +254,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			// extra ratio stays 1
-			extra_ratio = filter.has_distinct_count_hll ? static_cast<double>(filter.distinct_count_hll)
-			                                            : static_cast<double>(filter.distinct_count_no_hll);
+			extra_ratio = filter.GetDistinctCount();
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_LESSTHAN:
@@ -265,8 +263,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
 			// Assume this blows up, but use the tdom to bound it a bit
-			extra_ratio = filter.has_distinct_count_hll ? static_cast<double>(filter.distinct_count_hll)
-			                                            : static_cast<double>(filter.distinct_count_no_hll);
+			extra_ratio = filter.GetDistinctCount();
 			extra_ratio = pow(extra_ratio, 2.0 / 3.0);
 			break;
 		default:
@@ -300,7 +297,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// You must also make sure that the filters all relations in the given set, so we use subgraphs
 	// that should eventually merge into one connected graph that joins all the relations
 	// TODO: Implement a method to cache subgraphs so you don't have to build them up every
-	// time the cardinality of a new set is requested
+	//  time the cardinality of a new set is requested
 
 	// relations_to_tdoms has already been sorted by largest to smallest total domain
 	// then we look through the filters for the relations_to_tdoms,
@@ -330,8 +327,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			right_subgraph.numerator_relations = edge.filter_info->right_relation_set;
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
 			if (edge.filter_info->join_type == JoinType::LEFT) {
-				auto denom = edge.has_distinct_count_hll ? static_cast<double>(edge.distinct_count_hll)
-				                                         : static_cast<double>(edge.distinct_count_no_hll);
+				auto denom = edge.GetDistinctCount();
 				denom = MaxValue<double>(denom, 1);
 				left_subgraph.numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
 			}
@@ -356,8 +352,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			}
 			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
 			if (edge.filter_info->join_type == JoinType::LEFT) {
-				auto denom = edge.has_distinct_count_hll ? static_cast<double>(edge.distinct_count_hll)
-				                                         : static_cast<double>(edge.distinct_count_no_hll);
+				auto denom = edge.GetDistinctCount();
 				denom = MaxValue<double>(denom, 1);
 				left_subgraph->numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
 			}
@@ -374,8 +369,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			if (edge.filter_info->join_type == JoinType::LEFT) {
-				auto denom = edge.has_distinct_count_hll ? static_cast<double>(edge.distinct_count_hll)
-				                                         : static_cast<double>(edge.distinct_count_no_hll);
+				auto denom = edge.GetDistinctCount();
 				D_ASSERT(denom >= 1);
 				subgraph_to_merge_into->numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
 			}

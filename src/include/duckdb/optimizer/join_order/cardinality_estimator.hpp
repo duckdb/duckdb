@@ -52,6 +52,10 @@ public:
 	      has_distinct_count_hll(relation_set_to_stats.has_distinct_count_hll) {
 	}
 
+	double GetDistinctCount() const {
+		return static_cast<double>(has_distinct_count_hll ? distinct_count_hll : distinct_count_no_hll);
+	}
+
 	optional_ptr<FilterInfo> filter_info;
 	//!	the estimated distinct count the joined columns determined using HLL
 	idx_t distinct_count_hll;
