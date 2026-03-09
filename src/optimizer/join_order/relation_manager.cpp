@@ -29,23 +29,6 @@ idx_t RelationManager::NumRelations() {
 	return relations.size();
 }
 
-void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSet> left_set_new) {
-	left_relation_set = left_set_new;
-}
-
-void FilterInfo::SetRightSet(optional_ptr<JoinRelationSet> right_set_new) {
-	right_relation_set = right_set_new;
-}
-
-bool FilterInfo::SingleColumnFilter() {
-	// Return true only when exactly one side has relations (single-column predicate on one side).
-	// When both sides are empty, this is an EmptyFilter - handled separately.
-	if (left_relation_set->Empty() && right_relation_set->Empty()) {
-		return false;
-	}
-	return left_relation_set->Empty() || right_relation_set->Empty();
-}
-
 void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
                                                    const RelationStats &stats, LogicalOperatorType op_type) {
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
@@ -635,7 +618,7 @@ RelationManager::CreateFilterFromConjunctionChildren(unique_ptr<BoundConjunction
 	if (left_bindings.empty() && right_bindings.empty()) {
 		// the conjunction filter cannot be made into a connection
 		// in this case we do not create a FilterInfo for it, it will be pushed down the plan
-		// during plan reconstruction. (duckdb-internal/#1493)s
+		// during plan reconstruction. (duckdb-internal/#1493)
 		leftover_expressions.push_back(std::move(conjunction_expression));
 		return leftover_expressions;
 	}
@@ -676,23 +659,20 @@ vector<unique_ptr<Expression>> RelationManager::CreateFilterInfoFromExpression(u
 	case JoinType::SEMI:
 	case JoinType::ANTI:
 	case JoinType::LEFT: {
-		// todo handle a case like select * from a join b on a.col1 = a.col2 (i.e no conditions no table b)
-		// for SEMI ANTI AND LEFT, you want to keep the expressions together
+		// For SEMI/ANTI/LEFT, keep all conditions together as a conjunction so the
+		// full set of required relations is captured in a single FilterInfo.
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_CONJUNCTION);
-		if (expr->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
-			auto conj = unique_ptr_cast<Expression, BoundConjunctionExpression>(std::move(expr));
-			auto unused_expressions = CreateFilterFromConjunctionChildren(std::move(conj), set_manager, join_type);
-			// there should not be any unused expressions here.
-			D_ASSERT(unused_expressions.empty());
-			D_ASSERT(!filter_infos_.empty());
-			// We can guarantee there is a filterr info since the filter is created from a semi anti condition.
-			auto &new_filter = *filter_infos_.back();
-			left_set = new_filter.left_relation_set;
-			right_set = new_filter.right_relation_set;
-			set = set_manager.Union(*left_set, *right_set);
-		} else {
-			throw InternalException("left/semi/anti join should have conjunction expression");
+		auto conj = unique_ptr_cast<Expression, BoundConjunctionExpression>(std::move(expr));
+		auto unused_expressions = CreateFilterFromConjunctionChildren(std::move(conj), set_manager, join_type);
+		if (!unused_expressions.empty() || filter_infos_.empty()) {
+			// No column references found in any condition; this join has no valid graph
+			// edge and cannot participate in join reordering.
+			break;
 		}
+		auto &new_filter = *filter_infos_.back();
+		left_set = new_filter.left_relation_set;
+		right_set = new_filter.right_relation_set;
+		set = set_manager.Union(*left_set, *right_set);
 
 		if (join_type == JoinType::LEFT) {
 			// When we extract relations from the left join, all filters already extracted (i.e above the left
@@ -704,18 +684,13 @@ vector<unique_ptr<Expression>> RelationManager::CreateFilterInfoFromExpression(u
 					// don't inspect the filter we just created.
 					continue;
 				}
-				// if any filter filters on just the right set,
-				// if there is no right set, it is a single column filter?
+				// If this filter references only relations from the RIGHT side of the LEFT JOIN,
+				// then the LEFT JOIN must be computed first. We expand the filter's relation set
+				// to include the LEFT JOIN's full set (left ∪ right), preventing the optimizer
+				// from scheduling this filter before the LEFT JOIN has been executed.
+				// Example: ((A LEFT JOIN B) JOIN C) with condition B.x = C.y
+				//   -> the C-side filter gets expanded to require {A, B, C} so that A ⟕ B runs first.
 				if (JoinRelationSet::IsSubset(*filter->set, *right_set)) {
-					// TODO: I don't think changing the set does much, you need to change the left and right set and
-					//  the conditions of what is required.
-					// make sure it requires all relations from the left set.
-					// if the filter is a (T1.a = 9) where t1.a is in the RHS of the left join
-					// then the filter set needs the left relations of the left join filter
-					// if the filter is a (T1.a = T2.b) where T1.a is the RHS of the left join and t2.b is the
-					// LHS, then we are fine. Union the two sets because if you have a join plan like so ((A
-					// LEFT JOIN B) JOIN C) with condition B.x = C.y the upper inner join has the total set (A,
-					// B, C).
 					filter->set = set_manager.Union(*filter->set, *set);
 				}
 				if (JoinRelationSet::IsSubset(*filter->left_relation_set, *right_set)) {
@@ -783,7 +758,7 @@ vector<unique_ptr<Expression>> RelationManager::CreateFilterInfoFromExpression(u
 	if (left_bindings.empty() && right_bindings.empty()) {
 		// the filter cannot be made into a connection
 		// in this case we do not create a FilterInfo for it, it will be pushed down the plan
-		// during plan reconstruction. (duckdb-internal/#1493)s
+		// during plan reconstruction. (duckdb-internal/#1493)
 		if (new_expression) {
 			leftover_expressions.push_back(std::move(new_expression));
 		}

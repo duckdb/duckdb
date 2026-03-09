@@ -18,8 +18,8 @@ explain select * from large left join medium on (l_id = m_id) left join small on
 physical_plan	<REGEX>:.*l_id = m_id.*l_id = s_id.*
 
 
-# reorder so that large is first left joined with small, then left joined with medium
+# cardinality estimate of the result should reflect the large table size (~100000 rows)
 query II
 explain select * from large left join medium on (l_id = m_id) left join small on (l_id = s_id);
 ----
-physical_plan	<REGEX>:.*~100000 Rows*
+physical_plan	<REGEX>:.*~100.000 rows.*

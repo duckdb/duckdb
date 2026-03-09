@@ -144,22 +144,6 @@ static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, boo
 	return JoinCondition(std::move(left), std::move(right), comp_type);
 }
 
-void GetColumnBindingsFromExpression(Expression &expression, column_binding_set_t &column_bindings) {
-	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		// Here you have a filter on a single column in a table. Return a binding for the column
-		// being filtered on so the filter estimator knows what HLL count to pull
-		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
-		// only add column bindings that map to relations.
-		// map the base table index to the relation index used by the JoinOrderOptimizer
-		column_bindings.insert(ColumnBinding(colref.binding.table_index, colref.binding.column_index));
-	}
-	// TODO: handle inequality filters with functions.
-	ExpressionIterator::EnumerateChildren(
-	    expression, [&](Expression &expr) { GetColumnBindingsFromExpression(expr, column_bindings); });
-}
-
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
                                                       JoinRelationSet &set) {
 	optional_ptr<JoinRelationSet> left_node;
@@ -209,8 +193,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				         (JoinRelationSet::IsSubset(*left.set, *f->right_relation_set) &&
 				          JoinRelationSet::IsSubset(*right.set, *f->left_relation_set)));
 
-				auto left_bindings = join->children[0]->GetColumnBindings();
-				auto right_bindings = join->children[1]->GetColumnBindings();
 				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_relation_set);
 
 				// If the left and right set are inverted for LEFT/SEMI/ANTI joins then swap them back
