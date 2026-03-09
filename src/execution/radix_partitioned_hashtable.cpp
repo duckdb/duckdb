@@ -325,8 +325,8 @@ idx_t RadixHTConfig::ExternalRadixBits(const bool dynamic) const {
 	// Because we'll have too many pages in memory to do the partitioning in the first place
 
 	// Assume we can fill half of RAM with pages, and pessimistically assume 4 pages per partition
-	const auto memory_limit = dynamic ? sink.temporary_memory_state->GetReservation() : sink.memory_limit;
-	const auto max_partitions = memory_limit / 2 / sink.number_of_threads / sink.block_alloc_size / 4;
+	const auto memory_limit = dynamic ? sink.temporary_memory_state->GetReservation() : sink.memory_limit / 2;
+	const auto max_partitions = memory_limit / sink.number_of_threads / sink.block_alloc_size / 4;
 
 	// Compute number of bits, rounded down, at least as much as initial bits
 	const auto bits = MaxValue(RadixPartitioning::RadixBits(max_partitions) - 1, InitialSinkRadixBits());
