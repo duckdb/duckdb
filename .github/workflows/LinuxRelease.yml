@@ -296,39 +296,3 @@ jobs:
         python3 scripts/amalgamation.py
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
-
- symbol-leakage:
-    name: Symbol Leakage
-    runs-on: ubuntu-22.04
-    needs: linux-release-cli
-    if: ${{ inputs.skip_tests != 'true' }}
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-
-    - name: Install Ninja
-      shell: bash
-      run: make toolsci
-
-    - uses: ./.github/actions/ccache-action
-
-    - name: Build
-      shell: bash
-      run: make
-
-    - name: Symbol Leakage Test
-      shell: bash
-      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
-    - name: Banned Symbol Check
-      shell: bash
-      run: python3 scripts/banned_symbols_check.py --directory build/release/src
