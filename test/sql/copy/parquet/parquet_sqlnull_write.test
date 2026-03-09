@@ -1,0 +1,35 @@
+# name: test/sql/copy/parquet/parquet_sqlnull_write.test
+# description: Test reading parquet files with UNKNOWN (null) logical type and combining with typed files
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification;
+
+# Read a parquet file that has a column with UNKNOWN logical type (all nulls, no type info)
+query III
+SELECT *, typeof(val) FROM '{DATA_DIR}/parquet-testing/null_type_column.parquet';
+----
+1	NULL	"NULL"
+2	NULL	"NULL"
+3	NULL	"NULL"
+
+# Verify the schema shows NullType
+query I
+SELECT logical_type FROM parquet_schema('{DATA_DIR}/parquet-testing/null_type_column.parquet') WHERE name='val';
+----
+NullType()
+
+# Test combining a SQLNULL parquet file with a typed parquet file using union_by_name
+# The SQLNULL type should be resolved to VARCHAR from the typed file
+statement ok
+COPY (SELECT 1 AS id, 'hello' AS val) TO '__TEST_DIR__/typed_val.parquet' (FORMAT PARQUET);
+
+query II rowsort
+SELECT * FROM read_parquet(['{DATA_DIR}/parquet-testing/null_type_column.parquet', '__TEST_DIR__/typed_val.parquet'], union_by_name=true);
+----
+1	NULL
+1	hello
+2	NULL
+3	NULL

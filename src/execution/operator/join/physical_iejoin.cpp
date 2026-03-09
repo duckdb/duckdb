@@ -501,17 +501,27 @@ struct IEJoinUnion {
 
 	idx_t SearchL1(idx_t pos);
 
+	//! Start the current row.
+	//! Returns false if there are no more rows to process
 	template <SortKeyType SORT_KEY_TYPE>
 	bool NextRow();
 
+	//! NextRow pointer to member for the sort key type.
 	using next_row_t = bool (duckdb::IEJoinUnion::*)();
 	next_row_t next_row_func;
+
+	//! Finish this row and move to the next one.
+	//! Returns false if there are no more rows to process
+	bool FinishRow() {
+		++i;
+		return (this->*next_row_func)();
+	}
 
 	//! Constructor arguments
 	IEJoinGlobalSourceState &gsource;
 
 	//! Inverted loop
-	idx_t JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel);
+	idx_t JoinBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel);
 
 	//! B
 	vector<validity_t> bit_array;
@@ -529,7 +539,7 @@ struct IEJoinUnion {
 	idx_t j;
 	unique_ptr<UnionIterator> op2;
 	unique_ptr<UnionIterator> off2;
-	int64_t lrid;
+	int64_t lrid = std::numeric_limits<int64_t>::max();
 
 	//! Li
 	IEJoinCursor<int64_t> li;
@@ -778,13 +788,16 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	return j >= n ? n : j + CountZeros<validity_t>::Trailing(bits.GetValidityEntryUnsafe(entry_idx));
 }
 
-idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
+idx_t IEJoinUnion::JoinBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
 	// Release pinned blocks
 	op2->Repin();
 	off2->Repin();
 
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
+
+	lsel.resize(STANDARD_VECTOR_SIZE);
+	rsel.resize(STANDARD_VECTOR_SIZE);
 
 	// 11. for(i←1 to n) do
 	while (i < n) {
@@ -822,12 +835,14 @@ idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<i
 				return result_count;
 			}
 		}
-		++i;
 
-		if (!(this->*next_row_func)()) {
+		if (!FinishRow()) {
 			break;
 		}
 	}
+
+	lsel.resize(result_count);
+	rsel.resize(result_count);
 
 	return result_count;
 }
@@ -1023,6 +1038,10 @@ public:
 	void ExecuteFinalizeL2Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Materialize L2
 	void ExecuteMaterializeL2Task(ExecutionContext &context, InterruptState &interrupt);
+	// 	Resolve simple and complex inner joins
+	void ResolveInnerJoin(ExecutionContext &context, DataChunk &result);
+	// 	Resolve SEMI joins
+	void ResolveSemiJoin(ExecutionContext &context, DataChunk &result);
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, RIGHT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
 	//	Resolve left join results
@@ -1249,7 +1268,7 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 		gsource.ExecutePermutationTask(context.client);
 		break;
 	case IEJoinSourceStage::INNER:
-		ResolveComplexJoin(context, result);
+		ResolveInnerJoin(context, result);
 		break;
 	case IEJoinSourceStage::OUTER:
 		if (left_matches != nullptr) {
@@ -1259,6 +1278,67 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 		}
 		break;
 	}
+}
+
+void IEJoinLocalSourceState::ResolveInnerJoin(ExecutionContext &context, DataChunk &result) {
+	switch (gsource.op.join_type) {
+	case JoinType::SEMI:
+		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
+		return ResolveSemiJoin(context, result);
+	case JoinType::LEFT:
+	case JoinType::INNER:
+	case JoinType::RIGHT:
+	case JoinType::OUTER:
+		return ResolveComplexJoin(context, result);
+	default:
+		throw NotImplementedException("Unimplemented join type for IEJoin!");
+	}
+}
+
+void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChunk &result) {
+	auto &op = gsource.op;
+	const auto &conditions = op.conditions;
+	D_ASSERT(conditions.size() == 2);
+
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+	auto &left_table = *ie_sink.tables[0];
+
+	do {
+		auto result_count = joiner->JoinBlocks(lsel, rsel);
+		if (result_count == 0) {
+			// exhausted this pair
+			joiner.reset();
+			return;
+		}
+
+		//	Strip out left side duplicates
+		idx_t unique_count = 1;
+		for (idx_t i = 1; i < result_count; ++i) {
+			if (lsel[i] == lsel[i - 1]) {
+				continue;
+			}
+			lsel[unique_count++] = lsel[i];
+		}
+		lsel.resize(unique_count);
+		result_count = unique_count;
+
+		//	Handle chunk boundaries: If we found a match for the last value
+		//	then move to the next rid (which might be negative).
+		//	Note that the saved rid is offset by 1.
+		if (joiner->lrid > 0 && lsel[result_count - 1] == UnsafeNumericCast<idx_t>(joiner->lrid - 1)) {
+			joiner->FinishRow();
+		}
+
+		// found matches: extract them
+		left_table.Repin(*left_iterator);
+		op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, lsel,
+		                      *left_scan_state);
+		lpayload.SetCardinality(result_count);
+
+		//	SEMI JOINs return all the columns from the LHS
+		result.Reference(lpayload);
+		result.Verify(context.client.db);
+	} while (result.size() == 0);
 }
 
 void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataChunk &result) {
@@ -1274,7 +1354,7 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 	auto &right_table = *ie_sink.tables[1];
 
 	do {
-		auto result_count = joiner->JoinComplexBlocks(lsel, rsel);
+		auto result_count = joiner->JoinBlocks(lsel, rsel);
 		if (result_count == 0) {
 			// exhausted this pair
 			joiner.reset();
