@@ -970,7 +970,7 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 
 bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, optional_ptr<JoinHashTable> ht,
                                                      const PhysicalComparisonJoin &op, const ExpressionType &cmp,
-                                                     Value &min, Value &max) const {
+                                                     const Value &min, const Value &max) const {
 	if (!CanUseBloomFilter(context, op, cmp, ht)) {
 		return false;
 	}
@@ -981,9 +981,12 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 
 	if (min.type().IsIntegral()) {
 		static const auto SPAN_THRESHOLD = Hugeint::Convert(1048576);
-		if (max.TryCastAs(context, LogicalTypeId::HUGEINT) && min.TryCastAs(context, LogicalTypeId::HUGEINT)) {
-			const auto max_value = max.GetValueUnsafe<hugeint_t>();
-			const auto min_value = min.GetValueUnsafe<hugeint_t>();
+		Value min_hugeint;
+		Value max_hugeint;
+		if (max.TryCastAs(context, LogicalTypeId::HUGEINT, max_hugeint, nullptr) &&
+		    min.TryCastAs(context, LogicalTypeId::HUGEINT, min_hugeint, nullptr)) {
+			const auto max_value = max_hugeint.GetValueUnsafe<hugeint_t>();
+			const auto min_value = min_hugeint.GetValueUnsafe<hugeint_t>();
 			hugeint_t span;
 			if (TrySubtractOperator::Operation(max_value, min_value, span)) {
 				span_is_small = span <= SPAN_THRESHOLD;
