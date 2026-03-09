@@ -73,8 +73,10 @@ inline bool BloomFilter::LookupOne(const uint64_t hash) const {
 	D_ASSERT(initialized);
 	const uint64_t bf_offset = hash & bitmask;
 	const uint64_t mask = GetMask(hash);
+	atomic<uint64_t> &slot = *reinterpret_cast<atomic<uint64_t> *>(&bf[bf_offset]);
+	auto bf_entry = slot.load(std::memory_order_relaxed);
 
-	return (bf[bf_offset] & mask) == mask;
+	return (bf_entry & mask) == mask;
 }
 
 string BFTableFilter::ToString(const string &column_name) const {
