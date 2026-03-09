@@ -23,9 +23,9 @@ DEFAULT_MAX_RETRIES = 4
 
 def enable_line_buffering():
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(line_buffering=True)
+        sys.stdout.reconfigure(line_buffering=True, write_through=True)
     if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True, write_through=True)
 
 
 @dataclass(frozen=True)
