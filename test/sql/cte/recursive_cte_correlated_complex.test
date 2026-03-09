@@ -2,6 +2,8 @@
 # description: Must not report "More than one row returned by a subquery used as an expression"
 # group: [cte]
 
+require tpch
+
 statement ok
 call dbgen(sf=0.001);
 
