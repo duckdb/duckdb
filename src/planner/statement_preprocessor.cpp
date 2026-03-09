@@ -40,18 +40,20 @@ void UnpackMultiStatement(unique_ptr<MultiStatement> &multi_statement, bool is_i
 		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
 	}
 #endif
-	// if first sub-statement is SELECT, it is a PIVOT multistatement,
-	// so we skip transaction wrapping to not break the PIVOT
-	if (is_in_active_transaction || multi_statement->statements[0]->type == StatementType::SELECT_STATEMENT) {
-		// add sub-statements
-		for (auto &stmt : multi_statement->statements) {
-			new_statements.push_back(std::move(stmt));
+	vector<unique_ptr<SQLStatement>> unpacked_statements;
+	bool is_pivot_statement = false;
+	for (auto &stmt : multi_statement->statements) {
+		if (stmt->type == StatementType::SELECT_STATEMENT) {
+			is_pivot_statement = true;
 		}
+		unpacked_statements.push_back(std::move(stmt));
+	}
+	if (is_pivot_statement || is_in_active_transaction) {
+		new_statements = std::move(unpacked_statements);
 	} else {
 		WrapInTransaction(new_statements, [&] {
-			for (auto &stmt : multi_statement->statements) {
-				new_statements.push_back(std::move(stmt));
-			}
+			new_statements.insert(new_statements.end(), std::make_move_iterator(unpacked_statements.begin()),
+			                      std::make_move_iterator(unpacked_statements.end()));
 		});
 	}
 }
