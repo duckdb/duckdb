@@ -18,20 +18,13 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DUMMY_SCAN;
 
 public:
-	explicit LogicalDummyScan(TableIndex table_index)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {
-	}
+	explicit LogicalDummyScan(TableIndex table_index);
 
 	TableIndex table_index;
 
 public:
-	vector<ColumnBinding> GetColumnBindings() override {
-		return {ColumnBinding(table_index, 0)};
-	}
-
-	idx_t EstimateCardinality(ClientContext &context) override {
-		return 1;
-	}
+	vector<ColumnBinding> GetColumnBindings() override;
+	idx_t EstimateCardinality(ClientContext &context) override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	vector<TableIndex> GetTableIndex() const override;

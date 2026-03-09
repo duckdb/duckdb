@@ -61,14 +61,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 	children.push_back(right);
 
 	//	Fill out the right projection map.
-	right_projection_map = op.right_projection_map;
-	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
-		right_projection_map.reserve(right_count);
-		for (column_t i = 0; i < right_count; ++i) {
-			right_projection_map.emplace_back(i);
-		}
-	}
+	right_projection_map = FillProjectionMap(children[1].get(), op.right_projection_map);
 }
 
 //===--------------------------------------------------------------------===//

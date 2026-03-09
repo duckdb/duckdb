@@ -242,16 +242,16 @@ private:
 
 		// Pass group bindings through and register them in the aggregate_map
 		for (idx_t group_idx = 0; group_idx < group_count; group_idx++) {
-			ColumnBinding aggregate_binding(aggr.group_index, group_idx);
-			aggregate_map[aggregate_binding] = ColumnBinding(proj_index, group_idx);
+			ColumnBinding aggregate_binding(aggr.group_index, ProjectionIndex(group_idx));
+			aggregate_map[aggregate_binding] = ColumnBinding(proj_index, ProjectionIndex(group_idx));
 			auto group_ref =
 			    make_uniq<BoundColumnRefExpression>(aggr.groups[group_idx]->return_type, aggregate_binding);
 			projection_expressions.push_back(std::move(group_ref));
 		}
 
 		for (idx_t i = 0; i < aggr_count; i++) {
-			ColumnBinding aggregate_binding(aggr.aggregate_index, i);
-			aggregate_map[aggregate_binding] = ColumnBinding(proj_index, group_count + i);
+			ColumnBinding aggregate_binding(aggr.aggregate_index, ProjectionIndex(i));
+			aggregate_map[aggregate_binding] = ColumnBinding(proj_index, ProjectionIndex(group_count + i));
 			auto &aggr_type = aggr.expressions[i]->return_type;
 			auto aggr_ref = make_uniq<BoundColumnRefExpression>(aggr_type, aggregate_binding);
 
@@ -263,7 +263,7 @@ private:
 			}
 
 			auto &rewrite_info = rewrite_entry->second;
-			ColumnBinding count_binding(aggr.aggregate_index, rewrite_info.count_idx);
+			ColumnBinding count_binding(aggr.aggregate_index, ProjectionIndex(rewrite_info.count_idx));
 			auto count_ref = make_uniq<BoundColumnRefExpression>(aggr.expressions[rewrite_info.count_idx]->return_type,
 			                                                     count_binding);
 

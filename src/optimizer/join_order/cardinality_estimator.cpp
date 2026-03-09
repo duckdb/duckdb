@@ -472,7 +472,7 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
 		//! the cardinality
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
-		auto key = ColumnBinding(TableIndex(relation_id.index), i);
+		auto key = ColumnBinding(TableIndex(relation_id.index), ProjectionIndex(i));
 		for (auto &relation_to_tdom : relation_set_stats) {
 			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.find(key) == i_set.end()) {
@@ -502,8 +502,8 @@ void CardinalityEstimator::AddRelationNamesToRelationStats(vector<RelationStats>
 		for (auto &binding : total_domain.equivalent_relations) {
 			D_ASSERT(binding.table_index.index < stats.size());
 			string column_name;
-			if (binding.column_index < stats[binding.table_index.index].column_names.size()) {
-				column_name = stats[binding.table_index.index].column_names[binding.column_index];
+			if (binding.column_index.index < stats[binding.table_index.index].column_names.size()) {
+				column_name = stats[binding.table_index.index].column_names[binding.column_index.index];
 			} else {
 				column_name = "[unknown]";
 			}

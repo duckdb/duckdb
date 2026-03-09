@@ -19,7 +19,7 @@ static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter
 		    D_ASSERT(colref.depth == 0);
 
 		    // rewrite the binding by looking into the bound_tables list of the subquery
-		    colref.binding = bindings[colref.binding.column_index];
+		    colref.binding = bindings[colref.binding.column_index.index];
 		    filter.bindings.insert(colref.binding.table_index);
 	    });
 }

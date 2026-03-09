@@ -12,6 +12,7 @@ add_library_unity(
   bound_result_modifier.cpp
   bound_parameter_map.cpp
   collation_binding.cpp
+  column_binding.cpp
   expression_iterator.cpp
   expression.cpp
   table_binding.cpp

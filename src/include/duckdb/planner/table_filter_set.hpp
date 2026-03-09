@@ -111,7 +111,7 @@ private:
 class DynamicTableFilterSet {
 public:
 	void ClearFilters(const PhysicalOperator &op);
-	void PushFilter(const PhysicalOperator &op, idx_t column_index, unique_ptr<TableFilter> filter);
+	void PushFilter(const PhysicalOperator &op, ProjectionIndex column_index, unique_ptr<TableFilter> filter);
 
 	bool HasFilters() const;
 	unique_ptr<TableFilterSet> GetFinalTableFilters(const PhysicalTableScan &scan,

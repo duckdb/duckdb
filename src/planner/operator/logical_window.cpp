@@ -7,7 +7,7 @@ namespace duckdb {
 vector<ColumnBinding> LogicalWindow::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		child_bindings.emplace_back(window_index, i);
+		child_bindings.emplace_back(window_index, ProjectionIndex(i));
 	}
 	return child_bindings;
 }

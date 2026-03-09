@@ -13,6 +13,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 

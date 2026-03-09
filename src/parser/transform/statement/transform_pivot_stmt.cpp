@@ -158,7 +158,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 				auto colref = make_uniq<ColumnRefExpression>(group);
 				select_node->select_list.push_back(colref->Copy());
 				select_node->groups.group_expressions.push_back(std::move(colref));
-				set.insert(gr);
+				set.emplace(gr);
 			}
 			select_node->groups.grouping_sets.push_back(std::move(set));
 		}

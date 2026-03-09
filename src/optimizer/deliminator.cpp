@@ -438,8 +438,8 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 	}
 
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
-		if (std::find(join_bindings.begin(), join_bindings.end(), ColumnBinding(aggr.group_index, group_idx)) ==
-		    join_bindings.end()) {
+		if (std::find(join_bindings.begin(), join_bindings.end(),
+		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
 			return;
 		}
 	}

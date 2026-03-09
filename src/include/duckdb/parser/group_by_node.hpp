@@ -11,10 +11,11 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/projection_index.hpp"
 
 namespace duckdb {
 
-using GroupingSet = set<idx_t>;
+using GroupingSet = set<ProjectionIndex>;
 
 class GroupByNode {
 public:

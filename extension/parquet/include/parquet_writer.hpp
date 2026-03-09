@@ -27,6 +27,7 @@
 #include "parquet_geometry.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 class FileSystem;

@@ -12,6 +12,23 @@ LogicalAggregate::LogicalAggregate(TableIndex group_index, TableIndex aggregate_
       distinct_validity(TupleDataValidityType::CAN_HAVE_NULL_VALUES) {
 }
 
+const Expression &LogicalAggregate::GetExpression(ColumnBinding binding) const {
+	if (binding.table_index == group_index) {
+		return *groups[binding.column_index.index];
+	}
+	if (binding.table_index == aggregate_index) {
+		return *expressions[binding.column_index.index];
+	}
+	if (binding.table_index == groupings_index) {
+		throw InternalException("Groupings function does not have an expression defined");
+	}
+	throw InternalException("LogicalAggregate::GetExpression - incorrect table index");
+}
+
+const Expression &LogicalAggregate::GetGroupExpression(ProjectionIndex group_col_idx) const {
+	return GetExpression(ColumnBinding(group_index, group_col_idx));
+}
+
 void LogicalAggregate::ResolveTypes() {
 	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	for (auto &expr : groups) {
@@ -31,13 +48,13 @@ vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	vector<ColumnBinding> result;
 	result.reserve(groups.size() + expressions.size() + grouping_functions.size());
 	for (idx_t i = 0; i < groups.size(); i++) {
-		result.emplace_back(group_index, i);
+		result.emplace_back(group_index, ProjectionIndex(i));
 	}
 	for (idx_t i = 0; i < expressions.size(); i++) {
-		result.emplace_back(aggregate_index, i);
+		result.emplace_back(aggregate_index, ProjectionIndex(i));
 	}
 	for (idx_t i = 0; i < grouping_functions.size(); i++) {
-		result.emplace_back(groupings_index, i);
+		result.emplace_back(groupings_index, ProjectionIndex(i));
 	}
 	return result;
 }

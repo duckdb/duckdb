@@ -41,7 +41,7 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<TableInd
 		unordered_set<TableIndex> new_table_bindings;
 		for (auto &binding : proj_bindings) {
 			auto col_index = binding.column_index;
-			auto &expr = proj.expressions.at(col_index);
+			auto &expr = proj.expressions.at(col_index.index);
 			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
 				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 					auto &col_ref = child.Cast<BoundColumnRefExpression>();

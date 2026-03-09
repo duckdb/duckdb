@@ -20,12 +20,12 @@ struct SelectBindState;
 class GroupBinder : public ExpressionBinder {
 public:
 	GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, TableIndex group_index,
-	            SelectBindState &bind_state, case_insensitive_map_t<idx_t> &group_alias_map);
+	            SelectBindState &bind_state, case_insensitive_map_t<ProjectionIndex> &group_alias_map);
 
 	//! The unbound root expression
 	unique_ptr<ParsedExpression> unbound_expression;
 	//! The group index currently being bound
-	idx_t bind_index;
+	ProjectionIndex bind_index;
 
 protected:
 	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
@@ -41,7 +41,7 @@ protected:
 
 	SelectNode &node;
 	SelectBindState &bind_state;
-	case_insensitive_map_t<idx_t> &group_alias_map;
+	case_insensitive_map_t<ProjectionIndex> &group_alias_map;
 	unordered_set<idx_t> used_aliases;
 
 	TableIndex group_index;

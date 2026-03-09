@@ -134,7 +134,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		}
 
 		if (stats) {
-			ColumnBinding binding(get.table_index, i);
+			ColumnBinding binding(get.table_index, ProjectionIndex(i));
 			statistics_map.insert(make_pair(binding, std::move(stats)));
 		}
 	}
@@ -156,7 +156,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		D_ASSERT(column_ids[column_index].GetPrimaryIndex() == table_filter_column);
 
 		// find the stats
-		ColumnBinding stats_binding(get.table_index, column_index);
+		ColumnBinding stats_binding(get.table_index, ProjectionIndex(column_index));
 		auto entry = statistics_map.find(stats_binding);
 		if (entry == statistics_map.end()) {
 			// no stats for this entry

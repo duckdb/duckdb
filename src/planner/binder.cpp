@@ -26,6 +26,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 

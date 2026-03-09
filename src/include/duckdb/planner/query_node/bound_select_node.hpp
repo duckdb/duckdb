@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
+#include "duckdb/common/index_vector.hpp"
 
 namespace duckdb {
 
@@ -72,10 +73,10 @@ public:
 	vector<unique_ptr<Expression>> aggregates;
 
 	//! GROUPING function calls
-	vector<unsafe_vector<idx_t>> grouping_functions;
+	vector<unsafe_vector<ProjectionIndex>> grouping_functions;
 
 	//! Map from aggregate function to aggregate index (used to eliminate duplicate aggregates)
-	expression_map_t<idx_t> aggregate_map;
+	expression_map_t<ProjectionIndex> aggregate_map;
 
 	//! Window index used by the LogicalWindow (only used if HasWindow is true)
 	TableIndex window_index;

@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/projection_index.hpp"
 
 namespace duckdb {
 

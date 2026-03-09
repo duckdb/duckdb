@@ -49,8 +49,10 @@ public:
 	static string ColumnBindingsToString(const vector<ColumnBinding> &bindings);
 	void PrintColumnBindings();
 	static vector<ColumnBinding> GenerateColumnBindings(TableIndex table_idx, idx_t column_count);
-	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
-	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
+	static vector<LogicalType> MapTypes(const vector<LogicalType> &types,
+	                                    const vector<ProjectionIndex> &projection_map);
+	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types,
+	                                         const vector<ProjectionIndex> &projection_map);
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
