@@ -369,8 +369,10 @@ static void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const
 
 	Vector result_slice(result.GetType(), valid_count);
 	result_slice.Slice(result, valid_sel, valid_count);
+	SelectionVector true_sel(valid_count);
+	SelectionVector false_sel(valid_count);
 	idx_t match_count =
-	    VectorOperations::NotDistinctFrom(result_slice, result_roundtrip, nullptr, valid_count, nullptr, nullptr);
+	    VectorOperations::NotDistinctFrom(result_slice, result_roundtrip, nullptr, valid_count, &true_sel, &false_sel);
 	D_ASSERT(match_count == valid_count &&
 	         "Struct state roundtrip failed: finalize(serialize->deserialize(state)) != finalize(state). "
 	         "Check SerializeStructFields/DeserializeStructFields for this aggregate.");
