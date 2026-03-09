@@ -31,7 +31,7 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedCol
 }
 
 static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const CorrelatedColumns &correlated_columns,
-                                      const vector<ColumnBinding> &bindings, idx_t base_offset, bool perform_delim) {
+                                      vector<ColumnBinding> bindings, idx_t base_offset, bool perform_delim) {
 	// Determine the range of columns to process
 	idx_t start = 0;
 	idx_t end = perform_delim ? correlated_columns.size() : 1;
