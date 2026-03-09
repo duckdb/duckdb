@@ -83,7 +83,7 @@ end
 
 function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)::Vector{UInt8}
     data_ptr, len = _string_data_ptr(val, idx)
-    return unsafe_wrap(Array, data_ptr, len; own=false) |> copy
+    return unsafe_wrap(Array, data_ptr, len; own = false) |> copy
 end
 
 convert_date(column_data::ColumnConversionData, val) = convert(Date, val)

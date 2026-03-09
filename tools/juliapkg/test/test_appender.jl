@@ -157,4 +157,3 @@ end
     # close the database
     DBInterface.close!(db)
 end
-

@@ -58,5 +58,5 @@ function assign_string_element(vector::Vec, index::Int64, str::AbstractString)
 end
 
 function assign_string_element(vector::Vec, index::Int64, data::Vector{UInt8})
-    duckdb_vector_assign_string_element_len(vector.handle, index, pointer(data), length(data))
+    return duckdb_vector_assign_string_element_len(vector.handle, index, pointer(data), length(data))
 end
