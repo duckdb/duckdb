@@ -123,7 +123,6 @@ jobs:
     env:
       CC: gcc
       CXX: g++
-      DUCKDB_LINKER: mold
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -219,7 +218,6 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: ninja
-      DUCKDB_LINKER: mold
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
