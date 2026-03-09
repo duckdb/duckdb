@@ -138,13 +138,21 @@ void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 		// already bound
 		return;
 	}
+	auto prev_bind_state = bind_state.load();
 	bind_state = ViewBindState::BINDING;
 	bind_thread = ThreadUtil::GetThreadId();
-	auto columns = make_shared_ptr<ViewColumnInfo>();
-	Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases,
-	                 columns->types, columns->names);
-	view_columns.atomic_store(columns);
+	try {
+		auto columns = make_shared_ptr<ViewColumnInfo>();
+		Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases,
+		                 columns->types, columns->names);
+		view_columns.atomic_store(columns);
+	} catch (...) {
+		bind_state = prev_bind_state;
+		bind_thread = thread_id {};
+		throw;
+	}
 	bind_state = ViewBindState::BOUND;
+	bind_thread = thread_id {};
 }
 
 void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const vector<string> &names_p) {
