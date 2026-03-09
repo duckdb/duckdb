@@ -20,7 +20,7 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
 	}
 }
 
-MultiFilePushdownInfo::MultiFilePushdownInfo(idx_t table_index, const vector<string> &column_names,
+MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<string> &column_names,
                                              const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info)
     : table_index(table_index), column_names(column_names), column_ids(column_ids), extra_info(extra_info) {
 }
@@ -51,7 +51,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<string> &names,
                       const vector<LogicalType> &types, const vector<column_t> &column_ids,
                       const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files) {
-	idx_t table_index = 0;
+	TableIndex table_index(0);
 	ExtraOperatorInfo extra_info;
 
 	// construct the pushdown info

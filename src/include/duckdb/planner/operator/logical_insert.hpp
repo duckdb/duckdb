@@ -35,7 +35,7 @@ struct BoundOnConflictInfo {
 	// The types of the columns targeted by the DO UPDATE SET expressions
 	vector<LogicalType> set_types;
 	// The table_index referring to the column references qualified with 'excluded'
-	idx_t excluded_table_index = 0;
+	TableIndex excluded_table_index;
 	// The columns to fetch from the 'destination' table
 	vector<column_t> columns_to_fetch;
 	// The columns to fetch from the 'source' table
@@ -50,7 +50,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INSERT;
 
 public:
-	LogicalInsert(TableCatalogEntry &table, idx_t table_index);
+	LogicalInsert(TableCatalogEntry &table, TableIndex table_index);
 
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	//! The insertion map ([table_index -> index in result, or DConstants::INVALID_INDEX if not specified])
@@ -59,7 +59,7 @@ public:
 	vector<LogicalType> expected_types;
 	//! The base table to insert into
 	TableCatalogEntry &table;
-	idx_t table_index;
+	TableIndex table_index;
 	//! if returning option is used, return actual chunk to projection
 	bool return_chunk;
 	//! The default statements used by the table
@@ -78,7 +78,7 @@ protected:
 	void ResolveTypes() override;
 
 	idx_t EstimateCardinality(ClientContext &context) override;
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
 private:

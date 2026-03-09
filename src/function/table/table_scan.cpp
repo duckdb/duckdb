@@ -529,7 +529,7 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
 
 vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, const TableFilter &filter,
                                                         idx_t storage_idx) {
-	ColumnBinding binding(0, storage_idx);
+	ColumnBinding binding(TableIndex(0), storage_idx);
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 
 	// Extract all comparisons and IN filters from nested filters

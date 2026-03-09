@@ -11,17 +11,19 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/optimizer/join_order/relation_index.hpp"
 
 namespace duckdb {
 
 //! Set of relations, used in the join graph.
 struct JoinRelationSet {
-	JoinRelationSet(unsafe_unique_array<idx_t> relations, idx_t count) : relations(std::move(relations)), count(count) {
+	JoinRelationSet(unsafe_unique_array<RelationIndex> relations, idx_t count)
+	    : relations(std::move(relations)), count(count) {
 	}
 
 	string ToString() const;
 
-	unsafe_unique_array<idx_t> relations;
+	unsafe_unique_array<RelationIndex> relations;
 	idx_t count;
 
 	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);
@@ -35,16 +37,16 @@ public:
 	// FIXME: this structure is inefficient, could use a bitmap for lookup instead (todo: profile)
 	struct JoinRelationTreeNode {
 		unique_ptr<JoinRelationSet> relation;
-		unordered_map<idx_t, unique_ptr<JoinRelationTreeNode>> children;
+		unordered_map<RelationIndex, unique_ptr<JoinRelationTreeNode>> children;
 	};
 
 public:
 	//! Create or get a JoinRelationSet from a single node with the given index
-	JoinRelationSet &GetJoinRelation(idx_t index);
+	JoinRelationSet &GetJoinRelation(RelationIndex index);
 	//! Create or get a JoinRelationSet from a set of relation bindings
-	JoinRelationSet &GetJoinRelation(const unordered_set<idx_t> &bindings);
+	JoinRelationSet &GetJoinRelation(const unordered_set<RelationIndex> &bindings);
 	//! Create or get a JoinRelationSet from a (sorted, duplicate-free!) list of relations
-	JoinRelationSet &GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count);
+	JoinRelationSet &GetJoinRelation(unsafe_unique_array<RelationIndex> relations, idx_t count);
 	//! Union two sets of relations together and create a new relation set
 	JoinRelationSet &Union(JoinRelationSet &left, JoinRelationSet &right);
 	// //! Create the set difference of left \ right (i.e. all elements in left that are not in right)

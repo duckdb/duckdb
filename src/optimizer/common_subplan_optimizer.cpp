@@ -65,7 +65,7 @@ public:
 	}
 
 public:
-	const arena_unordered_map<idx_t, PlanSignatureColumnIndexMap> &GetMap() const {
+	const arena_unordered_map<TableIndex, PlanSignatureColumnIndexMap> &GetMap() const {
 		return table_index_map;
 	}
 
@@ -100,7 +100,7 @@ private:
 					if (it != to_canonical_table_index.end()) {
 						continue; // We've seen this table index before
 					}
-					const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size();
+					TableIndex canonical(CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size());
 					D_ASSERT(to_canonical_table_index.find(original) == to_canonical_table_index.end());
 					D_ASSERT(restore_original_table_index.find(canonical) == restore_original_table_index.end());
 					to_canonical_table_index.emplace(make_pair(original, canonical));
@@ -147,7 +147,7 @@ private:
 			auto &aggr = op.Cast<LogicalAggregate>();
 			ConvertTableIndex<TYPE>(aggr.group_index, 0);
 			ConvertTableIndex<TYPE>(aggr.aggregate_index, 1);
-			if (aggr.groupings_index != DConstants::INVALID_INDEX) {
+			if (aggr.groupings_index.IsValid()) {
 				ConvertTableIndex<TYPE>(aggr.groupings_index, 2);
 			}
 			break;
@@ -223,14 +223,14 @@ private:
 	}
 
 	template <ConversionType TYPE>
-	void ConvertTableIndex(idx_t &table_index, const idx_t i) {
+	void ConvertTableIndex(TableIndex &table_index, const idx_t i) {
 		switch (TYPE) {
 		case ConversionType::TO_CANONICAL:
 			D_ASSERT(table_indices.size() == i);
 			D_ASSERT(table_index_map.find(table_index) == table_index_map.end());
 			table_index_map.emplace(table_index, PlanSignatureColumnIndexMap(allocator));
 			table_indices.emplace_back(table_index);
-			table_index = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size() + i;
+			table_index = TableIndex(CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size() + i);
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			table_index = table_indices[i];
@@ -372,13 +372,13 @@ private:
 	ArenaAllocator &allocator;
 
 	//! Map from original table index to column index map
-	arena_unordered_map<idx_t, PlanSignatureColumnIndexMap> table_index_map;
+	arena_unordered_map<TableIndex, PlanSignatureColumnIndexMap> table_index_map;
 
 	//! Temporary map from original table index to canonical table index (and reverse)
-	arena_unordered_map<idx_t, idx_t> to_canonical_table_index;
-	arena_unordered_map<idx_t, idx_t> restore_original_table_index;
+	arena_unordered_map<TableIndex, TableIndex> to_canonical_table_index;
+	arena_unordered_map<TableIndex, TableIndex> restore_original_table_index;
 	//! Temporary vector to store table indices
-	vector<idx_t> table_indices;
+	vector<TableIndex> table_indices;
 	//! Temporary vector to store projection maps
 	vector<vector<idx_t>> projection_maps;
 
@@ -863,7 +863,7 @@ public:
 				auto &rhs_child = current_op.get()->children[1];
 				if (rhs_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 					const auto child_table_index = rhs_child->Cast<LogicalMaterializedCTE>().table_index;
-					if (child_table_index >= min_cte_idx.GetIndex() && child_table_index < cte_index) {
+					if (child_table_index >= min_cte_idx && child_table_index < cte_index) {
 						auto tmp = std::move(rhs_child->children[1]);
 						rhs_child->children[1] = std::move(current_op.get());
 						current_op.get() = std::move(rhs_child);
@@ -1004,9 +1004,9 @@ private:
 	//! Mapping from subplan signature to subplan information
 	subplan_map_t subplans;
 	//! Mapping from original table index to canonical table index
-	unordered_map<idx_t, idx_t> to_canonical_table_index;
+	unordered_map<TableIndex, TableIndex> to_canonical_table_index;
 	//! Minimum CTE index created by this optimizer
-	optional_idx min_cte_idx;
+	TableIndex min_cte_idx;
 };
 
 //===--------------------------------------------------------------------===//

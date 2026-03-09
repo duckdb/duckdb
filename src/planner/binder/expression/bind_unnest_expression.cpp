@@ -205,7 +205,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 
 		auto current_level = unnest_level + list_unnests - current_depth - 1;
 		auto entry = node.unnests.find(current_level);
-		idx_t unnest_table_index;
+		TableIndex unnest_table_index;
 		idx_t unnest_column_index;
 		if (entry == node.unnests.end()) {
 			BoundUnnestNode unnest_node;

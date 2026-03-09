@@ -59,7 +59,7 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 }
 
 template <class T>
-void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace) {
+void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace) {
 	idx_t offset = 0;
 	idx_t new_col_idx = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {

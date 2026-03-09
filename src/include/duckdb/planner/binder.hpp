@@ -216,7 +216,7 @@ public:
 	//! The intermediate lambda bindings to bind nested lambdas (if any)
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
 
-	unordered_map<idx_t, LogicalOperator *> recursive_ctes;
+	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
 
 public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
@@ -263,7 +263,7 @@ public:
 	BoundStatement Bind(TableRef &ref);
 
 	//! Generates an unused index for a table
-	idx_t GenerateTableIndex();
+	TableIndex GenerateTableIndex();
 
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
@@ -290,7 +290,7 @@ public:
 	                                          UpdateSetInfo &set_info, TableCatalogEntry &table,
 	                                          vector<PhysicalIndex> &columns,
 	                                          bool prioritize_table_when_binding = false);
-	void BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
+	void BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
 	                   TableCatalogEntry &table, vector<PhysicalIndex> &columns,
 	                   vector<unique_ptr<Expression>> &update_expressions,
 	                   vector<unique_ptr<Expression>> &projection_expressions,
@@ -427,7 +427,7 @@ private:
 	                            vector<unique_ptr<Expression>> &projection_expressions,
 	                            LogicalOperator &target_binding);
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-	                             const string &alias, idx_t update_table_index,
+	                             const string &alias, TableIndex update_table_index,
 	                             unique_ptr<LogicalOperator> child_operator,
 	                             virtual_column_map_t virtual_columns = virtual_column_map_t());
 
@@ -489,7 +489,7 @@ private:
 	case_insensitive_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
+	void BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
 	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
@@ -553,7 +553,7 @@ private:
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
 	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-	                                                 LogicalGet &get, idx_t proj_index,
+	                                                 LogicalGet &get, TableIndex proj_index,
 	                                                 vector<unique_ptr<Expression>> &expressions,
 	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
 	                                                 const vector<BindingAlias> &source_aliases,

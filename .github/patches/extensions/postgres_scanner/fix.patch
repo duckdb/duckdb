@@ -40,3 +40,25 @@ index c2f981a..fcdcf3e 100644
  		auto filter_text = TransformFilter(column_name, filter, column_id);
  
  		if (filter_text.empty()) {
+diff --git a/src/storage/postgres_merge_into.cpp b/src/storage/postgres_merge_into.cpp
+index 03188d6..7bcab80 100644
+--- a/src/storage/postgres_merge_into.cpp
++++ b/src/storage/postgres_merge_into.cpp
+@@ -51,7 +51,7 @@ unique_ptr<MergeIntoOperator> PostgresPlanMergeIntoAction(PostgresCatalog &catal
+ 		break;
+ 	}
+ 	case MergeActionType::MERGE_DELETE: {
+-		LogicalDelete delete_op(op.table, 0);
++		LogicalDelete delete_op(op.table, TableIndex(0));
+ 		auto ref = make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, op.row_id_start);
+ 		delete_op.expressions.push_back(std::move(ref));
+ 		delete_op.bound_constraints = std::move(bound_constraints);
+@@ -59,7 +59,7 @@ unique_ptr<MergeIntoOperator> PostgresPlanMergeIntoAction(PostgresCatalog &catal
+ 		break;
+ 	}
+ 	case MergeActionType::MERGE_INSERT: {
+-		LogicalInsert insert_op(op.table, 0);
++		LogicalInsert insert_op(op.table, TableIndex(0));
+ 		insert_op.bound_constraints = std::move(bound_constraints);
+ 		for (auto &def : op.bound_defaults) {
+ 			insert_op.bound_defaults.push_back(def->Copy());
