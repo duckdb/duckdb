@@ -315,7 +315,7 @@ end
         s = @NamedTuple{a::Int32, b::String}[
             (a = Int32(10), b = "hello"),
             (a = Int32(20), b = "world"),
-            (a = Int32(30), b = "foo"),
+            (a = Int32(30), b = "foo")
         ]
     )
 
@@ -342,7 +342,7 @@ end
     my_tbl = (
         s = @NamedTuple{x::Int32, inner::@NamedTuple{a::Int32, b::Int32}}[
             (x = Int32(1), inner = (a = Int32(10), b = Int32(20))),
-            (x = Int32(2), inner = (a = Int32(30), b = Int32(40))),
+            (x = Int32(2), inner = (a = Int32(30), b = Int32(40)))
         ],
         id = [1, 2]
     )

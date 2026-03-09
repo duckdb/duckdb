@@ -34,7 +34,13 @@ value_to_duckdb(val::AbstractString) = throw(
 )
 value_to_duckdb(val) = val
 
-function _scan_into_vector!(vector::Vec, input_column::AbstractVector, row_offset::Int64, scan_count::Int64, ::Type{DUCK_TYPE}) where {DUCK_TYPE}
+function _scan_into_vector!(
+    vector::Vec,
+    input_column::AbstractVector,
+    row_offset::Int64,
+    scan_count::Int64,
+    ::Type{DUCK_TYPE}
+) where {DUCK_TYPE}
     result_array::Vector{DUCK_TYPE} = DuckDB.get_array(vector, DUCK_TYPE)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
@@ -69,7 +75,7 @@ function tbl_scan_column(
     ::Type{DUCK_TYPE},
     ::Type{JL_TYPE}
 ) where {DUCK_TYPE, JL_TYPE}
-    _scan_into_vector!(DuckDB.get_vector(output, result_idx), input_column, row_offset, scan_count, DUCK_TYPE)
+    return _scan_into_vector!(DuckDB.get_vector(output, result_idx), input_column, row_offset, scan_count, DUCK_TYPE)
 end
 
 function tbl_scan_string_column(
@@ -82,7 +88,7 @@ function tbl_scan_string_column(
     ::Type{DUCK_TYPE},
     ::Type{JL_TYPE}
 ) where {DUCK_TYPE, JL_TYPE}
-    _scan_string_into_vector!(DuckDB.get_vector(output, result_idx), input_column, row_offset, scan_count)
+    return _scan_string_into_vector!(DuckDB.get_vector(output, result_idx), input_column, row_offset, scan_count)
 end
 
 function tbl_scan_struct_column(
@@ -97,7 +103,7 @@ function tbl_scan_struct_column(
 ) where {DUCK_TYPE, JL_TYPE}
     vector::Vec = DuckDB.get_vector(output, result_idx)
     # No missing support within struct columns for now.
-    _scan_struct_vector!(vector, input_column, row_offset, scan_count)
+    return _scan_struct_vector!(vector, input_column, row_offset, scan_count)
 end
 
 function _scan_struct_vector!(vector::Vec, child_columns::NamedTuple, row_offset::Int64, scan_count::Int64)
