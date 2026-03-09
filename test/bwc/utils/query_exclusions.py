@@ -32,7 +32,7 @@ def _normalize_sql(sql: str) -> str:
             continue
         # Remove inline comments
         if '--' in stripped:
-            stripped = stripped[:stripped.index('--')]
+            stripped = stripped[: stripped.index('--')]
 
         if len(stripped) > 0:
             lines.append(stripped)
@@ -65,12 +65,10 @@ SKIP_PATTERNS = [
     # Transaction statements - we're not testing transaction semantics
     r'\b(begin|commit|rollback)\b',
     r'\bstart\s+transaction\b',
-
     # Pragmas that cause verification issues
     r'\bpragma\s+enable_verification\b',
     r'\bpragma\s+verify_external\b',
     r'\bpragma\s+threads\b',
-
     # Thread settings can cause system errors
     r'\bset\s+threads\b',
     r'\breset\s+threads\b',
@@ -89,24 +87,19 @@ EXECUTE_FROM_SQL_PATTERNS_WITHOUT_LITERALS = [
     r'\bcreate(\s+or\s+replace)?\s+schema\b',
     r'\bcreate(\s+or\s+replace)?(\s+recursive)?\s+view\b',
     r'\bcreate(\s+or\s+replace)?\s+secret\b',
-
     # ALTER - catalog changes on read-only transaction
     r'\balter\b',
-
     # DML - transaction is read-only but has made changes
     r'\binsert\b',
     r'\bupdate\b(?!\s*statistics)',  # UPDATE but not UPDATE STATISTICS
     r'\bdelete\b',
     r'\bdrop\b',
-
     # Prepared statements - not implemented
     r'\bprepare\b',
     r'\bexecute\b',
     r'\bdeallocate\b',
-
     # All pragmas don't serialize well
     r'\bpragma\b',
-
     # Table functions that don't have serialization implemented
     r'\bread_csv\s*\(',
     r'\bread_csv_auto\s*\(',
@@ -117,14 +110,11 @@ EXECUTE_FROM_SQL_PATTERNS_WITHOUT_LITERALS = [
     r'\bread_ndjson\s*\(',
     r'\bread_ndjson_objects\s*\(',
     r'\bread_ndjson_auto\s*\(',
-
     # Function calls that don't serialize
     r'\bnextval\s*\(',
     r'\bfinalize\s*\(',
-
     # EXPORT_STATE doesn't serialize
     r'\bexport_state\b',
-
     # CALL dbgen/dsdgen - causes database modification issues
     r'\bcall\s+dbgen\s*\(',
     r'\bcall\s+dsdgen\s*\(',

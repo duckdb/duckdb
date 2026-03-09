@@ -14,8 +14,10 @@ import uuid
 
 logger = make_logger(__name__)
 
+
 class DuckDBCLI:
     """DuckDB CLI interface using CSV output and a unique marker."""
+
     def __init__(self, duckdb_path: str = None, unsigned: bool = False):
         self.duckdb_path = duckdb_path
         self.unsigned = unsigned
@@ -43,7 +45,7 @@ class DuckDBCLI:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
             )
             self.output_buffer = []
             self.error_buffer = []
@@ -135,7 +137,7 @@ class DuckDBCLI:
             "output": crash_stdout,
             "error": crash_msg,
             "exception_message": f"CLI process crashed: {crash_msg}",
-            "error_log": f"[{self.version}] ❌ Command: \n-------\n{command}\n-------\nfailed with:\n{crash_msg}"
+            "error_log": f"[{self.version}] ❌ Command: \n-------\n{command}\n-------\nfailed with:\n{crash_msg}",
         }
 
     def execute_command(self, command: str) -> Dict[str, Any]:
@@ -195,7 +197,7 @@ class DuckDBCLI:
                 if last_stderr_count < len(self.error_buffer):
                     last_stderr_count = len(self.error_buffer)
                     last_output_time = time.time()
-            if time.time() - last_output_time > 0.05: # TODO review that
+            if time.time() - last_output_time > 0.05:  # TODO review that
                 break
 
         # Collect any errors
@@ -213,11 +215,13 @@ class DuckDBCLI:
             "query": command,
             "success": success,
             "output": output_lines,
-            "error": "\n".join(error_lines) if error_lines else None
+            "error": "\n".join(error_lines) if error_lines else None,
         }
 
         if result["success"]:
-            if len(result["output"]) == 0 or (len(result["output"]) == 2 and result["output"][0] == "result" and result["output"][1] == "true"):
+            if len(result["output"]) == 0 or (
+                len(result["output"]) == 2 and result["output"][0] == "result" and result["output"][1] == "true"
+            ):
                 logger.debug(f"[{self.version}] ✅ '{command}'")
             else:
                 logger.debug(f"[{self.version}] ✅ '{command}' - result:")
@@ -233,7 +237,9 @@ class DuckDBCLI:
                 # Extract the exception message from the JSON output
                 match = re.search(r'"exception_message":"((?:[^"\\]|\\.)*)"', output_lines)
                 if match:
-                    result['exception_message'] = match.group(1).split('\\n')[0]  # Get the first line of the exception message
+                    result['exception_message'] = match.group(1).split('\\n')[
+                        0
+                    ]  # Get the first line of the exception message
 
             if 'exception_message' not in result:
                 if result['error'] is not None:
@@ -244,7 +250,9 @@ class DuckDBCLI:
                         result['exception_message'] = error_lines[0]
                 else:
                     result['exception_message'] = output_lines
-            result['error_log'] = f"[{self.version}] ❌ Command: \n-------\n{command}\n-------\nfailed with:\n{output_lines}"
+            result['error_log'] = (
+                f"[{self.version}] ❌ Command: \n-------\n{command}\n-------\nfailed with:\n{output_lines}"
+            )
         return result
 
     @staticmethod
@@ -255,7 +263,6 @@ class DuckDBCLI:
             if "terminating due to" in line or "Error" in line:
                 return True
         return False
-
 
     def close(self):
         if not self.process or self.process.poll() is not None:
