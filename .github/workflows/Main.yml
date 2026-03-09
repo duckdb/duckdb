@@ -440,15 +440,13 @@ jobs:
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
     name: Tests a release build with different configurations
-    runs-on: ubuntu-24.04
-    needs: linux-debug
-    env:
-      BASE_BRANCH: ${{ github.base_ref || 'main' }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    needs:
+      - prepare
+      - linux-debug
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - uses: actions/setup-python@v5
       with:
