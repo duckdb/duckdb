@@ -39,6 +39,9 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 	switch (op.join_type) {
 	case JoinType::SEMI:
+		can_merge = can_merge && op.conditions.size() == 1;
+		can_iejoin = can_iejoin && op.conditions.size() == 2;
+		break;
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
 	case JoinType::RIGHT_SEMI:
