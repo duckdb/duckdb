@@ -3048,6 +3048,10 @@ void ShellState::DetectDarkLightMode() {
 		// not printing to console - don't auto-detect
 		return;
 	}
+	if (!stdin_is_interactive) {
+		// stdin is not interactive - don't read from stdin to detect terminal colors
+		return;
+	}
 	// detect terminal colors
 	auto terminal_color = linenoiseGetTerminalColorMode();
 	if (terminal_color == LINENOISE_DARK_MODE) {
