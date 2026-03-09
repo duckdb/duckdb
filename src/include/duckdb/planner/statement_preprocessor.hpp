@@ -32,8 +32,8 @@ private:
 private:
 	//! Handles a pragma statement, returns whether the statement was expanded, if it was expanded the 'resulting_query'
 	//! contains the statement(s) to replace the current one
-	bool TryExpandPragma(SQLStatement &statement, string &resulting_query);
+	void TryExpandPragma(SQLStatement &statement, string &resulting_query, bool &expanded);
 
-	void ExpandPragma(unique_ptr<SQLStatement> &statements, vector<unique_ptr<SQLStatement>> &new_statements);
+	void ExpandPragma(vector<unique_ptr<SQLStatement>> &new_statements, const string &new_query);
 };
 } // namespace duckdb
