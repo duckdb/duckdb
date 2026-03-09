@@ -18,6 +18,7 @@ namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
+class Optimizer;
 
 struct ReferencedExtractComponent {
 public:
@@ -116,13 +117,12 @@ private:
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public BaseColumnPruner {
 public:
-	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false)
-	    : binder(binder), context(context), everything_referenced(is_root) {
-	}
+	explicit RemoveUnusedColumns(Optimizer &optimizer, bool is_root = false);
 
-	void VisitOperator(LogicalOperator &op) override;
+	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
 private:
+	Optimizer &optimizer;
 	Binder &binder;
 	ClientContext &context;
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
@@ -131,8 +131,8 @@ private:
 
 private:
 	template <class T>
-	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
-	void RemoveColumnsFromLogicalGet(LogicalGet &get);
+	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
+	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void WritePushdownExtractColumns(

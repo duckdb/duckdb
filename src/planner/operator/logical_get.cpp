@@ -16,7 +16,7 @@ namespace duckdb {
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
-LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+LogicalGet::LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<string> returned_names,
                        virtual_column_map_t virtual_columns_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
@@ -36,15 +36,15 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 
 	string filters_info;
 	bool first_item = true;
-	for (auto &kv : table_filters.filters) {
-		auto &column_index = kv.first;
-		auto &filter = kv.second;
+	for (auto &kv : table_filters) {
+		auto column_index = kv.ColumnIndex();
+		auto &filter = kv.Filter();
 		if (column_index < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
 			first_item = false;
-			filters_info += filter->ToString(names[column_index]);
+			filters_info += filter.ToString(names[column_index]);
 		}
 	}
 	result["Filters"] = filters_info;
@@ -353,14 +353,14 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	return std::move(result);
 }
 
-vector<idx_t> LogicalGet::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalGet::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 string LogicalGet::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return StringUtil::Upper(function.name) + StringUtil::Format(" #%llu", table_index);
+		return StringUtil::Upper(function.name) + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return StringUtil::Upper(function.name);

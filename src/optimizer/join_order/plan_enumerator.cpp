@@ -9,9 +9,9 @@
 
 namespace duckdb {
 
-static vector<unordered_set<idx_t>> AddSuperSets(const vector<unordered_set<idx_t>> &current,
-                                                 const vector<idx_t> &all_neighbors) {
-	vector<unordered_set<idx_t>> ret;
+static vector<unordered_set<RelationIndex>> AddSuperSets(const vector<unordered_set<RelationIndex>> &current,
+                                                         const vector<RelationIndex> &all_neighbors) {
+	vector<unordered_set<RelationIndex>> ret;
 
 	for (const auto &neighbor_set : current) {
 		auto max_val = std::max_element(neighbor_set.begin(), neighbor_set.end());
@@ -20,7 +20,7 @@ static vector<unordered_set<idx_t>> AddSuperSets(const vector<unordered_set<idx_
 				continue;
 			}
 			if (neighbor_set.count(neighbor) == 0) {
-				unordered_set<idx_t> new_set;
+				unordered_set<RelationIndex> new_set;
 				for (auto &n : neighbor_set) {
 					new_set.insert(n);
 				}
@@ -34,7 +34,7 @@ static vector<unordered_set<idx_t>> AddSuperSets(const vector<unordered_set<idx_
 }
 
 //! Update the exclusion set with all entries in the subgraph
-static void UpdateExclusionSet(optional_ptr<JoinRelationSet> node, unordered_set<idx_t> &exclusion_set) {
+static void UpdateExclusionSet(optional_ptr<JoinRelationSet> node, unordered_set<RelationIndex> &exclusion_set) {
 	for (idx_t i = 0; i < node->count; i++) {
 		exclusion_set.insert(node->relations[i]);
 	}
@@ -43,13 +43,13 @@ static void UpdateExclusionSet(optional_ptr<JoinRelationSet> node, unordered_set
 // works by first creating all sets with cardinality 1
 // then iterates over each previously created group of subsets and will only add a neighbor if the neighbor
 // is greater than all relations in the set.
-static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) {
-	vector<unordered_set<idx_t>> ret;
+static vector<unordered_set<RelationIndex>> GetAllNeighborSets(vector<RelationIndex> neighbors) {
+	vector<unordered_set<RelationIndex>> ret;
 	sort(neighbors.begin(), neighbors.end());
-	vector<unordered_set<idx_t>> added;
+	vector<unordered_set<RelationIndex>> added;
 	for (auto &neighbor : neighbors) {
-		added.push_back(unordered_set<idx_t>({neighbor}));
-		ret.push_back(unordered_set<idx_t>({neighbor}));
+		added.push_back(unordered_set<RelationIndex>({neighbor}));
+		ret.push_back(unordered_set<RelationIndex>({neighbor}));
 	}
 	do {
 		added = AddSuperSets(added, neighbors);
@@ -79,12 +79,12 @@ void PlanEnumerator::GenerateCrossProducts() {
 	// generate a set of cross products to combine the currently available plans into a full join plan
 	// we create edges between every relation with a high cost
 	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
-		auto &left = query_graph_manager.set_manager.GetJoinRelation(i);
+		auto &left = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(i));
 		for (idx_t j = 0; j < query_graph_manager.relation_manager.NumRelations(); j++) {
 			auto cross_product_allowed = query_graph_manager.relation_manager.CrossProductWithRelationAllowed(i) &&
 			                             query_graph_manager.relation_manager.CrossProductWithRelationAllowed(j);
 			if (i != j && cross_product_allowed) {
-				auto &right = query_graph_manager.set_manager.GetJoinRelation(j);
+				auto &right = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(j));
 				query_graph_manager.CreateQueryGraphCrossProduct(left, right);
 			}
 		}
@@ -186,9 +186,9 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 		return true;
 	}
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
-	unordered_set<idx_t> exclusion_set;
-	for (idx_t i = 0; i < node.relations[0]; i++) {
-		exclusion_set.insert(i);
+	unordered_set<RelationIndex> exclusion_set;
+	for (idx_t i = 0; i < node.relations[0].index; i++) {
+		exclusion_set.emplace(i);
 	}
 	UpdateExclusionSet(&node, exclusion_set);
 	// find the neighbors given this exclusion set
@@ -198,7 +198,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 	}
 
 	//! Neighbors should be reversed when iterating over them.
-	std::sort(neighbors.begin(), neighbors.end(), std::greater<idx_t>());
+	std::sort(neighbors.begin(), neighbors.end(), std::greater<RelationIndex>());
 	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
 		D_ASSERT(neighbors[i] > neighbors[i + 1]);
 	}
@@ -207,7 +207,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 	// Because we are traversing in reverse order, we need to add neighbors whose number is smaller than the current
 	// node to exclusion_set
 	// This avoids duplicated enumeration
-	unordered_set<idx_t> new_exclusion_set = exclusion_set;
+	unordered_set<RelationIndex> new_exclusion_set = exclusion_set;
 	for (idx_t i = 0; i < neighbors.size(); ++i) {
 		D_ASSERT(new_exclusion_set.find(neighbors[i]) == new_exclusion_set.end());
 		new_exclusion_set.insert(neighbors[i]);
@@ -234,7 +234,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 }
 
 bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
-                                           unordered_set<idx_t> &exclusion_set) {
+                                           unordered_set<RelationIndex> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {
@@ -262,7 +262,7 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 		union_sets.push_back(combined_set);
 	}
 
-	unordered_set<idx_t> new_exclusion_set = exclusion_set;
+	unordered_set<RelationIndex> new_exclusion_set = exclusion_set;
 	for (const auto &neighbor : neighbors) {
 		new_exclusion_set.insert(neighbor);
 	}
@@ -277,7 +277,7 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 	return true;
 }
 
-bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) {
+bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<RelationIndex> &exclusion_set) {
 	// find neighbors of S under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.empty()) {
@@ -300,7 +300,7 @@ bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<
 		union_sets.push_back(new_set);
 	}
 
-	unordered_set<idx_t> new_exclusion_set = exclusion_set;
+	unordered_set<RelationIndex> new_exclusion_set = exclusion_set;
 	for (const auto &neighbor : neighbors) {
 		new_exclusion_set.insert(neighbor);
 	}
@@ -320,15 +320,15 @@ bool PlanEnumerator::SolveJoinOrderExactly() {
 	// we enumerate over all the possible pairs in the neighborhood
 	for (idx_t i = query_graph_manager.relation_manager.NumRelations(); i > 0; i--) {
 		// for every node in the set, we consider it as the start node once
-		auto &start_node = query_graph_manager.set_manager.GetJoinRelation(i - 1);
+		auto &start_node = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(i - 1));
 		// emit the start node
 		if (!EmitCSG(start_node)) {
 			return false;
 		}
 		// initialize the set of exclusion_set as all the nodes with a number below this
-		unordered_set<idx_t> exclusion_set;
+		unordered_set<RelationIndex> exclusion_set;
 		for (idx_t j = 0; j < i; j++) {
-			exclusion_set.insert(j);
+			exclusion_set.emplace(j);
 		}
 		// then we recursively search for neighbors that do not belong to the banned entries
 		if (!EnumerateCSGRecursive(start_node, exclusion_set)) {
@@ -344,7 +344,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 	// construct the result tree first we start out with all the base relations (the to-be-joined relations)
 	vector<reference<JoinRelationSet>> join_relations; // T in the paper
 	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
-		join_relations.push_back(query_graph_manager.set_manager.GetJoinRelation(i));
+		join_relations.push_back(query_graph_manager.set_manager.GetJoinRelation(RelationIndex(i)));
 	}
 	while (join_relations.size() > 1) {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
@@ -456,7 +456,7 @@ void PlanEnumerator::InitLeafPlans() {
 	// then update the total domains based on the cardinalities of each relation.
 	for (idx_t i = 0; i < relation_stats.size(); i++) {
 		auto stats = relation_stats.at(i);
-		auto &relation_set = query_graph_manager.set_manager.GetJoinRelation(i);
+		auto &relation_set = query_graph_manager.set_manager.GetJoinRelation(RelationIndex(i));
 		auto join_node = make_uniq<DPJoinNode>(relation_set);
 		join_node->cost = 0;
 		join_node->cardinality = stats.cardinality;
@@ -481,9 +481,9 @@ void PlanEnumerator::SolveJoinOrder() {
 
 	// now the optimal join path should have been found
 	// get it from the node
-	unordered_set<idx_t> bindings;
+	unordered_set<RelationIndex> bindings;
 	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
-		bindings.insert(i);
+		bindings.emplace(i);
 	}
 	auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(bindings);
 	auto final_plan = plans.find(total_relation);

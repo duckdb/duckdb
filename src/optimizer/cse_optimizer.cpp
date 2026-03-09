@@ -21,7 +21,7 @@ struct CSENode {
 //! The CSEReplacementState
 struct CSEReplacementState {
 	//! The projection index of the new projection
-	idx_t projection_index;
+	TableIndex projection_index;
 	//! Map of expression -> CSENode
 	expression_map_t<CSENode> expression_count;
 	//! Map of column bindings to column indexes in the projection expression list

@@ -189,11 +189,11 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
 	// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
-	if (!get.table_filters.filters.empty()) {
-		map<StorageIndex, reference<unique_ptr<TableFilter>>> filter_storage_index_map;
-		for (auto &entry : get.table_filters.filters) {
-			auto col_idx = entry.first;
-			auto &filter = entry.second;
+	if (get.table_filters.HasFilters()) {
+		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
+		for (auto &entry : get.table_filters) {
+			auto col_idx = entry.ColumnIndex();
+			auto &filter = entry.Filter();
 			auto column_index = ColumnIndex(col_idx);
 			StorageIndex storage_index;
 			if (!get.TryGetStorageIndex(column_index, storage_index)) {
@@ -218,7 +218,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				if (!column_stats) {
 					return;
 				}
-				auto col_filter_result = filter.get()->CheckStatistics(*column_stats);
+				auto col_filter_result = filter.get().CheckStatistics(*column_stats);
 				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 					// all data in this partition is filtered out, remove this partition entirely
 					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;

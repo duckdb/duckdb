@@ -46,7 +46,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		if (distinct.distinct_targets[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 			break;
 		}
-		idx_t table_idx = distinct.distinct_targets[0]->Cast<BoundColumnRefExpression>().binding.table_index;
+		auto table_idx = distinct.distinct_targets[0]->Cast<BoundColumnRefExpression>().binding.table_index;
 		bool can_add = true;
 		for (auto &target : distinct.distinct_targets) {
 			if (target->type != ExpressionType::BOUND_COLUMN_REF) {
@@ -69,7 +69,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		}
 		// only resolve group by columns for now
 		column_binding_set_t distinct_group;
-		idx_t table_idx = aggr.group_index;
+		TableIndex table_idx = aggr.group_index;
 		for (idx_t i = 0; i < aggr.groups.size(); i++) {
 			distinct_group.insert(ColumnBinding(aggr.group_index, i));
 		}
@@ -94,7 +94,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 				break;
 			}
 			bool could_add = true;
-			idx_t ref_id = expression->Cast<BoundColumnRefExpression>().binding.table_index;
+			auto ref_id = expression->Cast<BoundColumnRefExpression>().binding.table_index;
 			for (auto &col : it->second) {
 				auto &expression = projection.expressions.get(col.column_index);
 				if (expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -117,7 +117,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		if (!get.table_filters.filters.empty()) {
+		if (get.table_filters.HasFilters()) {
 			pipe_info.has_filter = true;
 		}
 		break;
@@ -142,7 +142,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &projection = op.Cast<LogicalProjection>();
 		// after traversed children, here check whether any distinct group added in children
-		unordered_map<idx_t, DistinctGroupRef> ref_table_columns;
+		unordered_map<TableIndex, DistinctGroupRef> ref_table_columns;
 		for (idx_t idx = 0; idx < projection.expressions.size(); idx++) {
 			auto &expression = projection.expressions.get(idx);
 			if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {

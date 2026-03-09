@@ -27,7 +27,7 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, Physic
 	    children[0].get().GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
 	if (delim_idx.IsValid()) {
 		auto &cast_cached_scan = cached_scan.Cast<PhysicalColumnDataScan>();
-		cast_cached_scan.cte_index = delim_idx.GetIndex();
+		cast_cached_scan.delim_index = delim_idx.GetIndex();
 	}
 	join.children[0] = cached_scan;
 }

@@ -32,7 +32,7 @@ unique_ptr<ParsedExpression> HavingBinder::QualifyColumnName(ColumnRefExpression
 	}
 
 	auto group_index = TryBindGroup(*qualified_colref);
-	if (group_index != DConstants::INVALID_INDEX) {
+	if (group_index.IsValid()) {
 		return qualified_colref;
 	}
 	if (column_alias_binder.DoesColumnAliasExist(colref)) {

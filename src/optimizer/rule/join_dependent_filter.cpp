@@ -15,26 +15,26 @@ JoinDependentFilterRule::JoinDependentFilterRule(ExpressionRewriter &rewriter) :
 	root = std::move(op);
 }
 
-static void GetTableIndices(const Expression &root_expr, unordered_set<idx_t> &table_idxs) {
+static void GetTableIndices(const Expression &root_expr, unordered_set<TableIndex> &table_idxs) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 	    root_expr, [&](const BoundColumnRefExpression &colref) { table_idxs.insert(colref.binding.table_index); });
 }
 
 static inline bool ExpressionReferencesMultipleTables(const Expression &binding) {
-	unordered_set<idx_t> table_idxs;
+	unordered_set<TableIndex> table_idxs;
 	GetTableIndices(binding, table_idxs);
 	return table_idxs.size() > 1;
 }
 
 static inline void ExtractConjunctedExpressions(Expression &expression,
-                                                unordered_map<idx_t, unique_ptr<Expression>> &expressions) {
+                                                unordered_map<TableIndex, unique_ptr<Expression>> &expressions) {
 	if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
 		for (auto &child : conjunction.children) {
 			ExtractConjunctedExpressions(*child, expressions);
 		}
 	} else if (!expression.IsVolatile()) {
-		unordered_set<idx_t> table_idxs;
+		unordered_set<TableIndex> table_idxs;
 		GetTableIndices(expression, table_idxs);
 		if (table_idxs.size() != 1) {
 			return; // Needs to reference exactly one table
@@ -100,9 +100,9 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 	}
 
 	// Extract all comparison expressions between column references and constants that are AND'ed together
-	auto conjuncted_expressions = make_uniq_array<unordered_map<idx_t, unique_ptr<Expression>>>(children.size());
+	auto conjuncted_expressions = make_uniq_array<unordered_map<TableIndex, unique_ptr<Expression>>>(children.size());
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-		conjuncted_expressions[child_idx] = unordered_map<idx_t, unique_ptr<Expression>>();
+		conjuncted_expressions[child_idx] = unordered_map<TableIndex, unique_ptr<Expression>>();
 		ExtractConjunctedExpressions(*children[child_idx], conjuncted_expressions[child_idx]);
 	}
 

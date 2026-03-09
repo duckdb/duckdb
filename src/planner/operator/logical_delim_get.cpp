@@ -4,14 +4,14 @@
 
 namespace duckdb {
 
-vector<idx_t> LogicalDelimGet::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalDelimGet::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 string LogicalDelimGet::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();
