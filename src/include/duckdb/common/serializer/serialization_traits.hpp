@@ -341,12 +341,12 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline typename std::enable_if<std::is_same<T, TableIndex>::value, T>::type GetDefault() {
-		return TableIndex();
+		return TableIndex(0);
 	}
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, TableIndex>::value, T>::type &value) {
-		return !value.IsValid();
+		return value.index == 0;
 	}
 };
 
