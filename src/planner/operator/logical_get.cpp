@@ -36,15 +36,15 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 
 	string filters_info;
 	bool first_item = true;
-	for (auto &kv : table_filters.filters) {
-		auto &column_index = kv.first;
-		auto &filter = kv.second;
+	for (auto &kv : table_filters) {
+		auto column_index = kv.ColumnIndex();
+		auto &filter = kv.Filter();
 		if (column_index < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
 			first_item = false;
-			filters_info += filter->ToString(names[column_index]);
+			filters_info += filter.ToString(names[column_index]);
 		}
 	}
 	result["Filters"] = filters_info;

@@ -1066,7 +1066,7 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 }
 
 static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
-                                                      TableFilter &filter) {
+                                                      const TableFilter &filter) {
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_filter = filter.Cast<ConjunctionAndFilter>();
@@ -1096,7 +1096,7 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 }
 
 static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
-                                                     TableFilter &filter) {
+                                                     const TableFilter &filter) {
 	// floating point values can have values in the [min, max] domain AND nan values
 	// check both stats against the filter
 	auto &type = reader.Type();
@@ -1138,9 +1138,9 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
-		auto filter_entry = filters->filters.find(col_idx);
-		if (stats && filter_entry != filters->filters.end()) {
-			auto &filter = *filter_entry->second;
+		auto filter_entry = filters->TryGetFilterByColumnIndex(col_idx);
+		if (stats && filter_entry) {
+			auto &filter = *filter_entry;
 
 			FilterPropagateResult prune_result;
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
@@ -1233,8 +1233,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.scan_filters.clear();
 	if (filters) {
 		state.adaptive_filter = make_uniq<AdaptiveFilter>(*filters);
-		for (auto &entry : filters->filters) {
-			state.scan_filters.emplace_back(context, entry.first, *entry.second);
+		for (auto &entry : *filters) {
+			state.scan_filters.emplace_back(context, entry.ColumnIndex(), entry.Filter());
 		}
 	}
 
@@ -1382,11 +1382,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					auto file_col_idx = column_ids[col_idx];
 					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
-					bool has_filter = false;
-					if (filters) {
-						auto entry = filters->filters.find(col_idx);
-						has_filter = entry != filters->filters.end();
-					}
+					bool has_filter = filters && filters->HasFilter(col_idx);
 					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
 				}
 
@@ -1426,7 +1422,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		vector<bool> need_to_read(column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
-		D_ASSERT(!filters || state.scan_filters.size() == filters->filters.size());
+		D_ASSERT(!filters || state.scan_filters.size() == filters->FilterCount());
 
 		bool is_first_filter = true;
 		if (deletion_filter) {

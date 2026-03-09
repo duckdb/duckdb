@@ -393,7 +393,7 @@ bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_va
 	}
 	// if there are any filters we shouldn't do large limit optimization
 	auto &get = current_op.get().Cast<LogicalGet>();
-	if (!get.table_filters.filters.empty()) {
+	if (get.table_filters.HasFilters()) {
 		return false;
 	}
 	return true;
