@@ -365,8 +365,8 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	}
 
 	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns the plan
-	RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
-	unused_optimizer.VisitOperator(*op);
+	RemoveUnusedColumns unused_optimizer(optimizer, true);
+	unused_optimizer.VisitOperator(op);
 	return true;
 }
 
@@ -393,7 +393,7 @@ bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_va
 	}
 	// if there are any filters we shouldn't do large limit optimization
 	auto &get = current_op.get().Cast<LogicalGet>();
-	if (!get.table_filters.filters.empty()) {
+	if (get.table_filters.HasFilters()) {
 		return false;
 	}
 	return true;

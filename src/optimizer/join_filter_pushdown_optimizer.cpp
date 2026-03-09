@@ -150,7 +150,7 @@ bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op->Cast<LogicalGet>();
-		return !get.table_filters.filters.empty();
+		return get.table_filters.HasFilters();
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		return true;

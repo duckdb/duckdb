@@ -24,7 +24,8 @@ AggregateFunction CovarPopFun::GetFunction() {
 
 AggregateFunction CovarSampFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<CovarState, double, double, double, CovarSampOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetCovarStateType);
 }
 
 } // namespace duckdb

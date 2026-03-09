@@ -1,0 +1,77 @@
+# name: test/sql/storage/types/variant/variant_extract_filter_pushdown.test
+# group: [variant]
+
+load __TEST_DIR__/variant_extract_pushdown.test readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE variant_extract_pushdown(v VARIANT);
+
+statement ok
+INSERT INTO variant_extract_pushdown
+SELECT {'x': i, 'y': i * 100, 'z': i * 10000}::VARIANT FROM range(100) t(i)
+
+query I
+SELECT COUNT(*) FROM variant_extract_pushdown WHERE v.x=5
+----
+1
+
+query I
+SELECT v.x FROM variant_extract_pushdown WHERE v.x=5
+----
+5
+
+query I
+SELECT v.y FROM variant_extract_pushdown WHERE v.x=5
+----
+500
+
+query I
+SELECT COUNT(*) FROM variant_extract_pushdown WHERE v.x=5 AND v.y=500
+----
+1
+
+query I
+SELECT v.x FROM variant_extract_pushdown WHERE v.x=5 AND v.y=500
+----
+5
+
+query I
+SELECT v.z FROM variant_extract_pushdown WHERE v.x=5 AND v.y=500
+----
+50000
+
+query I
+SELECT COUNT(*) FROM variant_extract_pushdown WHERE v.x + v.y = 505
+----
+1
+
+query I
+SELECT v.x FROM variant_extract_pushdown WHERE v.x + v.y = 505
+----
+5
+
+query I
+SELECT v.z FROM variant_extract_pushdown WHERE v.x + v.y = 505
+----
+50000
+
+
+query I
+SELECT COUNT(*) FROM variant_extract_pushdown WHERE v.x = 5 OR v.y = 400
+----
+2
+
+query I
+SELECT v.x FROM variant_extract_pushdown WHERE v.x = 5 OR v.y = 400 ORDER BY ALL
+----
+4
+5
+
+query I
+SELECT v.z FROM variant_extract_pushdown WHERE v.x = 5 OR v.y = 400 ORDER BY ALL
+----
+40000
+50000

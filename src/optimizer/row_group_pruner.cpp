@@ -69,7 +69,7 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 		return false;
 	}
 
-	if (!logical_get->table_filters.filters.empty()) {
+	if (logical_get->table_filters.HasFilters()) {
 		// If there are filters, we only order the row groups but do not prune
 		row_limit.SetInvalid();
 		row_offset.SetInvalid();

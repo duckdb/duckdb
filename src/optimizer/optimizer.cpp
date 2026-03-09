@@ -40,6 +40,7 @@
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/optimizer/outer_join_simplification.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
@@ -207,6 +208,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		projection_pullup.Optimize(plan);
 	});
 
+	// Simplifies FULL OUTER -> LEFT/RIGHT OUTER -> INNER if NULLs are filtered anyway
+	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION, [&]() {
+		OuterJoinSimplification outer_join_simplification;
+		outer_join_simplification.VisitOperator(*plan);
+	});
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
@@ -227,8 +234,8 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// removes unused columns
 	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
-		RemoveUnusedColumns unused(binder, context, true);
-		unused.VisitOperator(*plan);
+		RemoveUnusedColumns unused(*this, true);
+		unused.VisitOperator(plan);
 	});
 
 	// Remove duplicate groups from aggregates

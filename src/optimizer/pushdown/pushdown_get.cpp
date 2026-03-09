@@ -45,7 +45,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 	}
 
-	if (!get.table_filters.filters.empty() || !get.function.filter_pushdown) {
+	if (get.table_filters.HasFilters() || !get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top
 		return FinishPushdown(std::move(op));
 	}

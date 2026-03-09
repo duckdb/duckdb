@@ -1,0 +1,138 @@
+diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
+index 02a3b3d3..28064a0c 100644
+--- a/src/iceberg_functions/iceberg_multi_file_list.cpp
++++ b/src/iceberg_functions/iceberg_multi_file_list.cpp
+@@ -134,12 +134,12 @@ bool IcebergMultiFileList::FinishedScanningDeletes() const {
+ optional_ptr<const TableFilter> IcebergMultiFileList::GetFilterForColumnIndex(const TableFilterSet &filter_set,
+                                                                               const ColumnIndex &column_index) const {
+ 	auto primary_index = column_index.GetPrimaryIndex();
+-	auto filter_it = filter_set.filters.find(primary_index);
+-	if (filter_it == filter_set.filters.end()) {
++	auto filter = filter_set.TryGetFilterByColumnIndex(primary_index);
++	if (!filter) {
+ 		return nullptr;
+ 	}
+ 
+-	auto &parent_filter = *filter_it->second;
++	auto &parent_filter = *filter;
+ 	auto &child_indexes = column_index.GetChildIndexes();
+ 
+ 	reference<const TableFilter> current_filter(parent_filter);
+@@ -217,14 +217,14 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
+ 	TableFilterSet result_filter_set;
+ 
+ 	// Add pre-existing filters
+-	for (auto &entry : table_filters.filters) {
+-		result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
++	for (auto &entry : table_filters) {
++		result_filter_set.PushFilter(ColumnIndex(entry.ColumnIndex()), entry.Filter().Copy());
+ 	}
+ 
+ 	// Add new filters
+-	for (auto &entry : new_filters.filters) {
+-		if (entry.first < names.size()) {
+-			result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
++	for (auto &entry : new_filters) {
++		if (entry.ColumnIndex() < names.size()) {
++			result_filter_set.PushFilter(ColumnIndex(entry.ColumnIndex()), entry.Filter().Copy());
+ 		}
+ 	}
+ 
+@@ -239,23 +239,23 @@ unique_ptr<MultiFileList>
+ IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
+                                             const vector<string> &names, const vector<LogicalType> &types,
+                                             const vector<column_t> &column_ids, TableFilterSet &filters) const {
+-	if (filters.filters.empty()) {
++	if (!filters.HasFilters()) {
+ 		return nullptr;
+ 	}
+ 
+ 	TableFilterSet filters_copy;
+-	for (auto &filter : filters.filters) {
+-		auto column_id = column_ids[filter.first];
+-		auto previously_pushed_down_filter = this->table_filters.filters.find(column_id);
+-		if (previously_pushed_down_filter != this->table_filters.filters.end() &&
+-		    filter.second->Equals(*previously_pushed_down_filter->second)) {
++	for (auto &entry : filters) {
++		auto column_id = column_ids[entry.ColumnIndex()];
++		auto &filter = entry.Filter();
++		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(column_id);
++		if (previously_pushed_down_filter && filter.Equals(*previously_pushed_down_filter)) {
+ 			// Skip filters that we already have pushed down
+ 			continue;
+ 		}
+-		filters_copy.PushFilter(ColumnIndex(column_id), filter.second->Copy());
++		filters_copy.PushFilter(ColumnIndex(column_id), filter.Copy());
+ 	}
+ 
+-	if (!filters_copy.filters.empty()) {
++	if (filters_copy.HasFilters()) {
+ 		auto new_snap = PushdownInternal(context, filters_copy);
+ 		return std::move(new_snap);
+ 	}
+@@ -277,7 +277,7 @@ unique_ptr<MultiFileList> IcebergMultiFileList::ComplexFilterPushdown(ClientCont
+ 
+ 	vector<FilterPushdownResult> unused;
+ 	auto filter_set = combiner.GenerateTableScanFilters(info.column_indexes, unused);
+-	if (filter_set.filters.empty()) {
++	if (!filter_set.HasFilters()) {
+ 		return nullptr;
+ 	}
+ 
+@@ -382,16 +382,14 @@ IcebergPredicateStats IcebergPredicateStats::DeserializeBounds(const Value &lowe
+ 
+ bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestEntry &manifest_entry,
+                                              IcebergDataFileType file_type) const {
+-	D_ASSERT(!table_filters.filters.empty());
++	D_ASSERT(table_filters.HasFilters());
+ 
+-	auto &filters = table_filters.filters;
+ 	auto &schema = GetSchema().columns;
+ 
+ 	for (idx_t index = 0; index < schema.size(); index++) {
+ 		auto &column = *schema[index];
+-		auto it = filters.find(index);
+-
+-		if (it == filters.end()) {
++		auto filter = table_filters.TryGetFilterByColumnIndex(index);
++		if (!filter) {
+ 			continue;
+ 		}
+ 		auto &metadata = GetMetadata();
+@@ -512,8 +510,7 @@ bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestEntry &manifes
+ 			stats.has_nan = nan_counts != 0;
+ 		}
+ 
+-		auto &filter = *it->second;
+-		if (!IcebergPredicate::MatchBounds(context, filter, stats, IcebergTransform::Identity())) {
++		if (!IcebergPredicate::MatchBounds(context, *filter, stats, IcebergTransform::Identity())) {
+ 			//! If any predicate fails, exclude the file
+ 			return false;
+ 		}
+@@ -596,7 +593,7 @@ optional_ptr<const IcebergManifestEntry> IcebergMultiFileList::GetDataFile(idx_t
+ 			auto &data_file = manifest_entry.data_file;
+ 			manifest_entry_idx++;
+ 			// Check whether current data file is filtered out.
+-			if (!table_filters.filters.empty() && !FileMatchesFilter(manifest_entry, IcebergDataFileType::DATA)) {
++			if (table_filters.HasFilters() && !FileMatchesFilter(manifest_entry, IcebergDataFileType::DATA)) {
+ 				DUCKDB_LOG(context, IcebergLogType, "Iceberg Filter Pushdown, skipped 'data_file': '%s'",
+ 				           data_file.file_path);
+ 				//! Skip this file
+@@ -689,7 +686,7 @@ bool IcebergMultiFileList::ManifestMatchesFilter(const IcebergManifestFile &mani
+ 		    field_summaries.size(), partition_spec.fields.size());
+ 	}
+ 
+-	if (table_filters.filters.empty()) {
++	if (!table_filters.HasFilters()) {
+ 		//! There are no filters
+ 		return true;
+ 	}
+@@ -850,7 +847,7 @@ void IcebergMultiFileList::ProcessDeletes(const vector<MultiFileColumnDefinition
+ 		for (auto &manifest_entry : entries) {
+ 			auto &data_file = manifest_entry.data_file;
+ 			// Check whether current data file is filtered out.
+-			if (!table_filters.filters.empty() && !FileMatchesFilter(manifest_entry, IcebergDataFileType::DELETE)) {
++			if (table_filters.HasFilters() && !FileMatchesFilter(manifest_entry, IcebergDataFileType::DELETE)) {
+ 				DUCKDB_LOG(context, IcebergLogType, "Iceberg Filter Pushdown, skipped 'data_file': '%s'",
+ 				           data_file.file_path);
+ 				//! Skip this file

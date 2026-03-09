@@ -92,7 +92,7 @@ inputs:
     default: ''
   unittest_script:
     description: 'Script/program to execute the unittests'
-    default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
+    default: 'python3 scripts/ci/run_tests.py ./build/release/test/unittest'
   cmake_flags:
     description: 'Flags to be passed to cmake'
     default: ''

@@ -88,7 +88,7 @@ select finalize(finalize(combine_aggr(state))) from states;
 
 # Can't call the aggregate combine on a legacy aggregate state
 statement ok
-CREATE TABLE legacy_states AS (SELECT g, (min(d) export_state) state FROM dummy GROUP BY g);
+CREATE TABLE legacy_states AS (SELECT g, (skewness(d) export_state) state FROM dummy GROUP BY g);
 
 statement error
 select combine_aggr(state) from legacy_states;

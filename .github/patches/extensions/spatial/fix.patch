@@ -1,3 +1,56 @@
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index 3b37ca8..a11f736 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -175,13 +175,15 @@ public:
+ 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+ 			// this is a LogicalGet - check if there is an ExpressionFilter
+ 			auto &get = op.Cast<LogicalGet>();
+-			for (auto &entry : get.table_filters.filters) {
+-				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
++			for (auto &entry : get.table_filters) {
++				auto column_id = entry.ColumnIndex();
++				auto &filter = entry.Filter();
++				if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+ 					// not an expression filter
+ 					continue;
+ 				}
+-				auto &expr_filter = entry.second->Cast<ExpressionFilter>();
+-				if (TryOptimizeGet(binder, context, plan, root, nullptr, entry.first, expr_filter.expr)) {
++				auto &expr_filter = filter.Cast<ExpressionFilter>();
++				if (TryOptimizeGet(binder, context, plan, root, nullptr, column_id, expr_filter.expr)) {
+ 					return true;
+ 				}
+ 			}
+@@ -281,7 +283,7 @@ public:
+ 		get.has_estimated_cardinality = cardinality->has_estimated_cardinality;
+ 		get.estimated_cardinality = cardinality->estimated_cardinality;
+ 		get.bind_data = std::move(bind_data);
+-		if (get.table_filters.filters.empty()) {
++		if (!get.table_filters.HasFilters()) {
+ 			return true;
+ 		}
+ 
+@@ -299,8 +301,8 @@ public:
+ 		// does not support regular filter pushdown.
+ 		auto new_filter = make_uniq<LogicalFilter>();
+ 		auto &column_ids = get.GetColumnIds();
+-		for (const auto &entry : get.table_filters.filters) {
+-			idx_t column_id = entry.first;
++		for (const auto &entry : get.table_filters) {
++			idx_t column_id = entry.ColumnIndex();
+ 			auto &type = get.returned_types[column_id];
+ 			bool found = false;
+ 			for (idx_t i = 0; i < column_ids.size(); i++) {
+@@ -314,7 +316,7 @@ public:
+ 				throw InternalException("Could not find column id for filter");
+ 			}
+ 			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, column_id));
+-			new_filter->expressions.push_back(entry.second->ToExpression(*column));
++			new_filter->expressions.push_back(entry.Filter().ToExpression(*column));
+ 		}
+ 		new_filter->children.push_back(std::move(get_ptr));
+ 		new_filter->ResolveOperatorTypes();
 diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
 index e46d5ad..7c08e82 100644
 --- a/src/spatial/operators/spatial_join_optimizer.cpp

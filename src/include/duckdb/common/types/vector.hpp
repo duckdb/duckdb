@@ -706,6 +706,9 @@ struct ShreddedVector {
 	//! Unshred a shredded vector
 	DUCKDB_API static void Unshred(Vector &vec, idx_t count);
 	DUCKDB_API static void Unshred(Vector &vec, const SelectionVector &sel, idx_t count);
+
+	//! Returns whether or not the vector is fully shredded
+	DUCKDB_API static bool IsFullyShredded(Vector &vec);
 };
 
 enum class UnionInvalidReason : uint8_t {

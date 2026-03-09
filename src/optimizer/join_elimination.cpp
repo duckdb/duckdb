@@ -117,7 +117,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		if (!get.table_filters.filters.empty()) {
+		if (get.table_filters.HasFilters()) {
 			pipe_info.has_filter = true;
 		}
 		break;

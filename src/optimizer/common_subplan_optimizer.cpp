@@ -315,11 +315,11 @@ private:
 		});
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op.Cast<LogicalGet>();
-			for (auto &entry : get.table_filters.filters) {
-				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
+			for (auto &entry : get.table_filters) {
+				if (entry.Filter().filter_type != TableFilterType::EXPRESSION_FILTER) {
 					continue;
 				}
-				auto &expression_filter = entry.second->Cast<ExpressionFilter>();
+				auto &expression_filter = entry.Filter().Cast<ExpressionFilter>();
 				ConvertExpression<TYPE>(*expression_filter.expr, info_idx, can_materialize);
 			}
 		}
