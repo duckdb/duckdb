@@ -33,17 +33,6 @@ static void WrapInTransaction(vector<unique_ptr<SQLStatement>> &new_statements,
 StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(context) {
 }
 
-void StatementPreprocessor::ExpandPragma(vector<unique_ptr<SQLStatement>> &new_statements, const string &new_query) {
-	// this PRAGMA statement gets replaced by a new query string
-	// push the new query string through the parser again and add it to the transformer
-	Parser parser(context.GetParserOptions());
-	parser.ParseQuery(new_query);
-	// insert the new statements and remove the old statement
-	for (idx_t j = 0; j < parser.statements.size(); j++) {
-		new_statements.push_back(std::move(parser.statements[j]));
-	};
-}
-
 void UnpackMultiStatement(unique_ptr<MultiStatement> &multi_statement, bool is_in_active_transaction,
                           vector<unique_ptr<SQLStatement>> &new_statements) {
 #ifdef DEBUG // MultiStatement should not contain transaction statements
@@ -77,14 +66,28 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 			bool expanded;
 			context.RunFunctionInTransactionInternal(lock,
 			                                         [&] { TryExpandPragma(*statements[i], new_query, expanded); });
-			if (!expanded || is_in_active_transaction) {
+			vector<unique_ptr<SQLStatement>> expanded_statements;
+			if (expanded) {
+				Parser parser(context.GetParserOptions());
+				parser.ParseQuery(new_query);
+				expanded_statements = std::move(parser.statements);
+				if (is_in_active_transaction) {
+					for (auto &stmt : expanded_statements) {
+						new_statements.push_back(std::move(stmt));
+					}
+					break;
+				} else {
+					WrapInTransaction(new_statements, [&] {
+						for (auto &stmt : expanded_statements) {
+							new_statements.push_back(std::move(stmt));
+						}
+					});
+					break;
+				}
+			} else {
 				new_statements.push_back(std::move(statements[i]));
 				break;
 			}
-			WrapInTransaction(new_statements, [&] {
-				context.RunFunctionInTransactionInternal(lock, [&] { ExpandPragma(new_statements, new_query); });
-			});
-			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
 			auto multi_statement = unique_ptr<MultiStatement>(static_cast<MultiStatement *>(statements[i].release()));
