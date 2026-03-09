@@ -56,6 +56,12 @@ void UnpackMultiStatement(unique_ptr<MultiStatement> &multi_statement, bool is_i
 	}
 }
 
+vector<unique_ptr<SQLStatement>> StatementPreprocessor::Reparse(string new_query) {
+	Parser parser(context.GetParserOptions());
+	parser.ParseQuery(new_query);
+	return parser.statements;
+}
+
 void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
                                        bool is_in_active_transaction) {
 	vector<unique_ptr<SQLStatement>> new_statements;
@@ -63,31 +69,26 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
 			string new_query;
-			bool expanded;
-			context.RunFunctionInTransactionInternal(lock,
-			                                         [&] { TryExpandPragma(*statements[i], new_query, expanded); });
-			vector<unique_ptr<SQLStatement>> expanded_statements;
-			if (expanded) {
-				Parser parser(context.GetParserOptions());
-				parser.ParseQuery(new_query);
-				expanded_statements = std::move(parser.statements);
-				if (is_in_active_transaction || expanded_statements.size() == 1) {
-					for (auto &stmt : expanded_statements) {
+			bool needs_reparsing;
+			context.RunFunctionInTransactionInternal(
+			    lock, [&] { PragmaNeedsReparsing(*statements[i], new_query, needs_reparsing); });
+			if (needs_reparsing) {
+				vector<unique_ptr<SQLStatement>> reparsed_statements = Reparse(new_query);
+				if (is_in_active_transaction || reparsed_statements.size() == 1) {
+					for (auto &stmt : reparsed_statements) {
 						new_statements.push_back(std::move(stmt));
 					}
 					break;
-				} else {
-					WrapInTransaction(new_statements, [&] {
-						for (auto &stmt : expanded_statements) {
-							new_statements.push_back(std::move(stmt));
-						}
-					});
-					break;
 				}
-			} else {
-				new_statements.push_back(std::move(statements[i]));
+				WrapInTransaction(new_statements, [&] {
+					for (auto &stmt : reparsed_statements) {
+						new_statements.push_back(std::move(stmt));
+					}
+				});
 				break;
 			}
+			new_statements.push_back(std::move(statements[i]));
+			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
 			auto multi_statement = unique_ptr<MultiStatement>(static_cast<MultiStatement *>(statements[i].release()));
@@ -114,11 +115,12 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 	statements = std::move(new_statements);
 }
 
-void StatementPreprocessor::TryExpandPragma(SQLStatement &statement, string &resulting_query, bool &expanded) {
-	auto info = statement.Cast<PragmaStatement>().info->Copy();
+void StatementPreprocessor::PragmaNeedsReparsing(SQLStatement &statement, string &resulting_query,
+                                                 bool &expanded) const {
+	const auto info = statement.Cast<PragmaStatement>().info->Copy();
 	QueryErrorContext error_context(statement.stmt_location);
-	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindPragma(*info, error_context);
+	const auto binder = Binder::CreateBinder(context);
+	const auto bound_info = binder->BindPragma(*info, error_context);
 	if (bound_info->function.query) {
 		FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters};
 		resulting_query = bound_info->function.query(context, parameters);

@@ -30,8 +30,10 @@ private:
 	ClientContext &context;
 
 private:
-	//! Handles a pragma statement, returns whether the statement was expanded, if it was expanded the 'resulting_query'
+	//! Handles a pragma statement, determines whether the statement needs reparsing, if it does the 'resulting_query'
 	//! contains the statement(s) to replace the current one
-	void TryExpandPragma(SQLStatement &statement, string &resulting_query, bool &expanded);
+	void PragmaNeedsReparsing(SQLStatement &statement, string &resulting_query, bool &expanded) const;
+
+	vector<unique_ptr<SQLStatement>> Reparse(string new_query);
 };
 } // namespace duckdb
