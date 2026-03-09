@@ -76,7 +76,8 @@ public:
 		D_ASSERT(bitmap);
 		BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
 		auto state_data = buffer_manager.GetBufferAllocator().Allocate(64ULL + word_count * sizeof(uint64_t) * 8);
-		auto state_bitmap = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(state_data.get())) & ~63ULL);
+		auto state_bitmap =
+		    reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(state_data.get())) & ~63ULL);
 		std::fill_n(state_bitmap, word_count, 0);
 		return make_uniq<NumericBuildState>(std::move(state_data), state_bitmap, word_count);
 	}
