@@ -516,31 +516,31 @@ jobs:
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector=dictionary_expression --skip-compiled" ./build/release/test/unittest
+        python3 scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_expression --skip-compiled" ./build/release/test/unittest
 
     - name: Test dictionary_operator
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector=dictionary_operator --skip-compiled" ./build/release/test/unittest
+        python3 scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_operator --skip-compiled" ./build/release/test/unittest
 
     - name: Test constant_operator
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector=constant_operator --skip-compiled" ./build/release/test/unittest
+        python3 scripts/ci/run_tests.py --test-flags="--verify-vector constant_operator --skip-compiled" ./build/release/test/unittest
 
     - name: Test sequence_operator
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector=sequence_operator --skip-compiled" ./build/release/test/unittest
+        python3 scripts/ci/run_tests.py --test-flags="--verify-vector sequence_operator --skip-compiled" ./build/release/test/unittest
 
     - name: Test nested_shuffle
       if: (success() || failure()) && steps.build.conclusion == 'success'
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector=nested_shuffle --skip-compiled" ./build/release/test/unittest
+        python3 scripts/ci/run_tests.py --test-flags="--verify-vector nested_shuffle --skip-compiled" ./build/release/test/unittest
 
     - name: Test variant_vector
       if: (success() || failure()) && steps.build.conclusion == 'success'
