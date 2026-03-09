@@ -63,7 +63,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global] --break-system-packages
+        run: make toolsci && sudo apt-get install -y -qq clang-tidy && sudo pip3 install pybind11[global] --break-system-packages
 
       - uses: ./.github/actions/ccache-action
 
