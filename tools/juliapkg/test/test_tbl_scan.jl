@@ -321,7 +321,7 @@ end
 
     DuckDB.register_table(con, my_tbl, "my_tbl")
     results = DBInterface.execute(con, "SELECT * FROM my_tbl") |> columntable
-    @test typeof(results) == typeof(my_tbl)
+    @test eltype(results.s) == @NamedTuple{a::Union{Missing, Int32}, b::Union{Missing, String}}
     @test isequal(results.id, [1, 2, 3])
     @test isequal(results.s, [(a = 10, b = "hello"), (a = 20, b = "world"), (a = 30, b = "foo")])
 
@@ -349,7 +349,7 @@ end
 
     DuckDB.register_table(con, my_tbl, "my_tbl")
     results = DBInterface.execute(con, "SELECT * FROM my_tbl") |> columntable
-    @test typeof(results) == typeof(my_tbl)
+    @test eltype(results.s) == @NamedTuple{x::Union{Missing, Int32}, inner::Union{Missing, @NamedTuple{a::Union{Missing, Int32}, b::Union{Missing, Int32}}}}
     @test isequal(results.s[1], (x = 1, inner = (a = 10, b = 20)))
     @test isequal(results.s[2], (x = 2, inner = (a = 30, b = 40)))
 
