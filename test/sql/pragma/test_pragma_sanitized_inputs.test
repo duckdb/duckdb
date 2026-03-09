@@ -31,9 +31,6 @@ PRAGMA import_database('test_table''); DROP TABLE test_table; --')
 ----
 IO Error
 
-statement ok
-rollback
-
 # Test copy_database with injection attempt (two parameters)
 statement error
 PRAGMA copy_database('test_table''); DROP TABLE test_table; --', 'target')

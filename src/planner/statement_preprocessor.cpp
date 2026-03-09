@@ -71,7 +71,7 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 				Parser parser(context.GetParserOptions());
 				parser.ParseQuery(new_query);
 				expanded_statements = std::move(parser.statements);
-				if (is_in_active_transaction) {
+				if (is_in_active_transaction || expanded_statements.size() == 1) {
 					for (auto &stmt : expanded_statements) {
 						new_statements.push_back(std::move(stmt));
 					}

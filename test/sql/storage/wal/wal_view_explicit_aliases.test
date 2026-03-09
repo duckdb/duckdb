@@ -52,9 +52,6 @@ PRAGMA table_info('test.v')
 ----
 Catalog Error: Table with name v does not exist!
 
-statement ok
-rollback
-
 statement error
 SELECT * FROM test.v
 ----

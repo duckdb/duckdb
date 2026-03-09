@@ -51,9 +51,6 @@ statement error
 PRAGMA table_info('test.v')
 ----
 
-statement ok
-rollback
-
 statement error
 SELECT * FROM test.v
 ----

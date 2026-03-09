@@ -71,9 +71,6 @@ statement error
 PRAGMA table_info('nonexistant_table');
 ----
 
-statement ok
-rollback
-
 # handle constraints + default values
 statement ok
 create table tconstraint1(i integer primary key default(3), j blob not null);

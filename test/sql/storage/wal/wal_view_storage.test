@@ -46,9 +46,6 @@ PRAGMA table_info('test.v')
 Catalog Error: Table with name v does not exist!
 
 statement ok
-rollback
-
-statement ok
 CREATE VIEW test.v2 AS SELECT 42
 
 statement ok
@@ -68,9 +65,6 @@ Catalog Error: Table with name v does not exist!
 statement error
 SELECT * FROM test.v
 ----
-
-statement ok
-rollback
 
 # after recreating the table, we can query the view again
 statement ok
