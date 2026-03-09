@@ -352,8 +352,7 @@ static void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const
 	SerializeStructFields(layout, struct_vec, valid_count, addresses_ptrs.get());
 
 	// DeserializeStructFields: struct vector -> packed buffer
-	unsafe_unique_array<data_t> temp_state_buf(
-	    make_unsafe_uniq_array<data_t>(valid_count * layout.aligned_state_size));
+	unsafe_unique_array<data_t> temp_state_buf(make_unsafe_uniq_array<data_t>(valid_count * layout.aligned_state_size));
 	UnifiedVectorFormat struct_format;
 	struct_vec.ToUnifiedFormat(valid_count, struct_format);
 	DeserializeStructFields(layout, layout.aligned_state_size, struct_vec, struct_format, valid_count,
@@ -373,8 +372,8 @@ static void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const
 	idx_t match_count =
 	    VectorOperations::NotDistinctFrom(result_slice, result_roundtrip, nullptr, valid_count, nullptr, nullptr);
 	D_ASSERT(match_count == valid_count &&
-	        "Struct state roundtrip failed: finalize(serialize->deserialize(state)) != finalize(state). "
-	        "Check SerializeStructFields/DeserializeStructFields for this aggregate.");
+	         "Struct state roundtrip failed: finalize(serialize->deserialize(state)) != finalize(state). "
+	         "Check SerializeStructFields/DeserializeStructFields for this aggregate.");
 }
 #endif
 
