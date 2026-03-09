@@ -193,7 +193,11 @@
     )
     @test isequal(
         df.fixed_nested_varchar_array,
-        [[["a", missing, "c"], missing, ["a", missing, "c"]], [["d", "e", "f"], ["a", missing, "c"], ["d", "e", "f"]], missing]
+        [
+            [["a", missing, "c"], missing, ["a", missing, "c"]],
+            [["d", "e", "f"], ["a", missing, "c"], ["d", "e", "f"]],
+            missing
+        ]
     )
     @test isequal(
         df.fixed_struct_array,
@@ -205,15 +209,15 @@
     )
     @test isequal(
         df.struct_of_fixed_array,
-        [
-            (a = [missing, 2, 3], b = ["a", missing, "c"]),
-            (a = [4, 5, 6], b = ["d", "e", "f"]),
-            missing
-        ]
+        [(a = [missing, 2, 3], b = ["a", missing, "c"]), (a = [4, 5, 6], b = ["d", "e", "f"]), missing]
     )
     @test isequal(
         df.fixed_array_of_int_list,
-        [[[], [42, 999, missing, missing, -42], []], [[42, 999, missing, missing, -42], [], [42, 999, missing, missing, -42]], missing]
+        [
+            [[], [42, 999, missing, missing, -42], []],
+            [[42, 999, missing, missing, -42], [], [42, 999, missing, missing, -42]],
+            missing
+        ]
     )
     @test isequal(
         df.list_of_fixed_int_array,
