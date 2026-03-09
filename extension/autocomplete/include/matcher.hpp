@@ -11,7 +11,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 #include "transformer/parse_result.hpp"
+#include <mutex>
 
 namespace duckdb {
 class ParseResultAllocator;
@@ -182,8 +184,6 @@ public:
 	virtual string ToString() const = 0;
 	void Print() const;
 
-	static Matcher &RootMatcher();
-	static void InvalidateRootMatcher();
 
 	MatcherType Type() const {
 		return type;
@@ -229,6 +229,17 @@ public:
 
 private:
 	vector<unique_ptr<ParseResult>> parse_results;
+};
+
+//! Per-database cache for the compiled PEG root matcher.
+//! Lives in ParserExtension::parser_info so it is tied to the database lifetime.
+struct PEGMatcherCache : ParserExtensionInfo {
+	std::mutex mutex;
+	MatcherAllocator allocator;
+	Matcher *root = nullptr; // NOLINT: raw pointer into allocator-owned storage
+
+	Matcher &GetRootMatcher();
+	void Invalidate();
 };
 
 } // namespace duckdb

@@ -26,7 +26,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options) {
+unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
+                                                         Matcher &root_matcher) {
 	string token_stream;
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
@@ -35,7 +36,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	ParseResultAllocator parse_result_allocator;
 	idx_t max_token_index = 0;
 	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index);
-	auto &matcher = Matcher::RootMatcher();
+	auto &matcher = root_matcher;
 	auto match_result = matcher.MatchParseResult(state);
 	if (match_result == nullptr || state.token_index < state.tokens.size()) {
 		idx_t error_token_idx = state.GetMaxTokenIndex();

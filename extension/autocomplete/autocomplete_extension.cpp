@@ -21,8 +21,21 @@
 #include "parser/tokenizer/highlight_tokenizer.hpp"
 #include "parser/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 namespace duckdb {
+
+static PEGMatcherCache &GetPEGMatcherCache(DBConfig &config) {
+	for (auto &ext : config.GetCallbackManager().ParserExtensions()) {
+		if (ext.parser_info) {
+			auto *cache = dynamic_cast<PEGMatcherCache *>(ext.parser_info.get());
+			if (cache) {
+				return *cache;
+			}
+		}
+	}
+	throw InternalException("PEG autocomplete parser extension not registered");
+}
 
 struct SQLTokenizeFunctionData : public TableFunctionData {
 	explicit SQLTokenizeFunctionData(vector<MatcherToken> tokens_p) : tokens(std::move(tokens_p)) {
@@ -629,7 +642,7 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	if (state.suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
-		auto &matcher = Matcher::RootMatcher();
+		auto &matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetRootMatcher();
 		matcher.Match(state);
 	}
 	if (state.suggestions.empty()) {
@@ -854,7 +867,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		idx_t max_token_index = 0;
 		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
-		auto &matcher = Matcher::RootMatcher();
+		auto &matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetRootMatcher();
 		auto match_result = matcher.Match(state);
 		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
 			string token_list;
@@ -882,9 +895,13 @@ class PEGParserExtension : public ParserExtension {
 public:
 	PEGParserExtension() {
 		parser_override = PEGParser;
+		parser_info = make_shared_ptr<PEGMatcherCache>();
 	}
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
+		auto &cache = info->Cast<PEGMatcherCache>();
+		auto &root_matcher = cache.GetRootMatcher();
+
 		vector<MatcherToken> root_tokens;
 		string clean_sql;
 
@@ -898,8 +915,7 @@ public:
 				if (tokenized_statement.empty()) {
 					continue;
 				}
-				auto &transformer = PEGTransformerFactory::GetInstance();
-				auto statement = transformer.Transform(tokenized_statement, options);
+				auto statement = PEGTransformerFactory::Transform(tokenized_statement, options, root_matcher);
 				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
 					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +
