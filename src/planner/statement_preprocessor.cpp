@@ -56,10 +56,10 @@ void UnpackMultiStatement(unique_ptr<MultiStatement> &multi_statement, bool is_i
 	}
 }
 
-vector<unique_ptr<SQLStatement>> StatementPreprocessor::Reparse(string new_query) {
+vector<unique_ptr<SQLStatement>> StatementPreprocessor::ReParse(const string &new_query) const {
 	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(new_query);
-	return parser.statements;
+	return std::move(parser.statements);
 }
 
 void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
@@ -73,7 +73,7 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 			context.RunFunctionInTransactionInternal(
 			    lock, [&] { PragmaNeedsReparsing(*statements[i], new_query, needs_reparsing); });
 			if (needs_reparsing) {
-				vector<unique_ptr<SQLStatement>> reparsed_statements = Reparse(new_query);
+				vector<unique_ptr<SQLStatement>> reparsed_statements = ReParse(new_query);
 				if (is_in_active_transaction || reparsed_statements.size() == 1) {
 					for (auto &stmt : reparsed_statements) {
 						new_statements.push_back(std::move(stmt));

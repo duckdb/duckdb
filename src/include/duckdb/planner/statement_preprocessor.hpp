@@ -34,6 +34,6 @@ private:
 	//! contains the statement(s) to replace the current one
 	void PragmaNeedsReparsing(SQLStatement &statement, string &resulting_query, bool &expanded) const;
 
-	vector<unique_ptr<SQLStatement>> Reparse(string new_query);
+	vector<unique_ptr<SQLStatement>> ReParse(const string &new_query) const;
 };
 } // namespace duckdb
