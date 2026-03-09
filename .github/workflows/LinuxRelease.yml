@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}]
+        config: ${{ fromJson(github.event_name == 'pull_request' && '[{"runner":"ubuntu-latest","arch":"amd64","image":"x86_64"}]' || '[{"runner":"ubuntu-latest","arch":"amd64","image":"x86_64"},{"runner":"ubuntu-24.04-arm","arch":"arm64","image":"aarch64"}]') }}
 
     name: Linux CLI (${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.runner }}
@@ -122,7 +122,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [ { runner: ubuntu-latest, arch: amd64}, {runner: ubuntu-24.04-arm, arch: arm64}]
+        config: ${{ fromJson(github.event_name == 'pull_request' && '[{"runner":"ubuntu-24.04-arm","arch":"arm64"}]' || '[{"runner":"ubuntu-latest","arch":"amd64"},{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') }}
 
     name: Linux CLI (${{ matrix.config.arch }}-musl)
     runs-on: ${{ matrix.config.runner }}
