@@ -2,10 +2,7 @@
 # description: Window functions cannot be used in lateral join
 # group: [duckfuzz]
 
-statement ok
-create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types();
-
 statement error
-SELECT NULL FROM all_types INNER JOIN (SELECT NULL LIMIT rank_dense() OVER (PARTITION BY #4, NULL, NULL, NULL ROWS BETWEEN c83 PRECEDING AND CURRENT ROW)) USING (c19)
+SELECT NULL FROM (VALUES (0, 1, 2, 3, 4)) AS _("0", "1", "2", "3", "4") INNER JOIN (SELECT NULL LIMIT rank_dense() OVER (PARTITION BY #4, NULL, NULL, NULL ROWS BETWEEN c83 PRECEDING AND CURRENT ROW)) USING (c19)
 ----
 cannot contain window functions
