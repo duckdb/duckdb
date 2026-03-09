@@ -37,9 +37,20 @@ class NumericPrefixRangeFilter : public PrefixRangeFilter {
 private:
 	using U = typename MakeUnsigned<T>::type;
 
+	struct NumericBuildState : public PrefixRangeFilter::BuildState {
+		explicit NumericBuildState(AllocatedData data_p, uint64_t *bitmap_p, idx_t word_count_p)
+		    : data(std::move(data_p)), bitmap(bitmap_p), word_count(word_count_p) {
+		}
+
+		AllocatedData data;
+		uint64_t *bitmap;
+		idx_t word_count;
+	};
+
 public:
 	void Initialize(ClientContext &context, idx_t number_of_rows, Value min_val, Value max_val) override {
 		D_ASSERT(min_val <= max_val);
+		D_ASSERT(number_of_rows > 0);
 		min = static_cast<U>(min_val.GetValueUnsafe<T>());
 		span = (static_cast<U>(max_val.GetValueUnsafe<T>()) - min);
 		shift = 0;
@@ -50,18 +61,28 @@ public:
 		}
 
 		const idx_t buckets = (span >> shift) + 1;
-		const idx_t words = buckets == 0 ? 1 : (buckets + 63) >> 6;
-		const idx_t bitmap_bit_size = words * sizeof(uint64_t) * 8;
+		word_count = buckets == 0 ? 1 : (buckets + 63) >> 6;
+		const idx_t bitmap_bit_size = word_count * sizeof(uint64_t) * 8;
 
 		BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
 		buf_ = buffer_manager.GetBufferAllocator().Allocate(64ULL + bitmap_bit_size);
 		bitmap = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
-		std::fill_n(bitmap, words, 0);
+		std::fill_n(bitmap, word_count, 0);
 
-		initialized = true;
+		initialized = false;
 	}
 
-	void InsertKeys(Vector &keys, idx_t count) const override {
+	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {
+		D_ASSERT(bitmap);
+		BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
+		auto state_data = buffer_manager.GetBufferAllocator().Allocate(64ULL + word_count * sizeof(uint64_t) * 8);
+		auto state_bitmap = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(state_data.get())) & ~63ULL);
+		std::fill_n(state_bitmap, word_count, 0);
+		return make_uniq<NumericBuildState>(std::move(state_data), state_bitmap, word_count);
+	}
+
+	void InsertKeys(Vector &keys, idx_t count, BuildState &state_p) const override {
+		auto &state = static_cast<NumericBuildState &>(state_p);
 		UnifiedVectorFormat vector_data;
 		keys.ToUnifiedFormat(count, vector_data);
 		const auto key_data = UnifiedVectorFormat::GetData<const T>(vector_data);
@@ -74,7 +95,7 @@ public:
 				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
 				const U idx = y >> shift;
-				bitmap[idx >> 6] |= 1ULL << (idx & 63u);
+				state.bitmap[idx >> 6] |= 1ULL << (idx & 63u);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
@@ -86,17 +107,17 @@ public:
 				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
 				const U idx = y >> shift;
-				bitmap[idx >> 6] |= 1ULL << (idx & 63u);
+				state.bitmap[idx >> 6] |= 1ULL << (idx & 63u);
 			}
 		}
 	}
 
-	void InsertOne(const Value &k) const override {
-		const U &key = static_cast<U>(k.GetValueUnsafe<T>());
-		const U y = key - min;
-		// All x are in-range by construction, so range check can be omitted here.
-		const U idx = y >> shift;
-		bitmap[idx >> 6] |= 1ULL << (idx & 63u);
+	void MergeBuildState(BuildState &state_p) override {
+		auto &state = static_cast<NumericBuildState &>(state_p);
+		for (idx_t word_idx = 0; word_idx < word_count; word_idx++) {
+			bitmap[word_idx] |= state.bitmap[word_idx];
+		}
+		initialized = true;
 	}
 
 	inline idx_t LookupOne(const T &k) const {
@@ -209,6 +230,7 @@ private:
 	U min;
 	U span;
 	idx_t shift;
+	idx_t word_count;
 	AllocatedData buf_;
 	uint64_t *bitmap;
 };
@@ -269,7 +291,7 @@ string PrefixRangeTableFilter::ToString(const string &column_name) const {
 }
 
 idx_t PrefixRangeTableFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count) const {
-	if (!filter) {
+	if (!filter || !filter->IsInitialized()) {
 		return approved_tuple_count;
 	}
 
@@ -297,10 +319,16 @@ idx_t PrefixRangeTableFilter::Filter(Vector &keys, SelectionVector &sel, idx_t &
 }
 
 bool PrefixRangeTableFilter::FilterValue(const Value &value) const {
+	if (!filter || !filter->IsInitialized()) {
+		return true;
+	}
 	return filter->LookupOneValue(value);
 }
 
 FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &stats) const {
+	if (!filter || !filter->IsInitialized()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 	D_ASSERT(stats.GetStatsType() == StatisticsType::NUMERIC_STATS);
 	if (!NumericStats::HasMinMax(stats)) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;

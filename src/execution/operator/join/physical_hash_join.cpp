@@ -678,13 +678,14 @@ public:
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
-	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p, const PhysicalOperator &op_p)
+	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p, const PhysicalOperator &op_p,
+	                     optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state_p = nullptr)
 	    : ExecutorTask(context, std::move(event_p), op_p), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
-	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p) {
+	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p), prefix_range_state(prefix_range_state_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
+		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, prefix_range_state);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -697,6 +698,7 @@ private:
 	idx_t chunk_idx_from;
 	idx_t chunk_idx_to;
 	bool parallel;
+	optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state;
 };
 
 class HashJoinFinalizeEvent : public BasePipelineEvent {
@@ -714,30 +716,51 @@ public:
 		vector<shared_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
+		const auto build_prefix_range_filter = ht.ShouldBuildPrefixRangeFilter();
+		const bool finalize_single_threaded = FinalizeSingleThreaded(sink, true);
+		const idx_t chunks_per_task = context.config.verify_parallelism ? 1 : CHUNKS_PER_TASK;
+		if (build_prefix_range_filter) {
+			prefix_range_states.clear();
+			const auto task_count =
+			    finalize_single_threaded ? 1 : (chunk_count + chunks_per_task - 1) / chunks_per_task;
+			prefix_range_states.reserve(task_count);
+		}
 
 		// if the keys are too skewed, we finalize single-threaded
-		if (FinalizeSingleThreaded(sink, true)) {
+		if (finalize_single_threaded) {
 			// Single-threaded finalize
-			finalize_tasks.push_back(
-			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op));
+			auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
+			finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count,
+			                                                         false, sink.op, prefix_range_state));
 		} else {
 			// Parallel finalize
-			const idx_t chunks_per_task = context.config.verify_parallelism ? 1 : CHUNKS_PER_TASK;
 			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx += chunks_per_task) {
 				auto chunk_idx_to = MinValue<idx_t>(chunk_idx + chunks_per_task, chunk_count);
-				finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, chunk_idx,
-				                                                         chunk_idx_to, true, sink.op));
+				auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
+				finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(
+				    shared_from_this(), context, sink, chunk_idx, chunk_idx_to, true, sink.op, prefix_range_state));
 			}
 		}
 		SetTasks(std::move(finalize_tasks));
 	}
 
 	void FinishEvent() override {
+		for (auto &prefix_range_state : prefix_range_states) {
+			sink.hash_table->MergePrefixRangeBuildState(*prefix_range_state);
+		}
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 		sink.hash_table->finalized = true;
 	}
 
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
+
+private:
+	optional_ptr<PrefixRangeFilter::BuildState> RegisterPrefixRangeState(JoinHashTable &ht) {
+		prefix_range_states.push_back(ht.InitializePrefixRangeBuildState());
+		return *prefix_range_states.back();
+	}
+
+	vector<unique_ptr<PrefixRangeFilter::BuildState>> prefix_range_states;
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
@@ -999,21 +1022,17 @@ void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &o
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
-void JoinFilterPushdownInfo::PushPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
-                                                   JoinHashTable &ht, const PhysicalOperator &op, idx_t filter_col_idx,
-                                                   const Value &min_val, const Value &max_val) const {
+void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
+                                                       JoinHashTable &ht, const PhysicalOperator &op,
+                                                       idx_t filter_col_idx, const Value &min_val,
+                                                       const Value &max_val) const {
 	const auto key_type = ht.conditions[0].GetLHS().return_type;
-	auto prefix_filter = PrefixRangeFilter::CreatePrefixRangeFilter(key_type);
-	prefix_filter->Initialize(context, ht.Count(), min_val, max_val);
-
-	Vector tuples_addresses(LogicalType::POINTER, ht.Count());
-	Vector build_vector(key_type, ht.Count());
-	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, 0);
-
-	// FIXME: Make this multi-threaded!
-	prefix_filter->InsertKeys(build_vector, key_count);
-
-	ht.SetPrefixRangeFilter(std::move(prefix_filter));
+	if (!ht.GetPrefixRangeFilter()) {
+		auto prefix_filter = PrefixRangeFilter::CreatePrefixRangeFilter(key_type);
+		prefix_filter->Initialize(context, ht.Count(), min_val, max_val);
+		ht.SetPrefixRangeFilter(std::move(prefix_filter));
+		ht.SetBuildPrefixRangeFilter(0);
+	}
 
 	// If the nulls are equal, we let nulls pass. If not, we filter them
 	auto filters_null_values = !ht.NullValuesAreEqual(0);
@@ -1022,8 +1041,8 @@ void JoinFilterPushdownInfo::PushPrefixRangeFilter(const JoinFilterPushdownFilte
 	    make_uniq<PrefixRangeTableFilter>(ht.GetPrefixRangeFilter(), filters_null_values, key_name, key_type);
 
 	// TODO: Experimentally find suitable selectivity threshold
-	auto opt_rf_filter =
-	    make_uniq<SelectivityOptionalFilter>(std::move(rf_filter), 0.8f, SelectivityOptionalFilter::BF_CHECK_N);
+	auto opt_rf_filter = make_uniq<SelectivityOptionalFilter>(
+	    std::move(rf_filter), SelectivityOptionalFilter::BF_THRESHOLD, SelectivityOptionalFilter::BF_CHECK_N);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_rf_filter));
 }
 
@@ -1113,7 +1132,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				if (perfect_join_executor) {
 					PushPerfectHashJoinFilter(op, *perfect_join_executor, info, filter_col_idx);
 				} else if (CanUsePrefixRangeFilter(context, ht, op, cmp, min_val, max_val)) {
-					PushPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val, max_val);
+					RegisterPrefixRangeFilter(info, context, *ht, op, filter_col_idx, min_val, max_val);
 				} else if (ht && CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(op, *ht, info, filter_col_idx);
 				}

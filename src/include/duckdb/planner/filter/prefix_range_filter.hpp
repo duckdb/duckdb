@@ -20,10 +20,15 @@ namespace duckdb {
 
 class PrefixRangeFilter {
 public:
+	struct BuildState {
+		virtual ~BuildState() = default;
+	};
+
 	virtual ~PrefixRangeFilter() = default;
 	virtual void Initialize(ClientContext &context, idx_t number_of_rows, Value min, Value max) = 0;
-	virtual void InsertKeys(Vector &keys, idx_t count) const = 0;
-	virtual void InsertOne(const Value &key) const = 0;
+	virtual unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const = 0;
+	virtual void InsertKeys(Vector &keys, idx_t count, BuildState &state) const = 0;
+	virtual void MergeBuildState(BuildState &state) = 0;
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
 	virtual bool LookupOneValue(const Value &key) const = 0;
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;

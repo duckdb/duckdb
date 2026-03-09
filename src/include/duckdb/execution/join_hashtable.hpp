@@ -213,7 +213,8 @@ public:
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
-	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
+	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
+	              optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state = nullptr);
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
@@ -373,6 +374,8 @@ private:
 	bool should_build_bloom_filter = false;
 
 	unique_ptr<PrefixRangeFilter> prefix_range_filter;
+	bool should_build_prefix_range_filter = false;
+	idx_t prefix_range_filter_build_idx = 0;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
@@ -465,9 +468,26 @@ public:
 		prefix_range_filter = std::move(filter);
 	}
 
+	void SetBuildPrefixRangeFilter(idx_t build_idx) {
+		should_build_prefix_range_filter = true;
+		prefix_range_filter_build_idx = build_idx;
+	}
+
 	optional_ptr<PrefixRangeFilter> GetPrefixRangeFilter() {
 		return prefix_range_filter;
 	}
+
+	bool ShouldBuildPrefixRangeFilter() const {
+		return should_build_prefix_range_filter && prefix_range_filter;
+	}
+
+	idx_t GetPrefixRangeFilterBuildIndex() const {
+		return prefix_range_filter_build_idx;
+	}
+
+	unique_ptr<PrefixRangeFilter::BuildState> InitializePrefixRangeBuildState();
+	void InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count, PrefixRangeFilter::BuildState &state);
+	void MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state);
 
 	//! Get total size of HT if all partitions would be built
 	idx_t GetTotalSize(const vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
