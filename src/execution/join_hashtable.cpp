@@ -745,9 +745,9 @@ unique_ptr<PrefixRangeFilter::BuildState> JoinHashTable::InitializePrefixRangeBu
 void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count,
                                            PrefixRangeFilter::BuildState &state) {
 	D_ASSERT(prefix_range_filter);
-	Vector build_keys(layout_ptr->GetTypes()[prefix_range_filter_build_idx], count);
+	Vector build_keys(layout_ptr->GetTypes()[0], count);
 	auto &sel = *FlatVector::IncrementalSelectionVector();
-	data_collection->Gather(chunk_state.row_locations, sel, count, prefix_range_filter_build_idx, build_keys, sel, nullptr);
+	data_collection->Gather(chunk_state.row_locations, sel, count, 0, build_keys, sel, nullptr);
 	prefix_range_filter->InsertKeys(build_keys, count, state);
 }
 

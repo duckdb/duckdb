@@ -1031,7 +1031,7 @@ void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownF
 		auto prefix_filter = PrefixRangeFilter::CreatePrefixRangeFilter(key_type);
 		prefix_filter->Initialize(context, ht.Count(), min_val, max_val);
 		ht.SetPrefixRangeFilter(std::move(prefix_filter));
-		ht.SetBuildPrefixRangeFilter(0);
+		ht.SetBuildPrefixRangeFilter();
 	}
 
 	// If the nulls are equal, we let nulls pass. If not, we filter them

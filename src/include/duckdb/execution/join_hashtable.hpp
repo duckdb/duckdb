@@ -375,7 +375,6 @@ private:
 
 	unique_ptr<PrefixRangeFilter> prefix_range_filter;
 	bool should_build_prefix_range_filter = false;
-	idx_t prefix_range_filter_build_idx = 0;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
@@ -468,9 +467,8 @@ public:
 		prefix_range_filter = std::move(filter);
 	}
 
-	void SetBuildPrefixRangeFilter(idx_t build_idx) {
+	void SetBuildPrefixRangeFilter() {
 		should_build_prefix_range_filter = true;
-		prefix_range_filter_build_idx = build_idx;
 	}
 
 	optional_ptr<PrefixRangeFilter> GetPrefixRangeFilter() {
@@ -479,10 +477,6 @@ public:
 
 	bool ShouldBuildPrefixRangeFilter() const {
 		return should_build_prefix_range_filter && prefix_range_filter;
-	}
-
-	idx_t GetPrefixRangeFilterBuildIndex() const {
-		return prefix_range_filter_build_idx;
 	}
 
 	unique_ptr<PrefixRangeFilter::BuildState> InitializePrefixRangeBuildState();
