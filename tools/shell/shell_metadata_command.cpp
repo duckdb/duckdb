@@ -886,7 +886,7 @@ static const MetadataCommand metadata_commands[] = {
     {"render_errors", 2, ToggleErrorRendering, "on|off", "Toggle rendering of errors in the shell on/off", 0, ""},
 #endif
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0, ""},
-    {"safe_mode", 0, ShellState::EnableSafeMode, "", "enable safe-mode", 0, ""},
+    {"safe_mode", 0, ShellState::EnableSafeMode, "", "Enable safe-mode", 0, ""},
     {"separator", 0, ShellState::SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0,
      "Options:\n\t--indent\tTry to pretty-print the schema"},

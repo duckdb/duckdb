@@ -1,0 +1,330 @@
+{
+  "description": "Failed tests from backwards compatibility testing.",
+  "skip_tests": [
+    {
+      "reason": "Table does not exist after import/export",
+      "paths": [
+        "test/sql/attach/attach_export_import.test",
+        "test/sql/attach/attach_issue_7660.test",
+        "test/sql/catalog/function/test_table_macro_copy.test",
+        "test/sql/copy/csv/test_export_force_quotes.test",
+        "test/sql/copy_database/copy_database_gen_col.test",
+        "test/sql/export/export_compression_level.test",
+        "test/sql/export/export_database.test",
+        "test/sql/export/export_generated_columns.test",
+        "test/sql/export/export_hive_path.test",
+        "test/sql/export/export_quoted_structs.test",
+        "test/sql/export/export_quoted_union.test",
+        "test/sql/export/parquet/export_parquet_bit.test",
+        "test/sql/export/parquet/export_parquet_enum.test",
+        "test/sql/export/parquet/export_parquet_hugeint.test",
+        "test/sql/export/parquet/export_parquet_json.test",
+        "test/sql/export/parquet/export_parquet_list.test",
+        "test/sql/export/parquet/export_parquet_map.test",
+        "test/sql/export/parquet/export_parquet_struct.test",
+        "test/sql/export/parquet/export_parquet_union.test",
+        "test/sql/export/parquet_export.test",
+        "test/sql/index/art/constraints/test_art_eager_constraint_checking.test",
+        "test/sql/index/art/insert_update_delete/test_art_update_with_dict_fsst.test",
+        "test/sql/join/asof/test_asof_join.test",
+        "test/sql/join/asof/test_asof_join_doubles.test",
+        "test/sql/join/asof/test_asof_join_inequalities.test",
+        "test/sql/join/asof/test_asof_join_integers.test",
+        "test/sql/join/asof/test_asof_join_subquery.test",
+        "test/sql/join/asof/test_asof_join_varchar.test",
+        "test/sql/join/asof/test_asof_join_timestamps.test",
+        "test/sql/json/test_json_export.test",
+        "test/sql/pragma/profiling/test_profiling_all.test",
+        "test/sql/storage/checkpointed_self_append.test",
+        "test/sql/storage/checkpointed_self_append_tinyint.test",
+        "test/sql/storage/compact_block_size/compact_vector_size.test",
+        "test/sql/storage/compact_block_size/insertion_order_odd_batches.test",
+        "test/sql/storage/compression/alp/alp_inf_null_nan.test",
+        "test/sql/storage/compression/alp/alp_list_skip.test",
+        "test/sql/storage/compression/alp/alp_negative_numbers.test",
+        "test/sql/storage/compression/alp/alp_nulls.test",
+        "test/sql/storage/compression/alp/alp_nulls_simple.test",
+        "test/sql/storage/compression/alp/alp_simple.test",
+        "test/sql/storage/compression/alp/alp_simple_float.test",
+        "test/sql/storage/compression/alp/alp_zeros.test",
+        "test/sql/storage/compression/alprd/alprd_inf_null_nan.test",
+        "test/sql/storage/compression/alprd/alprd_negative_numbers.test",
+        "test/sql/storage/compression/alprd/alprd_nulls.test",
+        "test/sql/storage/compression/alprd/alprd_nulls_simple.test",
+        "test/sql/storage/compression/alprd/alprd_simple.test",
+        "test/sql/storage/compression/alprd/alprd_simple_float.test",
+        "test/sql/storage/compression/alprd/alprd_zeros.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_constant_delta.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_filter_pushdown.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_hugeint.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_nulls.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_simple.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_simple_hugeint.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_table_copy.test",
+        "test/sql/storage/compression/bitpacking/bitpacking_uhugeint.test",
+        "test/sql/storage/compression/dict_fsst/dict_fsst_test.test",
+        "test/sql/storage/compression/dict_fsst/test_null_filter_pushdown.test",
+        "test/sql/storage/compression/rle/rle_bool.test",
+        "test/sql/storage/compression/rle/rle_constant.test",
+        "test/sql/storage/compression/rle/rle_filter.test",
+        "test/sql/storage/compression/rle/rle_filter_pushdown.test",
+        "test/sql/storage/compression/rle/rle_index_fetch.test",
+        "test/sql/storage/compression/rle/rle_nulls_edge_case.test",
+        "test/sql/storage/compression/rle/rle_select.test",
+        "test/sql/storage/compression/rle/rle_select_list.test",
+        "test/sql/storage/compression/roaring/roaring_array_simple.test",
+        "test/sql/storage/compression/roaring/roaring_bitset_simple.test",
+        "test/sql/storage/compression/roaring/roaring_inverted_array_simple.test",
+        "test/sql/storage/compression/roaring/roaring_inverted_run_simple.test",
+        "test/sql/storage/compression/roaring/roaring_run_simple.test",
+        "test/sql/storage/compression/roaring/roaring_smaller_than_vector.test",
+        "test/sql/storage/compression/zstd/nulls.test",
+        "test/sql/storage/compression/zstd/zstd.test",
+        "test/sql/storage/many_self_append.test",
+        "test/sql/storage/null_byte_storage.test",
+        "test/sql/storage/partial_blocks/many_columns_drop_table.test",
+        "test/sql/storage/types/list/empty_float_arrays.test",
+        "test/sql/storage/update/dictionary_update_null.test",
+        "test/sql/transactions/rollback_drop.test",
+        "test/sql/types/nested/array/array_storage_3.test",
+        "test/sql/types/nested/list/list_aggregate_dict.test",
+        "test/sql/types/union/struct_to_json_union.test",
+        "test/sql/update/update_null_integers.test",
+        "test/sql/attach/attach_encryption_fallback_readonly.test"
+      ]
+    },
+    {
+      "reason": "Vector::Reference type mismatch (INTEGER/BIGINT)",
+      "paths": [
+        "test/sql/binder/function_chaining_19035.test",
+        "test/sql/function/list/lambdas/arrow/list_comprehension_deprecated.test",
+        "test/sql/function/list/lambdas/arrow/reduce_deprecated.test",
+        "test/sql/function/list/lambdas/arrow/reduce_initial_deprecated.test",
+        "test/sql/function/list/lambdas/arrow/transform_with_index_deprecated.test",
+        "test/sql/function/list/lambdas/reduce.test",
+        "test/sql/function/list/lambdas/reduce_initial.test",
+        "test/sql/function/list/lambdas/list_comprehension.test",
+        "test/sql/function/list/lambdas/transform_with_index.test"
+      ]
+    },
+    {
+      "reason": "Failed to commit: read-only transaction made changes",
+      "paths": [
+        "test/sql/catalog/function/test_sequence_macro.test",
+        "test/sql/copy/parquet/parquet_encryption.test",
+        "test/sql/copy/parquet/parquet_schema_evolution.test",
+        "test/sql/copy/parquet/writer/parquet_write_home_directory.test",
+        "test/sql/copy/parquet/writer/test_copy_overwrite_parquet.test",
+        "test/sql/delete/test_truncate.test",
+        "test/sql/optimizer/expression/test_timestamp_offset.test",
+        "test/sql/types/nested/array/array_roundtrip_parquet.test"
+      ]
+    },
+    {
+      "reason": "Cannot rollback - no transaction active",
+      "paths": [
+        "test/sql/catalog/function/attached_macro.test",
+        "test/sql/copy/csv/test_export_not_null.test"
+      ]
+    },
+    {
+      "reason": "Database invalidated by previous fatal error",
+      "paths": [
+        "test/sql/catalog/comment_on_extended.test",
+        "test/sql/copy_database/copy_database_with_unique_index.test",
+        "test/sql/prepared/test_prepare_select.test",
+        "test/sql/catalog/comment_on_pg_description.test"
+      ]
+    },
+    {
+      "reason": "PRAGMA function does not have a function specified",
+      "paths": [
+        "test/sql/constraints/foreignkey/test_fk_export.test",
+        "test/sql/copy_database/copy_table_with_sequence.test",
+        "test/sql/pragma/pragma_database_size_readonly.test"
+      ]
+    },
+    {
+      "reason": "No files found matching pattern (Hive partitioning)",
+      "paths": [
+        "test/sql/copy/csv/csv_windows_mixed_separators.test",
+        "test/sql/copy/format_uuid.test",
+        "test/sql/copy/partitioned/hive_partition_append.test",
+        "test/sql/copy/parquet/parquet_hive2.test",
+        "test/sql/copy/row_groups_per_file.test"
+      ]
+    },
+    {
+      "reason": "Write-write conflict on key",
+      "paths": [
+        "test/sql/index/art/constraints/test_art_simple_update.test",
+        "test/sql/insert/insert_by_name.test",
+        "test/sql/upsert/insert_or_replace/returning.test",
+        "test/sql/upsert/postgres/planner_preprocessing.test"
+      ]
+    },
+    {
+      "reason": "Duplicate key violates primary key constraint",
+      "paths": [
+        "test/sql/constraints/foreignkey/test_fk_self_referencing.test",
+        "test/sql/constraints/primarykey/test_pk_update_delete.test",
+        "test/sql/constraints/primarykey/test_pk_updel_local.test",
+        "test/sql/constraints/primarykey/test_pk_updel_multi_column.test",
+        "test/sql/copy/csv/test_web_page.test",
+        "test/sql/delete/test_delete_indexed.test",
+        "test/sql/transactions/test_transaction_local_unique.test",
+        "test/sql/transactions/test_transaction_local_unique_ops.test"
+      ]
+    },
+    {
+      "reason": "Violates foreign key constraint",
+      "paths": [
+        "test/sql/constraints/foreignkey/test_fk_transaction.test",
+        "test/sql/constraints/foreignkey/test_fk_multiple.test",
+        "test/sql/constraints/foreignkey/test_fk_temporary.test",
+        "test/sql/constraints/foreignkey/fk_4309.test",
+        "test/sql/constraints/foreignkey/test_foreignkey.test"
+      ]
+    },
+    {
+      "reason": "Unique file handle conflict (read-only attach)",
+      "paths": [
+        "test/sql/attach/attach_read_only.test",
+        "test/sql/create/create_objects_readonly.test",
+        "test/sql/index/art/storage/test_art_readonly.test",
+        "test/sql/tpcds/dsdgen_readonly.test",
+        "test/sql/tpch/dbgen_readonly.test"
+      ]
+    },
+    {
+      "reason": "Resource deadlock avoided",
+      "paths": [
+        "test/sql/settings/setting_threads.test"
+      ]
+    },
+    {
+      "reason": "SerializationData - unexpected empty stack",
+      "paths": [
+        "test/sql/order/test_limit_parameter.test",
+        "test/sql/types/map/map_empty.test"
+      ]
+    },
+    {
+      "reason": "Profiling result type mismatch",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_disable_metrics.test",
+        "test/sql/pragma/profiling/test_custom_profiling_optimizer.test",
+        "test/sql/pragma/profiling/test_custom_profiling_result_set_size.test",
+        "test/sql/pragma/profiling/test_custom_profiling_rows_scanned.test",
+        "test/sql/pragma/profiling/test_default_profiling_settings.test"
+      ]
+    },
+    {
+      "reason": "Transaction state errors",
+      "paths": [
+        "test/sql/transactions/test_transaction_functionality.test",
+        "test/sql/transactions/transaction_errors.test"
+      ]
+    },
+    {
+      "reason": "Catalog changes on read-only transaction",
+      "paths": [
+        "test/sql/catalog/comment_on_dependencies.test"
+      ]
+    },
+    {
+      "reason": "Failed to deserialize (field id mismatch)",
+      "paths": [
+        "test/sql/function/uuid/test_uuid.test"
+      ]
+    },
+    {
+      "reason": "MERGE INTO parse failure",
+      "paths": [
+        "test/sql/peg_parser/merge_into.test"
+      ]
+    },
+    {
+      "reason": "Syntax error or parse failure",
+      "paths": [
+        "test/sql/storage/unzip.test"
+      ]
+    },
+    {
+      "reason": "Timestamp timezone casting disabled",
+      "paths": [
+        "test/sql/timezone/disable_timestamptz_casts.test"
+      ]
+    },
+    {
+      "reason": "Compression type not available (DICT_FSST)",
+      "paths": [
+        "test/sql/storage/compression/dict_fsst/test_null_update.test"
+      ]
+    },
+    {
+      "reason": "Query expected to fail but succeeded",
+      "paths": [
+        "test/sql/copy/csv/zstd_crash.test"
+      ]
+    },
+    {
+      "reason": "No files found that match the pattern",
+      "paths": [
+        "test/sql/copy/parquet/parquet_glob.test",
+        "test/sql/copy/per_thread_output.test"
+      ]
+    },
+    {
+      "reason": "Out of Memory Error",
+      "paths": [
+        "test/sql/copy/csv/code_cov/csv_disk_reload.test"
+      ]
+    },
+    {
+      "reason": "File system disabled by configuration",
+      "paths": [
+        "test/sql/settings/test_disabled_file_systems.test"
+      ]
+    },
+    {
+      "reason": "Invalid unicode in value construction",
+      "paths": [
+        "test/sql/pragma/test_pragma_functions.test"
+      ]
+    },
+    {
+      "reason": "Invalid input file path",
+      "paths": [
+        "test/sql/function/autocomplete/create_secret.test"
+      ]
+    },
+    {
+      "reason": "Out of memory/range error",
+      "paths": [
+        "test/sql/index/art/storage/test_art_mem_limit.test",
+        "test/sql/logging/test_logging_function.test"
+      ]
+    },
+    {
+      "reason": "Serialization error - not enough data",
+      "paths": [
+        "test/sql/parser/invisible_spaces.test"
+      ]
+    },
+    {
+      "reason": "Upsert test failure",
+      "paths": [
+        "test/sql/upsert/upsert_basic.test"
+      ]
+    },
+    {
+      "reason": "Unknown failure (empty reason)",
+      "paths": [
+        "test/sql/catalog/function/test_recursive_macro.test",
+        "test/sql/storage/compression/dict_fsst/dictionary_covers_validity.test",
+        "test/sql/storage/compression/zstd/test_skipping.test"
+      ]
+    }
+  ]
+}
