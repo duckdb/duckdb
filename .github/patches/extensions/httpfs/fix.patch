@@ -1,9 +1,21 @@
-commit 289d6283aabb40d39b21a7180b6f28515d277a62
-Author: dentiny <dentinyhao@gmail.com>
-Date:   Thu Feb 26 06:58:16 2026 +0000
-
-    Patch CSV cached reader change
-
+diff --git a/src/include/s3fs.hpp b/src/include/s3fs.hpp
+index d75423e..90071d9 100644
+--- a/src/include/s3fs.hpp
++++ b/src/include/s3fs.hpp
+@@ -32,7 +32,12 @@ public:
+ 		auto setting_scope = reader.TryGetSecretKeyOrSetting(secret_key, setting_name, temp_result);
+ 		if (!temp_result.IsNull() &&
+ 		    !(setting_scope.GetScope() == SettingScope::GLOBAL && !use_env_variables_for_secret_settings)) {
+-			result = temp_result.GetValue<TYPE>();
++		    try {
++				result = temp_result.GetValue<TYPE>();
++			} catch(std::exception &ex) {
++				ErrorData error(ex);
++				error.Throw("Failed to convert value for secret key \"" + secret_key + "\": ");
++			}
+ 		}
+ 		return setting_scope;
+ 	}
 diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
 index 6aa2ed0..54babde 100644
 --- a/test/sql/logging/file_system_logging.test
