@@ -219,11 +219,18 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11.1
+      with:
+        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+
     - name: Build
       env:
         BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
         DISABLE_SANITIZER: 1
+        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: make release
 
     - name: Smoke tests
@@ -252,35 +259,6 @@ jobs:
       with:
         name: linux-default-release-build
         path: build/linux-default-release.tar.gz
-        if-no-files-found: error
-
-    - name: Install httpfs build dependency
-      run: sudo apt-get install -y -qq libcurl4-openssl-dev
-
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
-      with:
-        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
-
-    - name: Build linux full release
-      env:
-        BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds;autocomplete;httpfs"
-        DISABLE_SANITIZER: 1
-        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        USE_MERGED_VCPKG_MANIFEST: 1
-      run: make clean release
-
-    - name: Prepare linux full release artifact
-      run: |
-        make release-artifact
-        mv build/release-artifact.tar.gz build/linux-full-release.tar.gz
-
-    - name: Upload linux full release artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-full-release-build
-        path: build/linux-full-release.tar.gz
         if-no-files-found: error
 
  linux-release-tests:
@@ -523,17 +501,17 @@ jobs:
       shell: bash
       run: make toolsci
 
-    - name: Download linux full release artifact
+    - name: Download linux release artifact
       uses: actions/download-artifact@v4
       with:
-        name: linux-full-release-build
+        name: linux-release-build
         path: build
 
-    - name: Extract linux full release artifact
+    - name: Extract linux release artifact
       shell: bash
       run: |
         rm -rf build/release
-        tar -xzf build/linux-full-release.tar.gz -C build
+        tar -xzf build/release-artifact.tar.gz -C build
 
     - name: test/configs/force_storage.json
       if: success() || failure()
