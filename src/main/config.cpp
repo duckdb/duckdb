@@ -912,7 +912,7 @@ bool SerializationCompatibility::Compare(idx_t property_version) const {
 }
 
 void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
-	lock_guard<mutex> guard(config_lock);
+	lock_guard<mutex> guard(http_util_lock);
 	old_http_utils.push_back(http_util);
 	http_util.atomic_store(new_http_util);
 }

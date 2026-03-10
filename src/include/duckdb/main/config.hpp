@@ -322,6 +322,7 @@ private:
 	//! HTTP Request utility functions
 	shared_ptr<HTTPUtil> http_util;
 	vector<shared_ptr<HTTPUtil>> old_http_utils;
+	mutex http_util_lock;
 };
 
 } // namespace duckdb
