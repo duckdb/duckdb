@@ -278,7 +278,8 @@ RadixHTConfig::RadixHTConfig(RadixHTGlobalSinkState &sink_p)
 }
 
 void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
-	SetRadixBitsInternal(MinValue(radix_bits_p, maximum_sink_radix_bits), false);
+	const auto max_bits = MinValue(maximum_sink_radix_bits, ExternalRadixBits(true));
+	SetRadixBitsInternal(MinValue(radix_bits_p, max_bits), false);
 }
 
 bool RadixHTConfig::SetRadixBitsToExternal() {
@@ -336,8 +337,8 @@ idx_t RadixHTConfig::ExternalRadixBits(const bool dynamic) const {
 		return 1;
 	}
 
-	// Capped by global maxima
-	return ClampValue(bits, maximum_sink_radix_bits, MAXIMUM_FINAL_SINK_RADIX_BITS);
+	// Capped by global maximum
+	return MinValue(bits, MAXIMUM_FINAL_SINK_RADIX_BITS);
 }
 
 idx_t RadixHTConfig::MaximumSinkRadixBits() const {
