@@ -1,6 +1,8 @@
 #include "duckdb/common/serialization_compatibility.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 

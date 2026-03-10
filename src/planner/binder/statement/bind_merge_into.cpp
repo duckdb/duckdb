@@ -14,6 +14,8 @@
 #include "duckdb/parser/tableref/bound_ref_wrapper.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/expression_binder/projection_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include <algorithm>
 
 namespace duckdb {

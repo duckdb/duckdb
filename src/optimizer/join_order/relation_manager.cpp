@@ -562,21 +562,6 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<Rela
 	return can_reorder;
 }
 
-//! Flatten a predicate into individual conjuncts
-static inline void FlattenConjunction(Expression &expr, vector<unique_ptr<Expression>> &result) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
-		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		if (conj.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-			for (auto &child : conj.children) {
-				FlattenConjunction(*child, result);
-			}
-			return;
-		}
-	}
-	// not an AND conjunction - add as is
-	result.push_back(expr.Copy());
-}
-
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
                                                              vector<reference<LogicalOperator>> &filter_operators,
                                                              JoinRelationSetManager &set_manager) {
