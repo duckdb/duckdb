@@ -774,6 +774,18 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	pending_skips = 0;
 
 	auto to_skip = num_values;
+	ResizeableBuffer skip_defines;
+	ResizeableBuffer skip_repeats;
+	auto skip_define_out = define_out;
+	auto skip_repeat_out = repeat_out;
+	if (HasDefines()) {
+		skip_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
+		skip_define_out = skip_defines.ptr;
+	}
+	if (HasRepeats()) {
+		skip_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
+		skip_repeat_out = skip_repeats.ptr;
+	}
 	// start reading but do not apply skips (we are skipping now)
 	BeginRead(nullptr, nullptr);
 
@@ -785,9 +797,9 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 			to_skip -= skip_now;
 			continue;
 		}
-		const auto all_valid = PrepareRead(skip_now, define_out, repeat_out, 0);
+		const auto all_valid = PrepareRead(skip_now, skip_define_out, skip_repeat_out, 0);
 
-		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
+		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(skip_define_out);
 		switch (encoding) {
 		case ColumnEncoding::DICTIONARY:
 			dictionary_decoder.Skip(define_ptr, skip_now);
