@@ -127,8 +127,8 @@ private:
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public BaseColumnPruner {
 public:
-	explicit RemoveUnusedColumns(Optimizer &optimizer, bool is_root = false,
-	                             shared_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> cte_info_map = nullptr);
+	explicit RemoveUnusedColumns(Optimizer &optimizer);
+	RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root);
 
 	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
@@ -140,8 +140,8 @@ private:
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
 
-	shared_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> cte_info_map;
-	RemoveUnusedColumns CreateChildOptimizer();
+	RemoveUnusedColumns &root;
+	unique_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> root_cte_map;
 
 private:
 	template <class T>
@@ -152,6 +152,8 @@ private:
 	void WritePushdownExtractColumns(
 	    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
 	    const std::function<idx_t(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)> &callback);
+	unordered_map<TableIndex, MaterializedCTEInfo> &GetCTEMap();
+	optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> TryGetCTEMap();
 };
 
 class CTERefPruner : public LogicalOperatorVisitor {

@@ -365,7 +365,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	}
 
 	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns the plan
-	RemoveUnusedColumns unused_optimizer(optimizer, true);
+	RemoveUnusedColumns unused_optimizer(optimizer);
 	unused_optimizer.VisitOperator(op);
 	return true;
 }
