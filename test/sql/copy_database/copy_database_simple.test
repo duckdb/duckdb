@@ -31,6 +31,9 @@ COPY FROM DATABASE dbxx TO memory
 ----
 dbxx
 
+statement ok
+rollback
+
 statement error
 COPY FROM DATABASE db1 TO dbxx
 ----
