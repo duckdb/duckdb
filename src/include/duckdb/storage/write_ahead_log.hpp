@@ -119,10 +119,6 @@ public:
 	void Flush();
 	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
-	//! Add a used block to the WAL.
-	void AddBlockInUse(const block_id_t block_id);
-	bool NewBlockInUse(const block_id_t block_id) const;
-	void MarkBlocksInUseAsModified();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
