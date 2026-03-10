@@ -327,7 +327,7 @@ unique_ptr<BufferedFileWriter> FileLogStorage::InitializeFileWriter(DatabaseInst
 	auto &fs = db.GetFileSystem();
 
 	// Create parent directories if non existent
-	auto pos = path.find_last_of(fs.PathSeparator(path));
+	auto pos = path.find_last_of("/\\");
 	if (pos != path.npos) {
 		fs.CreateDirectoriesRecursive(path.substr(0, pos));
 	}
