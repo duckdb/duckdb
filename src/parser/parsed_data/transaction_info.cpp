@@ -48,6 +48,7 @@ string TransactionInfo::ToString() const {
 unique_ptr<TransactionInfo> TransactionInfo::Copy() const {
 	auto result = make_uniq<TransactionInfo>(type);
 	result->modifier = modifier;
+	result->invalidation_policy = invalidation_policy;
 	return result;
 }
 
