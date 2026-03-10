@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include <set>
 #include <map>
@@ -130,6 +131,26 @@ TEST_CASE("Test user_agent", "[api]") {
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
 		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
+	}
+}
+
+TEST_CASE("Test default extension directories are not malformed", "[api]") {
+	DBConfig config;
+	DuckDB db(nullptr, &config);
+	auto &fs = db.GetFileSystem();
+	auto extension_directories = ExtensionHelper::GetExtensionDirectoryPath(*db.instance, fs);
+
+	REQUIRE(!extension_directories.empty());
+	for (const auto &dir : extension_directories) {
+		bool malformed_embedded_drive = false;
+		for (idx_t i = 2; i < dir.size(); i++) {
+			if ((((dir[i - 1] >= 'A' && dir[i - 1] <= 'Z') || (dir[i - 1] >= 'a' && dir[i - 1] <= 'z'))) &&
+			    dir[i] == ':') {
+				malformed_embedded_drive = true;
+				break;
+			}
+		}
+		REQUIRE(!malformed_embedded_drive);
 	}
 }
 
