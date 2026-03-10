@@ -621,7 +621,7 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/variant_vector.json ./build/release/test/unittest
 
-    - name: Test variant_vector
+    - name: Test compressed in memory
       if: success() || failure()
       shell: bash
       run: |
