@@ -53,7 +53,7 @@ GlobalUserSettings::GlobalUserSettings() : settings_version(0), uuid(UUID::Gener
 
 GlobalUserSettings::GlobalUserSettings(const GlobalUserSettings &other)
     : settings_map(other.settings_map), extension_parameters(other.extension_parameters),
-      settings_version(other.settings_version.load()), uuid(other.uuid) {
+      settings_version(other.settings_version.load()), uuid(UUID::GenerateRandomUUID()) {
 }
 
 GlobalUserSettings &GlobalUserSettings::operator=(const GlobalUserSettings &other) {
