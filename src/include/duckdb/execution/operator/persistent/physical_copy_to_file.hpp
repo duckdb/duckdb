@@ -19,6 +19,7 @@
 namespace duckdb {
 
 struct GlobalFileState;
+enum class PhysicalCopyFlushBatchType : uint8_t;
 
 struct CopyToFileInfo {
 	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
@@ -50,7 +51,8 @@ private:
 	bool Rotate() const;
 	bool RotateNow(GlobalFileState &global_state) const;
 	void FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
-	                unique_ptr<ColumnDataCollection> batch) const;
+	                unique_ptr<LocalFunctionData> &lstate, unique_ptr<ColumnDataCollection> batch,
+	                PhysicalCopyFlushBatchType flush_batch_type) const;
 	SinkFinalizeType FinalizeInternal(ClientContext &context, GlobalSinkState &gstate) const;
 
 public:

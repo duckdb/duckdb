@@ -117,16 +117,11 @@ ParquetWriteLocalState::ParquetWriteLocalState(ClientContext &context, const vec
 
 static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &input) {
 	auto &copy_options = input.options;
-	copy_options["row_group_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::READ_WRITE);
-	copy_options["chunk_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
-	copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
-	copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["compression"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
 	copy_options["codec"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
 	copy_options["field_ids"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["kv_metadata"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["encryption_config"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
-	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["dictionary_size_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["string_dictionary_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
@@ -139,12 +134,18 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["can_have_nan"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["geoparquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["shredding"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+
+	// Deprecated
+	copy_options["row_group_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["chunk_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 }
 
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
                                                  const vector<string> &names, const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
-	bool row_group_size_bytes_set = false;
 	bool compression_level_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : input.info.options) {
@@ -153,19 +154,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			// All parquet write options require exactly one argument
 			throw BinderException("%s requires exactly one argument", StringUtil::Upper(loption));
 		}
-		if (loption == "row_group_size" || loption == "chunk_size") {
-			bind_data->row_group_size = option.second[0].GetValue<uint64_t>();
-		} else if (loption == "row_group_size_bytes") {
-			auto roption = option.second[0];
-			if (roption.GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
-				bind_data->row_group_size_bytes = DBConfig::ParseMemoryLimit(roption.ToString());
-			} else {
-				bind_data->row_group_size_bytes = option.second[0].GetValue<uint64_t>();
-			}
-			row_group_size_bytes_set = true;
-		} else if (loption == "row_groups_per_file") {
-			bind_data->row_groups_per_file = option.second[0].GetValue<uint64_t>();
-		} else if (loption == "compression" || loption == "codec") {
+		if (loption == "compression" || loption == "codec") {
 			const auto roption = StringUtil::Lower(option.second[0].ToString());
 			if (roption == "uncompressed") {
 				bind_data->codec = duckdb_parquet::CompressionCodec::UNCOMPRESSED;
@@ -271,7 +260,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			}
 		} else if (loption == "encryption_config") {
 			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
-		} else if (loption == "dictionary_compression_ratio_threshold" || loption == "debug_use_openssl") {
+		} else if (loption == "dictionary_compression_ratio_threshold" || loption == "debug_use_openssl" ||
+		           loption == "row_group_size" || loption == "chunk_size" || loption == "row_group_size_bytes" ||
+		           loption == "row_groups_per_file") {
 			// deprecated, ignore setting
 		} else if (loption == "dictionary_size_limit") {
 			auto val = option.second[0].GetValue<int64_t>();
@@ -328,12 +319,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			}
 		} else {
 			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
-		}
-	}
-	if (row_group_size_bytes_set) {
-		if (Settings::Get<PreserveInsertionOrderSetting>(context)) {
-			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
-			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
 		}
 	}
 
@@ -583,8 +568,10 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(100, "sql_types", bind_data.sql_types);
 	serializer.WriteProperty(101, "column_names", bind_data.column_names);
 	serializer.WriteProperty(102, "codec", bind_data.codec);
-	serializer.WriteProperty(103, "row_group_size", bind_data.row_group_size);
-	serializer.WriteProperty(104, "row_group_size_bytes", bind_data.row_group_size_bytes);
+
+	// 103 was row_group_size, but was deleted
+	// 104 was row_group_size_bytes, but was deleted
+
 	serializer.WriteProperty(105, "kv_metadata", bind_data.kv_metadata);
 	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
@@ -599,8 +586,9 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	D_ASSERT(DeserializeCompressionLevel(compression_level) == bind_data.compression_level);
 	ParquetWriteBindData default_value;
 	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
-	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file,
-	                                    default_value.row_groups_per_file);
+
+	// 110 was row_groups_per_file, but was deleted
+
 	serializer.WritePropertyWithDefault(112, "dictionary_size_limit", bind_data.dictionary_size_limit,
 	                                    default_value.dictionary_size_limit);
 	serializer.WritePropertyWithDefault(113, "bloom_filter_false_positive_ratio",

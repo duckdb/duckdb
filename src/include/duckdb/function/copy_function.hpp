@@ -183,6 +183,11 @@ struct CopyFunctionFileStatistics {
 	case_insensitive_map_t<case_insensitive_map_t<Value>> column_statistics;
 };
 
+bool CopyFunctionMustFlushBatch(const idx_t &current_batch_size, const idx_t current_batch_size_bytes,
+                                const optional_idx &batch_size, const optional_idx &batch_size_bytes);
+bool CopyFunctionMustFlushBatch(const ColumnDataCollection &batch, const optional_idx &batch_size,
+                                const optional_idx &batch_size_bytes);
+
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
 	explicit CopyFunction(const string &name);

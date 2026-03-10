@@ -16,6 +16,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Util
 //===--------------------------------------------------------------------===//
+enum class PhysicalCopyFlushBatchType : uint8_t { SINK, COMBINE, FINALIZE };
+
 struct PartitionWriteInfo {
 	unique_ptr<GlobalFunctionData> global_state;
 	idx_t active_writes = 0;
@@ -47,16 +49,6 @@ struct VectorOfValuesEquality {
 
 template <class T>
 using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
-
-static bool PhysicalCopyMustFlushBatch(const PhysicalCopyToFile &op, const idx_t count, const idx_t size_in_bytes) {
-	const auto exceeds_count = count >= op.batch_size.GetIndex();
-	const auto exceeds_size = op.batch_size_bytes.IsValid() && size_in_bytes >= op.batch_size_bytes.GetIndex();
-	return exceeds_count || exceeds_size;
-}
-
-static bool PhysicalCopyMustFlushBatch(const PhysicalCopyToFile &op, const ColumnDataCollection &collection) {
-	return PhysicalCopyMustFlushBatch(op, collection.Count(), collection.SizeInBytes());
-}
 
 void CheckDirectory(FileSystem &fs, const string &file_path, CopyOverwriteMode overwrite_mode) {
 	if (overwrite_mode == CopyOverwriteMode::COPY_OVERWRITE_OR_IGNORE ||
@@ -680,9 +672,11 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	}
 	lstate.batch->Append(lstate.batch_append_state, chunk);
 
-	if (PhysicalCopyMustFlushBatch(*this, *lstate.batch)) {
+	if (CopyFunctionMustFlushBatch(*lstate.batch, batch_size, batch_size_bytes)) {
+		lstate.batch_append_state.current_chunk_state.handles.clear();
 		auto &file_state_ptr = per_thread_output ? lstate.global_state : gstate.global_state;
-		FlushBatch(context.client, gstate, file_state_ptr, std::move(lstate.batch));
+		FlushBatch(context.client, gstate, file_state_ptr, lstate.local_state, std::move(lstate.batch),
+		           PhysicalCopyFlushBatchType::SINK);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -705,7 +699,8 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 
 	if (per_thread_output) {
 		if (lstate.batch) {
-			FlushBatch(context.client, gstate, lstate.global_state, std::move(lstate.batch));
+			FlushBatch(context.client, gstate, lstate.global_state, lstate.local_state, std::move(lstate.batch),
+			           PhysicalCopyFlushBatchType::COMBINE);
 		}
 		function.copy_to_finalize(context.client, *bind_data, *lstate.global_state->data);
 		return SinkCombineResultType::FINISHED;
@@ -714,16 +709,16 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	if (!lstate.batch) {
 		return SinkCombineResultType::FINISHED;
 	}
-	D_ASSERT(!PhysicalCopyMustFlushBatch(*this, *lstate.batch));
+	D_ASSERT(!CopyFunctionMustFlushBatch(*lstate.batch, batch_size, batch_size_bytes));
 
 	unique_ptr<ColumnDataCollection> batch;
 	{
 		annotated_lock_guard<annotated_mutex> guard(gstate.last_batch_lock);
 		if (gstate.last_batch) {
-			D_ASSERT(!PhysicalCopyMustFlushBatch(*this, *gstate.last_batch));
+			D_ASSERT(!CopyFunctionMustFlushBatch(*gstate.last_batch, batch_size, batch_size_bytes));
 			const auto count = gstate.last_batch->Count() + lstate.batch->Count();
 			const auto size_in_bytes = gstate.last_batch->SizeInBytes() + lstate.batch->SizeInBytes();
-			if (PhysicalCopyMustFlushBatch(*this, count, size_in_bytes)) {
+			if (CopyFunctionMustFlushBatch(count, size_in_bytes, batch_size, batch_size_bytes)) {
 				// Combining makes us overshoot, make sure the smallest one gets flushed now
 				auto &small = lstate.batch->Count() < gstate.last_batch->Count() ? lstate.batch : gstate.last_batch;
 				auto &large = lstate.batch->Count() < gstate.last_batch->Count() ? gstate.last_batch : lstate.batch;
@@ -742,7 +737,8 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	}
 
 	auto &file_state_ptr = per_thread_output ? lstate.global_state : gstate.global_state;
-	FlushBatch(context.client, gstate, file_state_ptr, std::move(batch));
+	FlushBatch(context.client, gstate, file_state_ptr, lstate.local_state, std::move(batch),
+	           PhysicalCopyFlushBatchType::COMBINE);
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -777,7 +773,9 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 
 	annotated_lock_guard<annotated_mutex> guard(gstate.last_batch_lock);
 	if (gstate.last_batch) {
-		FlushBatch(context, gstate, gstate.global_state, std::move(gstate.last_batch));
+		unique_ptr<LocalFunctionData> lstate;
+		FlushBatch(context, gstate, gstate.global_state, lstate, std::move(gstate.last_batch),
+		           PhysicalCopyFlushBatchType::FINALIZE);
 	}
 
 	if (function.copy_to_finalize && gstate.global_state) {
@@ -796,8 +794,9 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 }
 
 void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
-                                    unique_ptr<GlobalFileState> &file_state_ptr,
-                                    unique_ptr<ColumnDataCollection> batch) const {
+                                    unique_ptr<GlobalFileState> &file_state_ptr, unique_ptr<LocalFunctionData> &lstate,
+                                    unique_ptr<ColumnDataCollection> batch,
+                                    const PhysicalCopyFlushBatchType flush_batch_type) const {
 	auto &gstate = gstate_p.Cast<CopyToFunctionGlobalState>();
 
 	while (true) {
@@ -831,8 +830,23 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 			// Because we got the shared lock on the file, we're sure that it will keep existing until we release it
 			global_guard.reset();
 
-			auto prepared_batch = function.prepare_batch(context, *bind_data, *file_state.data, std::move(batch));
-			function.flush_batch(context, *bind_data, *file_state.data, *prepared_batch);
+			if (function.prepare_batch && function.flush_batch) {
+				auto prepared_batch = function.prepare_batch(context, *bind_data, *file_state.data, std::move(batch));
+				function.flush_batch(context, *bind_data, *file_state.data, *prepared_batch);
+			} else {
+				// Old API - make dummy stuff and manually prepare/flush batch
+				ThreadContext thread_context(context);
+				ExecutionContext execution_context(context, thread_context, nullptr);
+				if (!lstate) {
+					lstate = function.copy_to_initialize_local(execution_context, *bind_data);
+				}
+				for (auto &chunk : batch->Chunks()) {
+					function.copy_to_sink(execution_context, *bind_data, *file_state.data, *lstate, chunk);
+				}
+				if (flush_batch_type != PhysicalCopyFlushBatchType::SINK) {
+					function.copy_to_combine(execution_context, *bind_data, *file_state.data, *lstate);
+				}
+			}
 
 			break;
 		}

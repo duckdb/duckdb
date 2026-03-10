@@ -51,6 +51,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		cast_copy.children.push_back(plan);
 		cast_copy.return_type = op.return_type;
 		cast_copy.write_empty_file = op.write_empty_file;
+
+		cast_copy.batch_size = op.batch_size;
+		cast_copy.batch_size_bytes = op.batch_size_bytes;
+		cast_copy.batches_per_file = op.batches_per_file;
+		cast_copy.file_size_bytes = op.file_size_bytes;
+
 		return copy;
 	}
 
@@ -69,17 +75,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.batch_size_bytes = op.batch_size_bytes;
 	cast_copy.batches_per_file = op.batches_per_file;
 	cast_copy.file_size_bytes = op.file_size_bytes;
-
-	if (!cast_copy.batch_size.IsValid()) {
-		if (cast_copy.function.default_batch_size) {
-			cast_copy.batch_size = cast_copy.function.default_batch_size();
-		} else if (cast_copy.function.desired_batch_size) {
-			cast_copy.batch_size = cast_copy.function.desired_batch_size(context, *cast_copy.bind_data);
-		} else {
-			cast_copy.batch_size = DEFAULT_ROW_GROUP_SIZE;
-		}
-	}
-	D_ASSERT(cast_copy.batch_size.IsValid());
 
 	if (!cast_copy.batch_size_bytes.IsValid() && cast_copy.function.default_batch_size_bytes) {
 		cast_copy.batch_size_bytes = cast_copy.function.default_batch_size_bytes();

@@ -320,6 +320,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			throw NotImplementedException(
 			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
 		}
+		if (!function.prepare_batch || !function.flush_batch) {
+			throw NotImplementedException(
+			    "Can't use file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY with FORMAT %s", function.name);
+		}
 	}
 	if (!write_empty_file) {
 		if (per_thread_output) {
@@ -371,6 +375,18 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	default:
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
+
+	// This must be set
+	if (!copy->batch_size.IsValid()) {
+		if (copy->function.default_batch_size) {
+			copy->batch_size = copy->function.default_batch_size();
+		} else if (copy->function.desired_batch_size) {
+			copy->batch_size = copy->function.desired_batch_size(context, *copy->bind_data);
+		} else {
+			copy->batch_size = DEFAULT_ROW_GROUP_SIZE;
+		}
+	}
+	D_ASSERT(copy->batch_size.IsValid());
 
 	BoundStatement result;
 	result.names = GetCopyFunctionReturnNames(copy->return_type);

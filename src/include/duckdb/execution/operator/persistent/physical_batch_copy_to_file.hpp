@@ -32,6 +32,12 @@ public:
 	CopyFunctionReturnType return_type;
 	bool write_empty_file;
 
+	//! Fine-grained control over writes
+	optional_idx batch_size;
+	optional_idx batch_size_bytes;
+	optional_idx batches_per_file;
+	optional_idx file_size_bytes;
+
 public:
 	// Source interface
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,

@@ -1,5 +1,7 @@
 #include "duckdb/function/copy_function.hpp"
 
+#include "duckdb/common/types/column/column_data_collection.hpp"
+
 namespace duckdb {
 
 CopyFunction::CopyFunction(const string &name)
@@ -52,6 +54,18 @@ vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType ret
 	default:
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
+}
+
+bool CopyFunctionMustFlushBatch(const idx_t &current_batch_size, const idx_t current_batch_size_bytes,
+                                const optional_idx &batch_size, const optional_idx &batch_size_bytes) {
+	const auto exceeds_count = current_batch_size >= batch_size.GetIndex();
+	const auto exceeds_size = batch_size_bytes.IsValid() && current_batch_size_bytes >= batch_size_bytes.GetIndex();
+	return exceeds_count || exceeds_size;
+}
+
+bool CopyFunctionMustFlushBatch(const ColumnDataCollection &batch, const optional_idx &batch_size,
+                                const optional_idx &batch_size_bytes) {
+	return CopyFunctionMustFlushBatch(batch.Count(), batch.SizeInBytes(), batch_size, batch_size_bytes);
 }
 
 } // namespace duckdb
