@@ -241,7 +241,7 @@ BlockAllocator &BlockAllocator::Get(AttachedDatabase &db) {
 void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
 	lock_guard<mutex> guard(physical_memory_lock);
 
-	if (!IsActive()) {
+	if (new_physical_memory_size != 0 && !IsActive()) {
 		virtual_memory_space = AllocateVirtualMemory(virtual_memory_size);
 		if (!IsActive()) {
 			return; // Failed to initialize
