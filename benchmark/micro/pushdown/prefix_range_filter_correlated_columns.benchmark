@@ -1,6 +1,6 @@
 # name: benchmark/micro/pushdown/prefix_range_filter_correlated_columns.benchmark
 # description: Prefix Range Filter Pushdown with Correlated Join Key Orders
-# group: [join]
+# group: [pushdown]
 
 name Prefix Range Filter Pushdown with Correlated Join Columns
 group join
