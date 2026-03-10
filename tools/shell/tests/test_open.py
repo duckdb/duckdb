@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 
-# test import from a parquet file
+# test .open with non-databsae files
 def test_open(shell, tmp_path):
     target_dir = tmp_path / 'open_test'
     os.mkdir(target_dir)
@@ -24,11 +24,11 @@ def test_open(shell, tmp_path):
         .statement(f"COPY (SELECT 44) TO '{target_dir}/test.csv'")
         .statement(f"ATTACH '{target_dir}/test.parquet' as test2")
         .statement(f"ATTACH '{target_dir}/test.csv' as test3")
-        .statement(f".open {target_dir}/test.duckdb")
+        .statement(f".open '{target_dir}/test.duckdb'")
         .statement("FROM tbl")
-        .statement(f".open {target_dir}/test.parquet")
+        .statement(f".open '{target_dir}/test.parquet'")
         .statement("FROM file")
-        .statement(f".open {target_dir}/test.csv")
+        .statement(f".open '{target_dir}/test.csv'")
         .statement("FROM file")
     )
 
