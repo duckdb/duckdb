@@ -52,6 +52,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
+#include "duckdb/parser/statement/transaction_statement.hpp"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -926,6 +927,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 						// re-apply `prioritize_table_when_binding` (which is normally set during transform)
 						parser.statements[0]->Cast<UpdateStatement>().prioritize_table_when_binding =
 						    statement->Cast<UpdateStatement>().prioritize_table_when_binding;
+					} else if (statement->type == StatementType::TRANSACTION_STATEMENT) {
+						// re-apply invalidation policy
+						parser.statements[0]->Cast<TransactionStatement>().info->invalidation_policy =
+						    statement->Cast<TransactionStatement>().info->invalidation_policy;
 					}
 					statement = std::move(parser.statements[0]);
 				} catch (const NotImplementedException &) {
