@@ -348,6 +348,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// of the CTE. However, if we have not seen all readers, we opt to not prune, because we might miss column
 		// references, resulting in incorrect query results.
 		auto have_seen_all_readers = cte_map_entry.expected_readers == cte_map_entry.seen_readers;
+
+		if (!have_seen_all_readers) {
+			// We did not traverse the entire plan. Something is wrong.
+			throw InternalException("CTE pruning did not traverse the entire plan. This is a bug in the optimizer.");
+		}
+
 		if (!cte_map_entry.everything_referenced && have_seen_all_readers) {
 			auto lhs_child_optimizer = CreateChildOptimizer();
 			// Construct a projection on top of the left-hand side of the CTE
