@@ -392,16 +392,16 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		if (it == cte_map_ref.end()) {
 			throw InternalException("Could not find CTE definition for CTE reference");
 		}
+		auto &cte_entry = it->second;
+		auto &referenced_columns = cte_entry.column_references;
 
 		for (auto &entry : column_references) {
 			if (entry.first.table_index == cte_ref.table_index) {
-				auto &test = cte_map_ref[cte_ref.cte_index].column_references;
-				test.insert(entry);
+				referenced_columns.insert(entry);
 			}
 		}
 
-		cte_map_ref[cte_ref.cte_index].everything_referenced |=
-		    cte_ref.chunk_types.size() == cte_map_ref[cte_ref.cte_index].column_references.size();
+		cte_entry.everything_referenced = cte_ref.chunk_types.size() == cte_entry.column_references.size();
 
 		break;
 	}
