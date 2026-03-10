@@ -216,7 +216,6 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		} else {
 			unnest_table_index = entry->second.index;
 			unnest_column_index = ColumnBinding::PushExpression(entry->second.expressions, std::move(result));
-			entry->second.expressions.push_back(std::move(result));
 		}
 		// now create a column reference referring to the unnest
 		unnest_expr = make_uniq<BoundColumnRefExpression>(

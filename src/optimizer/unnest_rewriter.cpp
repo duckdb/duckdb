@@ -133,18 +133,19 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 			auto unnest_get_column = unnest_get->GetColumnBindings();
 			auto &proj = curr_op->get()->Cast<LogicalProjection>();
 			auto delim_get = std::move(proj.children[0]);
-			auto unnest = make_uniq<LogicalUnnest>(unnest_get->GetTableIndex()[0]);
+			auto unnest_get_index = unnest_get->GetTableIndex()[0];
+			auto unnest = make_uniq<LogicalUnnest>(unnest_get_index);
 			unnest->children.push_back(std::move(delim_get));
 			delim_join.children[other_idx] = std::move(*curr_op);
 			for (idx_t i = 0; i < unnest_get_column.size(); i++) {
 				auto &col_bind = unnest_get_column[i];
-				D_ASSERT(col_bind.table_index == unnest_get->GetTableIndex()[0] ||
+				D_ASSERT(col_bind.table_index == unnest_get_index ||
 				         col_bind.table_index == proj.table_index);
-				if (col_bind.table_index == unnest_get->GetTableIndex()[0]) {
+				if (col_bind.table_index == unnest_get_index) {
 					auto &bind_col = proj.expressions[col_bind.column_index.index]->Cast<BoundColumnRefExpression>();
 					auto unnest_expr = make_uniq<BoundUnnestExpression>(unnest_get->types[i]);
 					unnest_expr->child = proj.expressions[col_bind.column_index.index]->Copy();
-					bind_col.binding = ColumnBinding(unnest->GetTableIndex()[0], bind_col.binding.column_index);
+					bind_col.binding = ColumnBinding(unnest_get_index, bind_col.binding.column_index);
 					auto unnest_proj_idx = ColumnBinding::PushExpression(unnest->expressions, std::move(unnest_expr));
 					ColumnBinding new_column_ref(bind_col.binding.table_index, unnest_proj_idx);
 					auto unnest_ref = make_uniq<BoundColumnRefExpression>(bind_col.alias, unnest_get->types[i],
