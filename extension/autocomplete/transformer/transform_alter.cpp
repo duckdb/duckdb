@@ -5,6 +5,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,27 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<AlterStatement>();
 	result->info = transformer.Transform<unique_ptr<AlterInfo>>(list_pr.Child<ListParseResult>(1));
-	return std::move(result);
+	if (result->info->type != AlterType::ALTER_TABLE) {
+		return std::move(result);
+	}
+	auto &alter_table = result->info->Cast<AlterTableInfo>();
+	if (alter_table.alter_table_type != AlterTableType::ADD_COLUMN) {
+		return std::move(result);
+	}
+	auto &add_column = alter_table.Cast<AddColumnInfo>();
+	if (!add_column.new_column.HasDefaultValue() ||
+	    add_column.new_column.DefaultValue().GetExpressionClass() == ExpressionClass::CONSTANT) {
+		return std::move(result);
+	}
+	auto &column_entry = add_column.new_column;
+	auto null_column = column_entry.Copy();
+	null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
+	auto alter_entry_data = add_column.GetAlterEntryData();
+	return unique_ptr<SQLStatement>(std::move(TransformAndMaterializeAlter(
+	    alter_entry_data,
+	    make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
+	                             result->info->if_not_found == OnEntryNotFound::RETURN_NULL),
+	    column_entry.GetName(), column_entry.DefaultValue().Copy())));
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterOptions(PEGTransformer &transformer,
@@ -122,6 +143,63 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterTableOptions(PEG
                                                                              optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+void PEGTransformerFactory::AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement,
+                                                unique_ptr<AlterInfo> alter_info) {
+	auto alter_statement = make_uniq<AlterStatement>();
+	alter_statement->info = std::move(alter_info);
+	multi_statement->statements.push_back(std::move(alter_statement));
+}
+
+void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement,
+                                                      const string &column_name, const AlterEntryData &table_data,
+                                                      const unique_ptr<ParsedExpression> &original_expression) {
+	auto update_statement = make_uniq<UpdateStatement>();
+	update_statement->prioritize_table_when_binding = true;
+
+	auto table_ref = make_uniq<BaseTableRef>();
+	table_ref->catalog_name = table_data.catalog;
+	table_ref->schema_name = table_data.schema;
+	table_ref->table_name = table_data.name;
+	update_statement->table = std::move(table_ref);
+
+	auto set_info = make_uniq<UpdateSetInfo>();
+	set_info->columns.push_back(column_name);
+	set_info->expressions.push_back(original_expression->Copy());
+	update_statement->set_info = std::move(set_info);
+
+	multi_statement->statements.push_back(std::move(update_statement));
+}
+
+unique_ptr<MultiStatement> PEGTransformerFactory::TransformAndMaterializeAlter(
+    AlterEntryData &data, unique_ptr<AlterInfo> info_with_null_placeholder, const string &column_name,
+    unique_ptr<ParsedExpression> expression) {
+	auto multi_statement = make_uniq<MultiStatement>();
+	/* Here we do a workaround that consists of the following statements:
+	 *	 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	 *	 2. `UPDATE t SET col = <expression>;`
+	 *	 3. `ALTER TABLE t ALTER col SET DEFAULT <expression>;`
+
+	 *
+	 * This workaround exists because, when statements like this were executed:
+	 *	`ALTER TABLE ... ADD COLUMN ... DEFAULT <expression>`
+	 * the WAL replay would re-run the default expression, and with expressions such as RANDOM or CURRENT_TIMESTAMP, the
+	 * value would be different from that of the original run. By now doing an UPDATE in statement 2, we force
+	 * materialization of these values for all existing rows, which makes WAL replays consistent.
+	 */
+
+	// 1. `ALTER TABLE t ADD COLUMN col <type> DEFAULT NULL;`
+	AddToMultiStatement(multi_statement, std::move(info_with_null_placeholder));
+
+	// 2. `UPDATE t SET u = <expression>;`
+	AddUpdateToMultiStatement(multi_statement, column_name, data, expression);
+
+	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
+	// Reinstate the original default expression.
+	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, column_name, std::move(expression)));
+
+	return multi_statement;
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransformer &transformer,

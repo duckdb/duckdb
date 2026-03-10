@@ -623,9 +623,15 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	vector<reference<ART>> arts_to_scan;
 	arts_to_scan.push_back(art);
 	if (entry.deleted_rows_in_use) {
+		if (entry.deleted_rows_in_use->GetIndexType() != ART::TYPE_NAME) {
+			throw InternalException("Concurrent changes made to a non-ART index");
+		}
 		arts_to_scan.push_back(entry.deleted_rows_in_use->Cast<ART>());
 	}
 	if (entry.added_data_during_checkpoint) {
+		if (entry.added_data_during_checkpoint->GetIndexType() != ART::TYPE_NAME) {
+			throw InternalException("Concurrent changes made to a non-ART index");
+		}
 		arts_to_scan.push_back(entry.added_data_during_checkpoint->Cast<ART>());
 	}
 

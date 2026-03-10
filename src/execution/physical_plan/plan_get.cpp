@@ -102,12 +102,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		vector<unique_ptr<Expression>> select_list;
 		unique_ptr<Expression> unsupported_filter;
 		unordered_set<idx_t> to_remove;
+
+		virtual_column_map_t virtual_columns;
+		if (op.function.get_virtual_columns) {
+			virtual_columns = op.function.get_virtual_columns(context, op.bind_data.get());
+		}
 		for (auto &entry : *table_filters) {
 			auto filter_idx = entry.ColumnIndex();
-			auto &filter = entry.Filter();
+			auto &filter_expr = entry.Filter();
 			auto column_id = column_ids[filter_idx].GetPrimaryIndex();
-			auto &type = op.returned_types[column_id];
 			if (!op.function.supports_pushdown_type(*op.bind_data, column_id)) {
+				LogicalType column_type;
+				if (IsVirtualColumn(column_id)) {
+					auto &column = virtual_columns.at(column_id);
+					column_type = column.type;
+				} else {
+					column_type = op.returned_types[column_id];
+				}
 				idx_t column_id_filter = filter_idx;
 				bool found_projection = false;
 				for (idx_t i = 0; i < projection_ids.size(); i++) {
@@ -121,8 +132,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 					projection_ids.push_back(filter_idx);
 					column_id_filter = projection_ids.size() - 1;
 				}
-				auto column = make_uniq<BoundReferenceExpression>(type, column_id_filter);
-				select_list.push_back(filter.ToExpression(*column));
+				auto column = make_uniq<BoundReferenceExpression>(column_type, column_id_filter);
+				select_list.push_back(filter_expr.ToExpression(*column));
 				to_remove.insert(filter_idx);
 			}
 		}
@@ -134,7 +145,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			vector<LogicalType> filter_types;
 			for (auto &c : projection_ids) {
 				auto column_id = column_ids[c].GetPrimaryIndex();
-				filter_types.push_back(op.returned_types[column_id]);
+				if (IsVirtualColumn(column_id)) {
+					auto &column = virtual_columns.at(column_id);
+					filter_types.push_back(column.type);
+				} else {
+					filter_types.push_back(op.returned_types[column_id]);
+				}
 			}
 			filter = Make<PhysicalFilter>(filter_types, std::move(select_list), op.estimated_cardinality);
 		}

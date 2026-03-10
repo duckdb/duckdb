@@ -343,17 +343,12 @@ void ShellState::Print(PrintOutput output, const char *str, idx_t len) {
 	}
 
 #if defined(_WIN32) || defined(WIN32)
-	if ((stdout_is_console && (out == stdout || out == stderr) || pager_is_active) && !win_utf8_mode) {
-		if (pager_is_active) {
-			auto mbcs_text = ShellState::Win32Utf8ToMbcs(str, true);
-			fputs(mbcs_text.c_str(), output == PrintOutput::STDOUT ? out : stderr);
-		} else {
-			// convert from utf8 to utf16
-			auto unicode_text = ShellState::Win32Utf8ToUnicode(str);
-			auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
-			// use WriteConsoleW to write the unicode codepoints to the console
-			WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
-		}
+	if ((stdout_is_console && (out == stdout || out == stderr)) && !pager_is_active) {
+		// convert from utf8 to utf16
+		auto unicode_text = ShellState::Win32Utf8ToUnicode(str);
+		auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
+		// use WriteConsoleW to write the unicode codepoints to the console
+		WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
 		return;
 	}
 #endif
@@ -430,6 +425,19 @@ bool ShellState::IsSpace(char c) {
 
 bool ShellState::IsDigit(char c) {
 	return isdigit(c);
+}
+
+PagerState::~PagerState() {
+#if defined(_WIN32) || defined(WIN32)
+	if (win_console_cp_before_pager > 0 && win_console_cp_before_pager != CP_UTF8) {
+		SetConsoleCP(win_console_cp_before_pager);
+	}
+#endif
+	if (state) {
+		state->ResetOutput();
+		ShellState::FinishPagerDisplay();
+		state = nullptr;
+	}
 }
 
 /*
@@ -1357,8 +1365,8 @@ string ShellState::GetSystemPager() {
 }
 
 bool ShellState::ShouldUsePager() {
-	if (out != stdout || !stdout_is_console || !outfile.empty()) {
-		// if we have an outfile specified we don't set up the pager
+	if (out != stdout || !stdout_is_console || !outfile.empty() || !stdin_is_interactive) {
+		// if we have an outfile specified, or we are in non-interactive/batch mode, don't use the pager
 		return false;
 	}
 	// setup a pager for output
@@ -1412,9 +1420,13 @@ void ShellState::FinishPagerDisplay() {
 }
 
 unique_ptr<PagerState> ShellState::SetupPager() {
+	uint32_t win_console_cp_before_pager = 0;
 #if defined(_WIN32) || defined(WIN32)
-	if (win_utf8_mode) {
-		SetConsoleCP(CP_UTF8);
+	if (pager_command == "more") { // UTF-8 mode must be used with "more" pager
+		win_console_cp_before_pager = GetConsoleCP();
+		if (win_console_cp_before_pager > 0 && win_console_cp_before_pager != CP_UTF8) {
+			SetConsoleCP(CP_UTF8);
+		}
 	}
 #endif
 	StartPagerDisplay();
@@ -1428,7 +1440,7 @@ unique_ptr<PagerState> ShellState::SetupPager() {
 	pager_is_active = true;
 	out = pager_out;
 	outfile = "|" + pager_command;
-	return make_uniq<PagerState>(*this);
+	return make_uniq<PagerState>(*this, win_console_cp_before_pager);
 }
 /*
 ** Change the output file back to stdout.
