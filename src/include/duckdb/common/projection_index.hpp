@@ -40,6 +40,15 @@ struct ProjectionIndex {
 	bool operator>=(const ProjectionIndex &other) const {
 		return !(*this < other);
 	}
+	ProjectionIndex &operator++() {
+		index++;
+		return *this;
+	}
+	ProjectionIndex operator++(int) {
+		ProjectionIndex tmp(*this);
+		index++;
+		return tmp;
+	}
 	bool IsValid() const {
 		return index != DConstants::INVALID_INDEX;
 	}

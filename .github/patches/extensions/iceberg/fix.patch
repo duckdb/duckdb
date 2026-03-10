@@ -1,8 +1,16 @@
 diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
-index 02a3b3d3..28064a0c 100644
+index 02a3b3d3..e0d90035 100644
 --- a/src/iceberg_functions/iceberg_multi_file_list.cpp
 +++ b/src/iceberg_functions/iceberg_multi_file_list.cpp
-@@ -134,12 +134,12 @@ bool IcebergMultiFileList::FinishedScanningDeletes() const {
+@@ -19,6 +19,7 @@
+ #include "duckdb/parser/expression/constant_expression.hpp"
+ #include "duckdb/planner/filter/struct_filter.hpp"
+ #include "duckdb/execution/executor.hpp"
++#include "duckdb/optimizer/filter_combiner.hpp"
+ 
+ #include "metadata/iceberg_predicate_stats.hpp"
+ #include "metadata/iceberg_table_metadata.hpp"
+@@ -134,12 +135,12 @@ bool IcebergMultiFileList::FinishedScanningDeletes() const {
  optional_ptr<const TableFilter> IcebergMultiFileList::GetFilterForColumnIndex(const TableFilterSet &filter_set,
                                                                                const ColumnIndex &column_index) const {
  	auto primary_index = column_index.GetPrimaryIndex();
@@ -18,7 +26,7 @@ index 02a3b3d3..28064a0c 100644
  	auto &child_indexes = column_index.GetChildIndexes();
  
  	reference<const TableFilter> current_filter(parent_filter);
-@@ -217,14 +217,14 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
+@@ -217,14 +218,14 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
  	TableFilterSet result_filter_set;
  
  	// Add pre-existing filters
@@ -38,7 +46,7 @@ index 02a3b3d3..28064a0c 100644
  		}
  	}
  
-@@ -239,23 +239,23 @@ unique_ptr<MultiFileList>
+@@ -239,23 +240,23 @@ unique_ptr<MultiFileList>
  IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
                                              const vector<string> &names, const vector<LogicalType> &types,
                                              const vector<column_t> &column_ids, TableFilterSet &filters) const {
@@ -70,7 +78,7 @@ index 02a3b3d3..28064a0c 100644
  		auto new_snap = PushdownInternal(context, filters_copy);
  		return std::move(new_snap);
  	}
-@@ -277,7 +277,7 @@ unique_ptr<MultiFileList> IcebergMultiFileList::ComplexFilterPushdown(ClientCont
+@@ -277,7 +278,7 @@ unique_ptr<MultiFileList> IcebergMultiFileList::ComplexFilterPushdown(ClientCont
  
  	vector<FilterPushdownResult> unused;
  	auto filter_set = combiner.GenerateTableScanFilters(info.column_indexes, unused);
@@ -79,7 +87,7 @@ index 02a3b3d3..28064a0c 100644
  		return nullptr;
  	}
  
-@@ -382,16 +382,14 @@ IcebergPredicateStats IcebergPredicateStats::DeserializeBounds(const Value &lowe
+@@ -382,16 +383,14 @@ IcebergPredicateStats IcebergPredicateStats::DeserializeBounds(const Value &lowe
  
  bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestEntry &manifest_entry,
                                               IcebergDataFileType file_type) const {
@@ -99,7 +107,7 @@ index 02a3b3d3..28064a0c 100644
  			continue;
  		}
  		auto &metadata = GetMetadata();
-@@ -512,8 +510,7 @@ bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestEntry &manifes
+@@ -512,8 +511,7 @@ bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestEntry &manifes
  			stats.has_nan = nan_counts != 0;
  		}
  
@@ -109,7 +117,7 @@ index 02a3b3d3..28064a0c 100644
  			//! If any predicate fails, exclude the file
  			return false;
  		}
-@@ -596,7 +593,7 @@ optional_ptr<const IcebergManifestEntry> IcebergMultiFileList::GetDataFile(idx_t
+@@ -596,7 +594,7 @@ optional_ptr<const IcebergManifestEntry> IcebergMultiFileList::GetDataFile(idx_t
  			auto &data_file = manifest_entry.data_file;
  			manifest_entry_idx++;
  			// Check whether current data file is filtered out.
@@ -118,7 +126,7 @@ index 02a3b3d3..28064a0c 100644
  				DUCKDB_LOG(context, IcebergLogType, "Iceberg Filter Pushdown, skipped 'data_file': '%s'",
  				           data_file.file_path);
  				//! Skip this file
-@@ -689,7 +686,7 @@ bool IcebergMultiFileList::ManifestMatchesFilter(const IcebergManifestFile &mani
+@@ -689,7 +687,7 @@ bool IcebergMultiFileList::ManifestMatchesFilter(const IcebergManifestFile &mani
  		    field_summaries.size(), partition_spec.fields.size());
  	}
  
@@ -127,7 +135,7 @@ index 02a3b3d3..28064a0c 100644
  		//! There are no filters
  		return true;
  	}
-@@ -850,7 +847,7 @@ void IcebergMultiFileList::ProcessDeletes(const vector<MultiFileColumnDefinition
+@@ -850,7 +848,7 @@ void IcebergMultiFileList::ProcessDeletes(const vector<MultiFileColumnDefinition
  		for (auto &manifest_entry : entries) {
  			auto &data_file = manifest_entry.data_file;
  			// Check whether current data file is filtered out.
@@ -136,3 +144,62 @@ index 02a3b3d3..28064a0c 100644
  				DUCKDB_LOG(context, IcebergLogType, "Iceberg Filter Pushdown, skipped 'data_file': '%s'",
  				           data_file.file_path);
  				//! Skip this file
+diff --git a/src/iceberg_manifest.cpp b/src/iceberg_manifest.cpp
+index 82c0aed8..905ca1cb 100644
+--- a/src/iceberg_manifest.cpp
++++ b/src/iceberg_manifest.cpp
+@@ -5,6 +5,7 @@
+ #include "catalog_utils.hpp"
+ #include "iceberg_value.hpp"
+ #include "storage/iceberg_table_information.hpp"
++#include "duckdb/storage/buffer_manager.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/storage/catalog/iceberg_table_set.cpp b/src/storage/catalog/iceberg_table_set.cpp
+index d2d8f9df..6522c068 100644
+--- a/src/storage/catalog/iceberg_table_set.cpp
++++ b/src/storage/catalog/iceberg_table_set.cpp
+@@ -22,6 +22,7 @@
+ #include "duckdb/parser/parser.hpp"
+ #include "duckdb/planner/tableref/bound_at_clause.hpp"
+ #include "duckdb/planner/expression_binder/table_function_binder.hpp"
++#include "duckdb/execution/expression_executor.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/storage/iceberg_update.cpp b/src/storage/iceberg_update.cpp
+index 15350c54..4ab34c16 100644
+--- a/src/storage/iceberg_update.cpp
++++ b/src/storage/iceberg_update.cpp
+@@ -305,23 +305,24 @@ void IcebergTableEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
+ 			continue;
+ 		}
+ 		// check if the column is already projected
+-		optional_idx column_id_index;
++		ProjectionIndex column_id_index;
+ 		for (idx_t i = 0; i < column_ids.size(); i++) {
+ 			if (column_ids[i].GetPrimaryIndex() == physical_index.index) {
+-				column_id_index = i;
++				column_id_index = ProjectionIndex(i);
+ 				break;
+ 			}
+ 		}
+ 		if (!column_id_index.IsValid()) {
+ 			// not yet projected - add to projection list
+-			column_id_index = column_ids.size();
++			column_id_index = ProjectionIndex(column_ids.size());
+ 			get.AddColumnId(physical_index.index);
+ 		}
+ 		// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
++		auto get_ref = make_uniq<BoundColumnRefExpression>(
++			column.Type(), ColumnBinding(get.table_index, column_id_index));
++		auto proj_id = ColumnBinding::PushExpression(update.expressions, std::move(get_ref));
+ 		update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+-		    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
+-		proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+-		    column.Type(), ColumnBinding(get.table_index, column_id_index.GetIndex())));
++		    column.Type(), ColumnBinding(proj.table_index, proj_id)));
+ 		get.AddColumnId(physical_index.index);
+ 		update.columns.push_back(physical_index);
+ 	}

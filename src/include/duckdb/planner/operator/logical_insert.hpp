@@ -11,6 +11,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/index_vector.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
