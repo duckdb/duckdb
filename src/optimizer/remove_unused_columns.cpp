@@ -209,15 +209,12 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 				// extract the first column
 				entries.push_back(0);
 			}
-			// columns were cleared
-			setop.column_count = entries.size();
-
 			for (idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
 				RemoveUnusedColumns remove(*this, true);
 				auto &child = op.children[child_idx];
 
 				if (entries.size() < setop.column_count) {
-					// we are stripping columns
+					// columns were cleared
 					// push a projection under this child that references the required columns of the union
 					child->ResolveOperatorTypes();
 					auto bindings = child->GetColumnBindings();
@@ -239,6 +236,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 				// now visit the child
 				remove.VisitOperator(op.children[child_idx]);
 			}
+			setop.column_count = entries.size();
 			return;
 		}
 		for (auto &child : op.children) {
@@ -402,7 +400,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			}
 		}
 
-		cte_map_ref[cte_ref.cte_index].everything_referenced =
+		cte_map_ref[cte_ref.cte_index].everything_referenced |=
 		    cte_ref.chunk_types.size() == cte_map_ref[cte_ref.cte_index].column_references.size();
 
 		break;
