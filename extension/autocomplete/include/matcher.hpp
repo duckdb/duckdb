@@ -184,7 +184,6 @@ public:
 	virtual string ToString() const = 0;
 	void Print() const;
 
-
 	MatcherType Type() const {
 		return type;
 	}

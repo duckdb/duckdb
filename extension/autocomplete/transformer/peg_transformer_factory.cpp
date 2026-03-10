@@ -27,7 +27,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-                                                         Matcher &root_matcher) {
+                                                          Matcher &root_matcher) {
 	string token_stream;
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";

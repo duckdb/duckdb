@@ -20,7 +20,6 @@
 
 namespace duckdb {
 
-
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);
 	if (entry != state.added_suggestions.end()) {
