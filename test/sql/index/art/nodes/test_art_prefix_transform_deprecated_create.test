@@ -2,8 +2,6 @@
 # description: Test transforming a prefix to v1.0.0 storage with CHECKPOINT after CREATE INDEX
 # group: [nodes]
 
-require parquet
-
 statement ok
 SET checkpoint_threshold = '10.0 GB';
 
@@ -11,15 +9,12 @@ statement ok
 ATTACH '__TEST_DIR__/prefix_transform.db' AS db (STORAGE_VERSION 'v1.0.0');
 
 statement ok
-CREATE TABLE db.data AS
-SELECT
-    i AS id,
-    md5(i::text) AS col_a,
-    md5((i * 2)::text) AS col_b
-FROM generate_series(1, 50000) AS t(i);
+CREATE TABLE db.t (id VARCHAR, ts TIMESTAMP, value INTEGER, PRIMARY KEY (id, ts));
 
 statement ok
-CREATE INDEX idx_data ON db.data (col_a, col_b);
+INSERT OR IGNORE INTO db.t
+	SELECT range || 'hello this is a long prefix', current_timestamp, range
+	FROM range(1_000_000);
 
 statement ok
 CHECKPOINT db;
