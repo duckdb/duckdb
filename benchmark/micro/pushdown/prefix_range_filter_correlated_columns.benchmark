@@ -1,0 +1,16 @@
+# name: benchmark/micro/pushdown/prefix_range_filter_correlated_columns.benchmark
+# description: Prefix Range Filter Pushdown with Correlated Join Key Orders
+# group: [join]
+
+name Prefix Range Filter Pushdown with Correlated Join Columns
+group join
+
+storage persistent
+
+load
+CREATE TABLE build AS SELECT i id, i NOT BETWEEN 100000 AND 4900000 p, CAST(random() AS VARCHAR) v1, CAST (random() AS VARCHAR) v2 FROM range(5000000) _(i);
+CREATE TABLE probe AS SELECT i id, i // 20 bid, CAST(random() AS VARCHAR) v1, CAST (random() AS VARCHAR) v2 FROM range(100000000) _(i);
+
+run
+SELECT any_value(probe.v1), any_value(probe.v2), any_value(build.v1), any_value(build.v2) FROM build, probe WHERE build.id = probe.bid AND p = TRUE;
+
