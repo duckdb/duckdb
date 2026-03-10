@@ -149,8 +149,8 @@ static bool IsComparisonExpression(const Expression &expr) {
 }
 
 //! Create a JoinCondition from a comparison
-static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &left_bindings,
-                                const unordered_set<idx_t> &right_bindings, vector<JoinCondition> &conditions) {
+static bool CreateJoinCondition(Expression &expr, const unordered_set<TableIndex> &left_bindings,
+                                const unordered_set<TableIndex> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = expr.Cast<BoundComparisonExpression>();
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
@@ -175,8 +175,8 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &le
 void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
                                                   unique_ptr<LogicalOperator> &left_child,
                                                   unique_ptr<LogicalOperator> &right_child,
-                                                  const unordered_set<idx_t> &left_bindings,
-                                                  const unordered_set<idx_t> &right_bindings,
+                                                  const unordered_set<TableIndex> &left_bindings,
+                                                  const unordered_set<TableIndex> &right_bindings,
                                                   vector<unique_ptr<Expression>> &expressions,
                                                   vector<JoinCondition> &conditions) {
 	for (auto &expr : expressions) {
@@ -212,7 +212,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinTy
                                                   unique_ptr<LogicalOperator> &right_child,
                                                   vector<unique_ptr<Expression>> &expressions,
                                                   vector<JoinCondition> &conditions) {
-	unordered_set<idx_t> left_bindings, right_bindings;
+	unordered_set<TableIndex> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
 	return ExtractJoinConditions(context, type, ref_type, left_child, right_child, left_bindings, right_bindings,
@@ -235,8 +235,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
                                                               unique_ptr<LogicalOperator> left_child,
                                                               unique_ptr<LogicalOperator> right_child,
                                                               vector<JoinCondition> conditions) {
-	bool is_asof = ref_type == JoinRefType::ASOF;
-
 	// separate comparison and non-comparison conditions for validation
 	vector<JoinCondition> comparison_conditions;
 	vector<JoinCondition> non_comparison_conditions;
@@ -248,22 +246,24 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 		}
 	}
 
-	if (is_asof && (type == JoinType::SEMI || type == JoinType::ANTI)) {
-		//	For these join types, we can use a regular join because the RHS match is not important
-		//	But we will verify the requirements of an ASOF.
-		is_asof = false;
-		ref_type = JoinRefType::REGULAR;
-	}
-
 	// validate ASOF join conditions
+	auto is_asof = (ref_type == JoinRefType::ASOF);
 	if (is_asof) {
 		switch (type) {
 		case JoinType::RIGHT:
 		case JoinType::OUTER:
+			//	We can't (yet) support arbitrary predicates with some ASOF joins
 			if (!non_comparison_conditions.empty()) {
 				throw NotImplementedException("Unsupported ASOF JOIN type (%s) with arbitrary predicate",
 				                              EnumUtil::ToChars(type));
 			}
+			break;
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+			//	For these join types, we can use a regular join because the RHS match is not important
+			//	But we will verify the requirements of an ASOF.
+			is_asof = false;
+			ref_type = JoinRefType::REGULAR;
 			break;
 		default:
 			break;

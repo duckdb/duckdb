@@ -18,12 +18,14 @@ LogicalType GetStddevStateType(const AggregateFunction &) {
 
 AggregateFunction StdDevSampFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevSampOperation>(LogicalType::DOUBLE,
-	                                                                                           LogicalType::DOUBLE);
+	                                                                                           LogicalType::DOUBLE)
+	    .SetStructStateExport(GetStddevStateType);
 }
 
 AggregateFunction StdDevPopFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<StddevState, double, double, STDDevPopOperation>(LogicalType::DOUBLE,
-	                                                                                          LogicalType::DOUBLE);
+	                                                                                          LogicalType::DOUBLE)
+	    .SetStructStateExport(GetStddevStateType);
 }
 
 AggregateFunction VarPopFun::GetFunction() {
@@ -34,12 +36,14 @@ AggregateFunction VarPopFun::GetFunction() {
 
 AggregateFunction VarSampFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<StddevState, double, double, VarSampOperation>(LogicalType::DOUBLE,
-	                                                                                        LogicalType::DOUBLE);
+	                                                                                        LogicalType::DOUBLE)
+	    .SetStructStateExport(GetStddevStateType);
 }
 
 AggregateFunction StandardErrorOfTheMeanFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<StddevState, double, double, StandardErrorOfTheMeanOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetStddevStateType);
 }
 
 } // namespace duckdb

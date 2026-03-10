@@ -185,7 +185,8 @@ protected:
 	BindResult BindExpression(TypeExpression &expr, idx_t depth);
 
 	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const vector<LogicalType> &function_child_types,
-	                          optional_ptr<bind_lambda_function_t> bind_lambda_function);
+	                          optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                          optional_ptr<BindLambdaContext> bind_lambda_context);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
@@ -194,10 +195,12 @@ protected:
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
 	                                   BoundLambdaExpression &bound_lambda_expr,
 	                                   const optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                                   const optional_ptr<BindLambdaContext> bind_lambda_context,
 	                                   const vector<LogicalType> &function_child_types);
 
 	void CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_expr, unique_ptr<Expression> &expr,
 	                          const optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                          const optional_ptr<BindLambdaContext> bind_lambda_context,
 	                          const vector<LogicalType> &function_child_types);
 
 	virtual unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);

@@ -86,8 +86,7 @@ unique_ptr<LocalFunctionData> WriteBlobInitializeLocal(ExecutionContext &context
 //----------------------------------------------------------------------------------------------------------------------
 // Sink
 //----------------------------------------------------------------------------------------------------------------------
-void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                   LocalFunctionData &lstate, DataChunk &input) {
+void WriteBlobSinkInternal(ClientContext &context, GlobalFunctionData &gstate, DataChunk &input) {
 	D_ASSERT(input.ColumnCount() == 1);
 
 	auto &state = gstate.Cast<WriteBlobGlobalState>();
@@ -99,7 +98,7 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 	input.data[0].ToUnifiedFormat(input.size(), vdata);
 	const auto blobs = UnifiedVectorFormat::GetData<string_t>(vdata);
 
-	QueryContext query_context(context.client);
+	QueryContext query_context(context);
 
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		const auto out_idx = vdata.sel->get_index(row_idx);
@@ -120,6 +119,11 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 	}
 }
 
+void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                   LocalFunctionData &lstate, DataChunk &input) {
+	WriteBlobSinkInternal(context.client, gstate, input);
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Combine
 //----------------------------------------------------------------------------------------------------------------------
@@ -137,6 +141,31 @@ void WriteBlobFinalize(ClientContext &context, FunctionData &bind_data, GlobalFu
 	state.handle->Close();
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+// Prepare Batch
+//----------------------------------------------------------------------------------------------------------------------
+struct WriteBlobBatchData : public PreparedBatchData {
+	explicit WriteBlobBatchData(unique_ptr<ColumnDataCollection> collection_p) : collection(std::move(collection_p)) {
+	}
+	unique_ptr<ColumnDataCollection> collection;
+};
+
+unique_ptr<PreparedBatchData> WriteBlobPrepareBatch(ClientContext &, FunctionData &, GlobalFunctionData &,
+                                                    unique_ptr<ColumnDataCollection> collection) {
+	return make_uniq<WriteBlobBatchData>(std::move(collection));
+}
+
+//===--------------------------------------------------------------------===//
+// Flush Batch
+//===--------------------------------------------------------------------===//
+void WriteBlobFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                         PreparedBatchData &batch_p) {
+	auto &batch = batch_p.Cast<WriteBlobBatchData>();
+	for (auto &chunk : batch.collection->Chunks()) {
+		WriteBlobSinkInternal(context, gstate, chunk);
+	}
+}
+
 } // namespace
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -150,6 +179,8 @@ void BuiltinFunctions::RegisterCopyFunctions() {
 	info.copy_to_sink = WriteBlobSink;
 	info.copy_to_combine = WriteBlobCombine;
 	info.copy_to_finalize = WriteBlobFinalize;
+	info.prepare_batch = WriteBlobPrepareBatch;
+	info.flush_batch = WriteBlobFlushBatch;
 	info.extension = "blob";
 
 	AddFunction(info);

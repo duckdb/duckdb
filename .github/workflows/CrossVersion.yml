@@ -67,7 +67,7 @@ jobs:
       - name: Unit Test
         shell: bash
         run: |
-          ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
+          python3 scripts/ci/run_tests.py --test-flags="--force-storage --test-temp-dir=my_local_folder" ./build/release/test/unittest || true
           rm -rf my_local_folder/hive
 
       - uses: actions/upload-artifact@v4
@@ -209,7 +209,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -224,7 +224,7 @@ jobs:
       - name: Unit Test
         shell: bash
         run: |
-          ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
+          python3 scripts/ci/run_tests.py --test-flags="--force-storage --test-temp-dir=my_local_folder" ./build/release/test/unittest || true
           rm -rf my_local_folder/hive
 
       - uses: actions/upload-artifact@v4
@@ -274,7 +274,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 

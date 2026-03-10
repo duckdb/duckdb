@@ -39,11 +39,11 @@ void QueryGraphManager::GetColumnBinding(Expression &root_expr, ColumnBinding &b
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 	    root_expr, [&](const BoundColumnRefExpression &colref) {
 		    D_ASSERT(colref.depth == 0);
-		    D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		    D_ASSERT(colref.binding.table_index.IsValid());
 		    // map the base table index to the relation index used by the JoinOrderOptimizer
 		    D_ASSERT(relation_manager.relation_mapping.find(colref.binding.table_index) !=
 		             relation_manager.relation_mapping.end());
-		    binding = ColumnBinding(relation_manager.relation_mapping[colref.binding.table_index],
+		    binding = ColumnBinding(TableIndex(relation_manager.relation_mapping[colref.binding.table_index].index),
 		                            colref.binding.column_index);
 	    });
 }
@@ -84,7 +84,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
-			unordered_set<idx_t> left_bindings, right_bindings;
+			unordered_set<RelationIndex> left_bindings, right_bindings;
 			relation_manager.ExtractBindings(*comparison.left, left_bindings);
 			relation_manager.ExtractBindings(*comparison.right, right_bindings);
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
@@ -118,7 +118,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				// Conjunction filters are mostly to help plan semi and anti joins at the moment.
 				continue;
 			}
-			unordered_set<idx_t> left_bindings, right_bindings;
+			unordered_set<RelationIndex> left_bindings, right_bindings;
 			D_ASSERT(filter_info->left_set);
 			D_ASSERT(filter_info->right_set);
 			D_ASSERT(filter_info->join_type == JoinType::SEMI || filter_info->join_type == JoinType::ANTI);
@@ -130,11 +130,11 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				// extract the bindings that are required for the left and right side of the comparison
 				relation_manager.ExtractBindings(*comparison.left, left_bindings);
 				relation_manager.ExtractBindings(*comparison.right, right_bindings);
-				if (filter_info->left_binding.table_index == DConstants::INVALID_INDEX &&
+				if (!filter_info->left_binding.table_index.IsValid() &&
 				    filter_info->left_binding.column_index == DConstants::INVALID_INDEX) {
 					GetColumnBinding(*comparison.left, filter_info->left_binding);
 				}
-				if (filter_info->right_binding.table_index == DConstants::INVALID_INDEX &&
+				if (!filter_info->right_binding.table_index.IsValid() &&
 				    filter_info->right_binding.column_index == DConstants::INVALID_INDEX) {
 					GetColumnBinding(*comparison.right, filter_info->right_binding);
 				}
@@ -171,9 +171,9 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 	// now we have to rewrite the plan
 	bool root_is_join = plan->children.size() > 1;
 
-	unordered_set<idx_t> bindings;
+	unordered_set<RelationIndex> bindings;
 	for (idx_t i = 0; i < relation_manager.NumRelations(); i++) {
-		bindings.insert(i);
+		bindings.emplace(i);
 	}
 	auto &total_relation = set_manager.GetJoinRelation(bindings);
 
@@ -308,9 +308,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	} else {
 		// base node, get the entry from the list of extracted relations
 		D_ASSERT(node->set.count == 1);
-		D_ASSERT(extracted_relations[node->set.relations[0]]);
+		D_ASSERT(extracted_relations[node->set.relations[0].index]);
 		result_relation = &node->set;
-		result_operator = std::move(extracted_relations[result_relation->relations[0]]);
+		result_operator = std::move(extracted_relations[result_relation->relations[0].index]);
 	}
 	// TODO: this is where estimated properties start coming into play.
 	//  when creating the result operator, we should ask the cost model and cardinality estimator what

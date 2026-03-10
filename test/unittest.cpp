@@ -1,5 +1,6 @@
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
+#include <stdlib.h>
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -12,6 +13,7 @@ using namespace duckdb;
 int main(int argc_in, char *argv[]) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
+	bool has_test_config_arg = false;
 
 	auto &test_config = TestConfiguration::Get();
 	test_config.Initialize();
@@ -34,12 +36,22 @@ int main(int argc_in, char *argv[]) {
 			SetTestDirectory(test_dir);
 		} else if (argument == "--require") {
 			AddRequire(string(argv[++i]));
+		} else if (argument == "--test-config") {
+			has_test_config_arg = true;
+			if (!test_config.ParseArgument(argument, argc, argv, i)) {
+				new_argv[new_argc] = argv[i];
+				new_argc++;
+			}
 		} else if (!test_config.ParseArgument(argument, argc, argv, i)) {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
 		}
 	}
 	test_config.ChangeWorkingDirectory(test_directory);
+	if (has_test_config_arg && !test_config.GetSkipCompiledTests()) {
+		fprintf(stderr, "--test-config requires \"skip_compiled\": true in the config\n");
+		return 1;
+	}
 
 	// delete the testing directory if it exists
 	auto dir = TestCreatePath("");
@@ -51,6 +63,19 @@ int main(int argc_in, char *argv[]) {
 		fprintf(stderr, "Failed to create testing directory \"%s\": %s\n", dir.c_str(), ex.what());
 		return 1;
 	}
+
+	// Override the home dir so the .duckdb dir is isolated per test process.
+#ifdef DUCKDB_WINDOWS
+	if (_putenv_s("USERPROFILE", dir.c_str()) != 0) {
+		fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
+		return 1;
+	}
+#else
+	if (setenv("HOME", dir.c_str(), 1) != 0) {
+		fprintf(stderr, "Failed to set HOME environment variable\n");
+		return 1;
+	}
+#endif
 
 	if (test_config.GetSkipCompiledTests()) {
 		Catch::getMutableRegistryHub().clearTests();
