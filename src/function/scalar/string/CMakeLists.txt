@@ -10,6 +10,7 @@ add_library_unity(
   md5.cpp
   nfc_normalize.cpp
   regexp.cpp
+  path_join.cpp
   substring.cpp
   prefix.cpp
   regexp_escape.cpp
