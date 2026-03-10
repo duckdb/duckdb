@@ -167,7 +167,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		// refers to a lambda parameter inside the current lambda function
 		auto logical_type = (*bind_lambda_function)(context, function_child_types,
 		                                            bound_lambda_ref.binding.column_index.index, bind_lambda_context);
-		auto index = bound_lambda_expr.parameter_count - bound_lambda_ref.binding.column_index - 1;
+		auto index = bound_lambda_expr.parameter_count - bound_lambda_ref.binding.column_index.index - 1;
 		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, index);
 		return;
 	}

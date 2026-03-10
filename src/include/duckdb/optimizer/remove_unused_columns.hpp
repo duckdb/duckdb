@@ -159,13 +159,13 @@ private:
 
 class CTERefPruner : public LogicalOperatorVisitor {
 public:
-	CTERefPruner(const TableIndex table_index, const unordered_set<idx_t> &referenced_columns);
+	CTERefPruner(const TableIndex table_index, const unordered_set<ProjectionIndex> &referenced_columns);
 
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
 	const TableIndex cte_index;
-	const unordered_set<idx_t> &referenced_columns;
+	const unordered_set<ProjectionIndex> &referenced_columns;
 
 public:
 	vector<ReplacementBinding> binding_replacements;

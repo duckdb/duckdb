@@ -140,8 +140,8 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 				for (idx_t i = 0; i < pre_columns.size(); i++) {
 					auto &col_bind = pre_columns[i];
 					auto is_unnest_column = col_bind.table_index == pre_tbl_idx;
-					auto is_column_ref = pre_proj.expressions[col_bind.column_index]->GetExpressionClass() ==
-					                     ExpressionClass::BOUND_COLUMN_REF;
+					auto is_column_ref =
+					    pre_proj.GetExpression(col_bind).GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 					if (is_unnest_column && !is_column_ref) {
 						return;
 					}

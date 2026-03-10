@@ -144,7 +144,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		if (!select_list.empty()) {
 			vector<LogicalType> filter_types;
 			for (auto &c : projection_ids) {
-				auto column_id = column_ids[c].GetPrimaryIndex();
+				auto column_id = column_ids[c.index].GetPrimaryIndex();
 				if (IsVirtualColumn(column_id)) {
 					auto &column = virtual_columns.at(column_id);
 					filter_types.push_back(column.type);

@@ -334,7 +334,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		RemoveUnusedColumns rhs_child_optimizer(*this, true);
 		rhs_child_optimizer.VisitOperator(cte.children[1]);
 
-		unordered_set<idx_t> referenced_columns_in_rhs;
+		unordered_set<ProjectionIndex> referenced_columns_in_rhs;
 		for (auto &entry : cte_map_entry.column_references) {
 			referenced_columns_in_rhs.insert(entry.first.column_index);
 		}
@@ -348,7 +348,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			auto bindings = cte.children[0]->GetColumnBindings();
 			vector<unique_ptr<Expression>> expressions;
 			for (idx_t i = 0; i < bindings.size(); i++) {
-				if (referenced_columns_in_rhs.find(i) != referenced_columns_in_rhs.end()) {
+				if (referenced_columns_in_rhs.find(ProjectionIndex(i)) != referenced_columns_in_rhs.end()) {
 					expressions.push_back(make_uniq<BoundColumnRefExpression>(cte.children[0]->types[i], bindings[i]));
 				}
 			}
@@ -852,7 +852,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	}
 }
 
-CTERefPruner::CTERefPruner(const TableIndex cte_index, const unordered_set<idx_t> &referenced_columns)
+CTERefPruner::CTERefPruner(const TableIndex cte_index, const unordered_set<ProjectionIndex> &referenced_columns)
     : cte_index(cte_index), referenced_columns(referenced_columns) {
 }
 
@@ -869,13 +869,14 @@ void CTERefPruner::VisitOperator(LogicalOperator &op) {
 		// skipped.
 		idx_t skipped = 0;
 		for (idx_t i = 0; i < cte_ref.chunk_types.size(); i++) {
-			if (referenced_columns.find(i) != referenced_columns.end()) {
+			if (referenced_columns.find(ProjectionIndex(i)) != referenced_columns.end()) {
 				// This column is referenced, keep it and add any necessary binding replacements for the skipped columns
 				// if necessary.
 				types.push_back(cte_ref.chunk_types[i]);
 				if (skipped > 0) {
-					binding_replacements.push_back(ReplacementBinding(ColumnBinding(cte_ref.table_index, i),
-					                                                  ColumnBinding(cte_ref.table_index, i - skipped)));
+					ColumnBinding source_binding(cte_ref.table_index, ProjectionIndex(i));
+					ColumnBinding target_binding(cte_ref.table_index, ProjectionIndex(i - skipped));
+					binding_replacements.push_back(ReplacementBinding(source_binding, target_binding));
 				}
 			} else {
 				skipped++;
