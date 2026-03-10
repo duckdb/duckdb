@@ -263,12 +263,16 @@ AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key,
 		return ADBC_STATUS_NOT_IMPLEMENTED;
 	}
 	if (strcmp(key, "uri") == 0) {
-		if (strncmp(value, "file:", 5) != 0) {
+		std::string file_path;
+		if (strncmp(value, "file:", 5) == 0) {
+			file_path = std::string(value + 5);
+		} else if (strncmp(value, "duckdb:", 7) == 0) {
+			file_path = std::string(value + 7);
+		} else {
 			wrapper->uri_path = value;
 			wrapper->uri_set = true;
 			return ADBC_STATUS_OK;
 		}
-		std::string file_path(value + 5);
 		auto suffix_pos = file_path.find_first_of("?#");
 		if (suffix_pos != std::string::npos) {
 			file_path.erase(suffix_pos);
@@ -283,7 +287,7 @@ AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key,
 				file_path = (authority_lc.empty() || authority_lc == "localhost") ? std::string() : authority;
 			} else {
 				if (!authority_lc.empty() && authority_lc != "localhost") {
-					SetError(error, "file: URI with a non-empty authority is not supported");
+					SetError(error, "URI with a non-empty authority is not supported");
 					return ADBC_STATUS_INVALID_ARGUMENT;
 				}
 				file_path = file_path.substr(path_start);

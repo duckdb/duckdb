@@ -3387,6 +3387,23 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 		std::remove(expected_path);
 	}
 
+	// Test duckdb://<relative> is accepted
+	{
+		const char *expected_path = "test_duckdb_uri_file.db";
+		std::remove(expected_path);
+
+		AdbcDatabase adbc_database;
+		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", "duckdb://test_duckdb_uri_file.db", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+
+		REQUIRE(file_exists(expected_path));
+		std::remove(expected_path);
+	}
+
 	// Test URI overrides path (uri takes precedence)
 	{
 		AdbcDatabase adbc_database;
@@ -3492,7 +3509,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 		REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "uri", uri.c_str(), &adbc_error)));
 		REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
 		REQUIRE(adbc_error.message);
-		REQUIRE((std::strcmp(adbc_error.message, "file: URI with a non-empty authority is not supported") == 0));
+		REQUIRE((std::strcmp(adbc_error.message, "URI with a non-empty authority is not supported") == 0));
 		adbc_error.release(&adbc_error);
 		InitializeADBCError(&adbc_error);
 		auto release_status = AdbcDatabaseRelease(&adbc_database, &adbc_error);
