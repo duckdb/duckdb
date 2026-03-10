@@ -31,6 +31,19 @@
 
 namespace duckdb {
 
+static void GatherCTEScans(const idx_t cte_index, const LogicalOperator &op, unordered_set<idx_t> &expected_readers) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cte_scan = op.Cast<LogicalCTERef>();
+		if (cte_scan.cte_index != cte_index) {
+			return;
+		}
+		expected_readers.insert(cte_scan.table_index);
+	}
+	for (auto &child : op.children) {
+		GatherCTEScans(cte_index, *child, expected_readers);
+	}
+}
+
 RemoveUnusedColumns RemoveUnusedColumns::CreateChildOptimizer() {
 	return RemoveUnusedColumns(binder, context, true, cte_info_map);
 }
@@ -185,6 +198,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 			ClearUnusedExpressions(entries, setop.table_index);
 			if (entries.size() >= setop.column_count) {
+				// We still need to recurse into the children to populate CTE info, etc.
+				for (auto &child : op.children) {
+					RemoveUnusedColumns remove(binder, context, true, cte_info_map);
+					remove.VisitOperator(*child);
+				}
 				return;
 			}
 			if (entries.empty()) {
@@ -315,6 +333,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		auto &cte = op.Cast<LogicalCTE>();
 		auto &cte_map_entry = cte_map_ref[cte.table_index];
 
+		// Gather all scans of this CTE in the query and mark them as expected readers of this CTE
+		GatherCTEScans(cte.table_index, *cte.children[1], cte_map_entry.expected_readers);
+		cte_map_entry.everything_referenced = false;
 		auto rhs_child_optimizer = CreateChildOptimizer();
 		rhs_child_optimizer.VisitOperator(*cte.children[1]);
 
@@ -323,9 +344,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			referenced_columns_in_rhs.insert(entry.first.column_index);
 		}
 
-		if (!cte_map_entry.everything_referenced) {
+		// If we have seen all readers of this CTE, and not all columns are referenced, we can prune the left-hand side
+		// of the CTE. However, if we have not seen all readers, we opt to not prune, because we might miss column
+		// references, resulting in incorrect query results.
+		auto have_seen_all_readers = cte_map_entry.expected_readers == cte_map_entry.seen_readers;
+		if (!cte_map_entry.everything_referenced && have_seen_all_readers) {
 			auto lhs_child_optimizer = CreateChildOptimizer();
-
 			// Construct a projection on top of the left-hand side of the CTE
 			// that only projects the columns that are referenced in the right-hand side of the CTE
 			cte.children[0]->ResolveOperatorTypes();
@@ -377,6 +401,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			throw InternalException("Could not find CTE definition for CTE reference");
 		}
 
+		// Mark this CTE reference as a seen reader of the CTE
+		it->second.seen_readers.insert(cte_ref.table_index);
+
 		for (auto &entry : column_references) {
 			if (entry.first.table_index == cte_ref.table_index) {
 				auto &test = cte_map_ref[cte_ref.cte_index].column_references;
@@ -384,7 +411,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 
-		cte_map_ref[cte_ref.cte_index].everything_referenced =
+		cte_map_ref[cte_ref.cte_index].everything_referenced |=
 		    cte_ref.chunk_types.size() == cte_map_ref[cte_ref.cte_index].column_references.size();
 
 		break;
