@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <termios.h>
 #include <unistd.h>
+#include <fcntl.h>
 #endif
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,7 +19,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <sys/fcntl.h>
 
 namespace duckdb {
 
