@@ -56,8 +56,8 @@ public:
 		shift = 0;
 
 		if (span >= CAP_BITS) {
-			const auto q = static_cast<uint64_t>((span /* + CAP_BITS*/) >> MAX_PREFIX_LENGTH); // ceil(span/CAP_BITS
-			shift = (q <= 1) ? 0 : (64 - CountLeadingZeros(q - 1));                            // ceil_log2(q)
+			const auto q = static_cast<uint64_t>((span) >> MAX_PREFIX_LENGTH);
+			shift = (q <= 1) ? 0 : (64 - CountLeadingZeros(q - 1));
 		}
 
 		const idx_t buckets = (span >> shift) + 1;
