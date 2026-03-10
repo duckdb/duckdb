@@ -18,10 +18,11 @@ BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 		return result;
 	}
 	// we have successfully bound a column - push it into the projection and emit a reference
+	auto return_type = result.expression->return_type;
+	auto alias = result.expression->GetName();
 	auto proj_col_idx = ColumnBinding::PushExpression(proj_expressions, std::move(result.expression));
-	auto proj_ref =
-	    make_uniq<BoundColumnRefExpression>(result.expression->return_type, ColumnBinding(proj_index, proj_col_idx));
-	proj_ref->alias = result.expression->GetName();
+	auto proj_ref = make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(proj_index, proj_col_idx));
+	proj_ref->alias = std::move(alias);
 	return BindResult(std::move(proj_ref));
 }
 

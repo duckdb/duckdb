@@ -139,8 +139,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 			delim_join.children[other_idx] = std::move(*curr_op);
 			for (idx_t i = 0; i < unnest_get_column.size(); i++) {
 				auto &col_bind = unnest_get_column[i];
-				D_ASSERT(col_bind.table_index == unnest_get_index ||
-				         col_bind.table_index == proj.table_index);
+				D_ASSERT(col_bind.table_index == unnest_get_index || col_bind.table_index == proj.table_index);
 				if (col_bind.table_index == unnest_get_index) {
 					auto &bind_col = proj.expressions[col_bind.column_index.index]->Cast<BoundColumnRefExpression>();
 					auto unnest_expr = make_uniq<BoundUnnestExpression>(unnest_get->types[i]);
