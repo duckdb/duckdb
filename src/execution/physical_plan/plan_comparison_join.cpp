@@ -35,12 +35,13 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 
 	idx_t has_range = 0;
 	bool has_equality = op.HasEquality(has_range);
+	bool has_arbitrary = op.HasArbitraryConditions();
 	bool can_merge = has_range > 0;
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 	switch (op.join_type) {
 	case JoinType::SEMI:
 		can_merge = can_merge && op.conditions.size() == 1;
-		can_iejoin = can_iejoin && op.conditions.size() == 2;
+		can_iejoin = can_iejoin && !has_arbitrary;
 		break;
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
