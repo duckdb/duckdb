@@ -1235,8 +1235,7 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 		// empty path: clean up query writer
 		client_data.log_query_writer = nullptr;
 	} else {
-		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*info.context), path,
-		                                                             BufferedFileWriter::DEFAULT_OPEN_FLAGS);
+		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*info.context), path);
 	}
 }
 

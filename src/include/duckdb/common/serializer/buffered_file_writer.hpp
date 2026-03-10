@@ -17,11 +17,10 @@ namespace duckdb {
 
 class BufferedFileWriter : public WriteStream {
 public:
-	static const FileOpenFlags DEFAULT_OPEN_FLAGS;
-
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, FileOpenFlags open_flags = DEFAULT_OPEN_FLAGS);
+	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path);
+	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, FileOpenFlags open_flags);
 
 	FileSystem &fs;
 	string path;
