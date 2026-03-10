@@ -304,12 +304,32 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// and we start to choose the filters that join relations in the set.
 
 	// edges are guaranteed to be in order of largest tdom to smallest tdom.
+
+	// For LEFT joins, track the accumulated product of all join condition distinct counts per
+	// right-side relation set. The extra_multiplier is computed at the end as
+	//   ∏ max(1, D_i / |B_i|)  for each distinct LEFT join right side i,
+	// where D_i is the product of all that join's condition distinct counts. This correctly
+	// handles multi-condition LEFT joins and multiple LEFT joins with different right sides.
+	unordered_map<string, double> left_join_denoms;
+	unordered_map<string, double> left_join_right_cards;
+
 	unordered_set<idx_t> unused_edge_tdoms;
 	auto edges = GetEdges(relation_set_stats, set);
 	for (auto &edge : edges) {
+		if (edge.filter_info->join_type == JoinType::LEFT) {
+			auto right_key = edge.filter_info->right_relation_set->ToString();
+			auto emplace_result = left_join_denoms.emplace(right_key, 1.0);
+			emplace_result.first->second *= edge.GetDistinctCount();
+			left_join_right_cards[right_key] = GetNumerator(*edge.filter_info->right_relation_set);
+		}
+
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
-			// the first subgraph has connected all the desired relations, just skip the rest of the edges
-			if (edge.has_distinct_count_hll) {
+			// The subgraph already connects all desired relations.
+			// LEFT join conditions multiply the denominator (all conditions matter for cardinality).
+			// INNER join conditions get a mild penalty via denom_multiplier.
+			if (edge.filter_info->join_type == JoinType::LEFT) {
+				subgraphs.at(0).denom *= edge.GetDistinctCount();
+			} else if (edge.has_distinct_count_hll) {
 				unused_edge_tdoms.insert(edge.distinct_count_hll);
 			}
 			continue;
@@ -326,11 +346,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			right_subgraph.relations = edge.filter_info->right_relation_set;
 			right_subgraph.numerator_relations = edge.filter_info->right_relation_set;
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
-			if (edge.filter_info->join_type == JoinType::LEFT) {
-				auto denom = edge.GetDistinctCount();
-				denom = MaxValue<double>(denom, 1);
-				left_subgraph.numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
-			}
 			left_subgraph.relations = edge.filter_info->set;
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
 			subgraphs.push_back(left_subgraph);
@@ -346,16 +361,14 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->left_relation_set) &&
 			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->right_relation_set)) {
-				// here we have an edge that connects the same subgraph to the same subgraph.
-				// Just continue. no need to update the denom
+				// Edge connects the same subgraph to itself — no new relation is added.
+				// For LEFT joins, the additional condition still contributes to the denominator.
+				if (edge.filter_info->join_type == JoinType::LEFT) {
+					left_subgraph->denom *= edge.GetDistinctCount();
+				}
 				continue;
 			}
 			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
-			if (edge.filter_info->join_type == JoinType::LEFT) {
-				auto denom = edge.GetDistinctCount();
-				denom = MaxValue<double>(denom, 1);
-				left_subgraph->numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
-			}
 			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
 			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
 		} else if (subgraph_connections.size() == 2) {
@@ -368,11 +381,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			subgraph_to_merge_into->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
-			if (edge.filter_info->join_type == JoinType::LEFT) {
-				auto denom = edge.GetDistinctCount();
-				D_ASSERT(denom >= 1);
-				subgraph_to_merge_into->numerator_relations_extra = 1 + LEFT_JOIN_COEFFICIENT * (denom - 1);
-			}
 			subgraph_to_delete->relations = nullptr;
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
@@ -380,8 +388,20 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		}
 	}
 
-	// Slight penalty to cardinality for unused edges
+	// Slight penalty to cardinality for unused INNER join edges.
 	auto denom_multiplier = 1.0 + static_cast<double>(unused_edge_tdoms.size());
+
+	// Compute the LEFT join extra_multiplier from the accumulated per-right-side denominators.
+	// For each distinct LEFT join right-side B, extra *= max(1, D / |B|) where D is the product
+	// of all that LEFT join's condition distinct counts. This gives estimate = max(|LHS|, inner)
+	// and correctly handles multi-condition LEFT joins and multiple LEFT joins.
+	double left_join_extra = 1.0;
+	for (auto &entry : left_join_denoms) {
+		auto right_card = left_join_right_cards[entry.first];
+		if (right_card > 0) {
+			left_join_extra *= MaxValue(1.0, entry.second / right_card);
+		}
+	}
 
 	// It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	// structures. When that's the case, merge all remaining subgraphs as if they are connected by a cross product
@@ -393,7 +413,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			D_ASSERT(final_subgraph.numerator_relations && merge_with->numerator_relations);
 			final_subgraph.numerator_relations =
 			    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
-			final_subgraph.numerator_relations_extra *= merge_with->numerator_relations_extra;
 			final_subgraph.denom *= merge_with->denom;
 		}
 	}
@@ -419,8 +438,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		return DenomInfo(set, 1, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).numerator_relations, subgraphs.at(0).numerator_relations_extra,
-	                 subgraphs.at(0).denom * denom_multiplier);
+	return DenomInfo(*subgraphs.at(0).numerator_relations, left_join_extra, subgraphs.at(0).denom * denom_multiplier);
 }
 
 // Cardinality is calculated using logic found in
