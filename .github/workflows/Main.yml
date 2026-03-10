@@ -20,10 +20,6 @@ on:
       - '!.github/workflows/Regression.yml'
       - '!.github/workflows/Extensions.yml'
       - '!.github/workflows/LinuxRelease.yml'
-      - '.github/config/extensions/*.cmake'
-      - '.github/patches/extensions/**/*.patch'
-      - '!.github/patches/extensions/fts/*.patch' # fts used in some jobs
-      - '!.github/config/extensions/fts.cmake'
   merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
@@ -40,10 +36,6 @@ on:
       - '!.github/workflows/Regression.yml'
       - '!.github/workflows/Extensions.yml'
       - '!.github/workflows/LinuxRelease.yml'
-      - '.github/config/extensions/*.cmake'
-      - '.github/patches/extensions/**/*.patch'
-      - '!.github/patches/extensions/fts/*.patch' # fts used in some jobs
-      - '!.github/config/extensions/fts.cmake'
 
 
 concurrency:
