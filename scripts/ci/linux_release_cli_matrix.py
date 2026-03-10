@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
 import os
+import platform
 import sys
 
 GNU_AMD64_IMAGE = "quay.io/pypa/manylinux_2_28_x86_64"
@@ -11,6 +13,26 @@ MUSL_IMAGE = "alpine:3.22"
 
 def env(name: str, default: str) -> str:
     return os.environ.get(name, default)
+
+
+def current_arch() -> str:
+    machine = platform.machine().lower()
+    if machine in {"x86_64", "amd64"}:
+        return "amd64"
+    if machine in {"aarch64", "arm64"}:
+        return "arm64"
+    raise ValueError(f"unsupported platform architecture: {machine}")
+
+
+def image_for(libc: str, arch: str | None = None) -> str:
+    arch = arch or current_arch()
+    if libc == "musl":
+        return MUSL_IMAGE
+    if libc == "gnu" and arch == "amd64":
+        return GNU_AMD64_IMAGE
+    if libc == "gnu" and arch == "arm64":
+        return GNU_ARM64_IMAGE
+    raise ValueError("unsupported libc/arch combination")
 
 
 def build_matrix(kind: str) -> dict[str, list[dict[str, str]]]:
@@ -56,13 +78,44 @@ def build_matrix(kind: str) -> dict[str, list[dict[str, str]]]:
     return {"include": include}
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        usage=(
+            "linux_release_cli_matrix.py <pull_request|default>\n"
+            "       linux_release_cli_matrix.py image <gnu|musl> [amd64|arm64]"
+        )
+    )
+    parser.add_argument("command", choices=["pull_request", "default", "image"])
+    parser.add_argument("libc", nargs="?")
+    parser.add_argument("arch", nargs="?")
+    args = parser.parse_args()
+
+    if args.command == "image":
+        if args.libc is None:
+            parser.error("image requires <gnu|musl>")
+        if args.libc not in {"gnu", "musl"}:
+            parser.error("image libc must be one of: gnu, musl")
+        if args.arch is not None and args.arch not in {"amd64", "arm64"}:
+            parser.error("image arch must be one of: amd64, arm64")
+    elif args.libc is not None or args.arch is not None:
+        parser.error(f"{args.command} does not take additional arguments")
+
+    return args
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: linux_release_cli_matrix.py <pull_request|default>", file=sys.stderr)
-        return 1
+    args = parse_args()
+
+    if args.command == "image":
+        try:
+            print(image_for(args.libc, args.arch))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        return 0
 
     try:
-        matrix = build_matrix(sys.argv[1])
+        matrix = build_matrix(args.command)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
