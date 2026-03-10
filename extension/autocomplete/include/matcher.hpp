@@ -231,11 +231,10 @@ private:
 };
 
 //! Per-database cache for the compiled PEG root matcher.
-//! Lives in ParserExtension::parser_info so it is tied to the database lifetime.
 struct PEGMatcherCache : ParserExtensionInfo {
 	std::mutex mutex;
 	MatcherAllocator allocator;
-	Matcher *root = nullptr; // NOLINT: raw pointer into allocator-owned storage
+	optional_ptr<Matcher> root;
 
 	Matcher &GetRootMatcher();
 	void Invalidate();

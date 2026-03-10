@@ -1315,13 +1315,10 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 }
 
 Matcher &PEGMatcherCache::GetRootMatcher() {
-	// Fast path: check without lock first (benign race on pointer read)
 	if (root) {
 		return *root;
 	}
-	// Cache miss: acquire lock to build
 	std::unique_lock<std::mutex> lock(mutex);
-	// Double-check after acquiring lock
 	if (root) {
 		return *root;
 	}
@@ -1332,9 +1329,9 @@ Matcher &PEGMatcherCache::GetRootMatcher() {
 	buffer << t.rdbuf();
 	auto grammar_string = buffer.str();
 
-	root = &factory.CreateMatcher(grammar_string.c_str(), "Statement");
+	root = factory.CreateMatcher(grammar_string.c_str(), "Statement");
 #else
-	root = &factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
+	root = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
 #endif
 	return *root;
 }
