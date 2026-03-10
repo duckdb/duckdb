@@ -1,5 +1,5 @@
-# name: test/sql/index/art/nodes/test_art_prefix_transform_deprecated.test_slow
-# description: Test transforming a prefix to v1.0.0 storage with CHECKPOINT after INSERT
+# name: test/sql/index/art/nodes/test_art_prefix_transform_deprecated_create.test
+# description: Test transforming a prefix to v1.0.0 storage with CHECKPOINT after CREATE INDEX
 # group: [nodes]
 
 require parquet
