@@ -30,18 +30,7 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
- check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI
-        run: echo "Event name is ${{ github.event_name }}"
-
  linux-release-cli:
-    needs:
-      - check-draft
-
     strategy:
       fail-fast: false
       matrix:
@@ -52,9 +41,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+
+    - name: Install tools
+      run: make toolsci
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -62,8 +51,9 @@ jobs:
       run: |
         python3 -m pip install pytest
 
+    - uses: ./.github/actions/ccache-action
+
     - name: Build
-      shell: bash
       run: |
         export PWD=`pwd`
         docker run                                                             \
@@ -91,11 +81,9 @@ jobs:
         "
 
     - name: Print platform
-      shell: bash
       run: ./build/release/duckdb -c "PRAGMA platform;"
 
     - name: Deploy
-      shell: bash
       env:
         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
@@ -131,9 +119,6 @@ jobs:
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  linux-musl-release-cli:
-    needs:
-      - check-draft
-
     strategy:
       fail-fast: false
       matrix:
@@ -144,11 +129,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
+
+    - name: Install tools
+      run: make toolsci
 
     - uses: ./.github/actions/cleanup_runner
+
+    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
@@ -233,6 +220,7 @@ jobs:
  main_julia:
     name: Julia ${{ matrix.version }}
     needs: linux-release-cli
+    if: ${{ github.ref_name == 'main' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -329,7 +317,7 @@ jobs:
 
     - name: Install Ninja
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 

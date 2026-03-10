@@ -21,17 +21,8 @@ env:
   BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
-  check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI 
-        run: echo "Event name is ${{ github.event_name }}"
-      
   regression-test-benchmark-runner:
     name: Regression Tests
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -52,7 +43,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
+        run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install requests
 
       - uses: ./.github/actions/ccache-action
 
@@ -165,7 +156,6 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -184,7 +174,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+        run: make toolsci && pip install requests
 
       - uses: ./.github/actions/ccache-action
 
@@ -242,7 +232,6 @@ jobs:
 
   regression-test-binary-size:
     name: Regression test binary size
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -261,7 +250,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+        run: make toolsci && pip install requests
 
       - uses: ./.github/actions/ccache-action
 
@@ -281,7 +270,6 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
-    needs: check-draft
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -300,7 +288,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install tqdm
+        run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install tqdm
 
       - uses: ./.github/actions/ccache-action
 

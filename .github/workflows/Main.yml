@@ -65,7 +65,13 @@ jobs:
       runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
       runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
     steps:
+      - uses: actions/checkout@v4
+
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
@@ -91,6 +97,24 @@ jobs:
 
           grep runner_ "$GITHUB_OUTPUT"
 
+      - name: Install tools
+        run: make format_tools
+
+      - name: List Installed Packages
+        run: pip3 freeze
+
+      - name: Check format
+        run: |
+          clang-format --version
+          clang-format --dump-config
+          black --version
+          make format-check-silent
+
+      - name: Check generated files
+        run: |
+          make generate-files
+          git diff --exit-code
+
  linux-debug:
     name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
@@ -99,7 +123,6 @@ jobs:
     env:
       CC: gcc
       CXX: g++
-      DUCKDB_LINKER: mold
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -114,24 +137,20 @@ jobs:
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
-      shell: bash
       run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      shell: bash
-      run:  make relassert
+      run: make relassert
 
     - name: Smoke tests
       run: make smoke
 
     - name: Output version info
-      shell: bash
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Prepare relassert artifact
-      shell: bash
       run: make relassert-artifact
 
     - name: Upload relassert build artifact
@@ -150,6 +169,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Install tools
+      run: make toolsci
 
     - name: Download relassert build artifact
       uses: actions/download-artifact@v4
@@ -197,7 +218,6 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: ninja
-      DUCKDB_LINKER: mold
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
@@ -236,6 +256,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Install tools
+      run: make toolsci
 
     - name: Download release build artifact
       uses: actions/download-artifact@v4
@@ -276,8 +298,10 @@ jobs:
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
-    runs-on: ubuntu-24.04
-    needs: linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    needs:
+      - prepare
+      - linux-debug
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
@@ -304,8 +328,10 @@ jobs:
 
  vector-sizes:
     name: Vector Sizes
-    runs-on: ubuntu-22.04
-    needs: linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: gcc-10
       CXX: g++-10
@@ -344,7 +370,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind clang
+      run: make toolsci && sudo apt-get install -y -qq valgrind clang
 
     - uses: ./.github/actions/ccache-action
 
@@ -362,8 +388,10 @@ jobs:
 
  threadsan:
     name: Thread Sanitizer
-    needs: linux-debug
-    runs-on: ubuntu-24.04
+    needs:
+      - prepare
+      - linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: clang
       CXX: clang++
@@ -412,15 +440,13 @@ jobs:
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
     name: Tests a release build with different configurations
-    runs-on: ubuntu-24.04
-    needs: linux-debug
-    env:
-      BASE_BRANCH: ${{ github.base_ref || 'main' }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    needs:
+      - prepare
+      - linux-debug
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - uses: actions/setup-python@v5
       with:
@@ -428,7 +454,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+      run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 

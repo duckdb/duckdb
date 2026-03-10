@@ -58,6 +58,10 @@ if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
     endif()
 endif()
 
+if(NOT DUCKDB_LINKER AND DEFINED ENV{CI} AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(DUCKDB_LINKER "mold")
+endif()
+
 if (DUCKDB_LINKER)
   set(DUCKDB_LINKER_FLAG "-fuse-ld=${DUCKDB_LINKER}")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
@@ -676,6 +680,25 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE
       "${DEFAULT_BUILD_TYPE}"
       CACHE STRING "Choose the type of build." FORCE)
+endif()
+
+set(DUCKDB_RELEASE_LINK_JOBS
+    4
+    CACHE STRING "Maximum number of concurrent linker jobs for Release builds")
+set(DUCKDB_DEBUG_LINK_JOBS
+    2
+    CACHE STRING "Maximum number of concurrent linker jobs for non-Release builds")
+
+# Throttle linker concurrency (mainly effective for Ninja) to avoid OOM in debug-like builds.
+set_property(GLOBAL PROPERTY JOB_POOLS
+             release_link_jobs=${DUCKDB_RELEASE_LINK_JOBS}
+             debug_link_jobs=${DUCKDB_DEBUG_LINK_JOBS})
+if(NOT DEFINED CMAKE_JOB_POOL_LINK)
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_JOB_POOL_LINK release_link_jobs)
+  else()
+    set(CMAKE_JOB_POOL_LINK debug_link_jobs)
+  endif()
 endif()
 
 if(OS_NAME STREQUAL "windows")
