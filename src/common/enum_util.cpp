@@ -1169,25 +1169,6 @@ CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializatio
 	return static_cast<CompressedMaterializationDirection>(StringUtil::StringToEnum(GetCompressedMaterializationDirectionValues(), 3, "CompressedMaterializationDirection", value));
 }
 
-const StringUtil::EnumStringLiteral *GetCompressionFunctionSetLoadResultValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::ALREADY_LOADED_BEFORE_LOCK), "ALREADY_LOADED_BEFORE_LOCK" },
-		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::ALREADY_LOADED_AFTER_LOCK), "ALREADY_LOADED_AFTER_LOCK" },
-		{ static_cast<uint32_t>(CompressionFunctionSetLoadResult::LAZILY_LOADED), "LAZILY_LOADED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<CompressionFunctionSetLoadResult>(CompressionFunctionSetLoadResult value) {
-	return StringUtil::EnumToString(GetCompressionFunctionSetLoadResultValues(), 3, "CompressionFunctionSetLoadResult", static_cast<uint32_t>(value));
-}
-
-template<>
-CompressionFunctionSetLoadResult EnumUtil::FromString<CompressionFunctionSetLoadResult>(const char *value) {
-	return static_cast<CompressionFunctionSetLoadResult>(StringUtil::StringToEnum(GetCompressionFunctionSetLoadResultValues(), 3, "CompressionFunctionSetLoadResult", value));
-}
-
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CompressionType::COMPRESSION_AUTO), "AUTO" },
@@ -3207,6 +3188,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_ELIMINATION), "OPTIMIZER_JOIN_ELIMINATION" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_WINDOW_SELF_JOIN), "OPTIMIZER_WINDOW_SELF_JOIN" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_PROJECTION_PULLUP), "OPTIMIZER_PROJECTION_PULLUP" },
+		{ static_cast<uint32_t>(MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION), "OPTIMIZER_OUTER_JOIN_SIMPLIFICATION" },
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
@@ -3221,12 +3203,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 68, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 69, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 68, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 69, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
@@ -3484,19 +3466,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::COMMON_SUBPLAN), "COMMON_SUBPLAN" },
 		{ static_cast<uint32_t>(OptimizerType::JOIN_ELIMINATION), "JOIN_ELIMINATION" },
 		{ static_cast<uint32_t>(OptimizerType::WINDOW_SELF_JOIN), "WINDOW_SELF_JOIN" },
-		{ static_cast<uint32_t>(OptimizerType::PROJECTION_PULLUP), "PROJECTION_PULLUP" }
+		{ static_cast<uint32_t>(OptimizerType::PROJECTION_PULLUP), "PROJECTION_PULLUP" },
+		{ static_cast<uint32_t>(OptimizerType::OUTER_JOIN_SIMPLIFICATION), "OUTER_JOIN_SIMPLIFICATION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 35, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 36, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 35, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 36, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {

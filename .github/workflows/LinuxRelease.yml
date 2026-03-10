@@ -116,23 +116,16 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Test
-      shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
-      run: |
-        python3 scripts/ci/run_tests.py build/release/test/unittest "*"
+      run: make allunit
 
     - name: Release specific tests
-      shell: bash
-      run: |
-        ./build/release/test/unittest --select-tag release
+      run: make unittest_release_tag
 
     - name: Tools Tests
-      shell: bash
-      run: |
-        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+      run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
-      shell: bash
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
@@ -222,13 +215,14 @@ jobs:
           set -e
           cat /etc/os-release
           apk add      \
+            make       \
             python3    \
             py3-pytest
           cd $PWD
           echo Tests
-          python3 scripts/ci/run_tests.py build/release/test/unittest \"*\"
+          make allunit
           echo Release specific tests
-          ./build/release/test/unittest --select-tag release
+          make unittest_release_tag
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples

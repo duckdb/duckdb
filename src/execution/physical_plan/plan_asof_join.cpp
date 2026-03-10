@@ -282,6 +282,21 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 }
 
 PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
+	// If we have a predicate and its a "simple" join, then we can just plan a regular join
+	switch (op.join_type) {
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+	case JoinType::MARK:
+		for (const auto &cond : op.conditions) {
+			if (!cond.IsComparison()) {
+				return PhysicalPlanGenerator::PlanComparisonJoin(op);
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);

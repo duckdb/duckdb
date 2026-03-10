@@ -132,10 +132,6 @@ public:
 
 struct BaseRequest {
 	BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params);
-	BaseRequest(RequestType type, const string &endpoint_p, const string &path_p, const HTTPHeaders &headers,
-	            HTTPParams &params)
-	    : type(type), url(path), path(path_p), proto_host_port(endpoint_p), headers(headers), params(params) {
-	}
 
 	RequestType type;
 	const string &url;
@@ -175,12 +171,6 @@ struct GetRequestInfo : public BaseRequest {
 	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler_p)
 	    : BaseRequest(RequestType::GET_REQUEST, url, headers, params), content_handler(std::move(content_handler_p)),
 	      response_handler(std::move(response_handler_p)) {
-	}
-	GetRequestInfo(const string &endpoint, const string &path, const HTTPHeaders &headers, HTTPParams &params,
-	               std::function<bool(const HTTPResponse &response)> response_handler_p,
-	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler_p)
-	    : BaseRequest(RequestType::GET_REQUEST, endpoint, path, headers, params),
-	      content_handler(std::move(content_handler_p)), response_handler(std::move(response_handler_p)) {
 	}
 
 	std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler;

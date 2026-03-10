@@ -127,8 +127,28 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 		// find pattern2 and convert to pattern1
 		if (curr_op->get()->type == LogicalOperatorType::LOGICAL_PROJECTION &&
 		    curr_op->get()->children[0]->type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+			// Pre-check: verify all projection expressions for unnest columns are simple
+			// column references. With deeply nested struct paths (e.g. t.a.b.c.items),
+			// the projection may contain struct extraction functions instead,
+			// which we cannot rewrite. We must check before moving any unique_ptrs.
+			{
+				auto &pre_get = *delim_join.children[other_idx];
+				pre_get.ResolveOperatorTypes();
+				auto pre_columns = pre_get.GetColumnBindings();
+				auto pre_tbl_idx = pre_get.GetTableIndex()[0];
+				auto &pre_proj = curr_op->get()->Cast<LogicalProjection>();
+				for (idx_t i = 0; i < pre_columns.size(); i++) {
+					auto &col_bind = pre_columns[i];
+					auto is_unnest_column = col_bind.table_index == pre_tbl_idx;
+					auto is_column_ref = pre_proj.expressions[col_bind.column_index]->GetExpressionClass() ==
+					                     ExpressionClass::BOUND_COLUMN_REF;
+					if (is_unnest_column && !is_column_ref) {
+						return;
+					}
+				}
+			}
 			auto unnest_get = std::move(delim_join.children[other_idx]);
-			unnest_get->ResolveOperatorTypes();
+			// ResolveOperatorTypes() already called in the pre-check above
 			ColumnBindingReplacer replacer;
 			auto unnest_get_column = unnest_get->GetColumnBindings();
 			auto &proj = curr_op->get()->Cast<LogicalProjection>();
@@ -140,7 +160,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 			for (idx_t i = 0; i < unnest_get_column.size(); i++) {
 				auto &col_bind = unnest_get_column[i];
 				D_ASSERT(col_bind.table_index == unnest_get_index || col_bind.table_index == proj.table_index);
-				if (col_bind.table_index == unnest_get_index) {
+				if (col_bind.table_index == unnest_get->GetTableIndex()[0]) {
 					auto &bind_col = proj.expressions[col_bind.column_index.index]->Cast<BoundColumnRefExpression>();
 					auto unnest_expr = make_uniq<BoundUnnestExpression>(unnest_get->types[i]);
 					unnest_expr->child = proj.expressions[col_bind.column_index.index]->Copy();

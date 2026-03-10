@@ -94,8 +94,15 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 
 	auto &copy_info = *stmt.info;
 	// bind the select statement
+	// preserve SQLNULL types from table functions (e.g. JSON reader null columns)
+	// so file writers that support it can emit the correct null type (e.g. parquet UNKNOWN/NullType)
+	auto prev_can_contain_nulls = can_contain_nulls;
+	if (function.supports_sql_null) {
+		can_contain_nulls = true;
+	}
 	auto node_copy = copy_info.select_statement->Copy();
 	auto select_node = Bind(*node_copy);
+	can_contain_nulls = prev_can_contain_nulls;
 
 	if (!function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format);

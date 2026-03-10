@@ -17,38 +17,15 @@
         "test/sql/types/nested/array/array_invalid.test",
         "test/sql/types/nested/struct/struct_dict.test",
         "test/sql/types/map/map_empty.test",
-        "test/sql/binder/column_ref_as_alias.test"
+        "test/sql/binder/column_ref_as_alias.test",
+        "test/sql/error/lineitem_errors.test",
+        "test/sql/copy/csv/test_encodings.test_slow"
       ]
-    },
-    {
-      "reason": "Window function exceptions",
-      "paths": [
-        "test/sql/window/test_window_clause.test",
-        "test/sql/window/test_invalid_window.test"
-      ]
-    },
-    {
-      "reason": "Case insensitive preservation",
-      "paths": ["test/sql/settings/setting_preserve_identifier_case.test"]
     },
     {
       "reason": "Parser error",
       "paths": [
-        "test/sql/prepared/parameter_variants.test",
-        "test/sql/parser/digit_separators.test",
-        "test/fuzzer/duckfuzz/list_try_cast.test",
-        "test/sql/json/scalar/test_json_extract.test",
-        "test/issues/monetdb/test_boolean_not.test"
-      ]
-    },
-    {
-      "reason": "Autocomplete wrong results",
-      "paths": [
-        "test/sql/function/autocomplete/copy.test",
-        "test/sql/function/autocomplete/expressions.test",
-        "test/sql/function/autocomplete/select.test",
-        "test/sql/function/autocomplete/suggest_file.test",
-        "test/sql/function/autocomplete/tpch.test"
+        "test/sql/json/scalar/test_json_extract.test"
       ]
     },
     {
@@ -63,6 +40,7 @@
         "test/extension/loadable_parser_override.test",
         "test/sql/peg_parser/transformer/peg_transformer.test",
         "test/sql/collate/test_unsupported_collations.test",
+        "test/extension/consistent_semicolon_extension_parse.test",
         "test/extension/test_custom_type_modifier_cast.test",
         "test/extension/test_alias_point.test",
         "test/extension/concurrent_load_extension.test",
@@ -73,15 +51,8 @@
       ]
     },
     {
-      "reason": "Unclassified failures",
+      "reason": "Different behaviour compared to PostgreSQL parser",
       "paths": [
-        "test/sql/error/lineitem_errors.test",
-        "test/sql/create/create_as_partition_sorted_options.test",
-        "test/sql/select/test_select_locking.test",
-        "test/sql/copy/csv/glob/copy_csv_glob.test",
-        "test/sql/alter/alter_table_set_table_options.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
         "test/sql/function/string/test_string_slice.test",
         "test/sql/function/string/test_subscript.test",
         "test/sql/catalog/table/create_table_parameters.test",
@@ -93,26 +64,18 @@
         "test/sql/join/iejoin/test_iejoin_predicate.test",
         "test/sql/join/test_merge_join_predicate.test",
         "test/sql/cte/recursive_cte_key_hll_aggregation.test",
-        "test/sql/subquery/scalar/test_scalar_subquery_cte.test"
+        "test/sql/subquery/scalar/test_scalar_subquery_cte.test",
+        "test/sql/prepared/parameter_variants.test",
+        "test/sql/parser/digit_separators.test"
       ]
     },
     {
-      "reason": "Expression depth",
+      "reason": "New syntax",
       "paths": [
-        "test/sql/overflow/expression_tree_depth.test"
+        "test/sql/alter/alter_table_set_table_options.test",
+        "test/sql/create/create_table_extra_options.test",
+        "test/sql/create/create_as_partition_sorted_options.test"
       ]
-    },
-    {
-      "reason": "New CREATE TABLE option syntax",
-      "paths": ["test/sql/create/create_table_extra_options.test"]
-    },
-    {
-      "reason": "DESCRIBE with CTE not supported",
-      "paths": ["test/sql/cte/cte_describe.test"]
-    },
-    {
-      "reason": "FIXME: CREATE SECRET not properly supported",
-      "paths": ["test/sql/secrets/create_secret_expression.test"]
     }
   ]
 }

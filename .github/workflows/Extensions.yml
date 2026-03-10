@@ -334,7 +334,7 @@ jobs:
           LOCAL_EXTENSION_REPO: /tmp/extension-repository
           DUCKDB_TEST_DESCRIPTION: 'Running with autoloading of extensions. Run unittest --autoloading available to reproduce locally. Add require no_extension_autoloading to skip the test'
         run: |
-          ./build/release/test/unittest --autoloading available --skip-compiled
+          python3 scripts/ci/run_tests.py --test-flags="--autoloading=available --skip-compiled" ./build/release/test/unittest
 
   check-load-install-extensions:
     name: Checks extension entries

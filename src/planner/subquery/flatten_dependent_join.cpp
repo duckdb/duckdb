@@ -32,8 +32,17 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedCol
 
 static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const CorrelatedColumns &correlated_columns,
                                       vector<ColumnBinding> bindings, idx_t base_offset, bool perform_delim) {
-	auto col_count = perform_delim ? correlated_columns.size() : 1;
-	for (idx_t i = 0; i < col_count; i++) {
+	// Determine the range of columns to process
+	idx_t start = 0;
+	idx_t end = perform_delim ? correlated_columns.size() : 1;
+
+	// Special case: if not doing a full delim join, use the specific delim index if it's valid
+	if (!perform_delim && correlated_columns.GetDelimIndex() < correlated_columns.size()) {
+		start = correlated_columns.GetDelimIndex();
+		end = start + 1;
+	}
+
+	for (idx_t i = start; i < end; i++) {
 		auto &col = correlated_columns[i];
 		auto binding_idx = base_offset + i;
 		if (binding_idx >= bindings.size()) {

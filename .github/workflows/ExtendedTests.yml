@@ -59,7 +59,7 @@ jobs:
     - name: Run Tests
       shell: bash
       run: |
-        ./build/reldebug/test/unittest --test-config test/configs/${{ matrix.config }}.json "*"
+        python3 scripts/ci/run_tests.py --test-config=test/configs/${{ matrix.config }}.json ./build/reldebug/test/unittest "*"
 
   regression-lto-benchmark-runner:
      name: Benchmark runner lto vs non-lto (OSX)

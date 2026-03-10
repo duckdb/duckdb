@@ -400,7 +400,10 @@ unittest_reldebug:
 	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest $(T)
 
 unittest_release: release
-	build/release/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest $(T)
+
+unittest_release_tag:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/test/unittest $(T)
 
 unittest_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
@@ -412,7 +415,7 @@ runnertests:
 	python3 -m unittest scripts.ci.test_run_tests
 
 unittestarrow:
-	build/debug/test/unittest "[arrow]"
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest "[arrow]"
 
 allunit:
 	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
@@ -420,13 +423,11 @@ ifndef CI
 allunit: release
 endif
 
+unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[intraquery]" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
 	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/test/unittest "[interquery]" $(T)
 	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/test/unittest "[interquery]" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/test/unittest "[detailed_profiler]" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -534,7 +535,7 @@ third_party/sqllogictest:
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
-	./build/release/test/unittest "[sqlitelogic]"
+	$(PYTHON) scripts/ci/run_tests.py ./build/release/test/unittest "[sqlitelogic]"
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
@@ -610,3 +611,17 @@ gather-libs: release
 	cp third_party/*/libduckdb_*.a libs/. && \
 	cp extension/libduckdb_generated_extension_loader.a libs/. && \
 	cp extension/*/lib*_extension.a libs/.
+
+#### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
+vcpkg/scripts/buildsystems/vcpkg.cmake:
+	git -C vcpkg fetch || git clone --branch 2025.12.12 https://github.com/microsoft/vcpkg
+	cd vcpkg && ./bootstrap-vcpkg.sh
+
+setup-vcpkg: vcpkg/scripts/buildsystems/vcpkg.cmake
+	@echo 'Consider exporting VCPKG_TOOLCHAIN_PATH=$(PWD)/vcpkg/scripts/buildsystems/vcpkg.cmake'
+
+cleanup-vcpkg:
+	rm -rf vcpkg
+
+test-utils:
+	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'

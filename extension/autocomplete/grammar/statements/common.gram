@@ -28,7 +28,11 @@ Statement <-
 	LoadStatement /
 	InstallStatement /
 	AnalyzeStatement /
-	MergeIntoStatement
+	MergeIntoStatement /
+	ExpressionStatement
+
+ExpressionStatement <- List(ExpressionAlias)
+ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -54,7 +58,7 @@ NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
 Type <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
-SimpleType <- (QualifiedTypeName / CharacterType) TypeModifiers?
+SimpleType <- (CharacterType / QualifiedTypeName) TypeModifiers?
 CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
                  ('NATIONAL' 'CHARACTER' 'VARYING'?) /
