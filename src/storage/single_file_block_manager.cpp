@@ -864,7 +864,7 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 	}
 }
 
-void SingleFileBlockManager::MarkBlockACheckpointed(block_id_t block_id) {
+void SingleFileBlockManager::MarkBlockAsCheckpointed(block_id_t block_id) {
 	lock_guard<mutex> lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	newly_used_blocks.erase(block_id);

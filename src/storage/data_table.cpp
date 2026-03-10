@@ -1167,13 +1167,6 @@ void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx
 		    optimistic_count, count);
 	}
 
-	// Get all the blocks that need to be kept alive as long as the WAL is alive.
-	for (const auto &row_group_data : entry->row_group_data) {
-		for (const auto &column_data : row_group_data.column_data) {
-			GatherBlockIds(log, column_data, commit_state->GetBlockIdsInUse());
-		}
-	}
-
 	// Write any remaining (non-optimistically written) rows to the WAL.
 	row_start += optimistic_count;
 	count -= optimistic_count;
