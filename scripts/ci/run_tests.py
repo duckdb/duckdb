@@ -23,9 +23,9 @@ DEFAULT_MAX_RETRIES = 4
 
 def enable_line_buffering():
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(line_buffering=True)
+        sys.stdout.reconfigure(line_buffering=True, write_through=True)
     if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True, write_through=True)
 
 
 @dataclass(frozen=True)
@@ -68,6 +68,48 @@ class BatchRunState:
 
     def should_stop(self, config: TestRunnerConfig):
         return self.stop_launching or config.max_failures is not None and self.failed_count >= config.max_failures
+
+
+class DotProgressBar:
+    def __init__(self, total_batches: int):
+        self.total_batches = total_batches
+        self.printed_dots = 0
+        self.row_width = 50
+        self._line_open = False
+
+    def _write(self, text: str):
+        sys.stdout.write(text)
+        sys.stdout.flush()
+
+    def flush_line(self):
+        if self._line_open:
+            self._write("\n")
+            self._line_open = False
+
+    def print_message(self, text: str):
+        self.flush_line()
+        print(text)
+
+    def advance(self, completed_batches: int):
+        if self.total_batches <= 0:
+            return
+        target_dots = min(100, int((completed_batches * 100) / self.total_batches))
+        while self.printed_dots < target_dots:
+            self._write(".")
+            self.printed_dots += 1
+            self._line_open = True
+            if self.printed_dots % self.row_width == 0:
+                self._write(" [{:3}%]\n".format(self.printed_dots))
+                self._line_open = False
+
+
+@dataclass
+class RunContext:
+    executor: concurrent.futures.ThreadPoolExecutor
+    config: TestRunnerConfig
+    state: BatchRunState
+    future_to_batch: dict
+    progress: DotProgressBar
 
 
 def chunked(items, n):
@@ -328,53 +370,56 @@ def submit_batches(executor, config: TestRunnerConfig, batches, future_to_batch,
     return next_batch_idx
 
 
-def handle_failed_batch(executor, config: TestRunnerConfig, state: BatchRunState, future_to_batch, batch_info, result):
-    print(
+def handle_failed_batch(ctx: RunContext, batch_info, result):
+    ctx.progress.print_message(
         format_batch_failure(
             batch_info["batch_idx"],
             batch_info["batch"],
-            config,
+            ctx.config,
             result["stdout"],
             result["stderr"],
             result["message"],
         ),
-        end="",
     )
-    print("========================")
-    if state.can_retry(batch_info, config):
-        state.record_retry()
+    ctx.progress.print_message("========================")
+    if ctx.state.can_retry(batch_info, ctx.config):
+        ctx.state.record_retry()
         next_attempt = batch_info["attempt"] + 1
-        print(
+        ctx.progress.print_message(
             f"retrying failed test batch {batch_info['batch_idx']} "
-            f"(attempt {next_attempt}/{config.retry}, retry {state.retry_count}/{config.max_retries})"
+            f"(attempt {next_attempt}/{ctx.config.retry}, retry {ctx.state.retry_count}/{ctx.config.max_retries})"
         )
         submit_batch(
-            executor,
-            config,
+            ctx.executor,
+            ctx.config,
             batch_info["batch"],
-            future_to_batch,
+            ctx.future_to_batch,
             batch_info["batch_idx"],
             next_attempt,
         )
         return True
 
-    if batch_info["attempt"] < config.retry:
-        print(f"not retrying failed test batch {batch_info['batch_idx']} after reaching {config.max_retries} retries")
+    if batch_info["attempt"] < ctx.config.retry:
+        ctx.progress.print_message(
+            f"not retrying failed test batch {batch_info['batch_idx']} after reaching {ctx.config.max_retries} retries"
+        )
 
-    state.record_failure()
-    if state.should_stop(config):
-        state.stop_launching = True
+    ctx.state.record_failure()
+    if ctx.state.should_stop(ctx.config):
+        ctx.state.stop_launching = True
     return False
 
 
-def report_batch_metrics(config: TestRunnerConfig, batch_info, result, elapsed: float):
-    if config.runtime_threshold_seconds is not None and elapsed >= config.runtime_threshold_seconds:
-        print(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
+def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
+    if ctx.config.runtime_threshold_seconds is not None and elapsed >= ctx.config.runtime_threshold_seconds:
+        ctx.progress.print_message(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
     if (
-        config.rss_memory_threshold_mib is not None
-        and format_mib(result["peak_rss_bytes"]) >= config.rss_memory_threshold_mib
+        ctx.config.rss_memory_threshold_mib is not None
+        and format_mib(result["peak_rss_bytes"]) >= ctx.config.rss_memory_threshold_mib
     ):
-        print(f"batch with file {batch_info['batch'][0]} peak RSS {format_mib(result['peak_rss_bytes']):.0f} MiB")
+        ctx.progress.print_message(
+            f"batch with file {batch_info['batch'][0]} peak RSS {format_mib(result['peak_rss_bytes']):.0f} MiB"
+        )
 
 
 def parse_args():
@@ -484,10 +529,18 @@ def main():
 def run_tests(config: TestRunnerConfig, batches):
     start = time.monotonic()
     state = BatchRunState()
+    progress = DotProgressBar(len(batches))
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
         future_to_batch = {}
         next_batch_idx = 0
+        ctx = RunContext(
+            executor=executor,
+            config=config,
+            state=state,
+            future_to_batch=future_to_batch,
+            progress=progress,
+        )
 
         next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
@@ -500,14 +553,16 @@ def run_tests(config: TestRunnerConfig, batches):
                 batch_info = future_to_batch.pop(future)
                 result = future.result()
                 elapsed = time.monotonic() - batch_info["start"]
-                report_batch_metrics(config, batch_info, result, elapsed)
+                report_batch_metrics(ctx, batch_info, result, elapsed)
                 if result["failed"]:
-                    if handle_failed_batch(executor, config, state, future_to_batch, batch_info, result):
+                    if handle_failed_batch(ctx, batch_info, result):
                         continue
+                progress.advance(next_batch_idx - len(future_to_batch))
 
             if not state.stop_launching:
                 next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
+    progress.flush_line()
     elapsed = time.monotonic() - start
     if state.failed_count:
         print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")

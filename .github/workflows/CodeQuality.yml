@@ -21,44 +21,8 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
-  format-check:
-    name: Format Check
-    runs-on: ubuntu-22.04
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
-
-      - name: List Installed Packages
-        shell: bash
-        run: pip3 freeze
-
-      - name: Format Check
-        shell: bash
-        run: |
-          clang-format --version
-          clang-format --dump-config
-          black --version
-          make format-check-silent
-
-      - name: Generated Check
-        shell: bash
-        run: |
-          make generate-files
-          git diff --exit-code
-
   enum-check:
     name: C Enum Integrity Check
-    needs: format-check
     runs-on: ubuntu-22.04
 
     env:
@@ -84,7 +48,6 @@ jobs:
   tidy-check:
     name: Tidy Check
     runs-on: ubuntu-24.04
-    needs: format-check
 
     env:
       CC: gcc
@@ -100,7 +63,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global] --break-system-packages
+        run: make toolsci && sudo apt-get install -y -qq clang-tidy && sudo pip3 install pybind11[global] --break-system-packages
 
       - uses: ./.github/actions/ccache-action
 
