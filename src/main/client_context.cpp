@@ -403,7 +403,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
-	// profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
+	profiler.StartQuery(query, IsExplainAnalyze(statement.get()));
 	profiler.StartPhase(MetricType::PLANNER);
 	Planner logical_planner(*this);
 	if (parameters.parameters) {
@@ -702,7 +702,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 	try {
 		Parser parser(GetParserOptions());
 		auto &profiler = QueryProfiler::Get(*this);
-		profiler.StartQuery(query, false);
+		profiler.StartQuery(query);
 		profiler.StartPhase(MetricType::PARSER);
 		parser.ParseQuery(query);
 		if (!parser.statements.empty() && IsExplainAnalyze(parser.statements[0].get())) {
@@ -949,7 +949,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	unique_ptr<PendingQueryResult> pending;
-
 	try {
 		BeginQueryInternal(lock, query);
 	} catch (std::exception &ex) {
