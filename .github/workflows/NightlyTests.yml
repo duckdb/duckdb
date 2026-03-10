@@ -55,7 +55,7 @@ jobs:
 
      - name: Install Ninja
        shell: bash
-       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+       run: make toolsci
 
      - uses: ./.github/actions/ccache-action
 
@@ -91,7 +91,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+      run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 
@@ -171,7 +171,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -215,7 +215,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm libcurl4-openssl-dev
+      run: make toolsci && sudo apt-get install -y -qq llvm libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 
@@ -256,6 +256,10 @@ jobs:
 
      - uses: ./.github/actions/swap_space
 
+     - name: Install tools
+       shell: bash
+       run: make toolsci
+
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
        shell: bash
@@ -283,7 +287,7 @@ jobs:
 
      - name: Install
        shell: bash
-       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+       run: make toolsci
 
      - uses: ./.github/actions/ccache-action
 
@@ -322,7 +326,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: actions/setup-python@v4
         with:
@@ -391,7 +395,7 @@ jobs:
      - name: Install
        shell: bash
        run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
+        make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install requests
 
      - uses: ./.github/actions/ccache-action
 
@@ -456,7 +460,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -498,7 +502,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -535,7 +539,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -582,6 +586,10 @@ jobs:
       with:
         fetch-depth: 0
         path: duckdb-wasm/submodules/duckdb
+
+    - name: Install tools
+      shell: bash
+      run: make -C duckdb-wasm/submodules/duckdb toolsci
 
     - name: Setup
       shell: bash
@@ -648,7 +656,7 @@ jobs:
 
      - name: Install
        shell: bash
-       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+       run: make toolsci
 
      - uses: ./.github/actions/ccache-action
 
