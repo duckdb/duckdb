@@ -555,6 +555,14 @@ def test_jsonlines(shell):
     result = test.run()
     result.check_stdout('{"42":42,"43":43}')
 
+def test_jsonlines_cmdline(shell):
+    test = (
+        ShellTest(shell, ['-jsonlines'])
+        .statement("SELECT 42,43;")
+    )
+    result = test.run()
+    result.check_stdout('{"42":42,"43":43}')
+
 def test_nested_jsonlines(shell):
     test = (
         ShellTest(shell)
