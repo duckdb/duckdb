@@ -541,6 +541,9 @@ struct IEJoinUnion {
 	unique_ptr<UnionIterator> off2;
 	int64_t lrid = std::numeric_limits<int64_t>::max();
 
+	//! ANTI JOIN bookmark
+	idx_t anti_i;
+
 	//! Li
 	IEJoinCursor<int64_t> li;
 	//! P
@@ -646,6 +649,7 @@ IEJoinUnion::IEJoinUnion(IEJoinGlobalSourceState &gsource, const ChunkRange &chu
 	n = l2.BlockStart(chunks.second);
 	i = l2.BlockStart(chunks.first);
 	j = i;
+	anti_i = i;
 
 	const auto sort_key_type = l2.GetSortKeyType();
 	switch (sort_key_type) {
@@ -956,9 +960,8 @@ public:
 	using TaskPtr = optional_ptr<Task>;
 
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
-	    : gsource(gsource), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
-	      left_executor(client), right_executor(client), simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client),
-	      left_matches(nullptr), right_matches(nullptr)
+	    : gsource(gsource), true_sel(STANDARD_VECTOR_SIZE), left_executor(client), right_executor(client),
+	      simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client), left_matches(nullptr), right_matches(nullptr)
 
 	{
 		auto &op = gsource.op;
@@ -1052,6 +1055,8 @@ public:
 	idx_t FilterSemiJoin(const SelectionVector *sel);
 	// 	Resolve SEMI joins
 	void ResolveSemiJoin(ExecutionContext &context, DataChunk &result);
+	// 	Resolve ANTI joins
+	void ResolveAntiJoin(ExecutionContext &context, DataChunk &result);
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, RIGHT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
 	//	Resolve left join results
@@ -1105,12 +1110,15 @@ public:
 	ExpressionExecutor pred_executor;
 	SelectionVector pred_matches;
 
-	// Outer joins
+	//! Outer joins
 	unsafe_vector<idx_t> outer_sel;
 	idx_t outer_idx;
 	idx_t outer_count;
 	bool *left_matches;
 	bool *right_matches;
+
+	//! Simple Joins
+	idx_t anti_lsel = 0;
 };
 
 bool IEJoinLocalSourceState::TryAssignTask() {
@@ -1294,17 +1302,27 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 }
 
 void IEJoinLocalSourceState::ResolveInnerJoin(ExecutionContext &context, DataChunk &result) {
+	// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 	switch (gsource.op.join_type) {
 	case JoinType::SEMI:
-		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
-		return ResolveSemiJoin(context, result);
+		ResolveSemiJoin(context, result);
+		break;
+	case JoinType::ANTI:
+		ResolveAntiJoin(context, result);
+		break;
 	case JoinType::LEFT:
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 	case JoinType::OUTER:
-		return ResolveComplexJoin(context, result);
+		ResolveComplexJoin(context, result);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented join type for IEJoin!");
+	}
+
+	if (result.size() == 0) {
+		// exhausted this pair
+		joiner.reset();
 	}
 }
 
@@ -1397,7 +1415,8 @@ idx_t IEJoinLocalSourceState::FilterSemiJoin(const SelectionVector *sel) {
 	//	Strip out remaining left side duplicates
 	const auto result_count = lpayload.size();
 	idx_t unique_count = 0;
-	simple_sel.set_index(unique_count++, 0);
+	simple_sel.set_index(unique_count, 0);
+	lsel[unique_count++] = lsel[sel->get_index(0)];
 	for (idx_t i = 1; i < result_count; ++i) {
 		const auto iprev = sel->get_index(i - 1);
 		const auto icurr = sel->get_index(i - 0);
@@ -1430,7 +1449,6 @@ void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChun
 		auto result_count = joiner->JoinBlocks(lsel, rsel);
 		if (result_count == 0) {
 			// exhausted this pair
-			joiner.reset();
 			return;
 		}
 
@@ -1509,6 +1527,81 @@ void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChun
 	} while (result.size() == 0);
 }
 
+void IEJoinLocalSourceState::ResolveAntiJoin(ExecutionContext &context, DataChunk &result) {
+	auto &op = gsource.op;
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+	auto &left_table = *ie_sink.tables[0];
+
+	//	Generate the SEMI JOIN and then invert it.
+	//	This can result in more than one chunk at a time,
+	//	so we only call ResolveSemiJoin to "refill" the buffer (find the next batch of matches)
+	//	when we run out of anti-matches
+	do {
+		if (anti_lsel >= lsel.size()) {
+			ResolveSemiJoin(context, result);
+			result.Reset();
+			anti_lsel = 0;
+		}
+
+		//	Scan through Li, skipping anything in lsel.
+		//	They are both ordered in the same way, so we can ratchet
+		const auto &i = joiner->i;
+		auto &anti_i = joiner->anti_i;
+		auto &p = joiner->p;
+		auto &li = joiner->li;
+
+		//	Put the results in rsel (as that is no longer needed)
+		idx_t result_count = 0;
+		rsel.resize(STANDARD_VECTOR_SIZE);
+
+		//	Scan through the SEMI JOIN rids
+		//	Note that if there are no more matches, then lsel will be empty()
+		//	and i will be at the end of the range
+		for (; anti_i < i; ++anti_i) {
+			//	Get the next lrid
+			auto pos = p[anti_i];
+			auto rid = li[pos];
+			if (rid <= 0) {
+				continue;
+			}
+			const auto lrid = UnsafeNumericCast<idx_t>(rid - 1);
+
+			//	If the lrid is in the SEMI JOIN, then skip it
+			if (anti_lsel < lsel.size() && lsel[anti_lsel] == lrid) {
+				++anti_lsel;
+				continue;
+			}
+
+			//	Found an unmatched rid, so remember it
+			rsel[result_count++] = lrid;
+
+			//	If we have a full vector, stop
+			if (result_count >= STANDARD_VECTOR_SIZE) {
+				break;
+			}
+		}
+		rsel.resize(result_count);
+
+		if (result_count == 0) {
+			//	If there were no SEMI rows and we didn't find any past the last one,
+			//	then we are done.
+			if (lsel.empty()) {
+				return;
+			}
+			continue;
+		}
+
+		// 	Read the remaining unique rows
+		left_table.Repin(*left_iterator);
+		op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, rsel,
+		                      *left_scan_state);
+		lpayload.SetCardinality(result_count);
+
+		result.Reference(lpayload);
+		result.Verify(context.client.db);
+	} while (result.size() == 0);
+}
+
 void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataChunk &result) {
 	auto &op = gsource.op;
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
@@ -1522,7 +1615,6 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		auto result_count = joiner->JoinBlocks(lsel, rsel);
 		if (result_count == 0) {
 			// exhausted this pair
-			joiner.reset();
 			return;
 		}
 

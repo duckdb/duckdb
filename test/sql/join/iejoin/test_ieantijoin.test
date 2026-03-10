@@ -1,0 +1,300 @@
+# name: test/sql/join/iejoin/test_ieantijoin.test
+# description: Test IEJoin with ANTI JOIN
+# group: [iejoin]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+SET merge_join_threshold=0
+
+statement ok
+SET nested_loop_join_threshold=0;
+
+statement ok
+CREATE TABLE left_small(
+	id INTEGER, 
+	start DATE, 
+	stop DATE, 
+	symbol VARCHAR, 
+	price DECIMAL
+);
+
+statement ok
+INSERT INTO left_small VALUES
+    (1, '2026-01-01', '2026-01-02', 'A', 150.00),
+    (2, '2026-01-02', '2026-01-03', 'A', 151.00),
+    (3, '2026-01-03', '2026-01-04', 'B', 380.00);
+
+statement ok
+CREATE TABLE right_small (
+	id INTEGER, 
+	start DATE, 
+	stop DATE,
+	symbol VARCHAR, 
+	bid DECIMAL, 
+	active BOOLEAN
+);
+
+statement ok
+INSERT INTO right_small VALUES
+    (1, '2026-01-01', '2026-01-03', 'A', 149.50, true),
+    (2, '2026-01-03', '2026-01-04', 'A', 150.50, false),
+    (3, '2026-01-04', '2026-01-05', 'B', 379.00, true);
+
+statement ok
+SET prefer_range_joins=true
+
+# Use IEJoin for two predicates
+query II
+EXPLAIN
+SELECT l.id, l.start, l.stop
+FROM left_small l
+ANTI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+ORDER BY 1
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+# Use IEJoin for more than two predicates
+query II
+EXPLAIN
+SELECT l.id, l.start, l.stop
+FROM left_small l
+ANTI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.symbol = r.symbol
+ORDER BY 1
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+# Use IEJoin for arbitrary predicates
+query II
+EXPLAIN
+SELECT l.id, l.start, l.stop
+FROM left_small l
+ANTI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+# Use IEJoin for all predicates
+query II
+EXPLAIN
+SELECT l.id, l.start, l.stop
+FROM left_small l
+ANTI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.symbol = r.symbol
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+foreach prefer false true
+
+statement ok
+SET prefer_range_joins=${prefer}
+
+query III
+SELECT l.id, l.start, l.stop
+FROM left_small l
+ANTI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+ORDER BY 1
+----
+
+query III
+SELECT l.id, l.start, l.stop
+FROM left_small l
+ANTI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.symbol = r.symbol
+ORDER BY 1
+----
+3	2026-01-03	2026-01-04
+
+query III
+SELECT l.id, l.start, l.stop
+FROM left_small l
+ANTI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
+1	2026-01-01	2026-01-02
+
+query III
+SELECT l.id, l.start, l.stop
+FROM left_small l
+ANTI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.symbol = r.symbol
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
+1	2026-01-01	2026-01-02
+3	2026-01-03	2026-01-04
+
+endloop
+
+#
+# Test multiple matches
+#
+
+# Table with wide ranges that don't align well
+statement ok
+CREATE OR REPLACE TABLE wide_ranges AS (
+	SELECT 
+		id,
+		'2026-01-01'::TIMESTAMP + INTERVAL (id * 5 * 2048 // 7) SECONDS AS start,
+		'2026-01-01'::TIMESTAMP + INTERVAL ((id + 1) * 5 * 2048 // 7) SECONDS AS stop,
+		CHR(65 + (id % 26)::INTEGER) AS symbol,
+		149.5 + id * 5 * 2048 / 700.0 AS price,
+	FROM range(6) tbl(id)
+);
+
+# Table with many narrow ranges
+statement ok
+CREATE OR REPLACE TABLE narrow_ranges AS (
+	SELECT 
+		id,
+		'2026-01-01'::TIMESTAMP + INTERVAL (id + 15 * 2048 // 7) SECONDS AS start,
+		start + INTERVAL 1 SECOND AS stop,
+		CHR(65 + (id % 26)::INTEGER) AS symbol,
+		150.0 + id / 100.0 AS bid,
+		(id % 2)::BOOLEAN AS active,
+	FROM range(2048*5) tbl(id)
+);
+
+query IIIII
+FROM wide_ranges
+----
+0	2026-01-01 00:00:00	2026-01-01 00:24:22	A	149.5
+1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
+2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
+3	2026-01-01 01:13:08	2026-01-01 01:37:31	D	193.3857142857143
+4	2026-01-01 01:37:31	2026-01-01 02:01:54	E	208.0142857142857
+5	2026-01-01 02:01:54	2026-01-01 02:26:17	F	222.64285714285714
+
+statement ok
+SET prefer_range_joins=true
+
+# Verify IEJoin usage
+query II
+EXPLAIN
+FROM wide_ranges l
+ANTI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query II
+EXPLAIN
+FROM wide_ranges l
+ANTI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+	  AND r.symbol = l.symbol
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query II
+EXPLAIN
+FROM wide_ranges l
+ANTI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+      AND l.price + r.bid < 400
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query II
+EXPLAIN
+FROM wide_ranges l
+ANTI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+	  AND r.symbol = l.symbol
+	  AND l.price + r.bid < 375
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+foreach prefer false true
+
+statement ok
+SET prefer_range_joins=${prefer}
+
+query IIIII
+FROM wide_ranges l
+ANTI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+ORDER BY id;
+----
+0	2026-01-01 00:00:00	2026-01-01 00:24:22	A	149.5
+1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
+2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
+
+# Verify tail comparisons
+query IIIII
+FROM wide_ranges l
+ANTI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+	  AND r.symbol = l.symbol
+ORDER BY id;
+----
+0	2026-01-01 00:00:00	2026-01-01 00:24:22	A	149.5
+1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
+2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
+
+# Verify arbitrary comparisons
+query IIIII
+FROM wide_ranges l
+ANTI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+      AND l.price + r.bid < 400
+ORDER BY id;
+----
+0	2026-01-01 00:00:00	2026-01-01 00:24:22	A	149.5
+1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
+2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
+5	2026-01-01 02:01:54	2026-01-01 02:26:17	F	222.64285714285714
+
+endloop
+
+# TODO: Move back inside the loop when #21273 is fixed.
+# Verify all predicates
+query IIIII
+FROM wide_ranges l
+ANTI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+	  AND r.symbol = l.symbol
+	  AND l.price + r.bid < 375
+ORDER BY id;
+----
+0	2026-01-01 00:00:00	2026-01-01 00:24:22	A	149.5
+1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
+2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
+5	2026-01-01 02:01:54	2026-01-01 02:26:17	F	222.64285714285714
