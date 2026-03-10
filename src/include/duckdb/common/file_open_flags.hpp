@@ -146,40 +146,33 @@ private:
 class FileFlags {
 public:
 	//! Open file with read access
-	static constexpr FileOpenFlags FILE_FLAGS_READ = FileOpenFlags(FileOpenFlags::FILE_FLAGS_READ);
+	static const FileOpenFlags FILE_FLAGS_READ;
 	//! Open file with write access
-	static constexpr FileOpenFlags FILE_FLAGS_WRITE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_WRITE);
+	static const FileOpenFlags FILE_FLAGS_WRITE;
 	//! Use direct IO when reading/writing to the file
-	static constexpr FileOpenFlags FILE_FLAGS_DIRECT_IO = FileOpenFlags(FileOpenFlags::FILE_FLAGS_DIRECT_IO);
+	static const FileOpenFlags FILE_FLAGS_DIRECT_IO;
 	//! Create file if not exists, can only be used together with WRITE
-	static constexpr FileOpenFlags FILE_FLAGS_FILE_CREATE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_FILE_CREATE);
+	static const FileOpenFlags FILE_FLAGS_FILE_CREATE;
 	//! Always create a new file. If a file exists, the file is truncated. Cannot be used together with CREATE.
-	static constexpr FileOpenFlags FILE_FLAGS_FILE_CREATE_NEW =
-	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	static const FileOpenFlags FILE_FLAGS_FILE_CREATE_NEW;
 	//! Open file in append mode
-	static constexpr FileOpenFlags FILE_FLAGS_APPEND = FileOpenFlags(FileOpenFlags::FILE_FLAGS_APPEND);
+	static const FileOpenFlags FILE_FLAGS_APPEND;
 	//! Open file with restrictive permissions (600 on linux/mac) can only be used when creating, throws if file exists
-	static constexpr FileOpenFlags FILE_FLAGS_PRIVATE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_PRIVATE);
+	static const FileOpenFlags FILE_FLAGS_PRIVATE;
 	//! Return NULL if the file does not exist instead of throwing an error
-	static constexpr FileOpenFlags FILE_FLAGS_NULL_IF_NOT_EXISTS =
-	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+	static const FileOpenFlags FILE_FLAGS_NULL_IF_NOT_EXISTS;
 	//! Multiple threads may perform reads and writes in parallel
-	static constexpr FileOpenFlags FILE_FLAGS_PARALLEL_ACCESS =
-	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_PARALLEL_ACCESS);
+	static const FileOpenFlags FILE_FLAGS_PARALLEL_ACCESS;
 	//! Ensure that this call creates the file, throw is file exists
-	static constexpr FileOpenFlags FILE_FLAGS_EXCLUSIVE_CREATE =
-	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_EXCLUSIVE_CREATE);
+	static const FileOpenFlags FILE_FLAGS_EXCLUSIVE_CREATE;
 	//!  Return NULL if the file exist instead of throwing an error
-	static constexpr FileOpenFlags FILE_FLAGS_NULL_IF_EXISTS = FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_EXISTS);
+	static const FileOpenFlags FILE_FLAGS_NULL_IF_EXISTS;
 	//! Multiple clients may access the file at the same time
-	static constexpr FileOpenFlags FILE_FLAGS_MULTI_CLIENT_ACCESS =
-	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS);
+	static const FileOpenFlags FILE_FLAGS_MULTI_CLIENT_ACCESS;
 	//! Disables logging to avoid infinite loops when using FileHandle-backed log storage
-	static constexpr FileOpenFlags FILE_FLAGS_DISABLE_LOGGING =
-	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
+	static const FileOpenFlags FILE_FLAGS_DISABLE_LOGGING;
 	//! Opened file is allowed to be a duckdb_extension
-	static constexpr FileOpenFlags FILE_FLAGS_ENABLE_EXTENSION_INSTALL =
-	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
+	static const FileOpenFlags FILE_FLAGS_ENABLE_EXTENSION_INSTALL;
 };
 
 } // namespace duckdb
