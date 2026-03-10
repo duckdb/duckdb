@@ -22,7 +22,8 @@
         "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/pg_catalog/sqlalchemy.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
-        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test"
+        "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
+        "test/sql/transactions/test_multistatement_is_transactional.test"
       ]
     },
     {
