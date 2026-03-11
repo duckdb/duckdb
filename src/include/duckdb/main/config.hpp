@@ -97,7 +97,7 @@ struct DBConfigOptions {
 	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
-	//! Checkpoint when WAL reaches this size (default: 16MB)
+	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
