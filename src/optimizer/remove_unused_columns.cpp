@@ -345,16 +345,14 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			cte.children[0]->ResolveOperatorTypes();
 			auto bindings = cte.children[0]->GetColumnBindings();
 			vector<unique_ptr<Expression>> expressions;
+			if (referenced_columns_in_rhs.empty()) {
+				// if we have no columns selected just select the first column
+				referenced_columns_in_rhs.insert(0);
+			}
 			for (idx_t i = 0; i < bindings.size(); i++) {
 				if (referenced_columns_in_rhs.find(ProjectionIndex(i)) != referenced_columns_in_rhs.end()) {
 					expressions.push_back(make_uniq<BoundColumnRefExpression>(cte.children[0]->types[i], bindings[i]));
 				}
-			}
-
-			if (expressions.empty()) {
-				// no columns referenced, but we can not have an empty projection, as this would
-				// result in an empty left-hand side of the cte
-				break;
 			}
 
 			auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
@@ -401,8 +399,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			}
 		}
 
-		cte_entry.everything_referenced = cte_ref.chunk_types.size() == cte_entry.column_references.size();
-
+		cte_entry.everything_referenced = cte_ref.chunk_types.size() == referenced_columns.size();
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:

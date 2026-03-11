@@ -165,6 +165,7 @@ static const CommandLineOption command_line_options[] = {
     {"html", 0, "", nullptr, ToggleOutputMode<RenderMode::HTML>, "set output mode to HTML"},
     {"interactive", 0, "", nullptr, DisableBatch, "force interactive I/O"},
     {"json", 0, "", nullptr, ToggleOutputMode<RenderMode::JSON>, "set output mode to 'json'"},
+    {"jsonlines", 0, "", nullptr, ToggleOutputMode<RenderMode::JSONLINES>, "set output mode to 'jsonlines'"},
     {"line", 0, "", nullptr, ToggleOutputMode<RenderMode::LINE>, "set output mode to 'line'"},
     {"list", 0, "", nullptr, ToggleOutputMode<RenderMode::LIST>, "set output mode to 'list'"},
     {"markdown", 0, "", nullptr, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},

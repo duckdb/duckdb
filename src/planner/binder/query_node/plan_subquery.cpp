@@ -375,7 +375,7 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 		// Collect all recursive CTEs during recursive descend
 		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
 		    op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-			auto &rec_cte = op.Cast<LogicalRecursiveCTE>();
+			auto &rec_cte = op.Cast<LogicalCTE>();
 			binder.recursive_ctes[rec_cte.table_index] = &op;
 		}
 		for (idx_t i = 0; i < op.children.size(); i++) {

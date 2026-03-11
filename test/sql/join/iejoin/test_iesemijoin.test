@@ -45,6 +45,9 @@ INSERT INTO right_small VALUES
     (2, '2026-01-03', '2026-01-04', 'A', 150.50, false),
     (3, '2026-01-04', '2026-01-05', 'B', 379.00, true);
 
+statement ok
+SET prefer_range_joins=true
+
 # Verify IEJoin for two predicates
 query II
 EXPLAIN
@@ -56,6 +59,37 @@ SEMI JOIN right_small r
 ORDER BY 1
 ----
 physical_plan	<REGEX>:.*IE_JOIN.*
+
+# Use IEJoin for more than two predicates
+query II
+EXPLAIN
+SELECT l.id, l.start, l.stop
+FROM left_small l
+SEMI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.symbol = r.symbol
+ORDER BY 1
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+# Don't use IEJoin for arbitrary predicates
+query II
+EXPLAIN
+SELECT l.id, l.start, l.stop
+FROM left_small l
+SEMI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
+physical_plan	<!REGEX>:.*IE_JOIN.*
+
+foreach prefer false true
+
+statement ok
+SET prefer_range_joins=${prefer}
 
 query III
 SELECT l.id, l.start, l.stop
@@ -69,9 +103,7 @@ ORDER BY 1
 2	2026-01-02	2026-01-03
 3	2026-01-03	2026-01-04
 
-# Don't use IEJoin for more than two predicates
-query II
-EXPLAIN
+query III
 SELECT l.id, l.start, l.stop
 FROM left_small l
 SEMI JOIN right_small r
@@ -80,7 +112,10 @@ SEMI JOIN right_small r
       AND l.symbol = r.symbol
 ORDER BY 1
 ----
-physical_plan	<!REGEX>:.*IE_JOIN.*
+1	2026-01-01	2026-01-02
+2	2026-01-02	2026-01-03
+
+endloop
 
 #
 # Test multiple matches
@@ -111,6 +146,9 @@ CREATE OR REPLACE TABLE narrow_ranges AS (
 	FROM range(2048*5) tbl(id)
 );
 
+statement ok
+SET prefer_range_joins=true
+
 # Verify IEJoin
 query II
 EXPLAIN
@@ -121,6 +159,25 @@ SEMI JOIN narrow_ranges r
 ORDER BY id;
 ----
 physical_plan	<REGEX>:.*IE_JOIN.*
+
+#
+# Verify tail comparisons
+#
+query II
+EXPLAIN
+FROM wide_ranges l
+SEMI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+	  AND r.symbol = l.symbol
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+foreach prefer false true
+
+statement ok
+SET prefer_range_joins=${prefer}
 
 query IIIII
 FROM wide_ranges l
@@ -135,3 +192,20 @@ ORDER BY id;
 3	2026-01-01 01:13:08	2026-01-01 01:37:31	D	193.3857142857143
 4	2026-01-01 01:37:31	2026-01-01 02:01:54	E	208.0142857142857
 5	2026-01-01 02:01:54	2026-01-01 02:26:17	F	222.64285714285714
+
+query IIIII
+FROM wide_ranges l
+SEMI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+	  AND r.symbol = l.symbol
+ORDER BY id;
+----
+0	2026-01-01 00:00:00	2026-01-01 00:24:22	A	149.5
+1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
+2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
+3	2026-01-01 01:13:08	2026-01-01 01:37:31	D	193.3857142857143
+4	2026-01-01 01:37:31	2026-01-01 02:01:54	E	208.0142857142857
+5	2026-01-01 02:01:54	2026-01-01 02:26:17	F	222.64285714285714
+
+endloop

@@ -181,7 +181,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "external_threads", // tested in test_threads.cpp
 	    "profiling_output", // just an alias
 	    "duckdb_api",
-	    "custom_user_agent",
+	    "configure_profiling",
+	    "configure_metrics",
 	    "custom_profiling_settings",
 	    "custom_user_agent",
 	    "default_block_size",

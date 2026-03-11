@@ -13,7 +13,6 @@ using namespace duckdb;
 int main(int argc_in, char *argv[]) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
-	bool has_test_config_arg = false;
 
 	auto &test_config = TestConfiguration::Get();
 	test_config.Initialize();
@@ -36,22 +35,12 @@ int main(int argc_in, char *argv[]) {
 			SetTestDirectory(test_dir);
 		} else if (argument == "--require") {
 			AddRequire(string(argv[++i]));
-		} else if (argument == "--test-config") {
-			has_test_config_arg = true;
-			if (!test_config.ParseArgument(argument, argc, argv, i)) {
-				new_argv[new_argc] = argv[i];
-				new_argc++;
-			}
 		} else if (!test_config.ParseArgument(argument, argc, argv, i)) {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
 		}
 	}
 	test_config.ChangeWorkingDirectory(test_directory);
-	if (has_test_config_arg && !test_config.GetSkipCompiledTests()) {
-		fprintf(stderr, "--test-config requires \"skip_compiled\": true in the config\n");
-		return 1;
-	}
 
 	// delete the testing directory if it exists
 	auto dir = TestCreatePath("");
