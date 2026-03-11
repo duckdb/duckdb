@@ -10,6 +10,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 
 namespace duckdb {
 struct BindInfo;
