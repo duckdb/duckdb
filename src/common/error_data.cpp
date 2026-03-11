@@ -102,6 +102,10 @@ void ErrorData::Merge(const ErrorData &other) {
 		*this = other;
 		return;
 	}
+	if (Exception::InvalidatesDatabase(other.Type()) || other.type == ExceptionType::INTERNAL) {
+		// inherit severe types
+		type = other.type;
+	}
 	final_message += "\n\n" + other.Message();
 }
 

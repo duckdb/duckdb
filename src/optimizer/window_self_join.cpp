@@ -97,6 +97,16 @@ public:
 		VisitExpressionChildren(**expression);
 	}
 
+	void TranslateOrders(BoundAggregateExpression &result, const vector<BoundOrderByNode> &orders_bys) {
+		result.order_bys = make_uniq<BoundOrderModifier>();
+		auto &orders = result.order_bys->orders;
+		for (auto &order : orders_bys) {
+			auto order_copy = order.Copy();
+			VisitExpression(&order_copy.expression); // Update bindings
+			orders.emplace_back(std::move(order_copy));
+		}
+	}
+
 	unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_expr) {
 		auto agg_func = *w_expr.aggregate;
 		unique_ptr<FunctionData> bind_info;
@@ -125,13 +135,10 @@ public:
 		                                                  std::move(bind_info), aggr_type);
 
 		if (!w_expr.arg_orders.empty()) {
-			result->order_bys = make_uniq<BoundOrderModifier>();
-			auto &orders = result->order_bys->orders;
-			for (auto &order : w_expr.arg_orders) {
-				auto order_copy = order.Copy();
-				VisitExpression(&order_copy.expression); // Update bindings
-				orders.emplace_back(std::move(order_copy));
-			}
+			TranslateOrders(*result, w_expr.arg_orders);
+		} else if (!w_expr.orders.empty()) {
+			//	If the frame was ordered, copy the frame ordering to the aggregate function
+			TranslateOrders(*result, w_expr.orders);
 		}
 
 		return std::move(result);
@@ -155,7 +162,29 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	if (w_expr.type != ExpressionType::WINDOW_AGGREGATE) {
 		return false;
 	}
-	if (!w_expr.orders.empty()) {
+	//	We can only accept ORDER BY clauses if the frame is the entire partition
+	//	In that case, we will have to move the ordering clauses into the aggregate.
+	switch (w_expr.start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (!w_expr.orders.empty()) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+
+	switch (w_expr.end) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (!w_expr.orders.empty()) {
+			return false;
+		}
+		break;
+	default:
 		return false;
 	}
 	if (w_expr.partitions.empty()) {

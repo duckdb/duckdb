@@ -75,6 +75,19 @@ bool BaseTokenizer::CharacterIsInitialNumber(char c) {
 	return c == '.';
 }
 
+bool BaseTokenizer::CharacterIsSpecialStringCharacter(char c) {
+	if (c == 'N' || c == 'n') {
+		return true;
+	}
+	if (c == 'X' || c == 'x') {
+		return true;
+	}
+	if (c == 'E' || c == 'e') {
+		return true;
+	}
+	return false;
+}
+
 bool BaseTokenizer::CharacterIsNumber(char c) {
 	if (CharacterIsInitialNumber(c)) {
 		return true;
@@ -306,6 +319,15 @@ bool BaseTokenizer::TokenizeInput() {
 				last_pos = i;
 				break;
 			}
+			if (CharacterIsSpecialStringCharacter(c)) {
+				// Look ahead to see if a quote follows
+				if (i + 1 < sql.size() && sql[i + 1] == '\'') {
+					state = TokenizeState::STRING_LITERAL;
+					last_pos = i;
+					i++;
+					break;
+				}
+			}
 			if (StringUtil::CharacterIsOperator(c)) {
 				state = TokenizeState::OPERATOR;
 				last_pos = i;
@@ -437,6 +459,8 @@ bool BaseTokenizer::TokenizeInput() {
 			// Marker found! Revert to standard state
 			size_t full_marker_len = dollar_quote_marker.size() + 2;
 			string quoted = sql.substr(last_pos, (start + dollar_quote_marker.size() + 1) - last_pos);
+			string content = quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len);
+			content = StringUtil::Replace(content, "'", "''");
 			quoted = "'" + quoted.substr(full_marker_len, quoted.size() - 2 * full_marker_len) + "'";
 			tokens.emplace_back(quoted, dollar_marker_start - 1, TokenType::STRING_LITERAL);
 			dollar_quote_marker = string();

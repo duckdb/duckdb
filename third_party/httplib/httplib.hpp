@@ -7872,7 +7872,8 @@ inline bool Server::read_content(Stream &strm, Request &req, Response &res) {
           strm, req, res,
           // Regular
           [&](const char *buf, size_t n) {
-            if (req.body.size() + n > req.body.max_size()) { return false; }
+            if (req.body.size() + n > payload_max_length_ ||
+                req.body.size() + n > req.body.max_size()) { return false; }
             req.body.append(buf, n);
             return true;
           },

@@ -264,7 +264,12 @@ CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
 	// If we reach here, the query failed before Finalize was called
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file : created_files) {
-		fs.TryRemoveFile(file);
+		try {
+			fs.TryRemoveFile(file);
+		} catch (...) {
+			// TryRemoveFile migth fail for a varieaty of reasons, but we can't really propagate error codes here, so
+			// best effort cleanup
+		}
 	}
 }
 

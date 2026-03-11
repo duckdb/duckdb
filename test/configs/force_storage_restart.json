@@ -9,7 +9,8 @@
       "reason": "Contains explicit use of the memory catalog.",
       "paths": [
         "test/sql/attach/attach_use_rollback.test",
-        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test",
+        "test/sql/cte/warn_deprecated_union_in_using_key.test"
       ]
     },
     {
@@ -29,7 +30,8 @@
       "reason": "Logging setting doesn't survive restarts",
       "paths": [
         "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow",
-        "test/sql/logging/physical_operator_logging.test_slow"
+        "test/sql/logging/physical_operator_logging.test_slow",
+        "test/logging/warnings_as_errors.test"
       ]
     }
   ]

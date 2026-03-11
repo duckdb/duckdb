@@ -41,6 +41,8 @@ struct HTTPParams {
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool keep_alive = DEFAULT_KEEP_ALIVE;
 	bool follow_location = true;
+	bool override_verify_ssl = false;
+	bool verify_ssl = true;
 
 	string http_proxy;
 	idx_t http_proxy_port;
@@ -233,6 +235,7 @@ public:
 	virtual unique_ptr<HTTPResponse> Head(HeadRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Delete(DeleteRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Post(PostRequestInfo &info) = 0;
+	virtual void Cleanup() {};
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 };
@@ -263,6 +266,8 @@ public:
 	static void DecomposeURL(const string &url, string &path_out, string &proto_host_port_out);
 	static HTTPStatusCode ToStatusCode(int32_t status_code);
 	static string GetStatusMessage(HTTPStatusCode status);
+	static bool IsHTTPProtocol(const string &url);
+	static void BumpToSecureProtocol(string &url);
 
 public:
 	static duckdb::unique_ptr<HTTPResponse>

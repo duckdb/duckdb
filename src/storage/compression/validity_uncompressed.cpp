@@ -249,9 +249,9 @@ void ValidityUncompressed::UnalignedScan(data_ptr_t input, idx_t input_size, idx
 #if STANDARD_VECTOR_SIZE < 128
 	// fallback for tiny vector sizes
 	// the bitwise ops we use below don't work if the vector size is too small
-	ValidityMask source_mask(input_data, input_size);
+	ValidityMask source_mask128(input_data, input_size);
 	for (idx_t i = 0; i < scan_count; i++) {
-		if (!source_mask.RowIsValid(input_start + i)) {
+		if (!source_mask128.RowIsValid(input_start + i)) {
 			if (result_mask.AllValid()) {
 				result_mask.Initialize();
 			}

@@ -134,6 +134,13 @@
         "default_value": "64"
     },
     {
+        "name": "auto_checkpoint_skip_wal_threshold",
+        "description": "The estimated WAL write size at which point we will skip writing to the WAL and only checkpoint. Skipping writing to the WAL means concurrent commits are blocked while the checkpoint is happening.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "100000"
+    },
+    {
         "name": "autoinstall_extension_repository",
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "VARCHAR",
@@ -344,6 +351,13 @@
         "type": "VARCHAR",
         "scope": "global",
         "custom_implementation": true
+    },
+    {
+        "name": "deprecated_using_key_syntax",
+        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
+        "type": "ENUM<DeprecatedUsingKeySyntax>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
     },
     {
         "name": "disable_database_invalidation",
@@ -1065,7 +1079,10 @@
         "description": "Escalate all warnings to errors.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false"
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "write_buffer_row_group_count",

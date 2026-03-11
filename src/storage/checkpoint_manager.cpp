@@ -132,6 +132,10 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	if (storage_manager.InMemory()) {
 		return;
 	}
+	if (ValidChecker::IsInvalidated(db.GetDatabase())) {
+		// don't checkpoint invalidated databases
+		return;
+	}
 	// assert that the checkpoint manager hasn't been used before
 	D_ASSERT(!metadata_writer);
 
@@ -263,13 +267,23 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 		// truncate the WAL
 		if (has_wal) {
-			auto wal_lock = storage_manager.GetWALLock();
+			unique_ptr<lock_guard<mutex>> owned_wal_lock;
+			optional_ptr<lock_guard<mutex>> wal_lock;
+			if (!options.wal_lock) {
+				// not holding the WAL lock yet - grab it
+				owned_wal_lock = storage_manager.GetWALLock();
+				wal_lock = *owned_wal_lock;
+			} else {
+				// we already have the WAL lock - just refer to it
+				wal_lock = options.wal_lock;
+			}
 			storage_manager.WALFinishCheckpoint(*wal_lock);
 		}
 	} catch (std::exception &ex) {
 		// any exceptions thrown here are fatal
 		ErrorData error(ex);
 		if (error.Type() == ExceptionType::FATAL) {
+			ValidChecker::Invalidate(db.GetDatabase(), error.Message());
 			throw;
 		}
 		throw FatalException("Failed to create checkpoint: %s", error.Message());
@@ -293,6 +307,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &index_list = table_info->GetIndexes();
 		index_list.MergeCheckpointDeltas(options.transaction_id);
 	}
+	active_checkpoint.Clear();
 }
 
 void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {

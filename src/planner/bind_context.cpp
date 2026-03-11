@@ -85,6 +85,10 @@ optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_n
 		return nullptr;
 	}
 	auto &using_bindings = entry->second;
+	if (using_bindings.empty()) {
+		throw InternalException("Using binding found but no entries");
+	}
+
 	if (using_bindings.size() > 1) {
 		string error = "Ambiguous column reference: column \"" + column_name + "\" can refer to either:\n";
 		for (auto &using_set_ref : using_bindings) {
@@ -104,10 +108,7 @@ optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_n
 		}
 		throw BinderException(error);
 	}
-	for (auto &using_set : using_bindings) {
-		return &using_set.get();
-	}
-	throw InternalException("Using binding found but no entries");
+	return &using_bindings.begin()->get();
 }
 
 optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_name, const BindingAlias &binding) {

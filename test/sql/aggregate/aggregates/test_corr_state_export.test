@@ -1,0 +1,35 @@
+# name: test/sql/aggregate/aggregates/test_corr_state_export.test
+# description: Test the state export functionality for corr
+# group: [aggregates]
+
+require noforcestorage
+
+statement ok
+SET storage_compatibility_version = 'latest';
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# Test state export
+query T
+SELECT corr(d, d+1) export_state FROM dummy;
+----
+{'cov_pop': {'count': 100, 'mean_x': 50.5, 'mean_y': 49.5, 'co_moment': 83325.0}, 'dev_pop_x': {'count': 100, 'mean': 50.5, 'dsquared': 83325.0}, 'dev_pop_y': {'count': 100, 'mean': 49.5, 'dsquared': 83325.0}}
+
+# Test finalize and export state
+query II
+SELECT corr(d, d+1), finalize(corr(d, d+1) EXPORT_STATE) FROM dummy;
+----
+1.0	1.0
+
+# Test finalize on multiple states
+statement ok
+CREATE TABLE state AS SELECT g, corr(d, d+1) EXPORT_STATE corr_state FROM dummy GROUP BY g;
+
+query II nosort res_combine
+SELECT g, corr(d, d+1) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res_combine
+SELECT g, finalize(corr_state) FROM state ORDER BY g;
+----

@@ -1,0 +1,95 @@
+# name: test/sql/aggregate/aggregates/test_combine_aggr.test
+# description: Test the combine_aggr aggregate function. Based on `test_state_export_struct.test`
+# group: [aggregates]
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# Basic functionality and equivalence
+statement ok
+create table states as select g, avg(d) export_state state from dummy group by g;
+
+# Equivalent to the direct avg
+query I res0
+select finalize(combine_aggr(state))::integer from states;
+----
+50
+
+query I res0
+select avg(d)::integer from dummy;
+----
+50
+
+# combine_aggr on groups
+query II rowsort
+select g < 5 as bucket, finalize(combine_aggr(state))::integer from states group by bucket;
+----
+0	52
+1	47
+
+# Handling NULLs
+statement ok
+insert into states values (1, NULL);
+
+query I
+select finalize(combine_aggr(state))::integer from states;
+----
+50
+
+# Empty input
+query I
+select finalize(combine_aggr(state)) from states where false;
+----
+NULL
+
+# Single row input
+query I
+select finalize(combine_aggr(state))::integer from states where g = 0;
+----
+45
+
+# Persistence
+load __TEST_DIR__/test_combine_aggr_persistence.db
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+statement ok
+create table states as select g, avg(d) export_state state from dummy group by g;
+
+statement ok
+create table combined_states as select combine_aggr(state) as global_state from states;
+
+statement ok
+create view combined_view as select combine_aggr(state) as global_state from states;
+
+restart
+
+query I
+select finalize(global_state)::integer from combined_states;
+----
+50
+
+query I
+select finalize(global_state)::integer from combined_view;
+----
+50
+
+# Chaining
+query I
+select finalize(combine(combine_aggr(state), (select avg(d) export_state from dummy where d < 10)))::integer from states;
+----
+45
+
+# Can't finalize twice
+statement error
+select finalize(finalize(combine_aggr(state))) from states;
+----
+
+# Can't call the aggregate combine on a legacy aggregate state
+statement ok
+CREATE TABLE legacy_states AS (SELECT g, (min(d) export_state) state FROM dummy GROUP BY g);
+
+statement error
+select combine_aggr(state) from legacy_states;
+----

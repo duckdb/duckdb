@@ -26,6 +26,7 @@ vector<CreateSecretFunction> CreateHTTPSecretFunctions::GetDefaultSecretFunction
 	http_config_fun.provider = "config";
 	http_config_fun.function = CreateHTTPSecretFromConfig;
 
+	http_config_fun.named_parameters["verify_ssl"] = LogicalType::BOOLEAN;
 	http_config_fun.named_parameters["http_proxy"] = LogicalType::VARCHAR;
 	http_config_fun.named_parameters["http_proxy_password"] = LogicalType::VARCHAR;
 	http_config_fun.named_parameters["http_proxy_username"] = LogicalType::VARCHAR;
@@ -41,6 +42,7 @@ vector<CreateSecretFunction> CreateHTTPSecretFunctions::GetDefaultSecretFunction
 	http_env_fun.provider = "env";
 	http_env_fun.function = CreateHTTPSecretFromEnv;
 
+	http_env_fun.named_parameters["verify_ssl"] = LogicalType::BOOLEAN;
 	http_env_fun.named_parameters["http_proxy"] = LogicalType::VARCHAR;
 	http_env_fun.named_parameters["http_proxy_password"] = LogicalType::VARCHAR;
 	http_env_fun.named_parameters["http_proxy_username"] = LogicalType::VARCHAR;
@@ -78,6 +80,7 @@ unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromEnv(Client
 	}
 
 	// Allow overwrites
+	secret->TrySetValue("verify_ssl", input);
 	secret->TrySetValue("http_proxy", input);
 	secret->TrySetValue("http_proxy_password", input);
 	secret->TrySetValue("http_proxy_username", input);
@@ -92,6 +95,7 @@ unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromConfig(Cli
                                                                              CreateSecretInput &input) {
 	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
 
+	secret->TrySetValue("verify_ssl", input);
 	secret->TrySetValue("http_proxy", input);
 	secret->TrySetValue("http_proxy_password", input);
 	secret->TrySetValue("http_proxy_username", input);
