@@ -774,18 +774,10 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	pending_skips = 0;
 
 	auto to_skip = num_values;
-	ResizeableBuffer skip_defines;
-	ResizeableBuffer skip_repeats;
-	auto skip_define_out = define_out;
-	auto skip_repeat_out = repeat_out;
-	if (HasDefines()) {
-		skip_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
-		skip_define_out = skip_defines.ptr;
-	}
-	if (HasRepeats()) {
-		skip_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
-		skip_repeat_out = skip_repeats.ptr;
-	}
+	data_t skip_defines[STANDARD_VECTOR_SIZE] = {};
+	data_t skip_repeats[STANDARD_VECTOR_SIZE];
+	data_ptr_t skip_define_out = HasDefines() ? skip_defines : define_out;
+	data_ptr_t skip_repeat_out = HasRepeats() ? skip_repeats : repeat_out;
 	// start reading but do not apply skips (we are skipping now)
 	BeginRead(nullptr, nullptr);
 
