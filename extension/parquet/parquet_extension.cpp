@@ -658,7 +658,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->geoparquet_version =
 	    deserializer.ReadPropertyWithExplicitDefault(116, "geoparquet_version", default_value.geoparquet_version);
 	data->shredding_types =
-	    deserializer.ReadPropertyWithExplicitDefault<ShreddingType>(117, "shredding_types", default_value.shredding_types);
+	    deserializer.ReadPropertyWithExplicitDefault<ShreddingType>(117, "shredding_types", ShreddingType());
 	data->timestamp_is_adjusted_to_utc = deserializer.ReadPropertyWithExplicitDefault(
 	    118, "timestamp_is_adjusted_to_utc", default_value.timestamp_is_adjusted_to_utc);
 
