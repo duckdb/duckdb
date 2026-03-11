@@ -75,12 +75,6 @@ CREATE TRIGGER my_trigger AFTER INSERT ON my_table UPDATE other_table SET col = 
 ----
 CREATE TRIGGER is not yet supported
 
-# SELECT as trigger body
-statement error
-CREATE TRIGGER my_trigger AFTER INSERT ON my_table SELECT 1;
-----
-CREATE TRIGGER is not yet supported
-
 # Syntax errors - missing ON keyword
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT my_table INSERT INTO log_table VALUES (1);

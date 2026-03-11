@@ -615,6 +615,8 @@ private:
 	                                                      optional_ptr<ParseResult> parse_result);
 	static vector<string> TransformTriggerColumnList(PEGTransformer &transformer,
 	                                                 optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformTriggerBody(PEGTransformer &transformer,
+	                                                     optional_ptr<ParseResult> parse_result);
 
 	// deallocate.gram
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,

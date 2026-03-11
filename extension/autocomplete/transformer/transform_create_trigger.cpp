@@ -91,4 +91,12 @@ vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer 
 	return result;
 }
 
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformTriggerBody(PEGTransformer &transformer,
+                                                                     optional_ptr<ParseResult> parse_result) {
+	// TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
+}
+
 } // namespace duckdb

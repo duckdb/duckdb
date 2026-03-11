@@ -327,6 +327,7 @@ void PEGTransformerFactory::RegisterCreateTrigger() {
 	REGISTER_TRANSFORM(TransformTriggerEventUpdate);
 	REGISTER_TRANSFORM(TransformTriggerEventUpdateOf);
 	REGISTER_TRANSFORM(TransformTriggerColumnList);
+	REGISTER_TRANSFORM(TransformTriggerBody);
 }
 
 void PEGTransformerFactory::RegisterDeallocate() {
