@@ -1,14 +1,13 @@
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -36,10 +35,15 @@ public:
 		}
 	}
 
-	mutex delete_lock;
-	idx_t deleted_count;
+	//! Protects deleted_row_ids and return_collection Combine()
+	annotated_mutex return_lock;
+	//! Conservatively protect delete-index maintenance (unique indexes)
+	annotated_mutex index_lock;
+
+	atomic<idx_t> deleted_count;
 	ColumnDataCollection return_collection;
-	unordered_set<row_t> deleted_row_ids;
+	//! Global set of deleted row_ids (for cross-thread dedup in Sink; only accessed under return_lock)
+	unordered_set<row_t> deleted_row_ids DUCKDB_GUARDED_BY(return_lock);
 	LocalAppendState delete_index_append_state;
 	bool has_unique_indexes;
 };
@@ -57,11 +61,24 @@ public:
 
 		auto &storage = table.GetStorage();
 		delete_state = storage.InitializeDelete(table, context, bound_constraints);
+
+		if (return_chunk) {
+			// Collect RETURNING rows per-thread, merge into global in Combine()
+			return_collection = make_uniq<ColumnDataCollection>(context, return_types);
+			// Per-thread set of deleted row_ids (filters intra-thread duplicates lock-free)
+			deleted_row_ids = make_uniq<unordered_set<row_t>>();
+			// Reusable buffer for global-pass selection to avoid per-chunk allocation
+			final_sel.Initialize(STANDARD_VECTOR_SIZE);
+		}
 	}
 
 public:
 	DataChunk delete_chunk;
 	unique_ptr<TableDeleteState> delete_state;
+	unique_ptr<ColumnDataCollection> return_collection;
+	unique_ptr<unordered_set<row_t>> deleted_row_ids;
+	//! Reusable selection for global row_id pass (avoids allocation in Sink hot path)
+	SelectionVector final_sel;
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -69,16 +86,66 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &l_state = input.local_state.Cast<DeleteLocalState>();
 
 	auto &row_ids = chunk.data[row_id_index];
+	row_ids.Flatten(chunk.size());
 
-	lock_guard<mutex> delete_guard(g_state.delete_lock);
+	// Fast path: no RETURNING and no unique indexes
 	if (!return_chunk && !g_state.has_unique_indexes) {
-		g_state.deleted_count += table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
+		auto deleted = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
+		g_state.deleted_count.fetch_add(deleted);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
 	auto types = table.GetTypes();
 	l_state.delete_chunk.Reset();
-	row_ids.Flatten(chunk.size());
+
+	SelectionVector delete_sel(chunk.size());
+	idx_t delete_count = chunk.size();
+	Vector delete_row_ids(row_ids);
+
+	// If RETURNING is enabled, deduplicate row_ids: per-thread set (lock-free) then global set (batched lock).
+	if (return_chunk) {
+		D_ASSERT(l_state.deleted_row_ids);
+		auto flat_ids = FlatVector::GetData<row_t>(row_ids);
+		idx_t count = 0;
+		for (idx_t i = 0; i < chunk.size(); i++) {
+			auto row_id = flat_ids[i];
+			if (l_state.deleted_row_ids->insert(row_id).second) {
+				delete_sel.set_index(count++, i);
+			}
+		}
+		if (count == 0) {
+			return SinkResultType::NEED_MORE_INPUT;
+		}
+		{
+			annotated_lock_guard<annotated_mutex> guard(g_state.return_lock);
+			idx_t final_count = 0;
+			unique_ptr<SelectionVector> large_sel;
+			SelectionVector *write_sel = (count <= STANDARD_VECTOR_SIZE) ? &l_state.final_sel : nullptr;
+			if (!write_sel) {
+				large_sel = make_uniq<SelectionVector>(chunk.size());
+				write_sel = large_sel.get();
+			}
+			for (idx_t i = 0; i < count; i++) {
+				auto orig_idx = delete_sel[i];
+				auto row_id = flat_ids[orig_idx];
+				if (g_state.deleted_row_ids.insert(row_id).second) {
+					write_sel->set_index(final_count++, orig_idx);
+				}
+			}
+			if (final_count == 0) {
+				return SinkResultType::NEED_MORE_INPUT;
+			}
+			delete_count = final_count;
+			if (write_sel == &l_state.final_sel) {
+				delete_sel.Initialize(l_state.final_sel.data());
+			} else {
+				delete_sel = std::move(*large_sel);
+			}
+		}
+		if (delete_count != chunk.size()) {
+			delete_row_ids.Slice(row_ids, delete_sel, delete_count);
+		}
+	}
 
 	// Use columns from the input chunk - they were passed through from the scan
 	// return_columns maps storage_idx -> chunk_idx
@@ -100,9 +167,15 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 	l_state.delete_chunk.SetCardinality(chunk.size());
 
+	// Slice down to the claimed rows (RETURNING only)
+	if (return_chunk && delete_count != chunk.size()) {
+		l_state.delete_chunk.Slice(delete_sel, delete_count);
+	}
+
 	// Append the deleted row IDs to the delete indexes.
 	// If we only delete local row IDs, then the delete_chunk is empty.
 	if (g_state.has_unique_indexes && l_state.delete_chunk.size() != 0) {
+		annotated_lock_guard<annotated_mutex> index_guard(g_state.index_lock);
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
@@ -111,48 +184,39 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 				continue;
 			}
 			auto &bound_index = index.Cast<BoundIndex>();
-			auto error = bound_index.Append(l_state.delete_chunk, row_ids, index_append_info);
+			auto error = bound_index.Append(l_state.delete_chunk, delete_row_ids, index_append_info);
 			if (error.HasError()) {
 				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
 			}
 		}
 	}
 
-	auto deleted_count = table.Delete(*l_state.delete_state, context.client, row_ids, chunk.size());
-	g_state.deleted_count += deleted_count;
+	auto deleted = table.Delete(*l_state.delete_state, context.client, delete_row_ids, delete_count);
+	g_state.deleted_count.fetch_add(deleted);
 
-	// Append the return_chunk to the return collection.
+	// Collect RETURNING rows per-thread; merge into global in Combine()
 	if (return_chunk) {
-		// Rows can be duplicated, so we get the chunk indexes for new row id values.
-		map<row_t, idx_t> new_row_ids_deleted;
-		auto flat_ids = FlatVector::GetData<row_t>(row_ids);
-		for (idx_t i = 0; i < chunk.size(); i++) {
-			// If the row has not been deleted previously
-			// and is not a duplicate within the current chunk,
-			// then we add it to new_row_ids_deleted.
-			auto row_id = flat_ids[i];
-			auto already_deleted = g_state.deleted_row_ids.find(row_id) != g_state.deleted_row_ids.end();
-			auto newly_deleted = new_row_ids_deleted.find(row_id) != new_row_ids_deleted.end();
-			if (!already_deleted && !newly_deleted) {
-				new_row_ids_deleted[row_id] = i;
-				g_state.deleted_row_ids.insert(row_id);
-			}
-		}
-
-		D_ASSERT(new_row_ids_deleted.size() == deleted_count);
-		if (deleted_count < l_state.delete_chunk.size()) {
-			SelectionVector delete_sel(0, deleted_count);
-			idx_t chunk_index = 0;
-			for (auto &row_id_to_chunk_index : new_row_ids_deleted) {
-				delete_sel.set_index(chunk_index, row_id_to_chunk_index.second);
-				chunk_index++;
-			}
-			l_state.delete_chunk.Slice(delete_sel, deleted_count);
-		}
-		g_state.return_collection.Append(l_state.delete_chunk);
+		D_ASSERT(l_state.return_collection);
+		D_ASSERT(deleted == delete_count);
+		l_state.return_collection->Append(l_state.delete_chunk);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+SinkCombineResultType PhysicalDelete::Combine(ExecutionContext &, OperatorSinkCombineInput &input) const {
+	if (!return_chunk) {
+		return SinkCombineResultType::FINISHED;
+	}
+	auto &g_state = input.global_state.Cast<DeleteGlobalState>();
+	auto &l_state = input.local_state.Cast<DeleteLocalState>();
+	if (!l_state.return_collection || l_state.return_collection->Count() == 0) {
+		return SinkCombineResultType::FINISHED;
+	}
+	// Merge per-thread return_collection into global (deleted_row_ids is only needed during Sink)
+	annotated_lock_guard<annotated_mutex> guard(g_state.return_lock);
+	g_state.return_collection.Combine(*l_state.return_collection);
+	return SinkCombineResultType::FINISHED;
 }
 
 unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &context) const {
@@ -172,15 +236,32 @@ public:
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<DeleteGlobalState>();
-			g.return_collection.InitializeScan(scan_state);
+			g.return_collection.InitializeScan(global_scan_state);
+			max_threads = MaxValue<idx_t>(g.return_collection.ChunkCount(), 1);
+		} else {
+			max_threads = 1;
 		}
 	}
 
-	ColumnDataScanState scan_state;
+	idx_t MaxThreads() override {
+		return max_threads;
+	}
+
+	ColumnDataParallelScanState global_scan_state;
+	idx_t max_threads;
+};
+
+class DeleteLocalSourceState : public LocalSourceState {
+public:
+	ColumnDataLocalScanState local_scan_state;
 };
 
 unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<DeleteSourceState>(*this);
+}
+
+unique_ptr<LocalSourceState> PhysicalDelete::GetLocalSourceState(ExecutionContext &, GlobalSourceState &) const {
+	return make_uniq<DeleteLocalSourceState>();
 }
 
 SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -189,11 +270,12 @@ SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, Data
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.deleted_count)));
+		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.deleted_count.load())));
 		return SourceResultType::FINISHED;
 	}
 
-	g.return_collection.Scan(state.scan_state, chunk);
+	auto &lstate = input.local_state.Cast<DeleteLocalSourceState>();
+	g.return_collection.Scan(state.global_scan_state, lstate.local_scan_state, chunk);
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 

@@ -34,7 +34,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index);
+	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case);
 	MatcherAllocator allocator;
 	auto &matcher = Matcher::RootMatcher(allocator);
 	auto match_result = matcher.MatchParseResult(state);
@@ -385,6 +385,8 @@ void PEGTransformerFactory::RegisterExport() {
 
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
+	REGISTER_TRANSFORM(TransformExpressionStatement);
+	REGISTER_TRANSFORM(TransformExpressionAlias);
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLambdaArrowExpression);
@@ -411,6 +413,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformComparisonOperator);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
 	REGISTER_TRANSFORM(TransformOtherOperator);
+	REGISTER_TRANSFORM(TransformQualifiedOperator);
+	REGISTER_TRANSFORM(TransformAnyOp);
 	REGISTER_TRANSFORM(TransformStringOperator);
 	REGISTER_TRANSFORM(TransformJsonOperator);
 	REGISTER_TRANSFORM(TransformInetOperator);
@@ -685,6 +689,8 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformColIdExpression);
 	REGISTER_TRANSFORM(TransformExpressionOptIdentifier);
 	REGISTER_TRANSFORM(TransformTableAlias);
+	REGISTER_TRANSFORM(TransformTableAliasAs);
+	REGISTER_TRANSFORM(TransformTableAliasWithoutAs);
 	REGISTER_TRANSFORM(TransformColumnAliases);
 	REGISTER_TRANSFORM(TransformNamedParameter);
 	REGISTER_TRANSFORM(TransformTableRef);

@@ -157,7 +157,7 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
                                                       OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	if (filter_pushdown && !gstate.skip_filter_pushdown) {
-		(void)filter_pushdown->Finalize(client, nullptr, *gstate.global_filter_state, *this);
+		(void)filter_pushdown->Finalize(client, *gstate.global_filter_state, *this);
 	}
 
 	gstate.table->Finalize(client, input.interrupt_state);

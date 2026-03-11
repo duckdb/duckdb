@@ -97,7 +97,7 @@ struct DBConfigOptions {
 	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
-	//! Checkpoint when WAL reaches this size (default: 16MB)
+	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
@@ -253,13 +253,14 @@ public:
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
 	//! Returns the list of possible compression functions for the physical type.
-	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const PhysicalType physical_type);
+	DUCKDB_API vector<reference<const CompressionFunction>>
+	GetCompressionFunctions(const PhysicalType physical_type) const;
 	//! Returns the compression function matching the compression and physical type.
 	//! Throws an error if the function does not exist.
-	DUCKDB_API reference<CompressionFunction> GetCompressionFunction(CompressionType type,
-	                                                                 const PhysicalType physical_type);
-	DUCKDB_API optional_ptr<CompressionFunction> TryGetCompressionFunction(CompressionType type,
-	                                                                       const PhysicalType physical_type);
+	DUCKDB_API reference<const CompressionFunction> GetCompressionFunction(CompressionType type,
+	                                                                       const PhysicalType physical_type) const;
+	DUCKDB_API optional_ptr<const CompressionFunction>
+	TryGetCompressionFunction(CompressionType type, const PhysicalType physical_type) const;
 	//! Sets the disabled compression methods
 	DUCKDB_API void SetDisabledCompressionMethods(const vector<CompressionType> &disabled_compression_methods);
 	//! Returns a list of disabled compression methods

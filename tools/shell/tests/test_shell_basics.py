@@ -555,6 +555,14 @@ def test_jsonlines(shell):
     result = test.run()
     result.check_stdout('{"42":42,"43":43}')
 
+def test_jsonlines_cmdline(shell):
+    test = (
+        ShellTest(shell, ['-jsonlines'])
+        .statement("SELECT 42,43;")
+    )
+    result = test.run()
+    result.check_stdout('{"42":42,"43":43}')
+
 def test_nested_jsonlines(shell):
     test = (
         ShellTest(shell)
@@ -1249,5 +1257,12 @@ def test_open_with_sql_and_null_return(shell):
     )
     result = test.run()
     result.check_stderr("Error: --sql query returned a null value")
+
+
+def test_about(shell):
+    test = ShellTest(shell).statement(".about")
+
+    result = test.run()
+    result.check_stdout("DuckDB is an in-process analytical database management system designed for fast ")
 
 # fmt: on

@@ -49,6 +49,8 @@ create_value(val::T) where {T <: Time} = Value(duckdb_create_time(Dates.value(va
 create_value(val::T) where {T <: DateTime} =
     Value(duckdb_create_timestamp((Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000))
 create_value(val::T) where {T <: AbstractString} = Value(duckdb_create_varchar_length(val, length(val)))
+create_value(::Missing) = Value(duckdb_create_null_value())
+create_value(val::Vector{UInt8}) = Value(duckdb_create_blob(val, length(val)))
 function create_value(val::AbstractVector{T}) where {T}
     type = create_logical_type(T)
     values = create_value.(val)

@@ -18,6 +18,10 @@ TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, MemoryTag tag, idx
 	handle = buffer_handle.GetBlockHandle();
 }
 
+TupleDataBlock::TupleDataBlock(shared_ptr<BlockHandle> handle_p, idx_t capacity_p)
+    : handle(std::move(handle_p)), capacity(capacity_p), size(0) {
+}
+
 TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept : capacity(0), size(0) {
 	std::swap(handle, other.handle);
 	std::swap(capacity, other.capacity);
@@ -227,11 +231,7 @@ TupleDataAllocator::BuildChunkPart(TupleDataSegment &segment, TupleDataPinState 
 
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
-		CreateRowBlock(segment);
-		if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
-			row_blocks.back().handle->GetMemory().SetEvictionQueueIndex(
-			    RadixPartitioning::RadixBits(partition_index.GetIndex()));
-		}
+		CreateRowBlock(segment, pin_state);
 	}
 	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
 	auto &row_block = row_blocks[result.row_block_index];
@@ -283,11 +283,7 @@ TupleDataAllocator::BuildChunkPart(TupleDataSegment &segment, TupleDataPinState 
 				// Allocate heap block (if needed)
 				if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
 					const auto size = MaxValue<idx_t>(block_size, heap_sizes[append_offset]);
-					CreateHeapBlock(segment, size);
-					if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
-						heap_blocks.back().handle->GetMemory().SetEvictionQueueIndex(
-						    RadixPartitioning::RadixBits(partition_index.GetIndex()));
-					}
+					CreateHeapBlock(segment, pin_state, size);
 				}
 				result.heap_block_index = NumericCast<uint32_t>(heap_blocks.size() - 1);
 				auto &heap_block = heap_blocks[result.heap_block_index];
@@ -780,14 +776,29 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment
 	} while (found_handle);
 }
 
-void TupleDataAllocator::CreateRowBlock(TupleDataSegment &segment) {
-	row_blocks.emplace_back(buffer_manager, tag, buffer_manager.GetBlockSize());
+void TupleDataAllocator::CreateRowBlock(TupleDataSegment &segment, TupleDataPinState &pin_state) {
+	auto block_size = buffer_manager.GetBlockSize();
+	auto buffer_handle = buffer_manager.Allocate(tag, block_size, false);
+	auto block_handle = buffer_handle.GetBlockHandle();
+	if (partition_index.IsValid()) {
+		block_handle->GetMemory().SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+	}
+	auto block_index = NumericCast<uint32_t>(row_blocks.size());
+	row_blocks.emplace_back(std::move(block_handle), block_size);
 	segment.pinned_row_handles.resize(row_blocks.size());
+	pin_state.row_handles.emplace(block_index, std::move(buffer_handle));
 }
 
-void TupleDataAllocator::CreateHeapBlock(TupleDataSegment &segment, idx_t size) {
-	heap_blocks.emplace_back(buffer_manager, tag, size);
+void TupleDataAllocator::CreateHeapBlock(TupleDataSegment &segment, TupleDataPinState &pin_state, idx_t size) {
+	auto buffer_handle = buffer_manager.Allocate(tag, size, false);
+	auto block_handle = buffer_handle.GetBlockHandle();
+	if (partition_index.IsValid()) {
+		block_handle->GetMemory().SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+	}
+	auto block_index = NumericCast<uint32_t>(heap_blocks.size());
+	heap_blocks.emplace_back(std::move(block_handle), size);
 	segment.pinned_heap_handles.resize(heap_blocks.size());
+	pin_state.heap_handles.emplace(block_index, std::move(buffer_handle));
 }
 
 BufferHandle &TupleDataAllocator::PinRowBlock(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {

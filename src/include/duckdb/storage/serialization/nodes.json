@@ -188,6 +188,11 @@
         "name": "seed",
         "type": "int64_t",
         "serialize_property": "GetSeed()"
+      },
+      {
+        "id": 104,
+        "name": "repeatable",
+        "type": "bool"
       }
     ],
     "constructor": ["seed"]
@@ -419,7 +424,7 @@
       {
         "id": 100,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 101,
@@ -1145,21 +1150,26 @@
       },
       {
         "id": 103,
+        "name": "null_order",
+        "type": "OrderByNullType"
+      },
+      {
+        "id": 104,
         "name": "column_type",
         "type": "OrderByColumnType"
       },
       {
-        "id": 104,
+        "id": 105,
         "name": "row_limit",
         "type": "optional_idx"
       },
       {
-        "id": 105,
+        "id": 106,
         "name": "row_group_offset",
         "type": "idx_t"
       }
     ],
-    "constructor": ["column_idx", "order_by", "order_type", "column_type", "row_limit", "row_group_offset"]
+    "constructor": ["column_idx", "order_by", "order_type", "null_order", "column_type",  "row_limit", "row_group_offset"]
   },
   {
     "class": "StorageIndex",

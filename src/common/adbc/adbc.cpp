@@ -2085,7 +2085,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 
 				SELECT
 					catalog_name,
-					LIST({
+					COALESCE(LIST({
 						db_schema_name: schema_name,
 						db_schema_tables: []::STRUCT(
 							table_name VARCHAR,
@@ -2118,7 +2118,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 								constraint_column_usage STRUCT(fk_catalog VARCHAR, fk_db_schema VARCHAR, fk_table VARCHAR, fk_column_name VARCHAR)[]
 							)[]
 						)[],
-					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null), []) catalog_db_schemas
 				FROM
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs
@@ -2174,7 +2174,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					SELECT
 						catalog_name,
 						schema_name,
-						db_schema_tables,
+						COALESCE(db_schema_tables, []) AS db_schema_tables,
 					FROM information_schema.schemata
 					LEFT JOIN tables
 					USING (catalog_name, schema_name)
@@ -2183,10 +2183,10 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 
 				SELECT
 					catalog_name,
-					LIST({
+					COALESCE(LIST({
 						db_schema_name: schema_name,
 						db_schema_tables: db_schema_tables,
-					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null), []) catalog_db_schemas
 				FROM
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs
@@ -2267,8 +2267,8 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 						LIST({
 							table_name: table_name,
 							table_type: table_type,
-							table_columns: table_columns,
-							table_constraints: table_constraints,
+							table_columns: COALESCE(table_columns, []),
+							table_constraints: COALESCE(table_constraints, []),
 						}) db_schema_tables
 					FROM information_schema.tables
 					LEFT JOIN columns
@@ -2282,7 +2282,7 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 					SELECT
 						catalog_name,
 						schema_name,
-						db_schema_tables,
+						COALESCE(db_schema_tables, []) AS db_schema_tables,
 					FROM information_schema.schemata
 					LEFT JOIN tables
 					USING (catalog_name, schema_name)
@@ -2291,10 +2291,10 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 
 				SELECT
 					catalog_name,
-					LIST({
+					COALESCE(LIST({
 						db_schema_name: schema_name,
 						db_schema_tables: db_schema_tables,
-					}) FILTER (dbs.schema_name is not null) catalog_db_schemas
+					}) FILTER (dbs.schema_name is not null), []) catalog_db_schemas
 				FROM
 					information_schema.schemata
 				LEFT JOIN db_schemas dbs

@@ -80,16 +80,26 @@ jobs:
     needs:
       - load-extension-configs
       - vars
-    uses: ./.github/workflows/_extension_distribution.yml
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      artifact_prefix: extensions
+      override_repository: duckdb/extension-template
+      override_ref: main
+      upload_all_extensions: true
+      extension_name: extensions
+      reduced_ci_mode: auto
+      set_caller_as_duckdb: true
+      duckdb_version: ${{ inputs.duckdb_ref }}
+      override_ci_tools_repository: duckdb/extension-ci-tools
+      ci_tools_version: main
       exclude_archs: ${{ needs.load-extension-configs.outputs.extension_exclude_archs }}
-      extension_config: ${{ needs.load-extension-configs.outputs.extension_config }}
-      override_tag: ${{ inputs.override_git_describe }}
-      override_duckdb_version: ${{ inputs.duckdb_ref }}
+      opt_in_archs: ''
+      extra_toolchains: 'rust'
+      use_merged_vcpkg_manifest: '1'
+      duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
-      extra_toolchains: 'rust'
+      extensions_test_selection: 'complete'
+      extra_extension_config: ${{ needs.load-extension-configs.outputs.extension_config }}
 
   # Merge all extensions into a single, versioned repository
   create-extension-repository:

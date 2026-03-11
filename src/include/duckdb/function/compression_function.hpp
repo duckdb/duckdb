@@ -331,28 +331,22 @@ public:
 
 //! The set of compression functions
 struct CompressionFunctionSet {
-	static constexpr idx_t COMPRESSION_TYPE_COUNT = 15;
+	static constexpr idx_t COMPRESSION_TYPE_COUNT = 16;
 	static constexpr idx_t PHYSICAL_TYPE_COUNT = 19;
 
 public:
 	CompressionFunctionSet();
 
-	vector<reference<CompressionFunction>> GetCompressionFunctions(PhysicalType physical_type);
-	optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType physical_type);
+	vector<reference<const CompressionFunction>> GetCompressionFunctions(PhysicalType physical_type);
+	optional_ptr<const CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType physical_type);
 	void SetDisabledCompressionMethods(const vector<CompressionType> &methods);
 	vector<CompressionType> GetDisabledCompressionMethods() const;
 
 private:
-	mutex lock;
 	atomic<bool> is_disabled[COMPRESSION_TYPE_COUNT];
-	atomic<bool> is_loaded[PHYSICAL_TYPE_COUNT];
 	vector<vector<CompressionFunction>> functions;
 
 private:
-	void LoadCompressionFunctions(PhysicalType physical_type);
-
-	static void TryLoadCompression(CompressionType type, PhysicalType physical_type,
-	                               vector<CompressionFunction> &result);
 	static idx_t GetCompressionIndex(PhysicalType physical_type);
 	static idx_t GetCompressionIndex(CompressionType type);
 	void ResetDisabledMethods();

@@ -10,6 +10,22 @@
 
 namespace duckdb_shell {
 
+MetadataResult ToggleAbout(ShellState &state, const vector<string> &args) {
+	string about_text = "DuckDB is an in-process analytical database management system designed for fast "
+	                    "execution of complex SQL queries. It runs embedded within its host process with "
+	                    "no external dependencies, and is optimized for OLAP workloads using a columnar, "
+	                    "vectorized execution engine.\n\n"
+	                    "Developed and maintained by the DuckDB Foundation, "
+	                    "available under the MIT License.\n"
+	                    "For more information, visit https://duckdb.org or "
+	                    "https://github.com/duckdb/duckdb.\n\n";
+
+	state.PrintF(PrintOutput::STDOUT, "DuckDB %s (%s)\n\n", duckdb::DuckDB::LibraryVersion(),
+	             duckdb::DuckDB::ReleaseCodename());
+	state.Print(PrintOutput::STDOUT, about_text);
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
 	state.bail_on_error = state.StringToBool(args[1]);
 	return MetadataResult::SUCCESS;
@@ -775,6 +791,7 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 }
 
 static const MetadataCommand metadata_commands[] = {
+    {"about", 0, ToggleAbout, "", "Show information about DuckDB", 0, ""},
     {"bail", 2, ToggleBail, "on|off", "Stop after hitting an error.  Default OFF", 3, ""},
     {"binary", 2, ToggleBinary, "on|off", "Turn binary output on or off.  Default OFF", 3, ""},
     {"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0, ""},
@@ -886,7 +903,7 @@ static const MetadataCommand metadata_commands[] = {
     {"render_errors", 2, ToggleErrorRendering, "on|off", "Toggle rendering of errors in the shell on/off", 0, ""},
 #endif
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0, ""},
-    {"safe_mode", 0, ShellState::EnableSafeMode, "", "enable safe-mode", 0, ""},
+    {"safe_mode", 0, ShellState::EnableSafeMode, "", "Enable safe-mode", 0, ""},
     {"separator", 0, ShellState::SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0,
      "Options:\n\t--indent\tTry to pretty-print the schema"},
