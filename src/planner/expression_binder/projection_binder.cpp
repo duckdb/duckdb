@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-ProjectionBinder::ProjectionBinder(Binder &binder, ClientContext &context, idx_t proj_index_p,
+ProjectionBinder::ProjectionBinder(Binder &binder, ClientContext &context, TableIndex proj_index_p,
                                    vector<unique_ptr<Expression>> &proj_expressions_p, string clause_p)
     : ExpressionBinder(binder, context), proj_index(proj_index_p), proj_expressions(proj_expressions_p),
       clause(std::move(clause_p)) {

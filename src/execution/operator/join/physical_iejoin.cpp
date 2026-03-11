@@ -501,17 +501,27 @@ struct IEJoinUnion {
 
 	idx_t SearchL1(idx_t pos);
 
+	//! Start the current row.
+	//! Returns false if there are no more rows to process
 	template <SortKeyType SORT_KEY_TYPE>
 	bool NextRow();
 
+	//! NextRow pointer to member for the sort key type.
 	using next_row_t = bool (duckdb::IEJoinUnion::*)();
 	next_row_t next_row_func;
+
+	//! Finish this row and move to the next one.
+	//! Returns false if there are no more rows to process
+	bool FinishRow() {
+		++i;
+		return (this->*next_row_func)();
+	}
 
 	//! Constructor arguments
 	IEJoinGlobalSourceState &gsource;
 
 	//! Inverted loop
-	idx_t JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel);
+	idx_t JoinBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel);
 
 	//! B
 	vector<validity_t> bit_array;
@@ -529,7 +539,7 @@ struct IEJoinUnion {
 	idx_t j;
 	unique_ptr<UnionIterator> op2;
 	unique_ptr<UnionIterator> off2;
-	int64_t lrid;
+	int64_t lrid = std::numeric_limits<int64_t>::max();
 
 	//! Li
 	IEJoinCursor<int64_t> li;
@@ -778,13 +788,16 @@ static idx_t NextValid(const ValidityMask &bits, idx_t j, const idx_t n) {
 	return j >= n ? n : j + CountZeros<validity_t>::Trailing(bits.GetValidityEntryUnsafe(entry_idx));
 }
 
-idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
+idx_t IEJoinUnion::JoinBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<idx_t> &rsel) {
 	// Release pinned blocks
 	op2->Repin();
 	off2->Repin();
 
 	// 8. initialize join result as an empty list for tuple pairs
 	idx_t result_count = 0;
+
+	lsel.resize(STANDARD_VECTOR_SIZE);
+	rsel.resize(STANDARD_VECTOR_SIZE);
 
 	// 11. for(i←1 to n) do
 	while (i < n) {
@@ -822,12 +835,14 @@ idx_t IEJoinUnion::JoinComplexBlocks(unsafe_vector<idx_t> &lsel, unsafe_vector<i
 				return result_count;
 			}
 		}
-		++i;
 
-		if (!(this->*next_row_func)()) {
+		if (!FinishRow()) {
 			break;
 		}
 	}
+
+	lsel.resize(result_count);
+	rsel.resize(result_count);
 
 	return result_count;
 }
@@ -942,8 +957,8 @@ public:
 
 	IEJoinLocalSourceState(ClientContext &client, IEJoinGlobalSourceState &gsource)
 	    : gsource(gsource), lsel(STANDARD_VECTOR_SIZE), rsel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
-	      left_executor(client), right_executor(client), pred_executor(client), left_matches(nullptr),
-	      right_matches(nullptr)
+	      left_executor(client), right_executor(client), simple_sel(STANDARD_VECTOR_SIZE), pred_executor(client),
+	      left_matches(nullptr), right_matches(nullptr)
 
 	{
 		auto &op = gsource.op;
@@ -1023,6 +1038,12 @@ public:
 	void ExecuteFinalizeL2Task(ExecutionContext &context, InterruptState &interrupt);
 	//	Materialize L2
 	void ExecuteMaterializeL2Task(ExecutionContext &context, InterruptState &interrupt);
+	// 	Resolve simple and complex inner joins
+	void ResolveInnerJoin(ExecutionContext &context, DataChunk &result);
+	//	Derive an SV that applies the remaining conditions
+	const SelectionVector *ApplyTailConditions();
+	// 	Resolve SEMI joins
+	void ResolveSemiJoin(ExecutionContext &context, DataChunk &result);
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, RIGHT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
 	//	Resolve left join results
@@ -1068,6 +1089,9 @@ public:
 	DataChunk right_keys;
 
 	DataChunk unprojected;
+
+	//! Simple join subselection
+	SelectionVector simple_sel;
 
 	//! Arbitrary expressions
 	ExpressionExecutor pred_executor;
@@ -1249,7 +1273,7 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 		gsource.ExecutePermutationTask(context.client);
 		break;
 	case IEJoinSourceStage::INNER:
-		ResolveComplexJoin(context, result);
+		ResolveInnerJoin(context, result);
 		break;
 	case IEJoinSourceStage::OUTER:
 		if (left_matches != nullptr) {
@@ -1261,10 +1285,154 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 	}
 }
 
+void IEJoinLocalSourceState::ResolveInnerJoin(ExecutionContext &context, DataChunk &result) {
+	switch (gsource.op.join_type) {
+	case JoinType::SEMI:
+		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
+		return ResolveSemiJoin(context, result);
+	case JoinType::LEFT:
+	case JoinType::INNER:
+	case JoinType::RIGHT:
+	case JoinType::OUTER:
+		return ResolveComplexJoin(context, result);
+	default:
+		throw NotImplementedException("Unimplemented join type for IEJoin!");
+	}
+}
+
+const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
+	auto &op = gsource.op;
+	const auto &conditions = op.conditions;
+	auto sel = FlatVector::IncrementalSelectionVector();
+	if (conditions.size() <= 2) {
+		return sel;
+	}
+
+	// If there are more expressions to compute,
+	// use the left and right payloads
+	// to we can compute the values for comparison.
+	const auto tail_cols = conditions.size() - 2;
+
+	left_executor.SetChunk(lpayload);
+	right_executor.SetChunk(rpayload);
+
+	auto result_count = lpayload.size();
+	auto tail_count = result_count;
+	auto match_sel = &true_sel;
+	for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
+		auto &left = left_keys.data[cmp_idx];
+		left_executor.ExecuteExpression(cmp_idx, left);
+
+		auto &right = right_keys.data[cmp_idx];
+		right_executor.ExecuteExpression(cmp_idx, right);
+
+		if (tail_count < result_count) {
+			left.Slice(*sel, tail_count);
+			right.Slice(*sel, tail_count);
+		}
+		tail_count =
+		    op.SelectJoinTail(conditions[cmp_idx + 2].GetComparisonType(), left, right, sel, tail_count, match_sel);
+		sel = match_sel;
+	}
+
+	if (tail_count < result_count) {
+		lpayload.Slice(*sel, tail_count);
+		rpayload.Slice(*sel, tail_count);
+	}
+
+	return sel;
+}
+
+void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChunk &result) {
+	auto &op = gsource.op;
+	const auto &conditions = op.conditions;
+	D_ASSERT(conditions.size() >= 2);
+
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+	auto &left_table = *ie_sink.tables[0];
+
+	do {
+		auto result_count = joiner->JoinBlocks(lsel, rsel);
+		if (result_count == 0) {
+			// exhausted this pair
+			joiner.reset();
+			return;
+		}
+
+		// Apply any remaining filters
+		if (conditions.size() > 2) {
+			//	Read all the LHS rows because we need to apply the filters to every possible match
+			left_table.Repin(*left_iterator);
+			op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, lsel,
+			                      *left_scan_state);
+
+			auto &right_table = *ie_sink.tables[1];
+			right_table.Repin(*right_iterator);
+			op.SliceSortedPayload(rpayload, right_table, *right_iterator, right_chunk_state, right_block_index, rsel,
+			                      *right_scan_state);
+
+			auto sel = ApplyTailConditions();
+
+			//	If we filtered out everything, go back for more
+			result_count = lpayload.size();
+			if (result_count == 0) {
+				continue;
+			}
+
+			//	Strip out remaining left side duplicates
+			idx_t unique_count = 0;
+			simple_sel.set_index(unique_count++, 0);
+			for (idx_t i = 1; i < result_count; ++i) {
+				const auto iprev = sel->get_index(i - 1);
+				const auto icurr = sel->get_index(i - 0);
+				if (lsel[icurr] == lsel[iprev]) {
+					continue;
+				}
+				simple_sel.set_index(unique_count, i);
+				lsel[unique_count++] = lsel[icurr];
+			}
+			lsel.resize(unique_count);
+
+			//	Slice the LHS down to the unique rows
+			if (unique_count < result_count) {
+				lpayload.Slice(simple_sel, unique_count);
+				result_count = unique_count;
+			}
+		} else {
+			//	Strip out left side duplicates
+			idx_t unique_count = 1;
+			for (idx_t i = 1; i < result_count; ++i) {
+				if (lsel[i] == lsel[i - 1]) {
+					continue;
+				}
+				lsel[unique_count++] = lsel[i];
+			}
+			lsel.resize(unique_count);
+			result_count = unique_count;
+
+			// Read the remaining unique rows
+			left_table.Repin(*left_iterator);
+			op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, lsel,
+			                      *left_scan_state);
+			lpayload.SetCardinality(result_count);
+		}
+
+		//	Handle chunk boundaries: If we found a match for the last value
+		//	then move to the next rid (which might be negative).
+		//	Note that the saved rid is offset by 1.
+		if (joiner->lrid > 0 && lsel[result_count - 1] == UnsafeNumericCast<idx_t>(joiner->lrid - 1)) {
+			joiner->FinishRow();
+		}
+
+		//	SEMI JOINs return all the columns from the LHS
+		result.Reference(lpayload);
+		result.Verify(context.client.db);
+	} while (result.size() == 0);
+}
+
 void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataChunk &result) {
 	auto &op = gsource.op;
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
-	const auto &conditions = op.conditions;
 
 	auto &chunk = unprojected;
 
@@ -1274,7 +1442,7 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 	auto &right_table = *ie_sink.tables[1];
 
 	do {
-		auto result_count = joiner->JoinComplexBlocks(lsel, rsel);
+		auto result_count = joiner->JoinBlocks(lsel, rsel);
 		if (result_count == 0) {
 			// exhausted this pair
 			joiner.reset();
@@ -1291,39 +1459,10 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		op.SliceSortedPayload(rpayload, right_table, *right_iterator, right_chunk_state, right_block_index, rsel,
 		                      *right_scan_state);
 
-		auto sel = FlatVector::IncrementalSelectionVector();
-		if (conditions.size() > 2) {
-			// If there are more expressions to compute,
-			// use the left and right payloads
-			// to we can compute the values for comparison.
-			const auto tail_cols = conditions.size() - 2;
-
-			left_executor.SetChunk(lpayload);
-			right_executor.SetChunk(rpayload);
-
-			auto tail_count = result_count;
-			auto match_sel = &true_sel;
-			for (size_t cmp_idx = 0; cmp_idx < tail_cols; ++cmp_idx) {
-				auto &left = left_keys.data[cmp_idx];
-				left_executor.ExecuteExpression(cmp_idx, left);
-
-				auto &right = right_keys.data[cmp_idx];
-				right_executor.ExecuteExpression(cmp_idx, right);
-
-				if (tail_count < result_count) {
-					left.Slice(*sel, tail_count);
-					right.Slice(*sel, tail_count);
-				}
-				tail_count = op.SelectJoinTail(conditions[cmp_idx + 2].GetComparisonType(), left, right, sel,
-				                               tail_count, match_sel);
-				sel = match_sel;
-			}
-
-			if (tail_count < result_count) {
-				result_count = tail_count;
-				lpayload.Slice(*sel, result_count);
-				rpayload.Slice(*sel, result_count);
-			}
+		auto sel = ApplyTailConditions();
+		result_count = lpayload.size();
+		if (!result_count) {
+			continue;
 		}
 
 		//	Merge the payloads
@@ -1340,6 +1479,9 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		//	Apply any arbitrary predicate
 		if (op.predicate) {
 			result_count = pred_executor.SelectExpression(chunk, pred_matches);
+			if (!result_count) {
+				continue;
+			}
 			chunk.Slice(pred_matches, result_count);
 			sel = &pred_matches;
 		}

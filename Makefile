@@ -24,9 +24,20 @@ PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
 SMOKE_UNITTEST ?= build/relassert/test/unittest
+UNITTEST_SLOW_FLAGS ?= --batch-timeout=1800 --track-runtime=300
+UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
+
+ifeq ($(CI),1)
+CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
+CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+ifndef CMAKE_BUILD_PARALLEL_LEVEL
+CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
+endif
+export CMAKE_BUILD_PARALLEL_LEVEL
+endif
 
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
@@ -392,12 +403,18 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
-	build/debug/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest $(T)
+
+unittest_reldebug:
+	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest $(T)
 
 unittest_release: release
-	build/release/test/unittest
+	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest $(T)
 
-allunit_relassert:
+unittest_release_tag:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/test/unittest $(T)
+
+unittest_relassert:
 	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
 
 smoke:
@@ -407,14 +424,19 @@ runnertests:
 	python3 -m unittest scripts.ci.test_run_tests
 
 unittestarrow:
-	build/debug/test/unittest "[arrow]"
-
+	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest "[arrow]"
 
 allunit:
 	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
 ifndef CI
 allunit: release
 endif
+
+unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
+unittest_threadsan: unittest_reldebug
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/test/unittest "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/test/unittest "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -445,16 +467,28 @@ relassert-artifact:
 release-artifact:
 	bash scripts/prepare_build_artifact.sh release
 
-.PHONY: toolsci
+define ensure_apt_commands
+	missing=0; \
+	for cmd in $(1); do \
+		command -v $$cmd >/dev/null 2>&1 || missing=1; \
+	done; \
+	if [ $$missing -eq 1 ]; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq $(2); \
+	fi
+endef
+
+.PHONY: toolsci format_tools
 
 toolsci:
-	if ! command -v ninja >/dev/null 2>&1 || ! command -v mold >/dev/null 2>&1; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq ninja-build mold; \
-	fi
+	$(call ensure_apt_commands,ninja mold ccache,ninja-build mold ccache)
 	ls -lh /usr/bin/gcc* /usr/bin/g++*
 	gcc --version
 	g++ --version
+
+format_tools:
+	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
+	sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
 
 benchmark:
 	mkdir -p ./build/release && \
@@ -522,7 +556,7 @@ third_party/sqllogictest:
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
-	./build/release/test/unittest "[sqlitelogic]"
+	$(PYTHON) scripts/ci/run_tests.py ./build/release/test/unittest "[sqlitelogic]"
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:

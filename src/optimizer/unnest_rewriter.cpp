@@ -236,7 +236,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> &plan, unique
 		}
 
 		// store all shifted current bindings
-		idx_t tbl_idx = proj.table_index;
+		auto tbl_idx = proj.table_index;
 		for (idx_t i = 0; i < proj.expressions.size(); i++) {
 			ReplaceBinding replace_binding(ColumnBinding(tbl_idx, i), ColumnBinding(tbl_idx, i + shift));
 			updater.replace_bindings.push_back(replace_binding);

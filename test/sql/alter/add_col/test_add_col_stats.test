@@ -25,7 +25,7 @@ SELECT * FROM test WHERE m=2
 ----
 2	2	2
 
-query I
-SELECT stats(m) FROM test LIMIT 1
+query II
+SELECT s.min, s.max FROM (SELECT stats(m) s FROM test LIMIT 1)
 ----
-<REGEX>:.*1.*2.*
+1	2

@@ -424,7 +424,7 @@
       {
         "id": 100,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 101,
