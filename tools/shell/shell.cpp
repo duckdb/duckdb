@@ -796,7 +796,7 @@ string ShellState::EscapeCString(const string &str) {
 
 void ShellState::Exit(int exit_code) {
 	// destroy the shell state
-	GetReference().reset();
+	(void) GetReference().release();
 	// then exit
 	exit(exit_code);
 }
