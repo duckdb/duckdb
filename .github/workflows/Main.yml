@@ -121,6 +121,7 @@ jobs:
       FORCE_DEBUG: 1
       FORCE_ASSERT: 1
       REDUCE_SYMBOLS: 1
+      EXTENSIONS_STATIC_BUILD: 0
 
     steps:
     - uses: actions/checkout@v4
