@@ -795,8 +795,8 @@ string ShellState::EscapeCString(const string &str) {
 }
 
 void ShellState::Exit(int exit_code) {
-	// destroy the shell state
-	(void) GetReference().release();
+	// clean-up shell state
+	Get().Destroy();
 	// then exit
 	exit(exit_code);
 }
@@ -3042,12 +3042,6 @@ void ShellState::Initialize() {
 #endif
 #endif
 
-struct ShellStateDestroyer {
-	~ShellStateDestroyer() {
-		ShellState::Get().Destroy();
-	}
-};
-
 void ShellState::DetectDarkLightMode() {
 #ifdef HAVE_LINENOISE
 	ShellHighlight highlight(*this);
@@ -3076,7 +3070,6 @@ void ShellState::DetectDarkLightMode() {
 int RunShell(int argc, const char **argv) {
 	int rc = 0;
 	vector<string> extra_commands;
-	ShellStateDestroyer destroyer;
 
 	auto &data = ShellState::Get();
 	data.out = stdout;
@@ -3296,6 +3289,9 @@ int wmain(int argc, wchar_t **wargv) {
 	}
 	try {
 		// destroy shell state prior to program clean-up
+		if (shell_state) {
+			shell_state->Destroy();
+		}
 		shell_state.reset();
 	} catch (std::exception &ex) {
 		rc = 1;
