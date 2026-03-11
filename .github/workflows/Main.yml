@@ -53,6 +53,7 @@ jobs:
       (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
     outputs:
+      runner_linux_small: ${{ steps.select_runner.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
       runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
@@ -73,6 +74,7 @@ jobs:
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
             {
+              echo "runner_linux_small=namespace-profile-linux-small"
               echo "runner_linux_x64=namespace-profile-linux-x64"
               echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
               echo "runner_linux_arm64=namespace-profile-linux-arm64"
@@ -80,6 +82,7 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           else
             {
+              echo "runner_linux_small=ubuntu-latest"
               echo "runner_linux_x64=ubuntu-latest"
               echo "runner_linux_22_x64=ubuntu-22.04"
               echo "runner_linux_arm64=ubuntu-24.04-arm"
@@ -463,8 +466,10 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
-    runs-on: ubuntu-24.04
-    needs: linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: clang
       CXX: clang++
