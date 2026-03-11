@@ -56,7 +56,6 @@ DBConfig::DBConfig() {
 	secret_manager = make_uniq<SecretManager>();
 	http_util = make_shared_ptr<HTTPUtil>();
 	callback_manager = make_uniq<ExtensionCallbackManager>();
-	callback_manager->Register("__open_file__", OpenFileStorageExtension::Create());
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
@@ -475,6 +474,9 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.callback_manager = std::move(new_config.callback_manager);
 		new_config.callback_manager = make_uniq<ExtensionCallbackManager>();
 	}
+	// This is used to open e.g. parquet files. See DBPathAndType::CheckMagicBytes
+	config.callback_manager->Register("__open_file__", OpenFileStorageExtension::Create());
+
 	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
 		config.error_manager = make_uniq<ErrorManager>();
