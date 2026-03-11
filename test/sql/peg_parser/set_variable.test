@@ -5,7 +5,7 @@
 require autocomplete
 
 statement ok 
-SET allow_parser_override_extension = strict;
+call enable_peg_parser(); 
 
 statement ok
 x := 5; 
