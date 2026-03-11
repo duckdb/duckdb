@@ -476,8 +476,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 		if (!gstate.external) {
 			// We haven't yet triggered out-of-core behavior, but maybe we don't have to, grab the lock and check again
 			const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
-			thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
-			if (total_size > thread_limit) {
+			if (total_size > gstate.GetThreadLimit()) {
 				// Out-of-core would be triggered below, update minimum reservation and try to increase the reservation
 				temporary_memory_state.SetMinimumReservation(aggregate_allocator_size * gstate.number_of_threads +
 				                                             gstate.minimum_reservation);
