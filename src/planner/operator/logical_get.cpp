@@ -109,7 +109,7 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	}
 	vector<ColumnBinding> result;
 	if (projection_ids.empty()) {
-		for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		for (auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
 			result.emplace_back(table_index, ProjectionIndex(col_idx));
 		}
 	} else {

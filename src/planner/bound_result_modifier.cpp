@@ -109,9 +109,9 @@ bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector
 	// similarly, we only need to ORDER BY each aggregate once
 	expression_map_t<ProjectionIndex> group_expressions;
 	expression_set_t seen_expressions;
-	idx_t i = 0;
+	ProjectionIndex group_idx(0);
 	for (auto &target : groups) {
-		group_expressions.insert({*target, ProjectionIndex(i++)});
+		group_expressions.insert({*target, group_idx++});
 	}
 	vector<BoundOrderByNode> new_order_nodes;
 	for (auto &order_node : orders) {

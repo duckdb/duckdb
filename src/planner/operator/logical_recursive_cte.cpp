@@ -52,9 +52,10 @@ void LogicalRecursiveCTE::ResolveTypes() {
 
 	idx_t pay_idx = 0;
 	for (idx_t i = 0; i < types.size(); ++i) {
-		if (key_idx.find(ProjectionIndex(i)) == key_idx.end()) {
-			types[i] = payload_aggregates[pay_idx++]->return_type;
+		if (key_idx.find(ProjectionIndex(i)) != key_idx.end()) {
+			continue;
 		}
+		types[i] = payload_aggregates[pay_idx++]->return_type;
 	}
 }
 

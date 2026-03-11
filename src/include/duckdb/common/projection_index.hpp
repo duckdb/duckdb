@@ -53,13 +53,37 @@ struct ProjectionIndex {
 		return index != DConstants::INVALID_INDEX;
 	}
 
-	static vector<ProjectionIndex> GetIndexes(idx_t count) {
-		//! FIXME: this should be an iterator
-		vector<ProjectionIndex> result;
-		for (idx_t i = 0; i < count; i++) {
-			result.emplace_back(i);
+	struct IndexRange {
+		struct Iterator {
+			idx_t current;
+
+			explicit Iterator(idx_t val) : current(val) {
+			}
+			ProjectionIndex operator*() const {
+				return ProjectionIndex(current);
+			}
+			Iterator &operator++() {
+				++current;
+				return *this;
+			}
+			bool operator!=(const Iterator &other) const {
+				return current != other.current;
+			}
+		};
+
+		idx_t count;
+		explicit IndexRange(idx_t count) : count(count) {
 		}
-		return result;
+		Iterator begin() const {
+			return Iterator(0);
+		}
+		Iterator end() const {
+			return Iterator(count);
+		}
+	};
+
+	static IndexRange GetIndexes(idx_t count) {
+		return IndexRange(count);
 	}
 };
 

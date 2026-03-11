@@ -15,8 +15,8 @@ LogicalPivot::LogicalPivot(TableIndex pivot_idx, unique_ptr<LogicalOperator> pla
 
 vector<ColumnBinding> LogicalPivot::GetColumnBindings() {
 	vector<ColumnBinding> result;
-	for (idx_t i = 0; i < bound_pivot.types.size(); i++) {
-		result.emplace_back(pivot_index, ProjectionIndex(i));
+	for (auto pivot_col_idx : ProjectionIndex::GetIndexes(bound_pivot.types.size())) {
+		result.emplace_back(pivot_index, pivot_col_idx);
 	}
 	return result;
 }

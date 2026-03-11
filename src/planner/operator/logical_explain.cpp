@@ -21,7 +21,12 @@ void LogicalExplain::ResolveTypes() {
 	types = {LogicalType::VARCHAR, LogicalType::VARCHAR};
 }
 vector<ColumnBinding> LogicalExplain::GetColumnBindings() {
-	return {ColumnBinding(TableIndex(0), ProjectionIndex(0)), ColumnBinding(TableIndex(0), ProjectionIndex(1))};
+	vector<ColumnBinding> result;
+	TableIndex explain_tbl_idx(0);
+	for (auto explain_col_idx : ProjectionIndex::GetIndexes(2)) {
+		result.emplace_back(explain_tbl_idx, explain_col_idx);
+	}
+	return result;
 }
 
 } // namespace duckdb

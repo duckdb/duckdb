@@ -47,14 +47,14 @@ vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	vector<ColumnBinding> result;
 	result.reserve(groups.size() + expressions.size() + grouping_functions.size());
-	for (idx_t i = 0; i < groups.size(); i++) {
-		result.emplace_back(group_index, ProjectionIndex(i));
+	for (auto group_col_idx : ProjectionIndex::GetIndexes(groups.size())) {
+		result.emplace_back(group_index, group_col_idx);
 	}
-	for (idx_t i = 0; i < expressions.size(); i++) {
-		result.emplace_back(aggregate_index, ProjectionIndex(i));
+	for (auto aggr_col_idx : ProjectionIndex::GetIndexes(expressions.size())) {
+		result.emplace_back(aggregate_index, aggr_col_idx);
 	}
-	for (idx_t i = 0; i < grouping_functions.size(); i++) {
-		result.emplace_back(groupings_index, ProjectionIndex(i));
+	for (auto grouping_col_idx : ProjectionIndex::GetIndexes(grouping_functions.size())) {
+		result.emplace_back(groupings_index, grouping_col_idx);
 	}
 	return result;
 }

@@ -17,7 +17,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
                                                      TupleDataValidityType group_validity_p)
     : grouping_set(grouping_set_p), op(op_p), group_validity(group_validity_p) {
 	auto groups_count = op.GroupCount();
-	for (auto &group_idx : ProjectionIndex::GetIndexes(groups_count)) {
+	for (auto group_idx : ProjectionIndex::GetIndexes(groups_count)) {
 		if (grouping_set.find(group_idx) == grouping_set.end()) {
 			null_groups.push_back(group_idx.index);
 		}
