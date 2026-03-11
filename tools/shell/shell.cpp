@@ -394,7 +394,7 @@ void ShellState::Print(const char *str) {
 /* Indicate out-of-memory and exit. */
 static void shell_out_of_memory(void) {
 	fprintf(stderr, "Error: out of memory\n");
-	exit(1);
+	ShellState::Exit(1);
 }
 
 ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
@@ -794,6 +794,13 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
+void ShellState::Exit(int exit_code) {
+	// destroy the shell state
+	GetReference().reset();
+	// then exit
+	exit(exit_code);
+}
+
 extern "C" {
 
 /*
@@ -804,7 +811,7 @@ static void InterruptHandler(int NotUsed) {
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
 	if (state.seenInterrupt > 2) {
-		exit(1);
+		ShellState::Exit(1);
 	}
 	if (state.conn) {
 		state.conn->Interrupt();
@@ -1196,7 +1203,7 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 				RegisterShellLogger(*db, storage_ptr);
 				conn = make_uniq<duckdb::Connection>(*db);
 			} else {
-				exit(1);
+				ShellState::Exit(1);
 			}
 		}
 		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
@@ -1576,7 +1583,7 @@ void ShellState::NewTempFile(const char *zSuffix) {
 	}
 	if (zTempFile.empty()) {
 		PrintF(PrintOutput::STDERR, "out of memory\n");
-		exit(1);
+		ShellState::Exit(1);
 	}
 }
 
@@ -1695,7 +1702,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 			// verbose - ignore
 		} else if (strcmp(z, "-ascii") == 0) {
 			PrintF(PrintOutput::STDERR, "-ascii mode is no longer supported for .import");
-			exit(1);
+			ShellState::Exit(1);
 		} else if (strcmp(z, "-csv") == 0) {
 			function = "read_csv";
 		} else if (strcmp(z, "-parquet") == 0) {

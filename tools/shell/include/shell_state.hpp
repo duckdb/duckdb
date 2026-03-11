@@ -308,6 +308,7 @@ public:
 	void ShowConfiguration();
 	void ClearInterrupt();
 
+	static void Exit(int exit_code);
 	static idx_t RenderLength(const char *str, idx_t str_len);
 	static idx_t RenderLength(duckdb::string_t str);
 	static idx_t RenderLength(const string &str);
