@@ -241,6 +241,7 @@ enum class IEJoinSourceStage : uint8_t {
 	EXTRACT_P,
 	INNER,
 	OUTER,
+	ANTI,
 	DONE
 };
 
@@ -1063,6 +1064,8 @@ public:
 	void ExecuteLeftTask(ExecutionContext &context, DataChunk &result);
 	//	Resolve right join results
 	void ExecuteRightTask(ExecutionContext &context, DataChunk &result);
+	//	Resolve anti join results from NULL columns.
+	void ExecuteAntiTask(ExecutionContext &context, DataChunk &result);
 	//	Execute the current task
 	void ExecuteTask(ExecutionContext &context, DataChunk &result, InterruptState &interrupt);
 
@@ -1173,6 +1176,17 @@ bool IEJoinLocalSourceState::TryAssignTask() {
 			right_matches = right_table.found_match.get() + right_base;
 			outer_idx = 0;
 			outer_count = right_table.BlockSize(right_block_index);
+		}
+		break;
+	case IEJoinSourceStage::ANTI:
+		left_block_index = task->range.first;
+		outer_idx = 0;
+		outer_count = left_table.BlockSize(left_block_index);
+		//	Skip any non-NULL entries in the block
+		left_base = left_table.BlockStart(left_block_index);
+		right_base = left_table.count - left_table.has_null;
+		if (left_base < right_base) {
+			outer_idx = right_base - left_base;
 		}
 		break;
 	case IEJoinSourceStage::INIT:
@@ -1297,6 +1311,9 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 		} else if (right_matches != nullptr) {
 			ExecuteRightTask(context, result);
 		}
+		break;
+	case IEJoinSourceStage::ANTI:
+		ExecuteAntiTask(context, result);
 		break;
 	}
 }
@@ -1714,6 +1731,15 @@ void IEJoinGlobalSourceState::Initialize() {
 	//	OUTER
 	stage_tasks.emplace_back(left_outers + right_outers);
 
+	//	ANTI
+	if (op.join_type == JoinType::ANTI) {
+		auto &left_table = *gsink.tables[0];
+		const auto null_block = (left_table.count - left_table.has_null) / STANDARD_VECTOR_SIZE;
+		stage_tasks.emplace_back(left_blocks - null_block);
+	} else {
+		stage_tasks.emplace_back(0);
+	}
+
 	//	DONE
 	stage_tasks.emplace_back(0);
 
@@ -1844,6 +1870,15 @@ bool IEJoinGlobalSourceState::TryNextTask(Task &task) {
 			task.range = {right_task, right_task + 1};
 		}
 		break;
+	case IEJoinSourceStage::ANTI: {
+		//	ANTI JOINs return every row with NULL comparisons.
+		const auto &left_table = *gsink.tables[0];
+		const auto null_start = (left_table.count - left_table.has_null);
+		const auto null_block = null_start / STANDARD_VECTOR_SIZE;
+		const auto anti_task = task.thread_idx;
+		task.range = {null_block + anti_task, null_block + anti_task + 1};
+		break;
+	}
 	case IEJoinSourceStage::INIT:
 	case IEJoinSourceStage::DONE:
 		break;
@@ -1972,6 +2007,31 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 
 	op.ProjectResult(chunk, result);
 	result.SetCardinality(count);
+	result.Verify(context.client.db);
+}
+
+void IEJoinLocalSourceState::ExecuteAntiTask(ExecutionContext &context, DataChunk &result) {
+	auto &op = gsource.op;
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+
+	outer_sel.resize(0);
+	for (; outer_idx < outer_count; ++outer_idx) {
+		outer_sel.emplace_back(outer_idx);
+		if (outer_sel.size() >= STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+	const idx_t count = outer_sel.size();
+	if (!count) {
+		return;
+	}
+
+	auto &left_table = *ie_sink.tables[0];
+
+	left_table.Repin(*left_iterator);
+	op.SliceSortedPayload(result, left_table, *left_iterator, left_chunk_state, left_block_index, outer_sel,
+	                      *left_scan_state);
+
 	result.Verify(context.client.db);
 }
 
