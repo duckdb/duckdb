@@ -347,7 +347,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			vector<unique_ptr<Expression>> expressions;
 			if (referenced_columns_in_rhs.empty()) {
 				// if we have no columns selected just select the first column
-				referenced_columns_in_rhs.insert(0);
+				referenced_columns_in_rhs.emplace(0);
 			}
 			for (idx_t i = 0; i < bindings.size(); i++) {
 				if (referenced_columns_in_rhs.find(ProjectionIndex(i)) != referenced_columns_in_rhs.end()) {

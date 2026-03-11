@@ -137,12 +137,12 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 			for (idx_t i = 0; i < unnest_get_column.size(); i++) {
 				auto &col_bind = unnest_get_column[i];
 				if (col_bind.table_index != unnest_get_index) {
-					// not part of this projection
-					return;
+					// not part of the unnest
+					continue;
 				}
 				auto &expr = proj.GetExpression(col_bind.column_index);
 				if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-					// not a projection reference
+					// unnest reference is not a projection reference - bail
 					return;
 				}
 			}
@@ -157,7 +157,8 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 				auto &col_bind = unnest_get_column[i];
 				D_ASSERT(col_bind.table_index == unnest_get_index || col_bind.table_index == proj.table_index);
 				if (col_bind.table_index != unnest_get_index) {
-					throw InternalException("Unnest rewriter table index mismatch - should be handled before");
+					// not part of the unnest
+					continue;
 				}
 				auto &bind_col = proj.expressions[col_bind.column_index.index]->Cast<BoundColumnRefExpression>();
 				auto unnest_expr = make_uniq<BoundUnnestExpression>(unnest_get->types[i]);
