@@ -75,7 +75,7 @@ private:
 	//! Size of the virtual memory
 	const idx_t virtual_memory_size;
 	//! Pointer to the start of the virtual memory
-	const data_ptr_t virtual_memory_space;
+	atomic<data_ptr_t> virtual_memory_space;
 
 	//! Mutex for modifying physical memory size
 	mutex physical_memory_lock;
