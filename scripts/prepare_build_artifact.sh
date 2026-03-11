@@ -37,6 +37,14 @@ else
 	echo "No $BUILD_DIR/src/libduckdb.so* files found"
 fi
 
+# Required by regression jobs that run the prebuilt benchmark runner.
+if [[ -f "$BUILD_DIR/benchmark/benchmark_runner" ]]; then
+	mkdir -p "$ARTIFACT_DIR"/benchmark
+	cp -av "$BUILD_DIR/benchmark/benchmark_runner" "$ARTIFACT_DIR"/benchmark/
+else
+	echo "No $BUILD_DIR/benchmark/benchmark_runner file found"
+fi
+
 # Required by extension tests using __BUILD_DIRECTORY__/test/extension/*.duckdb_extension.
 extension_files=("$BUILD_DIR"/test/extension/*.duckdb_extension)
 if ((${#extension_files[@]} > 0)); then
