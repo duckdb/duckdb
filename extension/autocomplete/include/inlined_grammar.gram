@@ -27,6 +27,7 @@ Statement <-
 	TruncateStatement /
 	LoadStatement /
 	InstallStatement /
+	UpdateExtensionsStatement /
 	AnalyzeStatement /
 	MergeIntoStatement
 
@@ -1120,6 +1121,7 @@ NoneLiteral <- 'NONE'
 
 LoadStatement <- 'LOAD' ColIdOrString
 InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
+UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 FromSource <- 'FROM' (Identifier / StringLiteral)
 VersionNumber <- 'VERSION' IdentifierOrStringLiteral
 DropStatement <- 'DROP' DropEntries DropBehavior?

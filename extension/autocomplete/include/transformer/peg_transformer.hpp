@@ -1075,6 +1075,8 @@ private:
 	                                                       optional_ptr<ParseResult> parse_result);
 	static unique_ptr<SQLStatement> TransformInstallStatement(PEGTransformer &transformer,
 	                                                          optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformUpdateExtensionsStatement(PEGTransformer &transformer,
+	                                                                    optional_ptr<ParseResult> parse_result);
 	static ExtensionRepositoryInfo TransformFromSource(PEGTransformer &transformer,
 	                                                   optional_ptr<ParseResult> parse_result);
 	static string TransformVersionNumber(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);

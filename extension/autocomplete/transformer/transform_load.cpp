@@ -1,4 +1,6 @@
 #include "duckdb/parser/statement/load_statement.hpp"
+#include "duckdb/parser/statement/update_extensions_statement.hpp"
+#include "duckdb/parser/parsed_data/update_extensions_info.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "ast/extension_repository_info.hpp"
 
@@ -51,6 +53,27 @@ ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSource(PEGTransforme
 		result.repository_is_alias = true;
 	}
 	return result;
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateExtensionsStatement(
+    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	// UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
+	// child 0: 'UPDATE', child 1: 'EXTENSIONS', child 2: optional Parens(List(Identifier))
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto result = make_uniq<UpdateExtensionsStatement>();
+	auto info = make_uniq<UpdateExtensionsInfo>();
+
+	auto &opt = list_pr.Child<OptionalParseResult>(2);
+	if (opt.HasResult()) {
+		auto inner = ExtractResultFromParens(opt.optional_result);
+		auto ext_list = ExtractParseResultsFromList(inner);
+		for (auto &ext : ext_list) {
+			info->extensions_to_update.emplace_back(ext->Cast<IdentifierParseResult>().identifier);
+		}
+	}
+
+	result->info = std::move(info);
+	return std::move(result);
 }
 
 string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer,
