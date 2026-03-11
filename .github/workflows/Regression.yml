@@ -4,6 +4,9 @@ on:
     inputs:
       base_hash:
         type: string
+      runner_linux_x64:
+        default: ubuntu-latest
+        type: string
       runner_linux_small:
         default: ubuntu-latest
         type: string
@@ -11,6 +14,10 @@ on:
     inputs:
       base_hash:
         description: 'Base hash'
+        type: string
+      runner_linux_x64:
+        description: 'Optional x64 runner label override'
+        default: ubuntu-latest
         type: string
       runner_linux_small:
         description: 'Optional small runner label override'
@@ -28,8 +35,57 @@ env:
   BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
+  # This job exists so that workflow_dispatch and repository_dispatch continue
+  # to work. Note that those cannot rely on the linux release build because
+  # that CI job runs outside this workflow run.
+  linux-release:
+    name: Linux Release
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' }}
+    runs-on: ${{ inputs.runner_linux_x64 }}
+    env:
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: make toolsci
+
+      - uses: ./.github/actions/ccache-action
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11.1
+        with:
+          vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
+
+      - name: Build
+        env:
+          BUILD_BENCHMARK: 1
+          BUILD_JEMALLOC: 1
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          DISABLE_SANITIZER: 1
+          VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+          USE_MERGED_VCPKG_MANIFEST: 1
+        run: make release
+
+      - name: Smoke tests
+        run: make smoke SMOKE_UNITTEST=build/release/test/unittest
+
+      - name: Prepare release artifact
+        run: make release-artifact
+
+      - name: Upload release build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release-build
+          path: build/release-artifact.tar.gz
+          if-no-files-found: error
+
   regression-test-benchmark-runner:
     name: Regression Tests
+    needs:
+      - linux-release
+    if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
@@ -171,6 +227,9 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
+    needs:
+      - linux-release
+    if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
     runs-on: ${{ inputs.runner_linux_small }}
     env:
       CC: gcc-10
@@ -257,6 +316,9 @@ jobs:
 
   regression-test-binary-size:
     name: Regression test binary size
+    needs:
+      - linux-release
+    if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
     runs-on: ${{ inputs.runner_linux_small }}
     env:
       CC: gcc-10
@@ -305,6 +367,9 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
+    needs:
+      - linux-release
+    if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
     runs-on: ubuntu-22.04
     env:
       CC: gcc-10
