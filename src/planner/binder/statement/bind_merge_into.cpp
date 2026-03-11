@@ -359,6 +359,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 			RewriteMergeBindings(expr, source_bindings, new_proj_index);
 		}
 		RewriteMergeBindings(*root, source_bindings, new_proj_index);
+		RewriteMergeBindings(join_ref, source_bindings, new_proj_index);
 		RewriteMergeBindings(*merge_into, source_bindings, new_proj_index);
 
 		// push a reference
