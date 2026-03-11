@@ -5,7 +5,7 @@ namespace duckdb {
 
 CreateTriggerInfo::CreateTriggerInfo()
     : CreateInfo(CatalogType::TRIGGER_ENTRY, INVALID_SCHEMA), timing(TriggerTiming::AFTER),
-      event_type(TriggerEventType::INSERT), for_each_row(false) {
+      event_type(TriggerEventType::INSERT_EVENT), for_each_row(false) {
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
@@ -51,13 +51,13 @@ string CreateTriggerInfo::ToString() const {
 	}
 	ss << " ";
 	switch (event_type) {
-	case TriggerEventType::INSERT:
+	case TriggerEventType::INSERT_EVENT:
 		ss << "INSERT";
 		break;
-	case TriggerEventType::DELETE:
+	case TriggerEventType::DELETE_EVENT:
 		ss << "DELETE";
 		break;
-	case TriggerEventType::UPDATE:
+	case TriggerEventType::UPDATE_EVENT:
 		ss << "UPDATE";
 		if (!columns.empty()) {
 			ss << " OF ";

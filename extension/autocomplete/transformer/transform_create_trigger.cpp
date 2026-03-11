@@ -53,21 +53,21 @@ TriggerEventInfo PEGTransformerFactory::TransformTriggerEvent(PEGTransformer &tr
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventInsert(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	TriggerEventInfo result;
-	result.event_type = TriggerEventType::INSERT;
+	result.event_type = TriggerEventType::INSERT_EVENT;
 	return result;
 }
 
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventDelete(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	TriggerEventInfo result;
-	result.event_type = TriggerEventType::DELETE;
+	result.event_type = TriggerEventType::DELETE_EVENT;
 	return result;
 }
 
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdate(PEGTransformer &transformer,
                                                                     optional_ptr<ParseResult> parse_result) {
 	TriggerEventInfo result;
-	result.event_type = TriggerEventType::UPDATE;
+	result.event_type = TriggerEventType::UPDATE_EVENT;
 	return result;
 }
 
@@ -76,7 +76,7 @@ TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdateOf(PEGTransfo
 	// TriggerEventUpdateOf <- 'UPDATE' 'OF' TriggerColumnList
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	TriggerEventInfo result;
-	result.event_type = TriggerEventType::UPDATE;
+	result.event_type = TriggerEventType::UPDATE_EVENT;
 	result.columns = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
 	return result;
 }

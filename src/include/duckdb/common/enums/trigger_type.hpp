@@ -14,6 +14,6 @@ namespace duckdb {
 
 enum class TriggerTiming : uint8_t { BEFORE = 0, AFTER = 1, INSTEAD_OF = 2 };
 
-enum class TriggerEventType : uint8_t { INSERT = 0, DELETE = 1, UPDATE = 2 };
+enum class TriggerEventType : uint8_t { INSERT_EVENT = 0, DELETE_EVENT = 1, UPDATE_EVENT = 2 };
 
 } // namespace duckdb
