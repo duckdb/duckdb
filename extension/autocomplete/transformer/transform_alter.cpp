@@ -44,7 +44,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTrans
 	OnEntryNotFound not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 
 	auto catalog_name = list_pr.Child<IdentifierParseResult>(2).identifier;
-	auto new_name = list_pr.Child<IdentifierParseResult>(5).identifier;
+	auto new_name = list_pr.Child<IdentifierParseResult>(6).identifier;
 	auto result = make_uniq<RenameDatabaseInfo>(catalog_name, new_name, not_found);
 	return std::move(result);
 }

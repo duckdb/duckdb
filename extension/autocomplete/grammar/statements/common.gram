@@ -29,12 +29,10 @@ Statement <-
 	InstallStatement /
 	AnalyzeStatement /
 	MergeIntoStatement /
-    SetVariableStatement /
 	ExpressionStatement
 
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
-
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -86,7 +84,14 @@ DecadeKeyword       <- 'DECADE' / 'DECADES'
 CenturyKeyword      <- 'CENTURY' / 'CENTURIES'
 MillenniumKeyword   <- 'MILLENNIUM' / 'MILLENNIA'
 
-Interval <- YearKeyword /
+Interval <- (YearKeyword 'TO' MonthKeyword) /
+    (DayKeyword 'TO' HourKeyword) /
+    (DayKeyword 'TO' MinuteKeyword) /
+    (DayKeyword 'TO' SecondKeyword) /
+    (HourKeyword 'TO' MinuteKeyword) /
+    (HourKeyword 'TO' SecondKeyword) /
+    (MinuteKeyword 'TO' SecondKeyword) /
+    YearKeyword /
     MonthKeyword /
     DayKeyword /
     HourKeyword /
@@ -98,14 +103,7 @@ Interval <- YearKeyword /
     QuarterKeyword /
     DecadeKeyword /
     CenturyKeyword /
-    MillenniumKeyword /
-    (YearKeyword 'TO' MonthKeyword) /
-    (DayKeyword 'TO' HourKeyword) /
-    (DayKeyword 'TO' MinuteKeyword) /
-    (DayKeyword 'TO' SecondKeyword) /
-    (HourKeyword 'TO' MinuteKeyword) /
-    (HourKeyword 'TO' SecondKeyword) /
-    (MinuteKeyword 'TO' SecondKeyword)
+    MillenniumKeyword
 
 BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
 GeometryType <- 'GEOMETRY' Parens(Expression)?

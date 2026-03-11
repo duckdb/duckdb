@@ -55,6 +55,7 @@ public:
 	                                        const string &wal_path);
 
 	AttachedDatabase &GetDatabase();
+	StorageManager &GetStorageManager();
 
 	const string &GetPath() const {
 		return wal_path;
@@ -112,12 +113,21 @@ public:
 	//! -> 0 (first subcolumn of INT)
 	void WriteUpdate(DataChunk &chunk, const vector<column_t> &column_path);
 
-	//! Truncate the WAL to a previous size, and clear anything currently set in the writer
+	//! Truncate the WAL to a previous size, and clear anything currently set in the writer.
+	//! Used during RevertCommit.
 	void Truncate(idx_t size);
 	void Flush();
-	//! Increment the WAL entry count (for autocheckpoint threshold)
+	//! Increment the WAL entry count, which is used for the auto-checkpoint threshold.
 	void IncrementWALEntriesCount();
-
+	//! Add a used block to the WAL.
+	void AddBlockInUse(const block_id_t block_id) {
+		D_ASSERT(blocks_in_use.count(block_id) == 0);
+		blocks_in_use.insert(block_id);
+	}
+	bool NewBlockInUse(const block_id_t block_id) const {
+		return blocks_in_use.count(block_id) == 0;
+	}
+	void MarkBlocksInUseAsModified();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
@@ -133,6 +143,9 @@ protected:
 	string wal_path;
 	atomic<WALInitState> init_state;
 	optional_idx checkpoint_iteration;
+	// When we write optimistic pointers to the WAL, then we need to prevent these blocks from being
+	// re-used/overwritten, even if the data on them is no longer relevant (e.g., later DROP TABLE).
+	unordered_set<block_id_t> blocks_in_use;
 };
 
 } // namespace duckdb

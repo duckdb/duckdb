@@ -74,7 +74,9 @@ struct VariantBooleanConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, bool &ret,
 	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != VariantLogicalType::BOOL_FALSE && type_id != VariantLogicalType::BOOL_TRUE) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		ret = type_id == VariantLogicalType::BOOL_TRUE;
@@ -89,7 +91,9 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		ret = Load<T>(value + byte_offset);
@@ -99,7 +103,9 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const StringConversionPayload &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -117,7 +123,9 @@ struct VariantDecimalConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const DecimalConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -662,7 +670,40 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 	}
 }
 
+static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
+	if (variant_vec.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+		// input vector is not shredded
+		return false;
+	}
+	// check if we are fully shredded on this type
+	if (result.GetType().IsNested()) {
+		// shredded casts for nested types not yet supported
+		return false;
+	}
+	auto &shredded_vec = ShreddedVector::GetShreddedVector(variant_vec);
+	if (shredded_vec.GetType() == result.GetType()) {
+		// direct type match: variant vector is fully shredded on this primitive type
+		result.Reference(shredded_vec);
+		return true;
+	}
+	// check if this is a {typed_value ..., untyped_value ...} struct with an empty (constant NULL) untyped_value
+	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
+		// it is! check if the type of the typed_value entry matches
+		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
+		if (shredded_entries[1]->GetType() == result.GetType()) {
+			// the typed_value matches - directly reference it
+			result.Reference(*shredded_entries[1]);
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, CastParameters &parameters) {
+	if (TryFromShreddedCast(variant_vec, result)) {
+		return true;
+	}
+	// fallback to conversion
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, count, variant_format);

@@ -50,7 +50,7 @@ GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &f
 // Takes an expression and converts a list of known column_refs to constants
 static void ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &expr,
                                           const unordered_map<column_t, PartitioningColumnValue> &known_column_values,
-                                          idx_t table_index) {
+                                          TableIndex table_index) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 

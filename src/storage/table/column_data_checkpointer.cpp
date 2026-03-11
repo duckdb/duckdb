@@ -14,11 +14,11 @@ namespace duckdb {
 
 //! ColumnDataCheckpointData
 
-CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
+const CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
 	auto &db = col_data->GetDatabase();
 	auto &column_type = col_data->type;
 	auto &config = DBConfig::GetConfig(db);
-	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
+	return config.GetCompressionFunction(compression_type, column_type.InternalType());
 }
 
 DatabaseInstance &ColumnDataCheckpointData::GetDatabase() {
@@ -105,7 +105,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 }
 
 CompressionType ForceCompression(StorageManager &storage_manager,
-                                 vector<optional_ptr<CompressionFunction>> &compression_functions,
+                                 vector<optional_ptr<const CompressionFunction>> &compression_functions,
                                  CompressionType compression_type) {
 	// One of the force_compression flags has been set
 	// check if this compression method is available
@@ -308,7 +308,7 @@ void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions 
 		auto &config = DBConfig::GetConfig(db);
 		// Override the function to the COMPRESSION_EMPTY
 		// turning the compression+final compress steps into a no-op, saving a single empty segment
-		validity.function = config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT);
+		validity.function = config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT).get();
 	}
 
 	// Initialize the compression for the selected function

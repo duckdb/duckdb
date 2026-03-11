@@ -159,9 +159,18 @@ private:
 };
 
 struct ParquetVariantShredding : public VariantShredding {
+	ParquetVariantShredding() {
+		// for parquet untyped ("value") comes before typed ("typed_value")
+		untyped_value_index = 0;
+		typed_value_index = 1;
+	}
+
 	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
 	                        optional_ptr<const SelectionVector> value_index_sel,
 	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
+
+protected:
+	void WriteMissingField(Vector &vector, idx_t index) override;
 };
 
 } // namespace
@@ -723,6 +732,11 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
 		D_ASSERT(data_ptr_cast(value_blob.GetDataWriteable() + blob_length) == value_blob_data);
 		value_blob.SetSizeAndFinalize(blob_length, blob_length);
 	}
+}
+
+void ParquetVariantShredding::WriteMissingField(Vector &vector, idx_t index) {
+	//! The field is missing, set it to null
+	FlatVector::SetNull(vector, index, true);
 }
 
 void ParquetVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result,

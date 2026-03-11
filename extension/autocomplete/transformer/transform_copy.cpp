@@ -270,7 +270,7 @@ GenericCopyOption PEGTransformerFactory::TransformForceQuoteOption(PEGTransforme
 		result.expression = make_uniq<StarExpression>();
 	} else if (StringUtil::CIEquals(star_or_column_list->name, "ColumnList")) {
 		auto column_list = transformer.Transform<vector<string>>(star_or_column_list);
-		for (auto col : column_list) {
+		for (auto &col : column_list) {
 			result.children.push_back(Value(col));
 		}
 	}
@@ -292,7 +292,7 @@ GenericCopyOption PEGTransformerFactory::TransformForceNullOption(PEGTransformer
 	auto result = GenericCopyOption();
 	result.name = is_not ? "force_not_null" : "force_null";
 	auto column_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(3));
-	for (auto col : column_list) {
+	for (auto &col : column_list) {
 		result.children.push_back(Value(col));
 	}
 	return result;
@@ -309,7 +309,7 @@ GenericCopyOption PEGTransformerFactory::TransformPartitionByOption(PEGTransform
 		result.expression = make_uniq<StarExpression>();
 	} else if (StringUtil::CIEquals(star_or_column_list->name, "ColumnList")) {
 		auto column_list = transformer.Transform<vector<string>>(star_or_column_list);
-		for (auto col : column_list) {
+		for (auto &col : column_list) {
 			result.children.push_back(Value(col));
 		}
 	}

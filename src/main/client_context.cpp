@@ -423,11 +423,23 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	result->types = logical_planner.types;
 	result->value_map = std::move(logical_planner.value_map);
 	if (!logical_planner.properties.bound_all_parameters) {
+		// not all parameters were bound - return
 		return result;
 	}
 #ifdef DEBUG
 	logical_plan->Verify(*this);
 #endif
+	if (result->properties.parameter_count > 0 && !parameters.parameters) {
+		// if this is a prepared statement we can choose not to fully plan
+		// if we have parameters, we might want to re-bind when they are available as we can then do more optimizations
+		// in this situation we check if we want to cache the plan at all
+		if (!PreparedStatement::CanCachePlan(*logical_plan)) {
+			// we don't - early-out
+			result->properties.always_require_rebind = true;
+			return result;
+		}
+	}
+
 	if (config.enable_optimizer && logical_plan->RequireOptimizer()) {
 		profiler.StartPhase(MetricType::ALL_OPTIMIZERS);
 		Optimizer optimizer(*logical_planner.binder, *this);
@@ -745,8 +757,10 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	auto statement_query = statement->query;
 	shared_ptr<PreparedStatementData> prepared_data;
 	auto unbound_statement = statement->Copy();
+	PendingQueryParameters parameters;
 	RunFunctionInTransactionInternal(
-	    lock, [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), {}); },
+	    lock,
+	    [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), parameters); },
 	    false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),

@@ -5,7 +5,8 @@
 
 namespace duckdb {
 unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode> node, const string &name,
-                                                            vector<string> &aliases) {
+                                                            vector<string> &aliases,
+                                                            vector<unique_ptr<ParsedExpression>> &key_targets) {
 	if (node->type != QueryNodeType::SET_OPERATION_NODE) {
 		return node;
 	}
@@ -29,6 +30,9 @@ unique_ptr<QueryNode> PEGTransformerFactory::ToRecursiveCTE(unique_ptr<QueryNode
 	recursive_node->left = std::move(owned_set_node->children[0]);
 	recursive_node->right = std::move(owned_set_node->children[1]);
 	recursive_node->union_all = owned_set_node->setop_all;
+	for (auto &key : key_targets) {
+		recursive_node->key_targets.emplace_back(key->Copy());
+	}
 
 	return std::move(recursive_node);
 }
@@ -58,7 +62,8 @@ void PEGTransformerFactory::WrapRecursiveView(unique_ptr<CreateViewInfo> &info, 
 }
 
 void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &info, unique_ptr<QueryNode> &node) {
-	auto result_node = ToRecursiveCTE(std::move(node), info->view_name, info->aliases);
+	vector<unique_ptr<ParsedExpression>> empty_key_targets;
+	auto result_node = ToRecursiveCTE(std::move(node), info->view_name, info->aliases, empty_key_targets);
 	WrapRecursiveView(info, std::move(result_node));
 }
 

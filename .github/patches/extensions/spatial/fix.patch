@@ -1,397 +1,131 @@
+diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+index 263d413..63d35f1 100644
+--- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+@@ -32,7 +32,7 @@ void LogicalCreateRTreeIndex::ResolveTypes() {
+ }
+ 
+ void LogicalCreateRTreeIndex::ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings) {
+-	bindings = LogicalOperator::GenerateColumnBindings(0, table.GetColumns().LogicalColumnCount());
++	bindings = LogicalOperator::GenerateColumnBindings(TableIndex(0), table.GetColumns().LogicalColumnCount());
+ 
+ 	// Visit the operator's expressions
+ 	LogicalOperatorVisitor::EnumerateExpressions(*this,
 diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-index ed66c70..a8deb0c 100644
+index 3b37ca8..a11f736 100644
 --- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-@@ -192,7 +192,8 @@ public:
- 		                                            "ST_CoveredBy", "ST_ContainsProperly"};
- 
- 		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
--		table_info.GetIndexes().Scan([&](Index &index) {
-+
-+		for (auto &index : table_info.GetIndexes().Indexes()) {
- 			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
- 				return false;
+@@ -175,13 +175,15 @@ public:
+ 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+ 			// this is a LogicalGet - check if there is an ExpressionFilter
+ 			auto &get = op.Cast<LogicalGet>();
+-			for (auto &entry : get.table_filters.filters) {
+-				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
++			for (auto &entry : get.table_filters) {
++				auto column_id = entry.ColumnIndex();
++				auto &filter = entry.Filter();
++				if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+ 					// not an expression filter
+ 					continue;
+ 				}
+-				auto &expr_filter = entry.second->Cast<ExpressionFilter>();
+-				if (TryOptimizeGet(binder, context, plan, root, nullptr, entry.first, expr_filter.expr)) {
++				auto &expr_filter = filter.Cast<ExpressionFilter>();
++				if (TryOptimizeGet(binder, context, plan, root, nullptr, column_id, expr_filter.expr)) {
+ 					return true;
+ 				}
  			}
-@@ -210,7 +211,7 @@ public:
- 			}
- 			if (!rewrite_possible) {
- 				// Could not rewrite!
--				return false;
-+				continue;
- 			}
- 
- 			FunctionExpressionMatcher matcher;
-@@ -223,7 +224,7 @@ public:
- 
- 			vector<reference<Expression>> bindings;
- 			if (!matcher.Match(*filter_expr, bindings)) {
--				return false;
-+				continue;
- 			}
- 
- 			// 		bindings[0] = the expression
-@@ -234,12 +235,12 @@ public:
- 			auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
- 			Box2D<float> bbox;
- 			if (!TryGetBoundingBox(constant_value, bbox)) {
--				return false;
-+				continue;
- 			}
- 
- 			bind_data = make_uniq<RTreeIndexScanBindData>(duck_table, index_entry, bbox);
--			return true;
--		});
-+			break;
-+		};
- 
- 		if (!bind_data) {
- 			// No index found
-diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
-index 0ee4925..a0e5397 100644
---- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
-+++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
-@@ -77,17 +77,16 @@ static void RTreeIndexInfoExecute(ClientContext &context, TableFunctionInput &da
- 
- 		auto &table_info = *storage.GetDataTableInfo();
- 		table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
--		table_info.GetIndexes().Scan([&](Index &index) {
-+		for (auto &index : table_info.GetIndexes().Indexes()) {
- 			if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
--				return false;
-+				continue;
- 			}
- 			auto &rtree = index.Cast<RTreeIndex>();
- 			if (rtree.name == index_entry.name) {
- 				rtree_index = &rtree;
--				return true;
-+				break;
- 			}
--			return false;
--		});
-+		};
- 
- 		if (!rtree_index) {
- 			throw BinderException("Index %s not found", index_entry.name);
-@@ -121,17 +120,16 @@ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string
- 
- 	auto &table_info = *storage.GetDataTableInfo();
- 	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
--	table_info.GetIndexes().Scan([&](Index &index) {
-+	for (auto &index : table_info.GetIndexes().Indexes()) {
- 		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
--			return false;
-+			continue;
+@@ -281,7 +283,7 @@ public:
+ 		get.has_estimated_cardinality = cardinality->has_estimated_cardinality;
+ 		get.estimated_cardinality = cardinality->estimated_cardinality;
+ 		get.bind_data = std::move(bind_data);
+-		if (get.table_filters.filters.empty()) {
++		if (!get.table_filters.HasFilters()) {
+ 			return true;
  		}
- 		auto &rtree = index.Cast<RTreeIndex>();
- 		if (index_entry.name == index_name) {
- 			rtree_index = &rtree;
--			return true;
-+			break;
+ 
+@@ -299,8 +301,8 @@ public:
+ 		// does not support regular filter pushdown.
+ 		auto new_filter = make_uniq<LogicalFilter>();
+ 		auto &column_ids = get.GetColumnIds();
+-		for (const auto &entry : get.table_filters.filters) {
+-			idx_t column_id = entry.first;
++		for (const auto &entry : get.table_filters) {
++			idx_t column_id = entry.ColumnIndex();
+ 			auto &type = get.returned_types[column_id];
+ 			bool found = false;
+ 			for (idx_t i = 0; i < column_ids.size(); i++) {
+@@ -314,7 +316,7 @@ public:
+ 				throw InternalException("Could not find column id for filter");
+ 			}
+ 			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, column_id));
+-			new_filter->expressions.push_back(entry.second->ToExpression(*column));
++			new_filter->expressions.push_back(entry.Filter().ToExpression(*column));
  		}
--		return false;
--	});
-+	};
+ 		new_filter->children.push_back(std::move(get_ptr));
+ 		new_filter->ResolveOperatorTypes();
+diff --git a/src/spatial/operators/spatial_join_logical.cpp b/src/spatial/operators/spatial_join_logical.cpp
+index 0e5c07c..c82798d 100644
+--- a/src/spatial/operators/spatial_join_logical.cpp
++++ b/src/spatial/operators/spatial_join_logical.cpp
+@@ -84,7 +84,7 @@ void LogicalSpatialJoin::Serialize(Serializer &writer) const {
+ 	writer.WritePropertyWithDefault(300, "operator_type", string(OPERATOR_TYPE_NAME));
  
- 	return rtree_index;
- }
-diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
-index 014ecb4..9377c8f 100644
---- a/src/spatial/index/rtree/rtree_index_scan.cpp
-+++ b/src/spatial/index/rtree/rtree_index_scan.cpp
-@@ -214,17 +214,16 @@ static unique_ptr<FunctionData> RTreeScanDeserialize(Deserializer &deserializer,
- 	unique_ptr<RTreeIndexScanBindData> result = nullptr;
+ 	writer.WritePropertyWithDefault<JoinType>(400, "join_type", join_type, JoinType::INNER);
+-	writer.WritePropertyWithDefault<idx_t>(401, "mark_index", mark_index);
++	writer.WritePropertyWithDefault<TableIndex>(401, "mark_index", mark_index);
+ 	writer.WritePropertyWithDefault<vector<idx_t>>(402, "left_projection_map", left_projection_map);
+ 	writer.WritePropertyWithDefault<vector<idx_t>>(403, "right_projection_map", right_projection_map);
+ 	writer.WritePropertyWithDefault<unique_ptr<Expression>>(404, "spatial_predicate", spatial_predicate);
+@@ -97,7 +97,7 @@ void LogicalSpatialJoin::Serialize(Serializer &writer) const {
  
- 	table_info.BindIndexes(context, RTreeIndex::TYPE_NAME);
--	table_info.GetIndexes().Scan([&](Index &index) {
-+	for (auto &index : table_info.GetIndexes().Indexes()) {
- 		if (!index.IsBound() || RTreeIndex::TYPE_NAME != index.GetIndexType()) {
--			return false;
-+			continue;
- 		}
- 		auto &index_entry = index.Cast<RTreeIndex>();
- 		if (index_entry.GetIndexName() == index_name) {
- 			result = make_uniq<RTreeIndexScanBindData>(duck_table, index_entry, bbox);
--			return true;
-+			break;
- 		}
--		return false;
--	});
-+	};
- 
- 	if (!result) {
- 		throw SerializationException("Could not find index %s on table %s.%s", index_name, schema, table);
-diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
-index 213c13d..5762359 100644
---- a/src/spatial/modules/gdal/gdal_module.cpp
-+++ b/src/spatial/modules/gdal/gdal_module.cpp
-@@ -27,6 +27,7 @@
- #include "cpl_vsi.h"
- #include "cpl_vsi_error.h"
- #include "cpl_vsi_virtual.h"
-+#include "duckdb/common/types/geometry_crs.hpp"
- #include "duckdb/main/settings.hpp"
- 
- namespace duckdb {
-@@ -611,7 +612,7 @@ auto Bind(ClientContext &ctx, TableFunctionBindInput &input, vector<LogicalType>
- 		// Convert Arrow schema to DuckDB types
- 		for (int64_t i = 0; i < schema.n_children; i++) {
- 			auto &child_schema = *schema.children[i];
--			const auto gdal_type = ArrowType::GetTypeFromSchema(ctx.db->config, child_schema);
-+			const auto gdal_type = ArrowType::GetTypeFromSchema(ctx, child_schema);
- 			auto duck_type = gdal_type->GetDuckType();
- 
- 			// Track geometry columns to compute stats later
-@@ -849,7 +850,7 @@ auto InitGlobal(ClientContext &context, TableFunctionInitInput &input) -> unique
- 	// Store the column types
- 	for (int64_t i = 0; i < schema.n_children; i++) {
- 		auto &child_schema = *schema.children[i];
--		result->col_types.push_back(ArrowType::GetTypeFromSchema(context.db->config, child_schema));
-+		result->col_types.push_back(ArrowType::GetTypeFromSchema(context, child_schema));
- 	}
- 
- 	return std::move(result);
-@@ -1199,6 +1200,16 @@ auto Bind(ClientContext &context, CopyFunctionBindInput &input, const vector<str
- 		throw BinderException("Unknown GDAL COPY option: '%s'", option.first);
- 	}
- 
-+	// If no override SRS is set, we will use the SRS of the first geometry column
-+	if (result->target_srs.empty()) {
-+		for (auto &col : sql_types) {
-+			if (col.id() == LogicalTypeId::GEOMETRY && GeoType::HasCRS(col)) {
-+				result->target_srs = GeoType::GetCRS(col).GetDefinition();
-+				break;
-+			}
-+		}
-+	}
-+
- 	// Check that options are valid
- 	if (result->driver_name.empty()) {
- 		throw BinderException("GDAL COPY option 'DRIVER' is required");
-diff --git a/src/spatial/modules/main/spatial_functions.hpp b/src/spatial/modules/main/spatial_functions.hpp
-index f455278..67c722f 100644
---- a/src/spatial/modules/main/spatial_functions.hpp
-+++ b/src/spatial/modules/main/spatial_functions.hpp
-@@ -25,4 +25,10 @@ public:
- 	static void Box2DToVarchar(Vector &source, Vector &result, idx_t count);
- };
- 
-+struct CastParameters;
-+struct SpatialCasts {
-+	bool FromLegacyGeometryCast(Vector &source, Vector &result, idx_t count, CastParameters &params);
-+
-+};
-+
- } // namespace duckdb
-diff --git a/src/spatial/modules/main/spatial_functions_cast.cpp b/src/spatial/modules/main/spatial_functions_cast.cpp
-index ae553cf..e9acf8a 100644
---- a/src/spatial/modules/main/spatial_functions_cast.cpp
-+++ b/src/spatial/modules/main/spatial_functions_cast.cpp
-@@ -275,7 +275,7 @@ struct GeometryCasts {
- 		}
- 	}
- 
--	static bool FromLegacyGeometryCast(Vector &source, Vector &result, idx_t count, CastParameters &params) {
-+	 static bool FromLegacyGeometryCast(Vector &source, Vector &result, idx_t count, CastParameters &params) {
- 		UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &old_blob) {
- 			BinaryReader reader(old_blob.GetDataUnsafe(), old_blob.GetSize());
- 
-@@ -1079,6 +1079,12 @@ struct BoxCasts {
- 
- } // namespace
- 
-+// Re-export this function
-+bool SpatialCasts::FromLegacyGeometryCast(Vector &source, Vector &result, idx_t count, CastParameters &params) {
-+	return GeometryCasts::FromLegacyGeometryCast(source, result, count, params);
-+}
-+
-+
- //======================================================================================================================
- // Vector Operations
- //======================================================================================================================
-@@ -1124,6 +1130,7 @@ void CoreVectorOperations::Point3DToVarchar(Vector &source, Vector &result, idx_
- 	});
- }
- 
-+
- //------------------------------------------------------------------------------
- // POINT_4D -> VARCHAR
- //------------------------------------------------------------------------------
-diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
-index 616a9d0..21c4848 100644
---- a/src/spatial/modules/proj/proj_module.cpp
-+++ b/src/spatial/modules/proj/proj_module.cpp
-@@ -8,6 +8,10 @@
- #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
- #include "duckdb/execution/expression_executor.hpp"
- #include "duckdb/planner/expression/bound_function_expression.hpp"
-+#include "duckdb/common/types/geometry_crs.hpp"
-+#include "duckdb/parser/parsed_data/create_coordinate_system_info.hpp"
-+#include "duckdb/catalog/catalog_entry/coordinate_system_catalog_entry.hpp"
-+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
- 
- #include "proj.h"
- #include "geodesic.h"
-@@ -1208,6 +1212,133 @@ struct DuckDB_Proj_Compiled_Version {
- 
- } // namespace
- 
-+//======================================================================================================================
-+// CRS Provider
-+//======================================================================================================================
-+namespace {
-+
-+class SpatialCoordinateSystemGenerator : public DefaultGenerator {
-+private:
-+
-+	SchemaCatalogEntry &schema;
-+	PJ_CONTEXT *ctx = nullptr;
-+	mutex proj_mutex;
-+
-+public:
-+	SpatialCoordinateSystemGenerator(Catalog &catalog, SchemaCatalogEntry &schema) : DefaultGenerator(catalog), schema(schema) {
-+		ctx = ProjModule::GetThreadProjContext();
-+	}
-+
-+	~SpatialCoordinateSystemGenerator() override {
-+		if (ctx) {
-+			proj_context_destroy(ctx);
-+			ctx = nullptr;
-+		}
-+	}
-+
-+public:
-+	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override {
-+
-+		if (schema.name != DEFAULT_SCHEMA) {
-+			return nullptr;
-+		}
-+
-+		// Try to split name by ":"
-+		auto parts = StringUtil::Split(entry_name, ":");
-+		if (parts.size() != 2) {
-+			return nullptr;
-+		}
-+
-+		auto auth_name = parts[0];
-+		auto auth_code = parts[1];
-+
-+		// We only support OGC and EPSG for now
-+		if (!StringUtil::CIEquals(auth_name, "EPSG") && !StringUtil::CIEquals(auth_name, "OGC")) {
-+			return nullptr;
-+		}
-+
-+		// Create PJ object
-+		lock_guard<mutex> lock(proj_mutex);
-+
-+		PJ* crs = proj_create_from_database(ctx, auth_name.c_str(), auth_code.c_str(), PJ_CATEGORY_CRS, false, nullptr);
-+		if (!crs) {
-+			return nullptr;
-+		}
-+
-+		// Export to WKT2_2019
-+		string wkt_text;
-+		static const char *const options[] = {"MULTILINE=NO", nullptr};
-+		const auto wkt = proj_as_wkt(ctx, crs, PJ_WKT2_2019, options);
-+		if (wkt) {
-+			wkt_text = wkt;
-+		}
-+
-+		// Export to PROJJSON
-+		string projjson_text;
-+		const auto pj_json = proj_as_projjson(ctx, crs, options);
-+		if (pj_json) {
-+			projjson_text = pj_json;
-+		}
-+
-+		proj_destroy(crs);
-+
-+		auto info = CreateCoordinateSystemInfo(entry_name, auth_name, auth_code, projjson_text, wkt_text);
-+		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-+
-+		auto result = make_uniq<CoordinateSystemCatalogEntry>(catalog, schema, info);
-+		return std::move(result);
-+	}
-+
-+	vector<string> GetDefaultEntries() override {
-+
-+		if (schema.name != DEFAULT_SCHEMA) {
-+			return {};
-+		}
-+
-+		vector<string> entries;
-+
-+		auto scan_authority = [&](const char* auth) {
-+			int ncrs = 0;
-+			PROJ_CRS_INFO **crs_info = proj_get_crs_info_list_from_database(ctx, auth, nullptr, &ncrs);
-+
-+			if (crs_info) {
-+				for (int i = 0; i < ncrs; i++) {
-+					auto &auth_name = crs_info[i]->auth_name;
-+					auto &auth_code = crs_info[i]->code;
-+
-+					if (!auth_name || !auth_code) {
-+						continue;
-+					}
-+
-+					entries.push_back(StringUtil::Format("%s:%s", auth_name, auth_code));
-+				}
-+			}
-+
-+			proj_crs_info_list_destroy(crs_info);
-+		};
-+
-+		// Scan EPSG and OGC authority lists
-+		lock_guard<mutex> lock(proj_mutex);
-+		scan_authority("epsg");
-+		scan_authority("OGC");
-+
-+		return entries;
-+	}
-+
-+	static void Register(ExtensionLoader &loader) {
-+
-+		auto &db = loader.GetDatabaseInstance();
-+		auto system_transaction = CatalogTransaction::GetSystemTransaction(db);
-+		auto &catalog = Catalog::GetSystemCatalog(db);
-+		auto &schema = catalog.GetSchema(system_transaction, DEFAULT_SCHEMA);
-+		auto &duck_schema = schema.Cast<DuckSchemaEntry>();
-+
-+		auto &set = duck_schema.GetCatalogSet(CatalogType::COORDINATE_SYSTEM_ENTRY);
-+		set.SetDefaultGenerator(make_uniq<SpatialCoordinateSystemGenerator>(catalog, schema));
-+	}
-+};
-+
-+} // namespace
- //######################################################################################################################
- // Module Registration
- //######################################################################################################################
-@@ -1229,6 +1360,8 @@ void RegisterProjModule(ExtensionLoader &loader) {
- 	// Meta functions for proj lib
- 	DuckDB_Proj_Version::Register(loader);
- 	DuckDB_Proj_Compiled_Version::Register(loader);
-+
-+	SpatialCoordinateSystemGenerator::Register(loader);
- }
- 
- } // namespace duckdb
+ unique_ptr<LogicalExtensionOperator> LogicalSpatialJoin::Deserialize(Deserializer &reader) {
+ 	auto join_type = reader.ReadPropertyWithExplicitDefault<JoinType>(400, "join_type", JoinType::INNER);
+-	auto mark_index = reader.ReadPropertyWithDefault<idx_t>(401, "mark_index");
++	auto mark_index = reader.ReadPropertyWithDefault<TableIndex>(401, "mark_index");
+ 	auto left_projection_map = reader.ReadPropertyWithDefault<vector<idx_t>>(402, "left_projection_map");
+ 	auto right_projection_map = reader.ReadPropertyWithDefault<vector<idx_t>>(403, "right_projection_map");
+ 	auto spatial_predicate = reader.ReadPropertyWithDefault<unique_ptr<Expression>>(404, "spatial_predicate");
 diff --git a/src/spatial/operators/spatial_join_logical.hpp b/src/spatial/operators/spatial_join_logical.hpp
-index 3714311..00090e8 100644
+index 3714311..df711f5 100644
 --- a/src/spatial/operators/spatial_join_logical.hpp
 +++ b/src/spatial/operators/spatial_join_logical.hpp
-@@ -25,8 +25,6 @@ public:
- 	vector<idx_t> left_projection_map;
- 	//! The columns of the RHS that are output by the join
- 	vector<idx_t> right_projection_map;
--	//! Join Keys statistics (optional)
--	vector<unique_ptr<BaseStatistics>> join_stats;
+@@ -13,7 +13,7 @@ public:
+ 	//! The type of the join (INNER, OUTER, etc...)
+ 	JoinType join_type;
+ 	//! Table index used to refer to the MARK column (in case of a MARK join)
+-	idx_t mark_index {};
++	TableIndex mark_index {};
  
- 	bool has_const_distance = false;
- 	double const_distance = 0.0;
+ 	//! The spatial predicate of the join
+ 	unique_ptr<Expression> spatial_predicate;
 diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
-index a6b5d0e..6b67631 100644
+index e46d5ad..f660a78 100644
 --- a/src/spatial/operators/spatial_join_optimizer.cpp
 +++ b/src/spatial/operators/spatial_join_optimizer.cpp
-@@ -164,7 +164,6 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+@@ -66,8 +66,8 @@ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique
+ 	                                                           nullptr, func.is_operator);
+ }
+ 
+-static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const unordered_set<idx_t> &left_bindings,
+-                                   const unordered_set<idx_t> &right_bindings, bool &needs_flipping) {
++static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const unordered_set<TableIndex> &left_bindings,
++                                   const unordered_set<TableIndex> &right_bindings, bool &needs_flipping) {
+ 
+ 	const auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
+ 
+@@ -143,8 +143,8 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+ 	// Get the table indexes that are reachable from the left and right children
+ 	const auto &left_child = cmp_join.children[0];
+ 	const auto &right_child = cmp_join.children[1];
+-	unordered_set<idx_t> left_bindings;
+-	unordered_set<idx_t> right_bindings;
++	unordered_set<TableIndex> left_bindings;
++	unordered_set<TableIndex> right_bindings;
+ 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
+ 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
+ 
+@@ -167,7 +167,6 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
  	spatial_join->types = std::move(cmp_join.types);
  	spatial_join->left_projection_map = std::move(cmp_join.left_projection_map);
  	spatial_join->right_projection_map = std::move(cmp_join.right_projection_map);
@@ -399,7 +133,18 @@ index a6b5d0e..6b67631 100644
  	spatial_join->mark_index = cmp_join.mark_index;
  	spatial_join->has_estimated_cardinality = cmp_join.has_estimated_cardinality;
  	spatial_join->estimated_cardinality = cmp_join.estimated_cardinality;
-@@ -282,7 +281,6 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+@@ -224,8 +223,8 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+ 	// Get the table indexes that are reachable from the left and right children
+ 	auto &left_child = any_join.children[0];
+ 	auto &right_child = any_join.children[1];
+-	unordered_set<idx_t> left_bindings;
+-	unordered_set<idx_t> right_bindings;
++	unordered_set<TableIndex> left_bindings;
++	unordered_set<TableIndex> right_bindings;
+ 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
+ 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
+ 
+@@ -274,7 +273,6 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
  	spatial_join->types = std::move(any_join.types);
  	spatial_join->left_projection_map = std::move(any_join.left_projection_map);
  	spatial_join->right_projection_map = std::move(any_join.right_projection_map);

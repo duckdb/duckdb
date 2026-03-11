@@ -698,6 +698,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 			row_group_data = make_uniq<PersistentCollectionData>();
 		}
 	}
+	bool is_persistent = segments.back()->GetNode().IsPersistent();
 	for (auto &entry : segments) {
 		auto row_group = entry->MoveNode();
 		row_group->MoveToCollection(*this);
@@ -717,6 +718,9 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	}
 	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();
+	if (is_persistent) {
+		SetAppendRequiresNewRowGroup();
+	}
 }
 
 //===--------------------------------------------------------------------===//

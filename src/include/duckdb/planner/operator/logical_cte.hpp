@@ -23,7 +23,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INVALID;
 
 public:
-	explicit LogicalCTE(string ctename_p, idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
+	explicit LogicalCTE(string ctename_p, TableIndex table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom,
 	                    LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_INVALID)
 	    : LogicalOperator(logical_type), ctename(std::move(ctename_p)), table_index(table_index),
@@ -33,7 +33,7 @@ public:
 	}
 
 	string ctename;
-	idx_t table_index;
+	TableIndex table_index;
 	idx_t column_count;
 	CorrelatedColumns correlated_columns;
 };

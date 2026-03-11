@@ -55,11 +55,19 @@ struct ProductFunction {
 	}
 };
 
+LogicalType GetProductStateType(const AggregateFunction &function) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("empty", LogicalType::BOOLEAN);
+	children.emplace_back("val", LogicalType::DOUBLE);
+	return LogicalType::STRUCT(std::move(children));
+}
+
 } // namespace
 
 AggregateFunction ProductFun::GetFunction() {
 	return AggregateFunction::UnaryAggregate<ProductState, double, double, ProductFunction>(
-	    LogicalType(LogicalTypeId::DOUBLE), LogicalType::DOUBLE);
+	           LogicalType(LogicalTypeId::DOUBLE), LogicalType::DOUBLE)
+	    .SetStructStateExport(GetProductStateType);
 }
 
 } // namespace duckdb

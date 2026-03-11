@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistType persist_type)
-    : CreateInfo(CatalogType::SECRET_ENTRY), on_conflict(on_conflict), persist_type(persist_type), options() {
+CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict_p, SecretPersistType persist_type)
+    : CreateInfo(CatalogType::SECRET_ENTRY), persist_type(persist_type), options() {
+	on_conflict = on_conflict_p;
 }
 
 CreateSecretInfo::~CreateSecretInfo() {

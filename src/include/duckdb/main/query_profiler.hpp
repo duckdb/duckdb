@@ -144,6 +144,8 @@ public:
 	DUCKDB_API void Reset();
 	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
+	//! Finalize query metrics for output; safe to call multiple times.
+	DUCKDB_API void FinalizeMetrics();
 
 	//! Adds amount to a specific metric type.
 	DUCKDB_API void AddToCounter(MetricType type, const idx_t amount);
@@ -227,6 +229,8 @@ private:
 	TreeMap tree_map;
 	//! Whether or not we are running as part of a explain_analyze query
 	bool is_explain_analyze;
+	//! Whether root metrics have been finalized for output
+	bool metrics_finalized;
 
 public:
 	const TreeMap &GetTreeMap() const {
@@ -245,6 +249,7 @@ private:
 
 private:
 	void MoveOptimizerPhasesToRoot();
+	void FinalizeMetricsInternal();
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.

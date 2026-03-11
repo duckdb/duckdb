@@ -14,29 +14,234 @@ create table dummy as select range % 10 g, range d from range(100);
 # ungrouped aggr
 
 query IIIIIIIIIII nosort res0
-SELECT sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy;
+SELECT sum(d), avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM dummy;
 ----
 
 query IIIIIIIIIII nosort res0
-SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy;
+SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy;
 ----
 
 # grouped aggr
 query IIIIIIIIIIIII nosort res1
-SELECT g, sum(d), avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, sum(d), avg(d)::integer, count(d), min(d), max(d), stddev(d)::integer, first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
+
+query I nosort res_corr0
+SELECT corr(d, d+1) FROM dummy;
+----
+
+query I nosort res_corr0
+SELECT finalize(corr(d, d+1) EXPORT_STATE) FROM dummy;
+----
+
+# covar_pop and var_pop (struct state export)
+query I
+SELECT covar_pop(d, d+1) FROM dummy;
+----
+833.25
+
+query I
+SELECT finalize(covar_pop(d, d+1) EXPORT_STATE) FROM dummy;
+----
+833.25
+
+query I
+SELECT var_pop(d) FROM dummy;
+----
+833.25
+
+query I
+SELECT finalize(var_pop(d) EXPORT_STATE) FROM dummy;
+----
+833.25
+
+# Regression aggregates: ungrouped direct vs EXPORT_STATE + finalize
+query I
+SELECT regr_count(d, d+1) FROM dummy;
+----
+100
+
+query I
+SELECT finalize(regr_count(d, d+1) EXPORT_STATE) FROM dummy;
+----
+100
+
+query I
+SELECT regr_avgx(d, d+1) FROM dummy;
+----
+50.5
+
+query I
+SELECT finalize(regr_avgx(d, d+1) EXPORT_STATE) FROM dummy;
+----
+50.5
+
+query I
+SELECT regr_avgy(d, d+1) FROM dummy;
+----
+49.5
+
+query I
+SELECT finalize(regr_avgy(d, d+1) EXPORT_STATE) FROM dummy;
+----
+49.5
+
+query I
+SELECT regr_slope(d, d+1) FROM dummy;
+----
+1.0
+
+query I
+SELECT finalize(regr_slope(d, d+1) EXPORT_STATE) FROM dummy;
+----
+1.0
+
+query I
+SELECT regr_intercept(d, d+1) FROM dummy;
+----
+-1.0
+
+query I
+SELECT finalize(regr_intercept(d, d+1) EXPORT_STATE) FROM dummy;
+----
+-1.0
+
+query I
+SELECT regr_r2(d, d+1) FROM dummy;
+----
+1.0
+
+query I
+SELECT finalize(regr_r2(d, d+1) EXPORT_STATE) FROM dummy;
+----
+1.0
+
+query I
+SELECT regr_sxx(d, d+1) FROM dummy;
+----
+83325.0
+
+query I
+SELECT finalize(regr_sxx(d, d+1) EXPORT_STATE) FROM dummy;
+----
+83325.0
+
+query I
+SELECT regr_syy(d, d+1) FROM dummy;
+----
+83325.0
+
+query I
+SELECT finalize(regr_syy(d, d+1) EXPORT_STATE) FROM dummy;
+----
+83325.0
+
+query I
+SELECT regr_sxy(d, d+1) FROM dummy;
+----
+83325.0
+
+query I
+SELECT finalize(regr_sxy(d, d+1) EXPORT_STATE) FROM dummy;
+----
+83325.0
+
+# Regression aggregates: grouped direct vs EXPORT_STATE + finalize
+query IIIIIIIIII nosort
+SELECT g, regr_count(d, d+1), regr_avgx(d, d+1), regr_avgy(d, d+1), regr_slope(d, d+1), regr_intercept(d, d+1), regr_r2(d, d+1), regr_sxx(d, d+1), regr_syy(d, d+1), regr_sxy(d, d+1) FROM dummy GROUP BY g ORDER BY g;
+----
+0	10	46.0	45.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+1	10	47.0	46.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+2	10	48.0	47.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+3	10	49.0	48.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+4	10	50.0	49.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+5	10	51.0	50.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+6	10	52.0	51.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+7	10	53.0	52.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+8	10	54.0	53.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+9	10	55.0	54.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+
+query IIIIIIIIII nosort
+SELECT g, finalize(regr_count(d, d+1) EXPORT_STATE), finalize(regr_avgx(d, d+1) EXPORT_STATE), finalize(regr_avgy(d, d+1) EXPORT_STATE), finalize(regr_slope(d, d+1) EXPORT_STATE), finalize(regr_intercept(d, d+1) EXPORT_STATE), finalize(regr_r2(d, d+1) EXPORT_STATE), finalize(regr_sxx(d, d+1) EXPORT_STATE), finalize(regr_syy(d, d+1) EXPORT_STATE), finalize(regr_sxy(d, d+1) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+0	10	46.0	45.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+1	10	47.0	46.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+2	10	48.0	47.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+3	10	49.0	48.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+4	10	50.0	49.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+5	10	51.0	50.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+6	10	52.0	51.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+7	10	53.0	52.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+8	10	54.0	53.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+9	10	55.0	54.0	1.0	-1.0	1.0	8250.0	8250.0	8250.0
+
+# Regression: persist state and finalize later
+statement ok
+CREATE TABLE state_regr AS SELECT g, regr_slope(d, d+1) EXPORT_STATE slope_state, regr_count(d, d+1) EXPORT_STATE count_state FROM dummy GROUP BY g ORDER BY g;
+
+query III nosort
+SELECT g, regr_slope(d, d+1), regr_count(d, d+1) FROM dummy GROUP BY g ORDER BY g;
+----
+0	1.0	10
+1	1.0	10
+2	1.0	10
+3	1.0	10
+4	1.0	10
+5	1.0	10
+6	1.0	10
+7	1.0	10
+8	1.0	10
+9	1.0	10
+
+query III nosort
+SELECT g, finalize(slope_state), finalize(count_state) FROM state_regr ORDER BY g;
+----
+0	1.0	10
+1	1.0	10
+2	1.0	10
+3	1.0	10
+4	1.0	10
+5	1.0	10
+6	1.0	10
+7	1.0	10
+8	1.0	10
+9	1.0	10
+
+# Regression: struct shape for state export
+query T
+SELECT (regr_count(1, 2) export_state)::struct(count ubigint);
+----
+{'count': 1}
+
+query T
+SELECT (regr_avgx(1.0, 2.0) export_state)::struct(sum double, count ubigint);
+----
+{'sum': 2.0, 'count': 1}
+
+query T
+SELECT (covar_pop(1.0, 2.0) export_state)::struct(count ubigint, meanx double, meany double, co_moment double);
+----
+{'count': 1, 'meanx': 2.0, 'meany': 1.0, 'co_moment': 0.0}
+
+query T
+SELECT (var_pop(42.0) export_state)::struct(count ubigint, mean double, dsquared double);
+----
+{'count': 1, 'mean': 42.0, 'dsquared': 0.0}
+
+query IIIIIIIIIIIII nosort res1
+SELECT g, sum(d), avg(d)::integer, count(d), min(d), max(d), stddev(d)::integer, first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIIIIIIIII nosort res1
-SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(stddev(d) EXPORT_STATE)::integer, finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 # we can persist this
 
 statement ok
-CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, sum(d) EXPORT_STATE sum_state, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state, stddev(d) EXPORT_STATE stddev_state FROM dummy GROUP BY g ORDER BY g;
 
 query IIIIIIIIIIIII nosort res1
-SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state ORDER BY g;
+SELECT g, finalize(sum_state), finalize(avg_state)::integer, finalize(count_state), finalize(min_state), finalize(max_state), finalize(stddev_state)::integer, finalize(first_state), finalize(last_state) FROM state ORDER BY g;
 ----
 
 query II nosort res3
@@ -63,29 +268,29 @@ select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join sta
 
 # empty groups
 query IIIIIIIIIII nosort res4
-SELECT avg(d)::integer, count(d), first(d), last(d) FROM dummy WHERE FALSE;
+SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM dummy WHERE FALSE;
 ----
 
 query IIIIIIIIIII nosort res4
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy WHERE FALSE;
 ----
 
 # only null scanned
 query IIIIIIIIIII nosort res5
-SELECT avg(d)::integer, count(d), first(d), last(d) FROM (SELECT NULL::integer d);
+SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM (SELECT NULL::integer d);
 ----
 
 query IIIIIIIIIII nosort res5
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
 ----
 
 # only null scanned, but grouped
 query IIIIIIIIIII nosort res6
-SELECT avg(d)::integer, count(d), first(d), last(d) FROM (SELECT NULL::integer d, g FROM dummy);
+SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 query IIIIIIIIIII nosort res6
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 
@@ -98,6 +303,76 @@ SELECT g, favg(d) FROM dummy GROUP BY g ORDER BY g;
 query IIIIIII nosort res8
 SELECT g, FINALIZE(favg(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
 ----
+
+# we skip these for now as argmin/argmax now has a custom binder (so that it can work with extension types like JSON)
+# otherwise we get "Binder Error: Cannot use EXPORT_STATE on aggregate functions with custom binders"
+mode skip
+
+query II nosort res7
+select argmin(a,b), argmax(a,b) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
+----
+
+query II nosort res7
+select FINALIZE(argmin(a,b) EXPORT_STATE), FINALIZE(argmax(a,b) EXPORT_STATE) from (values (1,1), (2,2), (8,8), (10,10)) s(a,b);
+----
+
+mode unskip
+
+query II nosort res9
+SELECT covar_pop(d, d+1) FROM dummy;
+----
+
+query II nosort res9
+SELECT FINALIZE(covar_pop(d, d+1) EXPORT_STATE) FROM dummy;
+
+query II nosort res8a
+SELECT g, bool_and(d > 50) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res8a
+SELECT g, FINALIZE(bool_and(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bool_and(42 > 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': true}
+
+query II nosort res8a2
+SELECT g, bool_or(d > 50) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res8a2
+SELECT g, FINALIZE(bool_or(d > 50) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bool_or(42 > 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': true}
+
+query T
+SELECT (bool_or(42 < 0) export_state)::struct(empty boolean, val boolean);
+----
+{'empty': false, 'val': false}
+
+query III nosort res8b
+SELECT g, bit_and(d), bit_or(d), bit_xor(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query III nosort res8b
+SELECT g, FINALIZE(bit_and(d) EXPORT_STATE), FINALIZE(bit_or(d) EXPORT_STATE), FINALIZE(bit_xor(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT (bit_and(42) export_state)::struct(is_set boolean, value integer);
+----
+{'is_set': true, 'value': 42}
+
+query T
+SELECT (bit_xor(100) export_state)::struct(is_set boolean, value bigint);
+----
+{'is_set': true, 'value': 100}
 
 # You're holding it wrong:
 
@@ -127,6 +402,10 @@ SELECT finalize(avg(d)) from dummy;
 
 statement error
 SELECT finalize(avg(d)) from dummy group by g;
+----
+
+statement error
+SELECT FINALIZE(COMBINE(MIN(d) EXPORT_STATE)) FROM dummy;
 ----
 
 # can't finalize twice
@@ -170,23 +449,23 @@ create table dummy as select range % 10 g, range d from range(100);
 
 # we can persist this
 statement ok
-CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
+CREATE TABLE state AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
 
 statement ok
-CREATE VIEW state_view AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state FROM dummy GROUP BY g ORDER BY g;
+CREATE VIEW state_view AS SELECT g, avg(d) EXPORT_STATE avg_state, count(d) EXPORT_STATE count_state, first(d) EXPORT_STATE first_state, last(d) EXPORT_STATE last_state, min(d) EXPORT_STATE min_state, max(d) EXPORT_STATE max_state FROM dummy GROUP BY g ORDER BY g;
 
 restart
 
 query IIIIIIIIIIIII nosort res10
-SELECT g, avg(d)::integer, count(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
+SELECT g, avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM dummy GROUP BY g ORDER BY g;
 ----
 
 query IIIIIIIIIIIII nosort res10
-SELECT g, finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state ORDER BY g;
+SELECT g, finalize(avg_state)::integer, finalize(count_state), finalize(min_state), finalize(max_state), finalize(first_state), finalize(last_state) FROM state ORDER BY g;
 ----
 
 query IIIIIIIIIIIII nosort res10
-SELECT g, finalize(avg_state)::integer, finalize(count_state), finalize(first_state), finalize(last_state) FROM state_view ORDER BY g;
+SELECT g, finalize(avg_state)::integer, finalize(count_state), finalize(min_state), finalize(max_state), finalize(first_state), finalize(last_state) FROM state_view ORDER BY g;
 ----
 
 # Tests with long strings (>12 bytes, non-inlined) to verify proper string data copying
@@ -335,3 +614,24 @@ ORDER BY g;
 group_0	This is a very long string that exceeds the 12 byte inlining threshold for string_t12
 group_1	This is a very long string that exceeds the 12 byte inlining threshold for string_t10
 group_2	This is a very long string that exceeds the 12 byte inlining threshold for string_t11
+
+# parquet round-trip: write AGGREGATE_STATE directly
+# count() has state STRUCT(count BIGINT) which parquet preserves exactly
+require parquet
+
+statement ok
+COPY (SELECT g, count(d) EXPORT_STATE s1 FROM dummy GROUP BY g) TO '__TEST_DIR__/count_state.parquet' (FORMAT PARQUET);
+
+query II
+SELECT g, FINALIZE(COMBINE(s2, s1)) FROM (SELECT g, count(d) EXPORT_STATE s2 FROM dummy GROUP BY g) q1 JOIN '__TEST_DIR__/count_state.parquet' USING(g) ORDER BY g;
+----
+0	20
+1	20
+2	20
+3	20
+4	20
+5	20
+6	20
+7	20
+8	20
+9	20

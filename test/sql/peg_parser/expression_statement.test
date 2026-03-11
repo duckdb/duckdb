@@ -5,7 +5,7 @@
 require autocomplete
 
 statement ok 
-SET allow_parser_override_extension = strict;
+call enable_peg_parser();
 
 query I
 1 + 1; 
@@ -49,12 +49,12 @@ foo: 1 + 1, bar: ('hello world').replace(' ', '_'), [1,2,3][1] as list_element;
 statement error
 1 + 1 foo
 ----
-Parser Error: Parser override could not parse this query.
+Parser Error: Syntax error at or near "foo"
 
 statement error
 selec 42
 ----
-Parser Error: Parser override could not parse this query.
+Parser Error: Syntax error at or near "42"
 
 statement error
 SEL 

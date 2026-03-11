@@ -116,6 +116,7 @@
         "test/geoparquet/versions.text",
         "test/sql/types/variant/variant_distinct.test",
         "test/parquet/variant/variant_comparison.test",
+        "test/parquet/variant/variant_json_copy.test",
         "test/sql/function/variant/variant_typeof.test",
         "test/sql/storage/types/variant/append_shredded.test",
         "test/sql/storage/types/variant/big_table.test_slow",
@@ -145,6 +146,9 @@
         "test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test",
         "test/sql/storage/compression/roaring/roaring_bool_uncompressed_under_v1_5_0.test",
         "test/sql/aggregate/aggregates/test_state_export_struct.test",
+        "test/sql/aggregate/aggregates/test_corr_state_export.test",
+        "test/sql/aggregate/aggregates/test_stddev_export_state.test",
+        "test/sql/aggregate/aggregates/test_covar_export_state.test",
         "test/sql/aggregate/aggregates/test_combine_aggr.test"
       ]
     },

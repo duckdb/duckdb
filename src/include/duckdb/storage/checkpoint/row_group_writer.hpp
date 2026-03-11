@@ -42,6 +42,7 @@ public:
 	}
 
 	DatabaseInstance &GetDatabase();
+	AttachedDatabase &GetAttachedDatabase();
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
 	}

@@ -253,6 +253,19 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 	}
 }
 
+bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
+	if (instance.ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+	try {
+		auto &fs = FileSystem::GetFileSystem(instance);
+		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+		return true;
+	} catch (...) {
+		return false;
+	}
+}
+
 static ExtensionUpdateResult UpdateExtensionInternal(ClientContext &context, DatabaseInstance &db, FileSystem &fs,
                                                      const string &full_extension_path, const string &extension_name) {
 	ExtensionUpdateResult result;

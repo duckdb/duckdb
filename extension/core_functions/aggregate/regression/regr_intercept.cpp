@@ -2,13 +2,13 @@
 
 #include "core_functions/aggregate/regression_functions.hpp"
 #include "core_functions/aggregate/regression/regr_slope.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "core_functions/aggregate/algebraic_functions.hpp"
 
 namespace duckdb {
 
 namespace {
 struct RegrInterceptState {
-	size_t count;
+	uint64_t count;
 	double sum_x;
 	double sum_y;
 	RegrSlopeState slope;
@@ -60,11 +60,24 @@ struct RegrInterceptOperation {
 	}
 };
 
+LogicalType GetRegrInterceptStateType(const AggregateFunction &) {
+	child_list_t<LogicalType> state_children;
+	state_children.emplace_back("count", LogicalType::UBIGINT);
+	state_children.emplace_back("sum_x", LogicalType::DOUBLE);
+	state_children.emplace_back("sum_y", LogicalType::DOUBLE);
+	child_list_t<LogicalType> slope_children;
+	slope_children.emplace_back("cov_pop", CovarPopFun::GetFunction().GetStateType());
+	slope_children.emplace_back("var_pop", VarPopFun::GetFunction().GetStateType());
+	state_children.emplace_back("slope", LogicalType::STRUCT(std::move(slope_children)));
+	return LogicalType::STRUCT(std::move(state_children));
+}
+
 } // namespace
 
 AggregateFunction RegrInterceptFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrInterceptState, double, double, double, RegrInterceptOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrInterceptStateType);
 }
 
 } // namespace duckdb

@@ -31,4 +31,12 @@ struct CachedFileInformation {
 	bool loaded;
 };
 
+struct EvictionQueueInformation {
+	idx_t queue_index;
+	string queue_type;
+	idx_t approximate_size;
+	idx_t dead_nodes;
+	idx_t total_insertions;
+};
+
 } // namespace duckdb

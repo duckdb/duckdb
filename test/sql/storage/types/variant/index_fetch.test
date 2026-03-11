@@ -1,6 +1,9 @@
 # name: test/sql/storage/types/variant/index_fetch.test
 # group: [variant]
 
+# TODO: "Force storage" will use default storage version, but variant requires v1.5.0, so skip for now
+require no_force_storage
+
 statement ok
 CREATE TABLE tbl(i INT PRIMARY KEY, v VARIANT);
 
@@ -15,7 +18,7 @@ SELECT v FROM tbl WHERE i=42;
 # Now test the same with a persistent db, checkpointed (shredded VARIANT)
 
 statement ok
-ATTACH '__TEST_DIR__/variant_index_fetch.db' as db2;
+ATTACH '__TEST_DIR__/variant_index_fetch.db' as db2 (STORAGE_VERSION 'v1.5.0');
 
 statement ok
 USE db2;

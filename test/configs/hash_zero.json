@@ -26,6 +26,7 @@
       "reason": "HyperLogLog doesn't work.",
       "paths": [
         "test/optimizer/joins/better_ce_estimates_for_bad_join_conditions.test",
+        "test/optimizer/projection_pullup.test",
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/sql/types/nested/array/array_summarize.test",
         "test/sql/types/timestamp/test_infinite_time.test",

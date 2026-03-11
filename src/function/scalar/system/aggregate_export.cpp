@@ -1,8 +1,9 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -136,8 +137,8 @@ struct AggregateStateLayout {
  */
 struct LoadFieldOp {
 	template <class T>
-	static void Operation(const AggregateStateLayout &layout, Vector &struct_vec, idx_t field_idx,
-	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
+	static void Operation(idx_t root_stride, Vector &struct_vec, idx_t field_idx, const UnifiedVectorFormat &state_data,
+	                      idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
 		auto &child = *StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 
@@ -147,7 +148,7 @@ struct LoadFieldOp {
 				continue;
 			}
 
-			auto dest = base_ptr + row * layout.aligned_state_size + field_offset;
+			auto dest = base_ptr + row * root_stride + field_offset;
 			*reinterpret_cast<T *>(dest) = child_data[row];
 		}
 	}
@@ -252,20 +253,40 @@ void StoreFieldForSelectedRowsOp::Operation<string_t>(const AggregateStateLayout
 	}
 }
 
+idx_t GetRecursivePhysicalSize(const LogicalType &type) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return GetTypeIdSize(type.InternalType());
+	}
+	idx_t size = 0;
+	for (const auto &child : StructType::GetChildTypes(type)) {
+		size += GetRecursivePhysicalSize(child.second);
+	}
+	return size;
+}
+
 // Deserialize struct fields from a flattened struct vector into a state buffer.
-// Uses LoadFieldOp for tight SIMD-friendly loops
-void DeserializeStructFields(const AggregateStateLayout &layout, Vector &struct_vec,
+// Uses LoadFieldOp for tight SIMD-friendly loops.
+// root_stride is the aligned size of the top-level state, used to stride between rows in the buffer (root-state's
+// size must be taken into account)
+void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stride, Vector &struct_vec,
                              const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t dest_buffer) {
 	idx_t offset_in_state = 0;
 	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
 		auto &field_type = layout.child_types->at(field_idx).second;
 		auto physical = field_type.InternalType();
-		idx_t field_size = GetTypeIdSize(physical);
+		idx_t field_size = GetRecursivePhysicalSize(field_type);
 		idx_t alignment = MinValue<idx_t>(field_size, 8);
 		offset_in_state = AlignValue(offset_in_state, alignment);
 
-		TemplateDispatch<LoadFieldOp>(physical, layout, struct_vec, field_idx, state_data, count, dest_buffer,
-		                              offset_in_state);
+		if (field_type.id() == LogicalTypeId::STRUCT) {
+			auto child_layout = AggregateStateLayout(field_type, field_size);
+			auto &struct_entries = StructVector::GetEntries(struct_vec);
+			DeserializeStructFields(child_layout, root_stride, *struct_entries[field_idx], state_data, count,
+			                        dest_buffer + offset_in_state);
+		} else {
+			TemplateDispatch<LoadFieldOp>(physical, root_stride, struct_vec, field_idx, state_data, count, dest_buffer,
+			                              offset_in_state);
+		}
 
 		offset_in_state += field_size;
 	}
@@ -279,15 +300,84 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
 		auto &field_type = layout.child_types->at(field_idx).second;
 		auto physical = field_type.InternalType();
-		idx_t field_size = GetTypeIdSize(physical);
+		idx_t field_size = GetRecursivePhysicalSize(field_type);
 		idx_t alignment = MinValue<idx_t>(field_size, 8);
 		offset_in_state = AlignValue(offset_in_state, alignment);
 
-		TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
+		if (field_type.id() == LogicalTypeId::STRUCT) {
+			auto child_layout = AggregateStateLayout(field_type, field_size);
+
+			// we need to write to the buffers with the current offset the child is pointing to in the state
+			Vector child_addresses(LogicalType::POINTER);
+			auto child_ptrs = FlatVector::GetData<data_ptr_t>(child_addresses);
+			for (idx_t row = 0; row < count; row++) {
+				child_ptrs[row] = addresses_ptrs[row] + offset_in_state;
+			}
+
+			auto &struct_entries = StructVector::GetEntries(result);
+			SerializeStructFields(child_layout, *struct_entries.get(field_idx), count, child_ptrs);
+		} else {
+			TemplateDispatch<StoreFieldOp>(physical, result, field_idx, count, addresses_ptrs, offset_in_state);
+		}
 
 		offset_in_state += field_size;
 	}
 }
+
+#ifdef DEBUG
+// Internal verification: export all states to struct, import back, finalize, and compare to main path result
+// using vector operations. Catches serialization/deserialization bugs for struct-based aggregate state.
+static void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const Vector &state_vec, idx_t count,
+                                       const UnifiedVectorFormat &state_data, const data_ptr_t *state_vec_ptr,
+                                       const Vector &result, const ExportAggregateBindData &bind_data,
+                                       AggregateInputData &aggr_input_data) {
+	// Build selection of valid state rows
+	SelectionVector valid_sel(count);
+	idx_t valid_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (state_data.validity.RowIsValid(state_data.sel->get_index(i))) {
+			valid_sel.set_index(valid_count++, i);
+		}
+	}
+	if (valid_count == 0) {
+		return;
+	}
+
+	// SerializeStructFields: all valid states -> struct vector
+	Vector struct_vec(state_vec.GetType(), valid_count);
+	unsafe_unique_array<data_ptr_t> addresses_ptrs(make_unsafe_uniq_array<data_ptr_t>(valid_count));
+	for (idx_t i = 0; i < valid_count; i++) {
+		addresses_ptrs[i] = state_vec_ptr[valid_sel.get_index(i)];
+	}
+	SerializeStructFields(layout, struct_vec, valid_count, addresses_ptrs.get());
+
+	// DeserializeStructFields: struct vector -> packed buffer
+	unsafe_unique_array<data_t> temp_state_buf(make_unsafe_uniq_array<data_t>(valid_count * layout.aligned_state_size));
+	UnifiedVectorFormat struct_format;
+	struct_vec.ToUnifiedFormat(valid_count, struct_format);
+	DeserializeStructFields(layout, layout.aligned_state_size, struct_vec, struct_format, valid_count,
+	                        temp_state_buf.get());
+
+	// AggregateStateFinalize: packed buffer -> result values
+	Vector addresses_vec(LogicalType::POINTER);
+	auto addresses_finalize = FlatVector::GetData<data_ptr_t>(addresses_vec);
+	for (idx_t i = 0; i < valid_count; i++) {
+		addresses_finalize[i] = temp_state_buf.get() + i * layout.aligned_state_size;
+	}
+	Vector result_roundtrip(result.GetType(), valid_count);
+	bind_data.aggr.GetStateFinalizeCallback()(addresses_vec, aggr_input_data, result_roundtrip, valid_count, 0);
+
+	Vector result_slice(result.GetType(), valid_count);
+	result_slice.Slice(result, valid_sel, valid_count);
+	SelectionVector true_sel(valid_count);
+	SelectionVector false_sel(valid_count);
+	idx_t match_count =
+	    VectorOperations::NotDistinctFrom(result_slice, result_roundtrip, nullptr, valid_count, &true_sel, &false_sel);
+	D_ASSERT(match_count == valid_count &&
+	         "Struct state roundtrip failed: finalize(serialize->deserialize(state)) != finalize(state). "
+	         "Check SerializeStructFields/DeserializeStructFields for this aggregate.");
+}
+#endif
 
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
@@ -355,7 +445,8 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 			state_vec_ptr[i] = local_state.state_buffer.get() + i * layout.aligned_state_size;
 		}
 
-		DeserializeStructFields(layout, input.data[0], state_data, input.size(), local_state.state_buffer.get());
+		DeserializeStructFields(layout, layout.aligned_state_size, input.data[0], state_data, input.size(),
+		                        local_state.state_buffer.get());
 	} else {
 		for (idx_t i = 0; i < input.size(); i++) {
 			auto target_ptr = local_state.state_buffer.get() + layout.aligned_state_size * i;
@@ -381,6 +472,13 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 			FlatVector::SetNull(result, i, true);
 		}
 	}
+
+#ifdef DEBUG
+	if (layout.is_struct) {
+		VerifyStructStateRoundtrip(layout, input.data[0], input.size(), state_data, state_vec_ptr, result, bind_data,
+		                           aggr_input_data);
+	}
+#endif
 }
 
 void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &result) {
@@ -624,7 +722,8 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 
 	// combine
 	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type &&
-	    arguments[1]->return_type.id() != LogicalTypeId::BLOB) {
+	    arguments[1]->return_type.id() != LogicalTypeId::BLOB &&
+	    arguments[1]->return_type.id() != LogicalTypeId::STRUCT) {
 		throw BinderException("Cannot COMBINE aggregate states from different functions, %s <> %s",
 		                      arguments[0]->return_type.ToString(), arguments[1]->return_type.ToString());
 	}
@@ -634,6 +733,11 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 	} else {
 		D_ASSERT(bound_function.name == "combine");
 		bound_function.SetReturnType(arguments[0]->return_type);
+		// When the second argument is a STRUCT (e.g. from a parquet round-trip), prevent casting to AGGREGATE_STATE by
+		// matching the declared parameter type to the actual argument type.
+		if (arguments.size() == 2 && arguments[1]->return_type.id() == LogicalTypeId::STRUCT) {
+			bound_function.arguments[1] = arguments[1]->return_type;
+		}
 	}
 
 	return std::move(bind_data);
@@ -734,7 +838,7 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 		target_ptrs[i] = state_ptrs[sdata.sel->get_index(i)];
 	}
 
-	DeserializeStructFields(layout, inputs[0], input_data, count, temp_state_buf.get());
+	DeserializeStructFields(layout, layout.aligned_state_size, inputs[0], input_data, count, temp_state_buf.get());
 
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	AggregateInputData combine_input(nullptr, allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);

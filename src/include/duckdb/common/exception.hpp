@@ -301,6 +301,7 @@ public:
 
 class InterruptException : public Exception {
 public:
+	static constexpr const char *INTERRUPT_MESSAGE = "Interrupted!";
 	DUCKDB_API InterruptException();
 };
 

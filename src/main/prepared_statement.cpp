@@ -134,4 +134,25 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
 	return result;
 }
 
+bool PreparedStatement::CanCachePlan(const LogicalOperator &root) {
+	vector<const_reference<LogicalOperator>> operators;
+	operators.push_back(root);
+
+	for (idx_t i = 0; i < operators.size(); i++) {
+		auto &op = operators[i].get();
+		switch (op.type) {
+		case LogicalOperatorType::LOGICAL_GET:
+			// this operator prevents caching
+			return false;
+		default:
+			break;
+		}
+		// investigate the children of this operator
+		for (auto &child : op.children) {
+			operators.push_back(*child);
+		}
+	}
+	return true;
+}
+
 } // namespace duckdb

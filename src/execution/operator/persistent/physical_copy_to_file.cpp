@@ -264,15 +264,17 @@ CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
 	// If we reach here, the query failed before Finalize was called
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file : created_files) {
-		fs.TryRemoveFile(file);
+		try {
+			fs.TryRemoveFile(file);
+		} catch (...) {
+			// TryRemoveFile migth fail for a varieaty of reasons, but we can't really propagate error codes here, so
+			// best effort cleanup
+		}
 	}
 }
 
-string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
-	auto &fs = FileSystem::GetFileSystem(context);
-	string trimmed_path = file_path;
-	StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
-	return trimmed_path;
+string PhysicalCopyToFile::GetTrimmedPath(ClientContext & /*unused_context*/) const {
+	return Path::Normalize(file_path);
 }
 
 class CopyToFunctionLocalState : public LocalSinkState {

@@ -57,30 +57,6 @@ on:
         type: boolean
         required: false
         default: true
-  push:
-    branches-ignore:
-      - 'main'
-      - 'feature'
-      - 'v*.*-*'
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Extensions.yml'
-      - '!.github/workflows/_extension_distribution.yml'
-  merge_group:
-  pull_request:
-    types: [opened, reopened, ready_for_review, converted_to_draft]
-    paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Extensions.yml'
-      - '!.github/workflows/_extension_distribution.yml'
 
 concurrency:
   group: extensions-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -113,6 +89,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-draft
     outputs:
+      # NOTE: on PRs we exclude some archs to speed things up
+      reduced_ci_mode: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'enabled' || 'disabled' }}
       main_extensions_config: ${{ steps.set-main-extensions.outputs.extension_config }}
       main_extensions_exclude_archs: ${{ steps.set-main-extensions.outputs.exclude_archs }}
       main_extensions_opt_in_archs: ${{ steps.set-main-extensions.outputs.opt_in_archs }}
@@ -122,8 +100,6 @@ jobs:
       external_extensions_exclude_archs: ${{ steps.set-external-extensions.outputs.exclude_archs }}
 
     env:
-      # NOTE: on PRs we exclude some archs to speed things up
-      BASE_EXCLUDE_ARCHS: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'wasm_mvp;wasm_threads;windows_amd64_mingw;osx_amd64;osx_arm64;linux_arm64;linux_amd64_musl;' || '' }}
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
       OPT_IN_ARCHS: ${{ inputs.opt_in_archs }}
     steps:
@@ -140,7 +116,7 @@ jobs:
           DEFAULT_EXCLUDE_ARCHS: ''
         run: |
           # Set config
-          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
+          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
           echo opt_in_archs="$OPT_IN_ARCHS" >> $GITHUB_OUTPUT
           in_tree_extensions="`cat $IN_TREE_CONFIG_FILE`"
           out_of_tree_extensions="`cat $OUT_OF_TREE_CONFIG_FILE`"
@@ -157,7 +133,7 @@ jobs:
           CONFIG_FILE: .github/config/rust_based_extensions.cmake
           DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_rtools;windows_amd64_mingw;linux_amd64_musl'
         run: |
-          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
+          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
           rust_based_extensions="`cat .github/config/rust_based_extensions.cmake`"
           echo "extension_config<<EOF" >> $GITHUB_OUTPUT
           echo "$rust_based_extensions" >> $GITHUB_OUTPUT
@@ -170,73 +146,70 @@ jobs:
           CONFIG_FILE: .github/config/external_extensions.cmake
           DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
         run: |
-          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
+          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
           external_extensions="`cat .github/config/external_extensions.cmake`"
           echo "extension_config<<EOF" >> $GITHUB_OUTPUT
           echo "$external_extensions" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT
 
-  # Build the extensions from .github/config/in_tree_extensions.cmake
-  main-extensions:
-    name: Main Extensions
+  # Build the extensions from .github/config/{in_tree,rust_based,external}_extensions.cmake
+  extensions-build:
+    name: ${{ matrix.name }}
     needs:
       - load-extension-configs
       - vars
-    uses: ./.github/workflows/_extension_distribution.yml
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Main Extensions
+            artifact_prefix: main-extensions
+            exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
+            opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
+            extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
+            extra_toolchains: unixodbc
+          - name: Rust-based Extensions
+            artifact_prefix: rust-based-extensions
+            exclude_archs: ${{ needs.load-extension-configs.outputs.rust_based_extensions_exclude_archs }}
+            opt_in_archs: ''
+            extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
+            extra_toolchains: rust
+          - name: External Extensions
+            artifact_prefix: external-extensions
+            exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions_exclude_archs }}
+            opt_in_archs: ''
+            extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
+            extra_toolchains: rust
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      artifact_prefix: main-extensions
-      exclude_archs: ${{ needs.load-extension-configs.outputs.main_extensions_exclude_archs }}
-      opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
-      extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
-      extra_toolchains: 'unixodbc'
-      override_tag: ${{ inputs.override_git_describe }}
-      override_duckdb_version: ${{ inputs.git_ref }}
+      # We piggy-back extension-template to build the extensions in extension_config
+      override_repository: duckdb/extension-template
+      override_ref: main
+      upload_all_extensions: true
+      extension_name: ${{ matrix.artifact_prefix }}
+      # NOTE: on PRs we exclude some archs to speed things up
+      reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
+      set_caller_as_duckdb: true
+      duckdb_version: ${{ inputs.git_ref }}
+      override_ci_tools_repository: duckdb/extension-ci-tools
+      ci_tools_version: main
+      exclude_archs: ${{ matrix.exclude_archs }}
+      opt_in_archs: ${{ matrix.opt_in_archs }}
+      extra_toolchains: ${{ matrix.extra_toolchains }}
+      use_merged_vcpkg_manifest: '1'
+      duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
-
-  # Build the extensions from .github/config/rust_based_extensions.cmake
-  rust-based-extensions:
-    name: Rust-based Extensions
-    needs:
-      - load-extension-configs
-      - vars
-    uses: ./.github/workflows/_extension_distribution.yml
-    with:
-      exclude_archs: ${{ needs.load-extension-configs.outputs.rust_based_extensions_exclude_archs }}
-      artifact_prefix: rust-based-extensions
-      extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
-      extra_toolchains: 'rust'
-      override_tag: ${{ inputs.override_git_describe }}
-      override_duckdb_version: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
-      save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
-
-  # Build the extensions from .github/config/external_extensions.cmake
-  external-extensions:
-    name: External Extensions
-    needs:
-      - load-extension-configs
-      - vars
-    uses: ./.github/workflows/_extension_distribution.yml
-    with:
-      exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions_exclude_archs }}
-      artifact_prefix: external-extensions
-      extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
-      extra_toolchains: 'rust'
-      override_tag: ${{ inputs.override_git_describe }}
-      override_duckdb_version: ${{ inputs.git_ref }}
-      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
-      save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
+      extensions_test_selection: 'complete'
+      extra_extension_config: ${{ matrix.extension_config }}
 
   # Merge all extensions into a single, versioned repository
   create-extension-repository:
     name: Create Extension Repository
     runs-on: ubuntu-latest
     needs:
-      - main-extensions
-      - rust-based-extensions
-      - external-extensions
+      - extensions-build
     steps:
       - uses: actions/checkout@v4
         with:
@@ -329,8 +302,7 @@ jobs:
 
       - name: Setup Build Environment
         run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq ninja-build ccache
+          make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -361,7 +333,7 @@ jobs:
           LOCAL_EXTENSION_REPO: /tmp/extension-repository
           DUCKDB_TEST_DESCRIPTION: 'Running with autoloading of extensions. Run unittest --autoloading available to reproduce locally. Add require no_extension_autoloading to skip the test'
         run: |
-          ./build/release/test/unittest --autoloading available --skip-compiled
+          python3 scripts/ci/run_tests.py --test-flags="--autoloading available --skip-compiled" ./build/release/test/unittest
 
   check-load-install-extensions:
     name: Checks extension entries
@@ -385,7 +357,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 

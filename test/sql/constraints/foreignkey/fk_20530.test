@@ -1,0 +1,56 @@
+# name: test/sql/constraints/foreignkey/fk_20530.test
+# description: Issue #20530: Unqualified foreign key schema resolution
+# group: [foreignkey]
+
+statement ok
+CREATE SCHEMA freddy;
+
+statement ok
+SET schema = freddy;
+
+statement ok
+CREATE TABLE zippy(
+    id INTEGER PRIMARY KEY
+);
+
+statement ok
+CREATE TABLE george(
+    zippy_id INTEGER,
+    FOREIGN KEY (zippy_id) REFERENCES zippy(id)
+);
+
+statement ok
+INSERT INTO zippy VALUES (1);
+
+statement ok
+INSERT INTO george VALUES (1);
+
+query I
+SELECT constraint_text
+FROM duckdb_constraints()
+WHERE table_name = 'george'
+  AND constraint_type = 'FOREIGN KEY';
+----
+FOREIGN KEY (zippy_id) REFERENCES freddy.zippy(id)
+
+statement ok
+SET schema = main;
+
+statement ok
+CREATE TABLE zippy_main(
+    id INTEGER PRIMARY KEY
+);
+
+statement ok
+CREATE TABLE george_main(
+    zippy_id INTEGER,
+    FOREIGN KEY (zippy_id) REFERENCES zippy_main(id)
+);
+
+query I
+SELECT constraint_text
+FROM duckdb_constraints()
+WHERE table_name = 'george_main'
+  AND constraint_type = 'FOREIGN KEY';
+----
+FOREIGN KEY (zippy_id) REFERENCES zippy_main(id)

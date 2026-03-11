@@ -164,7 +164,7 @@ static unique_ptr<BaseStatistics> StatisticsPropagateVariant(const BaseStatistic
 		return nullptr;
 	}
 	// extract the typed stats
-	auto &typed_stats = StructStats::GetChildStats(shredded_stats, 1);
+	auto &typed_stats = VariantStats::GetTypedStats(shredded_stats);
 	if (structured_type == target) {
 		// type matches - return stats directly
 		return typed_stats.ToUnique();

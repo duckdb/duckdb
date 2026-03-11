@@ -307,7 +307,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	return has_correlation;
 }
 
-bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op, idx_t cte_index) {
+bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op, TableIndex cte_index) {
 	// Do not mark base table scans as correlated
 	auto entry = has_correlated_expressions.find(op);
 	D_ASSERT(entry != has_correlated_expressions.end());
@@ -383,7 +383,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
 				if (op.correlated_columns == 0) {
-					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns);
+					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns,
+					                            CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS);
 					cte_rewriter.VisitOperator(*plan);
 				}
 			}
@@ -502,7 +503,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
-		idx_t delim_table_index;
+		TableIndex delim_table_index;
 		idx_t delim_column_offset;
 		idx_t delim_data_offset;
 		auto new_group_count = perform_delim ? correlated_columns.size() : 1;
@@ -605,6 +606,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// cross product
 		// push into both sides of the plan
+		D_ASSERT(has_correlated_expressions.find(*plan->children[0]) != has_correlated_expressions.end());
+		D_ASSERT(has_correlated_expressions.find(*plan->children[1]) != has_correlated_expressions.end());
 		bool left_has_correlation = has_correlated_expressions.find(*plan->children[0])->second;
 		bool right_has_correlation = has_correlated_expressions.find(*plan->children[1])->second;
 		if (!right_has_correlation) {
@@ -1055,7 +1058,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
-		idx_t table_index = 0;
+		TableIndex table_index(0);
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
@@ -1081,8 +1084,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
-		RewriteCTEScan cte_rewriter(table_index, correlated_columns,
-		                            plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
+		CTEScanRewriteMode rewrite_mode;
+		if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			rewrite_mode = CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS;
+		} else if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			rewrite_mode = CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS;
+		} else {
+			throw InternalException("Unsupported CTE operator type for CTEScanRewriteMode selection");
+		}
+		RewriteCTEScan cte_rewriter(table_index, correlated_columns, rewrite_mode);
 		cte_rewriter.VisitOperator(*plan->children[1]);
 
 		parent_propagate_null_values = false;

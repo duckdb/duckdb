@@ -93,6 +93,7 @@ private:
 		if (StringUtil::CIEquals(keyword, token.text)) {
 			// move to the next token
 			state.token_index++;
+			state.UpdateMaxTokenIndex();
 			return true;
 		}
 		return false;
@@ -458,9 +459,11 @@ public:
 		string result_text = token_text;
 		if (IsQuoted(result_text)) {
 			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
 		}
 		if (IsSingleQuoted(result_text) && SupportsStringLiteral()) {
 			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "''", "'");
 		}
 		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
 	}
@@ -559,6 +562,7 @@ private:
 			return false;
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 
@@ -585,10 +589,12 @@ public:
 		if (!MatchReservedIdentifier(state)) {
 			return nullptr;
 		}
-		if (IsQuoted(token_text)) {
-			token_text = token_text.substr(1, token_text.size() - 2);
+		string result_text = token_text;
+		if (IsQuoted(result_text)) {
+			result_text = result_text.substr(1, result_text.size() - 2);
+			result_text = StringUtil::Replace(result_text, "\"\"", "\"");
 		}
-		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(token_text));
+		return state.allocator.Allocate(make_uniq<IdentifierParseResult>(result_text));
 	}
 
 private:
@@ -598,6 +604,7 @@ private:
 			return false;
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -612,8 +619,14 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		// variable matchers match anything except for reserved keywords
-		if (!MatchStringLiteral(state)) {
+		if (state.token_index >= state.tokens.size()) {
+			return MatchResultType::FAIL;
+		}
+
+		auto &token_text = state.tokens[state.token_index].text;
+		auto string_info = GetSpecialStringInfo(token_text);
+
+		if (!MatchStringLiteral(state, string_info)) {
 			return MatchResultType::FAIL;
 		}
 		return MatchResultType::SUCCESS;
@@ -623,13 +636,23 @@ public:
 		if (state.token_index >= state.tokens.size()) {
 			return nullptr;
 		}
-		auto &token_text = state.tokens[state.token_index].text;
-		if (!MatchStringLiteral(state)) {
+
+		auto &token = state.tokens[state.token_index];
+		auto string_info = GetSpecialStringInfo(token.text);
+
+		if (!MatchStringLiteral(state, string_info)) {
 			return nullptr;
 		}
-		string stripped_string = token_text.substr(1, token_text.length() - 2);
 
-		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string));
+		idx_t suffix_len = 1;
+		if (token.text.length() < string_info.prefix_len + suffix_len) {
+			return nullptr;
+		}
+
+		string stripped_string =
+		    token.text.substr(string_info.prefix_len, token.text.length() - (string_info.prefix_len + suffix_len));
+		stripped_string = StringUtil::Replace(stripped_string, "''", "'");
+		auto result = state.allocator.Allocate(make_uniq<StringLiteralParseResult>(stripped_string, string_info.type));
 		result->name = name;
 		return result;
 	}
@@ -643,10 +666,18 @@ public:
 	}
 
 private:
-	static bool MatchStringLiteral(MatchState &state) {
+	static bool MatchStringLiteral(MatchState &state, const SpecialStringInfo &string_info) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
-		if (token_text.size() >= 2 && token_text.front() == '\'' && token_text.back() == '\'') {
+
+		idx_t open_quote_idx = string_info.prefix_len - 1;
+		idx_t min_len = string_info.prefix_len + 1;
+
+		if (token_text.size() >= min_len && token_text[open_quote_idx] == '\'' && token_text.back() == '\'') {
 			state.token_index++;
+			state.UpdateMaxTokenIndex();
 			return true;
 		}
 		return false;
@@ -713,6 +744,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -776,6 +808,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };
@@ -803,7 +836,6 @@ public:
 		if (!MatchArithmeticOperator(state)) {
 			return nullptr;
 		}
-		Printer::Print("Found arithmetic operator!!!");
 		return state.allocator.Allocate(make_uniq<OperatorParseResult>(token_text));
 	}
 
@@ -831,6 +863,7 @@ private:
 			}
 		}
 		state.token_index++;
+		state.UpdateMaxTokenIndex();
 		return true;
 	}
 };

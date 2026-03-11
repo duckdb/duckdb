@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
 
@@ -64,7 +65,7 @@ public:
 	}
 
 public:
-	const arena_unordered_map<idx_t, PlanSignatureColumnIndexMap> &GetMap() const {
+	const arena_unordered_map<TableIndex, PlanSignatureColumnIndexMap> &GetMap() const {
 		return table_index_map;
 	}
 
@@ -99,7 +100,7 @@ private:
 					if (it != to_canonical_table_index.end()) {
 						continue; // We've seen this table index before
 					}
-					const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size();
+					TableIndex canonical(CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size());
 					D_ASSERT(to_canonical_table_index.find(original) == to_canonical_table_index.end());
 					D_ASSERT(restore_original_table_index.find(canonical) == restore_original_table_index.end());
 					to_canonical_table_index.emplace(make_pair(original, canonical));
@@ -146,7 +147,7 @@ private:
 			auto &aggr = op.Cast<LogicalAggregate>();
 			ConvertTableIndex<TYPE>(aggr.group_index, 0);
 			ConvertTableIndex<TYPE>(aggr.aggregate_index, 1);
-			if (aggr.groupings_index != DConstants::INVALID_INDEX) {
+			if (aggr.groupings_index.IsValid()) {
 				ConvertTableIndex<TYPE>(aggr.groupings_index, 2);
 			}
 			break;
@@ -222,14 +223,14 @@ private:
 	}
 
 	template <ConversionType TYPE>
-	void ConvertTableIndex(idx_t &table_index, const idx_t i) {
+	void ConvertTableIndex(TableIndex &table_index, const idx_t i) {
 		switch (TYPE) {
 		case ConversionType::TO_CANONICAL:
 			D_ASSERT(table_indices.size() == i);
 			D_ASSERT(table_index_map.find(table_index) == table_index_map.end());
 			table_index_map.emplace(table_index, PlanSignatureColumnIndexMap(allocator));
 			table_indices.emplace_back(table_index);
-			table_index = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size() + i;
+			table_index = TableIndex(CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size() + i);
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			table_index = table_indices[i];
@@ -305,46 +306,62 @@ private:
 
 	template <ConversionType TYPE>
 	bool ConvertExpressions(LogicalOperator &op) {
-		const auto &table_index_mapping =
-		    TYPE == ConversionType::TO_CANONICAL ? to_canonical_table_index : restore_original_table_index;
-		bool can_materialize = true;
 		idx_t info_idx = 0;
+		bool can_materialize = true;
 		LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
 			ExpressionIterator::EnumerateExpression(*expr, [&](unique_ptr<Expression> &child) {
-				// Replace column binding
-				if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &column_binding = child->Cast<BoundColumnRefExpression>().binding;
-					const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
-					                            ? column_binding.table_index
-					                            : restore_original_table_index.at(column_binding.table_index);
-					auto &table_map = table_index_map.at(lookup_idx);
-					if (!table_map.Empty<TYPE>()) {
-						// Replace column index
-						column_binding.column_index = table_map.Get<TYPE>(column_binding.column_index);
-					}
-					// Replace table index
-					column_binding.table_index = table_index_mapping.at(column_binding.table_index);
-				}
-
-				// Replace default fields
-				switch (TYPE) {
-				case ConversionType::TO_CANONICAL:
-					expression_info.emplace_back(std::move(child->alias), child->query_location);
-					child->alias.clear();
-					child->query_location.SetInvalid();
-					break;
-				case ConversionType::RESTORE_ORIGINAL:
-					auto &info = expression_info[info_idx++];
-					child->alias = std::move(info.first);
-					child->query_location = info.second;
-					break;
-				}
-				if (child->IsVolatile()) {
-					can_materialize = false;
-				}
+				ConvertExpression<TYPE>(*child, info_idx, can_materialize);
 			});
 		});
+		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = op.Cast<LogicalGet>();
+			for (auto &entry : get.table_filters) {
+				if (entry.Filter().filter_type != TableFilterType::EXPRESSION_FILTER) {
+					continue;
+				}
+				auto &expression_filter = entry.Filter().Cast<ExpressionFilter>();
+				ConvertExpression<TYPE>(*expression_filter.expr, info_idx, can_materialize);
+			}
+		}
 		return can_materialize;
+	}
+
+	template <ConversionType TYPE>
+	void ConvertExpression(Expression &expr, idx_t &info_idx, bool &can_materialize) {
+		const auto &table_index_mapping =
+		    TYPE == ConversionType::TO_CANONICAL ? to_canonical_table_index : restore_original_table_index;
+
+		// Replace column binding
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &column_binding = expr.Cast<BoundColumnRefExpression>().binding;
+			const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
+			                            ? column_binding.table_index
+			                            : restore_original_table_index.at(column_binding.table_index);
+			auto &table_map = table_index_map.at(lookup_idx);
+			if (!table_map.Empty<TYPE>()) {
+				// Replace column index
+				column_binding.column_index = table_map.Get<TYPE>(column_binding.column_index);
+			}
+			// Replace table index
+			column_binding.table_index = table_index_mapping.at(column_binding.table_index);
+		}
+
+		// Replace default fields
+		switch (TYPE) {
+		case ConversionType::TO_CANONICAL:
+			expression_info.emplace_back(std::move(expr.alias), expr.query_location);
+			expr.alias.clear();
+			expr.query_location.SetInvalid();
+			break;
+		case ConversionType::RESTORE_ORIGINAL:
+			auto &info = expression_info[info_idx++];
+			expr.alias = std::move(info.first);
+			expr.query_location = info.second;
+			break;
+		}
+		if (expr.IsVolatile()) {
+			can_materialize = false;
+		}
 	}
 
 private:
@@ -355,13 +372,13 @@ private:
 	ArenaAllocator &allocator;
 
 	//! Map from original table index to column index map
-	arena_unordered_map<idx_t, PlanSignatureColumnIndexMap> table_index_map;
+	arena_unordered_map<TableIndex, PlanSignatureColumnIndexMap> table_index_map;
 
 	//! Temporary map from original table index to canonical table index (and reverse)
-	arena_unordered_map<idx_t, idx_t> to_canonical_table_index;
-	arena_unordered_map<idx_t, idx_t> restore_original_table_index;
+	arena_unordered_map<TableIndex, TableIndex> to_canonical_table_index;
+	arena_unordered_map<TableIndex, TableIndex> restore_original_table_index;
 	//! Temporary vector to store table indices
-	vector<idx_t> table_indices;
+	vector<TableIndex> table_indices;
 	//! Temporary vector to store projection maps
 	vector<vector<idx_t>> projection_maps;
 
@@ -630,6 +647,7 @@ public:
 
 			if (!RefersToSameObject(current.op, root.get())) {
 				// We have all child information for this operator now, compute signature
+				D_ASSERT(operator_infos.find(current.op) != operator_infos.end());
 				auto &signature = operator_infos.find(current.op)->second.signature;
 				signature = CreatePlanSignature(current.op);
 
@@ -682,19 +700,23 @@ public:
 				to_remove.push_back(signature); // Just one operator in this subplan
 				continue;
 			}
+
 			if (subplan_info.subplans.size() == 1) {
 				to_remove.push_back(signature); // No other identical subplan
 				continue;
 			}
 
+			D_ASSERT(operator_infos.find(subplan_info.subplans[0].op) != operator_infos.end());
 			auto &parent_op = operator_infos.find(subplan_info.subplans[0].op)->second.parent;
+			D_ASSERT(operator_infos.find(parent_op) != operator_infos.end());
 			auto &parent_signature = operator_infos.find(parent_op)->second.signature;
 			if (parent_signature) {
 				auto parent_it = subplans.find(*parent_signature);
 				if (parent_it != subplans.end()) {
 					const auto subplan_count = subplan_info.subplans.size() * signature.OperatorCount();
-					const auto parent_count = parent_it->second.subplans.size() * parent_signature->OperatorCount();
-					if (parent_count >= subplan_count) {
+					const auto parent_subplan_count = parent_it->second.subplans.size();
+					const auto parent_count = parent_subplan_count * parent_signature->OperatorCount();
+					if (parent_subplan_count != 1 && parent_count >= subplan_count) {
 						to_remove.push_back(signature); // Parent is better, this one is redundant
 						continue;
 					}
@@ -732,7 +754,7 @@ public:
 				const auto &subplan_bindings = subplan_info.subplans[subplan_idx].canonical_bindings;
 				for (auto &cb : subplan_bindings) {
 					if (max_subplan_column_binding_set.find(cb) == max_subplan_column_binding_set.end()) {
-						bail = true; // Subplan does not fully contain the the other subplans
+						bail = true; // Subplan does not fully contain the other subplans
 						break;
 					}
 				}
@@ -841,7 +863,7 @@ public:
 				auto &rhs_child = current_op.get()->children[1];
 				if (rhs_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 					const auto child_table_index = rhs_child->Cast<LogicalMaterializedCTE>().table_index;
-					if (child_table_index >= min_cte_idx.GetIndex() && child_table_index < cte_index) {
+					if (child_table_index >= min_cte_idx && child_table_index < cte_index) {
 						auto tmp = std::move(rhs_child->children[1]);
 						rhs_child->children[1] = std::move(current_op.get());
 						current_op.get() = std::move(rhs_child);
@@ -982,9 +1004,9 @@ private:
 	//! Mapping from subplan signature to subplan information
 	subplan_map_t subplans;
 	//! Mapping from original table index to canonical table index
-	unordered_map<idx_t, idx_t> to_canonical_table_index;
+	unordered_map<TableIndex, TableIndex> to_canonical_table_index;
 	//! Minimum CTE index created by this optimizer
-	optional_idx min_cte_idx;
+	TableIndex min_cte_idx;
 };
 
 //===--------------------------------------------------------------------===//
