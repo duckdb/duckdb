@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -20,11 +21,7 @@ struct CreateTriggerInfo : public CreateInfo {
 	//! Trigger name
 	string trigger_name;
 	//! The table the trigger is on
-	string table_name;
-	//! Table catalog
-	string table_catalog;
-	//! Table schema
-	string table_schema;
+	unique_ptr<BaseTableRef> base_table;
 	//! When the trigger fires (BEFORE/AFTER/INSTEAD OF)
 	TriggerTiming timing;
 	//! The event that fires the trigger (INSERT/DELETE/UPDATE)

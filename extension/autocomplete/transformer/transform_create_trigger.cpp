@@ -5,7 +5,7 @@ namespace duckdb {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
-	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' QualifiedName
+	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName
 	// ForEachRow? Statement
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
@@ -13,7 +13,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	auto timing = transformer.Transform<TriggerTiming>(list_pr.Child<ListParseResult>(3));
 	auto trigger_event = transformer.Transform<TriggerEventInfo>(list_pr.Child<ListParseResult>(4));
 	// index 5 is 'ON'
-	auto table_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(6));
+	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(6));
 	bool for_each_row = list_pr.Child<OptionalParseResult>(7).HasResult();
 	auto sql_body = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(8));
 
@@ -26,9 +26,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	info->timing = timing;
 	info->event_type = trigger_event.event_type;
 	info->columns = std::move(trigger_event.columns);
-	info->table_name = table_name.name;
-	info->table_catalog = table_name.catalog;
-	info->table_schema = table_name.schema;
+	info->base_table = std::move(base_table);
 	info->for_each_row = for_each_row;
 	info->sql_body_text = sql_body->ToString();
 	info->sql_body = std::move(sql_body);

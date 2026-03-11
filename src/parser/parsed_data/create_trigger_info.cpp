@@ -12,9 +12,10 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	auto result = make_uniq<CreateTriggerInfo>();
 	CopyProperties(*result);
 	result->trigger_name = trigger_name;
-	result->table_name = table_name;
-	result->table_catalog = table_catalog;
-	result->table_schema = table_schema;
+	result->base_table = make_uniq<BaseTableRef>();
+	result->base_table->catalog_name = base_table->catalog_name;
+	result->base_table->schema_name = base_table->schema_name;
+	result->base_table->table_name = base_table->table_name;
 	result->timing = timing;
 	result->event_type = event_type;
 	result->columns = columns;
@@ -71,7 +72,7 @@ string CreateTriggerInfo::ToString() const {
 		break;
 	}
 	ss << " ON ";
-	ss << QualifierToString(table_catalog, table_schema, table_name);
+	ss << QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
 	if (for_each_row) {
 		ss << " FOR EACH ROW";
 	}

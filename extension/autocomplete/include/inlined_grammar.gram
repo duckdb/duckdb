@@ -1571,7 +1571,7 @@ CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
 CommentValue <- 'NULL' / StringLiteral
-CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' QualifiedName ForEachRow? Statement
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachRow? Statement
 
 TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
 TriggerBefore <- 'BEFORE'
