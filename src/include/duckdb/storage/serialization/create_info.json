@@ -344,17 +344,23 @@
       {
         "id": 201,
         "name": "table_name",
-        "type": "string"
+        "type": "string",
+        "serialize_property": "base_table->table_name",
+        "deserialize_property": "base_table->table_name"
       },
       {
         "id": 202,
         "name": "table_catalog",
-        "type": "string"
+        "type": "string",
+        "serialize_property": "base_table->catalog_name",
+        "deserialize_property": "base_table->catalog_name"
       },
       {
         "id": 203,
         "name": "table_schema",
-        "type": "string"
+        "type": "string",
+        "serialize_property": "base_table->schema_name",
+        "deserialize_property": "base_table->schema_name"
       },
       {
         "id": 204,

@@ -205,7 +205,6 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTriggerInfo>(new CreateTriggerInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "trigger_name", result->trigger_name);
-	result->base_table = make_uniq<BaseTableRef>();
 	deserializer.ReadPropertyWithDefault<string>(201, "table_name", result->base_table->table_name);
 	deserializer.ReadPropertyWithDefault<string>(202, "table_catalog", result->base_table->catalog_name);
 	deserializer.ReadPropertyWithDefault<string>(203, "table_schema", result->base_table->schema_name);

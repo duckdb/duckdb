@@ -6,16 +6,14 @@ namespace duckdb {
 CreateTriggerInfo::CreateTriggerInfo()
     : CreateInfo(CatalogType::TRIGGER_ENTRY, INVALID_SCHEMA), timing(TriggerTiming::AFTER),
       event_type(TriggerEventType::INSERT_EVENT), for_each_row(false) {
+	base_table = make_uniq<BaseTableRef>();
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	auto result = make_uniq<CreateTriggerInfo>();
 	CopyProperties(*result);
 	result->trigger_name = trigger_name;
-	result->base_table = make_uniq<BaseTableRef>();
-	result->base_table->catalog_name = base_table->catalog_name;
-	result->base_table->schema_name = base_table->schema_name;
-	result->base_table->table_name = base_table->table_name;
+	result->base_table = unique_ptr_cast<TableRef, BaseTableRef>(base_table->Copy());
 	result->timing = timing;
 	result->event_type = event_type;
 	result->columns = columns;
