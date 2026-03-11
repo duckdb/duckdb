@@ -935,9 +935,13 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 	return false;
 }
 
+unique_ptr<ShellState> &ShellState::GetReference() {
+	static unique_ptr<ShellState> reference = make_uniq<ShellState>();
+	return reference;
+}
+
 ShellState &ShellState::Get() {
-	static ShellState state;
-	return state;
+	return *GetReference();
 }
 
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
@@ -3062,12 +3066,7 @@ void ShellState::DetectDarkLightMode() {
 #endif
 }
 
-#if SQLITE_SHELL_IS_UTF8
-int main(int argc, const char **argv) {
-#else
-int wmain(int argc, wchar_t **wargv) {
-	const char **argv;
-#endif
+int RunShell(int argc, const char **argv) {
 	int rc = 0;
 	vector<string> extra_commands;
 	ShellStateDestroyer destroyer;
@@ -3085,14 +3084,6 @@ int wmain(int argc, wchar_t **wargv) {
 
 	/* On Windows, we must translate command-line arguments into UTF-8.
 	 */
-#if !SQLITE_SHELL_IS_UTF8
-	vector<string> utf8_args;
-	utf8_args.resize(argc);
-	for (i = 0; i < argc; i++) {
-		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		argv[i] = utf8_args[i].c_str();
-	}
-#endif
 
 	assert(argc >= 1 && argv && argv[0]);
 	data.program_name = argv[0];
@@ -3271,5 +3262,38 @@ int wmain(int argc, wchar_t **wargv) {
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
+	return rc;
+}
+
+#if SQLITE_SHELL_IS_UTF8
+int main(int argc, const char **argv) {
+#else
+int wmain(int argc, wchar_t **wargv) {
+	const char **argv;
+	vector<string> utf8_args;
+	utf8_args.resize(argc);
+	for (i = 0; i < argc; i++) {
+		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
+		argv[i] = utf8_args[i].c_str();
+	}
+#endif
+
+	auto &shell_state = ShellState::GetReference();
+	int rc = 0;
+	try {
+		rc = RunShell(argc, argv);
+	} catch (std::exception &ex) {
+		rc = 1;
+		ErrorData error(ex);
+		fprintf(stderr, "Exited due to error: %s", error.Message().c_str());
+	}
+	try {
+		// destroy shell state prior to program clean-up
+		shell_state.reset();
+	} catch (std::exception &ex) {
+		rc = 1;
+		ErrorData error(ex);
+		fprintf(stderr, "Error during clean-up due to error: %s", error.Message().c_str());
+	}
 	return rc;
 }
