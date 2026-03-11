@@ -1187,8 +1187,7 @@ vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 			lock_guard<mutex> guard(single_file_block_lock);
 			free_list_count =
 			    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
-			multi_use_blocks_count =
-			    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
+			multi_use_blocks_count = multi_use_blocks.size();
 		}
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * free_list_count;
 		auto multi_use_blocks_size =
