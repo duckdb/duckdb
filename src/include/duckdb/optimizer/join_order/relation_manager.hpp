@@ -84,8 +84,6 @@ public:
 	vector<unique_ptr<FilterInfo>> ExtractEdges(vector<reference<LogicalOperator>> &filter_operators,
 	                                            JoinRelationSetManager &set_manager);
 
-	//! Extract all column bindings from an expression
-	void ExtractColumnBindingsFromExpression(Expression &expression, unordered_set<idx_t> &bindings);
 	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings);
 	//! Inspects an expression and creates filter info instances that can connect two relations

@@ -35,19 +35,6 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	return true;
 }
 
-void QueryGraphManager::GetColumnBinding(Expression &root_expr, ColumnBinding &binding) {
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &colref) {
-		    D_ASSERT(colref.depth == 0);
-		    D_ASSERT(colref.binding.table_index.IsValid());
-		    // map the base table index to the relation index used by the JoinOrderOptimizer
-		    D_ASSERT(relation_manager.relation_mapping.find(colref.binding.table_index) !=
-		             relation_manager.relation_mapping.end());
-		    binding = ColumnBinding(TableIndex(relation_manager.relation_mapping[colref.binding.table_index].index),
-		                            colref.binding.column_index);
-	    });
-}
-
 const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() const {
 	return filters_and_bindings;
 }

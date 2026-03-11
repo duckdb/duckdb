@@ -568,23 +568,6 @@ optional_ptr<JoinRelationSet> RelationManager::GetJoinRelations(column_binding_s
 	return *ret;
 }
 
-void RelationManager::ExtractColumnBindingsFromExpression(Expression &expression, unordered_set<idx_t> &bindings) {
-	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index.IsValid());
-		if (relation_mapping.find(colref.binding.table_index) != relation_mapping.end()) {
-			bindings.insert(relation_mapping[colref.binding.table_index].index);
-		}
-	}
-	if (expression.GetExpressionType() == ExpressionType::BOUND_REF) {
-		bindings.clear();
-		return;
-	}
-	ExpressionIterator::EnumerateChildren(
-	    expression, [&](Expression &expr) { ExtractColumnBindingsFromExpression(expr, bindings); });
-}
-
 bool RelationManager::ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
@@ -843,18 +826,14 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 				}
 				// Store non-comparison ON-clause conditions as residual predicates.
 				if (!non_comparison_exprs.empty()) {
-					unordered_set<idx_t> raw_all_bindings;
+					unordered_set<RelationIndex> all_bindings;
 					for (auto &cond : join.conditions) {
 						if (cond.IsComparison()) {
-							ExtractColumnBindingsFromExpression(cond.GetLHS(), raw_all_bindings);
-							ExtractColumnBindingsFromExpression(cond.GetRHS(), raw_all_bindings);
+							ExtractBindings(cond.GetLHS(), all_bindings);
+							ExtractBindings(cond.GetRHS(), all_bindings);
 						} else {
-							ExtractColumnBindingsFromExpression(cond.GetJoinExpression(), raw_all_bindings);
+							ExtractBindings(cond.GetJoinExpression(), all_bindings);
 						}
-					}
-					unordered_set<RelationIndex> all_bindings;
-					for (auto &b : raw_all_bindings) {
-						all_bindings.insert(RelationIndex(b));
 					}
 					auto full_set = &set_manager.GetJoinRelation(all_bindings);
 					if (!full_set->Empty()) {
@@ -938,18 +917,14 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 
 				// Store non-comparison ON-clause conditions as residual predicates.
 				if (!non_comparison_exprs.empty()) {
-					unordered_set<idx_t> raw_all_bindings;
+					unordered_set<RelationIndex> all_bindings;
 					for (auto &cond : join.conditions) {
 						if (cond.IsComparison()) {
-							ExtractColumnBindingsFromExpression(cond.GetLHS(), raw_all_bindings);
-							ExtractColumnBindingsFromExpression(cond.GetRHS(), raw_all_bindings);
+							ExtractBindings(cond.GetLHS(), all_bindings);
+							ExtractBindings(cond.GetRHS(), all_bindings);
 						} else {
-							ExtractColumnBindingsFromExpression(cond.GetJoinExpression(), raw_all_bindings);
+							ExtractBindings(cond.GetJoinExpression(), all_bindings);
 						}
-					}
-					unordered_set<RelationIndex> all_bindings;
-					for (auto &b : raw_all_bindings) {
-						all_bindings.insert(RelationIndex(b));
 					}
 					auto full_set = &set_manager.GetJoinRelation(all_bindings);
 					if (!full_set->Empty()) {
@@ -993,12 +968,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(vector<reference<Lo
 								// Truly non-comparison expression - store as residual.
 								// If the expression has no column references (e.g. a bare `true`),
 								// skip it: there is no valid relation set to attach it to.
-								unordered_set<idx_t> raw_bindings;
-								ExtractColumnBindingsFromExpression(*expr, raw_bindings);
 								unordered_set<RelationIndex> bindings;
-								for (auto &b : raw_bindings) {
-									bindings.insert(RelationIndex(b));
-								}
+								ExtractBindings(*expr, bindings);
 								optional_ptr<JoinRelationSet> set = &set_manager.GetJoinRelation(bindings);
 								if (!set->Empty()) {
 									optional_ptr<JoinRelationSet> empty_set = set_manager.GetEmptyJoinRelationSet();

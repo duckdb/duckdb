@@ -476,9 +476,9 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
 	if (subgraphs.empty() || subgraphs.at(0).denom == 0) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
-		return DenomInfo(set, 1, 1);
+		return DenomInfo(set, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).numerator_relations, 1.0, subgraphs.at(0).denom * denom_multiplier);
+	return DenomInfo(*subgraphs.at(0).numerator_relations, subgraphs.at(0).denom * denom_multiplier);
 }
 
 // Cardinality is calculated using logic found in
@@ -504,7 +504,6 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	// we pass numerator relations, because for semi and anti joins, we don't want to
 	// include cardinalities of relations on the RHS of a semi/anti join.
 	auto numerator = GetNumerator(denom.numerator_relations);
-	numerator *= denom.extra_multiplier;
 
 	double result = numerator / denom.denominator;
 	auto new_entry = CardinalityHelper(result);

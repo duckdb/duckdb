@@ -23,3 +23,20 @@ query II
 explain select * from large left join medium on (l_id = m_id) left join small on (l_id = s_id);
 ----
 physical_plan	<REGEX>:.*~100.000 rows.*
+
+# multi-condition LEFT join: large LEFT JOIN medium ON (l_id=m_id AND l_x=m_x)
+# With the old product formula, D = D_id * D_x = 10K * 5K = 50M >> |medium|=10K, so
+# left_join_extra would be ~5000 to compensate — astronomically large intermediate values.
+# With min(D, |RHS|), denom = min(10K, 10K) = 10K, estimate = |large| * |medium| / 10K = |large|.
+
+statement ok
+create table large_mc as select range l_id, range % 5000 l_x from range(100000);
+
+statement ok
+create table medium_mc as select range m_id, range % 5000 m_x from range(10000);
+
+# cardinality estimate should still reflect the large table size (~100000 rows)
+query II
+explain select * from large_mc left join medium_mc on (l_id = m_id and l_x = m_x);
+----
+physical_plan	<REGEX>:.*~100.000 rows.*
