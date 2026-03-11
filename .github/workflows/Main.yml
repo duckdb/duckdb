@@ -192,7 +192,12 @@ jobs:
  regression:
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
+      - linux-release
+    with:
+      runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
  code-quality:
     uses: ./.github/workflows/CodeQuality.yml

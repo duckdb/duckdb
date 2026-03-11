@@ -4,10 +4,17 @@ on:
     inputs:
       base_hash:
         type: string
+      runner_linux_small:
+        default: ubuntu-latest
+        type: string
   workflow_dispatch:
     inputs:
       base_hash:
         description: 'Base hash'
+        type: string
+      runner_linux_small:
+        description: 'Optional small runner label override'
+        default: ubuntu-latest
         type: string
   repository_dispatch:
 
@@ -156,7 +163,7 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner_linux_small }}
     env:
       CC: gcc-10
       CXX: g++-10
@@ -178,10 +185,21 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - name: Build
+      - name: Download linux release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release-build
+          path: build
+
+      - name: Extract linux release artifact
         shell: bash
         run: |
-          make
+          rm -rf build/release
+          tar -xzf build/release-artifact.tar.gz -C build
+
+      - name: Build base branch
+        shell: bash
+        run: |
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
           make
