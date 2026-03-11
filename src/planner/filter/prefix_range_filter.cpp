@@ -1,6 +1,7 @@
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -13,24 +14,6 @@
 namespace duckdb {
 
 namespace {
-
-template <typename T>
-idx_t CountLeadingZeros(const T &v) {
-	D_ASSERT(std::is_unsigned<T>());
-	const idx_t bit_size = sizeof(v) * 8;
-	if (v == 0) {
-		return bit_size;
-	}
-
-	idx_t count = 0;
-	T mask = T(1) << (bit_size - 1);
-
-	while ((v & mask) == 0) {
-		++count;
-		mask >>= 1;
-	}
-	return count;
-}
 
 template <typename T>
 class NumericPrefixRangeFilter : public PrefixRangeFilter {
@@ -57,15 +40,15 @@ public:
 
 		if (span >= CAP_BITS) {
 			const auto q = static_cast<uint64_t>((span) >> MAX_PREFIX_LENGTH);
-			shift = (q <= 1) ? 0 : (64 - CountLeadingZeros(q - 1));
+			shift = (q <= 1) ? 0 : (64 - CountZeros<uint64_t>::Leading(q - 1));
 		}
 
 		const idx_t buckets = (span >> shift) + 1;
-		word_count = buckets == 0 ? 1 : (buckets + 63) >> 6;
-		const idx_t bitmap_bit_size = word_count * sizeof(uint64_t) * 8;
+		word_count = buckets == 0 ? 1 : (buckets + 63) >> WORD_SHIFT;
+		const idx_t bitmap_byte_size = word_count * sizeof(uint64_t);
 
 		BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
-		buf_ = buffer_manager.GetBufferAllocator().Allocate(64ULL + bitmap_bit_size);
+		buf_ = buffer_manager.GetBufferAllocator().Allocate(64ULL + bitmap_byte_size);
 		bitmap = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
 		std::fill_n(bitmap, word_count, 0);
 
@@ -75,10 +58,12 @@ public:
 	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {
 		D_ASSERT(bitmap);
 		BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
-		auto state_data = buffer_manager.GetBufferAllocator().Allocate(64ULL + word_count * sizeof(uint64_t) * 8);
+		const idx_t bitmap_byte_size = word_count * sizeof(uint64_t);
+		auto state_data = buffer_manager.GetBufferAllocator().Allocate(64ULL + bitmap_byte_size);
 		auto state_bitmap =
 		    reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(state_data.get())) & ~63ULL);
 		std::fill_n(state_bitmap, word_count, 0);
+
 		return make_uniq<NumericBuildState>(std::move(state_data), state_bitmap, word_count);
 	}
 
@@ -96,7 +81,7 @@ public:
 				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
 				const U idx = y >> shift;
-				state.bitmap[idx >> 6] |= 1ULL << (idx & 63u);
+				state.bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
@@ -108,7 +93,7 @@ public:
 				const U y = key - min;
 				// All x are in-range by construction, so range check can be omitted here.
 				const U idx = y >> shift;
-				state.bitmap[idx >> 6] |= 1ULL << (idx & 63u);
+				state.bitmap[idx >> WORD_SHIFT] |= 1ULL << (idx & WORD_MASK);
 			}
 		}
 	}
@@ -126,8 +111,8 @@ public:
 		const U y = key - min;
 		const U bit_idx = y >> shift;
 		const uint8_t in_range = y <= span;
-		const uint32_t word_idx = (bit_idx >> 6) & (0U - in_range);
-		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & 63ULL)) & 1ULL;
+		const uint32_t word_idx = (bit_idx >> WORD_SHIFT) & (0U - in_range);
+		const uint8_t bit = (bitmap[word_idx] >> (bit_idx & WORD_MASK)) & 1ULL;
 		return bit & in_range;
 	}
 
@@ -183,17 +168,19 @@ public:
 
 		const auto lb_y = static_cast<U>(adjusted_lb - static_cast<U>(min_t));
 		const U lb_bit_idx = lb_y >> shift;
-		const U lb_word_idx = lb_bit_idx >> 6;
+		const U lb_word_idx = lb_bit_idx >> WORD_SHIFT;
 
 		const auto ub_y = static_cast<U>(adjusted_ub - static_cast<U>(min_t));
 		const U ub_bit_idx = ub_y >> shift;
-		const U ub_word_idx = ub_bit_idx >> 6;
+		const U ub_word_idx = ub_bit_idx >> WORD_SHIFT;
 
-		const auto lb_bit_off = lb_bit_idx & 63u;
-		const auto ub_bit_off = ub_bit_idx & 63u;
+		const auto lb_bit_off = lb_bit_idx & WORD_MASK;
+		const auto ub_bit_off = ub_bit_idx & WORD_MASK;
 
+		// TODO: Count the amount of 1's in the range, compare to a threshold, and make a decision if we want to use the
+		// per-row filter for this row group.
 		if (lb_word_idx == ub_word_idx) {
-			const auto range_mask = ((~0ULL << lb_bit_off) & (~0ULL >> (63u - ub_bit_off)));
+			const auto range_mask = ((~0ULL << lb_bit_off) & (~0ULL >> (WORD_MASK - ub_bit_off)));
 			if (bitmap[lb_word_idx] & range_mask) {
 				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			}
@@ -211,7 +198,7 @@ public:
 			}
 		}
 
-		const auto ub_word_mask = ~0ULL >> (63u - ub_bit_off);
+		const auto ub_word_mask = ~0ULL >> (WORD_MASK - ub_bit_off);
 		if (bitmap[ub_word_idx] & ub_word_mask) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -225,7 +212,9 @@ public:
 
 private:
 	static constexpr idx_t MAX_PREFIX_LENGTH = 20;
-	static constexpr size_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;
+	static constexpr idx_t CAP_BITS = 1ULL << MAX_PREFIX_LENGTH;
+	static constexpr idx_t WORD_SHIFT = 6;
+	static constexpr idx_t WORD_MASK = 63;
 
 	bool initialized = false;
 	U min;
