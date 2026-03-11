@@ -155,7 +155,7 @@ CompressionFunctionSet::GetCompressionFunction(CompressionType type, const Physi
 	const auto &function_list = functions[index];
 	for (auto &function : function_list) {
 		if (function.type == type) {
-			return &function;
+			return function;
 		}
 	}
 	return nullptr;

@@ -74,7 +74,7 @@ class U_COMMON_API ICUServiceKey : public UObject {
   const UnicodeString _id;
 
  protected:
-  static const UChar PREFIX_DELIMITER;
+  static const char16_t PREFIX_DELIMITER;
 
  public:
 
@@ -138,16 +138,16 @@ class U_COMMON_API ICUServiceKey : public UObject {
   * must eventually return false.  This implementation has no fallbacks
   * and always returns false.</p>
   *
-  * @return TRUE if the ICUServiceKey changed to a valid fallback value.
+  * @return true if the ICUServiceKey changed to a valid fallback value.
   */
   virtual UBool fallback();
 
  /**
-  * <p>Return TRUE if a key created from id matches, or would eventually
+  * <p>Return true if a key created from id matches, or would eventually
   * fallback to match, the canonical ID of this ICUServiceKey.</p>
   *
   * @param id the id to test.
-  * @return TRUE if this ICUServiceKey's canonical ID is a fallback of id.
+  * @return true if this ICUServiceKey's canonical ID is a fallback of id.
   */
   virtual UBool isFallbackOf(const UnicodeString& id) const;
 
@@ -191,7 +191,7 @@ public:
   /**
    * UObject RTTI boilerplate.
    */
-  virtual UClassID getDynamicClassID() const;
+  virtual UClassID getDynamicClassID() const override;
 
 #ifdef SERVICE_DEBUG
  public:
@@ -217,7 +217,7 @@ class U_COMMON_API ICUServiceFactory : public UObject {
 
     /**
      * <p>Create a service object from the key, if this factory
-     * supports the key.  Otherwise, return NULL.</p>
+     * supports the key.  Otherwise, return nullptr.</p>
      *
      * <p>If the factory supports the key, then it can call
      * the service's getKey(ICUServiceKey, String[], ICUServiceFactory) method
@@ -230,7 +230,7 @@ class U_COMMON_API ICUServiceFactory : public UObject {
      * @param key the service key.
      * @param service the service with which this factory is registered.
      * @param status the error code status.
-     * @return the service object, or NULL if the factory does not support the key.
+     * @return the service object, or nullptr if the factory does not support the key.
      */
     virtual UObject* create(const ICUServiceKey& key, const ICUService* service, UErrorCode& status) const = 0;
 
@@ -291,15 +291,15 @@ class U_COMMON_API SimpleFactory : public ICUServiceFactory {
  public:
   /**
    * <p>Construct a SimpleFactory that maps a single ID to a single 
-   * service instance.  If visible is TRUE, the ID will be visible.
-   * The instance must not be NULL.  The SimpleFactory will adopt
+   * service instance.  If visible is true, the ID will be visible.
+   * The instance must not be nullptr.  The SimpleFactory will adopt
    * the instance, which must not be changed subsequent to this call.</p>
    *
    * @param instanceToAdopt the service instance to adopt.
    * @param id the ID to assign to this service instance.
-   * @param visible if TRUE, the ID will be visible.
+   * @param visible if true, the ID will be visible.
    */
-  SimpleFactory(UObject* instanceToAdopt, const UnicodeString& id, UBool visible = TRUE);
+  SimpleFactory(UObject* instanceToAdopt, const UnicodeString& id, UBool visible = true);
 
   /**
    * <p>Destructor.</p>
@@ -313,21 +313,21 @@ class U_COMMON_API SimpleFactory : public ICUServiceFactory {
    * @param key the service key.
    * @param service the service with which this factory is registered.
    * @param status the error code status.
-   * @return the service object, or NULL if the factory does not support the key.
+   * @return the service object, or nullptr if the factory does not support the key.
    */
-  virtual UObject* create(const ICUServiceKey& key, const ICUService* service, UErrorCode& status) const;
+  virtual UObject* create(const ICUServiceKey& key, const ICUService* service, UErrorCode& status) const override;
 
   /**
-   * <p>This implementation adds a mapping from ID -> this to result if visible is TRUE, 
+   * <p>This implementation adds a mapping from ID -> this to result if visible is true, 
    * otherwise it removes ID from result.</p>
    *
    * @param result the mapping table to update.
    * @param status the error code status.
    */
-  virtual void updateVisibleIDs(Hashtable& result, UErrorCode& status) const;
+  virtual void updateVisibleIDs(Hashtable& result, UErrorCode& status) const override;
 
   /**
-   * <p>This implementation returns the factory ID if it equals id and visible is TRUE,
+   * <p>This implementation returns the factory ID if it equals id and visible is true,
    * otherwise it returns the empty string.  (This implementation provides
    * no localized id information.)</p>
    *
@@ -336,7 +336,7 @@ class U_COMMON_API SimpleFactory : public ICUServiceFactory {
    * @param result output parameter to hold the display name.
    * @return result.
    */
-  virtual UnicodeString& getDisplayName(const UnicodeString& id, const Locale& locale, UnicodeString& result) const;
+  virtual UnicodeString& getDisplayName(const UnicodeString& id, const Locale& locale, UnicodeString& result) const override;
 
 public:
  /**
@@ -347,7 +347,7 @@ public:
  /**
   * UObject RTTI boilerplate.
   */
-  virtual UClassID getDynamicClassID() const;
+  virtual UClassID getDynamicClassID() const override;
 
 #ifdef SERVICE_DEBUG
  public:
@@ -363,7 +363,7 @@ public:
 
 /**
  * <p>ServiceListener is the listener that ICUService provides by default.
- * ICUService will notifiy this listener when factories are added to
+ * ICUService will notify this listener when factories are added to
  * or removed from the service.  Subclasses can provide
  * different listener interfaces that extend EventListener, and modify
  * acceptsListener and notifyListener as appropriate.</p>
@@ -390,7 +390,7 @@ public:
     /**
      * UObject RTTI boilerplate.
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
     
 };
 
@@ -420,15 +420,15 @@ public:
    * @param displayName the displayName.
    * @param id the ID.
    * @param status the error code status.
-   * @return a StringPair if the creation was successful, otherwise NULL.
+   * @return a StringPair if the creation was successful, otherwise nullptr.
    */
   static StringPair* create(const UnicodeString& displayName, 
                             const UnicodeString& id,
                             UErrorCode& status);
 
   /**
-   * <p>Return TRUE if either string of the pair is bogus.</p>
-   * @return TRUE if either string of the pair is bogus.
+   * <p>Return true if either string of the pair is bogus.</p>
+   * @return true if either string of the pair is bogus.
    */
   UBool isBogus() const;
 
@@ -593,7 +593,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * @param descriptor the descriptor.
      * @param status the error code status.
-     * @return the service instance, or NULL.
+     * @return the service instance, or nullptr.
      */
     UObject* get(const UnicodeString& descriptor, UErrorCode& status) const;
 
@@ -602,9 +602,9 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * createKey to create a key from the provided descriptor.</p>
      *
      * @param descriptor the descriptor.
-     * @param actualReturn a pointer to a UnicodeString to hold the matched descriptor, or NULL.
+     * @param actualReturn a pointer to a UnicodeString to hold the matched descriptor, or nullptr.
      * @param status the error code status.
-     * @return the service instance, or NULL.
+     * @return the service instance, or nullptr.
      */
     UObject* get(const UnicodeString& descriptor, UnicodeString* actualReturn, UErrorCode& status) const;
 
@@ -613,15 +613,15 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * @param key the key.
      * @param status the error code status.
-     * @return the service instance, or NULL.
+     * @return the service instance, or nullptr.
      */
     UObject* getKey(ICUServiceKey& key, UErrorCode& status) const;
 
     /**
      * <p>Given a key, return a service object, and, if actualReturn
-     * is not NULL, the descriptor with which it was found in the
+     * is not nullptr, the descriptor with which it was found in the
      * first element of actualReturn.  If no service object matches
-     * this key, returns NULL and leaves actualReturn unchanged.</p>
+     * this key, returns nullptr and leaves actualReturn unchanged.</p>
      *
      * <p>This queries the cache using the key's descriptor, and if no
      * object in the cache matches, tries the key on each
@@ -635,9 +635,9 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * result before returning it.
      *
      * @param key the key.
-     * @param actualReturn a pointer to a UnicodeString to hold the matched descriptor, or NULL.
+     * @param actualReturn a pointer to a UnicodeString to hold the matched descriptor, or nullptr.
      * @param status the error code status.
-     * @return the service instance, or NULL.
+     * @return the service instance, or nullptr.
      */
     virtual UObject* getKey(ICUServiceKey& key, UnicodeString* actualReturn, UErrorCode& status) const;
 
@@ -648,10 +648,10 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * should not call it directly, but call through one of the other get functions.</p>
      * 
      * @param key the key.
-     * @param actualReturn a pointer to a UnicodeString to hold the matched descriptor, or NULL.
+     * @param actualReturn a pointer to a UnicodeString to hold the matched descriptor, or nullptr.
      * @param factory the factory making the recursive call.
      * @param status the error code status.
-     * @return the service instance, or NULL.
+     * @return the service instance, or nullptr.
      */
     UObject* getKey(ICUServiceKey& key, UnicodeString* actualReturn, const ICUServiceFactory* factory, UErrorCode& status) const;
 
@@ -677,11 +677,11 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * new elements, if any, are added.</p>
      *
      * <p>matchID is passed to createKey to create a key.  If the key
-     * is not NULL, its isFallbackOf method is used to filter out IDs
+     * is not nullptr, its isFallbackOf method is used to filter out IDs
      * that don't match the key or have it as a fallback.</p>
      *
      * @param result a vector to hold the returned IDs.
-     * @param matchID an ID used to filter the result, or NULL if all IDs are desired.
+     * @param matchID an ID used to filter the result, or nullptr if all IDs are desired.
      * @param status the error code status.
      * @return the result vector.
      */
@@ -711,7 +711,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
 
     /**
      * <p>Convenience override of getDisplayNames(const Locale&, const UnicodeString*) that 
-     * uses the current default Locale as the locale and NULL for
+     * uses the current default Locale as the locale and nullptr for
      * the matchID.</p>
      *
      * @param result a vector to hold the returned displayName/id StringPairs.
@@ -722,7 +722,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
 
     /**
      * <p>Convenience override of getDisplayNames(const Locale&, const UnicodeString*) that 
-     * uses NULL for the matchID.</p>
+     * uses nullptr for the matchID.</p>
      *
      * @param result a vector to hold the returned displayName/id StringPairs.
      * @param locale the locale in which to localize the ID.
@@ -746,12 +746,12 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * discarded before new elements, if any, are added.</p>
      *
      * <p>matchID is passed to createKey to create a key.  If the key
-     * is not NULL, its isFallbackOf method is used to filter out IDs
+     * is not nullptr, its isFallbackOf method is used to filter out IDs
      * that don't match the key or have it as a fallback.</p>
      *
      * @param result a vector to hold the returned displayName/id StringPairs.
      * @param locale the locale in which to localize the ID.
-     * @param matchID an ID used to filter the result, or NULL if all IDs are desired.
+     * @param matchID an ID used to filter the result, or nullptr if all IDs are desired.
      * @param status the error code status.
      * @return the result vector.  */
     UVector& getDisplayNames(UVector& result,
@@ -761,7 +761,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
 
     /**
      * <p>A convenience override of registerInstance(UObject*, const UnicodeString&, UBool)
-     * that defaults visible to TRUE.</p>
+     * that defaults visible to true.</p>
      *
      * @param objToAdopt the object to register and adopt.
      * @param id the ID to assign to this object.
@@ -774,7 +774,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
     /**
      * <p>Register a service instance with the provided ID.  The ID will be 
      * canonicalized.  The canonicalized ID will be returned by
-     * getVisibleIDs if visible is TRUE.  The service instance will be adopted and
+     * getVisibleIDs if visible is true.  The service instance will be adopted and
      * must not be modified subsequent to this call.</p>
      *
      * <p>This issues a serviceChanged notification to registered listeners.</p>
@@ -784,7 +784,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * @param objToAdopt the object to register and adopt.
      * @param id the ID to assign to this object.
-     * @param visible TRUE if getVisibleIDs is to return this ID.
+     * @param visible true if getVisibleIDs is to return this ID.
      * @param status the error code status.
      * @return a registry key that can be passed to unregister() to unregister
      * (and discard) this instance.
@@ -820,7 +820,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * @param rkey the registry key.
      * @param status the error code status.  
-     * @return TRUE if the call successfully unregistered the factory.
+     * @return true if the call successfully unregistered the factory.
      */
     virtual UBool unregister(URegistryKey rkey, UErrorCode& status);
 
@@ -830,18 +830,18 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * <p>This issues a serviceChanged notification to registered listeners.</p>
      */
-    virtual void reset(void);
+    virtual void reset();
 
     /**
-     * <p>Return TRUE if the service is in its default state.</p>
+     * <p>Return true if the service is in its default state.</p>
      *
-     * <p>The default implementation returns TRUE if there are no 
+     * <p>The default implementation returns true if there are no 
      * factories registered.</p>
      */
-    virtual UBool isDefault(void) const;
+    virtual UBool isDefault() const;
 
     /**
-     * <p>Create a key from an ID.  If ID is NULL, returns NULL.</p>
+     * <p>Create a key from an ID.  If ID is nullptr, returns nullptr.</p>
      *
      * <p>The default implementation creates an ICUServiceKey instance.
      * Subclasses can override to define more useful keys appropriate
@@ -849,7 +849,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * @param a pointer to the ID for which to create a default ICUServiceKey.
      * @param status the error code status.
-     * @return the ICUServiceKey corresponding to ID, or NULL.
+     * @return the ICUServiceKey corresponding to ID, or nullptr.
      */
     virtual ICUServiceKey* createKey(const UnicodeString* id, UErrorCode& status) const;
 
@@ -859,7 +859,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * This is public so factories can call it, but should really be protected.</p>
      *
      * @param instance the service instance to clone.
-     * @return a clone of the passed-in instance, or NULL if cloning was unsuccessful.
+     * @return a clone of the passed-in instance, or nullptr if cloning was unsuccessful.
      */
     virtual UObject* cloneInstance(UObject* instance) const = 0;
 
@@ -877,7 +877,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * @param instanceToAdopt the service instance to adopt.
      * @param id the ID to assign to this service instance.
-     * @param visible if TRUE, the ID will be visible.
+     * @param visible if true, the ID will be visible.
      * @param status the error code status.
      * @return an instance of ICUServiceFactory that maps this instance to the provided ID.
      */
@@ -885,7 +885,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
 
     /**
      * <p>Reinitialize the factory list to its default state.  After this call, isDefault()
-     * must return TRUE.</p>
+     * must return true.</p>
      *
      * <p>This issues a serviceChanged notification to registered listeners.</p>
      *
@@ -895,18 +895,18 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * directly, since it must only be called while holding write
      * access to the factory list.</p>
      */
-    virtual void reInitializeFactories(void);
+    virtual void reInitializeFactories();
 
     /**
      * <p>Default handler for this service if no factory in the factory list
      * handled the key passed to getKey.</p>
      *
-     * <p>The default implementation returns NULL.</p>
+     * <p>The default implementation returns nullptr.</p>
      *
      * @param key the key.
-     * @param actualReturn a pointer to a UnicodeString to hold the matched descriptor, or NULL.
+     * @param actualReturn a pointer to a UnicodeString to hold the matched descriptor, or nullptr.
      * @param status the error code status.
-     * @return the service instance, or NULL.
+     * @return the service instance, or nullptr.
      */
     virtual UObject* handleDefault(const ICUServiceKey& key, UnicodeString* actualReturn, UErrorCode& status) const;
 
@@ -918,7 +918,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * should generally not call this method directly, as it must only
      * be called while synchronized on the factory lock.</p>
      */
-    virtual void clearCaches(void);
+    virtual void clearCaches();
 
     /**
      * <p>Return true if the listener is accepted.</p>
@@ -928,9 +928,9 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * different listeners.</p>
      *
      * @param l the listener to test.
-     * @return TRUE if the service accepts the listener.
+     * @return true if the service accepts the listener.
      */
-    virtual UBool acceptsListener(const EventListener& l) const;
+    virtual UBool acceptsListener(const EventListener& l) const override;
 
     /**
      * <p>Notify the listener of a service change.</p>
@@ -941,7 +941,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * @param l the listener to notify.
      */
-    virtual void notifyListener(EventListener& l) const;
+    virtual void notifyListener(EventListener& l) const override;
 
     /************************************************************************
      * Utilities for subclasses.
@@ -955,7 +955,7 @@ class U_COMMON_API ICUService : public ICUNotifier {
      * the resolution of IDs also changes, requiring the cache to be
      * flushed, but not the visible IDs themselves.</p>
      */
-    void clearServiceCache(void);
+    void clearServiceCache();
 
     /**
      * <p>Return a map from visible IDs to factories.
@@ -972,14 +972,14 @@ class U_COMMON_API ICUService : public ICUNotifier {
      *
      * @return the timestamp.
      */
-    int32_t getTimestamp(void) const;
+    int32_t getTimestamp() const;
 
     /**
      * <p>Return the number of registered factories.</p>
      *
      * @return the number of factories registered at the time of the call.
      */
-    int32_t countFactories(void) const;
+    int32_t countFactories() const;
 
 private:
 

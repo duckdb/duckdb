@@ -218,6 +218,10 @@ shared_ptr<ExtraTypeInfo> ListTypeInfo::DeepCopy() const {
 StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {
 }
 
+StructTypeInfo::StructTypeInfo(ExtraTypeInfoType type, child_list_t<LogicalType> child_types_p)
+    : ExtraTypeInfo(type), child_types(std::move(child_types_p)) {
+}
+
 StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
     : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
 }
@@ -240,24 +244,76 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::DeepCopy() const {
 }
 
 //===--------------------------------------------------------------------===//
-// Aggregate State Type Info
+// Legacy Aggregate State Type Info
 //===--------------------------------------------------------------------===//
-AggregateStateTypeInfo::AggregateStateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO) {
+LegacyAggregateStateTypeInfo::LegacyAggregateStateTypeInfo()
+    : ExtraTypeInfo(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO) {
 }
 
-AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
+LegacyAggregateStateTypeInfo::LegacyAggregateStateTypeInfo(aggregate_state_t state_type_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
+}
+
+shared_ptr<ExtraTypeInfo> LegacyAggregateStateTypeInfo::Copy() const {
+	return make_shared_ptr<LegacyAggregateStateTypeInfo>(*this);
+}
+
+bool LegacyAggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
+	auto &other = other_p->Cast<LegacyAggregateStateTypeInfo>();
+	return state_type.function_name == other.state_type.function_name &&
+	       state_type.return_type == other.state_type.return_type &&
+	       state_type.bound_argument_types == other.state_type.bound_argument_types;
+}
+
+//===--------------------------------------------------------------------===//
+// Aggregate State Type Info
+//===--------------------------------------------------------------------===//
+/*
+ * NOTE: In types.json, AggregateStateTypeInfo inherits directly from ExtraTypeInfo
+ * instead of StructTypeInfo. This is intentional because of a bug in the generation script logic:
+ * the generation script produces invalid C++ when handling
+ *    multi-level inheritance for these types (specifically, trying to access
+ *    non-static members in static Deserialize methods). Flattening the JSON
+ *    ensures the dispatch logic remains in ExtraTypeInfo::Deserialize where
+ *    the 'type' property is readily available.
+ */
+
+AggregateStateTypeInfo::AggregateStateTypeInfo() : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, {}) {
+}
+
+AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p, child_list_t<LogicalType> child_types_p)
+    : StructTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, std::move(child_types_p)),
+      state_type(std::move(state_type_p)) {
 }
 
 bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<AggregateStateTypeInfo>();
 	return state_type.function_name == other.state_type.function_name &&
 	       state_type.return_type == other.state_type.return_type &&
-	       state_type.bound_argument_types == other.state_type.bound_argument_types;
+	       state_type.bound_argument_types == other.state_type.bound_argument_types && child_types == other.child_types;
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Copy() const {
-	return make_shared_ptr<AggregateStateTypeInfo>(*this);
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(state_type, child_types);
+	result->alias = alias;
+	return std::move(result);
+}
+
+shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
+	child_list_t<LogicalType> copied_child_types;
+	for (const auto &child_type : child_types) {
+		copied_child_types.emplace_back(child_type.first, child_type.second.DeepCopy());
+	}
+
+	vector<LogicalType> copied_bound_arguments;
+	for (const auto &arg : state_type.bound_argument_types) {
+		copied_bound_arguments.push_back(arg.DeepCopy());
+	}
+	aggregate_state_t copied_state_type(state_type.function_name, state_type.return_type.DeepCopy(),
+	                                    std::move(copied_bound_arguments));
+	auto result = make_shared_ptr<AggregateStateTypeInfo>(copied_state_type, copied_child_types);
+	result->alias = alias;
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//

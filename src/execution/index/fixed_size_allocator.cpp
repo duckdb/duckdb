@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 
 namespace duckdb {

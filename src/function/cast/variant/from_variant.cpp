@@ -182,7 +182,6 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 				all_valid = false;
 			}
 			result.SetValue(i + offset, value);
-			converted = true;
 		}
 	}
 	return all_valid;
@@ -439,8 +438,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
-		auto json_val =
-		    VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant.variant, row_index, sel[i]);
+		auto json_val = VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
 			error = StringUtil::Format("Failed to convert to JSON object");
 			return false;
@@ -668,11 +666,44 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 				FlatVector::SetNull(result, offset + i, true);
 			}
 			return false;
-		};
+		}
 	}
 }
 
+static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
+	if (variant_vec.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+		// input vector is not shredded
+		return false;
+	}
+	// check if we are fully shredded on this type
+	if (result.GetType().IsNested()) {
+		// shredded casts for nested types not yet supported
+		return false;
+	}
+	auto &shredded_vec = ShreddedVector::GetShreddedVector(variant_vec);
+	if (shredded_vec.GetType() == result.GetType()) {
+		// direct type match: variant vector is fully shredded on this primitive type
+		result.Reference(shredded_vec);
+		return true;
+	}
+	// check if this is a {typed_value ..., untyped_value ...} struct with an empty (constant NULL) untyped_value
+	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
+		// it is! check if the type of the typed_value entry matches
+		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
+		if (shredded_entries[1]->GetType() == result.GetType()) {
+			// the typed_value matches - directly reference it
+			result.Reference(*shredded_entries[1]);
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, CastParameters &parameters) {
+	if (TryFromShreddedCast(variant_vec, result)) {
+		return true;
+	}
+	// fallback to conversion
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, count, variant_format);

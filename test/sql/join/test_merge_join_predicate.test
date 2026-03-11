@@ -1,0 +1,233 @@
+# name: test/sql/join/test_merge_join_predicate.test
+# description: Test PiecewiseMergeJoin arbitrary predicate evaluation
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+create or replace table tleft as
+	select 
+		i as k100,
+		'2024-01-01'::TIMESTAMP + INTERVAL (i) seconds as b100,
+		b100 + INTERVAL 1 second as e100,
+	from range(10) as tbl(i);
+
+query II
+explain
+select l.k100 as lid, r.k100 as rid
+from tleft l 
+left join tleft r 
+on l.b100 < r.e100
+and l.k100 + r.k100 < 10
+order by 1
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*k100.*
+
+query II
+select l.k100 as lid, r.k100 as rid
+from tleft l 
+inner join tleft r 
+on l.b100 < r.e100
+and l.k100 + r.k100 < 10
+order by all
+----
+0	0
+0	1
+0	2
+0	3
+0	4
+0	5
+0	6
+0	7
+0	8
+0	9
+1	1
+1	2
+1	3
+1	4
+1	5
+1	6
+1	7
+1	8
+2	2
+2	3
+2	4
+2	5
+2	6
+2	7
+3	3
+3	4
+3	5
+3	6
+4	4
+4	5
+
+query II
+explain
+select l.k100 as lid, r.k100 as rid
+from tleft l 
+left join tleft r 
+on l.b100 < r.e100
+and l.k100 + r.k100 < 10
+order by 1
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*k100.*
+
+query II
+select l.k100 as lid, r.k100 as rid
+from tleft l 
+left join tleft r 
+on l.b100 < r.e100
+and l.k100 + r.k100 < 10
+order by all
+----
+0	0
+0	1
+0	2
+0	3
+0	4
+0	5
+0	6
+0	7
+0	8
+0	9
+1	1
+1	2
+1	3
+1	4
+1	5
+1	6
+1	7
+1	8
+2	2
+2	3
+2	4
+2	5
+2	6
+2	7
+3	3
+3	4
+3	5
+3	6
+4	4
+4	5
+5	NULL
+6	NULL
+7	NULL
+8	NULL
+9	NULL
+
+query II
+explain
+select l.k100 as lid, r.k100 as rid
+from tleft l 
+right join tleft r 
+on r.b100 < l.e100
+and l.k100 + r.k100 < 10
+order by 2
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*k100.*
+
+query II
+select l.k100 as lid, r.k100 as rid
+from tleft l 
+right join tleft r 
+on r.b100 < l.e100
+and l.k100 + r.k100 < 10
+order by 2, 1
+----
+0	0
+1	0
+2	0
+3	0
+4	0
+5	0
+6	0
+7	0
+8	0
+9	0
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+2	2
+3	2
+4	2
+5	2
+6	2
+7	2
+3	3
+4	3
+5	3
+6	3
+4	4
+5	4
+NULL	5
+NULL	6
+NULL	7
+NULL	8
+NULL	9
+
+query II
+explain
+select l.k100 as lid, r.k100 as rid
+from tleft l 
+full join tleft r 
+on l.b100 < r.e100
+and l.k100 + r.k100 < 10
+order by all
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*k100.*
+
+query II
+select l.k100 as lid, r.k100 as rid
+from tleft l 
+full join tleft r 
+on l.b100 < r.e100
+and l.k100 + r.k100 < 10
+order by all
+----
+0	0
+0	1
+0	2
+0	3
+0	4
+0	5
+0	6
+0	7
+0	8
+0	9
+1	1
+1	2
+1	3
+1	4
+1	5
+1	6
+1	7
+1	8
+2	2
+2	3
+2	4
+2	5
+2	6
+2	7
+3	3
+3	4
+3	5
+3	6
+4	4
+4	5
+5	NULL
+6	NULL
+7	NULL
+8	NULL
+9	NULL
+

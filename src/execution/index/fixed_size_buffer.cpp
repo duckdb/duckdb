@@ -230,4 +230,18 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 	allocation_size = max_offset * segment_size + bitmask_offset;
 }
 
+SegmentHandle::SegmentHandle(FixedSizeBuffer &buffer_p, const idx_t offset) : buffer_ptr(buffer_p) {
+	lock_guard<mutex> l(buffer_ptr->lock);
+
+	if (!buffer_ptr->InMemory() && !buffer_ptr->loaded) {
+		buffer_ptr->LoadFromDisk();
+	}
+	if (!buffer_ptr->InMemory() && buffer_ptr->loaded) {
+		buffer_ptr->block_manager.buffer_manager.Pin(buffer_ptr->block_handle);
+	}
+
+	ptr = buffer_ptr->buffer_handle.Ptr() + offset;
+	buffer_ptr->readers++;
+}
+
 } // namespace duckdb

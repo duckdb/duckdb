@@ -23,12 +23,8 @@ static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &r
 		    if (idx_t(n) < input_length) {
 			    throw InvalidInputException("Length must be equal or larger than input string");
 		    }
-		    idx_t len;
-		    if (FROM_STRING) {
-			    Bit::TryGetBitStringSize(input, len, nullptr); // string verification
-		    }
 
-		    len = Bit::ComputeBitstringLen(UnsafeNumericCast<idx_t>(n));
+		    idx_t len = Bit::ComputeBitstringLen(UnsafeNumericCast<idx_t>(n));
 		    string_t target = StringVector::EmptyString(result, len);
 		    if (FROM_STRING) {
 			    Bit::BitString(input, UnsafeNumericCast<idx_t>(n), target);

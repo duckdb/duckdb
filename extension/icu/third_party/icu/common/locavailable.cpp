@@ -35,26 +35,26 @@
 
 U_NAMESPACE_BEGIN
 
-static icu::Locale*  gLocAvailable_availableLocaleList = NULL;
-static int32_t  gLocAvailable_availableLocaleListCount;
-static icu::UInitOnce gLocAvailableInitOnceLocale = U_INITONCE_INITIALIZER;
+static icu::Locale*  availableLocaleList = nullptr;
+static int32_t  availableLocaleListCount;
+static icu::UInitOnce gInitOnceLocale {};
 
 U_NAMESPACE_END
 
 U_CDECL_BEGIN
 
-static UBool U_CALLCONV locale_available_cleanup(void)
+static UBool U_CALLCONV locale_available_cleanup()
 {
     U_NAMESPACE_USE
 
-    if (gLocAvailable_availableLocaleList) {
-        delete []gLocAvailable_availableLocaleList;
-        gLocAvailable_availableLocaleList = NULL;
+    if (availableLocaleList) {
+        delete []availableLocaleList;
+        availableLocaleList = nullptr;
     }
-    gLocAvailable_availableLocaleListCount = 0;
-    gLocAvailableInitOnceLocale.reset();
+    availableLocaleListCount = 0;
+    gInitOnceLocale.reset();
 
-    return TRUE;
+    return true;
 }
 
 U_CDECL_END
@@ -64,18 +64,18 @@ U_NAMESPACE_BEGIN
 void U_CALLCONV locale_available_init() {
     // This function is a friend of class Locale.
     // This function is only invoked via umtx_initOnce().
-
+    
     // for now, there is a hardcoded list, so just walk through that list and set it up.
     //  Note: this function is a friend of class Locale.
-    gLocAvailable_availableLocaleListCount = uloc_countAvailable();
-    if(gLocAvailable_availableLocaleListCount) {
-       gLocAvailable_availableLocaleList = new Locale[gLocAvailable_availableLocaleListCount];
+    availableLocaleListCount = uloc_countAvailable();
+    if(availableLocaleListCount) {
+       availableLocaleList = new Locale[availableLocaleListCount];
     }
-    if (gLocAvailable_availableLocaleList == NULL) {
-        gLocAvailable_availableLocaleListCount= 0;
+    if (availableLocaleList == nullptr) {
+        availableLocaleListCount= 0;
     }
-    for (int32_t locCount=gLocAvailable_availableLocaleListCount-1; locCount>=0; --locCount) {
-        gLocAvailable_availableLocaleList[locCount].setFromPOSIXID(uloc_getAvailable(locCount));
+    for (int32_t locCount=availableLocaleListCount-1; locCount>=0; --locCount) {
+        availableLocaleList[locCount].setFromPOSIXID(uloc_getAvailable(locCount));
     }
     ucln_common_registerCleanup(UCLN_COMMON_LOCALE_AVAILABLE, locale_available_cleanup);
 }
@@ -83,9 +83,9 @@ void U_CALLCONV locale_available_init() {
 const Locale* U_EXPORT2
 Locale::getAvailableLocales(int32_t& count)
 {
-    umtx_initOnce(gLocAvailableInitOnceLocale, &locale_available_init);
-    count = gLocAvailable_availableLocaleListCount;
-    return gLocAvailable_availableLocaleList;
+    umtx_initOnce(gInitOnceLocale, &locale_available_init);
+    count = availableLocaleListCount;
+    return availableLocaleList;
 }
 
 
@@ -102,11 +102,11 @@ namespace {
 // Enough capacity for the two lists in the res_index.res file
 const char** gAvailableLocaleNames[2] = {};
 int32_t gAvailableLocaleCounts[2] = {};
-icu::UInitOnce ginstalledLocalesInitOnce = U_INITONCE_INITIALIZER;
+icu::UInitOnce ginstalledLocalesInitOnce {};
 
 class AvailableLocalesSink : public ResourceSink {
   public:
-    void put(const char *key, ResourceValue &value, UBool /*noFallback*/, UErrorCode &status) U_OVERRIDE {
+    void put(const char *key, ResourceValue &value, UBool /*noFallback*/, UErrorCode &status) override {
         ResourceTable resIndexTable = value.getTable(status);
         if (U_FAILURE(status)) {
             return;
@@ -196,14 +196,14 @@ class AvailableLocalesStringEnumeration : public StringEnumeration {
 
 /* ### Get available **************************************************/
 
-static UBool U_CALLCONV uloc_cleanup(void) {
+static UBool U_CALLCONV uloc_cleanup() {
     for (int32_t i = 0; i < UPRV_LENGTHOF(gAvailableLocaleNames); i++) {
         uprv_free(gAvailableLocaleNames[i]);
         gAvailableLocaleNames[i] = nullptr;
         gAvailableLocaleCounts[i] = 0;
     }
     ginstalledLocalesInitOnce.reset();
-    return TRUE;
+    return true;
 }
 
 // Load Installed Locales. This function will be called exactly once
@@ -212,7 +212,7 @@ static UBool U_CALLCONV uloc_cleanup(void) {
 static void U_CALLCONV loadInstalledLocales(UErrorCode& status) {
     ucln_common_registerCleanup(UCLN_COMMON_ULOC, uloc_cleanup);
 
-    icu::LocalUResourceBundlePointer rb(ures_openDirect(NULL, "res_index", &status));
+    icu::LocalUResourceBundlePointer rb(ures_openDirect(nullptr, "res_index", &status));
     AvailableLocalesSink sink;
     ures_getAllItemsWithFallback(rb.getAlias(), "", sink, status);
 }

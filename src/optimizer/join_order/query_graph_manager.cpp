@@ -39,11 +39,11 @@ void QueryGraphManager::GetColumnBinding(Expression &root_expr, ColumnBinding &b
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 	    root_expr, [&](const BoundColumnRefExpression &colref) {
 		    D_ASSERT(colref.depth == 0);
-		    D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		    D_ASSERT(colref.binding.table_index.IsValid());
 		    // map the base table index to the relation index used by the JoinOrderOptimizer
 		    D_ASSERT(relation_manager.relation_mapping.find(colref.binding.table_index) !=
 		             relation_manager.relation_mapping.end());
-		    binding = ColumnBinding(relation_manager.relation_mapping[colref.binding.table_index],
+		    binding = ColumnBinding(TableIndex(relation_manager.relation_mapping[colref.binding.table_index].index),
 		                            colref.binding.column_index);
 	    });
 }
@@ -84,7 +84,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
-			unordered_set<idx_t> left_bindings, right_bindings;
+			unordered_set<RelationIndex> left_bindings, right_bindings;
 			relation_manager.ExtractBindings(*comparison.left, left_bindings);
 			relation_manager.ExtractBindings(*comparison.right, right_bindings);
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
@@ -118,7 +118,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				// Conjunction filters are mostly to help plan semi and anti joins at the moment.
 				continue;
 			}
-			unordered_set<idx_t> left_bindings, right_bindings;
+			unordered_set<RelationIndex> left_bindings, right_bindings;
 			D_ASSERT(filter_info->left_set);
 			D_ASSERT(filter_info->right_set);
 			D_ASSERT(filter_info->join_type == JoinType::SEMI || filter_info->join_type == JoinType::ANTI);
@@ -130,11 +130,11 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				// extract the bindings that are required for the left and right side of the comparison
 				relation_manager.ExtractBindings(*comparison.left, left_bindings);
 				relation_manager.ExtractBindings(*comparison.right, right_bindings);
-				if (filter_info->left_binding.table_index == DConstants::INVALID_INDEX &&
+				if (!filter_info->left_binding.table_index.IsValid() &&
 				    filter_info->left_binding.column_index == DConstants::INVALID_INDEX) {
 					GetColumnBinding(*comparison.left, filter_info->left_binding);
 				}
-				if (filter_info->right_binding.table_index == DConstants::INVALID_INDEX &&
+				if (!filter_info->right_binding.table_index.IsValid() &&
 				    filter_info->right_binding.column_index == DConstants::INVALID_INDEX) {
 					GetColumnBinding(*comparison.right, filter_info->right_binding);
 				}
@@ -171,9 +171,9 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 	// now we have to rewrite the plan
 	bool root_is_join = plan->children.size() > 1;
 
-	unordered_set<idx_t> bindings;
+	unordered_set<RelationIndex> bindings;
 	for (idx_t i = 0; i < relation_manager.NumRelations(); i++) {
-		bindings.insert(i);
+		bindings.emplace(i);
 	}
 	auto &total_relation = set_manager.GetJoinRelation(bindings);
 
@@ -219,15 +219,14 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 
 static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, bool invert) {
 	auto &comparison = condition->Cast<BoundComparisonExpression>();
-	JoinCondition cond;
-	cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-	cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-	cond.comparison = condition->GetExpressionType();
+	auto left = !invert ? std::move(comparison.left) : std::move(comparison.right);
+	auto right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+	auto comp_type = condition->GetExpressionType();
 	if (invert) {
 		// reverse comparison expression if we reverse the order of the children
-		cond.comparison = FlipComparisonExpression(cond.comparison);
+		comp_type = FlipComparisonExpression(comp_type);
 	}
-	return cond;
+	return JoinCondition(std::move(left), std::move(right), comp_type);
 }
 
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
@@ -309,9 +308,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	} else {
 		// base node, get the entry from the list of extracted relations
 		D_ASSERT(node->set.count == 1);
-		D_ASSERT(extracted_relations[node->set.relations[0]]);
+		D_ASSERT(extracted_relations[node->set.relations[0].index]);
 		result_relation = &node->set;
-		result_operator = std::move(extracted_relations[result_relation->relations[0]]);
+		result_operator = std::move(extracted_relations[result_relation->relations[0].index]);
 	}
 	// TODO: this is where estimated properties start coming into play.
 	//  when creating the result operator, we should ask the cost model and cardinality estimator what
@@ -319,6 +318,35 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	//	result_operator->estimated_props = node.estimated_props->Copy();
 	result_operator->estimated_cardinality = node->cardinality;
 	result_operator->has_estimated_cardinality = true;
+
+	// collect unused residual predicates that belong to THIS join
+	vector<unique_ptr<Expression>> unused_residual_predicates;
+	for (auto &filter_info : filters_and_bindings) {
+		if (filter_info->from_residual_predicate && filters_and_bindings[filter_info->filter_index]->filter) {
+			if (filter_info->set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, filter_info->set)) {
+				unused_residual_predicates.push_back(
+				    std::move(filters_and_bindings[filter_info->filter_index]->filter));
+			}
+		}
+	}
+
+	if (!unused_residual_predicates.empty()) {
+		unique_ptr<Expression> combined = std::move(unused_residual_predicates[0]);
+		for (idx_t i = 1; i < unused_residual_predicates.size(); i++) {
+			combined = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(combined),
+			                                                 std::move(unused_residual_predicates[i]));
+		}
+
+		if (result_operator->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			// attach to join's predicate field
+			auto &comp_join = result_operator->Cast<LogicalComparisonJoin>();
+			comp_join.conditions.emplace_back(std::move(combined));
+		} else {
+			// push as filter
+			result_operator = PushFilter(std::move(result_operator), std::move(combined));
+		}
+	}
+
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
@@ -326,6 +354,11 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
 		if (filters_and_bindings[info.filter_index]->filter) {
+			// skip filters from residual predicates
+			if (info.from_residual_predicate) {
+				continue;
+			}
+
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
 			if (info.set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
@@ -357,17 +390,17 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					continue;
 				}
 				// create the join condition
-				JoinCondition cond;
 				D_ASSERT(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = filter->Cast<BoundComparisonExpression>();
 				// we need to figure out which side is which by looking at the relations available to us
-				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
-				cond.comparison = comparison.GetExpressionType();
+				auto left = !invert ? std::move(comparison.left) : std::move(comparison.right);
+				auto right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+				auto comp_type = comparison.GetExpressionType();
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = FlipComparisonExpression(comparison.GetExpressionType());
+					comp_type = FlipComparisonExpression(comp_type);
 				}
+				JoinCondition cond(std::move(left), std::move(right), comp_type);
 				// now find the join to push it into
 				auto node = result_operator.get();
 				if (node->type == LogicalOperatorType::LOGICAL_FILTER) {

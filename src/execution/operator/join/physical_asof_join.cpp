@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/join/physical_asof_join.hpp"
 
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
@@ -19,20 +20,20 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
                              op.estimated_cardinality),
       comparison_type(ExpressionType::INVALID) {
 	// Convert the conditions partitions and sorts
-	D_ASSERT(!op.predicate.get());
 	for (auto &cond : conditions) {
-		D_ASSERT(cond.left->return_type == cond.right->return_type);
-		join_key_types.push_back(cond.left->return_type);
+		D_ASSERT(cond.IsComparison());
+		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
+		join_key_types.push_back(cond.GetLHS().return_type);
 
-		auto left_cond = cond.left->Copy();
-		auto right_cond = cond.right->Copy();
-		switch (cond.comparison) {
+		auto left_cond = cond.LeftReference()->Copy();
+		auto right_cond = cond.RightReference()->Copy();
+		switch (cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		case ExpressionType::COMPARE_GREATERTHAN:
 			null_sensitive.emplace_back(lhs_orders.size());
 			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left_cond));
 			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right_cond));
-			comparison_type = cond.comparison;
+			comparison_type = cond.GetComparisonType();
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_LESSTHAN:
@@ -40,7 +41,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 			null_sensitive.emplace_back(lhs_orders.size());
 			lhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left_cond));
 			rhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right_cond));
-			comparison_type = cond.comparison;
+			comparison_type = cond.GetComparisonType();
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 			null_sensitive.emplace_back(lhs_orders.size());
@@ -903,7 +904,7 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
       left_outer(IsLeftOuterJoin(op.join_type)), lhs_executor(client), fetch_next_left(true) {
 	lhs_keys.Initialize(client, op.join_key_types);
 	for (const auto &cond : op.conditions) {
-		lhs_executor.AddExpression(*cond.left);
+		lhs_executor.AddExpression(cond.GetLHS());
 	}
 
 	lhs_payload.Initialize(client, op.children[0].get().GetTypes());
@@ -918,7 +919,7 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	vector<LogicalType> prefix_types;
 	for (idx_t i = 0; i < op.conditions.size() - 1; ++i) {
 		const auto &cond = op.conditions[i];
-		const auto &type = cond.left->return_type;
+		const auto &type = cond.GetLHS().return_type;
 		prefix_types.emplace_back(type);
 		SortKeyPrefixComparisonColumn col;
 		col.size = DConstants::INVALID_INDEX;
@@ -1452,7 +1453,7 @@ bool AsOfLocalSourceState::TryAssignTask() {
 }
 
 bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	auto guard = Lock();
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1464,7 +1465,7 @@ bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	for (const auto &group_idx : active_groups) {
 		auto &asof_group = asof_groups[group_idx];
 		if (asof_group->TryPrepareNextStage()) {
-			UnblockTasks(guard);
+			UnblockTasks();
 		}
 		if (asof_group->TryNextTask(task_local)) {
 			task = task_local;
@@ -1480,7 +1481,7 @@ bool AsOfGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 
 		auto &asof_group = asof_groups[group_idx];
 		if (asof_group->TryPrepareNextStage()) {
-			UnblockTasks(guard);
+			UnblockTasks();
 		}
 		if (!asof_group->TryNextTask(task_local)) {
 			//	Group has no tasks (empty?)
@@ -1592,13 +1593,13 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 				throw;
 			}
 		} else {
-			auto guard = gsource.Lock();
+			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
 			if (!gsource.HasMoreTasks()) {
-				gsource.UnblockTasks(guard);
+				gsource.UnblockTasks();
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source
-				return gsource.BlockSource(guard, input.interrupt_state);
+				return gsource.BlockSource(input.interrupt_state);
 			}
 		}
 	}

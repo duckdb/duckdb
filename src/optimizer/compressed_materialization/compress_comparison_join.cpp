@@ -53,38 +53,60 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 	// But we can try to compress the expression directly
 	column_binding_set_t probe_compress_bindings;
 	column_binding_set_t referenced_bindings;
+
+	// mark predicate expressions as not compressible
+	idx_t has_range = 0;
+	join.HasEquality(has_range);
+	if (join.HasArbitraryConditions()) {
+		for (const auto &condition : join.conditions) {
+			if (!condition.IsComparison()) {
+				GetReferencedBindings(condition.GetJoinExpression(), referenced_bindings);
+			}
+		}
+	}
+
 	for (const auto &condition : join.conditions) {
 		if (join.conditions.size() == 1 && join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			// We only try to compress the join condition cols if there's one join condition
 			// Else it gets messy with the stats if one column shows up in multiple conditions
-			if (condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
-			    condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				// Both are bound column refs, see if both can be compressed generically to the same type
-				auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
-				auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
-				auto lhs_it = statistics_map.find(lhs_colref.binding);
-				auto rhs_it = statistics_map.find(rhs_colref.binding);
-				if (lhs_it != statistics_map.end() && rhs_it != statistics_map.end() && lhs_it->second &&
-				    rhs_it->second) {
-					// For joins we need to compress both using the same statistics, otherwise comparisons don't work
-					auto merged_stats = lhs_it->second->Copy();
-					merged_stats.Merge(*rhs_it->second);
+			if (condition.IsComparison() &&
+			    condition.GetLHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+			    condition.GetRHS().GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+				// check if either side is referenced in residual predicate
+				auto &lhs_colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
+				auto &rhs_colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
+				bool lhs_referenced = referenced_bindings.count(lhs_colref.binding) > 0;
+				bool rhs_referenced = referenced_bindings.count(rhs_colref.binding) > 0;
 
-					// If one can be compressed, both can (same stats)
-					auto compress_expr = GetCompressExpression(condition.left->Copy(), merged_stats);
-					if (compress_expr) {
-						D_ASSERT(GetCompressExpression(condition.right->Copy(), merged_stats));
-						// This will be compressed generically, but we have to merge the stats
-						lhs_it->second->Merge(merged_stats);
-						rhs_it->second->Merge(merged_stats);
-						probe_compress_bindings.insert(lhs_colref.binding);
-						continue;
+				if (!lhs_referenced && !rhs_referenced) {
+					// Both are bound column refs, see if both can be compressed generically to the same type
+					auto lhs_it = statistics_map.find(lhs_colref.binding);
+					auto rhs_it = statistics_map.find(rhs_colref.binding);
+					if (lhs_it != statistics_map.end() && rhs_it != statistics_map.end() && lhs_it->second &&
+					    rhs_it->second) {
+						// For joins we need to compress both using the same statistics, otherwise comparisons don't
+						// work
+						auto merged_stats = lhs_it->second->Copy();
+						merged_stats.Merge(*rhs_it->second);
+
+						// If one can be compressed, both can (same stats)
+						auto compress_expr = GetCompressExpression(condition.GetLHS().Copy(), merged_stats);
+						if (compress_expr) {
+							D_ASSERT(GetCompressExpression(condition.GetRHS().Copy(), merged_stats));
+							// This will be compressed generically, but we have to merge the stats
+							lhs_it->second->Merge(merged_stats);
+							rhs_it->second->Merge(merged_stats);
+							probe_compress_bindings.insert(lhs_colref.binding);
+							continue;
+						}
 					}
 				}
 			}
 		}
-		GetReferencedBindings(*condition.left, referenced_bindings);
-		GetReferencedBindings(*condition.right, referenced_bindings);
+		if (condition.IsComparison()) {
+			GetReferencedBindings(condition.GetLHS(), referenced_bindings);
+			GetReferencedBindings(condition.GetRHS(), referenced_bindings);
+		}
 	}
 
 	if (join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
@@ -124,31 +146,22 @@ void CompressedMaterialization::UpdateComparisonJoinStats(unique_ptr<LogicalOper
 
 	// Update join stats if compressed
 	auto &compressed_join = op->children[0]->Cast<LogicalComparisonJoin>();
-	if (compressed_join.join_stats.empty()) {
-		return; // Nothing to update
-	}
-
 	for (idx_t condition_idx = 0; condition_idx < compressed_join.conditions.size(); condition_idx++) {
 		auto &condition = compressed_join.conditions[condition_idx];
-		if (condition.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
-		    condition.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		if (!condition.IsComparison() || condition.GetLHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
+		    condition.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue; // We definitely didn't compress these, nothing changed
 		}
-		if (condition_idx * 2 >= compressed_join.join_stats.size()) {
-			break;
-		}
 
-		auto &lhs_colref = condition.left->Cast<BoundColumnRefExpression>();
-		auto &rhs_colref = condition.right->Cast<BoundColumnRefExpression>();
-		auto &lhs_join_stats = compressed_join.join_stats[condition_idx * 2];
-		auto &rhs_join_stats = compressed_join.join_stats[condition_idx * 2 + 1];
+		auto &lhs_colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
+		auto &rhs_colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
 		auto lhs_it = statistics_map.find(lhs_colref.binding);
 		auto rhs_it = statistics_map.find(rhs_colref.binding);
 		if (lhs_it != statistics_map.end() && lhs_it->second) {
-			lhs_join_stats = lhs_it->second->ToUnique();
+			condition.SetLeftStats(lhs_it->second->ToUnique());
 		}
 		if (rhs_it != statistics_map.end() && rhs_it->second) {
-			rhs_join_stats = rhs_it->second->ToUnique();
+			condition.SetRightStats(rhs_it->second->ToUnique());
 		}
 	}
 }

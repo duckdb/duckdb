@@ -32,7 +32,7 @@ vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, co
 }
 
 unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
-                                                         LogicalGet &get, idx_t proj_index,
+                                                         LogicalGet &get, TableIndex proj_index,
                                                          vector<unique_ptr<Expression>> &expressions,
                                                          unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
                                                          const vector<BindingAlias> &source_aliases,
@@ -165,7 +165,7 @@ unique_ptr<BoundMergeIntoAction> Binder::BindMergeAction(LogicalMergeInto &merge
 }
 
 void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBinding> &source_bindings,
-                          idx_t new_table_index) {
+                          TableIndex new_table_index) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    for (idx_t i = 0; i < source_bindings.size(); i++) {
@@ -177,7 +177,8 @@ void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBindi
 	    });
 }
 
-void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings, idx_t new_table_index) {
+void RewriteMergeBindings(LogicalOperator &op, const vector<ColumnBinding> &source_bindings,
+                          TableIndex new_table_index) {
 	LogicalOperatorVisitor::EnumerateExpressions(
 	    op, [&](unique_ptr<Expression> *child) { RewriteMergeBindings(*child, source_bindings, new_table_index); });
 }
@@ -367,6 +368,40 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
 		marker_ref->alias = "source_marker";
 		projection_expressions.push_back(std::move(marker_ref));
+	}
+
+	// Check if we have a DELETE action
+	bool has_delete_action = false;
+	for (auto &entry : merge_into->actions) {
+		for (auto &action : entry.second) {
+			if (action->action_type == MergeActionType::MERGE_DELETE) {
+				has_delete_action = true;
+				break;
+			}
+		}
+		if (has_delete_action) {
+			break;
+		}
+	}
+
+	// If RETURNING is present and we have a DELETE action, add all physical columns to the scan
+	// so we can pass them through instead of fetching by row ID in PhysicalDelete.
+	// Generated columns will be computed in the RETURNING projection by the binder.
+	if (has_delete_action) {
+		if (!stmt.returning_list.empty()) {
+			// Use the overloaded helper to add physical columns to the scan and build projection expressions
+			auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
+			BindDeleteReturningColumns(table, get, merge_into->delete_return_columns, projection_expressions,
+			                           *target_binding);
+		} else if (table.IsDuckTable()) {
+			// Only optimize for DuckDB tables (not attached external tables like SQLite)
+			auto &storage = table.GetStorage();
+			if (storage.HasUniqueIndexes()) {
+				auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
+				BindDeleteIndexColumns(table, get, merge_into->delete_return_columns, projection_expressions,
+				                       *target_binding);
+			}
+		}
 	}
 
 	merge_into->row_id_start = projection_expressions.size();

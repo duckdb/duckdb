@@ -28,13 +28,11 @@ static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientCo
 }
 
 static JoinCondition CreateNotDistinctComparison(ClientContext &context, const LogicalType &type, idx_t i) {
-	JoinCondition cond;
-	cond.left = make_uniq<BoundReferenceExpression>(type, i);
-	cond.right = make_uniq<BoundReferenceExpression>(type, i);
-	cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-
-	ExpressionBinder::PushCollation(context, cond.left, type);
-	ExpressionBinder::PushCollation(context, cond.right, type);
+	auto left = make_uniq<BoundReferenceExpression>(type, i);
+	auto right = make_uniq<BoundReferenceExpression>(type, i);
+	JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+	ExpressionBinder::PushCollation(context, cond.LeftReference(), type);
+	ExpressionBinder::PushCollation(context, cond.RightReference(), type);
 
 	return cond;
 }

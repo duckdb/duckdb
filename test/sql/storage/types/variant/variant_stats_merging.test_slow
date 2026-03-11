@@ -23,10 +23,26 @@ checkpoint
 
 restart
 
+# only nulls, so no min/max
 query I
-select stats(col) from tbl limit 1;
+select s.has_no_null from (select s.fully_shredded.child_stats.stats s from (select stats(col) s from tbl limit 1));
 ----
-<REGEX>:.*typed_value_type: VARCHAR\[\].*
+false
+
+query I
+select count(*) from tbl where col is null
+----
+122880
+
+# FIXME: this is wrong
+mode skip
+
+query I
+select s.has_null from (select s.fully_shredded.child_stats.stats s from (select stats(col) s from tbl limit 1));
+----
+true
+
+mode unskip
 
 # -------------------------- Shred 'tbl' on INTEGER[] --------------------------
 
@@ -43,9 +59,9 @@ restart
 
 # Mixing VARCHAR[] + INTEGER[] results in inconsistent stats
 query I
-select stats(col) from tbl limit 1;
+select s.shredding_state from (select stats(col) s from tbl limit 1);
 ----
-<REGEX>:shredding_state: INCONSISTENT.*
+INCONSISTENT
 
 # -------------------------- Shred 'tbl2' on OBJECT(a INTEGER, b VARCHAR, c BOOLEAN) --------------------------
 
@@ -63,10 +79,10 @@ checkpoint
 
 restart
 
-query I
-select stats(col) from tbl2 limit 1;
+query III
+select s.fully_shredded.a.type, s.fully_shredded.b.type, s.fully_shredded.c.type from (select stats(col) s from tbl2 limit 1);
 ----
-<REGEX>:.*typed_value_type: STRUCT\(a INTEGER, b VARCHAR, c BOOLEAN\).*
+INTEGER	VARCHAR	BOOLEAN
 
 # -------------------------- Shred 'tbl2' on OBJECT(b VARCHAR, a INTEGER, c BOOLEAN) --------------------------
 
@@ -82,10 +98,10 @@ checkpoint
 restart
 
 # Order of fields shouldn't matter
-query I
-select stats(col) from tbl2 limit 1;
+query III
+select s.fully_shredded.a.type, s.fully_shredded.b.type, s.fully_shredded.c.type from (select stats(col) s from tbl2 limit 1);
 ----
-<REGEX>:.*typed_value_type: STRUCT\(a INTEGER, b VARCHAR, c BOOLEAN\).*
+INTEGER	VARCHAR	BOOLEAN
 
 # -------------------------- Shred 'tbl2' on OBJECT(b VARCHAR, a INTEGER, c INTEGER) --------------------------
 
@@ -101,10 +117,10 @@ checkpoint
 restart
 
 # We lose field 'c' because its type is different
-query I
-select stats(col) from tbl2 limit 1;
+query II
+select s.fully_shredded.a.type, s.fully_shredded.b.type from (select stats(col) s from tbl2 limit 1);
 ----
-<REGEX>:.*typed_value_type: STRUCT\(a INTEGER, b VARCHAR\).*
+INTEGER	VARCHAR
 
 # -------------------------- Shred 'tbl2' on OBJECT(b VARCHAR, c BOOLEAN) --------------------------
 
@@ -120,6 +136,6 @@ checkpoint
 restart
 
 query I
-select stats(col) from tbl2 limit 1;
+select s.fully_shredded.b.type from (select stats(col) s from tbl2 limit 1);
 ----
-<REGEX>:.*typed_value_type: STRUCT\(b VARCHAR\).*
+VARCHAR

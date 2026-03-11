@@ -9,9 +9,6 @@
 #pragma once
 
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/hugeint.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
@@ -40,9 +37,10 @@ public:
 	DUCKDB_API static string ToString(bitstring_t bits);
 	//! Returns the bit size of a string -> bit conversion
 	DUCKDB_API static bool TryGetBitStringSize(string_t str, idx_t &result_size, string *error_message);
-	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT
-	//! perform data validation.
-	DUCKDB_API static void ToBit(string_t str, bitstring_t &output);
+	//! Convert a string to a bit
+	DUCKDB_API static bool ToBit(string_t str, bitstring_t &output, string *error_message);
+	//! Convert a hexadecimal string, e.g., 'x2F', to a bit string
+	DUCKDB_API static bool HexToBit(string_t str, bitstring_t &output, string *error_message);
 
 	DUCKDB_API static string ToBit(string_t str);
 
@@ -76,6 +74,7 @@ public:
 	DUCKDB_API static void SetEmptyBitString(bitstring_t &target, string_t &input);
 	DUCKDB_API static void SetEmptyBitString(bitstring_t &target, idx_t len);
 	DUCKDB_API static idx_t ComputeBitstringLen(idx_t len);
+	DUCKDB_API static bool ValidateInputBitString(const string_t &input, string *error_message);
 
 	DUCKDB_API static void RightShift(const bitstring_t &bit_string, idx_t shift, bitstring_t &result);
 	DUCKDB_API static void LeftShift(const bitstring_t &bit_string, idx_t shift, bitstring_t &result);

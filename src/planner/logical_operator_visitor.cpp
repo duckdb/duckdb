@@ -6,6 +6,10 @@
 
 namespace duckdb {
 
+void LogicalOperatorVisitor::VisitOperator(unique_ptr<LogicalOperator> &op) {
+	VisitOperator(*op);
+}
+
 void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 	VisitOperatorExpressions(op);
@@ -16,7 +20,7 @@ void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
 		VisitOperatorWithProjectionMapChildren(op);
 	} else {
 		for (auto &child : op.children) {
-			VisitOperator(*child);
+			VisitOperator(child);
 		}
 	}
 }
@@ -29,18 +33,18 @@ void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOpera
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
 		auto &join = op.Cast<LogicalJoin>();
-		VisitChildOfOperatorWithProjectionMap(*op.children[0], join.left_projection_map);
-		VisitChildOfOperatorWithProjectionMap(*op.children[1], join.right_projection_map);
+		VisitChildOfOperatorWithProjectionMap(op.children[0], join.left_projection_map);
+		VisitChildOfOperatorWithProjectionMap(op.children[1], join.right_projection_map);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		auto &order = op.Cast<LogicalOrder>();
-		VisitChildOfOperatorWithProjectionMap(*op.children[0], order.projection_map);
+		VisitChildOfOperatorWithProjectionMap(op.children[0], order.projection_map);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		auto &filter = op.Cast<LogicalFilter>();
-		VisitChildOfOperatorWithProjectionMap(*op.children[0], filter.projection_map);
+		VisitChildOfOperatorWithProjectionMap(op.children[0], filter.projection_map);
 		break;
 	}
 	default:
@@ -48,15 +52,15 @@ void LogicalOperatorVisitor::VisitOperatorWithProjectionMapChildren(LogicalOpera
 	}
 }
 
-void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(LogicalOperator &child,
+void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<LogicalOperator> &child,
                                                                    vector<idx_t> &projection_map) {
-	const auto child_bindings_before = child.GetColumnBindings();
+	const auto child_bindings_before = child->GetColumnBindings();
 	VisitOperator(child);
 	if (projection_map.empty()) {
 		return; // Nothing to fix here
 	}
 	// Child binding order may have changed due to 'fun'.
-	const auto child_bindings_after = child.GetColumnBindings();
+	const auto child_bindings_after = child->GetColumnBindings();
 	if (child_bindings_before == child_bindings_after) {
 		return; // Nothing changed
 	}
@@ -127,6 +131,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		for (auto &target : rec.key_targets) {
 			callback(&target);
 		}
+		for (auto &aggregate : rec.payload_aggregates) {
+			callback(&aggregate);
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
@@ -145,8 +152,8 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 			callback(&expr);
 		}
 		for (auto &cond : join.conditions) {
-			callback(&cond.left);
-			callback(&cond.right);
+			callback(&cond.LeftReference());
+			callback(&cond.RightReference());
 		}
 		for (auto &expr : join.arbitrary_expressions) {
 			callback(&expr);
@@ -164,11 +171,12 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 			callback(&expr);
 		}
 		for (auto &cond : join.conditions) {
-			callback(&cond.left);
-			callback(&cond.right);
-		}
-		if (join.predicate) {
-			callback(&join.predicate);
+			if (cond.IsComparison()) {
+				callback(&cond.LeftReference());
+				callback(&cond.RightReference());
+			} else {
+				callback(&cond.JoinExpressionReference());
+			}
 		}
 		break;
 	}

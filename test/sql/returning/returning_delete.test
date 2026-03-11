@@ -265,3 +265,477 @@ query I rowsort
 DELETE FROM table1 RETURNING a;
 ----
 4000 values hashing to 4a8cf4fccc8e076d1309e1db2163b3c4
+
+# ============================================================
+# Tests for DELETE RETURNING optimization (scan pass-through)
+# ============================================================
+
+# Test DELETE RETURNING without generated columns (optimized path)
+statement ok
+CREATE TABLE test_optimized (id INTEGER, name VARCHAR, value DOUBLE);
+
+statement ok
+INSERT INTO test_optimized VALUES (1, 'one', 1.0), (2, 'two', 2.0), (3, 'three', 3.0), (4, 'four', 4.0), (5, 'five', 5.0);
+
+# Return specific columns
+query II
+DELETE FROM test_optimized WHERE id <= 2 RETURNING id, name;
+----
+1	one
+2	two
+
+# Return all columns with *
+query III
+DELETE FROM test_optimized WHERE id = 3 RETURNING *;
+----
+3	three	3.0
+
+# Return columns in different order than table definition
+query III
+DELETE FROM test_optimized WHERE id = 4 RETURNING value, name, id;
+----
+4.0	four	4
+
+# Return expression
+query I
+DELETE FROM test_optimized WHERE id = 5 RETURNING id * 10 + value;
+----
+55.0
+
+statement ok
+DROP TABLE test_optimized;
+
+# Test DELETE RETURNING with column used in both WHERE and RETURNING
+statement ok
+CREATE TABLE test_where_returning (id INTEGER, amount DOUBLE, customer VARCHAR);
+
+statement ok
+INSERT INTO test_where_returning VALUES (1, 100.0, 'Alice'), (2, 200.0, 'Bob'), (3, 300.0, 'Charlie');
+
+# Same column in WHERE and RETURNING (should not duplicate in scan)
+query III
+DELETE FROM test_where_returning WHERE id < 3 RETURNING id, amount, customer;
+----
+1	100.0	Alice
+2	200.0	Bob
+
+statement ok
+DROP TABLE test_where_returning;
+
+# ============================================================
+# Virtual columns like rowid ARE supported in RETURNING
+# ============================================================
+
+statement ok
+CREATE TABLE test_rowid_supported (id INTEGER, name VARCHAR);
+
+statement ok
+INSERT INTO test_rowid_supported VALUES (1, 'one'), (2, 'two'), (3, 'three');
+
+# rowid can be returned in DELETE RETURNING
+query I
+DELETE FROM test_rowid_supported WHERE id = 1 RETURNING rowid;
+----
+0
+
+# rowid with other columns
+query III
+DELETE FROM test_rowid_supported WHERE id = 2 RETURNING id, name, rowid;
+----
+2	two	1
+
+# rowid with star (rowid is not included in *, must be explicit)
+query III
+DELETE FROM test_rowid_supported WHERE id = 3 RETURNING *, rowid;
+----
+3	three	2
+
+statement ok
+DROP TABLE test_rowid_supported;
+
+# ============================================================
+# Tests for DELETE RETURNING rowid with generated columns
+# This tests the virtual_column_offset mechanism
+# ============================================================
+
+statement ok
+CREATE TABLE test_rowid_generated (
+    id INTEGER,
+    val INTEGER,
+    computed INTEGER GENERATED ALWAYS AS (val * 2) VIRTUAL
+);
+
+statement ok
+INSERT INTO test_rowid_generated (id, val) VALUES (1, 10), (2, 20), (3, 30);
+
+# Return rowid with generated column table
+query I
+DELETE FROM test_rowid_generated WHERE id = 1 RETURNING rowid;
+----
+0
+
+# Return all columns plus rowid (rowid should be at correct position)
+query IIII
+DELETE FROM test_rowid_generated WHERE id = 2 RETURNING *, rowid;
+----
+2	20	40	1
+
+# Return specific columns including generated and rowid
+query III
+DELETE FROM test_rowid_generated WHERE id = 3 RETURNING computed, id, rowid;
+----
+60	3	2
+
+statement ok
+DROP TABLE test_rowid_generated;
+
+# Test rowid with multiple generated columns
+statement ok
+CREATE TABLE test_rowid_multi_gen (
+    id INTEGER,
+    a INTEGER,
+    b INTEGER,
+    sum_ab INTEGER GENERATED ALWAYS AS (a + b) VIRTUAL,
+    prod_ab INTEGER GENERATED ALWAYS AS (a * b) VIRTUAL
+);
+
+statement ok
+INSERT INTO test_rowid_multi_gen (id, a, b) VALUES (1, 2, 3), (2, 4, 5);
+
+query IIIIII
+DELETE FROM test_rowid_multi_gen WHERE id = 1 RETURNING *, rowid;
+----
+1	2	3	5	6	0
+
+query III
+DELETE FROM test_rowid_multi_gen WHERE id = 2 RETURNING rowid, sum_ab, prod_ab;
+----
+1	9	20
+
+statement ok
+DROP TABLE test_rowid_multi_gen;
+
+# Test rowid with generated column in middle of table definition
+statement ok
+CREATE TABLE test_rowid_gen_middle (
+    a INTEGER,
+    gen INTEGER GENERATED ALWAYS AS (a + c) VIRTUAL,
+    c INTEGER
+);
+
+statement ok
+INSERT INTO test_rowid_gen_middle (a, c) VALUES (1, 100), (2, 200);
+
+query IIII
+DELETE FROM test_rowid_gen_middle WHERE a = 1 RETURNING *, rowid;
+----
+1	101	100	0
+
+query II
+DELETE FROM test_rowid_gen_middle WHERE a = 2 RETURNING rowid, gen;
+----
+1	202
+
+statement ok
+DROP TABLE test_rowid_gen_middle;
+
+# ============================================================
+# Tests for DELETE RETURNING with generated columns
+# Generated columns are computed at execution time from physical columns
+# ============================================================
+
+# Test DELETE RETURNING with VIRTUAL generated column
+statement ok
+CREATE TABLE test_generated_virtual (
+    id INTEGER,
+    base_value INTEGER,
+    computed_value INTEGER GENERATED ALWAYS AS (base_value * 2) VIRTUAL
+);
+
+statement ok
+INSERT INTO test_generated_virtual (id, base_value) VALUES (1, 10), (2, 20), (3, 30);
+
+# Return non-generated columns only
+query II
+DELETE FROM test_generated_virtual WHERE id = 1 RETURNING id, base_value;
+----
+1	10
+
+# Return all columns including generated
+query III
+DELETE FROM test_generated_virtual WHERE id = 2 RETURNING *;
+----
+2	20	40
+
+# Return only the generated column
+query I
+DELETE FROM test_generated_virtual WHERE id = 3 RETURNING computed_value;
+----
+60
+
+statement ok
+DROP TABLE test_generated_virtual;
+
+# Test DELETE RETURNING with generated column in middle of table definition
+statement ok
+CREATE TABLE test_generated_middle (
+    a INTEGER,
+    gen INTEGER GENERATED ALWAYS AS (a + c) VIRTUAL,
+    c INTEGER
+);
+
+statement ok
+INSERT INTO test_generated_middle (a, c) VALUES (1, 100), (2, 200), (3, 300);
+
+query III
+DELETE FROM test_generated_middle WHERE a <= 2 RETURNING *;
+----
+1	101	100
+2	202	200
+
+query I
+DELETE FROM test_generated_middle WHERE a = 3 RETURNING gen;
+----
+303
+
+statement ok
+DROP TABLE test_generated_middle;
+
+# Test DELETE RETURNING with multiple generated columns
+statement ok
+CREATE TABLE test_multi_generated (
+    x INTEGER,
+    y INTEGER,
+    sum_xy INTEGER GENERATED ALWAYS AS (x + y) VIRTUAL,
+    prod_xy INTEGER GENERATED ALWAYS AS (x * y) VIRTUAL
+);
+
+statement ok
+INSERT INTO test_multi_generated (x, y) VALUES (2, 3), (4, 5), (6, 7);
+
+query IIII
+DELETE FROM test_multi_generated WHERE x = 2 RETURNING *;
+----
+2	3	5	6
+
+query II
+DELETE FROM test_multi_generated WHERE x = 4 RETURNING sum_xy, prod_xy;
+----
+9	20
+
+statement ok
+DROP TABLE test_multi_generated;
+
+# Test DELETE RETURNING with generated column referencing VARCHAR
+statement ok
+CREATE TABLE test_generated_varchar (
+    id INTEGER,
+    name VARCHAR,
+    greeting VARCHAR GENERATED ALWAYS AS ('Hello, ' || name || '!') VIRTUAL
+);
+
+statement ok
+INSERT INTO test_generated_varchar (id, name) VALUES (1, 'Alice'), (2, 'Bob');
+
+query III
+DELETE FROM test_generated_varchar WHERE id = 1 RETURNING *;
+----
+1	Alice	Hello, Alice!
+
+query I
+DELETE FROM test_generated_varchar WHERE id = 2 RETURNING greeting;
+----
+Hello, Bob!
+
+statement ok
+DROP TABLE test_generated_varchar;
+
+# ============================================================
+# Tests for MERGE INTO DELETE RETURNING with generated columns
+# ============================================================
+
+statement ok
+CREATE TABLE merge_gen_target(id INT, x INT, gen AS (x * 2));
+
+statement ok
+INSERT INTO merge_gen_target(id, x) VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE merge_source(id INT);
+
+statement ok
+INSERT INTO merge_source VALUES (1), (2);
+
+# MERGE INTO DELETE RETURNING with generated column
+query IIII
+MERGE INTO merge_gen_target USING merge_source ON merge_gen_target.id = merge_source.id
+WHEN MATCHED THEN DELETE
+RETURNING *, merge_action;
+----
+1	10	20	DELETE
+2	20	40	DELETE
+
+# Verify remaining row
+query III
+SELECT * FROM merge_gen_target;
+----
+3	30	60
+
+statement ok
+DROP TABLE merge_gen_target;
+
+statement ok
+DROP TABLE merge_source;
+
+# MERGE INTO DELETE RETURNING with multiple generated columns
+statement ok
+CREATE TABLE merge_multi_gen(
+    id INT,
+    a INT,
+    b INT,
+    sum_ab INT GENERATED ALWAYS AS (a + b) VIRTUAL,
+    prod_ab INT GENERATED ALWAYS AS (a * b) VIRTUAL
+);
+
+statement ok
+INSERT INTO merge_multi_gen(id, a, b) VALUES (1, 2, 3), (2, 4, 5), (3, 6, 7);
+
+statement ok
+CREATE TABLE merge_delete_source(id INT);
+
+statement ok
+INSERT INTO merge_delete_source VALUES (1), (3);
+
+query IIIIII
+MERGE INTO merge_multi_gen t USING merge_delete_source s ON t.id = s.id
+WHEN MATCHED THEN DELETE
+RETURNING t.id, t.a, t.b, t.sum_ab, t.prod_ab, merge_action;
+----
+1	2	3	5	6	DELETE
+3	6	7	13	42	DELETE
+
+statement ok
+DROP TABLE merge_multi_gen;
+
+statement ok
+DROP TABLE merge_delete_source;
+
+# ============================================================
+# Virtual columns like rowid are not supported in MERGE INTO RETURNING
+# ============================================================
+
+statement ok
+CREATE TABLE merge_rowid_target (id INT, val INT);
+
+statement ok
+INSERT INTO merge_rowid_target VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE merge_rowid_source (id INT);
+
+statement ok
+INSERT INTO merge_rowid_source VALUES (1);
+
+# rowid is not supported in MERGE INTO DELETE RETURNING
+statement error
+MERGE INTO merge_rowid_target t USING merge_rowid_source s ON t.id = s.id
+WHEN MATCHED THEN DELETE
+RETURNING t.rowid, t.id, t.val;
+----
+<REGEX>:Binder Error.*does not have a column named "rowid".*
+
+statement ok
+DROP TABLE merge_rowid_target;
+
+statement ok
+DROP TABLE merge_rowid_source;
+
+# ============================================================
+# DELETE RETURNING with indexed table - verify index is updated
+# ============================================================
+
+statement ok
+CREATE TABLE indexed_returning (id INT PRIMARY KEY, val VARCHAR, amount INT);
+
+statement ok
+CREATE INDEX idx_amount ON indexed_returning(amount);
+
+statement ok
+INSERT INTO indexed_returning VALUES (1, 'a', 100), (2, 'b', 200), (3, 'c', 300);
+
+# DELETE with RETURNING should update the index
+query I
+DELETE FROM indexed_returning WHERE amount >= 200 RETURNING val;
+----
+b
+c
+
+# Verify only row 1 remains
+query III
+SELECT * FROM indexed_returning ORDER BY id;
+----
+1	a	100
+
+# Verify index lookup works
+query III
+SELECT * FROM indexed_returning WHERE amount = 100;
+----
+1	a	100
+
+# Verify deleted keys are no longer in index
+query I
+SELECT COUNT(*) FROM indexed_returning WHERE amount = 200;
+----
+0
+
+# Insert new rows with previously deleted primary keys
+statement ok
+INSERT INTO indexed_returning VALUES (2, 'new_b', 250), (3, 'new_c', 350);
+
+# Verify index lookup for new values
+query III
+SELECT * FROM indexed_returning WHERE amount = 250;
+----
+2	new_b	250
+
+query III
+SELECT * FROM indexed_returning WHERE amount = 350;
+----
+3	new_c	350
+
+# DELETE RETURNING with primary key index in same transaction
+statement ok
+BEGIN TRANSACTION;
+
+query III
+DELETE FROM indexed_returning WHERE id = 2 RETURNING *;
+----
+2	new_b	250
+
+# Can insert with same primary key within transaction
+statement ok
+INSERT INTO indexed_returning VALUES (2, 'tx_b', 225);
+
+# Verify index lookup during transaction
+query III
+SELECT * FROM indexed_returning WHERE amount = 225;
+----
+2	tx_b	225
+
+statement ok
+COMMIT;
+
+# Verify after commit
+query III
+SELECT * FROM indexed_returning WHERE amount = 225;
+----
+2	tx_b	225
+
+# Verify primary key lookup
+query III
+SELECT * FROM indexed_returning WHERE id = 2;
+----
+2	tx_b	225
+
+statement ok
+DROP TABLE indexed_returning;

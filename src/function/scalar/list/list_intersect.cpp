@@ -129,8 +129,6 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 		const auto *hash_keys = use_l_for_hash ? l_sortkey_ptr : r_sortkey_ptr;
 		const auto *iter_keys = use_l_for_hash ? r_sortkey_ptr : l_sortkey_ptr;
 
-		set.clear();
-		key_to_index_map.clear();
 		for (idx_t j = 0; j < hash_list.length; j++) {
 			const idx_t h_idx = hash_list.offset + j;
 			const idx_t h_entry = hash_fmt.sel->get_index(h_idx);
@@ -145,7 +143,6 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 
 		// Iterate the chosen side, but ALWAYS emit a LEFT index
-		result_set.clear();
 		idx_t row_result_length = 0;
 		for (idx_t j = 0; j < iter_list.length; j++) {
 			const idx_t it_idx = iter_list.offset + j;

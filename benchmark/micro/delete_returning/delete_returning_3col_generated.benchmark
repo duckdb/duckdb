@@ -1,0 +1,16 @@
+# name: benchmark/micro/delete_returning/delete_returning_3col_generated.benchmark
+# description: DELETE RETURNING with 3 columns including generated column
+# group: [delete_returning]
+
+load
+CREATE TABLE t3gen (c1 INT, c2 VARCHAR, c3 AS (c1 * 2));
+INSERT INTO t3gen SELECT i, 'value_' || i::VARCHAR FROM range(1000000) t(i);
+
+run
+DELETE FROM t3gen WHERE c1 % 2 = 0 RETURNING c1, c2, c3;
+
+cleanup
+DROP TABLE IF EXISTS t3gen;
+CREATE TABLE t3gen (c1 INT, c2 VARCHAR, c3 AS (c1 * 2));
+INSERT INTO t3gen SELECT i, 'value_' || i::VARCHAR FROM range(1000000) t(i);
+

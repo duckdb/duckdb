@@ -27,6 +27,7 @@ class BufferHandle;
 class ColumnDataCollection;
 struct ColumnDataAppendState;
 struct ClientConfig;
+struct ResidualPredicateInfo;
 
 struct JoinHTScanState {
 public:
@@ -59,6 +60,21 @@ private:
 class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
+
+	struct ResidualPredicateProbeState {
+		//! Evaluation chunk
+		DataChunk eval_chunk;
+		SelectionVector selected_sel;
+		SelectionVector remaining_sel;
+
+		ResidualPredicateProbeState() : selected_sel(STANDARD_VECTOR_SIZE), remaining_sel(STANDARD_VECTOR_SIZE) {
+		}
+
+		void Initialize(Allocator &allocator, const vector<LogicalType> &eval_types,
+		                const vector<bool> &initialize_columns) {
+			eval_chunk.Initialize(allocator, eval_types, initialize_columns, STANDARD_VECTOR_SIZE);
+		}
+	};
 
 #ifdef DUCKDB_HASH_ZERO
 	//! Verify salt when all hashes are 0
@@ -99,38 +115,39 @@ public:
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
-		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void Next(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		//! Are pointer chains all pointing to NULL?
 		bool PointersExhausted() const;
 
 	private:
 		//! Next operator for the inner join
-		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the semi join
-		void NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the anti join
-		void NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the RIGHT semi and anti join
-		void NextRightSemiOrAntiJoin(DataChunk &keys);
-		//! Next operator for the left outer join
-		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the mark join
-		void NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-		//! Next operator for the single join
-		void NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data);
+		void NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		void NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 
 		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false
 		//! for every tuple
-		void ScanKeyMatches(DataChunk &keys);
+		void ScanKeyMatches(DataChunk &keys, DataChunk &probe_data);
 		template <bool MATCH>
 		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
-
 		void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result);
 
-		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
+		idx_t ScanInnerJoin(DataChunk &keys, DataChunk &probe_data, SelectionVector &result_vector);
 
 		//! Update the data chunk compaction buffer
 		void UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count);
+
+		//! Apply residual predicate filtering
+		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
+		                             SelectionVector *no_match_sel);
+
+	private:
+		unique_ptr<ExpressionExecutor> residual_executor;
+		unique_ptr<ResidualPredicateProbeState> residual_state;
 
 	public:
 		void AdvancePointers();
@@ -139,7 +156,8 @@ public:
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel);
+		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
+		                        SelectionVector *no_match_sel);
 	};
 
 public:
@@ -175,7 +193,9 @@ public:
 	};
 
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
-	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns);
+	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns,
+	              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr = nullptr,
+	              const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -286,6 +306,12 @@ public:
 	bool insert_duplicate_keys = true;
 	//! Number of probe matches
 	atomic<idx_t> total_probe_matches {0};
+	//! Residual predicate to evaluate during probing
+	optional_ptr<Expression> residual_predicate;
+	//! Residual predicate mapping info
+	unique_ptr<ResidualPredicateInfo> residual_info;
+	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
+	vector<idx_t> lhs_output_in_probe;
 
 	struct {
 		mutex mj_lock;

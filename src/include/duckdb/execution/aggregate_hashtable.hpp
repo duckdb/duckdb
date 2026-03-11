@@ -207,6 +207,7 @@ private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
 	//! Destroy the HT
 	void Destroy();
+	void DestroyAggregateData(PartitionedTupleData &data, PartitionedTupleDataAppendState &append_state);
 
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();

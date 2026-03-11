@@ -76,7 +76,7 @@ vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperat
 	return row_id_bindings;
 }
 
-void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t new_index) {
+void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, TableIndex new_index) {
 	reference<LogicalOperator> current_op = root;
 	while (true) {
 		auto &op = current_op.get();
@@ -118,7 +118,7 @@ void LateMaterialization::ReplaceTopLevelTableIndex(LogicalOperator &root, idx_t
 	}
 }
 
-void LateMaterialization::ReplaceTableReferences(unique_ptr<Expression> &root_expr, idx_t new_table_index) {
+void LateMaterialization::ReplaceTableReferences(unique_ptr<Expression> &root_expr, TableIndex new_table_index) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_column_ref, unique_ptr<Expression> &expr) {
 		    bound_column_ref.binding.table_index = new_table_index;
@@ -318,10 +318,10 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 
 	for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
 		auto &row_id_col = row_id_columns[r_idx];
-		JoinCondition condition;
-		condition.comparison = ExpressionType::COMPARE_EQUAL;
-		condition.left = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]);
-		condition.right = make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, rhs_bindings[r_idx]);
+		JoinCondition condition(
+		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, lhs_bindings[r_idx]),
+		    make_uniq<BoundColumnRefExpression>(row_id_col.name, row_id_col.type, rhs_bindings[r_idx]),
+		    ExpressionType::COMPARE_EQUAL);
 		join->conditions.push_back(std::move(condition));
 	}
 
@@ -365,8 +365,8 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	}
 
 	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns the plan
-	RemoveUnusedColumns unused_optimizer(optimizer.binder, optimizer.context, true);
-	unused_optimizer.VisitOperator(*op);
+	RemoveUnusedColumns unused_optimizer(optimizer);
+	unused_optimizer.VisitOperator(op);
 	return true;
 }
 
@@ -393,7 +393,7 @@ bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_va
 	}
 	// if there are any filters we shouldn't do large limit optimization
 	auto &get = current_op.get().Cast<LogicalGet>();
-	if (!get.table_filters.filters.empty()) {
+	if (get.table_filters.HasFilters()) {
 		return false;
 	}
 	return true;

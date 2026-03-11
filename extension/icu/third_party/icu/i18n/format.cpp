@@ -25,6 +25,10 @@
 
 #include "unicode/utypes.h"
 
+#ifndef U_I18N_IMPLEMENTATION
+#error U_I18N_IMPLEMENTATION not set - must be set for all ICU source files in i18n/ - see https://unicode-org.github.io/icu/userguide/howtouseicu
+#endif
+
 /*
  * Dummy code:
  * If all modules in the I18N library are switched off, then there are no

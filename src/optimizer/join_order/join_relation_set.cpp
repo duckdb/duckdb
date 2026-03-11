@@ -12,7 +12,8 @@ using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
 // LCOV_EXCL_START
 string JoinRelationSet::ToString() const {
 	string result = "[";
-	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return to_string(relation); });
+	result += StringUtil::Join(relations, count, ", ",
+	                           [](const RelationIndex &relation) { return to_string(relation.index); });
 	result += "]";
 	return result;
 }
@@ -36,7 +37,7 @@ bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
 	return false;
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<RelationIndex> relations, idx_t count) {
 	// now look it up in the tree
 	reference<JoinRelationTreeNode> info(root);
 	for (idx_t i = 0; i < count; i++) {
@@ -58,17 +59,18 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx
 }
 
 //! Create or get a JoinRelationSet from a single node with the given index
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(idx_t index) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(RelationIndex index) {
 	// create a sorted vector of the relations
-	auto relations = make_unsafe_uniq_array<idx_t>(1);
+	auto relations = make_unsafe_uniq_array<RelationIndex>(1);
 	relations[0] = index;
 	idx_t count = 1;
 	return GetJoinRelation(std::move(relations), count);
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx_t> &bindings) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<RelationIndex> &bindings) {
 	// create a sorted vector of the relations
-	unsafe_unique_array<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_uniq_array<idx_t>(bindings.size());
+	unsafe_unique_array<RelationIndex> relations =
+	    bindings.empty() ? nullptr : make_unsafe_uniq_array<RelationIndex>(bindings.size());
 	idx_t count = 0;
 	for (auto &entry : bindings) {
 		relations[count++] = entry;
@@ -78,7 +80,7 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx
 }
 
 JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelationSet &right) {
-	auto relations = make_unsafe_uniq_array<idx_t>(left.count + right.count);
+	auto relations = make_unsafe_uniq_array<RelationIndex>(left.count + right.count);
 	idx_t count = 0;
 	// move through the left and right relations, eliminating duplicates
 	idx_t i = 0, j = 0;

@@ -1,8 +1,10 @@
 #include "duckdb/transaction/local_storage.hpp"
 
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"

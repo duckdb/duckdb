@@ -18,7 +18,7 @@
 
 namespace {
 
-constexpr int32_t UTRIE_ASCII_LIMIT = 0x80;
+constexpr int32_t ASCII_LIMIT = 0x80;
 
 }  // namespace
 
@@ -31,10 +31,10 @@ utrie_swap(const UDataSwapper *ds,
     int32_t size;
     UBool dataIs32;
 
-    if(pErrorCode==NULL || U_FAILURE(*pErrorCode)) {
+    if(pErrorCode==nullptr || U_FAILURE(*pErrorCode)) {
         return 0;
     }
-    if(ds==NULL || inData==NULL || (length>=0 && outData==NULL)) {
+    if(ds==nullptr || inData==nullptr || (length>=0 && outData==nullptr)) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
         return 0;
     }
@@ -105,7 +105,7 @@ utrie2_swap(const UDataSwapper *ds,
     if(U_FAILURE(*pErrorCode)) {
         return 0;
     }
-    if(ds==NULL || inData==NULL || (length>=0 && outData==NULL)) {
+    if(ds==nullptr || inData==nullptr || (length>=0 && outData==nullptr)) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
         return 0;
     }
@@ -220,7 +220,7 @@ ucptrie_swap(const UDataSwapper *ds,
         (trie.options & UCPTRIE_OPTIONS_RESERVED_MASK) != 0 ||
         valueWidth > UCPTRIE_VALUE_BITS_8 ||
         trie.indexLength < minIndexLength ||
-        dataLength < UTRIE_ASCII_LIMIT
+        dataLength < ASCII_LIMIT
     ) {
         *pErrorCode=U_INVALID_FORMAT_ERROR; /* not a UCPTrie */
         return 0;
@@ -256,20 +256,24 @@ ucptrie_swap(const UDataSwapper *ds,
         ds->swapArray32(ds, &inTrie->signature, 4, &outTrie->signature, pErrorCode);
         ds->swapArray16(ds, &inTrie->options, 12, &outTrie->options, pErrorCode);
 
-        /* swap the index and the data */
+        /* swap the index */
+        const uint16_t *inIndex=reinterpret_cast<const uint16_t *>(inTrie+1);
+        uint16_t *outIndex=reinterpret_cast<uint16_t *>(outTrie+1);
+        ds->swapArray16(ds, inIndex, trie.indexLength*2, outIndex, pErrorCode);
+
+        /* swap the data */
+        const uint16_t *inData=inIndex+trie.indexLength;
+        uint16_t *outData=outIndex+trie.indexLength;
         switch(valueWidth) {
         case UCPTRIE_VALUE_BITS_16:
-            ds->swapArray16(ds, inTrie+1, (trie.indexLength+dataLength)*2, outTrie+1, pErrorCode);
+            ds->swapArray16(ds, inData, dataLength*2, outData, pErrorCode);
             break;
         case UCPTRIE_VALUE_BITS_32:
-            ds->swapArray16(ds, inTrie+1, trie.indexLength*2, outTrie+1, pErrorCode);
-            ds->swapArray32(ds, (const uint16_t *)(inTrie+1)+trie.indexLength, dataLength*4,
-                                     (uint16_t *)(outTrie+1)+trie.indexLength, pErrorCode);
+            ds->swapArray32(ds, inData, dataLength*4, outData, pErrorCode);
             break;
         case UCPTRIE_VALUE_BITS_8:
-            ds->swapArray16(ds, inTrie+1, trie.indexLength*2, outTrie+1, pErrorCode);
             if(inTrie!=outTrie) {
-                uprv_memmove((outTrie+1)+trie.indexLength, (inTrie+1)+trie.indexLength, dataLength);
+                uprv_memmove(outData, inData, dataLength);
             }
             break;
         default:
@@ -290,8 +294,8 @@ namespace {
  * @param data a pointer to 32-bit-aligned memory containing the serialized form of a trie
  * @param length the number of bytes available at data;
  *               can be more than necessary (see return value)
- * @param anyEndianOk If FALSE, only platform-endian serialized forms are recognized.
- *                    If TRUE, opposite-endian serialized forms are recognized as well.
+ * @param anyEndianOk If false, only platform-endian serialized forms are recognized.
+ *                    If true, opposite-endian serialized forms are recognized as well.
  * @return the trie version of the serialized form, or 0 if it is not
  *         recognized as a serialized trie
  */
@@ -330,7 +334,7 @@ utrie_swapAnyVersion(const UDataSwapper *ds,
                      const void *inData, int32_t length, void *outData,
                      UErrorCode *pErrorCode) {
     if(U_FAILURE(*pErrorCode)) { return 0; }
-    switch(getVersion(inData, length, TRUE)) {
+    switch(getVersion(inData, length, true)) {
     case 1:
         return utrie_swap(ds, inData, length, outData, pErrorCode);
     case 2:

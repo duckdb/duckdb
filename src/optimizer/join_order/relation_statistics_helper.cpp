@@ -84,7 +84,6 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 	auto base_table_cardinality = get.EstimateCardinality(context);
 	auto cardinality_after_filters = base_table_cardinality;
-	unique_ptr<BaseStatistics> column_statistics;
 
 	auto catalog_table = get.GetTable();
 	auto name = string("some table");
@@ -116,28 +115,28 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		}
 	}
 
-	if (!get.table_filters.filters.empty()) {
-		column_statistics = nullptr;
+	if (get.table_filters.HasFilters()) {
+		unique_ptr<BaseStatistics> column_statistics;
 		bool has_non_optional_filters = false;
-		for (auto &it : get.table_filters.filters) {
+		for (auto &entry : get.table_filters) {
 			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
 				if (get.function.statistics_extended) {
-					auto column_index = ColumnIndex(it.first);
+					auto column_index = ColumnIndex(entry.ColumnIndex());
 					TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
 					column_statistics = get.function.statistics_extended(context, input);
 				} else {
 					D_ASSERT(get.function.statistics);
-					column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
+					column_statistics = get.function.statistics(context, get.bind_data.get(), entry.ColumnIndex());
 				}
 			}
 
 			if (column_statistics) {
 				idx_t cardinality_with_filter =
-				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
+				    InspectTableFilter(base_table_cardinality, entry.ColumnIndex(), entry.Filter(), *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
-			if (it.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+			if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
 				has_non_optional_filters = true;
 			}
 		}

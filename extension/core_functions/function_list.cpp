@@ -208,6 +208,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION(HistogramExactFun),
 	DUCKDB_SCALAR_FUNCTION_SET(HoursFun),
 	DUCKDB_SCALAR_FUNCTION(InSearchPathFun),
+	DUCKDB_SCALAR_FUNCTION(IndexKeyFun),
 	DUCKDB_SCALAR_FUNCTION(InstrFun),
 	DUCKDB_SCALAR_FUNCTION(IsHistogramOtherBinFun),
 	DUCKDB_SCALAR_FUNCTION_SET(IsFiniteFun),

@@ -22,6 +22,7 @@ namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
+class Optimizer;
 
 struct ReferencedExtractComponent {
 public:
@@ -126,42 +127,43 @@ private:
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public BaseColumnPruner {
 public:
-	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false,
-	                    shared_ptr<unordered_map<idx_t, MaterializedCTEInfo>> cte_info_map = nullptr)
-	    : binder(binder), context(context), everything_referenced(is_root), cte_info_map(std::move(cte_info_map)) {
-	}
+	explicit RemoveUnusedColumns(Optimizer &optimizer);
+	RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root);
 
-	void VisitOperator(LogicalOperator &op) override;
+	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
 private:
+	Optimizer &optimizer;
 	Binder &binder;
 	ClientContext &context;
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
 
-	shared_ptr<unordered_map<idx_t, MaterializedCTEInfo>> cte_info_map;
-	RemoveUnusedColumns CreateChildOptimizer();
+	RemoveUnusedColumns &root;
+	unique_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> root_cte_map;
 
 private:
 	template <class T>
-	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
-	void RemoveColumnsFromLogicalGet(LogicalGet &get);
+	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
+	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void WritePushdownExtractColumns(
 	    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
 	    const std::function<idx_t(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)> &callback);
+	unordered_map<TableIndex, MaterializedCTEInfo> &GetCTEMap();
+	optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> TryGetCTEMap();
 };
 
 class CTERefPruner : public LogicalOperatorVisitor {
 public:
-	CTERefPruner(const idx_t table_index, const unordered_set<idx_t> &referenced_columns);
+	CTERefPruner(const TableIndex table_index, const unordered_set<idx_t> &referenced_columns);
 
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
-	const idx_t cte_index;
+	const TableIndex cte_index;
 	const unordered_set<idx_t> &referenced_columns;
 
 public:

@@ -64,7 +64,7 @@ int32_t AffixUtils::estimateLength(const UnicodeString &patternString, UErrorCod
                 }
                 break;
             default:
-                UPRV_UNREACHABLE;
+                UPRV_UNREACHABLE_EXIT;
         }
 
         offset += U16_LENGTH(cp);
@@ -97,8 +97,8 @@ UnicodeString AffixUtils::escape(const UnicodeString &input) {
             case u'-':
             case u'+':
             case u'%':
-            case u'\x2030':
-            case u'\xa4':
+            case u'‰':
+            case u'¤':
                 if (state == STATE_BASE) {
                     output.append(u'\'');
                     output.append(cp);
@@ -131,27 +131,29 @@ UnicodeString AffixUtils::escape(const UnicodeString &input) {
 Field AffixUtils::getFieldForType(AffixPatternType type) {
     switch (type) {
         case TYPE_MINUS_SIGN:
-            return UNUM_SIGN_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_SIGN_FIELD};
         case TYPE_PLUS_SIGN:
-            return UNUM_SIGN_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_SIGN_FIELD};
+        case TYPE_APPROXIMATELY_SIGN:
+            return {UFIELD_CATEGORY_NUMBER, UNUM_APPROXIMATELY_SIGN_FIELD};
         case TYPE_PERCENT:
-            return UNUM_PERCENT_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_PERCENT_FIELD};
         case TYPE_PERMILLE:
-            return UNUM_PERMILL_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_PERMILL_FIELD};
         case TYPE_CURRENCY_SINGLE:
-            return UNUM_CURRENCY_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD};
         case TYPE_CURRENCY_DOUBLE:
-            return UNUM_CURRENCY_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD};
         case TYPE_CURRENCY_TRIPLE:
-            return UNUM_CURRENCY_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD};
         case TYPE_CURRENCY_QUAD:
-            return UNUM_CURRENCY_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD};
         case TYPE_CURRENCY_QUINT:
-            return UNUM_CURRENCY_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD};
         case TYPE_CURRENCY_OVERFLOW:
-            return UNUM_CURRENCY_FIELD;
+            return {UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD};
         default:
-            UPRV_UNREACHABLE;
+            UPRV_UNREACHABLE_EXIT;
     }
 }
 
@@ -165,7 +167,11 @@ AffixUtils::unescape(const UnicodeString &affixPattern, FormattedStringBuilder &
         if (U_FAILURE(status)) { return length; }
         if (tag.type == TYPE_CURRENCY_OVERFLOW) {
             // Don't go to the provider for this special case
-            length += output.insertCodePoint(position + length, 0xFFFD, UNUM_CURRENCY_FIELD, status);
+            length += output.insertCodePoint(
+                position + length,
+                0xFFFD,
+                {UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD},
+                status);
         } else if (tag.type < 0) {
             length += output.insert(
                     position + length, provider.getSymbol(tag.type), getFieldForType(tag.type), status);
@@ -218,7 +224,7 @@ bool AffixUtils::hasCurrencySymbols(const UnicodeString &affixPattern, UErrorCod
     while (hasNext(tag, affixPattern)) {
         tag = nextToken(tag, affixPattern, status);
         if (U_FAILURE(status)) { return false; }
-        if (tag.type < 0 && getFieldForType(tag.type) == UNUM_CURRENCY_FIELD) {
+        if (tag.type < 0 && getFieldForType(tag.type) == Field(UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD)) {
             return true;
         }
     }
@@ -291,11 +297,13 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
                         return makeTag(offset + count, TYPE_MINUS_SIGN, STATE_BASE, 0);
                     case u'+':
                         return makeTag(offset + count, TYPE_PLUS_SIGN, STATE_BASE, 0);
+                    case u'~':
+                        return makeTag(offset + count, TYPE_APPROXIMATELY_SIGN, STATE_BASE, 0);
                     case u'%':
                         return makeTag(offset + count, TYPE_PERCENT, STATE_BASE, 0);
-                    case u'\x2030':
+                    case u'‰':
                         return makeTag(offset + count, TYPE_PERMILLE, STATE_BASE, 0);
-                    case u'\xa4':
+                    case u'¤':
                         state = STATE_FIRST_CURR;
                         offset += count;
                         // continue to the next code point
@@ -328,7 +336,7 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
                     break;
                 }
             case STATE_FIRST_CURR:
-                if (cp == u'\xa4') {
+                if (cp == u'¤') {
                     state = STATE_SECOND_CURR;
                     offset += count;
                     // continue to the next code point
@@ -337,7 +345,7 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
                     return makeTag(offset, TYPE_CURRENCY_SINGLE, STATE_BASE, 0);
                 }
             case STATE_SECOND_CURR:
-                if (cp == u'\xa4') {
+                if (cp == u'¤') {
                     state = STATE_THIRD_CURR;
                     offset += count;
                     // continue to the next code point
@@ -346,7 +354,7 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
                     return makeTag(offset, TYPE_CURRENCY_DOUBLE, STATE_BASE, 0);
                 }
             case STATE_THIRD_CURR:
-                if (cp == u'\xa4') {
+                if (cp == u'¤') {
                     state = STATE_FOURTH_CURR;
                     offset += count;
                     // continue to the next code point
@@ -355,7 +363,7 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
                     return makeTag(offset, TYPE_CURRENCY_TRIPLE, STATE_BASE, 0);
                 }
             case STATE_FOURTH_CURR:
-                if (cp == u'\xa4') {
+                if (cp == u'¤') {
                     state = STATE_FIFTH_CURR;
                     offset += count;
                     // continue to the next code point
@@ -364,7 +372,7 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
                     return makeTag(offset, TYPE_CURRENCY_QUAD, STATE_BASE, 0);
                 }
             case STATE_FIFTH_CURR:
-                if (cp == u'\xa4') {
+                if (cp == u'¤') {
                     state = STATE_OVERFLOW_CURR;
                     offset += count;
                     // continue to the next code point
@@ -373,7 +381,7 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
                     return makeTag(offset, TYPE_CURRENCY_QUINT, STATE_BASE, 0);
                 }
             case STATE_OVERFLOW_CURR:
-                if (cp == u'\xa4') {
+                if (cp == u'¤') {
                     offset += count;
                     // continue to the next code point and loop back to this state
                     break;
@@ -381,7 +389,7 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
                     return makeTag(offset, TYPE_CURRENCY_OVERFLOW, STATE_BASE, 0);
                 }
             default:
-                UPRV_UNREACHABLE;
+                UPRV_UNREACHABLE_EXIT;
         }
     }
     // End of string
@@ -410,7 +418,7 @@ AffixTag AffixUtils::nextToken(AffixTag tag, const UnicodeString &patternString,
         case STATE_OVERFLOW_CURR:
             return makeTag(offset, TYPE_CURRENCY_OVERFLOW, STATE_BASE, 0);
         default:
-            UPRV_UNREACHABLE;
+            UPRV_UNREACHABLE_EXIT;
     }
 }
 

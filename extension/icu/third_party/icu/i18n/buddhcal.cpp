@@ -30,7 +30,7 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(BuddhistCalendar)
 
 static const int32_t kBuddhistEraStart = -543;  // 544 BC (Gregorian)
 
-static const int32_t buddhcal_kGregorianEpoch = 1970;    // used as the default value of EXTENDED_YEAR
+static const int32_t kGregorianEpoch = 1970;    // used as the default value of EXTENDED_YEAR
 
 BuddhistCalendar::BuddhistCalendar(const Locale& aLocale, UErrorCode& success)
 :   GregorianCalendar(aLocale, success)
@@ -69,20 +69,13 @@ int32_t BuddhistCalendar::handleGetExtendedYear()
     // The default value of EXTENDED_YEAR is 1970 (Buddhist 2513)
     int32_t year;
     if (newerField(UCAL_EXTENDED_YEAR, UCAL_YEAR) == UCAL_EXTENDED_YEAR) {
-        year = internalGet(UCAL_EXTENDED_YEAR, buddhcal_kGregorianEpoch);
+        year = internalGet(UCAL_EXTENDED_YEAR, kGregorianEpoch);
     } else {
-        // extended year is a gregorian year, where 1 = 1AD,  0 = 1BC, -1 = 2BC, etc
-        year = internalGet(UCAL_YEAR, buddhcal_kGregorianEpoch - kBuddhistEraStart)
+        // extended year is a gregorian year, where 1 = 1AD,  0 = 1BC, -1 = 2BC, etc 
+        year = internalGet(UCAL_YEAR, kGregorianEpoch - kBuddhistEraStart)
                 + kBuddhistEraStart;
     }
     return year;
-}
-
-int32_t BuddhistCalendar::handleComputeMonthStart(int32_t eyear, int32_t month,
-
-                                                  UBool useMonth) const
-{
-    return GregorianCalendar::handleComputeMonthStart(eyear, month, useMonth);
 }
 
 void BuddhistCalendar::handleComputeFields(int32_t julianDay, UErrorCode& status)
@@ -131,18 +124,18 @@ void BuddhistCalendar::timeToFields(UDate theTime, UBool quick, UErrorCode& stat
  * the first time it is used. Once the system default century date and year
  * are set, they do not change.
  */
-static UDate     buddhcal_gSystemDefaultCenturyStart       = DBL_MIN;
-static int32_t   buddhcal_gSystemDefaultCenturyStartYear   = -1;
-static icu::UInitOnce gBCInitOnce = U_INITONCE_INITIALIZER;
+static UDate     gSystemDefaultCenturyStart       = DBL_MIN;
+static int32_t   gSystemDefaultCenturyStartYear   = -1;
+static icu::UInitOnce gBCInitOnce {};
 
 
 UBool BuddhistCalendar::haveDefaultCentury() const
 {
-    return TRUE;
+    return true;
 }
 
 static void U_CALLCONV
-initializeBuddhCalSystemDefaultCentury()
+initializeSystemDefaultCentury()
 {
     // initialize systemDefaultCentury and systemDefaultCenturyYear based
     // on the current time.  They'll be set to 80 years before
@@ -154,8 +147,8 @@ initializeBuddhCalSystemDefaultCentury()
         calendar.add(UCAL_YEAR, -80, status);
         UDate    newStart =  calendar.getTime(status);
         int32_t  newYear  =  calendar.get(UCAL_YEAR, status);
-        buddhcal_gSystemDefaultCenturyStartYear = newYear;
-        buddhcal_gSystemDefaultCenturyStart = newStart;
+        gSystemDefaultCenturyStartYear = newYear;
+        gSystemDefaultCenturyStart = newStart;
     }
     // We have no recourse upon failure unless we want to propagate the failure
     // out.
@@ -164,15 +157,15 @@ initializeBuddhCalSystemDefaultCentury()
 UDate BuddhistCalendar::defaultCenturyStart() const
 {
     // lazy-evaluate systemDefaultCenturyStart and systemDefaultCenturyStartYear
-    umtx_initOnce(gBCInitOnce, &initializeBuddhCalSystemDefaultCentury);
-    return buddhcal_gSystemDefaultCenturyStart;
+    umtx_initOnce(gBCInitOnce, &initializeSystemDefaultCentury);
+    return gSystemDefaultCenturyStart;
 }
 
 int32_t BuddhistCalendar::defaultCenturyStartYear() const
 {
-    // lazy-evaluate systemDefaultCenturyStartYear and systemDefaultCenturyStart
-    umtx_initOnce(gBCInitOnce, &initializeBuddhCalSystemDefaultCentury);
-    return buddhcal_gSystemDefaultCenturyStartYear;
+    // lazy-evaluate systemDefaultCenturyStartYear and systemDefaultCenturyStart 
+    umtx_initOnce(gBCInitOnce, &initializeSystemDefaultCentury);
+    return gSystemDefaultCenturyStartYear;
 }
 
 

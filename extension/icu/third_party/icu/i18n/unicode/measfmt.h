@@ -91,7 +91,8 @@ class DateFormat;
 /**
  * <p><strong>IMPORTANT:</strong> New users are strongly encouraged to see if
  * numberformatter.h fits their use case.  Although not deprecated, this header
- * is provided for backwards compatibility only.
+ * is provided for backwards compatibility only, and has much more limited
+ * capabilities.
  *
  * @see Format
  * @author Alan Liu
@@ -147,13 +148,13 @@ class U_I18N_API MeasureFormat : public Format {
      * Return true if given Format objects are semantically equal.
      * @stable ICU 53
      */
-    virtual bool operator==(const Format &other) const;
+    virtual bool operator==(const Format &other) const override;
 
     /**
      * Clones this object polymorphically.
      * @stable ICU 53
      */
-    virtual MeasureFormat *clone() const;
+    virtual MeasureFormat *clone() const override;
 
     /**
      * Formats object to produce a string.
@@ -163,7 +164,7 @@ class U_I18N_API MeasureFormat : public Format {
             const Formattable &obj,
             UnicodeString &appendTo,
             FieldPosition &pos,
-            UErrorCode &status) const;
+            UErrorCode &status) const override;
 
 #ifndef U_FORCE_HIDE_DRAFT_API
     /**
@@ -175,7 +176,7 @@ class U_I18N_API MeasureFormat : public Format {
     virtual void parseObject(
             const UnicodeString &source,
             Formattable &reslt,
-            ParsePosition &pos) const;
+            ParsePosition &pos) const override;
 #endif  // U_FORCE_HIDE_DRAFT_API
 
     /**
@@ -243,7 +244,7 @@ class U_I18N_API MeasureFormat : public Format {
      * {@link icu::number::NumberFormatter} instead of NumberFormat.
      * @param locale desired locale
      * @param ec input-output error code
-     * @return a formatter object, or NULL upon error
+     * @return a formatter object, or nullptr upon error
      * @stable ICU 3.0
      */
     static MeasureFormat* U_EXPORT2 createCurrencyFormat(const Locale& locale,
@@ -256,7 +257,7 @@ class U_I18N_API MeasureFormat : public Format {
      * <strong>NOTE:</strong> New users are strongly encouraged to use
      * {@link icu::number::NumberFormatter} instead of NumberFormat.
      * @param ec input-output error code
-     * @return a formatter object, or NULL upon error
+     * @return a formatter object, or nullptr upon error
      * @stable ICU 3.0
      */
     static MeasureFormat* U_EXPORT2 createCurrencyFormat(UErrorCode& ec);
@@ -285,7 +286,7 @@ class U_I18N_API MeasureFormat : public Format {
      *                  other classes have different class IDs.
      * @stable ICU 53
      */
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID(void) const override;
 
  protected:
     /**
@@ -309,7 +310,7 @@ class U_I18N_API MeasureFormat : public Format {
     /**
      * ICU use only.
      * Allows subclass to change locale. Note that this method also changes
-     * the NumberFormat object. Returns TRUE if locale changed; FALSE if no
+     * the NumberFormat object. Returns true if locale changed; false if no
      * change was made.
      * @internal.
      */

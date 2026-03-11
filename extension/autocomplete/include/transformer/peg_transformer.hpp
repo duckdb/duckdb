@@ -1,7 +1,6 @@
 #pragma once
 
 #include "ast/unpivot_name_values.hpp"
-#include "tokenizer.hpp"
 #include "parse_result.hpp"
 #include "transform_enum_result.hpp"
 #include "transform_result.hpp"
@@ -730,6 +729,10 @@ private:
 	static string TransformExportSource(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 
 	// expression.gram
+	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
+	static unique_ptr<ParsedExpression> TransformExpressionAlias(PEGTransformer &transformer,
+	                                                             optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformBaseExpression(PEGTransformer &transformer,
 	                                                            optional_ptr<ParseResult> parse_result);
 	static unique_ptr<ParsedExpression> TransformExpression(PEGTransformer &transformer,

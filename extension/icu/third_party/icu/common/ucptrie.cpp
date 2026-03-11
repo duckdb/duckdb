@@ -256,7 +256,7 @@ inline uint32_t maybeFilterValue(uint32_t value, uint32_t trieNullValue, uint32_
     return value;
 }
 
-UChar32 ucptrie_internal_getRange(const void *t, UChar32 start,
+UChar32 getRange(const void *t, UChar32 start,
                  UCPMapValueFilter *filter, const void *context, uint32_t *pValue) {
     if ((uint32_t)start > MAX_UNICODE) {
         return U_SENTINEL;
@@ -461,7 +461,7 @@ U_CAPI UChar32 U_EXPORT2
 ucptrie_getRange(const UCPTrie *trie, UChar32 start,
                  UCPMapRangeOption option, uint32_t surrogateValue,
                  UCPMapValueFilter *filter, const void *context, uint32_t *pValue) {
-    return ucptrie_internalGetRange(ucptrie_internal_getRange, trie, start,
+    return ucptrie_internalGetRange(getRange, trie, start,
                                     option, surrogateValue,
                                     filter, context, pValue);
 }

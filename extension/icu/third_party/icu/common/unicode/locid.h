@@ -253,12 +253,12 @@ public:
     /**
      * Construct a locale from language, country, variant.
      * If an error occurs, then the constructed object will be "bogus"
-     * (isBogus() will return TRUE).
+     * (isBogus() will return true).
      *
      * @param language Lowercase two-letter or three-letter ISO-639 code.
      *  This parameter can instead be an ICU style C locale (e.g. "en_US"),
      *  but the other parameters must not be used.
-     *  This parameter can be NULL; if so,
+     *  This parameter can be nullptr; if so,
      *  the locale is initialized to match the current default locale.
      *  (This is the same as using the default constructor.)
      *  Please note: The Java Locale class does NOT accept the form
@@ -294,7 +294,7 @@ public:
      * @param other The Locale object being moved in.
      * @stable ICU 63
      */
-    Locale(Locale&& other) U_NOEXCEPT;
+    Locale(Locale&& other) noexcept;
 
     /**
      * Destructor
@@ -320,31 +320,31 @@ public:
      * @return      *this
      * @stable ICU 63
      */
-    Locale& operator=(Locale&& other) U_NOEXCEPT;
+    Locale& operator=(Locale&& other) noexcept;
 
     /**
      * Checks if two locale keys are the same.
      *
      * @param other The locale key object to be compared with this.
-     * @return      True if the two locale keys are the same, false otherwise.
+     * @return      true if the two locale keys are the same, false otherwise.
      * @stable ICU 2.0
      */
-    bool   operator==(const    Locale&     other) const;
+    bool    operator==(const    Locale&     other) const;
 
     /**
      * Checks if two locale keys are not the same.
      *
      * @param other The locale key object to be compared with this.
-     * @return      True if the two locale keys are not the same, false
+     * @return      true if the two locale keys are not the same, false
      *              otherwise.
      * @stable ICU 2.0
      */
-    inline bool   operator!=(const    Locale&     other) const;
+    inline bool    operator!=(const    Locale&     other) const;
 
     /**
      * Clone this object.
      * Clones can be used concurrently in multiple threads.
-     * If an error occurs, then NULL is returned.
+     * If an error occurs, then nullptr is returned.
      * The caller must delete the clone.
      *
      * @return a clone of this object
@@ -378,7 +378,7 @@ public:
      * setDefault() only changes ICU's default locale ID, <strong>not</strong>
      * the default locale ID of the runtime environment.
      *
-     * @param newLocale Locale to set to.  If NULL, set to the value obtained
+     * @param newLocale Locale to set to.  If nullptr, set to the value obtained
      *                  from the runtime environment.
      * @param success The error code.
      * @system
@@ -393,13 +393,17 @@ public:
      * If the specified language tag contains any ill-formed subtags,
      * the first such subtag and all following subtags are ignored.
      * <p>
-     * This implements the 'Language-Tag' production of BCP47, and so
-     * supports grandfathered (regular and irregular) as well as private
-     * use language tags.  Private use tags are represented as 'x-whatever',
-     * and grandfathered tags are converted to their canonical replacements
-     * where they exist.  Note that a few grandfathered tags have no modern
-     * replacement, these will be converted using the fallback described in
+     * This implements the 'Language-Tag' production of BCP 47, and so
+     * supports legacy language tags (marked as “Type: grandfathered” in BCP 47)
+     * (regular and irregular) as well as private use language tags.
+     *
+     * Private use tags are represented as 'x-whatever',
+     * and legacy tags are converted to their canonical replacements where they exist.
+     *
+     * Note that a few legacy tags have no modern replacement;
+     * these will be converted using the fallback described in
      * the first paragraph, so some information might be lost.
+     *
      * @param tag     the input BCP47 language tag.
      * @param status  error information if creating the Locale failed.
      * @return        the Locale for the specified BCP47 language tag.
@@ -448,8 +452,8 @@ public:
 
     /**
      * Creates a locale from the given string after canonicalizing
-     * the string by calling uloc_canonicalize().
-     * @param name the locale ID to create from.  Must not be NULL.
+     * the string according to CLDR by calling uloc_canonicalize().
+     * @param name the locale ID to create from.  Must not be nullptr.
      * @return a new locale object corresponding to the given name
      * @stable ICU 3.0
      * @see uloc_canonicalize
@@ -568,10 +572,18 @@ public:
     void minimizeSubtags(UErrorCode& status);
 
     /**
+     * Canonicalize the locale ID of this object according to CLDR.
+     * @param status the status code
+     * @stable ICU 67
+     * @see createCanonical
+     */
+    void canonicalize(UErrorCode& status);
+
+    /**
      * Gets the list of keywords for the specified locale.
      *
      * @param status the status code
-     * @return pointer to StringEnumeration class, or NULL if there are no keywords. 
+     * @return pointer to StringEnumeration class, or nullptr if there are no keywords.
      * Client must dispose of it by calling delete.
      * @see getKeywords
      * @stable ICU 2.8
@@ -582,7 +594,7 @@ public:
      * Gets the list of Unicode keywords for the specified locale.
      *
      * @param status the status code
-     * @return pointer to StringEnumeration class, or NULL if there are no keywords.
+     * @return pointer to StringEnumeration class, or nullptr if there are no keywords.
      * Client must dispose of it by calling delete.
      * @see getUnicodeKeywords
      * @stable ICU 63
@@ -710,7 +722,7 @@ public:
      *
      * @param keywordName name of the keyword to be set. Case insensitive.
      * @param keywordValue value of the keyword to be set. If 0-length or
-     *  NULL, will result in the keyword being removed. No error is given if
+     *  nullptr, will result in the keyword being removed. No error is given if
      *  that keyword does not exist.
      * @param status Returns any error information while performing this operation.
      *
@@ -731,7 +743,7 @@ public:
      *
      * @param keywordName name of the keyword to be set.
      * @param keywordValue value of the keyword to be set. If 0-length or
-     *  NULL, will result in the keyword being removed. No error is given if
+     *  nullptr, will result in the keyword being removed. No error is given if
      *  that keyword does not exist.
      * @param status Returns any error information while performing this operation.
      * @stable ICU 63
@@ -751,7 +763,7 @@ public:
      *
      * @param keywordName name of the keyword to be set.
      * @param keywordValue value of the keyword to be set. If 0-length or
-     *  NULL, will result in the keyword being removed. No error is given if
+     *  nullptr, will result in the keyword being removed. No error is given if
      *  that keyword does not exist.
      * @param status Returns any error information while performing this operation.
      * @stable ICU 63
@@ -785,14 +797,14 @@ public:
     /**
      * Returns whether this locale's script is written right-to-left.
      * If there is no script subtag, then the likely script is used, see uloc_addLikelySubtags().
-     * If no likely script is known, then FALSE is returned.
+     * If no likely script is known, then false is returned.
      *
      * A script is right-to-left according to the CLDR script metadata
      * which corresponds to whether the script's letters have Bidi_Class=R or AL.
      *
-     * Returns TRUE for "ar" and "en-Hebr", FALSE for "zh" and "fa-Cyrl".
+     * Returns true for "ar" and "en-Hebr", false for "zh" and "fa-Cyrl".
      *
-     * @return TRUE if the locale's script is written right-to-left
+     * @return true if the locale's script is written right-to-left
      * @stable ICU 54
      */
     UBool isRightToLeft() const;
@@ -946,7 +958,7 @@ public:
 
     /**
      * Gets the bogus state. Locale object can be bogus if it doesn't exist
-     * @return FALSE if it is a real locale, TRUE if it is a bogus locale
+     * @return false if it is a real locale, true if it is a bogus locale
      * @stable ICU 2.1
      */
     inline UBool isBogus(void) const;
@@ -972,7 +984,10 @@ public:
     static const char* const* U_EXPORT2 getISOCountries();
 
     /**
-     * Gets a list of all available language codes defined in ISO 639.  This is a pointer
+     * Returns a list of all unique language codes defined in ISO 639.
+     * They can be 2 or 3 letter codes, as defined by
+     * <a href="https://www.ietf.org/rfc/bcp/bcp47.html#section-2.2.1">
+     * BCP 47, section 2.2.1</a>. This is a pointer
      * to an array of pointers to arrays of char.  All of these pointers are owned
      * by ICU-- do not delete them, and do not write through them.  The array is
      * terminated with a null pointer.
@@ -993,34 +1008,33 @@ public:
      *
      * @stable ICU 2.2
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
-#ifndef U_HIDE_DRAFT_API
     /**
      * A Locale iterator interface similar to a Java Iterator<Locale>.
-     * @draft ICU 65
+     * @stable ICU 65
      */
     class U_COMMON_API Iterator /* not : public UObject because this is an interface/mixin class */ {
     public:
-        /** @draft ICU 65 */
+        /** @stable ICU 65 */
         virtual ~Iterator();
 
         /**
-         * @return TRUE if next() can be called again.
-         * @draft ICU 65
+         * @return true if next() can be called again.
+         * @stable ICU 65
          */
         virtual UBool hasNext() const = 0;
 
         /**
          * @return the next locale.
-         * @draft ICU 65
+         * @stable ICU 65
          */
         virtual const Locale &next() = 0;
     };
 
     /**
      * A generic Locale iterator implementation over Locale input iterators.
-     * @draft ICU 65
+     * @stable ICU 65
      */
     template<typename Iter>
     class RangeIterator : public Iterator, public UMemory {
@@ -1032,19 +1046,19 @@ public:
          *
          * @param begin Start of range.
          * @param end Exclusive end of range.
-         * @draft ICU 65
+         * @stable ICU 65
          */
         RangeIterator(Iter begin, Iter end) : it_(begin), end_(end) {}
 
         /**
-         * @return TRUE if next() can be called again.
-         * @draft ICU 65
+         * @return true if next() can be called again.
+         * @stable ICU 65
          */
         UBool hasNext() const override { return it_ != end_; }
 
         /**
          * @return the next locale.
-         * @draft ICU 65
+         * @stable ICU 65
          */
         const Locale &next() override { return *it_++; }
 
@@ -1056,7 +1070,7 @@ public:
     /**
      * A generic Locale iterator implementation over Locale input iterators.
      * Calls the converter to convert each *begin to a const Locale &.
-     * @draft ICU 65
+     * @stable ICU 65
      */
     template<typename Iter, typename Conv>
     class ConvertingIterator : public Iterator, public UMemory {
@@ -1069,20 +1083,20 @@ public:
          * @param begin Start of range.
          * @param end Exclusive end of range.
          * @param converter Converter from *begin to const Locale & or compatible.
-         * @draft ICU 65
+         * @stable ICU 65
          */
         ConvertingIterator(Iter begin, Iter end, Conv converter) :
                 it_(begin), end_(end), converter_(converter) {}
 
         /**
-         * @return TRUE if next() can be called again.
-         * @draft ICU 65
+         * @return true if next() can be called again.
+         * @stable ICU 65
          */
         UBool hasNext() const override { return it_ != end_; }
 
         /**
          * @return the next locale.
-         * @draft ICU 65
+         * @stable ICU 65
          */
         const Locale &next() override { return converter_(*it_++); }
 
@@ -1091,7 +1105,6 @@ public:
         const Iter end_;
         Conv converter_;
     };
-#endif  // U_HIDE_DRAFT_API
 
 protected: /* only protected for testing purposes. DO NOT USE. */
 #ifndef U_HIDE_INTERNAL_API
@@ -1100,6 +1113,15 @@ protected: /* only protected for testing purposes. DO NOT USE. */
      * @internal
      */
     void setFromPOSIXID(const char *posixID);
+    /**
+     * Minimize the subtags for this Locale, per the algorithm described
+     * @param favorScript favor to keep script if true, to keep region if false.
+     * @param status  error information if maximizing this Locale failed.
+     *                If this Locale is not well-formed, the error code is
+     *                U_ILLEGAL_ARGUMENT_ERROR.
+     * @internal
+     */
+    void minimizeSubtags(bool favorScript, UErrorCode& status);
 #endif  /* U_HIDE_INTERNAL_API */
 
 private:

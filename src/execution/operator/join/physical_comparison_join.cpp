@@ -7,8 +7,23 @@ namespace duckdb {
 PhysicalComparisonJoin::PhysicalComparisonJoin(PhysicalPlan &physical_plan, LogicalOperator &op,
                                                PhysicalOperatorType type, vector<JoinCondition> conditions_p,
                                                JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalJoin(physical_plan, op, type, join_type, estimated_cardinality), conditions(std::move(conditions_p)) {
+    : PhysicalJoin(physical_plan, op, type, join_type, estimated_cardinality) {
+	vector<JoinCondition> comparison_conditions;
+	vector<JoinCondition> arbitrary_conditions;
+
+	for (auto &cond : conditions_p) {
+		if (cond.IsComparison()) {
+			comparison_conditions.push_back(std::move(cond));
+		} else {
+			arbitrary_conditions.push_back(std::move(cond));
+		}
+	}
+	conditions = std::move(comparison_conditions);
 	ReorderConditions(conditions);
+
+	if (!arbitrary_conditions.empty()) {
+		predicate = JoinCondition::CreateExpression(std::move(arbitrary_conditions));
+	}
 }
 
 InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() const {
@@ -20,12 +35,19 @@ InsertionOrderPreservingMap<string> PhysicalComparisonJoin::ParamsToString() con
 		if (i > 0) {
 			condition_info += "\n";
 		}
-		condition_info +=
-		    StringUtil::Format("%s %s %s", join_condition.left->GetName(),
-		                       ExpressionTypeToOperator(join_condition.comparison), join_condition.right->GetName());
-		// string op = ExpressionTypeToOperator(it.comparison);
-		// extra_info += it.left->GetName() + " " + op + " " + it.right->GetName() + "\n";
+		D_ASSERT(join_condition.IsComparison());
+		condition_info += StringUtil::Format("%s %s %s", join_condition.GetLHS().GetName(),
+		                                     ExpressionTypeToOperator(join_condition.GetComparisonType()),
+		                                     join_condition.GetRHS().GetName());
 	}
+
+	if (predicate) {
+		if (!condition_info.empty()) {
+			condition_info += "\n";
+		}
+		condition_info += predicate->ToString();
+	}
+
 	result["Conditions"] = condition_info;
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
@@ -36,38 +58,55 @@ void PhysicalComparisonJoin::ReorderConditions(vector<JoinCondition> &conditions
 	// check if this is already the case
 	bool is_ordered = true;
 	bool seen_non_equal = false;
+	bool seen_non_comparison = false;
+
 	for (auto &cond : conditions) {
-		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
-		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-			if (seen_non_equal) {
+		if (!cond.IsComparison()) {
+			seen_non_comparison = true;
+		} else if (cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
+		           cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			if (seen_non_equal || seen_non_comparison) {
 				is_ordered = false;
 				break;
 			}
 		} else {
+			if (seen_non_comparison) {
+				is_ordered = false;
+				break;
+			}
 			seen_non_equal = true;
 		}
 	}
+
 	if (is_ordered) {
 		// no need to re-order
 		return;
 	}
-	// gather lists of equal/other conditions
+
 	vector<JoinCondition> equal_conditions;
-	vector<JoinCondition> other_conditions;
+	vector<JoinCondition> non_equi_conditions;
+	vector<JoinCondition> arbitrary_conditions;
+
 	for (auto &cond : conditions) {
-		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
-		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		if (!cond.IsComparison()) {
+			arbitrary_conditions.push_back(std::move(cond));
+		} else if (cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
+		           cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			equal_conditions.push_back(std::move(cond));
 		} else {
-			other_conditions.push_back(std::move(cond));
+			non_equi_conditions.push_back(std::move(cond));
 		}
 	}
+
 	conditions.clear();
 	// reconstruct the sorted conditions
 	for (auto &cond : equal_conditions) {
 		conditions.push_back(std::move(cond));
 	}
-	for (auto &cond : other_conditions) {
+	for (auto &cond : non_equi_conditions) {
+		conditions.push_back(std::move(cond));
+	}
+	for (auto &cond : arbitrary_conditions) {
 		conditions.push_back(std::move(cond));
 	}
 }

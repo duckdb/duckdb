@@ -107,11 +107,9 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	join->AddChild(std::move(root));
 	join->AddChild(std::move(chunk_scan));
 	// create the JOIN condition
-	JoinCondition cond;
-	cond.left = std::move(expr.children[0]);
-
-	cond.right = make_uniq<BoundColumnRefExpression>(in_type, ColumnBinding(chunk_index, 0));
-	cond.comparison = ExpressionType::COMPARE_EQUAL;
+	JoinCondition cond(std::move(expr.children[0]),
+	                   make_uniq<BoundColumnRefExpression>(in_type, ColumnBinding(chunk_index, 0)),
+	                   ExpressionType::COMPARE_EQUAL);
 	join->conditions.push_back(std::move(cond));
 	root = std::move(join);
 

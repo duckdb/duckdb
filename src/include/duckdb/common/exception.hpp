@@ -85,7 +85,7 @@ enum class ExceptionType : uint8_t {
 	DEPENDENCY = 37,             // dependency
 	HTTP = 38,
 	MISSING_EXTENSION = 39, // Thrown when an extension is used but not loaded
-	AUTOLOAD = 40,          // Thrown when an extension is used but not loaded
+	AUTOLOAD = 40,          // Thrown when an extension fails to autoload
 	SEQUENCE = 41,
 	INVALID_CONFIGURATION =
 	    42 // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
