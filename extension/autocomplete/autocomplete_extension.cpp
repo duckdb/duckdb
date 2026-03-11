@@ -316,8 +316,18 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 		} else if (entry.type == CatalogType::VIEW_ENTRY) {
 			auto &view = entry.Cast<ViewCatalogEntry>();
 			int32_t bonus = entry.internal ? 0 : 3;
-			for (auto &col : view.aliases) {
-				suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+			auto column_info = view.GetColumnInfo();
+			if (column_info) {
+				// view has names
+				for (idx_t n = 0; n < column_info->names.size(); n++) {
+					auto &name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
+					suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+				}
+			} else {
+				// add only aliases
+				for (auto &col : view.aliases) {
+					suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+				}
 			}
 		} else {
 			if (StringUtil::CharacterIsOperator(entry.name[0])) {

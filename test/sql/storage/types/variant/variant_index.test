@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/variant_index.test
 # group: [variant]
 
-load __TEST_DIR__/variant_index.db
+load __TEST_DIR__/variant_index.db readwrite v1.5.0
 
 statement error
 CREATE TABLE tbl(col VARIANT UNIQUE, b INTEGER)

@@ -1252,6 +1252,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// merge row group stats into the global stats
 		auto lock = global_stats.GetLock();
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+			if (is_loaded && !is_loaded[column_idx] &&
+			    collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
+				// column is not loaded from disk - don't load just to update stats
+				writer.SetHasUnloadedColumn(column_idx);
+				continue;
+			}
 			GetColumn(column_idx).MergeIntoStatistics(global_stats.GetStats(*lock, column_idx).Statistics());
 		}
 		return row_group_pointer;
@@ -1266,6 +1272,9 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	vector<MetaBlockPointer> column_metadata;
 	unordered_set<idx_t> metadata_blocks;
 	writer.StartWritingColumns(column_metadata);
+
+	auto serialization_options = SerializationOptions(writer.GetAttachedDatabase());
+
 	for (auto &state : write_data.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
@@ -1283,7 +1292,8 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// increment the "start" in all data pointers by the row group start
 		// FIXME: this is only necessary when targeting old serialization
 		IncrementSegmentStart(persistent_data, row_group_start);
-		BinarySerializer serializer(data_writer);
+
+		BinarySerializer serializer(data_writer, serialization_options);
 		serializer.Begin();
 		persistent_data.Serialize(serializer);
 		serializer.End();

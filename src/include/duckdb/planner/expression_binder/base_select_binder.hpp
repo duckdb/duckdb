@@ -57,7 +57,7 @@ protected:
 	virtual BindResult BindWindow(WindowExpression &expr, idx_t depth);
 	virtual BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 
-	idx_t TryBindGroup(ParsedExpression &expr);
+	optional_idx TryBindGroup(ParsedExpression &expr);
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index);
 };
 

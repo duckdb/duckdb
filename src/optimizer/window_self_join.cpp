@@ -40,7 +40,7 @@ public:
 	explicit WindowSelfJoinTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
-	unordered_map<idx_t, idx_t> table_map;
+	unordered_map<TableIndex, TableIndex> table_map;
 	Optimizer &optimizer;
 
 	void VisitOperator(LogicalOperator &op) override {

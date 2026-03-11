@@ -1,6 +1,9 @@
 # name: test/parquet/variant/variant_comparison.test
 # group: [variant]
 
+# TODO: "Force storage" will use default storage version, but variant requires v1.5.0, so skip for now
+require no_force_storage
+
 require parquet
 
 statement ok

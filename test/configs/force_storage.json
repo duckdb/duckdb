@@ -26,7 +26,8 @@
         "test/sql/storage/read_duckdb/concurrent_duckdb_read.test_slow",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
-        "test/sql/copy_database/copy_database_tpch.test_slow"
+        "test/sql/copy_database/copy_database_tpch.test_slow",
+        "test/sql/types/geo/geometry_compatability.test"
       ]
     },
     {

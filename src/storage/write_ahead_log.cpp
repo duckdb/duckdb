@@ -42,6 +42,10 @@ AttachedDatabase &WriteAheadLog::GetDatabase() {
 	return storage_manager.GetAttached();
 }
 
+StorageManager &WriteAheadLog::GetStorageManager() {
+	return storage_manager;
+}
+
 BufferedFileWriter &WriteAheadLog::Initialize() {
 	if (Initialized()) {
 		return *writer;
@@ -545,6 +549,13 @@ void WriteAheadLog::Flush() {
 
 void WriteAheadLog::IncrementWALEntriesCount() {
 	storage_manager.IncrementWALEntriesCount();
+}
+
+void WriteAheadLog::MarkBlocksInUseAsModified() {
+	auto &block_manager = storage_manager.GetBlockManager();
+	for (const block_id_t block_id : blocks_in_use) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
 }
 
 } // namespace duckdb

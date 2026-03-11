@@ -3,7 +3,7 @@
 
 require vector_size 2048
 
-load __TEST_DIR__/variant_shredding_omit_untyped.db
+load __TEST_DIR__/variant_shredding_omit_untyped.db readwrite v1.5.0
 
 # Always shred
 statement ok

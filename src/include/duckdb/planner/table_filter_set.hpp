@@ -1,0 +1,125 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/planner/table_filter_set.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/map.hpp"
+
+namespace duckdb {
+
+//! The filters in here are non-composite (only need a single column to be evaluated)
+//! Conditions like `A = 2 OR B = 4` are not pushed into a TableFilterSet.
+class TableFilterSet {
+public:
+	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);
+	bool HasFilters() const;
+	idx_t FilterCount() const;
+	bool HasFilter(idx_t col_idx) const;
+	TableFilter &GetFilterByColumnIndexMutable(idx_t col_idx);
+	optional_ptr<TableFilter> TryGetFilterByColumnIndexMutable(idx_t col_idx);
+	const TableFilter &GetFilterByColumnIndex(idx_t col_idx) const;
+	optional_ptr<const TableFilter> TryGetFilterByColumnIndex(idx_t col_idx) const;
+	void SetFilterByColumnIndex(idx_t col_idx, unique_ptr<TableFilter> filter);
+	void RemoveFilterByColumnIndex(idx_t col_idx);
+	void ClearFilters();
+
+	bool Equals(TableFilterSet &other);
+	static bool Equals(TableFilterSet *left, TableFilterSet *right);
+
+	unique_ptr<TableFilterSet> Copy() const;
+
+	void Serialize(Serializer &serializer) const;
+	static TableFilterSet Deserialize(Deserializer &deserializer);
+
+public:
+	class TableFilterIteratorEntry {
+	public:
+		explicit TableFilterIteratorEntry(map<idx_t, unique_ptr<TableFilter>>::iterator);
+
+		idx_t ColumnIndex() const;
+		TableFilter &Filter();
+		const TableFilter &Filter() const;
+		unique_ptr<TableFilter> TakeFilter();
+
+	public:
+		map<idx_t, unique_ptr<TableFilter>>::iterator iterator;
+	};
+
+	class ConstTableFilterIteratorEntry {
+	public:
+		explicit ConstTableFilterIteratorEntry(map<idx_t, unique_ptr<TableFilter>>::const_iterator);
+
+		idx_t ColumnIndex() const;
+		const TableFilter &Filter() const;
+
+	public:
+		map<idx_t, unique_ptr<TableFilter>>::const_iterator iterator;
+	};
+
+	// iterator
+	template <class T>
+	class TableFilterIterator {
+	public:
+		explicit TableFilterIterator(T entry_p) : entry(std::move(entry_p)) {
+		}
+
+	public:
+		TableFilterIterator &operator++() {
+			++entry.iterator;
+			return *this;
+		}
+		bool operator!=(const TableFilterIterator &other) const {
+			return entry.iterator != other.entry.iterator;
+		}
+		T &operator*() {
+			return entry;
+		}
+		const T &operator*() const {
+			return entry;
+		}
+
+	private:
+		T entry;
+	};
+
+	TableFilterIterator<TableFilterIteratorEntry> begin() { // NOLINT: match stl API
+		return TableFilterIterator<TableFilterIteratorEntry>(TableFilterIteratorEntry(filters.begin()));
+	}
+	TableFilterIterator<TableFilterIteratorEntry> end() { // NOLINT: match stl API
+		return TableFilterIterator<TableFilterIteratorEntry>(TableFilterIteratorEntry(filters.end()));
+	}
+	TableFilterIterator<ConstTableFilterIteratorEntry> begin() const { // NOLINT: match stl API
+		return TableFilterIterator<ConstTableFilterIteratorEntry>(ConstTableFilterIteratorEntry(filters.begin()));
+	}
+	TableFilterIterator<ConstTableFilterIteratorEntry> end() const { // NOLINT: match stl API
+		return TableFilterIterator<ConstTableFilterIteratorEntry>(ConstTableFilterIteratorEntry(filters.end()));
+	}
+
+private:
+	map<idx_t, unique_ptr<TableFilter>> filters;
+};
+
+class DynamicTableFilterSet {
+public:
+	void ClearFilters(const PhysicalOperator &op);
+	void PushFilter(const PhysicalOperator &op, idx_t column_index, unique_ptr<TableFilter> filter);
+
+	bool HasFilters() const;
+	unique_ptr<TableFilterSet> GetFinalTableFilters(const PhysicalTableScan &scan,
+	                                                optional_ptr<TableFilterSet> existing_filters) const;
+
+private:
+	mutable mutex lock;
+	reference_map_t<const PhysicalOperator, unique_ptr<TableFilterSet>> filters;
+};
+
+} // namespace duckdb

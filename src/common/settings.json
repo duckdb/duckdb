@@ -201,19 +201,23 @@
         ]
     },
     {
+        "name": "configure_profiling",
+        "description": "Accepts a JSON enabling custom metrics",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "custom_profiling_settings",
+            "configure_metrics"
+        ]
+    },
+    {
         "name": "custom_extension_repository",
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "VARCHAR",
         "internal_setting": "custom_extension_repo",
         "scope": "global",
         "default_value": ""
-    },
-    {
-        "name": "custom_profiling_settings",
-        "description": "Accepts a JSON enabling custom metrics",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
     },
     {
         "name": "custom_user_agent",

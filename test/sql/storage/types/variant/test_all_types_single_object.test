@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/test_all_types_single_object.test
 # group: [variant]
 
-load __TEST_DIR__/variant_test_all_types_single_table.db
+load __TEST_DIR__/variant_test_all_types_single_table.db readwrite v1.5.0
 
 # Always shred
 statement ok

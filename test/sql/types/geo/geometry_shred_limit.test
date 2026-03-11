@@ -3,6 +3,8 @@
 
 require vector_size 2048
 
+load __TEST_DIR__/test_shred_limit.db readwrite v1.5.0
+
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 

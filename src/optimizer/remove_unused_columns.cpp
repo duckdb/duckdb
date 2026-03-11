@@ -22,12 +22,36 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/planner/operator/logical_cte.hpp"
+#include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include <utility>
 
 namespace duckdb {
+
+RemoveUnusedColumns::RemoveUnusedColumns(Optimizer &optimizer)
+    : optimizer(optimizer), binder(optimizer.binder), context(optimizer.context), everything_referenced(true),
+      root(*this) {
+}
+
+RemoveUnusedColumns::RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root)
+    : optimizer(parent.optimizer), binder(parent.binder), context(parent.context), everything_referenced(is_root),
+      root(parent.root) {
+}
+
+unordered_map<TableIndex, MaterializedCTEInfo> &RemoveUnusedColumns::GetCTEMap() {
+	if (!root.root_cte_map) {
+		root.root_cte_map = make_uniq<unordered_map<TableIndex, MaterializedCTEInfo>>();
+	}
+	return *root.root_cte_map;
+}
+
+optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> RemoveUnusedColumns::TryGetCTEMap() {
+	return root.root_cte_map.get();
+}
 
 idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
@@ -55,7 +79,7 @@ idx_t BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBind
 }
 
 template <class T>
-void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace) {
+void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace) {
 	idx_t offset = 0;
 	idx_t new_col_idx = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
@@ -90,7 +114,8 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_id
 	}
 }
 
-void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
+void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
+	auto &op = *op_ref;
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// aggregate
@@ -111,9 +136,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// Note: We allow all optimizations (join column replacement, column pruning) to run below ROLLUP
 		// The duplicate groups optimizer will be responsible for not breaking ROLLUP by skipping when
 		// multiple grouping sets are present
-		RemoveUnusedColumns remove(binder, context, everything_referenced);
+		RemoveUnusedColumns remove(*this, everything_referenced);
 		remove.VisitOperatorExpressions(op);
-		remove.VisitOperator(*op.children[0]);
+		remove.VisitOperator(op.children[0]);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
@@ -178,44 +203,44 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				entries.push_back(i);
 			}
 			ClearUnusedExpressions(entries, setop.table_index);
-			if (entries.size() >= setop.column_count) {
-				return;
-			}
 			if (entries.empty()) {
 				// no columns referenced: this happens in the case of a COUNT(*)
 				// extract the first column
 				entries.push_back(0);
 			}
-			// columns were cleared
-			setop.column_count = entries.size();
-
 			for (idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
-				RemoveUnusedColumns remove(binder, context, true);
+				RemoveUnusedColumns remove(*this, true);
 				auto &child = op.children[child_idx];
 
-				// we push a projection under this child that references the required columns of the union
-				child->ResolveOperatorTypes();
-				auto bindings = child->GetColumnBindings();
-				vector<unique_ptr<Expression>> expressions;
-				expressions.reserve(entries.size());
-				for (auto &column_idx : entries) {
-					expressions.push_back(
-					    make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+				if (entries.size() < setop.column_count) {
+					// columns were cleared
+					// push a projection under this child that references the required columns of the union
+					child->ResolveOperatorTypes();
+					auto bindings = child->GetColumnBindings();
+					vector<unique_ptr<Expression>> expressions;
+					expressions.reserve(entries.size());
+					for (auto &column_idx : entries) {
+						expressions.push_back(
+						    make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+					}
+					auto new_projection =
+					    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+					if (child->has_estimated_cardinality) {
+						new_projection->SetEstimatedCardinality(child->estimated_cardinality);
+					}
+					new_projection->children.push_back(std::move(child));
+					op.children[child_idx] = std::move(new_projection);
 				}
-				auto new_projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-				if (child->has_estimated_cardinality) {
-					new_projection->SetEstimatedCardinality(child->estimated_cardinality);
-				}
-				new_projection->children.push_back(std::move(child));
-				op.children[child_idx] = std::move(new_projection);
 
-				remove.VisitOperator(*op.children[child_idx]);
+				// now visit the child
+				remove.VisitOperator(op.children[child_idx]);
 			}
+			setop.column_count = entries.size();
 			return;
 		}
 		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
+			RemoveUnusedColumns remove(*this, true);
+			remove.VisitOperator(child);
 		}
 		return;
 	}
@@ -223,8 +248,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_INTERSECT: {
 		// for INTERSECT/EXCEPT operations we can't remove anything, just recursively visit the children
 		for (auto &child : op.children) {
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*child);
+			RemoveUnusedColumns remove(*this, true);
+			remove.VisitOperator(child);
 		}
 		return;
 	}
@@ -244,9 +269,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		// then recurse into the children of this projection
-		RemoveUnusedColumns remove(binder, context);
+		RemoveUnusedColumns remove(*this, false);
 		remove.VisitOperatorExpressions(op);
-		remove.VisitOperator(*op.children[0]);
+		remove.VisitOperator(op.children[0]);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_INSERT:
@@ -258,20 +283,20 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		//! on top of them can select from only the table values being inserted.
 		//! TODO: Push down the projections from the returning statement
 		//! TODO: Be careful because you might be adding expressions when a user returns *
-		RemoveUnusedColumns remove(binder, context, true);
+		RemoveUnusedColumns remove(*this, true);
 		remove.VisitOperatorExpressions(op);
-		remove.VisitOperator(*op.children[0]);
+		remove.VisitOperator(op.children[0]);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		auto &get = op.Cast<LogicalGet>();
-		RemoveColumnsFromLogicalGet(get);
+		RemoveColumnsFromLogicalGet(get, op_ref);
 		if (!op.children.empty()) {
 			// Some LOGICAL_GET operators (e.g., table in out functions) may have a
 			// child operator. So we recurse into it if it exists.
-			RemoveUnusedColumns remove(binder, context, true);
-			remove.VisitOperator(*op.children[0]);
+			RemoveUnusedColumns remove(*this, true);
+			remove.VisitOperator(op.children[0]);
 		}
 		return;
 	}
@@ -288,9 +313,94 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		everything_referenced = true;
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
-	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
-	case LogicalOperatorType::LOGICAL_CTE_REF:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		// We do not (yet) support pruning columns in recursive CTEs, so we mark everything as referenced and continue
+		// to the children. However, we still need to create the cte_info_map for the recursive CTE so that column
+		// references in the CTE body can find the correct CTE entry and mark columns as referenced.
+		auto &rec = op.Cast<LogicalCTE>();
+		auto &cte_info_map = GetCTEMap();
+		cte_info_map.insert({rec.table_index, MaterializedCTEInfo()});
+		everything_referenced = true;
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		auto &cte_map_ref = GetCTEMap();
+		auto &cte = op.Cast<LogicalCTE>();
+		auto &cte_map_entry = cte_map_ref[cte.table_index];
+
+		RemoveUnusedColumns rhs_child_optimizer(*this, true);
+		rhs_child_optimizer.VisitOperator(cte.children[1]);
+
+		unordered_set<idx_t> referenced_columns_in_rhs;
+		for (auto &entry : cte_map_entry.column_references) {
+			referenced_columns_in_rhs.insert(entry.first.column_index);
+		}
+
+		if (!cte_map_entry.everything_referenced) {
+			RemoveUnusedColumns lhs_child_optimizer(*this, true);
+
+			// Construct a projection on top of the left-hand side of the CTE
+			// that only projects the columns that are referenced in the right-hand side of the CTE
+			cte.children[0]->ResolveOperatorTypes();
+			auto bindings = cte.children[0]->GetColumnBindings();
+			vector<unique_ptr<Expression>> expressions;
+			if (referenced_columns_in_rhs.empty()) {
+				// if we have no columns selected just select the first column
+				referenced_columns_in_rhs.insert(0);
+			}
+			for (idx_t i = 0; i < bindings.size(); i++) {
+				if (referenced_columns_in_rhs.find(i) != referenced_columns_in_rhs.end()) {
+					expressions.push_back(make_uniq<BoundColumnRefExpression>(cte.children[0]->types[i], bindings[i]));
+				}
+			}
+
+			auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+			projection->children.push_back(std::move(cte.children[0]));
+			cte.children[0] = std::move(projection);
+
+			lhs_child_optimizer.VisitOperator(cte.children[0]);
+
+			// After pruning the left-hand side of the CTE, we need to rewrite the CTE references to account for the
+			// removed columns.
+			CTERefPruner cte_ref_pruner(cte.table_index, referenced_columns_in_rhs);
+			cte_ref_pruner.VisitOperator(*cte.children[1]);
+
+			// We also need to rewrite the column bindings in the right-hand side of the CTE to account for the removed
+			// columns on the left-hand side. Conveniently, the CTERefPruner already has the information about which
+			// columns were removed, so we can reuse it for the column binding replacement.
+			ColumnBindingReplacer column_binding_replacer;
+			column_binding_replacer.replacement_bindings = cte_ref_pruner.binding_replacements;
+			column_binding_replacer.VisitOperator(*cte.children[1]);
+			return;
+		}
+		everything_referenced = true;
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		auto &cte_ref = op.Cast<LogicalCTERef>();
+
+		auto cte_info_map = TryGetCTEMap();
+		if (!cte_info_map) {
+			everything_referenced = true;
+			break;
+		}
+		auto &cte_map_ref = *cte_info_map;
+		auto it = cte_map_ref.find(cte_ref.cte_index);
+		if (it == cte_map_ref.end()) {
+			throw InternalException("Could not find CTE definition for CTE reference");
+		}
+		auto &cte_entry = it->second;
+		auto &referenced_columns = cte_entry.column_references;
+
+		for (auto &entry : column_references) {
+			if (entry.first.table_index == cte_ref.table_index) {
+				referenced_columns.insert(entry);
+			}
+		}
+
+		cte_entry.everything_referenced = cte_ref.chunk_types.size() == referenced_columns.size();
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 	case LogicalOperatorType::LOGICAL_PIVOT: {
 		everything_referenced = true;
@@ -404,7 +514,6 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 		auto &component = struct_extract.components[depth];
 		auto &expr = component.cast ? *component.cast : component.extract;
 
-		optional_ptr<LogicalType> cast_type;
 		auto return_type = expr->return_type;
 
 		auto &colref = col.bindings[struct_extract.bindings_idx];
@@ -572,7 +681,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 	}
 }
 
-void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
+void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref) {
 	if (everything_referenced) {
 		return;
 	}
@@ -605,23 +714,18 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	// Clear unused ids, exclude filter columns that are projected out immediately
 	ClearUnusedExpressions(proj_sel, get.table_index, false);
 
-	//! FIXME: pushdown extract is disabled when a struct field is referenced by a filter,
-	//! because that would involve rewriting the existing TableFilterSet
-	SetMode(BaseColumnPrunerMode::DISABLE_PUSHDOWN_EXTRACT);
-
-	// for every table filter, push a column binding into the column references map to prevent the column from
-	// being projected out
-
-	//! NOTE: This vector is required to keep the referenced Expressions alive
+	//! for each filter that was pushed down - convert them into an expression
 	vector<unique_ptr<Expression>> filter_expressions;
-	for (auto &filter : get.table_filters.filters) {
-		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter.first);
-		auto column_type = get.GetColumnType(ColumnIndex(filter.first));
+	for (auto &entry : get.table_filters) {
+		auto filter_idx = entry.ColumnIndex();
+		auto &filter = entry.Filter();
+		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter_idx);
+		auto column_type = get.GetColumnType(ColumnIndex(filter_idx));
 
 		ColumnBinding filter_binding(get.table_index, index);
 		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 		//! Convert the filter to an expression, so we can visit it
-		auto filter_expr = filter.second->ToExpression(*column_ref);
+		auto filter_expr = filter.ToExpression(*column_ref);
 		if (filter_expr->IsScalar()) {
 			filter_expr = std::move(column_ref);
 		}
@@ -636,6 +740,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 	// Clear unused ids, include filter columns that are projected out immediately
 	ClearUnusedExpressions(col_sel, get.table_index);
 
+	bool has_pushdown_extract = false;
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto &col_sel_idx : col_sel) {
 		auto &column_type = get.GetColumnType(old_column_ids[col_sel_idx]);
@@ -669,16 +774,17 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			    new_index.SetPushdownExtractType(column_type, cast_type);
 
 			    auto column_binding_index = new_column_ids.size();
-			    auto entry = child_map.find(new_index);
-			    if (entry == child_map.end()) {
+			    auto child_entry = child_map.find(new_index);
+			    if (child_entry == child_map.end()) {
 				    //! Adds the binding for the child only if it doesn't exist yet
-				    entry = child_map.emplace(new_index, column_binding_index).first;
+				    child_entry = child_map.emplace(new_index, column_binding_index).first;
 				    created_bindings[new_index.GetPrimaryIndex()]++;
 
 				    new_column_ids.emplace_back(std::move(new_index));
 				    original_ids.emplace_back(col_sel_idx);
 			    }
-			    return entry->second;
+			    has_pushdown_extract = true;
+			    return child_entry->second;
 		    });
 	}
 	if (new_column_ids.empty()) {
@@ -690,6 +796,19 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 		new_column_ids.emplace_back(any_column);
 	}
 	get.SetColumnIds(std::move(new_column_ids));
+
+	if (has_pushdown_extract && !filter_expressions.empty()) {
+		// if we have performed pushdown extract and we have filter expressions we might have adjusted the filter
+		// expressions remove the table filters and push a filter, then try to re-push the filters with the new set of
+		// projections
+		auto filter = make_uniq_base<LogicalOperator, LogicalFilter>();
+		filter->expressions = std::move(filter_expressions);
+		filter->children.push_back(std::move(op_ref));
+		get.table_filters.ClearFilters();
+		// push the final result in the operator
+		op_ref = std::move(filter);
+		return;
+	}
 
 	if (!get.function.filter_prune) {
 		return;
@@ -718,6 +837,41 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get) {
 			}
 		}
 	}
+}
+
+CTERefPruner::CTERefPruner(const TableIndex cte_index, const unordered_set<idx_t> &referenced_columns)
+    : cte_index(cte_index), referenced_columns(referenced_columns) {
+}
+
+void CTERefPruner::VisitOperator(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cte_ref = op.Cast<LogicalCTERef>();
+		if (cte_ref.cte_index != cte_index) {
+			return;
+		}
+		// We have to regenerate the chunk_types of the CTE reference to only include the referenced columns/
+		// Otherwise, we would run into issues during execution.
+		vector<LogicalType> types;
+		// We only prune, never reorder, so we can keep track of the new column indices by counting how many columns we
+		// skipped.
+		idx_t skipped = 0;
+		for (idx_t i = 0; i < cte_ref.chunk_types.size(); i++) {
+			if (referenced_columns.find(i) != referenced_columns.end()) {
+				// This column is referenced, keep it and add any necessary binding replacements for the skipped columns
+				// if necessary.
+				types.push_back(cte_ref.chunk_types[i]);
+				if (skipped > 0) {
+					binding_replacements.push_back(ReplacementBinding(ColumnBinding(cte_ref.table_index, i),
+					                                                  ColumnBinding(cte_ref.table_index, i - skipped)));
+				}
+			} else {
+				skipped++;
+			}
+		}
+		cte_ref.types = std::move(types);
+		cte_ref.chunk_types = cte_ref.types;
+	}
+	LogicalOperatorVisitor::VisitOperator(op);
 }
 
 void BaseColumnPruner::SetMode(BaseColumnPrunerMode mode) {

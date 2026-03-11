@@ -78,7 +78,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// figure out the table index of the bound table of the entry which we want to return
 		auto bindings = plan->GetColumnBindings();
 		D_ASSERT(bindings.size() == 1);
-		idx_t table_idx = bindings[0].table_index;
+		auto table_idx = bindings[0].table_index;
 
 		bool error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(binder.context);
 
@@ -108,7 +108,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		if (error_on_multiple_rows) {
 			// CASE WHEN count > 1 THEN error('Scalar subquery can only return a single row') ELSE first_agg END
-			idx_t proj_index = binder.GenerateTableIndex();
+			auto proj_index = binder.GenerateTableIndex();
 
 			auto first_ref =
 			    make_uniq<BoundColumnRefExpression>(plan->expressions[0]->return_type, ColumnBinding(aggr_index, 0));
@@ -158,7 +158,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		auto plan_columns = plan->GetColumnBindings();
 
 		// then we generate the MARK join with the subquery
-		idx_t mark_index = binder.GenerateTableIndex();
+		auto mark_index = binder.GenerateTableIndex();
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::MARK);
 		join->mark_index = mark_index;
 		join->AddChild(std::move(root));
@@ -312,7 +312,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	case SubqueryType::EXISTS: {
 		// correlated EXISTS query
 		// this query is similar to the correlated SCALAR query, except we use a MARK join here
-		idx_t mark_index = binder.GenerateTableIndex();
+		auto mark_index = binder.GenerateTableIndex();
 		auto delim_join =
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
 
@@ -333,7 +333,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// the correlated mark join handles this case by itself
 		// as the MARK join has one extra join condition (the original condition, of the ANY expression, e.g.
 		// [i=ANY(...)])
-		idx_t mark_index = binder.GenerateTableIndex();
+		auto mark_index = binder.GenerateTableIndex();
 		auto delim_join =
 		    CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, std::move(root), perform_delim);
 
@@ -369,7 +369,7 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 		// Collect all recursive CTEs during recursive descend
 		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
 		    op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-			auto &rec_cte = op.Cast<LogicalRecursiveCTE>();
+			auto &rec_cte = op.Cast<LogicalCTE>();
 			binder.recursive_ctes[rec_cte.table_index] = &op;
 		}
 		for (idx_t i = 0; i < op.children.size(); i++) {

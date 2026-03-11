@@ -88,7 +88,7 @@ namespace {
 
 struct ShredAnalysisState {
 	idx_t highest_count = 0;
-	LogicalType type;
+	LogicalType type = LogicalType::INVALID;
 };
 
 } // namespace
@@ -112,12 +112,13 @@ static void CheckPrimitive(const VariantAnalyzeData &state, ShredAnalysisState &
 	}
 }
 
-static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
+static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &out) {
 	ShredAnalysisState result;
 
 	if (state.type_map[0] == state.total_count) {
 		//! All NULL, emit INT32
-		return LogicalType::INTEGER;
+		out = LogicalType::INTEGER;
+		return true;
 	}
 
 	CheckPrimitive<VariantLogicalType::BOOL_TRUE, LogicalTypeId::BOOLEAN>(state, result);
@@ -142,7 +143,12 @@ static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
 	if (array_count > object_count) {
 		if (array_count > result.highest_count) {
 			auto &array_data = *state.array_data;
-			return LogicalType::LIST(ConstructShreddedType(array_data.child));
+			LogicalType child_type;
+			if (!ConstructShreddedType(array_data.child, child_type)) {
+				return false;
+			}
+			out = LogicalType::LIST(child_type);
+			return true;
 		}
 	} else {
 		if (object_count > result.highest_count) {
@@ -152,23 +158,31 @@ static LogicalType ConstructShreddedType(const VariantAnalyzeData &state) {
 			//! only 10% of rows make use of the field
 			child_list_t<LogicalType> field_types;
 			for (auto &field : object_data.fields) {
-				field_types.emplace_back(field.first, ConstructShreddedType(field.second));
+				LogicalType child_type;
+				if (!ConstructShreddedType(field.second, child_type)) {
+					return false;
+				}
+				field_types.emplace_back(field.first, child_type);
 			}
-			return LogicalType::STRUCT(field_types);
+			out = LogicalType::STRUCT(field_types);
+			return true;
 		}
 	}
-	return result.type;
+	if (result.type.id() == LogicalTypeId::INVALID) {
+		return false;
+	}
+	out = result.type;
+	return true;
 }
 
 void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state_p) {
 	auto &state = state_p.Cast<VariantAnalyzeSchemaState>();
-	auto shredded_type = ConstructShreddedType(state.analyze_data);
-	is_analyzed = true;
-
-	if (shredded_type.id() == LogicalTypeId::VARIANT || shredded_type.id() == LogicalTypeId::INVALID) {
+	LogicalType shredded_type;
+	if (!ConstructShreddedType(state.analyze_data, shredded_type)) {
 		//! Can't shred, keep the original children
 		return;
 	}
+	is_analyzed = true;
 	auto typed_value = TransformTypedValueRecursive(shredded_type);
 	auto &schema = Schema();
 	auto &context = writer.GetContext();

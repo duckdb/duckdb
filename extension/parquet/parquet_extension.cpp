@@ -620,7 +620,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.string_dictionary_page_size_limit);
 	serializer.WritePropertyWithDefault(116, "geoparquet_version", bind_data.geoparquet_version,
 	                                    default_value.geoparquet_version);
-	serializer.WriteProperty(117, "shredding_types", bind_data.shredding_types);
+	serializer.WritePropertyWithDefault<ShreddingType>(117, "shredding_types", bind_data.shredding_types,
+	                                                   default_value.shredding_types);
 	serializer.WritePropertyWithDefault(119, "write_timestamp_as_int96", bind_data.write_timestamp_as_int96,
 	                                    default_value.write_timestamp_as_int96);
 }
@@ -656,7 +657,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    115, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
 	data->geoparquet_version =
 	    deserializer.ReadPropertyWithExplicitDefault(116, "geoparquet_version", default_value.geoparquet_version);
-	data->shredding_types = deserializer.ReadProperty<ShreddingType>(117, "shredding_types");
+	data->shredding_types =
+	    deserializer.ReadPropertyWithExplicitDefault<ShreddingType>(117, "shredding_types", ShreddingType());
 	data->write_timestamp_as_int96 = deserializer.ReadPropertyWithExplicitDefault(
 	    119, "write_timestamp_as_int96", default_value.write_timestamp_as_int96);
 
@@ -889,6 +891,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(VariantColumnWriter::GetTransformFunction());
 
 	CopyFunction function("parquet");
+	function.supports_sql_null = true;
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
 	function.copy_options = ParquetListCopyOptions;

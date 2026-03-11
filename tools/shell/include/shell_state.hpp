@@ -434,17 +434,13 @@ private:
 };
 
 struct PagerState {
-	explicit PagerState(ShellState &state) : state(state) {
+	explicit PagerState(ShellState &state, uint32_t win_console_cp_before_pager_p = 0)
+	    : state(state), win_console_cp_before_pager(win_console_cp_before_pager_p) {
 	}
-	~PagerState() {
-		if (state) {
-			state->ResetOutput();
-			ShellState::FinishPagerDisplay();
-			state = nullptr;
-		}
-	}
+	~PagerState();
 
 	optional_ptr<ShellState> state;
+	uint32_t win_console_cp_before_pager = 0;
 };
 
 } // namespace duckdb_shell

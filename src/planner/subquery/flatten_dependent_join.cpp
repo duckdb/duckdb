@@ -32,8 +32,17 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const CorrelatedCol
 
 static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const CorrelatedColumns &correlated_columns,
                                       vector<ColumnBinding> bindings, idx_t base_offset, bool perform_delim) {
-	auto col_count = perform_delim ? correlated_columns.size() : 1;
-	for (idx_t i = 0; i < col_count; i++) {
+	// Determine the range of columns to process
+	idx_t start = 0;
+	idx_t end = perform_delim ? correlated_columns.size() : 1;
+
+	// Special case: if not doing a full delim join, use the specific delim index if it's valid
+	if (!perform_delim && correlated_columns.GetDelimIndex() < correlated_columns.size()) {
+		start = correlated_columns.GetDelimIndex();
+		end = start + 1;
+	}
+
+	for (idx_t i = start; i < end; i++) {
 		auto &col = correlated_columns[i];
 		auto binding_idx = base_offset + i;
 		if (binding_idx >= bindings.size()) {
@@ -307,7 +316,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	return has_correlation;
 }
 
-bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op, idx_t cte_index) {
+bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op, TableIndex cte_index) {
 	// Do not mark base table scans as correlated
 	auto entry = has_correlated_expressions.find(op);
 	D_ASSERT(entry != has_correlated_expressions.end());
@@ -383,7 +392,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
 				if (op.correlated_columns == 0) {
-					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns);
+					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns,
+					                            CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS);
 					cte_rewriter.VisitOperator(*plan);
 				}
 			}
@@ -502,7 +512,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
-		idx_t delim_table_index;
+		TableIndex delim_table_index;
 		idx_t delim_column_offset;
 		idx_t delim_data_offset;
 		auto new_group_count = perform_delim ? correlated_columns.size() : 1;
@@ -1057,7 +1067,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
-		idx_t table_index = 0;
+		TableIndex table_index(0);
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
@@ -1083,8 +1093,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
-		RewriteCTEScan cte_rewriter(table_index, correlated_columns,
-		                            plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE);
+		CTEScanRewriteMode rewrite_mode;
+		if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+			rewrite_mode = CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS;
+		} else if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+			rewrite_mode = CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS;
+		} else {
+			throw InternalException("Unsupported CTE operator type for CTEScanRewriteMode selection");
+		}
+		RewriteCTEScan cte_rewriter(table_index, correlated_columns, rewrite_mode);
 		cte_rewriter.VisitOperator(*plan->children[1]);
 
 		parent_propagate_null_values = false;

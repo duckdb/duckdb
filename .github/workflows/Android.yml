@@ -69,7 +69,7 @@ jobs:
 
     - name: Install Ninja
       shell: bash
-      run: sudo apt-get -y update && sudo apt-get -y install ninja-build
+      run: make toolsci
 
     - name: Checkout (again)
       shell: bash
