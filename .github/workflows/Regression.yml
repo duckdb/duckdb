@@ -63,23 +63,31 @@ jobs:
           token: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
           path: benchmark/fivetran
 
-      # For PRs we compare against the base branch
-      - name: Build Current and Base Branch
+      - name: Download current release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release-build
+          path: build
+
+      - name: Extract current release artifact
+        run: |
+          rm -rf build/release
+          tar -xzf build/release-artifact.tar.gz -C build
+
+      - name: Build Base Branch
         if: ${{ !(github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main') }}
         shell: bash
         run: |
-          make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
           make
           cd ..
 
       # For NightlyTest we fetch the last commit hash that ran Regression on main
-      - name: Build Main and Previous Successful Regression Hash
+      - name: Build Previous Successful Regression Hash
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
-          make
           git clone https://github.com/duckdb/duckdb.git
           cd duckdb
           if [[ -z "${BASE_HASH}" ]]; then
@@ -185,14 +193,13 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - name: Download linux release artifact
+      - name: Download current release artifact
         uses: actions/download-artifact@v4
         with:
           name: linux-release-build
           path: build
 
-      - name: Extract linux release artifact
-        shell: bash
+      - name: Extract current release artifact
         run: |
           rm -rf build/release
           tar -xzf build/release-artifact.tar.gz -C build
@@ -272,14 +279,13 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - name: Download linux release artifact
+      - name: Download current release artifact
         uses: actions/download-artifact@v4
         with:
           name: linux-release-build
           path: build
 
-      - name: Extract linux release artifact
-        shell: bash
+      - name: Extract current release artifact
         run: |
           rm -rf build/release
           tar -xzf build/release-artifact.tar.gz -C build
@@ -321,10 +327,20 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - name: Build
+      - name: Download current release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release-build
+          path: build
+
+      - name: Extract current release artifact
+        run: |
+          rm -rf build/release
+          tar -xzf build/release-artifact.tar.gz -C build
+
+      - name: Build base branch
         shell: bash
         run: |
-          make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
           make
