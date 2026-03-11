@@ -128,7 +128,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ColIdType <- ColId Type\n"
 	"ArrayBounds <- SquareBracketsArray / 'ARRAY'\n"
 	"ArrayKeyword <- 'ARRAY'\n"
-	"SquareBracketsArray <- '[' NumberLiteral? ']'\n"
+	"SquareBracketsArray <- '[' Expression? ']'\n"
 	"TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?\n"
 	"TimeOrTimestamp <- TimeTypeId / TimestampTypeId\n"
 	"TimeTypeId <- 'TIME'\n"
