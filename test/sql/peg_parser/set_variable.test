@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/expression_statement.test
+# name: test/sql/peg_parser/set_variable.test
 # description: Test expression statement
 # group: [peg_parser]
 
