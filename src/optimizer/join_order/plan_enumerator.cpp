@@ -161,6 +161,26 @@ DPJoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &rig
 		plans[new_set] = std::move(new_plan);
 		return *plans[new_set];
 	}
+	// Tiebreaker for equal-cost plans: prefer the plan whose right (build-side)
+	// child has the LARGER cardinality. This places the smaller table as the
+	// build side of the earlier (inner) join, so the first pipeline completes
+	// with a small hash table. DuckDB strongly prefers LEFT joins over RIGHT
+	// joins for execution efficiency, so the join order optimizer should already
+	// place the smaller relation on the right where possible — reducing the need
+	// for BuildProbeSideOptimizer to flip joins to RIGHT joins later.
+	// This matters most for LEFT JOINs, where all orderings preserve the LHS
+	// cardinality and therefore always tie on the primary cost metric.
+	if (new_cost == old_cost) {
+		auto new_right_cardinality = right_plan->second->cardinality;
+		auto existing_right = plans.find(entry->second->right_set);
+		if (existing_right != plans.end()) {
+			auto old_right_cardinality = existing_right->second->cardinality;
+			if (new_right_cardinality > old_right_cardinality) {
+				plans[new_set] = std::move(new_plan);
+				return *plans[new_set];
+			}
+		}
+	}
 	// Create join node from the plan currently in the DP table.
 	return *entry->second;
 }
