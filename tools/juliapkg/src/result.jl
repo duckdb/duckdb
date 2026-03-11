@@ -65,22 +65,25 @@ end
 
 nop_convert(column_data::ColumnConversionData, val) = val
 
-function convert_string(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)
+function _string_data_ptr(val::Ptr{Cvoid}, idx::UInt64)
     base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
-    length_ptr = Base.unsafe_convert(Ptr{Int32}, base_ptr)
-    length = unsafe_load(length_ptr)
-    if length <= STRING_INLINE_LENGTH
-        prefix_ptr = Base.unsafe_convert(Ptr{UInt8}, base_ptr + sizeof(Int32))
-        return unsafe_string(prefix_ptr, length)
+    len = unsafe_load(Base.unsafe_convert(Ptr{Int32}, base_ptr))
+    data_ptr = if len <= STRING_INLINE_LENGTH
+        Base.unsafe_convert(Ptr{UInt8}, base_ptr + sizeof(Int32))
     else
-        ptr_ptr = Base.unsafe_convert(Ptr{Ptr{UInt8}}, base_ptr + sizeof(Int32) * 2)
-        data_ptr = Base.unsafe_load(ptr_ptr)
-        return unsafe_string(data_ptr, length)
+        Base.unsafe_load(Base.unsafe_convert(Ptr{Ptr{UInt8}}, base_ptr + sizeof(Int32) * 2))
     end
+    return data_ptr, len
 end
 
-function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)::Base.CodeUnits{UInt8, String}
-    return Base.codeunits(convert_string(column_data, val, idx))
+function convert_string(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)
+    data_ptr, len = _string_data_ptr(val, idx)
+    return unsafe_string(data_ptr, len)
+end
+
+function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)::Vector{UInt8}
+    data_ptr, len = _string_data_ptr(val, idx)
+    return unsafe_wrap(Array, data_ptr, len; own = false) |> copy
 end
 
 convert_date(column_data::ColumnConversionData, val) = convert(Date, val)

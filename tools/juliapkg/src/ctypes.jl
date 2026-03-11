@@ -403,8 +403,8 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_UUID => UUID,
     DUCKDB_TYPE_VARCHAR => String,
     DUCKDB_TYPE_ENUM => String,
-    DUCKDB_TYPE_BLOB => Base.CodeUnits{UInt8, String},
-    DUCKDB_TYPE_BIT => Base.CodeUnits{UInt8, String},
+    DUCKDB_TYPE_BLOB => Vector{UInt8},
+    DUCKDB_TYPE_BIT => Vector{UInt8},
     DUCKDB_TYPE_MAP => Dict
 )
 
