@@ -798,6 +798,7 @@ void PEGTransformerFactory::RegisterSet() {
 	REGISTER_TRANSFORM(TransformSetVariable);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);
+	REGISTER_TRANSFORM(TransformSetVariableStatement);
 }
 
 void PEGTransformerFactory::RegisterTransaction() {

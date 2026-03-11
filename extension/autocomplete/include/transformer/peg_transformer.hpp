@@ -1356,6 +1356,8 @@ private:
 	                                                            optional_ptr<ParseResult> parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
 	                                                                  optional_ptr<ParseResult> parse_result);
+	static unique_ptr<SQLStatement> TransformSetVariableStatement(PEGTransformer &transformer,
+	                                                              optional_ptr<ParseResult> parse_result);
 
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
 

@@ -106,4 +106,12 @@ PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer, option
 	}
 	return expressions;
 }
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetVariableStatement(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto identifier = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
+	return make_uniq<SetVariableStatement>(identifier, std::move(expr), SetScope::VARIABLE);
+}
 } // namespace duckdb
