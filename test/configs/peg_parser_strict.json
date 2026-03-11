@@ -51,14 +51,6 @@
         "test/sql/prepared/parameter_variants.test",
         "test/sql/parser/digit_separators.test"
       ]
-    },
-    {
-      "reason": "New syntax",
-      "paths": [
-        "test/sql/alter/alter_table_set_table_options.test",
-        "test/sql/create/create_table_extra_options.test",
-        "test/sql/create/create_as_partition_sorted_options.test"
-      ]
     }
   ]
 }
