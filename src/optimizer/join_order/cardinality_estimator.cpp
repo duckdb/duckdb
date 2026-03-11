@@ -233,7 +233,47 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
                                                    FilterInfoWithTotalDomains &filter) {
 	double new_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
-	case JoinType::LEFT:
+	case JoinType::LEFT: {
+		// For LEFT joins, cap the effective distinct count at |RHS|.
+		// This makes the denominator min(D, |RHS|), so the estimate equals:
+		//   |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate)
+		// where inner_estimate = |LHS| * |RHS| / D.
+		// When D >= |RHS|: denom = |RHS|, estimate = |LHS| (clamped at LHS cardinality).
+		// When D <  |RHS|: denom = D,     estimate = |LHS| * |RHS| / D (multi-match fanout).
+		// This replaces the previous left_join_extra correction factor.
+		auto right_card = GetNumerator(*filter.filter_info->right_relation_set);
+		auto raw_d = filter.GetDistinctCount();
+		auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
+		ExpressionType comparison_type = ExpressionType::INVALID;
+		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
+			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+				comparison_type = expr.GetExpressionType();
+			}
+		});
+		if (comparison_type == ExpressionType::INVALID) {
+			new_denom *= effective_d;
+			return new_denom;
+		}
+		double extra_ratio = 1;
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			extra_ratio = effective_d;
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
+		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			extra_ratio = pow(effective_d, 2.0 / 3.0);
+			break;
+		default:
+			break;
+		}
+		new_denom *= extra_ratio;
+		return new_denom;
+	}
 	case JoinType::INNER: {
 		// Collect comparison types
 		ExpressionType comparison_type = ExpressionType::INVALID;
@@ -305,41 +345,26 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 	// edges are guaranteed to be in order of largest tdom to smallest tdom.
 
-	// For LEFT joins, track the dominant (largest) condition distinct count per right-side relation
-	// set. The extra_multiplier is computed at the end as
-	//   ∏ max(1, D_dominant_i / |B_i|)  for each distinct LEFT join right side i.
-	// Using only the dominant D (rather than the product of all conditions) avoids blowing up the
-	// denominator when secondary conditions have small distinct counts, while still correctly
-	// bounding the estimate at max(|LHS|, inner_estimate).
-	unordered_map<string, double> left_join_denoms;
-	unordered_map<string, double> left_join_right_cards;
-	// Tracks right-side keys whose dominant D has already been applied to the subgraph denominator.
-	// Prevents subsequent conditions for the same LEFT join from multiplying the denom again.
+	// For multi-condition LEFT joins (e.g. A LEFT JOIN B ON c1 AND c2), only apply the dominant
+	// (first/largest) condition's effective_d to the denominator. CalculateUpdatedDenom handles the
+	// first edge; subsequent edges for the same right side are skipped via this set.
 	unordered_set<string> left_join_denom_applied;
 
 	unordered_set<idx_t> unused_edge_tdoms;
 	auto edges = GetEdges(relation_set_stats, set);
 	for (auto &edge : edges) {
-		if (edge.filter_info->join_type == JoinType::LEFT) {
-			auto right_key = edge.filter_info->right_relation_set->ToString();
-			// Edges are sorted descending by distinct count, so the first edge for a given right side
-			// has the dominant (largest) D. Only keep that one — subsequent conditions are skipped.
-			auto insert_res = left_join_denoms.emplace(right_key, edge.GetDistinctCount());
-			if (insert_res.second) {
-				left_join_right_cards[right_key] = GetNumerator(*edge.filter_info->right_relation_set);
-			}
-		}
-
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
 			// The subgraph already connects all desired relations.
-			// For LEFT joins, only apply the dominant condition's D to the denominator (first time
-			// seen). Subsequent conditions for the same right side are skipped to avoid blowing up
-			// the denominator with the product of all condition distinct counts.
+			// For LEFT joins, only apply the dominant condition's effective_d once (first time seen).
+			// Subsequent conditions for the same right side are skipped.
 			// INNER join conditions get a mild penalty via denom_multiplier.
 			if (edge.filter_info->join_type == JoinType::LEFT) {
 				auto right_key = edge.filter_info->right_relation_set->ToString();
 				if (left_join_denom_applied.insert(right_key).second) {
-					subgraphs.at(0).denom *= edge.GetDistinctCount();
+					auto right_card = GetNumerator(*edge.filter_info->right_relation_set);
+					auto raw_d = edge.GetDistinctCount();
+					auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
+					subgraphs.at(0).denom *= effective_d;
 				}
 			} else if (edge.has_distinct_count_hll) {
 				unused_edge_tdoms.insert(edge.distinct_count_hll);
@@ -377,11 +402,14 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->left_relation_set) &&
 			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->right_relation_set)) {
 				// Edge connects the same subgraph to itself — no new relation is added.
-				// For LEFT joins, only apply the dominant condition's D (first time for this right side).
+				// For LEFT joins, only apply the dominant condition's effective_d (first time seen).
 				if (edge.filter_info->join_type == JoinType::LEFT) {
 					auto right_key = edge.filter_info->right_relation_set->ToString();
 					if (left_join_denom_applied.insert(right_key).second) {
-						left_subgraph->denom *= edge.GetDistinctCount();
+						auto right_card = GetNumerator(*edge.filter_info->right_relation_set);
+						auto raw_d = edge.GetDistinctCount();
+						auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
+						left_subgraph->denom *= effective_d;
 					}
 				}
 				continue;
@@ -414,18 +442,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 	// Slight penalty to cardinality for unused INNER join edges.
 	auto denom_multiplier = 1.0 + static_cast<double>(unused_edge_tdoms.size());
-
-	// Compute the LEFT join extra_multiplier from the dominant (largest) per-right-side D.
-	// For each distinct LEFT join right-side B, extra *= max(1, D_dominant / |B|).
-	// This bounds the estimate at max(|LHS|, inner) while avoiding denominator blow-up from
-	// the product of all condition distinct counts when secondary conditions have small D.
-	double left_join_extra = 1.0;
-	for (auto &entry : left_join_denoms) {
-		auto right_card = left_join_right_cards[entry.first];
-		if (right_card > 0) {
-			left_join_extra *= MaxValue(1.0, entry.second / right_card);
-		}
-	}
 
 	// It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	// structures. When that's the case, merge all remaining subgraphs as if they are connected by a cross product
@@ -462,7 +478,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 		// denominator is 1 and numerators are a cross product of cardinalities.
 		return DenomInfo(set, 1, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).numerator_relations, left_join_extra, subgraphs.at(0).denom * denom_multiplier);
+	return DenomInfo(*subgraphs.at(0).numerator_relations, 1.0, subgraphs.at(0).denom * denom_multiplier);
 }
 
 // Cardinality is calculated using logic found in
