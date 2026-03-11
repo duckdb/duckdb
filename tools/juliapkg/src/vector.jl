@@ -41,6 +41,10 @@ function list_size(vector::Vec)::UInt64
     return duckdb_list_vector_get_size(vector.handle)
 end
 
+function array_child(vector::Vec)::Vec
+    return Vec(duckdb_array_vector_get_child(vector.handle))
+end
+
 function struct_child(vector::Vec, index::UInt64)::Vec
     return Vec(duckdb_struct_vector_get_child(vector.handle, index))
 end

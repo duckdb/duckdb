@@ -373,7 +373,8 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_LIST => duckdb_list_entry_t,
     DUCKDB_TYPE_STRUCT => Cvoid,
     DUCKDB_TYPE_MAP => duckdb_list_entry_t,
-    DUCKDB_TYPE_UNION => Cvoid
+    DUCKDB_TYPE_UNION => Cvoid,
+    DUCKDB_TYPE_ARRAY => Cvoid
 )
 
 JULIA_TYPE_MAP = Dict(
@@ -434,6 +435,8 @@ function duckdb_type_to_julia_type(x)
         end
     elseif type_id == DUCKDB_TYPE_LIST
         return Vector{Union{Missing, duckdb_type_to_julia_type(get_list_child_type(x))}}
+    elseif type_id == DUCKDB_TYPE_ARRAY
+        return Vector{Union{Missing, duckdb_type_to_julia_type(get_array_child_type(x))}}
     elseif type_id == DUCKDB_TYPE_STRUCT
         child_count = get_struct_child_count(x)
         struct_names::Vector{Symbol} = Vector()

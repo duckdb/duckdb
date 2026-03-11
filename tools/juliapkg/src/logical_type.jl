@@ -101,6 +101,18 @@ function get_list_child_type(type::LogicalType)
 end
 
 ##===--------------------------------------------------------------------===##
+## Array methods
+##===--------------------------------------------------------------------===##
+
+function get_array_child_type(type::LogicalType)
+    return LogicalType(duckdb_array_type_child_type(type.handle))
+end
+
+function get_array_size(type::LogicalType)
+    return duckdb_array_type_array_size(type.handle)
+end
+
+##===--------------------------------------------------------------------===##
 ## Struct methods
 ##===--------------------------------------------------------------------===##
 
