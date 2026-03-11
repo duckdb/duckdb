@@ -56,7 +56,8 @@ ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSource(PEGTransforme
 string PEGTransformerFactory::TransformVersionNumber(PEGTransformer &transformer,
                                                      optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(1).identifier;
+	auto version = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
+	return version.name;
 }
 
 } // namespace duckdb

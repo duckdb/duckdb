@@ -1058,7 +1058,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"LoadStatement <- 'LOAD' ColIdOrString\n"
 	"InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?\n"
 	"FromSource <- 'FROM' (Identifier / StringLiteral)\n"
-	"VersionNumber <- Identifier\n"
+	"VersionNumber <- 'VERSION' IdentifierOrStringLiteral\n"
 	"DropStatement <- 'DROP' DropEntries DropBehavior?\n"
 	"DropEntries <-\n"
 	"	DropTable /\n"
