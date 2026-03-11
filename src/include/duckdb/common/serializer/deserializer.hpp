@@ -521,6 +521,12 @@ private:
 		return PhysicalIndex(ReadUnsignedInt64());
 	}
 
+	// Deserialize a TableIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, TableIndex>::value, T>::type Read() {
+		return TableIndex(ReadUnsignedInt64());
+	}
+
 	// Deserialize an optional_idx
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type Read() {

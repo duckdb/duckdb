@@ -22,7 +22,7 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
 
 public:
-	LogicalRecursiveCTE(string ctename_p, idx_t table_index, idx_t column_count, bool union_all,
+	LogicalRecursiveCTE(string ctename_p, TableIndex table_index, idx_t column_count, bool union_all,
 	                    vector<unique_ptr<Expression>> key_targets, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom)
 	    : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(top), std::move(bottom),
@@ -47,7 +47,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

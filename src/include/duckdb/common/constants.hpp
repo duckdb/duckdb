@@ -80,7 +80,7 @@ struct LogicalIndex {
 	inline bool operator<(const LogicalIndex &rhs) const {
 		return index < rhs.index;
 	};
-	bool IsValid() {
+	bool IsValid() const {
 		return index != DConstants::INVALID_INDEX;
 	}
 };
@@ -100,7 +100,7 @@ struct PhysicalIndex {
 	inline bool operator<(const PhysicalIndex &rhs) const {
 		return index < rhs.index;
 	};
-	bool IsValid() {
+	bool IsValid() const {
 		return index != DConstants::INVALID_INDEX;
 	}
 };
