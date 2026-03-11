@@ -266,6 +266,7 @@ using socklen_t = int;
 #endif
 #ifdef __MVS__
 #include <strings.h>
+#include <sys/time.h>
 #ifndef NI_MAXHOST
 #define NI_MAXHOST 1025
 #endif
@@ -2946,7 +2947,11 @@ inline std::string encode_path(const std::string &s) {
 
 inline std::string file_extension(const std::string &path) {
   Match m;
+  #ifdef __MVS__
+  static const auto re = Regex("\\.([a-zA-Z0-9]+)$");
+  #else
   thread_local auto re = Regex("\\.([a-zA-Z0-9]+)$");
+  #endif
   if (duckdb_re2::RegexSearch(path, m, re)) { return m[1].str(); }
   return std::string();
 }
@@ -4927,7 +4932,7 @@ inline ReadContentResult read_content_chunked(Stream &strm, T &x,
   if (!line_reader.getline()) { return ReadContentResult::Success; }
 
   // RFC 7230 Section 4.1.2 - Headers prohibited in trailers
-  thread_local case_ignore::unordered_set<std::string> prohibited_trailers = {
+  static const case_ignore::unordered_set<std::string> prohibited_trailers = {
       // Message framing
       "transfer-encoding", "content-length",
 
@@ -5715,9 +5720,15 @@ public:
             file_.content_type =
                 trim_copy(header.substr(str_len(header_content_type)));
           } else {
+          #ifdef __MVS__
+            static const Regex re_content_disposition(
+                R"~(^Content-Disposition:\s*form-data;\s*(.*)$)~",
+                duckdb_re2::RegexOptions::CASE_INSENSITIVE);
+            #else
             thread_local const Regex re_content_disposition(
                 R"~(^Content-Disposition:\s*form-data;\s*(.*)$)~",
                 duckdb_re2::RegexOptions::CASE_INSENSITIVE);
+            #endif
 
             Match m;
             if (RegexMatch(header, m, re_content_disposition)) {
@@ -5738,8 +5749,13 @@ public:
               it = params.find("filename*");
               if (it != params.end()) {
                 // Only allow UTF-8 encoding...
+                #ifdef __MVS__
+                static const Regex re_rfc5987_encoding(
+                    R"~(^UTF-8''(.+?)$)~", duckdb_re2::RegexOptions::CASE_INSENSITIVE);
+                #else
                 thread_local const Regex re_rfc5987_encoding(
                     R"~(^UTF-8''(.+?)$)~", duckdb_re2::RegexOptions::CASE_INSENSITIVE);
+                #endif
 
                 Match m2;
                 if (RegexMatch(it->second, m2, re_rfc5987_encoding)) {
@@ -6475,8 +6491,13 @@ inline bool parse_www_authenticate(const Response &res,
                                    bool is_proxy) {
   auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
   if (res.has_header(auth_key)) {
+#ifdef __MVS__
+    static const auto re =
+        Regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
+    #else
     thread_local auto re =
         Regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
+    #endif
     auto s = res.get_header_value(auth_key);
     auto pos = s.find(' ');
     if (pos != std::string::npos) {
@@ -6793,7 +6814,11 @@ inline std::string decode_query_component(const std::string &component,
 inline std::string append_query_params(const std::string &path,
                                        const Params &params) {
   std::string path_with_query = path;
+#ifdef __MVS__
+  static const Regex re("[^?]+\\?.*");
+  #else
   thread_local const Regex re("[^?]+\\?.*");
+  #endif
   auto delm = RegexMatch(path, re) ? '&' : '?';
   path_with_query += delm + detail::params_to_query_str(params);
   return path_with_query;
@@ -8813,10 +8838,18 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
 
   if (!line_reader.getline()) { return false; }
 
+#ifdef __MVS__
+#ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
+  static const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
+#else
+  static const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+#endif
+#else
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
   thread_local const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
 #else
   thread_local const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+#endif
 #endif
 
   Match m;
@@ -9071,8 +9104,13 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 	 return true;
 	}
 
+#ifdef __MVS__
+  static const Regex re(
+      R"((?:(https?):)?(?://(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
+  #else
   thread_local const Regex re(
       R"((?:(https?):)?(?://(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
+  #endif
 
   Match m;
   if (!RegexMatch(location, m, re)) { return false; }
