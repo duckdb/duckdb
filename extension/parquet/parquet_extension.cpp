@@ -610,8 +610,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->sql_types = deserializer.ReadProperty<vector<LogicalType>>(100, "sql_types");
 	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");
 	data->codec = deserializer.ReadProperty<duckdb_parquet::CompressionCodec::type>(102, "codec");
-	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
-	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
+	deserializer.ReadDeletedProperty<idx_t>(103, "row_group_size");
+	deserializer.ReadDeletedProperty<idx_t>(104, "row_group_size_bytes");
 	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
 	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(
@@ -623,8 +623,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->compression_level = DeserializeCompressionLevel(compression_level);
 	D_ASSERT(SerializeCompressionLevel(data->compression_level) == compression_level);
 	ParquetWriteBindData default_value;
-	data->row_groups_per_file = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(
-	    110, "row_groups_per_file", default_value.row_groups_per_file);
+	deserializer.ReadDeletedProperty<optional_idx>(110, "row_groups_per_file");
 	deserializer.ReadDeletedProperty<bool>(111, "debug_use_openssl");
 	data->dictionary_size_limit =
 	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(112, "dictionary_size_limit", optional_idx());
