@@ -24,12 +24,12 @@ public:
 	                       idx_t estimated_cardinality, optionally_owned_ptr<ColumnDataCollection> collection);
 
 	PhysicalColumnDataScan(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperatorType op_type,
-	                       idx_t estimated_cardinality, idx_t cte_index);
+	                       idx_t estimated_cardinality, TableIndex cte_index);
 
 	//! (optionally owned) column data collection to scan
 	optionally_owned_ptr<ColumnDataCollection> collection;
 
-	idx_t cte_index;
+	TableIndex cte_index;
 	optional_idx delim_index;
 
 public:

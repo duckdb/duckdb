@@ -20,7 +20,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"BLOCKED_THREAD_TIME": "true"}';
+PRAGMA configure_profiling='{"BLOCKED_THREAD_TIME": "true"}';
 
 statement ok
 SELECT (SELECT COUNT(*) FROM bigdata WHERE col_a = 1) + (SELECT COUNT(*) FROM bigdata WHERE col_b = 1);
@@ -30,7 +30,7 @@ PRAGMA disable_profiling;
 
 query I
 SELECT unnest(res) FROM (
-	SELECT current_setting('custom_profiling_settings') AS raw_setting,
+	SELECT current_setting('configure_profiling') AS raw_setting,
 	raw_setting.trim('{}') AS setting,
 	string_split(setting, ', ') AS res
 ) ORDER BY ALL

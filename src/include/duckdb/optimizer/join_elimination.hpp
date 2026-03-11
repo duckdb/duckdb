@@ -31,8 +31,8 @@ struct DistinctGroupRef {
 class PipelineInfo {
 public:
 	unique_ptr<LogicalOperator> root = nullptr;
-	unordered_set<idx_t> ref_table_ids;
-	unordered_map<idx_t, column_binding_set_t> distinct_groups;
+	unordered_set<TableIndex> ref_table_ids;
+	unordered_map<TableIndex, column_binding_set_t> distinct_groups;
 
 	// pushdown filter condition(ex in table scan operator),
 	// if have outer table columns then cannot elimination

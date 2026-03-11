@@ -158,7 +158,7 @@ vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
 	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type).size();
 	vector<ColumnBinding> result;
 	for (idx_t i = 0; i < return_column_count; i++) {
-		result.emplace_back(0, i);
+		result.emplace_back(TableIndex(0), i);
 	}
 	return result;
 }

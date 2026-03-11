@@ -50,6 +50,22 @@ struct ScalarFunctionInfo {
 	}
 };
 
+//! Optional context passed to lambda bind callbacks
+struct BindLambdaContext {
+	virtual ~BindLambdaContext() = default;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 class Binder;
 class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
@@ -118,9 +134,10 @@ typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &st
                                                              FunctionData *bind_data);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
+
 //! The type to bind lambda-specific parameter types
 typedef LogicalType (*bind_lambda_function_t)(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                              idx_t parameter_idx);
+                                              idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context);
 
 //! The type to bind lambda-specific parameter types
 typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifiedDatabasesInput &input);

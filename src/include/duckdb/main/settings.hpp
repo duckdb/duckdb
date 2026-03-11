@@ -361,6 +361,16 @@ struct CheckpointThresholdSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct ConfigureProfilingSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "configure_profiling";
+	static constexpr const char *Description = "Accepts a JSON enabling custom metrics";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct CustomExtensionRepositorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "custom_extension_repository";
@@ -369,16 +379,6 @@ struct CustomExtensionRepositorySetting {
 	static constexpr const char *DefaultValue = "";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = 16;
-};
-
-struct CustomProfilingSettingsSetting {
-	using RETURN_TYPE = string;
-	static constexpr const char *Name = "custom_profiling_settings";
-	static constexpr const char *Description = "Accepts a JSON enabling custom metrics";
-	static constexpr const char *InputType = "VARCHAR";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
 };
 
 struct CustomUserAgentSetting {

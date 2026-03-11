@@ -27,7 +27,7 @@ vector<ColumnBinding> LogicalUpdate::GetColumnBindings() {
 	if (return_chunk) {
 		return GenerateColumnBindings(table_index, table.GetTypes().size());
 	}
-	return {ColumnBinding(0, 0)};
+	return {ColumnBinding(TableIndex(0), 0)};
 }
 
 void LogicalUpdate::ResolveTypes() {
@@ -41,7 +41,7 @@ void LogicalUpdate::ResolveTypes() {
 string LogicalUpdate::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

@@ -57,7 +57,7 @@ endloop
 statement error
 SELEC 
 ----
-<REGEX>:.*Parser Error.*syntax error.*
+<REGEX>:(.*Parser Error: syntax error.*|.*Catalog Error: Table with name SELEC does not exist!.*)
 
 # only a unicode space
 statement ok
@@ -66,4 +66,4 @@ statement ok
 statement error
 S
 ----
-<REGEX>:.*Parser Error.*syntax error.*
+<REGEX>:(.*Parser Error: syntax error.*|.*Catalog Error: Table with name S does not exist!.*)

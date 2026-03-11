@@ -18,7 +18,7 @@ static void RevertFilterPullup(LogicalProjection &proj, vector<unique_ptr<Expres
 }
 
 static void ReplaceExpressionBinding(vector<unique_ptr<Expression>> &proj_expressions, Expression &expr,
-                                     idx_t proj_table_idx) {
+                                     TableIndex proj_table_idx) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		bool found_proj_col = false;
 		BoundColumnRefExpression &colref = expr.Cast<BoundColumnRefExpression>();

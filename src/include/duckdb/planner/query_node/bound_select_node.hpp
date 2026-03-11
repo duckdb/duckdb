@@ -27,7 +27,7 @@ public:
 
 struct BoundUnnestNode {
 	//! The index of the UNNEST node
-	idx_t index;
+	TableIndex index;
 	//! The set of expressions
 	vector<unique_ptr<Expression>> expressions;
 };
@@ -58,16 +58,16 @@ public:
 	idx_t bound_column_count = 0;
 
 	//! Index used by the LogicalProjection
-	idx_t projection_index;
+	TableIndex projection_index;
 
 	//! Group index used by the LogicalAggregate (only used if HasAggregation is true)
-	idx_t group_index;
+	TableIndex group_index;
 	//! Table index for the projection child of the group op
-	idx_t group_projection_index;
+	TableIndex group_projection_index;
 	//! Aggregate index used by the LogicalAggregate (only used if HasAggregation is true)
-	idx_t aggregate_index;
+	TableIndex aggregate_index;
 	//! Index used for GROUPINGS column references
-	idx_t groupings_index;
+	TableIndex groupings_index;
 	//! Aggregate functions to compute (only used if HasAggregation is true)
 	vector<unique_ptr<Expression>> aggregates;
 
@@ -78,7 +78,7 @@ public:
 	expression_map_t<idx_t> aggregate_map;
 
 	//! Window index used by the LogicalWindow (only used if HasWindow is true)
-	idx_t window_index;
+	TableIndex window_index;
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
 
@@ -86,11 +86,11 @@ public:
 	unordered_map<idx_t, BoundUnnestNode> unnests;
 
 	//! Index of pruned node
-	idx_t prune_index;
+	TableIndex prune_index;
 	bool need_prune = false;
 
 public:
-	idx_t GetRootIndex() override {
+	TableIndex GetRootIndex() override {
 		return need_prune ? prune_index : projection_index;
 	}
 };

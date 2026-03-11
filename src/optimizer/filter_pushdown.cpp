@@ -15,7 +15,7 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings) {
+void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<TableIndex> &table_bindings) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
@@ -38,7 +38,7 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 		// the tables in the projection
 		auto &proj = op.Cast<LogicalProjection>();
 		auto proj_bindings = proj.GetColumnBindings();
-		unordered_set<idx_t> new_table_bindings;
+		unordered_set<TableIndex> new_table_bindings;
 		for (auto &binding : proj_bindings) {
 			auto col_index = binding.column_index;
 			auto &expr = proj.expressions.at(col_index);
@@ -75,7 +75,7 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 				}
 			});
 		}
-		table_bindings = unordered_set<idx_t>();
+		table_bindings = unordered_set<TableIndex>();
 		for (auto &expr_binding : bindings_to_keep) {
 			table_bindings.insert(expr_binding.table_index);
 		}
@@ -156,7 +156,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	auto left_projection_map = join.left_projection_map;
 	auto right_projection_map = join.right_projection_map;
 
-	unordered_set<idx_t> left_bindings, right_bindings;
+	unordered_set<TableIndex> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
 
@@ -291,7 +291,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushFiltersIntoDelimJoin(unique_ptr<
 
 			// check if filter bindings can be applied to the child bindings.
 			auto child_bindings = child->GetColumnBindings();
-			unordered_set<idx_t> child_bindings_table;
+			unordered_set<TableIndex> child_bindings_table;
 			for (auto &binding : child_bindings) {
 				child_bindings_table.insert(binding.table_index);
 			}

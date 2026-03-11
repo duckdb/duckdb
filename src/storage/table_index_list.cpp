@@ -206,7 +206,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 
 		// Add the table to the binder.
 		vector<ColumnIndex> dummy_column_ids;
-		binder->bind_context.AddBaseTable(0, string(), column_names, column_types, dummy_column_ids, table);
+		binder->bind_context.AddBaseTable(TableIndex(0), string(), column_names, column_types, dummy_column_ids, table);
 
 		// Create an IndexBinder to bind the index
 		IndexBinder idx_binder(*binder, context);

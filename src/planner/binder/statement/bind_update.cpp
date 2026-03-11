@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
+void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
                            TableCatalogEntry &table, vector<PhysicalIndex> &columns,
                            vector<unique_ptr<Expression>> &update_expressions,
                            vector<unique_ptr<Expression>> &projection_expressions, bool prioritize_table_when_binding) {

@@ -35,6 +35,19 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	return true;
 }
 
+void QueryGraphManager::GetColumnBinding(Expression &root_expr, ColumnBinding &binding) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    root_expr, [&](const BoundColumnRefExpression &colref) {
+		    D_ASSERT(colref.depth == 0);
+		    D_ASSERT(colref.binding.table_index.IsValid());
+		    // map the base table index to the relation index used by the JoinOrderOptimizer
+		    D_ASSERT(relation_manager.relation_mapping.find(colref.binding.table_index) !=
+		             relation_manager.relation_mapping.end());
+		    binding = ColumnBinding(TableIndex(relation_manager.relation_mapping[colref.binding.table_index].index),
+		                            colref.binding.column_index);
+	    });
+}
+
 const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() const {
 	return filters_and_bindings;
 }
@@ -86,9 +99,9 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 	// now we have to rewrite the plan
 	bool root_is_join = plan->children.size() > 1;
 
-	unordered_set<idx_t> bindings;
+	unordered_set<RelationIndex> bindings;
 	for (idx_t i = 0; i < relation_manager.NumRelations(); i++) {
-		bindings.insert(i);
+		bindings.emplace(i);
 	}
 	auto &total_relation = set_manager.GetJoinRelation(bindings);
 
@@ -225,9 +238,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	} else {
 		// base node, get the entry from the list of extracted relations
 		D_ASSERT(node->set.count == 1);
-		D_ASSERT(extracted_relations[node->set.relations[0]]);
+		D_ASSERT(extracted_relations[node->set.relations[0].index]);
 		result_relation = &node->set;
-		result_operator = std::move(extracted_relations[result_relation->relations[0]]);
+		result_operator = std::move(extracted_relations[result_relation->relations[0].index]);
 	}
 	// TODO: this is where estimated properties start coming into play.
 	//  when creating the result operator, we should ask the cost model and cardinality estimator what

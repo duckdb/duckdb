@@ -30,6 +30,6 @@ protected:
 	bool verify_only;
 
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-	static unordered_set<idx_t> VerifyInternal(LogicalOperator &op);
+	static unordered_set<TableIndex> VerifyInternal(LogicalOperator &op);
 };
 } // namespace duckdb

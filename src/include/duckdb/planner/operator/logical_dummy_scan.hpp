@@ -18,11 +18,11 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DUMMY_SCAN;
 
 public:
-	explicit LogicalDummyScan(idx_t table_index)
+	explicit LogicalDummyScan(TableIndex table_index)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {
 	}
 
-	idx_t table_index;
+	TableIndex table_index;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
@@ -34,7 +34,7 @@ public:
 	}
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

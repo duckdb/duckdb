@@ -307,7 +307,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator &op, boo
 	return has_correlation;
 }
 
-bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op, idx_t cte_index) {
+bool FlattenDependentJoins::MarkSubtreeCorrelated(LogicalOperator &op, TableIndex cte_index) {
 	// Do not mark base table scans as correlated
 	auto entry = has_correlated_expressions.find(op);
 	D_ASSERT(entry != has_correlated_expressions.end());
@@ -503,7 +503,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
-		idx_t delim_table_index;
+		TableIndex delim_table_index;
 		idx_t delim_column_offset;
 		idx_t delim_data_offset;
 		auto new_group_count = perform_delim ? correlated_columns.size() : 1;
@@ -1058,7 +1058,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 
-		idx_t table_index = 0;
+		TableIndex table_index(0);
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 

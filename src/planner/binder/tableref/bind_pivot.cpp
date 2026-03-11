@@ -946,7 +946,7 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 	// bind the source of the pivot
 	// we need to do this to be able to expand star expressions
 	if (ref.source->type == TableReferenceType::SUBQUERY && ref.source->alias.empty()) {
-		ref.source->alias = "__internal_pivot_alias_" + to_string(GenerateTableIndex());
+		ref.source->alias = "__internal_pivot_alias_" + to_string(GenerateTableIndex().index);
 	}
 	auto copied_source = ref.source->Copy();
 	auto star_binder = Binder::CreateBinder(context, this);

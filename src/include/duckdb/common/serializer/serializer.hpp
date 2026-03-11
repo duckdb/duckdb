@@ -371,6 +371,9 @@ protected:
 	void WriteValue(PhysicalIndex value) {
 		WriteValue(value.index);
 	}
+	void WriteValue(TableIndex value) {
+		WriteValue(value.index);
+	}
 	void WriteValue(optional_idx value) {
 		WriteValue(value.IsValid() ? value.GetIndex() : DConstants::INVALID_INDEX);
 	}

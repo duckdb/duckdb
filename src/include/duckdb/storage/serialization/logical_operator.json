@@ -29,7 +29,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -72,17 +72,17 @@
       {
         "id": 201,
         "name": "group_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
         "name": "aggregate_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 203,
         "name": "groupings_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 204,
@@ -120,7 +120,7 @@
       {
         "id": 200,
         "name": "window_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -140,7 +140,7 @@
       {
         "id": 200,
         "name": "unnest_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -267,7 +267,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -294,7 +294,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -315,7 +315,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -342,7 +342,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       }
     ],
     "constructor": [
@@ -374,12 +374,12 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
         "name": "cte_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -427,7 +427,7 @@
       {
         "id": 201,
         "name": "mark_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -485,7 +485,7 @@
       {
         "id": 201,
         "name": "mark_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -533,7 +533,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -579,7 +579,7 @@
       {
         "id": 202,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 203,
@@ -616,7 +616,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -669,7 +669,7 @@
       {
         "id": 204,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 205,
@@ -726,7 +726,7 @@
       {
         "id": 214,
         "name": "excluded_table_index",
-        "type": "idx_t",
+        "type": "TableIndex",
         "property": "on_conflict_info.excluded_table_index"
       },
       {
@@ -774,7 +774,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -811,7 +811,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -858,7 +858,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -1077,7 +1077,7 @@
       {
         "id": 200,
         "name": "pivot_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,

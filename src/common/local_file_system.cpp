@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
+#include <type_traits>
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -571,19 +572,24 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 }
 
 bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {
+	bool trimmed = false;
+#if defined(DUCKDB_RUN_SLOW_VERIFIERS) || defined(DUCKDB_ALTERNATIVE_VERIFY)
+	std::vector<char> zeros(length_bytes, '\0');
+	Write(handle, zeros.data(), length_bytes, offset_bytes);
+	trimmed = true;
+#endif
 #if defined(__linux__)
 	// FALLOC_FL_PUNCH_HOLE requires glibc 2.18 or up
 #if __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 18)
-	return false;
+	// Nothing
 #else
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	int res = fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE, UnsafeNumericCast<int64_t>(offset_bytes),
 	                    UnsafeNumericCast<int64_t>(length_bytes));
-	return res == 0;
+	trimmed = (res == 0);
 #endif
-#else
-	return false;
 #endif
+	return trimmed;
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
@@ -811,14 +817,8 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 }
 
 string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
-	auto path = ExpandPath(path_p, opener);
-	if (!IsPathAbsolute(path)) {
-		// path is not absolute - join with working directory
-		return JoinPath(GetWorkingDirectory(), path);
-	} else {
-		// already absolute
-		return path;
-	}
+	auto parsed = Path::FromString(ExpandPath(path_p, opener));
+	return (parsed.IsAbsolute() ? parsed : Path::FromString(GetWorkingDirectory()).Join(parsed)).ToString();
 }
 #else
 
@@ -1384,33 +1384,21 @@ bool LocalFileSystem::IsPathAbsolute(const string &path) {
 
 string LocalFileSystem::MakePathAbsolute(const string &path_p, optional_ptr<FileOpener> opener) {
 	auto path = ExpandPath(path_p, opener);
-	if (FileSystem::IsPathAbsolute(path)) {
+	auto parsed = Path::FromString(path);
+	if (parsed.IsAbsolute()) {
 		// already absolute - nothing to do
-		return path;
-	}
-	// check if this is a drive letter (e.g. C:)
-	if (PathStartsWithDrive(path)) {
-		// this starts with a drive letter
-		// we now have two options - either this is "C:" or this is "C:\"
-		// "C:" is the current working directory, C:\ is an absolute path
-		if (path.size() >= 3 && (path[2] == '\\' || path[2] == '/')) {
-			// C:\\ - this is already an absolute path
-			return path;
-		}
-		// this is "C:" - expand to current working directory if this is the current drive
-		auto working_directory = GetWorkingDirectory();
-		if (working_directory[0] != path[0]) {
-			// this is not the drive we are on right now (e.g. referencing D: while in C:)
-			// default to root of drive
-			working_directory = string(1, path[0]) + ":\\";
-		}
-		if (path.size() == 2) {
-			return working_directory;
-		}
-		return JoinPath(working_directory, path.substr(2));
+		return parsed.ToString();
 	}
 
-	return JoinPath(GetWorkingDirectory(), path);
+	auto parsed_wd = Path::FromString(GetWorkingDirectory());
+	if (parsed.HasDrive() && parsed_wd.GetDriveChar() != parsed.GetDriveChar()) {
+		// this is relative path "C:", and this is not the drive we are on right now
+		// (referencing D: while in $PWD in C:); In this case, default as if PWD is
+		// root of drive, e.g. "C:\"
+		// NOTE: should this error? pushdir("c:") && getcwd() && popdir()?
+		parsed_wd = Path::FromString(parsed.GetBase() + parsed.GetSeparator());
+	}
+	return parsed_wd.Join(parsed.GetPath()).ToString();
 }
 
 #endif
@@ -1663,34 +1651,23 @@ LocalGlobResult::LocalGlobResult(LocalFileSystem &fs, const string &path_p, File
 		finished = true;
 		return;
 	}
-	// split up the path into separate chunks
-	idx_t last_pos = 0;
-	for (idx_t i = 0; i < path.size(); i++) {
-		if (path[i] == '\\' || path[i] == '/') {
-			if (i == last_pos) {
-				// empty: skip this position
-				last_pos = i + 1;
-				continue;
-			}
-			if (splits.empty()) {
-				splits.emplace_back(fs, path.substr(0, i));
-			} else {
-				splits.emplace_back(fs, path.substr(last_pos, i - last_pos));
-			}
-			last_pos = i + 1;
-		}
+	// Split path into base (= scheme+authority+anchor) + individual segments.
+	auto parsed = Path::FromString(path);
+	string base = parsed.GetBase();
+	if (!base.empty()) {
+		splits.emplace_back(fs, base);
 	}
-	splits.emplace_back(fs, path.substr(last_pos, path.size() - last_pos));
-	// handle absolute paths
-	absolute_path = false;
-	if (fs.IsPathAbsolute(path)) {
-		// first character is a slash -  unix absolute path
-		absolute_path = true;
-	} else if (StringUtil::Contains(splits[0].path,
-	                                ":")) { // TODO: this is weird? shouldn't IsPathAbsolute handle this?
-		// first split has a colon -  windows absolute path
-		absolute_path = true;
-	} else if (splits[0].path == "~") {
+	for (auto &seg : parsed.GetPathSegments()) {
+		splits.emplace_back(fs, seg);
+	}
+	absolute_path = parsed.IsAbsolute();
+	// Preserve trailing separator semantics: glob("dir/*/") matches directories,
+	// not files. Add empty trailing split to enforce this and make preceding splits
+	// non-final.
+	if (parsed.HasTrailingSeparator()) {
+		splits.emplace_back(fs, string());
+	}
+	if (!splits.empty() && splits[0].path == "~") {
 		// starts with home directory
 		auto home_directory = fs.GetHomeDirectory(opener);
 		if (!home_directory.empty()) {

@@ -63,6 +63,7 @@
         "test/extension/loadable_parser_override.test",
         "test/sql/peg_parser/transformer/peg_transformer.test",
         "test/sql/collate/test_unsupported_collations.test",
+        "test/extension/consistent_semicolon_extension_parse.test",
         "test/extension/test_custom_type_modifier_cast.test",
         "test/extension/test_alias_point.test",
         "test/extension/concurrent_load_extension.test",

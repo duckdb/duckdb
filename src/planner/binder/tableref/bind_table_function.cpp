@@ -386,9 +386,9 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 			error.Throw();
 		}
 
-		idx_t bind_index = query.plan->GetRootIndex();
+		auto bind_index = query.plan->GetRootIndex();
 		// string alias;
-		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
+		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index.index) : ref.alias);
 
 		// remember ref here is TableFunctionRef and NOT base class
 		bind_context.AddSubquery(bind_index, alias, ref, query);

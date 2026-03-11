@@ -196,12 +196,13 @@ public:
 	}
 
 	static JoinSide CombineJoinSide(JoinSide left, JoinSide right);
-	static JoinSide GetJoinSide(idx_t table_binding, const unordered_set<idx_t> &left_bindings,
-	                            const unordered_set<uint64_t> &right_bindings);
-	static JoinSide GetJoinSide(Expression &expression, const unordered_set<idx_t> &left_bindings,
-	                            const unordered_set<idx_t> &right_bindings);
-	static JoinSide GetJoinSide(const unordered_set<idx_t> &bindings, const unordered_set<idx_t> &left_bindings,
-	                            const unordered_set<idx_t> &right_bindings);
+	static JoinSide GetJoinSide(TableIndex table_binding, const unordered_set<TableIndex> &left_bindings,
+	                            const unordered_set<TableIndex> &right_bindings);
+	static JoinSide GetJoinSide(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+	                            const unordered_set<TableIndex> &right_bindings);
+	static JoinSide GetJoinSide(const unordered_set<TableIndex> &bindings,
+	                            const unordered_set<TableIndex> &left_bindings,
+	                            const unordered_set<TableIndex> &right_bindings);
 
 private:
 	JoinValue value;

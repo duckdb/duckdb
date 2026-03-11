@@ -86,6 +86,8 @@ public:
 
 	//! Extract all column bindings from an expression
 	void ExtractColumnBindingsFromExpression(Expression &expression, unordered_set<idx_t> &bindings);
+	//! Extract the set of relations referred to inside an expression
+	bool ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings);
 	//! Inspects an expression and creates filter info instances that can connect two relations
 	//! If the expression (or conjunction expression children cannot create a FilterInfo), then
 	//! they are returned to be added to the filter_op so they are pushed down at the end of reconstruction.
@@ -111,7 +113,7 @@ public:
 
 	const vector<RelationStats> GetRelationStats();
 	//! A mapping of base table index -> index into relations array (relation number)
-	unordered_map<idx_t, idx_t> relation_mapping;
+	unordered_map<TableIndex, RelationIndex> relation_mapping;
 
 	bool CrossProductWithRelationAllowed(idx_t relation_id);
 

@@ -5,14 +5,15 @@
 
 namespace duckdb {
 
-LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
+LogicalAggregate::LogicalAggregate(TableIndex group_index, TableIndex aggregate_index,
+                                   vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY, std::move(select_list)),
-      group_index(group_index), aggregate_index(aggregate_index), groupings_index(DConstants::INVALID_INDEX),
+      group_index(group_index), aggregate_index(aggregate_index),
       distinct_validity(TupleDataValidityType::CAN_HAVE_NULL_VALUES) {
 }
 
 void LogicalAggregate::ResolveTypes() {
-	D_ASSERT(groupings_index != DConstants::INVALID_INDEX || grouping_functions.empty());
+	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	for (auto &expr : groups) {
 		types.push_back(expr->return_type);
 	}
@@ -26,7 +27,7 @@ void LogicalAggregate::ResolveTypes() {
 }
 
 vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
-	D_ASSERT(groupings_index != DConstants::INVALID_INDEX || grouping_functions.empty());
+	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	vector<ColumnBinding> result;
 	result.reserve(groups.size() + expressions.size() + grouping_functions.size());
 	for (idx_t i = 0; i < groups.size(); i++) {
@@ -72,9 +73,9 @@ idx_t LogicalAggregate::EstimateCardinality(ClientContext &context) {
 	return LogicalOperator::EstimateCardinality(context);
 }
 
-vector<idx_t> LogicalAggregate::GetTableIndex() const {
-	vector<idx_t> result {group_index, aggregate_index};
-	if (groupings_index != DConstants::INVALID_INDEX) {
+vector<TableIndex> LogicalAggregate::GetTableIndex() const {
+	vector<TableIndex> result {group_index, aggregate_index};
+	if (groupings_index.IsValid()) {
 		result.push_back(groupings_index);
 	}
 	return result;
@@ -83,8 +84,8 @@ vector<idx_t> LogicalAggregate::GetTableIndex() const {
 string LogicalAggregate::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() +
-		       StringUtil::Format(" #%llu, #%llu, #%llu", group_index, aggregate_index, groupings_index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu, #%llu, #%llu", group_index.index,
+		                                                       aggregate_index.index, groupings_index.index);
 	}
 #endif
 	return LogicalOperator::GetName();

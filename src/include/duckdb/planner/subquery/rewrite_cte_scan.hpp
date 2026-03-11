@@ -27,13 +27,13 @@ enum class CTEScanRewriteMode {
 //! Helper class to rewrite correlated cte scans within a single LogicalOperator
 class RewriteCTEScan : public LogicalOperatorVisitor {
 public:
-	RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns,
+	RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns,
 	               CTEScanRewriteMode mode = CTEScanRewriteMode::CTE_REF_ONLY);
 
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
-	idx_t table_index;
+	TableIndex table_index;
 	const CorrelatedColumns &correlated_columns;
 	CTEScanRewriteMode mode;
 };

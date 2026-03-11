@@ -22,13 +22,14 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CHUNK_GET;
 
 public:
-	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ColumnDataCollection> collection);
-	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, ColumnDataCollection &to_scan);
-	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types,
+	LogicalColumnDataGet(TableIndex table_index, vector<LogicalType> types,
+	                     unique_ptr<ColumnDataCollection> collection);
+	LogicalColumnDataGet(TableIndex table_index, vector<LogicalType> types, ColumnDataCollection &to_scan);
+	LogicalColumnDataGet(TableIndex table_index, vector<LogicalType> types,
 	                     optionally_owned_ptr<ColumnDataCollection> to_scan);
 
 	//! The table index in the current bind context
-	idx_t table_index;
+	TableIndex table_index;
 	//! The types of the chunk
 	vector<LogicalType> chunk_types;
 	//! (optionally owned) column data collection
@@ -40,7 +41,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	vector<idx_t> GetTableIndex() const override;
+	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

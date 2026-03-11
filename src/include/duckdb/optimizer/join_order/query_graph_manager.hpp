@@ -79,6 +79,8 @@ private:
 
 	void CreateHyperGraphEdges();
 
+	void GetColumnBinding(Expression &root_expr, ColumnBinding &binding);
+
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 };
 

@@ -149,8 +149,8 @@ static bool IsComparisonExpression(const Expression &expr) {
 }
 
 //! Create a JoinCondition from a comparison
-static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &left_bindings,
-                                const unordered_set<idx_t> &right_bindings, vector<JoinCondition> &conditions) {
+static bool CreateJoinCondition(Expression &expr, const unordered_set<TableIndex> &left_bindings,
+                                const unordered_set<TableIndex> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = expr.Cast<BoundComparisonExpression>();
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
@@ -175,8 +175,8 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &le
 void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinType type, JoinRefType ref_type,
                                                   unique_ptr<LogicalOperator> &left_child,
                                                   unique_ptr<LogicalOperator> &right_child,
-                                                  const unordered_set<idx_t> &left_bindings,
-                                                  const unordered_set<idx_t> &right_bindings,
+                                                  const unordered_set<TableIndex> &left_bindings,
+                                                  const unordered_set<TableIndex> &right_bindings,
                                                   vector<unique_ptr<Expression>> &expressions,
                                                   vector<JoinCondition> &conditions) {
 	for (auto &expr : expressions) {
@@ -212,7 +212,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(ClientContext &context, JoinTy
                                                   unique_ptr<LogicalOperator> &right_child,
                                                   vector<unique_ptr<Expression>> &expressions,
                                                   vector<JoinCondition> &conditions) {
-	unordered_set<idx_t> left_bindings, right_bindings;
+	unordered_set<TableIndex> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
 	return ExtractJoinConditions(context, type, ref_type, left_child, right_child, left_bindings, right_bindings,
