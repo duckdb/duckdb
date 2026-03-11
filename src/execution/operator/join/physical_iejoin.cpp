@@ -1415,6 +1415,10 @@ idx_t IEJoinLocalSourceState::FilterSemiJoin(const SelectionVector *sel) {
 	//	Strip out remaining left side duplicates
 	const auto result_count = lpayload.size();
 	idx_t unique_count = 0;
+	if (!result_count) {
+		return unique_count;
+	}
+
 	simple_sel.set_index(unique_count, 0);
 	lsel[unique_count++] = lsel[sel->get_index(0)];
 	for (idx_t i = 1; i < result_count; ++i) {
