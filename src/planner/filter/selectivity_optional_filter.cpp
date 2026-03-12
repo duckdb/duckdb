@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression/compression.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 

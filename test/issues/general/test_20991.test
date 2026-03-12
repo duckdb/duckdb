@@ -1,0 +1,51 @@
+# name: test/issues/general/test_20991.test
+# description: Issue 20991 - Internal ERROR with a MERGE query
+# group: [general]
+
+statement ok
+CREATE TABLE ovirt_mac_pool_dedup(id UUID, collected_at TIMESTAMP WITH TIME ZONE, "name" VARCHAR, description VARCHAR, ranges VARCHAR, allow_duplicates BOOLEAN, default_pool BOOLEAN, sig VARCHAR);
+
+statement ok
+CREATE TABLE IF NOT EXISTS ovirt_mac_pool_hist (
+    id UUID,
+    name VARCHAR,
+    description VARCHAR,
+    ranges VARCHAR,
+    allow_duplicates BOOLEAN,
+    default_pool BOOLEAN,
+    sig VARCHAR,
+    _valid_from TIMESTAMP WITH TIME ZONE,
+    _valid_until TIMESTAMP WITH TIME ZONE,
+    _is_current BOOLEAN
+);
+
+statement ok
+WITH
+  src AS (SELECT * FROM   ovirt_mac_pool_dedup),
+  run AS (SELECT max(collected_at) AS run_ts FROM src)
+  MERGE INTO ovirt_mac_pool_hist AS target
+  USING src AS source
+  ON (target.id = source.id AND target._is_current = true)
+  WHEN MATCHED AND (target.sig <> source.sig) THEN
+    UPDATE SET
+      _valid_until = source.collected_at,
+      _is_current = false
+  WHEN NOT MATCHED BY SOURCE AND target._is_current = true THEN
+    UPDATE SET
+      _valid_until = (SELECT run_ts FROM run),
+      _is_current = false
+  WHEN NOT MATCHED BY TARGET THEN
+    INSERT ( id, name, description, ranges, allow_duplicates, default_pool, sig, _valid_from, _valid_until, _is_current)
+    VALUES
+      (
+        source.id,
+        source.name,
+        source.description,
+        source.ranges,
+        source.allow_duplicates,
+        source.default_pool,
+        source.sig,
+        source.collected_at,
+        null,
+        true
+      );
