@@ -87,7 +87,7 @@ MetadataResult LaunchUI(ShellState &state, const vector<string> &args) {
 	// run the UI command
 	auto rc = state.RunInitialCommand((char *)state.ui_command.c_str(), true);
 	if (rc != 0) {
-		exit(rc);
+		ShellState::Exit(rc);
 		return MetadataResult::EXIT;
 	}
 	return MetadataResult::SUCCESS;
@@ -119,7 +119,7 @@ MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
 	state.bail_on_error = true;
 	auto &file = args[1];
 	if (!state.ProcessFile(file)) {
-		exit(1);
+		ShellState::Exit(1);
 		return MetadataResult::EXIT;
 	}
 	state.bail_on_error = old_bail;
@@ -141,7 +141,7 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	auto &cmd = args[1];
 	auto rc = state.RunInitialCommand(cmd.c_str(), bail);
 	if (rc != 0) {
-		exit(rc);
+		ShellState::Exit(rc);
 		return MetadataResult::EXIT;
 	}
 	return MetadataResult::SUCCESS;
@@ -274,7 +274,7 @@ void ShellState::PrintUsage() {
 		}
 		PrintF("%s%s\n", spaces.c_str(), option.description.c_str());
 	}
-	exit(0);
+	ShellState::Exit(0);
 }
 
 } // namespace duckdb_shell
