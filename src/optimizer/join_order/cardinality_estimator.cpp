@@ -256,29 +256,9 @@ static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_
 }
 
 double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
-	auto raw_d = filter.GetDistinctCount();
-	// Cap D per side: a filtered relation with N rows cannot contribute more than N distinct
-	// join-key values, regardless of what the full-table HLL reports.
-	// Use per-column distinct counts from UpdateTotalDomains so each side is capped
-	// independently, avoiding the min(|LHS|, |RHS|) pitfall that always removes selectivity.
-	auto left_card = GetNumerator(*filter.filter_info->left_set);
-	auto right_card = GetNumerator(*filter.filter_info->right_set);
-
-	auto d_left = GetDistinctCountForBinding(filter.filter_info->left_binding);
-	auto d_right = GetDistinctCountForBinding(filter.filter_info->right_binding);
-	if (d_left == 0) {
-		d_left = raw_d;
-	}
-	if (d_right == 0) {
-		d_right = raw_d;
-	}
-	auto d_left_eff = left_card > 0 ? MinValue(d_left, left_card) : d_left;
-	auto d_right_eff = right_card > 0 ? MinValue(d_right, right_card) : d_right;
-	auto effective_d = MaxValue(d_left_eff, d_right_eff);
-
+	auto effective_d = filter.GetDistinctCount();
 	auto comparison_type = GetComparisonType(filter);
 	if (comparison_type == ExpressionType::INVALID) {
-		// No comparison operator found; apply effective_d directly.
 		return base_denom * effective_d;
 	}
 	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
@@ -572,7 +552,6 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 		//! the cardinality
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		auto key = ColumnBinding(TableIndex(relation_id.index), ProjectionIndex(i));
-		binding_distinct_counts[key] = stats.column_distinct_count.at(i);
 		for (auto &relation_to_tdom : relation_set_stats) {
 			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.find(key) == i_set.end()) {
@@ -592,17 +571,6 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 			break;
 		}
 	}
-}
-
-double CardinalityEstimator::GetDistinctCountForBinding(const ColumnBinding &binding) const {
-	if (!binding.table_index.IsValid()) {
-		return 0;
-	}
-	auto it = binding_distinct_counts.find(binding);
-	if (it == binding_distinct_counts.end() || !it->second.from_hll) {
-		return 0;
-	}
-	return static_cast<double>(it->second.distinct_count);
 }
 
 // LCOV_EXCL_START

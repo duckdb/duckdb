@@ -102,9 +102,6 @@ private:
 	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
 	JoinRelationSetManager set_manager;
 	vector<RelationStats> relation_stats;
-	//! Per-column distinct count, keyed by the optimizer's ColumnBinding.
-	//! Populated in UpdateTotalDomains; used by GetDistinctCountForBinding.
-	column_binding_map_t<DistinctCount> binding_distinct_counts;
 
 public:
 	void RemoveEmptyTotalDomains();
@@ -141,9 +138,6 @@ private:
 	                                  FilterInfoWithTotalDomains &filter);
 	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
 	                                          FilterInfoWithTotalDomains &filter);
-
-	//! Returns the HLL-based distinct count for a single column binding, or 0 if unavailable.
-	double GetDistinctCountForBinding(const ColumnBinding &binding) const;
 
 	void AddRelationStats(FilterInfo &filter_info);
 	bool EmptyFilter(FilterInfo &filter_info);
