@@ -47,7 +47,12 @@
         "test/issues/rigger/assertion_scale.test",
         "test/issues/general/test_16662.test",
         "test/sql/copy/csv/test_null_padding_projection.test"
-
+      ]
+    },
+    {
+      "reason": "Too many columns (20k) exceeds CSV field size limit in compatibility test script.",
+      "paths": [
+        "test/sql/join/test_hash_join_many_columns.test"
       ]
     }
   ]
