@@ -1,0 +1,197 @@
+# name: test/sql/optimizer/temporal_cast_zonemap.test
+# description: Test that temporal cast filters generate OptionalFilter for zonemap pruning
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification;
+
+# ---------------------------------------------------------------------------
+# Setup tables
+# ---------------------------------------------------------------------------
+statement ok
+CREATE TABLE ts_table AS SELECT '2020-01-01'::TIMESTAMP + (i * INTERVAL '1 minute') AS col FROM range(1000000) t(i);
+
+statement ok
+CREATE TABLE date_table AS SELECT ('2020-01-01'::DATE + (i * INTERVAL '1 day'))::DATE AS col FROM range(100000) d(i);
+
+statement ok
+CREATE TABLE tsns_table AS SELECT ('2020-01-01'::TIMESTAMP + (i * INTERVAL '1 minute'))::TIMESTAMP_NS AS col FROM range(1000000) t(i);
+
+statement ok
+CREATE TABLE tsms_table AS SELECT ('2020-01-01'::TIMESTAMP + (i * INTERVAL '1 minute'))::TIMESTAMP_MS AS col FROM range(1000000) t(i);
+
+statement ok
+CREATE TABLE tss_table AS SELECT ('2020-01-01'::TIMESTAMP + (i * INTERVAL '1 minute'))::TIMESTAMP_S AS col FROM range(1000000) t(i);
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP <-> TIMESTAMPTZ (margin = 26h)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM ts_table WHERE CAST(col AS TIMESTAMPTZ) > TIMESTAMPTZ '2020-06-01 00:00:00+00';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query II
+EXPLAIN SELECT * FROM ts_table WHERE CAST(col AS TIMESTAMPTZ) <= TIMESTAMPTZ '2020-06-01 00:00:00+00';
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# DATE -> TIMESTAMP (margin = 0, lossless)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) > '2024-01-01'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) < '2021-01-01'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) >= '2022-06-15'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) = '2022-06-15'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP -> DATE (margin = 24h)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM ts_table WHERE CAST(col AS DATE) > '2020-06-01'::DATE;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP_NS -> TIMESTAMP (margin = 1s)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM tsns_table WHERE CAST(col AS TIMESTAMP) > '2020-06-01'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP -> TIMESTAMP_MS (margin = 1s)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM ts_table WHERE CAST(col AS TIMESTAMP_MS) > '2020-06-01'::TIMESTAMP_MS;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP -> TIMESTAMP_S (margin = 1s)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM ts_table WHERE CAST(col AS TIMESTAMP_S) > '2020-06-01'::TIMESTAMP_S;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP_MS -> DATE (margin = 24h)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM tsms_table WHERE CAST(col AS DATE) > '2020-06-01'::DATE;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP_S -> DATE (margin = 24h)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM tss_table WHERE CAST(col AS DATE) > '2020-06-01'::DATE;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP_NS -> TIMESTAMP_MS (margin = 1s)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM tsns_table WHERE CAST(col AS TIMESTAMP_MS) > '2020-06-01'::TIMESTAMP_MS;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP_MS -> TIMESTAMP_S (margin = 1s)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM tsms_table WHERE CAST(col AS TIMESTAMP_S) > '2020-06-01'::TIMESTAMP_S;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# DATE -> TIMESTAMPTZ (margin = 26h) - requires ICU for TIMESTAMPTZ->DATE cast
+# so we skip this test here; it would work with LOAD icu
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Constant on left side (inverted comparison)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM date_table WHERE '2024-01-01'::TIMESTAMP < CAST(col AS TIMESTAMP);
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query II
+EXPLAIN SELECT * FROM date_table WHERE '2021-01-01'::TIMESTAMP > CAST(col AS TIMESTAMP);
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# ---------------------------------------------------------------------------
+# Negative: != should NOT produce an optional filter
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) != '2024-01-01'::TIMESTAMP;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# ---------------------------------------------------------------------------
+# Negative: non-temporal cast should NOT produce an optional filter
+# ---------------------------------------------------------------------------
+statement ok
+CREATE TABLE int_table AS SELECT i AS col FROM range(100000) t(i);
+
+query II
+EXPLAIN SELECT * FROM int_table WHERE CAST(col AS VARCHAR) > '50000';
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# ---------------------------------------------------------------------------
+# Original filter is preserved (not just the optional)
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) > '2024-01-01'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*CAST.*col.*TIMESTAMP.*
+
+# ---------------------------------------------------------------------------
+# Correctness: results match expected values
+# ---------------------------------------------------------------------------
+query I
+SELECT count(*) FROM date_table WHERE CAST(col AS TIMESTAMP) > '2024-01-01'::TIMESTAMP;
+----
+98538
+
+query I
+SELECT count(*) FROM date_table WHERE CAST(col AS TIMESTAMP) < '2021-01-01'::TIMESTAMP;
+----
+366
+
+query I
+SELECT count(*) FROM date_table WHERE CAST(col AS TIMESTAMP) = '2022-06-15 00:00:00'::TIMESTAMP;
+----
+1
+
+query I
+SELECT count(*) FROM date_table WHERE CAST(col AS TIMESTAMP) >= '2024-01-01'::TIMESTAMP;
+----
+98539
+
+query I
+SELECT count(*) FROM date_table WHERE CAST(col AS TIMESTAMP) <= '2020-01-03'::TIMESTAMP;
+----
+3
