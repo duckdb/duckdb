@@ -31,22 +31,20 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
+  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref_name, '_feature') && 'feature' || 'main') }}
   BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
-  # This job exists so that workflow_dispatch and repository_dispatch continue
-  # to work. Note that those cannot rely on the linux release build because
-  # that CI job runs outside this workflow run.
-  linux-release:
-    name: Linux Release
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch' }}
+  linux-base:
+    name: Linux Base
     runs-on: ${{ inputs.runner_linux_x64 }}
     env:
       GEN: ninja
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install tools
         run: make toolsci
@@ -58,34 +56,39 @@ jobs:
         with:
           vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
-      - name: Build
-        env:
-          BUILD_BENCHMARK: 1
-          BUILD_JEMALLOC: 1
-          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
-          DISABLE_SANITIZER: 1
-          VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-          USE_MERGED_VCPKG_MANIFEST: 1
-        run: make release
-
-      - name: Smoke tests
-        run: make smoke SMOKE_UNITTEST=build/release/test/unittest
-
-      - name: Prepare release artifact
-        run: make release-artifact
-
-      - name: Upload release build artifact
-        uses: actions/upload-artifact@v4
+      - name: Build current release
+        if: ${{ github.event_name != 'workflow_call' }}
+        uses: ./.github/actions/linux_release_build
         with:
-          name: linux-release-build
-          path: build/release-artifact.tar.gz
-          if-no-files-found: error
+          artifact_name: linux-release-build
+
+      - name: Select base ref
+        run: |
+          if [[ "${{ github.repository }}" == "duckdb/duckdb" && "${{ github.ref_name }}" == "main" ]]; then
+            if [[ -z "${BASE_HASH}" ]]; then
+              echo "BASE_REF=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --event=repository_dispatch --status=completed --json=headSha --limit=1 --jq '.[0].headSha')" >> "$GITHUB_ENV"
+            else
+              echo "BASE_REF=${BASE_HASH}" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "BASE_REF=origin/${BASE_BRANCH}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Reset workspace to base ref
+        run: |
+          make clean
+          git checkout --detach "${BASE_REF}"
+          git submodule update --init --recursive
+
+      - name: Build base release
+        uses: ./.github/actions/linux_release_build
+        with:
+          artifact_name: linux-base-build
 
   regression-test-benchmark-runner:
     name: Regression Tests
     needs:
-      - linux-release
-    if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
+      - linux-base
     runs-on: ubuntu-24.04
     env:
       CC: gcc-13
@@ -108,10 +111,8 @@ jobs:
         shell: bash
         run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install requests
 
-      - uses: ./.github/actions/ccache-action
-
       - name: Checkout Private Regression
-        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
+        if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
         uses: actions/checkout@v4
         with:
           repository: duckdblabs/fivetran_regression
@@ -123,113 +124,90 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: linux-release-build
-          path: build
+          path: build/current
 
       - name: Extract current release artifact
         run: |
-          rm -rf build/release
-          tar -xzf build/release-artifact.tar.gz -C build
+          rm -rf build/current/release
+          tar -xzf build/current/release-artifact.tar.gz -C build/current
 
-      - name: Build Base Branch
-        if: ${{ !(github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main') }}
-        shell: bash
-        run: |
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
-          cd duckdb
-          make
-          cd ..
+      - name: Download base artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-base-build
+          path: build/base
 
-      # For NightlyTest we fetch the last commit hash that ran Regression on main
-      - name: Build Previous Successful Regression Hash
-        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
-        shell: bash
+      - name: Extract base artifact
         run: |
-          git clone https://github.com/duckdb/duckdb.git
-          cd duckdb
-          if [[ -z "${BASE_HASH}" ]]; then
-            export CHECKOUT_HASH=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --event=repository_dispatch --status=completed --json=headSha --limit=1 --jq '.[0].headSha')
-          else
-            export CHECKOUT_HASH="$BASE_HASH"
-          fi
-          git checkout $CHECKOUT_HASH
-          make
-          cd ..
-
-      - name: Set up benchmarks
-        shell: bash
-        run: |
-          cp -r benchmark duckdb/
+          rm -rf build/base/release
+          tar -xzf build/base/release-artifact.tar.gz -C build/base
 
       - name: Regression Test Fivetran
-        if: ${{ github.repository == 'duckdb/duckdb' && github.ref == 'refs/heads/main' }}
+        if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test Micro
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test Ingestion Perf
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/ingestion.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/ingestion.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCH
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCH-PARQUET
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCDS
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test H2OAI
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test IMDB
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test CSV
         if: always()
         shell: bash
         run: |
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/csv.csv --verbose --threads 2 --clear-benchmark-cache
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/csv.csv --verbose --threads 2 --clear-benchmark-cache
 
-      - name: Regression Test RealNest 
+      - name: Regression Test RealNest
         if: always()
         shell: bash
         run: |
           mkdir -p duckdb_benchmark_data
-          rm -R duckdb/duckdb_benchmark_data
-          mkdir -p duckdb/duckdb_benchmark_data
           wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
-          cp duckdb_benchmark_data/real_nest.duckdb duckdb/duckdb_benchmark_data/real_nest.duckdb
-          python scripts/regression/test_runner.py --old duckdb/build/release/benchmark/benchmark_runner --new build/release/benchmark/benchmark_runner --benchmarks .github/regression/realnest.csv --verbose --threads 2
+          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/realnest.csv --verbose --threads 2
 
   regression-test-storage:
     name: Storage Size Regression Test
     needs:
-      - linux-release
-    if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
+      - linux-base
     runs-on: ubuntu-24.04
     env:
       CC: gcc-13
@@ -250,36 +228,37 @@ jobs:
         shell: bash
         run: make toolsci && pip install requests
 
-      - uses: ./.github/actions/ccache-action
-
       - name: Download current release artifact
         uses: actions/download-artifact@v4
         with:
           name: linux-release-build
-          path: build
+          path: build/current
 
       - name: Extract current release artifact
         run: |
-          rm -rf build/release
-          tar -xzf build/release-artifact.tar.gz -C build
+          rm -rf build/current/release
+          tar -xzf build/current/release-artifact.tar.gz -C build/current
 
-      - name: Build base branch
-        shell: bash
+      - name: Download base artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-base-build
+          path: build/base
+
+      - name: Extract base artifact
         run: |
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
-          cd duckdb
-          make
-          cd ..
+          rm -rf build/base/release
+          tar -xzf build/base/release-artifact.tar.gz -C build/base
 
       - name: Regression Test
         shell: bash
         run: |
-          python scripts/regression_test_storage_size.py --old duckdb/build/release/duckdb --new build/release/duckdb
+          python scripts/regression_test_storage_size.py --old build/base/release/duckdb --new build/current/release/duckdb
 
       - name: Test for incompatibility
         shell: bash
         run: |
-          if (cmp test/sql/storage_version/storage_version.db duckdb/test/sql/storage_version/storage_version.db); then
+          if (cmp test/sql/storage_version/storage_version.db build/base/release/test/sql/storage_version/storage_version.db); then
             echo "storage_changed=false" >> $GITHUB_ENV
           else
             echo "storage_changed=true" >> $GITHUB_ENV
@@ -291,22 +270,24 @@ jobs:
         run: |
           # Regenerate test/sql/storage_version.db with newer version -> read with older version
           python3 scripts/generate_storage_version.py
-          ./duckdb/build/release/duckdb test/sql/storage_version/storage_version.db
+          ./build/base/release/duckdb test/sql/storage_version/storage_version.db
           # Regenerate test/sql/storage_version.db with older version -> read with newer version (already performed as part of test.slow)
-          cd duckdb
-          python3 ../scripts/generate_storage_version.py
-          ../build/release/duckdb test/sql/storage_version/storage_version.db
-          cd ..
+          (
+            cd build/base/release
+            python3 scripts/generate_storage_version.py
+          )
+          ./build/current/release/duckdb build/base/release/test/sql/storage_version/storage_version.db
 
       - name: Regression Compatibility Test (testing storage version has been bumped)
         shell: bash
         if: env.storage_changed == 'true'
         run: |
           python3 scripts/generate_storage_version.py
-          cd duckdb
-          python3 scripts/generate_storage_version.py
-          cd ..
-          if (cmp -i 8 -n 12 test/sql/storage_version.db duckdb/test/sql/storage_version.db); then
+          (
+            cd build/base/release
+            python3 scripts/generate_storage_version.py
+          )
+          if (cmp -i 8 -n 12 test/sql/storage_version/storage_version.db build/base/release/test/sql/storage_version/storage_version.db); then
             echo "Expected storage format to be bumped, but this is not the case"
             echo "This might fail spuriously if changes to content of test database / generation script happened"
             exit 1
@@ -317,15 +298,15 @@ jobs:
   regression-test-binary-size:
     name: Regression test binary size
     needs:
-      - linux-release
-    if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
-    runs-on: ubuntu-24.04
+      - linux-base
+    runs-on: ${{ inputs.runner_linux_small }}
     env:
-      CC: gcc-13
-      CXX: g++-13
+      CC: gcc-10
+      CXX: g++-10
       GEN: ninja
       CORE_EXTENSIONS: "tpch;tpcds;json;parquet"
       EXTENSION_STATIC_BUILD: 1
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -339,37 +320,37 @@ jobs:
         shell: bash
         run: make toolsci && pip install requests
 
-      - uses: ./.github/actions/ccache-action
-
       - name: Download current release artifact
         uses: actions/download-artifact@v4
         with:
           name: linux-release-build
-          path: build
+          path: build/current
 
       - name: Extract current release artifact
         run: |
-          rm -rf build/release
-          tar -xzf build/release-artifact.tar.gz -C build
+          rm -rf build/current/release
+          tar -xzf build/current/release-artifact.tar.gz -C build/current
 
-      - name: Build base branch
-        shell: bash
+      - name: Download base artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-base-build
+          path: build/base
+
+      - name: Extract base artifact
         run: |
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
-          cd duckdb
-          make
-          cd ..
+          rm -rf build/base/release
+          tar -xzf build/base/release-artifact.tar.gz -C build/base
 
       - name: Regression Test Extension binary size
         shell: bash
         run: |
-          python scripts/regression_test_extension_size.py --old 'duckdb/build/release/extension' --new build/release/extension --expect json,parquet,tpch,tpcds
+          python scripts/regression_test_extension_size.py --old build/base/release/extension --new build/current/release/extension --expect json,parquet,tpch,tpcds
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
     needs:
-      - linux-release
-    if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
+      - linux-base
     runs-on: ubuntu-24.04
     env:
       CC: gcc-13
@@ -390,40 +371,36 @@ jobs:
         shell: bash
         run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install tqdm
 
-      - uses: ./.github/actions/ccache-action
-
       - name: Download current release artifact
         uses: actions/download-artifact@v4
         with:
           name: linux-release-build
-          path: build
+          path: build/current
 
       - name: Extract current release artifact
         run: |
-          rm -rf build/release
-          tar -xzf build/release-artifact.tar.gz -C build
+          rm -rf build/current/release
+          tar -xzf build/current/release-artifact.tar.gz -C build/current
 
-      - name: Build base branch
-        shell: bash
-        run: |
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
-          cd duckdb
-          make
-          cd ..
+      - name: Download base artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-base-build
+          path: build/base
 
-      - name: Set up benchmarks
-        shell: bash
+      - name: Extract base artifact
         run: |
-          cp -r benchmark duckdb/
+          rm -rf build/base/release
+          tar -xzf build/base/release-artifact.tar.gz -C build/base
 
       - name: Regression Test IMDB
         if: always()
         shell: bash
         run: |
-          python scripts/plan_cost_runner.py --old duckdb/build/release/duckdb --new build/release/duckdb --dir=benchmark/imdb_plan_cost
+          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/imdb_plan_cost
 
       - name: Regression Test TPCH
         if: always()
         shell: bash
         run: |
-          python scripts/plan_cost_runner.py --old duckdb/build/release/duckdb --new build/release/duckdb --dir=benchmark/tpch_plan_cost
+          python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/tpch_plan_cost

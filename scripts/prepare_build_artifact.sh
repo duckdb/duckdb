@@ -39,8 +39,11 @@ fi
 
 # Required by regression jobs that run the prebuilt benchmark runner.
 if [[ -f "$BUILD_DIR/benchmark/benchmark_runner" ]]; then
-	mkdir -p "$ARTIFACT_DIR"/benchmark
+	mkdir -p "$ARTIFACT_DIR"/benchmark "$ARTIFACT_DIR"/scripts
+	mkdir -p "$ARTIFACT_DIR"/test/sql/storage_version
 	cp -av "$BUILD_DIR/benchmark/benchmark_runner" "$ARTIFACT_DIR"/benchmark/
+	cp -av scripts/generate_storage_version.py "$ARTIFACT_DIR"/scripts/
+	cp -av test/sql/storage_version/. "$ARTIFACT_DIR"/test/sql/storage_version/
 else
 	echo "No $BUILD_DIR/benchmark/benchmark_runner file found"
 fi

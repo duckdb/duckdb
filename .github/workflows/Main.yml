@@ -197,8 +197,8 @@ jobs:
       - linux-debug
       - linux-release
     with:
-      runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
+      runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
  code-quality:
     uses: ./.github/workflows/CodeQuality.yml
