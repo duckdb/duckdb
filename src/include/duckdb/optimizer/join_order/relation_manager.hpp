@@ -20,6 +20,7 @@
 namespace duckdb {
 
 class JoinOrderOptimizer;
+class FilterInfo;
 
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {
