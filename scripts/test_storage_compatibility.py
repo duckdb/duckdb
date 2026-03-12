@@ -1,10 +1,11 @@
 import argparse
-import os
-import subprocess
-import re
+import concurrent.futures
 import csv
+import os
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 
 parser = argparse.ArgumentParser(description='Run a full benchmark using the CLI and report the results.')
 group = parser.add_mutually_exclusive_group(required=True)
@@ -17,6 +18,7 @@ parser.add_argument(
     '--test-config', action='store', help='Test config script to run', default='test/configs/storage_compatibility.json'
 )
 parser.add_argument('--db-name', action='store', help='Database name to write to', default='bwc_storage_test.db')
+parser.add_argument('--workers', action='store', help='Number of workers or CPU percentage to use', default='75%')
 parser.add_argument('--abort-on-failure', action='store_true', help='Abort on first failure', default=False)
 parser.add_argument('--start-offset', type=int, action='store', help='Test start offset', default=None)
 parser.add_argument('--end-offset', type=int, action='store', help='Test end offset', default=None)
@@ -31,6 +33,16 @@ parser.add_argument(
 
 args, extra_args = parser.parse_known_args()
 
+
+def resolve_workers(workers):
+    cpu_count = os.cpu_count() or 1
+    workers = workers.strip()
+    if workers.endswith("%"):
+        percentage = int(workers[:-1])
+        return max(1, int(cpu_count * (percentage / 100.0)))
+    return max(1, int(workers))
+
+
 programs_to_test = []
 if args.versions is not None:
     version_splits = args.versions.split('|')
@@ -39,18 +51,24 @@ if args.versions is not None:
         if not os.path.isfile(cli_path):
             if os.system(f'curl https://install.duckdb.org | DUCKDB_VERSION={version} sh'):
                 raise Exception(f"CURL install for DuckDB version: {version} failed")
-        programs_to_test.append(cli_path)
+        programs_to_test.append(os.path.abspath(cli_path))
 else:
-    programs_to_test.append(args.old_cli)
+    programs_to_test.append(os.path.abspath(args.old_cli))
 
-unittest_program = args.new_unittest
+unittest_program = os.path.abspath(args.new_unittest)
 db_name = args.db_name
-new_cli = args.new_unittest.replace('test/unittest', 'duckdb') if args.new_cli is None else args.new_cli
+test_config = os.path.abspath(args.test_config)
+new_cli = (
+    os.path.abspath(args.new_unittest.replace('test/unittest', 'duckdb'))
+    if args.new_cli is None
+    else os.path.abspath(args.new_cli)
+)
 summarize_failures = not args.no_summarize_failures
+workers = resolve_workers(args.workers)
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.run(
-    [unittest_program, '--test-config', args.test_config, '-l'] + extra_args,
+    [unittest_program, '--test-config', test_config, '-l'] + extra_args,
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
 )
@@ -74,7 +92,7 @@ for line in stdout.splitlines():
     if len(line.strip()) == 0:
         continue
     splits = line.rsplit('\t', 1)
-    test_cases.append(splits[0])
+    test_cases.append(os.path.abspath(splits[0]))
 
 test_cases.sort()
 if args.compatibility != 'v1.0.0':
@@ -110,14 +128,11 @@ def handle_failure(test, cmd, msg, stdout, stderr, returncode):
     print(f"==============STDERR=============", file=sys.stderr)
     print(stderr, file=sys.stderr)
     print(f"=================================", file=sys.stderr)
-    if args.abort_on_failure:
-        exit(1)
-    else:
-        error_container.append({'test': test, 'stderr': stderr})
+    error_container.append({'test': test, 'stderr': stderr})
 
 
-def run_program(cmd, description):
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def run_program(test, cmd, description, cwd=None):
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
     stdout = proc.stdout.decode('utf8').strip()
     stderr = proc.stderr.decode('utf8').strip()
     if proc.returncode != 0:
@@ -132,91 +147,130 @@ def run_program(cmd, description):
     return None
 
 
-def try_run_program(cmd, description):
-    result = run_program(cmd, description)
-    if result is None:
-        return True
-    handle_failure(**result)
-    return False
-
-
-index = 0
-start = 0 if args.start_offset is None else args.start_offset
-end = len(test_cases) if args.end_offset is None else args.end_offset
-for i in range(start, end):
-    test = test_cases[i]
-    skipped = ''
+def execute_test(i, test):
+    skipped = False
     if not args.run_empty_tests:
         with open(test, 'r') as f:
             test_contents = f.read().lower()
         if 'create table' not in test_contents and 'create view' not in test_contents:
-            skipped = ' (SKIPPED)'
+            skipped = True
 
-    print(f'[{i}/{len(test_cases)}]: {test}{skipped}')
-    if skipped != '':
-        continue
-    # remove the old db
-    try:
-        os.remove(db_name)
-    except:
-        pass
-    cmd = [unittest_program, '--test-config', args.test_config, test]
-    if not try_run_program(cmd, 'Run Test'):
-        print("Failed to Run Test")
-        continue
+    result = {
+        'index': i,
+        'test': test,
+        'skipped': skipped,
+        'messages': [],
+        'failures': [],
+    }
+    if skipped:
+        return result
 
-    if not os.path.isfile(db_name):
-        # db not created
-        print(f"Failed to create a database file by the name of {db_name}")
-        continue
-
-    cmd = [
-        programs_to_test[-1],
-        db_name,
-        '-c',
-        '.headers off',
-        '-csv',
-        '-c',
-        '.output table_list.csv',
-        '-c',
-        'SHOW ALL TABLES',
-    ]
-    if not try_run_program(cmd, 'List Tables'):
-        print("Failed to List Tables")
-        continue
-
-    tables = []
-    with open('table_list.csv', newline='') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            tables.append((row[1], row[2]))
-    # no tables / views
-    if len(tables) == 0:
-        print("No tables/views were created, skipping")
-        continue
-
-    # read all tables / views
-    failures = []
-    for cli in programs_to_test:
-        cmd = [cli, db_name]
-        for table in tables:
-            schema_name = table[0].replace('"', '""')
-            table_name = table[1].replace('"', '""')
-            cmd += ['-c', f'FROM "{schema_name}"."{table_name}"']
-        failure = run_program(cmd, 'Query Tables')
+    with tempfile.TemporaryDirectory(prefix='storage_compat_') as temp_dir:
+        db_path = os.path.join(temp_dir, db_name)
+        table_list_path = os.path.join(temp_dir, 'table_list.csv')
+        failure = run_program(
+            test,
+            [unittest_program, '--test-config', test_config, test],
+            'Run Test',
+            cwd=temp_dir,
+        )
         if failure is not None:
-            failures.append(failure)
-    if len(failures) > 0:
-        # we failed to query the tables
-        # this MIGHT be expected - e.g. we might have views that reference stale state (e.g. files that are deleted)
-        # try to run it with the new CLI - if this succeeds we have a problem
-        new_cmd = [new_cli] + cmd[1:]
-        new_failure = run_program(new_cmd, 'Query Tables (New)')
-        if new_failure is None:
-            # we succeeded with the new CLI - report the failure
-            for failure in failures:
-                handle_failure(**failure)
-        continue
+            result['failures'].append(failure)
+            result['messages'].append("Failed to Run Test")
+            return result
+
+        if not os.path.isfile(db_path):
+            result['messages'].append(f"Failed to create a database file by the name of {db_path}")
+            return result
+
+        failure = run_program(
+            test,
+            [
+                programs_to_test[-1],
+                db_path,
+                '-c',
+                '.headers off',
+                '-csv',
+                '-c',
+                f'.output {table_list_path}',
+                '-c',
+                'SHOW ALL TABLES',
+            ],
+            'List Tables',
+        )
+        if failure is not None:
+            result['failures'].append(failure)
+            result['messages'].append("Failed to List Tables")
+            return result
+
+        tables = []
+        with open(table_list_path, newline='') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                tables.append((row[1], row[2]))
+        if len(tables) == 0:
+            result['messages'].append("No tables/views were created, skipping")
+            return result
+
+        failures = []
+        last_cmd = None
+        for cli in programs_to_test:
+            cmd = [cli, db_path]
+            for table in tables:
+                schema_name = table[0].replace('"', '""')
+                table_name = table[1].replace('"', '""')
+                cmd += ['-c', f'FROM "{schema_name}"."{table_name}"']
+            last_cmd = cmd
+            failure = run_program(test, cmd, 'Query Tables')
+            if failure is not None:
+                failures.append(failure)
+        if len(failures) > 0:
+            # A query failure can be expected for stale views. Only report it
+            # when the same query succeeds against the new CLI.
+            new_cmd = [new_cli] + last_cmd[1:]
+            new_failure = run_program(test, new_cmd, 'Query Tables (New)')
+            if new_failure is None:
+                result['failures'].extend(failures)
+        return result
+
+
+def process_result(result):
+    i = result['index']
+    test = result['test']
+    suffix = ' (SKIPPED)' if result['skipped'] else ''
+    print(f'[{i}/{len(test_cases)}]: {test}{suffix}')
+    for failure in result['failures']:
+        handle_failure(**failure)
+    for message in result['messages']:
+        print(message)
+
+
+start = 0 if args.start_offset is None else args.start_offset
+end = len(test_cases) if args.end_offset is None else args.end_offset
+selected_tests = list(enumerate(test_cases[start:end], start=start))
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+    future_to_test = {}
+    next_test_idx = 0
+
+    while next_test_idx < len(selected_tests) and len(future_to_test) < workers:
+        i, test = selected_tests[next_test_idx]
+        future_to_test[executor.submit(execute_test, i, test)] = (i, test)
+        next_test_idx += 1
+
+    stop_launching = False
+    while future_to_test:
+        done, _ = concurrent.futures.wait(future_to_test, return_when=concurrent.futures.FIRST_COMPLETED)
+        for future in done:
+            future_to_test.pop(future)
+            result = future.result()
+            process_result(result)
+            if args.abort_on_failure and len(error_container) > 0:
+                stop_launching = True
+        while not stop_launching and next_test_idx < len(selected_tests) and len(future_to_test) < workers:
+            i, test = selected_tests[next_test_idx]
+            future_to_test[executor.submit(execute_test, i, test)] = (i, test)
+            next_test_idx += 1
 
 if len(error_container) == 0:
     exit(0)
