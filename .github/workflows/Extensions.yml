@@ -293,6 +293,9 @@ jobs:
     if: ${{ inputs.skip_tests != 'true' }}
     runs-on: ubuntu-latest
     needs: create-extension-repository
+    env:
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
 
     steps:
       - uses: actions/checkout@v4
@@ -316,7 +319,7 @@ jobs:
         run: |
           tree /tmp/extension-repository
 
-      - name: Build DuckDB
+      - name: Build DuckDB (first)
         env:
           GEN: ninja
           CC: gcc
@@ -327,6 +330,34 @@ jobs:
           ENABLE_EXTENSION_AUTOINSTALL: 1
         run: |
           make release
+
+      - name: Ccache stats (first)
+        run: |
+          tail -n 500 /tmp/ccache.log || true
+          ccache -s -vv
+
+      - name: Clear ccache stats
+        run: |
+          make clean
+          rm -f /tmp/ccache.log
+          ccache -z
+
+      - name: Build DuckDB (second)
+        env:
+          GEN: ninja
+          CC: gcc
+          CXX: g++
+          EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
+          EXTENSION_TESTS_ONLY: 1
+          ENABLE_EXTENSION_AUTOLOADING: 1
+          ENABLE_EXTENSION_AUTOINSTALL: 1
+        run: |
+          make release
+
+      - name: Ccache stats (second)
+        run: |
+          tail -n 500 /tmp/ccache.log || true
+          ccache -s -vv
 
       - name: Run Tests
         env:
@@ -342,6 +373,8 @@ jobs:
     needs: create-extension-repository
     env:
       CC: gcc-10
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
       CXX: g++-10
       GEN: ninja
 
@@ -361,13 +394,40 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - name: Build
+      - name: Build (first)
         shell: bash
         env:
           GENERATE_EXTENSION_ENTRIES: 1
           LOCAL_EXTENSION_REPO: build/release/repository_other
         run: |
           make
+
+      - name: Ccache stats (first)
+        shell: bash
+        run: |
+          tail -n 500 /tmp/ccache.log || true
+          ccache -s -vv
+
+      - name: Clear ccache stats
+        shell: bash
+        run: |
+          make clean
+          rm -f /tmp/ccache.log
+          ccache -z
+
+      - name: Build (second)
+        shell: bash
+        env:
+          GENERATE_EXTENSION_ENTRIES: 1
+          LOCAL_EXTENSION_REPO: build/release/repository_other
+        run: |
+          make
+
+      - name: Ccache stats (second)
+        shell: bash
+        run: |
+          tail -n 500 /tmp/ccache.log || true
+          ccache -s -vv
 
       - uses: actions/download-artifact@v4
         name: Download extension repository artifact

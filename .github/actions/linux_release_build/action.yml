@@ -41,11 +41,45 @@ runs:
       env:
         BUILD_BENCHMARK: ${{ inputs.build_benchmark }}
         BUILD_JEMALLOC: ${{ inputs.build_jemalloc }}
+        CCACHE_DEBUG: 1
+        CCACHE_LOGFILE: /tmp/ccache.log
         CORE_EXTENSIONS: ${{ inputs.core_extensions }}
         DISABLE_SANITIZER: ${{ inputs.disable_sanitizer }}
         VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         USE_MERGED_VCPKG_MANIFEST: 1
       run: make release
+
+    - name: Ccache stats (first)
+      shell: bash
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
+
+    - name: Clear ccache stats
+      shell: bash
+      run: |
+        make clean
+        rm -f /tmp/ccache.log
+        ccache -z
+
+    - name: Build release (second)
+      shell: bash
+      env:
+        BUILD_BENCHMARK: ${{ inputs.build_benchmark }}
+        BUILD_JEMALLOC: ${{ inputs.build_jemalloc }}
+        CCACHE_DEBUG: 1
+        CCACHE_LOGFILE: /tmp/ccache.log
+        CORE_EXTENSIONS: ${{ inputs.core_extensions }}
+        DISABLE_SANITIZER: ${{ inputs.disable_sanitizer }}
+        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        USE_MERGED_VCPKG_MANIFEST: 1
+      run: make release
+
+    - name: Ccache stats (second)
+      shell: bash
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
 
     - name: Smoke tests
       if: ${{ inputs.run_smoke_tests == 'true' }}

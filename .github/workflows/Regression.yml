@@ -46,6 +46,8 @@ jobs:
     name: Linux Base
     runs-on: ${{ inputs.runner_linux_x64 }}
     env:
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
       GEN: ninja
 
     steps:

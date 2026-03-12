@@ -117,6 +117,8 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: gcc
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
       CXX: g++
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
@@ -137,8 +139,27 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Build
+    - name: Build (first)
       run: make relassert
+
+    - name: Ccache stats (first)
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
+
+    - name: Clear ccache stats
+      run: |
+        make clean
+        rm -f /tmp/ccache.log
+        ccache -z
+
+    - name: Build (second)
+      run: make relassert
+
+    - name: Ccache stats (second)
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
 
     - name: Smoke tests
       run: make smoke
@@ -220,6 +241,8 @@ jobs:
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
       GEN: ninja
 
     steps:
@@ -234,8 +257,27 @@ jobs:
       with:
         artifact_name: linux-release-build
 
-    - name: Build linux default release
+    - name: Build linux default release (first)
       run: make clean release
+
+    - name: Ccache stats for linux default release (first)
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
+
+    - name: Clear ccache stats for linux default release
+      run: |
+        make clean
+        rm -f /tmp/ccache.log
+        ccache -z
+
+    - name: Build linux default release (second)
+      run: make release
+
+    - name: Ccache stats for linux default release (second)
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
 
     - name: Prepare linux default release artifact
       run: |
@@ -338,6 +380,8 @@ jobs:
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
@@ -353,8 +397,27 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - name: Build
+      - name: Build (first)
         run: make relassert
+
+      - name: Ccache stats (first)
+        run: |
+          tail -n 500 /tmp/ccache.log || true
+          ccache -s -vv
+
+      - name: Clear ccache stats
+        run: |
+          make clean
+          rm -f /tmp/ccache.log
+          ccache -z
+
+      - name: Build (second)
+        run: make relassert
+
+      - name: Ccache stats (second)
+        run: |
+          tail -n 500 /tmp/ccache.log || true
+          ccache -s -vv
 
       - name: Test
         run: make unittest_relassert
@@ -367,6 +430,8 @@ jobs:
       - linux-debug
     env:
       CC: gcc-10
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
       CXX: g++-10
       GEN: ninja
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
@@ -379,8 +444,27 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - name: Build
+      - name: Build (first)
         run: STANDARD_VECTOR_SIZE=2 make reldebug
+
+      - name: Ccache stats (first)
+        run: |
+          tail -n 500 /tmp/ccache.log || true
+          ccache -s -vv
+
+      - name: Clear ccache stats
+        run: |
+          make clean
+          rm -f /tmp/ccache.log
+          ccache -z
+
+      - name: Build (second)
+        run: STANDARD_VECTOR_SIZE=2 make reldebug
+
+      - name: Ccache stats (second)
+        run: |
+          tail -n 500 /tmp/ccache.log || true
+          ccache -s -vv
 
       - name: Test
         run: make unittest_reldebug
@@ -392,6 +476,8 @@ jobs:
     needs: linux-debug
     env:
       CC: clang
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
       CXX: clang++
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
@@ -407,9 +493,32 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Build
+    - name: Build (first)
       shell: bash
       run: make relassert
+
+    - name: Ccache stats (first)
+      shell: bash
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
+
+    - name: Clear ccache stats
+      shell: bash
+      run: |
+        make clean
+        rm -f /tmp/ccache.log
+        ccache -z
+
+    - name: Build (second)
+      shell: bash
+      run: make relassert
+
+    - name: Ccache stats (second)
+      shell: bash
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
 
     - name: Output version info
       shell: bash
@@ -427,6 +536,8 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: clang
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
       CXX: clang++
       GEN: ninja
       BUILD_JEMALLOC: 1
@@ -442,8 +553,27 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Build
+    - name: Build (first)
       run: THREADSAN=1 make reldebug
+
+    - name: Ccache stats (first)
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
+
+    - name: Clear ccache stats
+      run: |
+        make clean
+        rm -f /tmp/ccache.log
+        ccache -z
+
+    - name: Build (second)
+      run: THREADSAN=1 make reldebug
+
+    - name: Ccache stats (second)
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
 
     - name: Test
       run: make unittest_threadsan

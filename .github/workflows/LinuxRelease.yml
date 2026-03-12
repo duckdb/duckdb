@@ -38,6 +38,9 @@ jobs:
 
     name: Linux CLI (${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.runner }}
+    env:
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
 
     steps:
     - uses: actions/checkout@v4
@@ -53,17 +56,20 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Build
+    - name: Build (first)
       run: |
-        export PWD=`pwd`
+        workdir=$(pwd)
         docker run                                                             \
-        -v$PWD:$PWD                                                            \
+        -v /tmp:/tmp                                                           \
+        -v "$workdir:$workdir"                                                 \
         -e GEN=ninja                                                           \
         -e CC='ccache gcc'                                                     \
+        -e CCACHE_DEBUG=1                                                      \
         -e CXX='ccache g++'                                                    \
-        -e CCACHE_DIR=$PWD/.ccache                                             \
-        -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
-        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
+        -e CCACHE_DIR="$workdir/.ccache"                                       \
+        -e CCACHE_LOGFILE=/tmp/ccache.log                                      \
+        -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                      \
+        -e EXTENSION_CONFIGS="$workdir/.github/config/bundled_extensions.cmake" \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
         -e BUILD_BENCHMARK=1                                                   \
@@ -76,9 +82,63 @@ jobs:
             ccache       \
             ninja-build  \
             perl-IPC-Cmd
-          git config --global --add safe.directory $PWD
-          make -C $PWD
+          git config --global --add safe.directory \"$workdir\"
+          make -C \"$workdir\"
         "
+
+    - name: Ccache stats (first)
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
+
+    - name: Clear ccache stats
+      run: |
+        workdir=$(pwd)
+        docker run                                                             \
+        -v "$workdir:$workdir"                                                 \
+        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
+        bash -c "
+          set -e
+          git config --global --add safe.directory \"$workdir\"
+          make -C \"$workdir\" clean
+        "
+        rm -f /tmp/ccache.log
+        ccache -z
+
+    - name: Build (second)
+      run: |
+        workdir=$(pwd)
+        docker run                                                             \
+        -v /tmp:/tmp                                                           \
+        -v "$workdir:$workdir"                                                 \
+        -e GEN=ninja                                                           \
+        -e CC='ccache gcc'                                                     \
+        -e CCACHE_DEBUG=1                                                      \
+        -e CXX='ccache g++'                                                    \
+        -e CCACHE_DIR="$workdir/.ccache"                                       \
+        -e CCACHE_LOGFILE=/tmp/ccache.log                                      \
+        -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                      \
+        -e EXTENSION_CONFIGS="$workdir/.github/config/bundled_extensions.cmake" \
+        -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
+        -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
+        -e BUILD_BENCHMARK=1                                                   \
+        -e FORCE_WARN_UNUSED=1                                                 \
+        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
+        bash -c "
+          set -e
+          cat /etc/os-release
+          dnf install -y \
+            ccache       \
+            ninja-build  \
+            perl-IPC-Cmd
+          git config --global --add safe.directory \"$workdir\"
+          make -C \"$workdir\"
+        "
+
+    - name: Ccache stats (second)
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
 
     - name: Print platform
       run: ./build/release/duckdb -c "PRAGMA platform;"
@@ -126,6 +186,9 @@ jobs:
 
     name: Linux CLI (${{ matrix.config.arch }}-musl)
     runs-on: ${{ matrix.config.runner }}
+    env:
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: /tmp/ccache.log
 
     steps:
     - uses: actions/checkout@v4
@@ -137,18 +200,21 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Build
+    - name: Build (first)
       shell: bash
       run: |
-        export PWD=`pwd`
+        workdir=$(pwd)
         docker run                                                          \
-        -v$PWD:$PWD                                                         \
+        -v /tmp:/tmp                                                       \
+        -v "$workdir:$workdir"                                              \
         -e GEN=ninja                                                        \
         -e CC='ccache gcc'                                                  \
+        -e CCACHE_DEBUG=1                                                   \
         -e CXX='ccache g++'                                                 \
-        -e CCACHE_DIR=$PWD/.ccache                                          \
-        -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                     \
-        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake" \
+        -e CCACHE_DIR="$workdir/.ccache"                                    \
+        -e CCACHE_LOGFILE=/tmp/ccache.log                                   \
+        -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                   \
+        -e EXTENSION_CONFIGS="$workdir/.github/config/bundled_extensions.cmake" \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
         -e BUILD_BENCHMARK=1                                                \
@@ -164,9 +230,70 @@ jobs:
             git     \
             make    \
             samurai
-          git config --global --add safe.directory $PWD
-          make -C $PWD
+          git config --global --add safe.directory \"$workdir\"
+          make -C \"$workdir\"
         "
+
+    - name: Ccache stats (first)
+      shell: bash
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
+
+    - name: Clear ccache stats
+      shell: bash
+      run: |
+        workdir=$(pwd)
+        docker run                                                          \
+        -v "$workdir:$workdir"                                              \
+        alpine:3.22                                                         \
+        sh -c "
+          set -e
+          git config --global --add safe.directory \"$workdir\"
+          make -C \"$workdir\" clean
+        "
+        rm -f /tmp/ccache.log
+        ccache -z
+
+    - name: Build (second)
+      shell: bash
+      run: |
+        workdir=$(pwd)
+        docker run                                                          \
+        -v /tmp:/tmp                                                       \
+        -v "$workdir:$workdir"                                              \
+        -e GEN=ninja                                                        \
+        -e CC='ccache gcc'                                                  \
+        -e CCACHE_DEBUG=1                                                   \
+        -e CXX='ccache g++'                                                 \
+        -e CCACHE_DIR="$workdir/.ccache"                                    \
+        -e CCACHE_LOGFILE=/tmp/ccache.log                                   \
+        -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                   \
+        -e EXTENSION_CONFIGS="$workdir/.github/config/bundled_extensions.cmake" \
+        -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
+        -e ENABLE_EXTENSION_AUTOINSTALL=1                                   \
+        -e BUILD_BENCHMARK=1                                                \
+        -e FORCE_WARN_UNUSED=1                                              \
+        alpine:3.22                                                         \
+        sh -c "
+          set -e
+          cat /etc/os-release
+          apk add   \
+            ccache  \
+            cmake   \
+            g++     \
+            git     \
+            make    \
+            samurai
+          git config --global --add safe.directory \"$workdir\"
+          make -C \"$workdir\"
+        "
+
+    - name: Ccache stats (second)
+      shell: bash
+      run: |
+        tail -n 500 /tmp/ccache.log || true
+        ccache -s -vv
 
     - name: Deploy
       shell: bash
