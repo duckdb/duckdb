@@ -215,39 +215,46 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				entries.push_back(i);
 			}
 			ClearUnusedExpressions(entries, setop.table_index);
+			if (entries.size() >= setop.column_count) {
+				// We still need to recurse into the children to populate CTE info, etc.
+				for (auto &child : op.children) {
+					RemoveUnusedColumns remove(*this, true);
+					remove.VisitOperator(*child);
+				}
+
+				return;
+			}
 			if (entries.empty()) {
 				// no columns referenced: this happens in the case of a COUNT(*)
 				// extract the first column
 				entries.push_back(0);
 			}
+			// columns were cleared
+			setop.column_count = entries.size();
+
 			for (idx_t child_idx = 0; child_idx < op.children.size(); child_idx++) {
 				RemoveUnusedColumns remove(*this, true);
 				auto &child = op.children[child_idx];
 
-				if (entries.size() < setop.column_count) {
-					// columns were cleared
-					// push a projection under this child that references the required columns of the union
-					child->ResolveOperatorTypes();
-					auto bindings = child->GetColumnBindings();
-					vector<unique_ptr<Expression>> expressions;
-					expressions.reserve(entries.size());
-					for (auto &column_idx : entries) {
-						expressions.push_back(
-						    make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
-					}
-					auto new_projection =
-					    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-					if (child->has_estimated_cardinality) {
-						new_projection->SetEstimatedCardinality(child->estimated_cardinality);
-					}
-					new_projection->children.push_back(std::move(child));
-					op.children[child_idx] = std::move(new_projection);
+				// we push a projection under this child that references the required columns of the union
+				child->ResolveOperatorTypes();
+				auto bindings = child->GetColumnBindings();
+				vector<unique_ptr<Expression>> expressions;
+				expressions.reserve(entries.size());
+				for (auto &column_idx : entries) {
+					expressions.push_back(
+					    make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
 				}
 
-				// now visit the child
+				auto new_projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+				if (child->has_estimated_cardinality) {
+					new_projection->SetEstimatedCardinality(child->estimated_cardinality);
+				}
+				new_projection->children.push_back(std::move(child));
+				op.children[child_idx] = std::move(new_projection);
+
 				remove.VisitOperator(*op.children[child_idx]);
 			}
-			setop.column_count = entries.size();
 			return;
 		}
 		for (auto &child : op.children) {
