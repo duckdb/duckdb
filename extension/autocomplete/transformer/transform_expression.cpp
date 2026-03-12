@@ -1391,8 +1391,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(base_expr_pr);
 
-	// Apply prefixes in order (from right to left, as they were parsed)
-	for (auto &prefix_expr : prefix_repeat.children) {
+	// Apply prefixes right-to-left so the rightmost (innermost) prefix wraps the base first.
+	for (auto it = prefix_repeat.children.rbegin(); it != prefix_repeat.children.rend(); ++it) {
+		auto &prefix_expr = *it;
 		auto prefix = transformer.Transform<string>(prefix_expr);
 
 		if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
