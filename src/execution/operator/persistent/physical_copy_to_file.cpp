@@ -123,7 +123,7 @@ struct GlobalFileState {
 	atomic<idx_t> num_batches;
 
 	//! Lock for more fine-grained locking when rotating files
-	unique_ptr<StorageLock> file_write_lock_if_rotating;
+	StorageLock file_write_lock_if_rotating;
 };
 
 //===--------------------------------------------------------------------===//
@@ -494,6 +494,9 @@ void CopyToFunctionLocalState::FlushPartitions() {
 	auto &partitions = part_buffer->GetPartitions();
 	auto partition_key_map = part_buffer->GetReverseMap();
 
+	const auto types_without_partition_cols =
+	    LogicalCopyToFile::GetTypesWithoutPartitions(op.expected_types, op.partition_columns, false);
+
 	for (idx_t i = 0; i < partitions.size(); i++) {
 		auto entry = partition_key_map.find(i);
 		if (entry == partition_key_map.end()) {
@@ -508,41 +511,35 @@ void CopyToFunctionLocalState::FlushPartitions() {
 
 		auto local_copy_state = op.function.copy_to_initialize_local(context, *op.bind_data);
 
-		auto &partition = partitions[i];
-		auto analyze_result = CopyFunctionAnalyzeBatch(*partition, op.batch_size, op.batch_size_bytes);
-		if (!analyze_result.TooSmall() && op.write_partition_columns) {
-			op.FlushBatch(context.client, gstate, info.global_state, create_file_state_fun, local_copy_state,
-			              std::move(partition), PhysicalCopyToFilePhase::COMBINE);
-		} else {
-			unique_ptr<ColumnDataCollection> partition_batch;
-			ColumnDataAppendState partition_batch_append_state;
+		unique_ptr<ColumnDataCollection> partition_batch;
+		ColumnDataAppendState partition_batch_append_state;
 
-			// push the chunks into the write state
-			for (auto &chunk : partitions[i]->Chunks()) {
-				if (!partition_batch) {
-					partition_batch = make_uniq<ColumnDataCollection>(context.client, op.expected_types);
-					partition_batch->InitializeAppend(partition_batch_append_state);
-				}
+		// push the chunks into the write state
+		for (auto &chunk : partitions[i]->Chunks()) {
+			if (!partition_batch) {
+				partition_batch = make_uniq<ColumnDataCollection>(
+				    context.client, op.write_partition_columns ? op.expected_types : types_without_partition_cols);
+				partition_batch->InitializeAppend(partition_batch_append_state);
+			}
 
-				if (op.write_partition_columns) {
-					partition_batch->Append(partition_batch_append_state, chunk);
-				} else {
-					DataChunk filtered_chunk;
-					SetDataWithoutPartitions(filtered_chunk, chunk, op.expected_types, op.partition_columns);
-					partition_batch->Append(partition_batch_append_state, filtered_chunk);
-				}
+			if (op.write_partition_columns) {
+				partition_batch->Append(partition_batch_append_state, chunk);
+			} else {
+				DataChunk filtered_chunk;
+				SetDataWithoutPartitions(filtered_chunk, chunk, op.expected_types, op.partition_columns);
+				partition_batch->Append(partition_batch_append_state, filtered_chunk);
+			}
 
-				analyze_result = CopyFunctionAnalyzeBatch(*partition_batch, op.batch_size, op.batch_size_bytes);
-				if (!analyze_result.TooSmall()) {
-					partition_batch_append_state.current_chunk_state.handles.clear();
-					op.FlushBatch(context.client, gstate, info.global_state, create_file_state_fun, local_copy_state,
-					              std::move(partition_batch), PhysicalCopyToFilePhase::COMBINE);
-				}
+			const auto analyze_result = CopyFunctionAnalyzeBatch(*partition_batch, op.batch_size, op.batch_size_bytes);
+			if (!analyze_result.TooSmall()) {
+				partition_batch_append_state.current_chunk_state.handles.clear();
+				op.FlushBatch(context.client, gstate, info.global_state, create_file_state_fun, local_copy_state,
+				              std::move(partition_batch), PhysicalCopyToFilePhase::COMBINE);
 			}
 		}
 
 		local_copy_state.reset();
-		partition.reset();
+		partitions[i].reset();
 		gstate.FinishPartitionWrite(info);
 	}
 	ResetPartitionedAppendState();
@@ -862,7 +859,7 @@ void PhysicalCopyToFile::FlushBatch(
 			file_state_ptr = create_file_state_fun(*global_guard);
 		}
 		auto &file_state = *file_state_ptr;
-		auto &file_lock = *file_state_ptr->file_write_lock_if_rotating;
+		auto &file_lock = file_state_ptr->file_write_lock_if_rotating;
 		if (RotateNow(file_state)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
 			auto owned_file_state = std::move(file_state_ptr);
