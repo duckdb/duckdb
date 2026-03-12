@@ -11,16 +11,17 @@ class LogicalOperator;
 
 class ProjectionPullup {
 public:
-	explicit ProjectionPullup(Optimizer &optimizer_p, LogicalOperator &root) : optimizer(optimizer_p), root(root) {
+	explicit ProjectionPullup(Optimizer &optimizer_p, unique_ptr<LogicalOperator> &root) : optimizer(optimizer_p), root(root) {
 	}
 
 	void Optimize(unique_ptr<LogicalOperator> &op);
 	void PopParents(const LogicalOperator &op);
 	void InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, unique_ptr<LogicalOperator> &child, bool stop_at_op);
+	optional_ptr<LogicalOperator> FindParent(LogicalOperator &target, LogicalOperator &current);
 
 private:
 	Optimizer &optimizer;
-	LogicalOperator &root;
+	unique_ptr<LogicalOperator> &root;
 	vector<reference<LogicalOperator>> parents;
 };
 

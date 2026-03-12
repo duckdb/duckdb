@@ -22,7 +22,7 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 
 # These optimizers introduce projections. I disable them for now
 statement ok
-PRAGMA disabled_optimizers = 'column_lifetime,statistics_propagation'
+set disabled_optimizers to 'common_subplan,column_lifetime,compressed_materialization,statistics_propagation';
 
 # Projection with expressions used in join condition. Cannot pull up
 query II
@@ -104,3 +104,18 @@ select * from(select a.a, b.b from (select * from t1) a join (select * from t2) 
 semi join(select c.c, d.d as newD from (select * from t3) c join (select * from t4) d on c.c = d.d) as join34 on join12.a = join34.c;
 ----
 logical_opt	<!REGEX>:.*INNER.*PROJECTION.*
+
+statement ok
+create or replace table t1 as select range i from range(10);
+
+statement ok
+create or replace table t2 as select range i from range(100);
+
+statement ok
+create view v1 as select i, i * 42 j from t1 join t2 using (i);
+
+# Pullup projections with non colref expressions
+query II
+explain select i, j1.j from v1 j1 join v1 j2 using (i);
+----
+logical_opt	<!REGEX>:.*JOIN.*PROJECTION.*
