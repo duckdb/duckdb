@@ -55,7 +55,8 @@ void ProjectionPullup::InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, 
 		ColumnBindingReplacer replacer;
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 			const auto &old_binding = child_bindings[col_idx];
-			replacer.replacement_bindings.emplace_back(old_binding, ColumnBinding(proj_index, ProjectionIndex(col_idx)));
+			replacer.replacement_bindings.emplace_back(old_binding,
+			                                           ColumnBinding(proj_index, ProjectionIndex(col_idx)));
 		}
 
 		auto new_projection = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
@@ -274,8 +275,8 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 				if (existing_bindings.find(insert_bindings[i]) == existing_bindings.end()) {
 					proj.expressions.push_back(
 					    make_uniq<BoundColumnRefExpression>(insert_types[i], insert_bindings[i]));
-					replacer.replacement_bindings.emplace_back(insert_bindings[i],
-					                                           ColumnBinding(proj.table_index, ProjectionIndex(next_col)));
+					replacer.replacement_bindings.emplace_back(
+					    insert_bindings[i], ColumnBinding(proj.table_index, ProjectionIndex(next_col)));
 					next_col++;
 				}
 			}

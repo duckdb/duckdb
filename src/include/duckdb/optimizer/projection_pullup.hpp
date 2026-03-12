@@ -11,7 +11,8 @@ class LogicalOperator;
 
 class ProjectionPullup {
 public:
-	explicit ProjectionPullup(Optimizer &optimizer_p, unique_ptr<LogicalOperator> &root) : optimizer(optimizer_p), root(root) {
+	explicit ProjectionPullup(Optimizer &optimizer_p, unique_ptr<LogicalOperator> &root)
+	    : optimizer(optimizer_p), root(root) {
 	}
 
 	void Optimize(unique_ptr<LogicalOperator> &op);
