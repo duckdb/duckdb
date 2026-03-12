@@ -70,7 +70,7 @@ string CreateTriggerInfo::ToString() const {
 		break;
 	}
 	ss << " ON ";
-	ss << QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
+	ss << base_table->ToString();
 	if (for_each_row) {
 		ss << " FOR EACH ROW";
 	}
