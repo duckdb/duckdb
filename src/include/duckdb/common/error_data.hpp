@@ -58,6 +58,9 @@ public:
 	DUCKDB_API void AddQueryLocation(const ParsedExpression &ref);
 	DUCKDB_API void AddQueryLocation(const TableRef &ref);
 
+	//! Add a hint/suggestion to the error message (appended after the main message)
+	DUCKDB_API void AddHint(const string &hint);
+
 private:
 	//! Whether this ErrorData contains an exception or not
 	bool initialized;

@@ -53,6 +53,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/result_set_manager.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -208,6 +209,10 @@ void ClientContext::Destroy() {
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 	error.FinalizeError();
+	// Allow extensions to inspect and modify the error before finalization
+	for (auto &callback : ExtensionCallback::Iterate(*this)) {
+		callback->OnError(*this, error, query);
+	}
 	if (Settings::Get<ErrorsAsJSONSetting>(*this)) {
 		error.ConvertErrorToJSON();
 	} else {
@@ -218,6 +223,11 @@ void ClientContext::ProcessError(ErrorData &error, const string &query) const {
 template <class T>
 unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	ProcessError(error, query);
+	return make_uniq<T>(std::move(error));
+}
+
+template <class T>
+unique_ptr<T> ClientContext::WrapError(ErrorData error) {
 	return make_uniq<T>(std::move(error));
 }
 
@@ -824,7 +834,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	auto lock = LockContext();
 	auto pending = PendingQueryPreparedInternal(*lock, query, prepared, parameters);
 	if (pending->HasError()) {
-		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
+		return WrapError<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return pending->ExecuteInternal(*lock);
 }
@@ -868,7 +878,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
                                                             const PendingQueryParameters &parameters, bool verify) {
 	auto pending = PendingQueryInternal(lock, std::move(statement), parameters, verify);
 	if (pending->HasError()) {
-		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
+		return WrapError<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return ExecutePendingQueryInternal(lock, *pending);
 }
@@ -1017,7 +1027,7 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
 	auto pending_query = PendingQuery(std::move(statement), parameters);
 	if (pending_query->HasError()) {
-		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
+		return WrapError<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();
 }
@@ -1055,7 +1065,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 		auto has_result = pending_query->properties.return_type == StatementReturnType::QUERY_RESULT;
 		unique_ptr<QueryResult> current_result;
 		if (pending_query->HasError()) {
-			current_result = ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
+			current_result = WrapError<MaterializedQueryResult>(pending_query->GetErrorObject());
 		} else {
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 		}
@@ -1393,7 +1403,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	auto &expected_columns = relation->Columns();
 	auto pending = PendingQueryInternal(*lock, relation, false);
 	if (!pending->success) {
-		return ErrorResult<MaterializedQueryResult>(pending->GetErrorObject());
+		return WrapError<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 
 	unique_ptr<QueryResult> result;

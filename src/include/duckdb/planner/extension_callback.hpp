@@ -37,9 +37,17 @@ public:
 	//! Called after an extension fails to load loading
 	virtual void OnExtensionLoadFail(DatabaseInstance &db, const string &name, const ErrorData &error) {
 	}
+	//! Called when a query error occurs before it is returned to the client.
+	//! Extensions can inspect and modify the error (e.g., add hints, rewrite messages).
+	//! The query string is provided for context (may be empty).
+	virtual void OnError(const ClientContext &context, ErrorData &error, const string &query) {
+	}
 
 	static void Register(DBConfig &config, shared_ptr<ExtensionCallback> extension);
 	static ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> Iterate(ClientContext &context) {
+		return ExtensionCallbackManager::Get(context).ExtensionCallbacks();
+	}
+	static ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> Iterate(const ClientContext &context) {
 		return ExtensionCallbackManager::Get(context).ExtensionCallbacks();
 	}
 	static ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> Iterate(DatabaseInstance &db) {

@@ -341,6 +341,12 @@ class QuackLoadExtension : public ExtensionCallback {
 	void OnExtensionLoaded(DatabaseInstance &db, const string &name) override {
 		test_loaded_extension_list.insert(name);
 	}
+	void OnError(const ClientContext &context, ErrorData &error, const string &query) override {
+		// Demo: if the error mentions a missing table called "quack", suggest using the quack() function instead
+		if (error.Type() == ExceptionType::CATALOG && StringUtil::Contains(error.RawMessage(), "quack")) {
+			error.AddHint("Hint: Did you mean to use the quack() table function?");
+		}
+	}
 };
 
 static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
