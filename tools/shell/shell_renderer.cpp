@@ -2,6 +2,7 @@
 
 #include "shell_state.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/box_renderer_context.hpp"
 #include "shell_highlight.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include <stdexcept>
@@ -1680,7 +1681,8 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
 	auto &con = *state.conn;
 	try {
-		render_state = renderer.Prepare(*con.context, result.metadata.column_names, materialized.Collection());
+		duckdb::ClientBoxRendererContext render_context(*con.context);
+		render_state = renderer.Prepare(render_context, result.metadata.column_names, materialized.Collection());
 	} catch (std::exception &ex) {
 		// store the error - throw on render
 		error_str = ex.what();

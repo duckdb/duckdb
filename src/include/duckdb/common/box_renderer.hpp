@@ -14,6 +14,7 @@
 #include "duckdb/common/list.hpp"
 
 namespace duckdb {
+class BoxRendererContext;
 class ColumnDataCollection;
 class ColumnDataRowCollection;
 
@@ -150,13 +151,13 @@ class BoxRenderer {
 public:
 	explicit BoxRenderer(BoxRendererConfig config_p = BoxRendererConfig());
 
-	string ToString(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
+	string ToString(BoxRendererContext &context, const vector<string> &names, const ColumnDataCollection &op);
 
-	unique_ptr<BoxRendererState> Prepare(ClientContext &context, const vector<string> &names,
+	unique_ptr<BoxRendererState> Prepare(BoxRendererContext &context, const vector<string> &names,
 	                                     const ColumnDataCollection &op);
-	void Render(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op,
+	void Render(BoxRendererContext &context, const vector<string> &names, const ColumnDataCollection &op,
 	            BaseResultRenderer &ss);
-	void Print(ClientContext &context, const vector<string> &names, const ColumnDataCollection &op);
+	void Print(BoxRendererContext &context, const vector<string> &names, const ColumnDataCollection &op);
 
 	static string TryFormatLargeNumber(const string &numeric, char decimal_sep);
 	static string TruncateValue(const string &value, idx_t column_width, idx_t &pos, idx_t &current_render_width);

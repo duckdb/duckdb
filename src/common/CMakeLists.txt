@@ -33,6 +33,7 @@ add_library_unity(
   assert.cpp
   bind_helpers.cpp
   box_renderer.cpp
+  box_renderer_context.cpp
   cgroups.cpp
   csv_writer.cpp
   complex_json.cpp
