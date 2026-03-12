@@ -1380,7 +1380,7 @@ GroupByNode PEGTransformerFactory::TransformGroupByClause(PEGTransformer &transf
 }
 
 struct GroupingExpressionMap {
-	parsed_expression_map_t<idx_t> map;
+	parsed_expression_map_t<ProjectionIndex> map;
 };
 
 GroupByNode PEGTransformerFactory::TransformGroupByExpressions(PEGTransformer &transformer,
@@ -1412,7 +1412,7 @@ static void CheckGroupingSetCubes(idx_t current_count, idx_t cube_count) {
 	}
 }
 
-static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
+static GroupingSet VectorToGroupingSet(vector<ProjectionIndex> &indexes) {
 	GroupingSet result;
 	for (idx_t i = 0; i < indexes.size(); i++) {
 		result.insert(indexes[i]);
@@ -1421,7 +1421,7 @@ static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
 }
 
 void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
-                                                 GroupByNode &result, vector<idx_t> &result_set) {
+                                                 GroupByNode &result, vector<ProjectionIndex> &result_set) {
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
@@ -1432,9 +1432,9 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
 		}
 	}
 	auto entry = map.map.find(*expression);
-	idx_t result_idx;
+	ProjectionIndex result_idx;
 	if (entry == map.map.end()) {
-		result_idx = result.group_expressions.size();
+		result_idx = ProjectionIndex(result.group_expressions.size());
 		map.map[*expression] = result_idx;
 		result.group_expressions.push_back(std::move(expression));
 	} else {
@@ -1462,7 +1462,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 		result_sets.emplace_back();
 
 	} else if (StringUtil::CIEquals(group_by_expr->name, "Expression")) {
-		vector<idx_t> indexes;
+		vector<ProjectionIndex> indexes;
 		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(group_by_expr);
 		AddGroupByExpression(std::move(expr), map, result, indexes);
 		result_sets.push_back(VectorToGroupingSet(indexes));
@@ -1488,7 +1488,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 
 		vector<GroupingSet> unfolding_sets;
 		for (auto &expr_node : expr_list) {
-			vector<idx_t> indexes;
+			vector<ProjectionIndex> indexes;
 			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(expr_node);
 			AddGroupByExpression(std::move(expr), map, result, indexes);
 

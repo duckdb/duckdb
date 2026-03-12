@@ -83,7 +83,7 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 	idx_t offset = 0;
 	idx_t new_col_idx = 0;
 	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
-		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
+		auto current_binding = ColumnBinding(table_idx, ProjectionIndex(col_idx + offset));
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
 			// this entry is not referred to, erase it from the set of expressions
@@ -106,7 +106,8 @@ void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, TableIndex tab
 		}
 		if (should_replace) {
 			// column is used but the ColumnBinding has changed because of removed columns
-			auto created_bindings = ReplaceBinding(current_binding, ColumnBinding(table_idx, new_col_idx));
+			auto created_bindings =
+			    ReplaceBinding(current_binding, ColumnBinding(table_idx, ProjectionIndex(new_col_idx)));
 			new_col_idx += created_bindings;
 		} else {
 			new_col_idx++;
@@ -331,7 +332,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		RemoveUnusedColumns rhs_child_optimizer(*this, true);
 		rhs_child_optimizer.VisitOperator(cte.children[1]);
 
-		unordered_set<idx_t> referenced_columns_in_rhs;
+		unordered_set<ProjectionIndex> referenced_columns_in_rhs;
 		for (auto &entry : cte_map_entry.column_references) {
 			referenced_columns_in_rhs.insert(entry.first.column_index);
 		}
@@ -346,10 +347,10 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			vector<unique_ptr<Expression>> expressions;
 			if (referenced_columns_in_rhs.empty()) {
 				// if we have no columns selected just select the first column
-				referenced_columns_in_rhs.insert(0);
+				referenced_columns_in_rhs.emplace(0);
 			}
 			for (idx_t i = 0; i < bindings.size(); i++) {
-				if (referenced_columns_in_rhs.find(i) != referenced_columns_in_rhs.end()) {
+				if (referenced_columns_in_rhs.find(ProjectionIndex(i)) != referenced_columns_in_rhs.end()) {
 					expressions.push_back(make_uniq<BoundColumnRefExpression>(cte.children[0]->types[i], bindings[i]));
 				}
 			}
@@ -441,7 +442,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 }
 
-static idx_t GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t filter_idx) {
+static ProjectionIndex GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t filter_idx) {
 	// Find the index in the column_ids that contains the column referenced by the filter
 	auto it = std::find_if(column_ids.begin(), column_ids.end(), [&filter_idx](const ColumnIndex &column_index) {
 		return column_index.GetPrimaryIndex() == filter_idx;
@@ -449,7 +450,7 @@ static idx_t GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t f
 	if (it == column_ids.end()) {
 		throw InternalException("Could not find column index for table filter");
 	}
-	return static_cast<idx_t>(std::distance(column_ids.begin(), it));
+	return ProjectionIndex(static_cast<idx_t>(std::distance(column_ids.begin(), it)));
 }
 
 //! returns: found_path, depth of the found path
@@ -496,8 +497,9 @@ std::pair<column_index_set::iterator, idx_t> FindShortestMatchingPath(column_ind
 }
 
 void RemoveUnusedColumns::WritePushdownExtractColumns(
-    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
-    const std::function<idx_t(const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type)> &callback) {
+    ReferencedColumn &col,
+    const std::function<ProjectionIndex(const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type)>
+        &callback) {
 	//! For each struct extract, replace the expression with a BoundColumnRefExpression
 	//! The expression references a binding created for the extracted path, 1 per unique path
 	for (auto &struct_extract : col.struct_extracts) {
@@ -563,10 +565,10 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 	vector<unique_ptr<Expression>> expressions;
 	auto &context = this->context;
 
-	column_index_map<idx_t> new_bindings;
+	column_index_map<ProjectionIndex> new_bindings;
 	idx_t expression_idx = 0;
 	for (idx_t i = 0; i < expression_count; i++) {
-		auto binding = ColumnBinding(proj.table_index, i);
+		auto binding = ColumnBinding(proj.table_index, ProjectionIndex(i));
 		auto entry = column_references.find(binding);
 		if (entry == column_references.end()) {
 			//! Already removed by the call to ClearUnusedExpressions
@@ -584,8 +586,16 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 		idx_t start = expressions.size();
 		//! Pushdown Extract is supported, emit a column for every field
 		WritePushdownExtractColumns(
-		    entry->first, entry->second, i, column_type,
-		    [&](const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type) -> idx_t {
+		    entry->second,
+		    [&](const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type) -> ProjectionIndex {
+			    ColumnIndex full_path(i);
+			    full_path.AddChildIndex(extract_path);
+			    auto new_binding_entry = new_bindings.find(full_path);
+			    if (new_binding_entry != new_bindings.end()) {
+				    // already exists - emit it directly
+				    return new_binding_entry->second;
+			    }
+			    // binding does not exist - create it
 			    auto target = make_uniq<BoundColumnRefExpression>(column_type, original_binding);
 			    target->SetAlias(expr.GetAlias());
 			    auto new_extract = ConstructStructExtractFromPath(context, std::move(target), extract_path);
@@ -593,13 +603,10 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 				    auto cast = BoundCastExpression::AddCastToType(context, std::move(new_extract), *cast_type);
 				    new_extract = std::move(cast);
 			    }
-			    ColumnIndex full_path(i);
-			    full_path.AddChildIndex(extract_path);
-			    auto it = new_bindings.emplace(full_path, expressions.size()).first;
-			    if (it->second == expressions.size()) {
-				    expressions.push_back(std::move(new_extract));
-			    }
-			    return it->second;
+
+			    auto new_binding_idx = ColumnBinding::PushExpression(expressions, std::move(new_extract));
+			    new_bindings.emplace(full_path, new_binding_idx);
+			    return new_binding_idx;
 		    });
 		for (; start < expressions.size(); start++) {
 			VisitExpression(&expressions[start]);
@@ -614,8 +621,9 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 		auto &get = op.Cast<LogicalGet>();
 		//! For all referenced struct fields, check if the scan supports pushing down the extract
 		auto &column_ids = get.GetColumnIds();
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto entry = column_references.find(ColumnBinding(get.table_index, i));
+		for (auto proj_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
+			auto column_binding = ColumnBinding(get.table_index, proj_idx);
+			auto entry = column_references.find(column_binding);
 			if (entry == column_references.end()) {
 				//! Binding is not referenced, skip
 				continue;
@@ -629,7 +637,8 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				//! We're already not using pushdown extract for this column, no need to check with the scan
 				continue;
 			}
-			auto logical_column_index = LogicalIndex(column_ids[i].GetPrimaryIndex());
+			auto &column_id = get.GetColumnIndex(column_binding);
+			auto logical_column_index = LogicalIndex(column_id.GetPrimaryIndex());
 			if (!get.function.supports_pushdown_extract || get.function.statistics) {
 				//! Either 'statistics_extended' needs to be set or 'statistics' needs to be NULL
 				col.supports_pushdown_extract = PushdownExtractSupport::DISABLED;
@@ -646,9 +655,9 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &proj = op.Cast<LogicalProjection>();
-		for (idx_t idx = 0; idx < proj.expressions.size(); idx++) {
-			auto &expr = *proj.expressions[idx];
-			auto record = column_references.find(ColumnBinding(proj.table_index, idx));
+		for (auto proj_idx : ProjectionIndex::GetIndexes(proj.expressions.size())) {
+			auto &expr = *proj.expressions[proj_idx.index];
+			auto record = column_references.find(ColumnBinding(proj.table_index, proj_idx));
 			if (record == column_references.end()) {
 				//! Not referenced, skip
 				continue;
@@ -694,17 +703,17 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	//! The newly written column ids (same size as 'original_ids')
 	vector<ColumnIndex> new_column_ids;
 	//! The old index that the new one is based on (same size as 'new_column_ids')
-	vector<idx_t> original_ids;
+	vector<ProjectionIndex> original_ids;
 	//! Map of column index to binding, for pushed down struct extracts
-	column_index_map<idx_t> child_map;
+	column_index_map<ProjectionIndex> child_map;
 	//! Created bindings per original_column (for pushdown extract verification)
 	unordered_map<idx_t, idx_t> created_bindings;
 
 	// Create "selection vector" that contains all indices of the old 'column_ids' of the LogicalGet
 	//! i.e: This contains all the columns of the table
-	vector<idx_t> proj_sel;
-	for (idx_t col_idx = 0; col_idx < old_column_ids.size(); col_idx++) {
-		proj_sel.push_back(col_idx);
+	vector<ProjectionIndex> proj_sel;
+	for (auto proj_idx : ProjectionIndex::GetIndexes(old_column_ids.size())) {
+		proj_sel.push_back(proj_idx);
 	}
 	// Create a copy so we can later check the difference between these two:
 	//! 1. The set of filtered ids containing only the columns referenced by the projection expressions (proj_sel)
@@ -743,15 +752,14 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	bool has_pushdown_extract = false;
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto &col_sel_idx : col_sel) {
-		auto &column_type = get.GetColumnType(old_column_ids[col_sel_idx]);
+		auto &logical_column_id = old_column_ids[col_sel_idx.index];
+		auto &column_type = get.GetColumnType(logical_column_id);
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
 			throw InternalException("RemoveUnusedColumns - could not find referenced column");
 		}
 		if (entry->second.child_columns.empty() ||
 		    entry->second.supports_pushdown_extract != PushdownExtractSupport::ENABLED) {
-			auto &logical_column_id = old_column_ids[col_sel_idx];
-
 			original_ids.emplace_back(col_sel_idx);
 			if (logical_column_id.IsPushdownExtract()) {
 				//! RemoveUnusedColumns is also used by other optimizers,
@@ -764,12 +772,12 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 			}
 			continue;
 		}
-		auto struct_column_index = old_column_ids[col_sel_idx].GetPrimaryIndex();
+		auto struct_column_index = logical_column_id.GetPrimaryIndex();
 
 		//! Pushdown Extract is supported, emit a column for every field
 		WritePushdownExtractColumns(
-		    entry->first, entry->second, col_sel_idx, column_type,
-		    [&](const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type) -> idx_t {
+		    entry->second,
+		    [&](const ColumnIndex &extract_path, optional_ptr<const LogicalType> cast_type) -> ProjectionIndex {
 			    ColumnIndex new_index(struct_column_index, {extract_path});
 			    new_index.SetPushdownExtractType(column_type, cast_type);
 
@@ -817,7 +825,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	// with the "selection vector" that includes filter columns
 	idx_t col_idx = 0;
 	get.projection_ids.clear();
-	vector<idx_t> filtered_original_ids;
+	vector<ProjectionIndex> filtered_original_ids;
 	//! Find matching indices between the proj_sel and the col_sel
 	for (auto to_keep : proj_sel) {
 		for (; col_idx < col_sel.size(); col_idx++) {
@@ -831,7 +839,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	for (auto col : filtered_original_ids) {
 		for (; col_idx < original_ids.size(); col_idx++) {
 			if (original_ids[col_idx] == col) {
-				get.projection_ids.push_back(col_idx);
+				get.projection_ids.push_back(ProjectionIndex(col_idx));
 			} else if (original_ids[col_idx] > col) {
 				break;
 			}
@@ -839,7 +847,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	}
 }
 
-CTERefPruner::CTERefPruner(const TableIndex cte_index, const unordered_set<idx_t> &referenced_columns)
+CTERefPruner::CTERefPruner(const TableIndex cte_index, const unordered_set<ProjectionIndex> &referenced_columns)
     : cte_index(cte_index), referenced_columns(referenced_columns) {
 }
 
@@ -856,13 +864,14 @@ void CTERefPruner::VisitOperator(LogicalOperator &op) {
 		// skipped.
 		idx_t skipped = 0;
 		for (idx_t i = 0; i < cte_ref.chunk_types.size(); i++) {
-			if (referenced_columns.find(i) != referenced_columns.end()) {
+			if (referenced_columns.find(ProjectionIndex(i)) != referenced_columns.end()) {
 				// This column is referenced, keep it and add any necessary binding replacements for the skipped columns
 				// if necessary.
 				types.push_back(cte_ref.chunk_types[i]);
 				if (skipped > 0) {
-					binding_replacements.push_back(ReplacementBinding(ColumnBinding(cte_ref.table_index, i),
-					                                                  ColumnBinding(cte_ref.table_index, i - skipped)));
+					ColumnBinding source_binding(cte_ref.table_index, ProjectionIndex(i));
+					ColumnBinding target_binding(cte_ref.table_index, ProjectionIndex(i - skipped));
+					binding_replacements.push_back(ReplacementBinding(source_binding, target_binding));
 				}
 			} else {
 				skipped++;
