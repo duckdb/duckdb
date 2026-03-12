@@ -93,7 +93,86 @@ jobs:
           artifact_name: linux-base-build
 
   regression-test-benchmark-runner:
-    name: Regression Tests
+    name: Regression Tests (${{ matrix.name }})
+    needs:
+      - linux-base
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ingestion Perf
+            benchmarks: .github/regression/ingestion.csv
+          - name: Micro + TPCH + TPCH-PARQUET + TPCDS
+            benchmarks: .github/regression/micro.csv .github/regression/tpch.csv .github/regression/tpch_parquet.csv .github/regression/tpcds.csv
+          - name: H2OAI + IMDB + CSV
+            benchmarks: .github/regression/h2oai.csv .github/regression/imdb.csv .github/regression/csv.csv
+          - name: RealNest
+            benchmarks: .github/regression/realnest.csv
+            data_setup: |
+              mkdir -p duckdb_benchmark_data
+              wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install
+        run: make toolsci && pip install requests
+
+      - name: Download current release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-release-build
+          path: build/current
+
+      - name: Extract current release artifact
+        run: |
+          rm -rf build/current/release
+          tar -xzf build/current/release-artifact.tar.gz -C build/current
+
+      - name: Download base artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-base-build
+          path: build/base
+
+      - name: Extract base artifact
+        run: |
+          rm -rf build/base/release
+          tar -xzf build/base/release-artifact.tar.gz -C build/base
+
+      - name: Prepare benchmark data
+        if: ${{ matrix.data_setup }}
+        run: ${{ matrix.data_setup }}
+
+      - name: Run regression benchmarks
+        run: |
+          status=0
+
+          for benchmark in ${{ matrix.benchmarks }}; do
+            extra_args=(--clear-benchmark-cache)
+            if [[ "$benchmark" == ".github/regression/realnest.csv" ]]; then
+              extra_args=()
+            fi
+
+            echo "::group::$(basename "$benchmark" .csv)"
+            if ! python scripts/regression/test_runner.py \
+              --old build/base/release/benchmark/benchmark_runner \
+              --new build/current/release/benchmark/benchmark_runner \
+              --benchmarks "$benchmark" \
+              --verbose \
+              --threads 2 \
+              "${extra_args[@]}"; then
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+
+          exit $status
+
+  regression-test-fivetran:
+    name: Regression Test Fivetran
+    if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
     needs:
       - linux-base
     runs-on: ubuntu-24.04
@@ -105,7 +184,6 @@ jobs:
         run: make toolsci && pip install requests
 
       - name: Checkout Private Regression
-        if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
         uses: actions/checkout@v4
         with:
           repository: duckdblabs/fivetran_regression
@@ -135,57 +213,9 @@ jobs:
           rm -rf build/base/release
           tar -xzf build/base/release-artifact.tar.gz -C build/base
 
-      - name: Regression Test Fivetran
-        if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
+      - name: Run regression benchmark
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test Micro
-        if: always()
-        run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test Ingestion Perf
-        if: always()
-        run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/ingestion.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test TPCH
-        if: always()
-        run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test TPCH-PARQUET
-        if: always()
-        run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test TPCDS
-        if: always()
-        run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test H2OAI
-        if: always()
-        run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test IMDB
-        if: always()
-        run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test CSV
-        if: always()
-        run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/csv.csv --verbose --threads 2 --clear-benchmark-cache
-
-      - name: Regression Test RealNest
-        if: always()
-        run: |
-          mkdir -p duckdb_benchmark_data
-          wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/realnest.csv --verbose --threads 2
 
   regression-test-storage:
     name: Storage Size Regression Test
