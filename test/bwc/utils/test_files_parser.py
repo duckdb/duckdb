@@ -56,7 +56,7 @@ def parse_excluded_tests(path):
     with open(path) as f:
         for line in f:
             stripped = line.strip()
-            if len(stripped) > 0 and line[0] != '#':
+            if len(stripped) > 0 and stripped[0] != '#':
                 exclusion_list[stripped] = True
     return exclusion_list
 
