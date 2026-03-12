@@ -53,6 +53,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install tools
+        run: make toolsci
+
+      - uses: ./.github/actions/ccache-action
+
       - name: Build current release
         if: ${{ inputs.build_current_release != 'false' }}
         uses: ./.github/actions/linux_release_build

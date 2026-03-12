@@ -225,6 +225,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install tools
+      run: make toolsci
+
+    - uses: ./.github/actions/ccache-action
+
     - uses: ./.github/actions/linux_release_build
       with:
         artifact_name: linux-release-build

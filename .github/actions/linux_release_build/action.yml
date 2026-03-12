@@ -31,12 +31,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install tools
-      shell: bash
-      run: make toolsci
-
-    - uses: ./.github/actions/ccache-action
-
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11.1
       with:
