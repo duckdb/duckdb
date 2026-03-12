@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/progress_bar/progress_bar_display.hpp"
 #include "duckdb/common/unicode_bar.hpp"
 #include "duckdb/common/progress_bar/unscented_kalman_filter.hpp"
