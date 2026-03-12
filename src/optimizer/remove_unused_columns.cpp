@@ -405,7 +405,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			return;
 		}
 		everything_referenced = true;
-		break;
+		// We may opt out here, but we still need to traverse the left-hand side of the CTE
+		RemoveUnusedColumns remove(*this, true);
+		remove.VisitOperator(*cte.children[0]);
+		return;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		auto &cte_ref = op.Cast<LogicalCTERef>();
