@@ -90,7 +90,7 @@ SettingLookupResult FileOpener::TryGetCurrentSetting(optional_ptr<FileOpener> op
 }
 
 SettingLookupResult FileOpener::TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) {
-	return this->TryGetCurrentSetting(key, result);
+	return this->TryGetCurrentSetting(key, result, info);
 }
 // LCOV_EXCL_STOP
 } // namespace duckdb

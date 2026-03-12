@@ -57,7 +57,7 @@ public:
 		if (info) {
 			lookup_result = TryGetCurrentSetting(opener, key, output, *info);
 		} else {
-			lookup_result = TryGetCurrentSetting(opener, key, output, *info);
+			lookup_result = TryGetCurrentSetting(opener, key, output);
 		}
 
 		if (lookup_result) {
