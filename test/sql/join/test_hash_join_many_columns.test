@@ -1,6 +1,6 @@
-# name: test/sql/join/inner/test_hash_join_many_columns.test
+# name: test/sql/join/test_hash_join_many_columns.test
 # description: Divide by 0 in GetPartitioningSpaceRequirement, inlined by PhysicalHashJoin::PrepareFinalize when running a query with 20k columns (PR #21271)
-# group: [inner]
+# group: [join]
 
 statement ok
 SET threads=1;
