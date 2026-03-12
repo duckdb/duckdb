@@ -227,104 +227,119 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
 	}
 }
 
-// Given two relations, here is where we considers the filter(s) that join them.
-// This could use some work when it comes to join conditions that are not equality join conditions
+// Extract the comparison type (EQUAL, LESSTHAN, etc.) from a join filter expression.
+static ExpressionType GetComparisonType(FilterInfoWithTotalDomains &filter) {
+	ExpressionType comparison_type = ExpressionType::INVALID;
+	ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			comparison_type = expr.GetExpressionType();
+		}
+	});
+	return comparison_type;
+}
+
+// Apply the denominator multiplier for a given comparison type and effective distinct count.
+static double ApplyComparisonRatio(double base_denom, ExpressionType comparison_type, double effective_d) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return base_denom * effective_d;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		// Assume this blows up, but use the tdom to bound it a bit.
+		return base_denom * pow(effective_d, 2.0 / 3.0);
+	default:
+		return base_denom;
+	}
+}
+
+double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
+	auto raw_d = filter.GetDistinctCount();
+	// Cap D per side: a filtered relation with N rows cannot contribute more than N distinct
+	// join-key values, regardless of what the full-table HLL reports.
+	// Use per-column distinct counts from UpdateTotalDomains so each side is capped
+	// independently, avoiding the min(|LHS|, |RHS|) pitfall that always removes selectivity.
+	auto left_card = GetNumerator(*filter.filter_info->left_relation_set);
+	auto right_card = GetNumerator(*filter.filter_info->right_relation_set);
+
+	auto d_left = GetDistinctCountForBinding(filter.filter_info->left_binding);
+	auto d_right = GetDistinctCountForBinding(filter.filter_info->right_binding);
+	if (d_left == 0) {
+		d_left = raw_d;
+	}
+	if (d_right == 0) {
+		d_right = raw_d;
+	}
+	auto d_left_eff = left_card > 0 ? MinValue(d_left, left_card) : d_left;
+	auto d_right_eff = right_card > 0 ? MinValue(d_right, right_card) : d_right;
+	auto effective_d = MaxValue(d_left_eff, d_right_eff);
+
+	auto comparison_type = GetComparisonType(filter);
+	if (comparison_type == ExpressionType::INVALID) {
+		// No comparison operator found; apply effective_d directly.
+		return base_denom * effective_d;
+	}
+	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
+}
+
+double CardinalityEstimator::CalculateLeftJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
+	// For LEFT joins, cap the effective distinct count at |RHS|.
+	// This makes the denominator min(D, |RHS|), so the estimate equals:
+	//   |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate)
+	// where inner_estimate = |LHS| * |RHS| / D.
+	// When D >= |RHS|: denom = |RHS|, estimate = |LHS| (clamped at LHS cardinality).
+	// When D <  |RHS|: denom = D,     estimate = |LHS| * |RHS| / D (multi-match fanout).
+	// Use raw_d (max of both sides' HLL) rather than only d_right, so that a high-cardinality
+	// left column still contributes to the domain — preventing fanout blow-up when D_right < right_card.
+	auto left_card = GetNumerator(*filter.filter_info->left_relation_set);
+	auto right_card = GetNumerator(*filter.filter_info->right_relation_set);
+	auto raw_d = filter.GetDistinctCount();
+	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
+	// Floor effective_d at min(|LHS|, |RHS|) to prevent the estimate from exceeding
+	// max(|LHS|, |RHS|). This guards against multi-condition LEFT joins where the
+	// dominant single-column D underestimates the composite join key's true domain
+	// (e.g. a CTE grouped by (year, item, customer) has D_customer distinct customer
+	// values but far more rows, causing a spurious fanout from the customer-only D).
+	if (left_card > 0 && right_card > 0) {
+		effective_d = MaxValue(effective_d, MinValue(left_card, right_card));
+	}
+
+	auto comparison_type = GetComparisonType(filter);
+	if (comparison_type == ExpressionType::INVALID) {
+		return base_denom * effective_d;
+	}
+	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
+}
+
+double CardinalityEstimator::CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left,
+                                                        Subgraph2Denominator &right,
+                                                        FilterInfoWithTotalDomains &filter) {
+	if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_relation_set) &&
+	    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_relation_set)) {
+		return left.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
+	}
+	return right.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
+}
+
+// Given two subgraphs, compute the updated denominator for the join between them.
 double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
                                                    FilterInfoWithTotalDomains &filter) {
-	double new_denom = left.denom * right.denom;
+	double base_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
-	case JoinType::LEFT: {
-		// For LEFT joins, cap the effective distinct count at |RHS|.
-		// This makes the denominator min(D, |RHS|), so the estimate equals:
-		//   |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate)
-		// where inner_estimate = |LHS| * |RHS| / D.
-		// When D >= |RHS|: denom = |RHS|, estimate = |LHS| (clamped at LHS cardinality).
-		// When D <  |RHS|: denom = D,     estimate = |LHS| * |RHS| / D (multi-match fanout).
-		// This replaces the previous left_join_extra correction factor.
-		auto right_card = GetNumerator(*filter.filter_info->right_relation_set);
-		auto raw_d = filter.GetDistinctCount();
-		auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
-		ExpressionType comparison_type = ExpressionType::INVALID;
-		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
-			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-				comparison_type = expr.GetExpressionType();
-			}
-		});
-		if (comparison_type == ExpressionType::INVALID) {
-			new_denom *= effective_d;
-			return new_denom;
-		}
-		double extra_ratio = 1;
-		switch (comparison_type) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			extra_ratio = effective_d;
-			break;
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			extra_ratio = pow(effective_d, 2.0 / 3.0);
-			break;
-		default:
-			break;
-		}
-		new_denom *= extra_ratio;
-		return new_denom;
-	}
-	case JoinType::INNER: {
-		// Collect comparison types
-		ExpressionType comparison_type = ExpressionType::INVALID;
-		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
-			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-				comparison_type = expr.GetExpressionType();
-			}
-		});
-		if (comparison_type == ExpressionType::INVALID) {
-			new_denom *= filter.GetDistinctCount();
-			// no comparison is taking place, so the denominator is just the product of the left and right
-			return new_denom;
-		}
-		// extra_ratio helps represents how many tuples will be filtered out if the comparison evaluates to
-		// false. set to 1 to assume cross product.
-		double extra_ratio = 1;
-		switch (comparison_type) {
-		case ExpressionType::COMPARE_EQUAL:
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			// extra ratio stays 1
-			extra_ratio = filter.GetDistinctCount();
-			break;
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHAN:
-		case ExpressionType::COMPARE_NOTEQUAL:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			// Assume this blows up, but use the tdom to bound it a bit
-			extra_ratio = filter.GetDistinctCount();
-			extra_ratio = pow(extra_ratio, 2.0 / 3.0);
-			break;
-		default:
-			break;
-		}
-		new_denom *= extra_ratio;
-		return new_denom;
-	}
+	case JoinType::LEFT:
+		return CalculateLeftJoinDenom(base_denom, filter);
+	case JoinType::INNER:
+		return CalculateInnerJoinDenom(base_denom, filter);
 	case JoinType::SEMI:
-	case JoinType::ANTI: {
-		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_relation_set) &&
-		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_relation_set)) {
-			new_denom = left.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
-			return new_denom;
-		}
-		new_denom = right.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
-		return new_denom;
-	}
+	case JoinType::ANTI:
+		return CalculateSemiAntiJoinDenom(base_denom, left, right, filter);
 	default:
-		// cross product
-		return new_denom;
+		// Cross product: no join condition reduces the denominator.
+		return base_denom;
 	}
 }
 
@@ -559,6 +574,7 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 		//! the cardinality
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		auto key = ColumnBinding(TableIndex(relation_id.index), i);
+		binding_distinct_counts[key] = stats.column_distinct_count.at(i);
 		for (auto &relation_to_tdom : relation_set_stats) {
 			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.find(key) == i_set.end()) {
@@ -578,6 +594,17 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 			break;
 		}
 	}
+}
+
+double CardinalityEstimator::GetDistinctCountForBinding(const ColumnBinding &binding) const {
+	if (!binding.table_index.IsValid()) {
+		return 0;
+	}
+	auto it = binding_distinct_counts.find(binding);
+	if (it == binding_distinct_counts.end() || !it->second.from_hll) {
+		return 0;
+	}
+	return static_cast<double>(it->second.distinct_count);
 }
 
 // LCOV_EXCL_START
