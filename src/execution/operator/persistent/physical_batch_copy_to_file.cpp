@@ -69,7 +69,7 @@ struct FixedRawBatchData {
 struct FixedPreparedBatchData {
 	idx_t memory_usage;
 	unique_ptr<PreparedBatchData> prepared_data;
-	CopyFunctionAnalyzeBatchResult analyze_result;
+	CopyFunctionBatchAnalyzer batch_analyzer;
 };
 
 class FixedBatchCopyGlobalState : public GlobalSinkState {
@@ -134,13 +134,11 @@ public:
 	}
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage,
-	                  const CopyFunctionAnalyzeBatchResult &analyze_result) {
+	                  const CopyFunctionBatchAnalyzer &batch_analyzer) {
 		// move the batch data to the set of prepared batch data
 		lock_guard<mutex> l(lock);
-		auto prepared_data = make_uniq<FixedPreparedBatchData>();
-		prepared_data->prepared_data = std::move(new_batch);
-		prepared_data->memory_usage = memory_usage;
-		prepared_data->analyze_result = analyze_result;
+		auto prepared_data = unique_ptr<FixedPreparedBatchData>(
+		    new FixedPreparedBatchData {memory_usage, std::move(new_batch), batch_analyzer});
 		auto entry = batch_data.insert(make_pair(batch_index, std::move(prepared_data)));
 		if (!entry.second) {
 			throw InternalException("Duplicate batch index %llu encountered in PhysicalFixedBatchCopy", batch_index);
@@ -385,10 +383,10 @@ public:
 	void Execute(const PhysicalBatchCopyToFile &op, ClientContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
 		auto memory_usage = batch_data->memory_usage;
-		auto analyze_result = CopyFunctionAnalyzeBatch(*batch_data->collection, op.batch_size, op.batch_size_bytes);
+		const CopyFunctionBatchAnalyzer batch_analyzer(*batch_data->collection, op.batch_size, op.batch_size_bytes);
 		auto prepared_batch =
 		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(batch_data->collection));
-		gstate.AddBatchData(batch_index, std::move(prepared_batch), memory_usage, analyze_result);
+		gstate.AddBatchData(batch_index, std::move(prepared_batch), memory_usage, batch_analyzer);
 		if (batch_index == gstate.flushed_batch_index) {
 			gstate.task_manager.AddTask(make_uniq<RepartitionedFlushTask>());
 		}
@@ -469,9 +467,9 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			candidate_rows += entry->second->collection->Count();
 			candidate_size_bytes += entry->second->collection->SizeInBytes();
 		}
-		const auto analyze_result =
-		    CopyFunctionAnalyzeBatch(candidate_rows, candidate_size_bytes, batch_size, batch_size_bytes);
-		if (analyze_result.TooSmall()) {
+		const CopyFunctionBatchAnalyzer batch_analyzer(candidate_rows, candidate_size_bytes, batch_size,
+		                                               batch_size_bytes);
+		if (!batch_analyzer.MeetsFlushCriteria()) {
 			// not enough rows/bytes - cancel!
 			return;
 		}
@@ -492,15 +490,14 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 	// now perform the actual repartitioning
 	for (auto &current_batch : raw_batches) {
 		if (!append_batch) {
-			const auto analyze_result =
-			    CopyFunctionAnalyzeBatch(*current_batch->collection, batch_size, batch_size_bytes);
-			if (analyze_result.Acceptable()) {
+			const CopyFunctionBatchAnalyzer batch_analyzer(*current_batch->collection, batch_size, batch_size_bytes);
+			if (batch_analyzer.IsAcceptable()) {
 				// the collection is ~approximately equal to the batch size (off by at most one vector)
 				// use it directly
 				task_manager.AddTask(
 				    make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_batch)));
 				current_batch.reset();
-			} else if (analyze_result.TooSmall()) {
+			} else if (!batch_analyzer.MeetsFlushCriteria()) {
 				// the collection is smaller than the batch size - use it as a starting point
 				append_batch = std::move(current_batch);
 				current_batch.reset();
@@ -525,9 +522,8 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 		for (auto &chunk : current_collection.Chunks()) {
 			// append the chunk to the collection
 			append_batch->collection->Append(append_state, chunk);
-			const auto analyze_result =
-			    CopyFunctionAnalyzeBatch(*append_batch->collection, batch_size, batch_size_bytes);
-			if (!analyze_result.TooSmall()) {
+			const CopyFunctionBatchAnalyzer batch_analyzer(*append_batch->collection, batch_size, batch_size_bytes);
+			if (!batch_analyzer.MeetsFlushCriteria()) {
 				// the collection is still under the desired batch size - continue
 				continue;
 			}
@@ -588,9 +584,9 @@ void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkS
 		}
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalBatchCopyToFile", "FlushBatch",
 		           {{"file", file_path},
-		            {"rows", to_string(batch_data->analyze_result.batch_size)},
-		            {"size", to_string(batch_data->analyze_result.batch_size_bytes)},
-		            {"reason", EnumUtil::ToString(batch_data->analyze_result.ToReason())}});
+		            {"rows", to_string(batch_data->batch_analyzer.current_batch_size)},
+		            {"size", to_string(batch_data->batch_analyzer.current_batch_size_bytes)},
+		            {"reason", EnumUtil::ToString(batch_data->batch_analyzer.ToReason())}});
 		function.flush_batch(context, *bind_data, *gstate.global_state, *batch_data->prepared_data);
 		batch_data->prepared_data.reset();
 		memory_manager.ReduceUnflushedMemory(batch_data->memory_usage);

@@ -1280,25 +1280,6 @@ CoordinateReferenceSystemType EnumUtil::FromString<CoordinateReferenceSystemType
 	return static_cast<CoordinateReferenceSystemType>(StringUtil::StringToEnum(GetCoordinateReferenceSystemTypeValues(), 5, "CoordinateReferenceSystemType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetCopyFunctionAnalyzeBatchResultTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CopyFunctionAnalyzeBatchResultType::TOO_SMALL), "TOO_SMALL" },
-		{ static_cast<uint32_t>(CopyFunctionAnalyzeBatchResultType::ACCEPTABLE), "ACCEPTABLE" },
-		{ static_cast<uint32_t>(CopyFunctionAnalyzeBatchResultType::TOO_LARGE), "TOO_LARGE" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<CopyFunctionAnalyzeBatchResultType>(CopyFunctionAnalyzeBatchResultType value) {
-	return StringUtil::EnumToString(GetCopyFunctionAnalyzeBatchResultTypeValues(), 3, "CopyFunctionAnalyzeBatchResultType", static_cast<uint32_t>(value));
-}
-
-template<>
-CopyFunctionAnalyzeBatchResultType EnumUtil::FromString<CopyFunctionAnalyzeBatchResultType>(const char *value) {
-	return static_cast<CopyFunctionAnalyzeBatchResultType>(StringUtil::StringToEnum(GetCopyFunctionAnalyzeBatchResultTypeValues(), 3, "CopyFunctionAnalyzeBatchResultType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetCopyFunctionFlushBatchReasonValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE), "BATCH_SIZE" },

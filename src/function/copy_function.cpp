@@ -55,76 +55,91 @@ vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType ret
 	}
 }
 
-bool CopyFunctionAnalyzeBatchResult::TooSmall() const {
-	return batch_size_type == CopyFunctionAnalyzeBatchResultType::TOO_SMALL ||
-	       batch_size_bytes_type == CopyFunctionAnalyzeBatchResultType::TOO_SMALL;
+CopyFunctionBatchAnalyzer::CopyFunctionBatchAnalyzer(const idx_t &current_batch_size,
+                                                     const idx_t &current_batch_size_bytes,
+                                                     const optional_idx &batch_size,
+                                                     const optional_idx &batch_size_bytes)
+    : current_batch_size(current_batch_size), current_batch_size_bytes(current_batch_size_bytes),
+      batch_size(batch_size), batch_size_bytes(batch_size_bytes) {
 }
 
-bool CopyFunctionAnalyzeBatchResult::Acceptable() const {
-	return !TooSmall() && !TooLarge();
+CopyFunctionBatchAnalyzer::CopyFunctionBatchAnalyzer(const ColumnDataCollection &batch, const optional_idx &batch_size,
+                                                     const optional_idx &batch_size_bytes)
+    : CopyFunctionBatchAnalyzer(batch.Count(), batch.SizeInBytes(), batch_size, batch_size_bytes) {
 }
 
-bool CopyFunctionAnalyzeBatchResult::TooLarge() const {
-	return batch_size_type == CopyFunctionAnalyzeBatchResultType::TOO_LARGE ||
-	       batch_size_bytes_type == CopyFunctionAnalyzeBatchResultType::TOO_LARGE;
+bool CopyFunctionBatchAnalyzer::AnyBatchQualifies() const {
+	return !batch_size.IsValid() && !batch_size_bytes.IsValid();
 }
 
-CopyFunctionFlushBatchReason CopyFunctionAnalyzeBatchResult::ToReason() const {
-	if (batch_size_type != CopyFunctionAnalyzeBatchResultType::TOO_SMALL) {
+bool CopyFunctionBatchAnalyzer::ExceedsBatchSize() const {
+	return batch_size.IsValid() && current_batch_size >= batch_size.GetIndex();
+}
+
+bool CopyFunctionBatchAnalyzer::ExceedsBatchSizeBytes() const {
+	return batch_size_bytes.IsValid() && current_batch_size_bytes >= batch_size_bytes.GetIndex();
+}
+
+bool CopyFunctionBatchAnalyzer::MeetsFlushCriteria() const {
+	return AnyBatchQualifies() || ExceedsBatchSize() || ExceedsBatchSizeBytes();
+}
+
+int64_t CopyFunctionBatchAnalyzer::BatchSizeVectorDiff() const {
+	if (!batch_size.IsValid()) {
+		return 0;
+	}
+	const auto batch_size_diff = NumericCast<int64_t>(current_batch_size) - NumericCast<int64_t>(batch_size.GetIndex());
+	return (batch_size_diff + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+}
+
+int64_t CopyFunctionBatchAnalyzer::BatchSizeBytesVectorDiff() const {
+	if (batch_size_bytes.IsValid()) {
+		return 0;
+	}
+	const auto size_bytes_diff =
+	    NumericCast<int64_t>(current_batch_size_bytes) - NumericCast<int64_t>(batch_size_bytes.GetIndex());
+	const auto bytes_per_tuple = NumericCast<int64_t>(current_batch_size_bytes / current_batch_size) + 1;
+	return (size_bytes_diff / bytes_per_tuple + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+}
+
+bool CopyFunctionBatchAnalyzer::IsAcceptable() const {
+	const auto batch_size_vector_diff = BatchSizeVectorDiff();
+	const auto batch_size_bytes_vector_diff = BatchSizeBytesVectorDiff();
+
+	if (batch_size_vector_diff == 0) {
+		// Acceptable row count, require low or acceptable byte size
+		return batch_size_bytes_vector_diff <= 0;
+	}
+
+	if (batch_size_bytes_vector_diff == 0) {
+		// Acceptable byte size, require low or acceptable byte size
+		return batch_size_vector_diff <= 0;
+	}
+
+	return false;
+}
+
+CopyFunctionFlushBatchReason CopyFunctionBatchAnalyzer::ToReason() const {
+	if (AnyBatchQualifies() || ExceedsBatchSize()) {
 		return CopyFunctionFlushBatchReason::BATCH_SIZE;
 	}
-	if (batch_size_bytes_type != CopyFunctionAnalyzeBatchResultType::TOO_SMALL) {
+
+	if (ExceedsBatchSizeBytes()) {
 		return CopyFunctionFlushBatchReason::BATCH_SIZE_BYTES;
 	}
+
 	return CopyFunctionFlushBatchReason::LAST_BATCH;
 }
 
-CopyFunctionAnalyzeBatchResult CopyFunctionAnalyzeBatch(const idx_t &current_batch_size,
-                                                        const idx_t &current_batch_size_bytes,
-                                                        const optional_idx &batch_size,
-                                                        const optional_idx &batch_size_bytes) {
-	CopyFunctionAnalyzeBatchResult result;
-	result.batch_size = current_batch_size;
-	result.batch_size_bytes = current_batch_size_bytes;
-
-	int64_t size_vector_diff = 0;
-	if (batch_size.IsValid()) {
-		size_vector_diff = (NumericCast<int64_t>(current_batch_size) - NumericCast<int64_t>(batch_size.GetIndex()) +
-		                    STANDARD_VECTOR_SIZE - 1) /
-		                   STANDARD_VECTOR_SIZE;
-	}
-
-	int64_t size_bytes_vector_diff = 0;
-	if (batch_size_bytes.IsValid()) {
-		const auto size_bytes_overshoot =
-		    NumericCast<int64_t>(current_batch_size_bytes) - NumericCast<int64_t>(batch_size_bytes.GetIndex());
-		const auto bytes_per_tuple = NumericCast<int64_t>(current_batch_size_bytes / current_batch_size) + 1;
-		size_bytes_vector_diff =
-		    (size_bytes_overshoot / bytes_per_tuple + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
-	}
-
-	if (size_vector_diff < 0) {
-		result.batch_size_type = CopyFunctionAnalyzeBatchResultType::TOO_SMALL;
-	} else if (size_vector_diff == 0) {
-		result.batch_size_type = CopyFunctionAnalyzeBatchResultType::ACCEPTABLE;
-	} else {
-		result.batch_size_type = CopyFunctionAnalyzeBatchResultType::TOO_LARGE;
-	}
-
-	if (size_bytes_vector_diff < 0) {
-		result.batch_size_bytes_type = CopyFunctionAnalyzeBatchResultType::TOO_SMALL;
-	} else if (size_vector_diff == 0) {
-		result.batch_size_bytes_type = CopyFunctionAnalyzeBatchResultType::ACCEPTABLE;
-	} else {
-		result.batch_size_bytes_type = CopyFunctionAnalyzeBatchResultType::TOO_LARGE;
-	}
-
-	return result;
+CopyFunctionBatchAnalyzer CopyFunctionAnalyzeBatch(const idx_t &current_batch_size,
+                                                   const idx_t &current_batch_size_bytes,
+                                                   const optional_idx &batch_size,
+                                                   const optional_idx &batch_size_bytes) {
+	return CopyFunctionBatchAnalyzer(current_batch_size, current_batch_size_bytes, batch_size, batch_size_bytes);
 }
 
-CopyFunctionAnalyzeBatchResult CopyFunctionAnalyzeBatch(const ColumnDataCollection &batch,
-                                                        const optional_idx &batch_size,
-                                                        const optional_idx &batch_size_bytes) {
+CopyFunctionBatchAnalyzer CopyFunctionAnalyzeBatch(const ColumnDataCollection &batch, const optional_idx &batch_size,
+                                                   const optional_idx &batch_size_bytes) {
 	return CopyFunctionAnalyzeBatch(batch.Count(), batch.SizeInBytes(), batch_size, batch_size_bytes);
 }
 

@@ -530,8 +530,8 @@ void CopyToFunctionLocalState::FlushPartitions() {
 				partition_batch->Append(partition_batch_append_state, filtered_chunk);
 			}
 
-			const auto analyze_result = CopyFunctionAnalyzeBatch(*partition_batch, op.batch_size, op.batch_size_bytes);
-			if (!analyze_result.TooSmall()) {
+			const CopyFunctionBatchAnalyzer batch_analyze(*partition_batch, op.batch_size, op.batch_size_bytes);
+			if (batch_analyze.MeetsFlushCriteria()) {
 				partition_batch_append_state.current_chunk_state.handles.clear();
 				op.FlushBatch(context.client, gstate, info.global_state, create_file_state_fun, local_copy_state,
 				              std::move(partition_batch), PhysicalCopyToFilePhase::COMBINE);
@@ -724,8 +724,8 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	}
 	lstate.batch->Append(lstate.batch_append_state, chunk);
 
-	const auto analyze_result = CopyFunctionAnalyzeBatch(*lstate.batch, batch_size, batch_size_bytes);
-	if (!analyze_result.TooSmall()) {
+	const CopyFunctionBatchAnalyzer batch_analyzer(*lstate.batch, batch_size, batch_size_bytes);
+	if (batch_analyzer.MeetsFlushCriteria()) {
 		lstate.batch_append_state.current_chunk_state.handles.clear();
 		auto &file_state_ptr = per_thread_output ? lstate.global_state : gstate.global_state;
 		FlushBatch(context.client, gstate, file_state_ptr, gstate.create_file_state_fun, lstate.local_state,
@@ -769,8 +769,8 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 		if (gstate.last_batch) {
 			const auto count = gstate.last_batch->Count() + lstate.batch->Count();
 			const auto size_in_bytes = gstate.last_batch->SizeInBytes() + lstate.batch->SizeInBytes();
-			const auto analyze_result = CopyFunctionAnalyzeBatch(count, size_in_bytes, batch_size, batch_size_bytes);
-			if (analyze_result.TooLarge()) {
+			const CopyFunctionBatchAnalyzer batch_analyzer(count, size_in_bytes, batch_size, batch_size_bytes);
+			if (batch_analyzer.MeetsFlushCriteria()) {
 				// Combining makes us overshoot, make sure the smallest one gets flushed now
 				auto &small = lstate.batch->Count() < gstate.last_batch->Count() ? lstate.batch : gstate.last_batch;
 				auto &large = lstate.batch->Count() < gstate.last_batch->Count() ? gstate.last_batch : lstate.batch;
@@ -881,12 +881,12 @@ void PhysicalCopyToFile::FlushBatch(
 			// Because we got the shared lock on the file, we're sure that it will keep existing until we release it
 			global_guard.reset();
 
-			const auto analyze_result = CopyFunctionAnalyzeBatch(*batch, batch_size, batch_size_bytes);
+			const CopyFunctionBatchAnalyzer batch_analyzer(*batch, batch_size, batch_size_bytes);
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalCopyToFile", "FlushBatch",
 			           {{"file", file_state.path},
 			            {"rows", to_string(batch->Count())},
 			            {"size", to_string(batch->SizeInBytes())},
-			            {"reason", EnumUtil::ToString(analyze_result.ToReason())}});
+			            {"reason", EnumUtil::ToString(batch_analyzer.ToReason())}});
 
 			if (function.prepare_batch && function.flush_batch) {
 				auto prepared_batch = function.prepare_batch(context, *bind_data, *file_state.data, std::move(batch));
