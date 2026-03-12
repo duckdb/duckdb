@@ -277,11 +277,6 @@ public:
 	//! Shell highlighting mode
 	HighlightMode highlight_mode = HighlightMode::AUTOMATIC;
 
-#if defined(_WIN32) || defined(WIN32)
-	//! When enabled, sets the console page to UTF8 and renders using that code page
-	bool win_utf8_mode = false;
-#endif
-
 public:
 	static ShellState &Get();
 

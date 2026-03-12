@@ -498,13 +498,6 @@ MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
-#if defined(_WIN32) || defined(WIN32)
-MetadataResult SetUTF8Mode(ShellState &state, const vector<string> &args) {
-	state.win_utf8_mode = true;
-	return MetadataResult::SUCCESS;
-}
-#endif
-
 MetadataResult ToggleHighlighting(ShellState &state, const vector<string> &args) {
 	ShellHighlight::SetHighlighting(state.StringToBool(args[1]));
 	return MetadataResult::SUCCESS;
@@ -907,7 +900,8 @@ static const MetadataCommand metadata_commands[] = {
     {"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0,
      "Negative values right-justify"},
 #if defined(_WIN32) || defined(WIN32)
-    {"utf8", 1, SetUTF8Mode, "", "Enable experimental UTF-8 console output mode", 0, ""},
+    {"utf8", 1, [](ShellState &, const vector<string> &) -> MetadataResult { return MetadataResult::SUCCESS; }, "",
+     "Deprecated. This option is accepted for compatibility but has no effect.", 0, ""},
 #endif
     {nullptr, 0, nullptr, 0, nullptr}};
 

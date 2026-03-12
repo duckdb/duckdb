@@ -525,16 +525,6 @@ static char *local_getline(char *zLine, FILE *in) {
 	idx_t nLine = zLine == 0 ? 0 : 100;
 	idx_t n = 0;
 
-#if defined(_WIN32) || defined(WIN32)
-	auto &state = ShellState::Get();
-	int is_stdin = state.stdin_is_interactive && in == stdin;
-	int is_utf8 = 0;
-	if (is_stdin && state.win_utf8_mode) {
-		if (SetConsoleCP(CP_UTF8)) {
-			is_utf8 = 1;
-		}
-	}
-#endif
 	while (1) {
 		if (n + 100 > nLine) {
 			nLine = nLine * 2 + 100;
@@ -561,21 +551,6 @@ static char *local_getline(char *zLine, FILE *in) {
 			break;
 		}
 	}
-#if defined(_WIN32) || defined(WIN32)
-	/* For interactive input on Windows systems, translate the
-	** multi-byte characterset characters into UTF-8. */
-	if (is_stdin && !is_utf8) {
-		auto zTrans = ShellState::Win32MbcsToUtf8(zLine, 0);
-		idx_t nTrans = zTrans.size() + 1;
-		if (nTrans > nLine) {
-			zLine = (char *)realloc(zLine, nTrans);
-			if (zLine == 0) {
-				shell_out_of_memory();
-			}
-		}
-		memcpy(zLine, zTrans.data(), nTrans);
-	}
-#endif /* defined(_WIN32) || defined(WIN32) */
 	return zLine;
 }
 
