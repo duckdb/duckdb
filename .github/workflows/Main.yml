@@ -225,16 +225,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install tools
-      run: make toolsci
-
-    - uses: ./.github/actions/ccache-action
-
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
-      with:
-        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
-
     - uses: ./.github/actions/linux_release_build
       with:
         artifact_name: linux-release-build

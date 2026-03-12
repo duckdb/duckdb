@@ -53,16 +53,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install tools
-        run: make toolsci
-
-      - uses: ./.github/actions/ccache-action
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11.1
-        with:
-          vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
-
       - name: Build current release
         if: ${{ inputs.build_current_release != 'false' }}
         uses: ./.github/actions/linux_release_build
