@@ -115,7 +115,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 			throw ParserException("Expected table name with SUMMARIZE");
 		}
 		showref->table_name = "__show_tables_expanded";
-		showref->show_type = ShowType::DESCRIBE;
+		showref->show_type = ShowType::SHOW_UNQUALIFIED;
 	}
 
 	auto select_node = make_uniq<SelectNode>();

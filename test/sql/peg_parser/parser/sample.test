@@ -21,3 +21,11 @@ CALL check_peg_parser($TEST_PEG_PARSER$select count(*) from integers tablesample
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT * from t1 using sample reservoir(6000) repeatable (1) order by a;$TEST_PEG_PARSER$);
+
+statement ok
+call enable_peg_parser();
+
+query I
+SELECT 1 FROM (SELECT 1 ORDER BY ALL LIMIT 514322393620248226) USING SAMPLE SYSTEM (36%);
+----
+1

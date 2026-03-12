@@ -1245,7 +1245,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"NullsFirst <- 'NULLS' 'FIRST'\n"
 	"NullsLast <- 'NULLS' 'LAST'\n"
 	"OrderByClause <- 'ORDER' 'BY' OrderByExpressions\n"
-	"OrderByExpressions <- OrderByExpressionList / OrderByAll\n"
+	"OrderByExpressions <- OrderByAll / OrderByExpressionList\n"
 	"OrderByExpressionList <- List(OrderByExpression)\n"
 	"OrderByAll <- 'ALL' DescOrAsc? NullsFirstOrLast?\n"
 	"LimitClause <- 'LIMIT' LimitValue\n"
