@@ -76,10 +76,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.batches_per_file = op.batches_per_file;
 	cast_copy.file_size_bytes = op.file_size_bytes;
 
-	if (!cast_copy.batch_size_bytes.IsValid() && cast_copy.function.default_batch_size_bytes) {
-		cast_copy.batch_size_bytes = cast_copy.function.default_batch_size_bytes();
-	}
-
 	cast_copy.return_type = op.return_type;
 	cast_copy.partition_output = op.partition_output;
 	cast_copy.partition_columns = op.partition_columns;

@@ -16,7 +16,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Util
 //===--------------------------------------------------------------------===//
-enum class PhysicalCopyFlushBatchType : uint8_t { SINK, COMBINE, FINALIZE };
+enum class PhysicalCopyToFilePhase : uint8_t { SINK, COMBINE, FINALIZE };
 
 struct PartitionWriteInfo {
 	unique_ptr<GlobalFunctionData> global_state;
@@ -114,9 +114,11 @@ CreateColumnStatistics(const case_insensitive_map_t<case_insensitive_map_t<Value
 }
 
 struct GlobalFileState {
-	explicit GlobalFileState(unique_ptr<GlobalFunctionData> data_p) : data(std::move(data_p)), num_batches(0) {
+	explicit GlobalFileState(unique_ptr<GlobalFunctionData> data_p, const string &path_p)
+	    : data(std::move(data_p)), path(path_p), num_batches(0) {
 	}
 	unique_ptr<GlobalFunctionData> data;
+	const string path;
 	atomic<idx_t> num_batches;
 };
 
@@ -214,8 +216,8 @@ void CopyToFunctionGlobalState::Initialize() {
 	}
 	// initialize writing to the file
 	created_files.push_back(op.file_path);
-	global_state =
-	    make_uniq<GlobalFileState>(op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path));
+	global_state = make_uniq<GlobalFileState>(
+	    op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path), op.file_path);
 	if (op.function.initialize_operator) {
 		op.function.initialize_operator(*global_state->data, op);
 	}
@@ -508,6 +510,12 @@ PhysicalCopyToFile::PhysicalCopyToFile(PhysicalPlan &physical_plan, vector<Logic
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 
+InsertionOrderPreservingMap<string> PhysicalCopyToFile::ParamsToString() const {
+	InsertionOrderPreservingMap<string> result;
+	result["FORMAT"] = StringUtil::Upper(function.name);
+	return result;
+}
+
 string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context, const string &file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	string trimmed_path = file_path;
@@ -557,8 +565,8 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyT
 	chunk.SetValue(5, row_idx, info.partition_keys);
 }
 
-unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext &context, GlobalSinkState &sink,
-                                                                   StorageLockKey &global_lock) const {
+unique_ptr<GlobalFileState> PhysicalCopyToFile::CreateFileState(ClientContext &context, GlobalSinkState &sink,
+                                                                StorageLockKey &global_lock) const {
 	auto &gstate = sink.Cast<CopyToFunctionGlobalState>();
 	idx_t this_file_offset = gstate.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
@@ -568,14 +576,14 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	if (return_type != CopyFunctionReturnType::CHANGED_ROWS) {
 		written_file_info = gstate.AddFile(global_lock, output_path, return_type);
 	}
-	auto result = function.copy_to_initialize_global(context, *bind_data, output_path);
+	auto data = function.copy_to_initialize_global(context, *bind_data, output_path);
 	if (written_file_info) {
-		function.copy_to_get_written_statistics(context, *bind_data, *result, *written_file_info->file_stats);
+		function.copy_to_get_written_statistics(context, *bind_data, *data, *written_file_info->file_stats);
 	}
 	if (function.initialize_operator) {
-		function.initialize_operator(*result, *this);
+		function.initialize_operator(*data, *this);
 	}
-	return result;
+	return make_uniq<GlobalFileState>(std::move(data), output_path);
 }
 
 bool PhysicalCopyToFile::Rotate() const {
@@ -621,7 +629,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		auto state = make_uniq<CopyToFunctionGlobalState>(*this, context);
 		if (!per_thread_output && Rotate() && write_empty_file) {
 			auto global_lock = state->lock.GetExclusiveLock();
-			state->global_state = make_uniq<GlobalFileState>(CreateFileState(context, *state, *global_lock));
+			state->global_state = CreateFileState(context, *state, *global_lock);
 		}
 
 		if (partition_output) {
@@ -672,11 +680,12 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	}
 	lstate.batch->Append(lstate.batch_append_state, chunk);
 
-	if (CopyFunctionMustFlushBatch(*lstate.batch, batch_size, batch_size_bytes)) {
+	const auto analyze_result = CopyFunctionAnalyzeBatch(*lstate.batch, batch_size, batch_size_bytes);
+	if (!analyze_result.TooSmall()) {
 		lstate.batch_append_state.current_chunk_state.handles.clear();
 		auto &file_state_ptr = per_thread_output ? lstate.global_state : gstate.global_state;
 		FlushBatch(context.client, gstate, file_state_ptr, lstate.local_state, std::move(lstate.batch),
-		           PhysicalCopyFlushBatchType::SINK);
+		           PhysicalCopyToFilePhase::SINK);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -700,7 +709,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	if (per_thread_output) {
 		if (lstate.batch) {
 			FlushBatch(context.client, gstate, lstate.global_state, lstate.local_state, std::move(lstate.batch),
-			           PhysicalCopyFlushBatchType::COMBINE);
+			           PhysicalCopyToFilePhase::COMBINE);
 		}
 		function.copy_to_finalize(context.client, *bind_data, *lstate.global_state->data);
 		return SinkCombineResultType::FINISHED;
@@ -709,16 +718,15 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	if (!lstate.batch) {
 		return SinkCombineResultType::FINISHED;
 	}
-	D_ASSERT(!CopyFunctionMustFlushBatch(*lstate.batch, batch_size, batch_size_bytes));
 
 	unique_ptr<ColumnDataCollection> batch;
 	{
 		annotated_lock_guard<annotated_mutex> guard(gstate.last_batch_lock);
 		if (gstate.last_batch) {
-			D_ASSERT(!CopyFunctionMustFlushBatch(*gstate.last_batch, batch_size, batch_size_bytes));
 			const auto count = gstate.last_batch->Count() + lstate.batch->Count();
 			const auto size_in_bytes = gstate.last_batch->SizeInBytes() + lstate.batch->SizeInBytes();
-			if (CopyFunctionMustFlushBatch(count, size_in_bytes, batch_size, batch_size_bytes)) {
+			const auto analyze_result = CopyFunctionAnalyzeBatch(count, size_in_bytes, batch_size, batch_size_bytes);
+			if (analyze_result.TooLarge()) {
 				// Combining makes us overshoot, make sure the smallest one gets flushed now
 				auto &small = lstate.batch->Count() < gstate.last_batch->Count() ? lstate.batch : gstate.last_batch;
 				auto &large = lstate.batch->Count() < gstate.last_batch->Count() ? gstate.last_batch : lstate.batch;
@@ -738,7 +746,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 
 	auto &file_state_ptr = per_thread_output ? lstate.global_state : gstate.global_state;
 	FlushBatch(context.client, gstate, file_state_ptr, lstate.local_state, std::move(batch),
-	           PhysicalCopyFlushBatchType::COMBINE);
+	           PhysicalCopyToFilePhase::COMBINE);
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -765,7 +773,7 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 		if (NumericCast<int64_t>(gstate.rows_copied.load()) == 0 && sink_state != nullptr) {
 			// no rows from source, write schema to file
 			auto global_lock = gstate.lock.GetExclusiveLock();
-			gstate.global_state = make_uniq<GlobalFileState>(CreateFileState(context, *sink_state, *global_lock));
+			gstate.global_state = CreateFileState(context, *sink_state, *global_lock);
 			function.copy_to_finalize(context, *bind_data, *gstate.global_state->data);
 		}
 		return SinkFinalizeType::READY;
@@ -775,7 +783,7 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 	if (gstate.last_batch) {
 		unique_ptr<LocalFunctionData> lstate;
 		FlushBatch(context, gstate, gstate.global_state, lstate, std::move(gstate.last_batch),
-		           PhysicalCopyFlushBatchType::FINALIZE);
+		           PhysicalCopyToFilePhase::FINALIZE);
 	}
 
 	if (function.copy_to_finalize && gstate.global_state) {
@@ -795,22 +803,21 @@ SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, Gl
 
 void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
                                     unique_ptr<GlobalFileState> &file_state_ptr, unique_ptr<LocalFunctionData> &lstate,
-                                    unique_ptr<ColumnDataCollection> batch,
-                                    const PhysicalCopyFlushBatchType flush_batch_type) const {
+                                    unique_ptr<ColumnDataCollection> batch, const PhysicalCopyToFilePhase phase) const {
 	auto &gstate = gstate_p.Cast<CopyToFunctionGlobalState>();
 
 	while (true) {
 		// Grab global lock and dereference the current file state (and corresponding lock)
 		auto global_guard = gstate.lock.GetExclusiveLock();
 		if (!file_state_ptr) {
-			file_state_ptr = make_uniq<GlobalFileState>(CreateFileState(context, *sink_state, *global_guard));
+			file_state_ptr = CreateFileState(context, *sink_state, *global_guard);
 		}
 		auto &file_state = *file_state_ptr;
 		auto &file_lock = *gstate.file_write_lock_if_rotating;
 		if (RotateNow(file_state)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
 			auto owned_file_state = std::move(file_state_ptr);
-			file_state_ptr = make_uniq<GlobalFileState>(CreateFileState(context, *sink_state, *global_guard));
+			file_state_ptr = CreateFileState(context, *sink_state, *global_guard);
 			auto owned_lock = std::move(gstate.file_write_lock_if_rotating);
 			gstate.file_write_lock_if_rotating = make_uniq<StorageLock>();
 			global_guard.reset();
@@ -830,6 +837,13 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 			// Because we got the shared lock on the file, we're sure that it will keep existing until we release it
 			global_guard.reset();
 
+			const auto analyze_result = CopyFunctionAnalyzeBatch(*batch, batch_size, batch_size_bytes);
+			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalCopyToFile", "FlushBatch",
+			           {{"file", file_state.path},
+			            {"rows", to_string(batch->Count())},
+			            {"size", to_string(batch->SizeInBytes())},
+			            {"reason", EnumUtil::ToString(analyze_result.ToReason())}});
+
 			if (function.prepare_batch && function.flush_batch) {
 				auto prepared_batch = function.prepare_batch(context, *bind_data, *file_state.data, std::move(batch));
 				function.flush_batch(context, *bind_data, *file_state.data, *prepared_batch);
@@ -843,7 +857,7 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 				for (auto &chunk : batch->Chunks()) {
 					function.copy_to_sink(execution_context, *bind_data, *file_state.data, *lstate, chunk);
 				}
-				if (flush_batch_type != PhysicalCopyFlushBatchType::SINK) {
+				if (phase != PhysicalCopyToFilePhase::SINK) {
 					function.copy_to_combine(execution_context, *bind_data, *file_state.data, *lstate);
 				}
 			}

@@ -441,13 +441,6 @@ void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalF
 }
 
 //===--------------------------------------------------------------------===//
-// Default Batch Size Bytes
-//===--------------------------------------------------------------------===//
-optional_idx WriteCSVDefaultBatchSizeBytes() {
-	return WriteCSVData({}).flush_size;
-}
-
-//===--------------------------------------------------------------------===//
 // File Size Bytes
 //===--------------------------------------------------------------------===//
 idx_t WriteCSVFileSizeBytes(GlobalFunctionData &gstate) {
@@ -468,7 +461,6 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 
 	info.prepare_batch = WriteCSVPrepareBatch;
 	info.flush_batch = WriteCSVFlushBatch;
-	info.default_batch_size_bytes = WriteCSVDefaultBatchSizeBytes;
 	info.file_size_bytes = WriteCSVFileSizeBytes;
 
 	info.copy_from_bind = MultiFileFunction<CSVMultiFileInfo>::MultiFileBindCopy;

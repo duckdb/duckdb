@@ -183,10 +183,43 @@ struct CopyFunctionFileStatistics {
 	case_insensitive_map_t<case_insensitive_map_t<Value>> column_statistics;
 };
 
-bool CopyFunctionMustFlushBatch(const idx_t &current_batch_size, const idx_t current_batch_size_bytes,
-                                const optional_idx &batch_size, const optional_idx &batch_size_bytes);
-bool CopyFunctionMustFlushBatch(const ColumnDataCollection &batch, const optional_idx &batch_size,
-                                const optional_idx &batch_size_bytes);
+enum class CopyFunctionAnalyzeBatchResultType : uint8_t {
+	//! Batch is not yet large enough to flush
+	TOO_SMALL,
+	//! Batch has an acceptable size
+	ACCEPTABLE,
+	//! Batch is too large, should be repartitioned
+	TOO_LARGE
+};
+
+enum class CopyFunctionFlushBatchReason : uint8_t {
+	//! Flush because of current batch size
+	BATCH_SIZE,
+	//! Flush because of current batch size in bytes
+	BATCH_SIZE_BYTES,
+	//! Flush because it's the last batch
+	LAST_BATCH
+};
+
+struct CopyFunctionAnalyzeBatchResult {
+	idx_t batch_size;
+	idx_t batch_size_bytes;
+	CopyFunctionAnalyzeBatchResultType batch_size_type;
+	CopyFunctionAnalyzeBatchResultType batch_size_bytes_type;
+
+	bool TooSmall() const;
+	bool Acceptable() const;
+	bool TooLarge() const;
+	CopyFunctionFlushBatchReason ToReason() const;
+};
+
+CopyFunctionAnalyzeBatchResult CopyFunctionAnalyzeBatch(const idx_t &current_batch_size,
+                                                        const idx_t &current_batch_size_bytes,
+                                                        const optional_idx &batch_size,
+                                                        const optional_idx &batch_size_bytes);
+CopyFunctionAnalyzeBatchResult CopyFunctionAnalyzeBatch(const ColumnDataCollection &batch,
+                                                        const optional_idx &batch_size,
+                                                        const optional_idx &batch_size_bytes);
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
@@ -208,11 +241,7 @@ public:
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;
-
-	copy_default_batch_size_t default_batch_size;
-	copy_default_batch_size_bytes_t default_batch_size_bytes;
 	copy_file_size_bytes_t file_size_bytes;
-
 	copy_desired_batch_size_t desired_batch_size;
 
 	copy_to_serialize_t serialize;

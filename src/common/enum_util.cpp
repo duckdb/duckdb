@@ -1299,6 +1299,44 @@ CoordinateReferenceSystemType EnumUtil::FromString<CoordinateReferenceSystemType
 	return static_cast<CoordinateReferenceSystemType>(StringUtil::StringToEnum(GetCoordinateReferenceSystemTypeValues(), 5, "CoordinateReferenceSystemType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetCopyFunctionAnalyzeBatchResultTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CopyFunctionAnalyzeBatchResultType::TOO_SMALL), "TOO_SMALL" },
+		{ static_cast<uint32_t>(CopyFunctionAnalyzeBatchResultType::ACCEPTABLE), "ACCEPTABLE" },
+		{ static_cast<uint32_t>(CopyFunctionAnalyzeBatchResultType::TOO_LARGE), "TOO_LARGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyFunctionAnalyzeBatchResultType>(CopyFunctionAnalyzeBatchResultType value) {
+	return StringUtil::EnumToString(GetCopyFunctionAnalyzeBatchResultTypeValues(), 3, "CopyFunctionAnalyzeBatchResultType", static_cast<uint32_t>(value));
+}
+
+template<>
+CopyFunctionAnalyzeBatchResultType EnumUtil::FromString<CopyFunctionAnalyzeBatchResultType>(const char *value) {
+	return static_cast<CopyFunctionAnalyzeBatchResultType>(StringUtil::StringToEnum(GetCopyFunctionAnalyzeBatchResultTypeValues(), 3, "CopyFunctionAnalyzeBatchResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCopyFunctionFlushBatchReasonValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE), "BATCH_SIZE" },
+		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE_BYTES), "BATCH_SIZE_BYTES" },
+		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::LAST_BATCH), "LAST_BATCH" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CopyFunctionFlushBatchReason>(CopyFunctionFlushBatchReason value) {
+	return StringUtil::EnumToString(GetCopyFunctionFlushBatchReasonValues(), 3, "CopyFunctionFlushBatchReason", static_cast<uint32_t>(value));
+}
+
+template<>
+CopyFunctionFlushBatchReason EnumUtil::FromString<CopyFunctionFlushBatchReason>(const char *value) {
+	return static_cast<CopyFunctionFlushBatchReason>(StringUtil::StringToEnum(GetCopyFunctionFlushBatchReasonValues(), 3, "CopyFunctionFlushBatchReason", value));
+}
+
 const StringUtil::EnumStringLiteral *GetCopyFunctionReturnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS), "CHANGED_ROWS" },

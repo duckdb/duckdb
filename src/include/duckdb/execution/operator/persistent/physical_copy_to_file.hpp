@@ -19,7 +19,7 @@
 namespace duckdb {
 
 struct GlobalFileState;
-enum class PhysicalCopyFlushBatchType : uint8_t;
+enum class PhysicalCopyToFilePhase : uint8_t;
 
 struct CopyToFileInfo {
 	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
@@ -40,19 +40,22 @@ public:
 	                   unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality);
 
 public:
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
+public:
 	static string GetTrimmedPath(ClientContext &context, const string &file_path);
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
 	static void ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyToFileInfo &written_file_info);
 
 private:
-	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,
-	                                               StorageLockKey &global_lock) const;
+	unique_ptr<GlobalFileState> CreateFileState(ClientContext &context, GlobalSinkState &sink,
+	                                            StorageLockKey &global_lock) const;
 	bool Rotate() const;
 	bool RotateNow(GlobalFileState &global_state) const;
 	void FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
 	                unique_ptr<LocalFunctionData> &lstate, unique_ptr<ColumnDataCollection> batch,
-	                PhysicalCopyFlushBatchType flush_batch_type) const;
+	                PhysicalCopyToFilePhase phase) const;
 	SinkFinalizeType FinalizeInternal(ClientContext &context, GlobalSinkState &gstate) const;
 
 public:

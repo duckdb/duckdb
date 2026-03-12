@@ -98,17 +98,6 @@ struct ParquetWriteBindData : public TableFunctionData {
 	GeoParquetVersion geoparquet_version = GeoParquetVersion::V1;
 };
 
-void ParquetWriteGlobalState::LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
-	if (!op) {
-		return;
-	}
-	DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
-	           {{"file", writer->GetFileName()},
-	            {"rows", to_string(buffer.Count())},
-	            {"size", to_string(buffer.SizeInBytes())},
-	            {"reason", reason}});
-}
-
 ParquetWriteLocalState::ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
     : buffer(context, types) {
 	buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
@@ -364,9 +353,6 @@ static void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_
 
 	if (local_state.buffer.Count() >= bind_data.row_group_size ||
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {
-		const string reason =
-		    local_state.buffer.Count() >= bind_data.row_group_size ? "ROW_GROUP_SIZE" : "ROW_GROUP_SIZE_BYTES";
-		global_state.LogFlushingRowGroup(local_state.buffer, reason);
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
@@ -383,7 +369,6 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 	if (local_state.buffer.Count() >= bind_data.row_group_size / 2 ||
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes / 2) {
 		// local state buffer is more than half of the row_group_size(_bytes), just flush it
-		global_state.LogFlushingRowGroup(local_state.buffer, "Combine");
 		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
 		return;
 	}
@@ -397,7 +382,6 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 			// After combining, the combine buffer is more than half of the row_group_size(_bytes), so we flush
 			auto owned_combine_buffer = std::move(global_state.combine_buffer);
 			guard.unlock();
-			global_state.LogFlushingRowGroup(*owned_combine_buffer, "Combine");
 			// Lock free, of course
 			global_state.writer->Flush(*owned_combine_buffer, local_state.transform_data);
 		}
@@ -412,7 +396,6 @@ static void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	// flush the combine buffer (if it's there)
 	if (global_state.combine_buffer) {
-		global_state.LogFlushingRowGroup(*global_state.combine_buffer, "Finalize");
 		global_state.writer->Flush(*global_state.combine_buffer, global_state.transform_data);
 	}
 
@@ -689,13 +672,6 @@ static void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_da
 }
 
 //===--------------------------------------------------------------------===//
-// Default Batch Size
-//===--------------------------------------------------------------------===//
-static optional_idx ParquetWriteDefaultBatchSize() {
-	return DEFAULT_ROW_GROUP_SIZE;
-}
-
-//===--------------------------------------------------------------------===//
 // Desired Batch Size
 //===--------------------------------------------------------------------===//
 static idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_data_p) {
@@ -877,7 +853,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
-	function.default_batch_size = ParquetWriteDefaultBatchSize;
 	function.file_size_bytes = ParquetWriteFileSizeBytes;
 
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
