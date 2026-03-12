@@ -1630,6 +1630,7 @@ public:
 
 private:
 	duckdb::BoxRendererConfig config;
+	unique_ptr<duckdb::ClientBoxRendererContext> render_context;
 	unique_ptr<duckdb::BoxRendererState> render_state;
 	string error_str;
 };
@@ -1681,8 +1682,8 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
 	auto &con = *state.conn;
 	try {
-		duckdb::ClientBoxRendererContext render_context(*con.context);
-		render_state = renderer.Prepare(render_context, result.metadata.column_names, materialized.Collection());
+		render_context = duckdb::make_uniq<duckdb::ClientBoxRendererContext>(*con.context);
+		render_state = renderer.Prepare(*render_context, result.metadata.column_names, materialized.Collection());
 	} catch (std::exception &ex) {
 		// store the error - throw on render
 		error_str = ex.what();
