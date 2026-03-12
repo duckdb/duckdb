@@ -33,16 +33,16 @@ static void WrapInTransaction(vector<unique_ptr<SQLStatement>> &new_statements,
 StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(context) {
 }
 
-void UnpackMultiStatement(unique_ptr<MultiStatement> &multi_statement, bool is_in_active_transaction,
+void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_transaction,
                           vector<unique_ptr<SQLStatement>> &new_statements) {
 #ifdef DEBUG // MultiStatement should not contain transaction statements
-	for (auto &sub_statement : multi_statement->statements) {
+	for (auto &sub_statement : multi_statement.statements) {
 		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
 	}
 #endif
 	vector<unique_ptr<SQLStatement>> unpacked_statements;
 	bool is_pivot_statement = false;
-	for (auto &stmt : multi_statement->statements) {
+	for (auto &stmt : multi_statement.statements) {
 		if (stmt->type == StatementType::SELECT_STATEMENT) {
 			is_pivot_statement = true;
 		}
@@ -93,7 +93,7 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
-			auto multi_statement = unique_ptr<MultiStatement>(static_cast<MultiStatement *>(statements[i].release()));
+			auto &multi_statement = statements[i]->Cast<MultiStatement>();
 			UnpackMultiStatement(multi_statement, is_in_active_transaction, new_statements);
 			break;
 		}
