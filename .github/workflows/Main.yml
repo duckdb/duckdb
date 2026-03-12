@@ -53,6 +53,7 @@ jobs:
       (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
     outputs:
+      runner_linux_small: ${{ steps.select_runner.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
       runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
@@ -73,6 +74,7 @@ jobs:
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
             {
+              echo "runner_linux_small=namespace-profile-linux-small"
               echo "runner_linux_x64=namespace-profile-linux-x64"
               echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
               echo "runner_linux_arm64=namespace-profile-linux-arm64"
@@ -80,6 +82,7 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           else
             {
+              echo "runner_linux_small=ubuntu-latest"
               echo "runner_linux_x64=ubuntu-latest"
               echo "runner_linux_22_x64=ubuntu-22.04"
               echo "runner_linux_arm64=ubuntu-24.04-arm"
@@ -121,6 +124,7 @@ jobs:
       FORCE_DEBUG: 1
       FORCE_ASSERT: 1
       REDUCE_SYMBOLS: 1
+      EXTENSIONS_STATIC_BUILD: 0
 
     steps:
     - uses: actions/checkout@v4
@@ -188,7 +192,14 @@ jobs:
  regression:
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
+      - linux-release
+    with:
+      build_current_release: 'false'
+      runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
+      runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
  code-quality:
     uses: ./.github/workflows/CodeQuality.yml
@@ -219,32 +230,9 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+    - uses: ./.github/actions/linux_release_build
       with:
-        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
-
-    - name: Build
-      env:
-        BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
-        DISABLE_SANITIZER: 1
-        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        USE_MERGED_VCPKG_MANIFEST: 1
-      run: make release
-
-    - name: Smoke tests
-      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
-
-    - name: Prepare release artifact
-      run: make release-artifact
-
-    - name: Upload release build artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-release-build
-        path: build/release-artifact.tar.gz
-        if-no-files-found: error
+        artifact_name: linux-release-build
 
     - name: Build linux default release
       run: make clean release
@@ -462,8 +450,10 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
-    runs-on: ubuntu-24.04
-    needs: linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: clang
       CXX: clang++
