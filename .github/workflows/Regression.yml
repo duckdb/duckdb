@@ -90,26 +90,12 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
-    env:
-      CC: gcc-13
-      CXX: g++-13
-      GEN: ninja
-      BUILD_BENCHMARK: 1
-      BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "json;tpch;tpcds;httpfs;inet;icu"
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       - name: Install
-        shell: bash
-        run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install requests
+        run: make toolsci && pip install requests
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
@@ -144,61 +130,51 @@ jobs:
 
       - name: Regression Test Fivetran
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test Micro
         if: always()
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/micro.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test Ingestion Perf
         if: always()
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/ingestion.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCH
         if: always()
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCH-PARQUET
         if: always()
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpch_parquet.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test TPCDS
         if: always()
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/tpcds.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test H2OAI
         if: always()
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/h2oai.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test IMDB
         if: always()
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/imdb.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test CSV
         if: always()
-        shell: bash
         run: |
           python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks .github/regression/csv.csv --verbose --threads 2 --clear-benchmark-cache
 
       - name: Regression Test RealNest
         if: always()
-        shell: bash
         run: |
           mkdir -p duckdb_benchmark_data
           wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
@@ -209,23 +185,11 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
-    env:
-      CC: gcc-13
-      CXX: g++-13
-      GEN: ninja
-      CORE_EXTENSIONS: "tpch;tpcds"
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       - name: Install
-        shell: bash
         run: make toolsci && pip install requests
 
       - name: Download current release artifact
@@ -251,12 +215,10 @@ jobs:
           tar -xzf build/base/release-artifact.tar.gz -C build/base
 
       - name: Regression Test
-        shell: bash
         run: |
           python scripts/regression_test_storage_size.py --old build/base/release/duckdb --new build/current/release/duckdb
 
       - name: Test for incompatibility
-        shell: bash
         run: |
           if (cmp test/sql/storage_version/storage_version.db build/base/release/test/sql/storage_version/storage_version.db); then
             echo "storage_changed=false" >> $GITHUB_ENV
@@ -265,7 +227,6 @@ jobs:
           fi
 
       - name: Regression Compatibility Test (testing bidirectional compatibility)
-        shell: bash
         if: env.storage_changed == 'false'
         run: |
           # Regenerate test/sql/storage_version.db with newer version -> read with older version
@@ -279,7 +240,6 @@ jobs:
           ./build/current/release/duckdb build/base/release/test/sql/storage_version/storage_version.db
 
       - name: Regression Compatibility Test (testing storage version has been bumped)
-        shell: bash
         if: env.storage_changed == 'true'
         run: |
           python3 scripts/generate_storage_version.py
@@ -301,23 +261,12 @@ jobs:
       - linux-base
     runs-on: ${{ inputs.runner_linux_small }}
     env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      CORE_EXTENSIONS: "tpch;tpcds;json;parquet"
       EXTENSION_STATIC_BUILD: 1
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       - name: Install
-        shell: bash
         run: make toolsci && pip install requests
 
       - name: Download current release artifact
@@ -343,7 +292,6 @@ jobs:
           tar -xzf build/base/release-artifact.tar.gz -C build/base
 
       - name: Regression Test Extension binary size
-        shell: bash
         run: |
           python scripts/regression_test_extension_size.py --old build/base/release/extension --new build/current/release/extension --expect json,parquet,tpch,tpcds
 
@@ -352,24 +300,12 @@ jobs:
     needs:
       - linux-base
     runs-on: ubuntu-24.04
-    env:
-      CC: gcc-13
-      CXX: g++-13
-      GEN: ninja
-      CORE_EXTENSIONS: "tpch;httpfs"
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
       - name: Install
-        shell: bash
-        run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install tqdm
+        run: make toolsci && pip install tqdm
 
       - name: Download current release artifact
         uses: actions/download-artifact@v4
@@ -395,12 +331,10 @@ jobs:
 
       - name: Regression Test IMDB
         if: always()
-        shell: bash
         run: |
           python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/imdb_plan_cost
 
       - name: Regression Test TPCH
         if: always()
-        shell: bash
         run: |
           python scripts/plan_cost_runner.py --old build/base/release/duckdb --new build/current/release/duckdb --dir=benchmark/tpch_plan_cost
