@@ -331,16 +331,8 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				throw BinderException("Expected geoparquet_version 'NONE', 'V1' or 'BOTH'");
 			}
 		} else if (loption == "timestamp_is_adjusted_to_utc") {
-			const auto roption = StringUtil::Upper(option.second[0].ToString());
-			if (roption == "AUTO") {
-				bind_data->timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::AUTO;
-			} else if (roption == "TRUE") {
-				bind_data->timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::TRUE;
-			} else if (roption == "FALSE") {
-				bind_data->timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::FALSE;
-			} else {
-				throw BinderException("Expected timestamp_is_adjusted_to_utc 'AUTO', 'TRUE' or 'FALSE'");
-			}
+			bind_data->timestamp_is_adjusted_to_utc =
+			    EnumUtil::FromString<TimeStampIsAdjustedToUTC>(StringUtil::Upper(option.second[0].ToString()));
 		} else {
 			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
