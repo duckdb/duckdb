@@ -150,6 +150,8 @@ struct ShellTableInfo {
 	vector<ShellColumnInfo> columns;
 };
 
+enum class BailOnError { AUTOMATIC, BAIL_ON_ERROR, DONT_BAIL_ON_ERROR };
+
 /*
 ** State information about the database connection is contained in an
 ** instance of the following structure.
@@ -203,7 +205,7 @@ public:
 	string initFile;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
 	//! If the following flag is set, then command execution stops at an error
-	bool bail_on_error = false;
+	BailOnError bail = BailOnError::AUTOMATIC;
 	//! Table name when rendering a DESCRIBE statement
 	string describe_table_name;
 
@@ -380,8 +382,9 @@ public:
 	int RunOneSqlLine(InputMode mode, char *zSql);
 	string GetDefaultDuckDBRC();
 	bool ProcessDuckDBRC(const char *file);
-	bool ProcessFile(const string &file, bool is_duckdb_rc = false);
+	bool ProcessFile(const string &file, InputMode input_mode = InputMode::FILE, bool default_duckdb_rc = false);
 	int ProcessInput(InputMode mode);
+	bool BailOnError(InputMode mode);
 	static bool SQLIsComplete(const char *zSql);
 	static bool IsSpace(char c);
 	static bool IsDigit(char c);

@@ -11,7 +11,13 @@
 namespace duckdb_shell {
 
 MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
-	state.bail_on_error = state.StringToBool(args[1]);
+	if (args[1] == "auto") {
+		state.bail = BailOnError::AUTOMATIC;
+	} else if (state.StringToBool(args[1])) {
+		state.bail = BailOnError::BAIL_ON_ERROR;
+	} else {
+		state.bail = BailOnError::DONT_BAIL_ON_ERROR;
+	}
 	return MetadataResult::SUCCESS;
 }
 

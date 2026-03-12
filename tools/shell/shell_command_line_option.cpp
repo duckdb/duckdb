@@ -27,7 +27,7 @@ MetadataResult ToggleCSVMode(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult EnableBail(ShellState &state, const vector<string> &args) {
-	state.bail_on_error = true;
+	state.bail = BailOnError::BAIL_ON_ERROR;
 	return MetadataResult::SUCCESS;
 }
 
@@ -115,14 +115,11 @@ MetadataResult SetStorageVersion(ShellState &state, const vector<string> &args) 
 
 MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
 	state.readStdin = false;
-	auto old_bail = state.bail_on_error;
-	state.bail_on_error = true;
 	auto &file = args[1];
 	if (!state.ProcessFile(file)) {
 		exit(1);
 		return MetadataResult::EXIT;
 	}
-	state.bail_on_error = old_bail;
 	return MetadataResult::SUCCESS;
 }
 
@@ -137,7 +134,10 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 		state.readStdin = false;
 	}
 	// Always bail if -c or -s fail
-	bool bail = state.bail_on_error || EXIT;
+	bool bail = true;
+	if (state.bail != BailOnError::AUTOMATIC) {
+		bail = state.bail == BailOnError::BAIL_ON_ERROR;
+	}
 	auto &cmd = args[1];
 	auto rc = state.RunInitialCommand(cmd.c_str(), bail);
 	if (rc != 0) {

@@ -140,6 +140,60 @@ def test_bail_off_continues_after_error(shell):
     result.check_stderr("Parser Error: syntax error at or near \"invalid\"")
     assert "reached here" in str(result.stdout)
 
+def test_bail_on_missing_init(shell):
+    test = (
+        ShellTest(shell, ['-init', '___thisfiledoesnotexist'])
+        .statement("select 'reached here'")
+    )
+
+    result = test.run()
+    result.check_stderr("___thisfiledoesnotexist")
+    assert "reached here" not in str(result.stdout)
+
+@pytest.mark.parametrize('generated_file', ["selec 42;"], indirect=True)
+def test_bail_within_init(shell, generated_file):
+    test = (
+        ShellTest(shell, ['-init', generated_file])
+        .statement("select 'reached here'")
+    )
+
+    result = test.run()
+    result.check_stderr("selec")
+    assert "reached here" not in str(result.stdout)
+
+@pytest.mark.parametrize('generated_file', ["selec 42;\nselect 'reached here'"], indirect=True)
+def test_bail_within_read(shell, generated_file):
+    test = (
+        ShellTest(shell)
+        .statement(".read \"" + str(generated_file) + "\"")
+    )
+
+    result = test.run()
+    result.check_stderr("selec")
+    assert "reached here" not in str(result.stdout)
+@pytest.mark.parametrize('generated_file', [".bail off\nselec 42;"], indirect=True)
+def test_explicit_bail_within_init(shell, generated_file):
+    test = (
+        ShellTest(shell, ['-init', generated_file])
+        .statement("select 'reached here'")
+    )
+
+    result = test.run()
+    result.check_stderr("selec")
+    assert "reached here" in str(result.stdout)
+
+@pytest.mark.parametrize('generated_file', ["selec 42;\nselect 'reached here'"], indirect=True)
+def test_explicit_bail_within_read(shell, generated_file):
+    test = (
+        ShellTest(shell)
+        .statement(".bail off")
+        .statement(".read \"" + str(generated_file) + "\"")
+    )
+
+    result = test.run()
+    result.check_stderr("selec")
+    assert "reached here" in str(result.stdout)
+
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 def test_shell_command(shell):
     test = (

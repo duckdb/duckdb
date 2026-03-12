@@ -2749,6 +2749,14 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	return 0;
 }
 
+bool ShellState::BailOnError(InputMode mode) {
+	if (bail != BailOnError::AUTOMATIC) {
+		return bail == BailOnError::BAIL_ON_ERROR;
+	}
+	// by default bail on error in file and duckdb_rc modes
+	return mode == InputMode::FILE || mode == InputMode::DUCKDB_RC;
+}
+
 /*
 ** Read input from *in and process it.  If *in==0 then input
 ** is interactive - the user is typing it it.  Otherwise, input
@@ -2769,7 +2777,7 @@ int ShellState::ProcessInput(InputMode mode) {
 	idx_t errCnt = 0;      /* Number of errors seen */
 	idx_t numCtrlC = 0;
 	lineno = 0;
-	while (errCnt == 0 || !bail_on_error || (!in && stdin_is_interactive)) {
+	while (errCnt == 0 || !BailOnError(mode) || (!in && stdin_is_interactive)) {
 		fflush(out);
 		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
@@ -2897,22 +2905,19 @@ string ShellState::GetDefaultDuckDBRC() {
 ** Returns true if successful, false otherwise.
 */
 
-bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
+bool ShellState::ProcessFile(const string &file, InputMode input_mode, bool default_duckdb_rc) {
 	FILE *inSaved = in;
 	int savedLineno = lineno;
 	int rc = 0;
 
 	in = fopen(file.c_str(), "rb");
 	if (in) {
-		InputMode input_mode = InputMode::FILE;
-		if (stdin_is_interactive && is_duckdb_rc) {
-			input_mode = InputMode::DUCKDB_RC;
-			duckdb_rc_path = file;
-		}
 		rc = ProcessInput(input_mode);
 		fclose(in);
-	} else if (!is_duckdb_rc) {
-		PrintF(PrintOutput::STDERR, "Failed to read file \"%s\"\n", file.c_str());
+	} else if (input_mode != InputMode::DUCKDB_RC || !default_duckdb_rc) {
+		// we always error in regular file reading mode
+		// when reading the init file we only error if the file is explicitly specified by the user
+		PrintDatabaseError("IO Error: Failed to open file \"" + file + "\"");
 		rc = 1;
 	}
 	in = inSaved;
@@ -2922,6 +2927,7 @@ bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 
 bool ShellState::ProcessDuckDBRC(const char *file) {
 	string path;
+	bool is_default = false;
 	if (!file) {
 		// use default .duckdbrc path
 		path = ShellState::GetDefaultDuckDBRC();
@@ -2932,8 +2938,10 @@ bool ShellState::ProcessDuckDBRC(const char *file) {
 			return true;
 		}
 		file = path.c_str();
+		is_default = true;
 	}
-	return ProcessFile(file, true);
+	duckdb_rc_path = file;
+	return ProcessFile(file, InputMode::DUCKDB_RC, is_default);
 }
 
 #ifdef HAVE_LINENOISE
@@ -3180,8 +3188,16 @@ int wmain(int argc, wchar_t **wargv) {
 	** is given on the command line, look for a file named ~/.sqliterc and
 	** try to process it.
 	*/
-	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str()) && data.bail_on_error) {
-		return 1;
+	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str())) {
+		// failed to process init file - check if we should bail
+		bool bail_on_init_fail = data.bail != BailOnError::DONT_BAIL_ON_ERROR;
+		if (bail_on_init_fail) {
+			if (!data.duckdb_rc_path.empty()) {
+				data.PrintDatabaseError("Encountered errors while executing init file \"" + data.duckdb_rc_path +
+				                        "\". Exiting.");
+			}
+			return 1;
+		}
 	}
 
 	data.DetectDarkLightMode();
