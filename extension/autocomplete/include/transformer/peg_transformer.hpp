@@ -183,7 +183,7 @@ public:
 	static bool TryNegateValue(Value &val);
 	static unique_ptr<ParsedExpression> ConvertNumberToValue(string val);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
-	                                 GroupByNode &result, vector<idx_t> &result_set);
+	                                 GroupByNode &result, vector<ProjectionIndex> &result_set);
 	static vector<GroupingSet> GroupByExpressionUnfolding(PEGTransformer &transformer,
 	                                                      optional_ptr<ParseResult> group_by_expr,
 	                                                      GroupingExpressionMap &map, GroupByNode &result);

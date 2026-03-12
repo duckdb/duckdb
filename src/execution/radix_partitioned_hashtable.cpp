@@ -17,9 +17,9 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
                                                      TupleDataValidityType group_validity_p)
     : grouping_set(grouping_set_p), op(op_p), group_validity(group_validity_p) {
 	auto groups_count = op.GroupCount();
-	for (idx_t i = 0; i < groups_count; i++) {
-		if (grouping_set.find(i) == grouping_set.end()) {
-			null_groups.push_back(i);
+	for (auto group_idx : ProjectionIndex::GetIndexes(groups_count)) {
+		if (grouping_set.find(group_idx) == grouping_set.end()) {
+			null_groups.push_back(group_idx.index);
 		}
 	}
 	if (grouping_set.empty()) {
@@ -27,8 +27,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 		group_types.emplace_back(LogicalType::TINYINT);
 	}
 	for (auto &entry : grouping_set) {
-		D_ASSERT(entry < op.group_types.size());
-		group_types.push_back(op.group_types[entry]);
+		group_types.push_back(op.group_types[entry.index]);
 	}
 	SetGroupingValues();
 
@@ -407,7 +406,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	// Populate the group_chunk
 	for (auto &group_idx : grouping_set) {
 		// Retrieve the expression containing the index in the input chunk
-		auto &group = op.groups[group_idx];
+		auto &group = op.groups[group_idx.index];
 		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
@@ -921,7 +920,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	auto &radix_ht = sink.radix_ht;
 	idx_t chunk_index = 0;
 	for (auto &entry : radix_ht.grouping_set) {
-		chunk.data[entry].Reference(scan_chunk.data[chunk_index++]);
+		chunk.data[entry.index].Reference(scan_chunk.data[chunk_index++]);
 	}
 	for (auto null_group : radix_ht.null_groups) {
 		chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);

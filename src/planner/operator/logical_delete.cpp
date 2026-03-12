@@ -34,7 +34,7 @@ vector<ColumnBinding> LogicalDelete::GetColumnBindings() {
 		auto virtual_columns = table.GetVirtualColumns();
 		return GenerateColumnBindings(table_index, table.GetTypes().size() + virtual_columns.size());
 	}
-	return {ColumnBinding(TableIndex(0), 0)};
+	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
 }
 
 void LogicalDelete::ResolveTypes() {

@@ -4,6 +4,17 @@
 
 namespace duckdb {
 
+LogicalRecursiveCTE::LogicalRecursiveCTE() : LogicalCTE(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+}
+
+LogicalRecursiveCTE::LogicalRecursiveCTE(string ctename_p, TableIndex table_index, idx_t column_count, bool union_all,
+                                         vector<unique_ptr<Expression>> key_targets, unique_ptr<LogicalOperator> top,
+                                         unique_ptr<LogicalOperator> bottom)
+    : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(top), std::move(bottom),
+                 LogicalOperatorType::LOGICAL_RECURSIVE_CTE),
+      union_all(union_all), key_targets(std::move(key_targets)) {
+}
+
 InsertionOrderPreservingMap<string> LogicalRecursiveCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
@@ -23,6 +34,29 @@ string LogicalRecursiveCTE::GetName() const {
 	}
 #endif
 	return LogicalOperator::GetName();
+}
+
+void LogicalRecursiveCTE::ResolveTypes() {
+	types = children[0]->types;
+
+	if (payload_aggregates.empty()) {
+		return;
+	}
+
+	unordered_set<ProjectionIndex> key_idx;
+	for (auto &key_target : key_targets) {
+		D_ASSERT(key_target->type == ExpressionType::BOUND_COLUMN_REF);
+		auto &bound_ref = key_target->Cast<BoundColumnRefExpression>();
+		key_idx.insert(bound_ref.binding.column_index);
+	}
+
+	idx_t pay_idx = 0;
+	for (idx_t i = 0; i < types.size(); ++i) {
+		if (key_idx.find(ProjectionIndex(i)) != key_idx.end()) {
+			continue;
+		}
+		types[i] = payload_aggregates[pay_idx++]->return_type;
+	}
 }
 
 } // namespace duckdb
