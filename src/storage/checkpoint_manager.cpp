@@ -49,17 +49,17 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 	}
 }
 
-void ActiveCheckpointWrapper::SetCheckpointTransaction(DuckTransaction &txn) {
-	checkpoint_txn = &txn;
-	txn.is_checkpoint_transaction = true;
+void ActiveCheckpointWrapper::SetCheckpointTransaction(DuckTransaction &transaction) {
+	checkpoint_transaction = &transaction;
+	transaction.is_checkpoint_transaction = true;
 	transaction_manager.SetActiveCheckpoint();
 }
 
 void ActiveCheckpointWrapper::Commit() {
-	if (!checkpoint_txn) {
+	if (!checkpoint_transaction) {
 		return;
 	}
-	auto error = transaction_manager.CommitTransaction(*context, *checkpoint_txn);
+	auto error = transaction_manager.CommitTransaction(*context, *checkpoint_transaction);
 	transaction_manager.ResetActiveCheckpoint();
 	MetaTransaction::Get(*context).RemoveTransaction(db);
 	if (owns_meta_transaction) {
@@ -317,6 +317,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 			storage_manager.WALFinishCheckpoint(*wal_lock);
 		}
 	} catch (std::exception &ex) {
+		// any exceptions thrown here are fatal
 		ErrorData error(ex);
 		if (error.Type() == ExceptionType::FATAL) {
 			ValidChecker::Invalidate(db.GetDatabase(), error.Message());
@@ -343,7 +344,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &index_list = table_info->GetIndexes();
 		index_list.MergeCheckpointDeltas(options.transaction_id);
 	}
-
 	active_checkpoint.Commit();
 }
 

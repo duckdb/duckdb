@@ -58,6 +58,7 @@ void TransactionContext::Commit(bool notify_states) {
 				s->TransactionRollback(*transaction, context, error);
 			}
 			if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
+				// throw fatal / internal exceptions directly
 				error.Throw();
 			}
 		}
