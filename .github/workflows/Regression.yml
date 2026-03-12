@@ -77,6 +77,11 @@ jobs:
           git checkout --detach "${BASE_REF}"
           git submodule update --init --recursive
 
+          # Restore all build related files. This means that any new/changed
+          # compiler/linker optimization is now also applied to the base
+          # comparison build and thus not identical to the "real" base build.
+          git restore --source="${GITHUB_SHA}" --worktree --staged .github Makefile scripts
+
       - name: Build base release
         uses: ./.github/actions/linux_release_build
         with:
