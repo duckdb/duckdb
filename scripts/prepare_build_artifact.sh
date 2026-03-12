@@ -48,7 +48,7 @@ else
 	echo "No $BUILD_DIR/benchmark/benchmark_runner file found"
 fi
 
-# Required by extension tests using __BUILD_DIRECTORY__/test/extension/*.duckdb_extension.
+# Required by extension tests using build/<type>/test/extension/*.duckdb_extension.
 extension_files=("$BUILD_DIR"/test/extension/*.duckdb_extension)
 if ((${#extension_files[@]} > 0)); then
 	for extension in "${extension_files[@]}"; do
@@ -56,6 +56,18 @@ if ((${#extension_files[@]} > 0)); then
 	done
 else
 	echo "No $BUILD_DIR/test/extension/*.duckdb_extension files found"
+fi
+
+# Required by regression tests using build/<type>/extension/*.duckdb_extension.
+extension_files=("$BUILD_DIR"/extension/*/*.duckdb_extension)
+if ((${#extension_files[@]} > 0)); then
+	for extension in "${extension_files[@]}"; do
+		relative_path="${extension#"$BUILD_DIR"/}"
+		mkdir -p "$ARTIFACT_DIR/$(dirname "$relative_path")"
+		cp -av "$extension" "$ARTIFACT_DIR/$relative_path"
+	done
+else
+	echo "No $BUILD_DIR/extension/*/*.duckdb_extension files found"
 fi
 
 # Required by tests that use the local extension repository under the build directory.
