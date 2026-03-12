@@ -128,8 +128,6 @@ enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
 
-enum class CompressionFunctionSetLoadResult : uint8_t;
-
 enum class CompressionType : uint8_t;
 
 enum class CompressionValidity : uint8_t;
@@ -652,9 +650,6 @@ const char* EnumUtil::ToChars<ColumnSegmentType>(ColumnSegmentType value);
 
 template<>
 const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMaterializationDirection value);
-
-template<>
-const char* EnumUtil::ToChars<CompressionFunctionSetLoadResult>(CompressionFunctionSetLoadResult value);
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
@@ -1367,9 +1362,6 @@ ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value);
 
 template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value);
-
-template<>
-CompressionFunctionSetLoadResult EnumUtil::FromString<CompressionFunctionSetLoadResult>(const char *value);
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
