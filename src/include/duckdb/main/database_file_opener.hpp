@@ -13,6 +13,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/common/http_util.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -37,8 +38,8 @@ public:
 	optional_ptr<DatabaseInstance> TryGetDatabase() override {
 		return &db;
 	}
-	shared_ptr<HTTPUtil> &GetHTTPUtil() override {
-		return TryGetDatabase()->config.http_util;
+	HTTPUtil &GetHTTPUtil() override {
+		return HTTPUtil::Get(*TryGetDatabase());
 	}
 
 private:
