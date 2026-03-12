@@ -55,8 +55,9 @@ ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSource(PEGTransforme
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateExtensionsStatement(
-    PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformUpdateExtensionsStatement(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
 	// UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 	// child 0: 'UPDATE', child 1: 'EXTENSIONS', child 2: optional Parens(List(Identifier))
 	auto &list_pr = parse_result->Cast<ListParseResult>();
