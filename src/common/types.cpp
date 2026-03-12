@@ -248,14 +248,20 @@ const vector<LogicalType> LogicalType::Real() {
 
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
-	    LogicalType::BOOLEAN,  LogicalType::TINYINT,      LogicalType::SMALLINT,  LogicalType::INTEGER,
-	    LogicalType::BIGINT,   LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-	    LogicalType::FLOAT,    LogicalType::VARCHAR,      LogicalType::BLOB,      LogicalType::BIT,
-	    LogicalType::BIGNUM,   LogicalType::INTERVAL,     LogicalType::HUGEINT,   LogicalTypeId::DECIMAL,
-	    LogicalType::UTINYINT, LogicalType::USMALLINT,    LogicalType::UINTEGER,  LogicalType::UBIGINT,
-	    LogicalType::UHUGEINT, LogicalType::TIME,         LogicalTypeId::LIST,    LogicalTypeId::STRUCT,
-	    LogicalType::TIME_TZ,  LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,     LogicalTypeId::UNION,
-	    LogicalType::UUID,     LogicalTypeId::ARRAY};
+	    LogicalTypeId::BOOLEAN,   LogicalTypeId::TINYINT,       LogicalTypeId::SMALLINT,
+	    LogicalTypeId::INTEGER,   LogicalTypeId::BIGINT,        LogicalTypeId::DATE,
+	    LogicalTypeId::TIME,      LogicalTypeId::TIMESTAMP_SEC, LogicalTypeId::TIMESTAMP_MS,
+	    LogicalTypeId::TIMESTAMP, LogicalTypeId::TIMESTAMP_NS,  LogicalTypeId::DECIMAL,
+	    LogicalTypeId::FLOAT,     LogicalTypeId::DOUBLE,        LogicalTypeId::CHAR,
+	    LogicalTypeId::VARCHAR,   LogicalTypeId::BLOB,          LogicalTypeId::INTERVAL,
+	    LogicalTypeId::UTINYINT,  LogicalTypeId::USMALLINT,     LogicalTypeId::UINTEGER,
+	    LogicalTypeId::UBIGINT,   LogicalTypeId::TIMESTAMP_TZ,  LogicalTypeId::TIME_TZ,
+	    LogicalTypeId::TIME_NS,   LogicalTypeId::BIT,           LogicalTypeId::BIGNUM,
+	    LogicalTypeId::UHUGEINT,  LogicalTypeId::HUGEINT,       LogicalTypeId::UUID,
+	    LogicalTypeId::GEOMETRY,  LogicalTypeId::STRUCT,        LogicalTypeId::LIST,
+	    LogicalTypeId::MAP,       LogicalTypeId::ENUM,          LogicalTypeId::UNION,
+	    LogicalTypeId::ARRAY,     LogicalTypeId::VARIANT,
+	};
 	return types;
 }
 
@@ -1129,7 +1135,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 }
 
 template <class OP>
-bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+static bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
 		result = left;
@@ -1359,6 +1365,14 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 }
 
 void LogicalType::Serialize(Serializer &serializer) const {
+	// Serialize geometry as old extension geometry type if required
+	if (id_ == LogicalTypeId::GEOMETRY && !serializer.ShouldSerialize(7)) {
+		// This will drop the CRS information, but that's better than throwing an error.
+		auto legacy_geom = Geometry::GetSpatialGeometryType();
+		legacy_geom.Serialize(serializer);
+		return;
+	}
+
 	// This is a UNBOUND type and we are writing to older storage.
 	// 1. try to default-bind into a concrete logical type, and serialize that
 	// 2. if that fails, serialize normally, in which case the UNBOUND_TYPE_INFO will try to
@@ -1381,7 +1395,14 @@ void LogicalType::Serialize(Serializer &serializer) const {
 LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
 	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info");
+
 	LogicalType result(id, std::move(type_info));
+
+	if (Geometry::IsSpatialGeometryType(result)) {
+		// This is a legacy geometry type, deserialize as geometry
+		return LogicalType::GEOMETRY();
+	}
+
 	return result;
 }
 

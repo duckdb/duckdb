@@ -98,6 +98,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 
 	if (!info.IsValid()) {
 		// We create a new ART.
+		storage_version = db.GetStorageManager().GetStorageVersion();
 		return;
 	}
 
@@ -110,6 +111,18 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	// Set the root node and initialize the allocators.
 	tree.Set(info.root);
 	InitAllocators(info);
+
+	// Set the storage version of the ART
+	auto it = info.options.find("storage_version");
+	if (it != info.options.end()) {
+		// If this is an existing index with a saved storage version, use it.
+		storage_version = it->second.GetValue<idx_t>();
+	} else {
+		// Otherwise, this must be an existing index without a saved storage version.
+		// We started saving the storage version in v1.5.0, so if it is not present,
+		// we can not make any general assumptions about the exact storage version.
+		storage_version = optional_idx::Invalid();
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -395,14 +408,65 @@ void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
+static bool KeyInputNeedConversion(const vector<LogicalType> &types, optional_idx storage_version) {
+	// We only started tracking the storage version of the index in v1.5.0.
+	// Old GEOMETRY columns (pre v1.5.0) had a different internal representation.
+	if (!storage_version.IsValid() || (storage_version.GetIndex() < 7)) {
+		for (auto &type : types) {
+			// ART does not support nested types, so we only need to check the top-level type.
+			if (type.id() == LogicalTypeId::GEOMETRY) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
+	vector<LogicalType> new_types;
+
+	for (auto &type : input.GetTypes()) {
+		if (type.id() == LogicalTypeId::GEOMETRY) {
+			new_types.push_back(LogicalType::BLOB);
+		} else {
+			new_types.push_back(type);
+		}
+	}
+
+	// Initialize the result chunk with the new types
+	result.Initialize(Allocator::DefaultAllocator(), new_types, input.size());
+
+	// Reference or convert the input data into the result chunk
+	for (idx_t i = 0; i < input.ColumnCount(); i++) {
+		if (input.data[i].GetType().id() == LogicalTypeId::GEOMETRY) {
+			Geometry::ToSpatialGeometry(input.data[i], result.data[i], input.size());
+		} else {
+			result.data[i].Reference(input.data[i]);
+		}
+	}
+
+	result.SetCardinality(input.size());
+}
+
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
                              unsafe_vector<ARTKey> &row_id_keys) {
-	GenerateKeys<>(allocator, input, keys);
+	auto key_input = &input;
+
+	DataChunk converted_chunk;
+	// Do we need to convert the input first before generating keys?
+	if (KeyInputNeedConversion(input.GetTypes(), storage_version)) {
+		ConvertKeyInput(input, converted_chunk);
+		key_input = &converted_chunk;
+	}
+
+	GenerateKeys<>(allocator, *key_input, keys);
 
 	DataChunk row_id_chunk;
-	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, input.size());
+	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE},
+	                        key_input->size());
 	row_id_chunk.data[0].Reference(row_ids);
-	row_id_chunk.SetCardinality(input.size());
+	row_id_chunk.SetCardinality(key_input->size());
 	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
 }
 
@@ -705,7 +769,8 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	}
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
-	auto key = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[0]);
+
+	auto key = ARTKey::CreateKey(arena_allocator, scan_state.values[0], storage_version);
 
 	lock_guard<mutex> l(lock);
 	if (scan_state.values[1].IsNull()) {
@@ -728,7 +793,8 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 
 	// Two predicates.
 	D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
-	auto upper_bound = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[1]);
+
+	auto upper_bound = ARTKey::CreateKey(arena_allocator, scan_state.values[1], storage_version);
 
 	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
@@ -943,6 +1009,11 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	IndexStorageInfo info(name);
 	info.root = tree.Get();
 	info.options = options;
+
+	// It never hurts to serialize the storage version, even to older formats
+	if (storage_version.IsValid()) {
+		info.options["storage_version"] = Value::UBIGINT(storage_version.GetIndex());
+	}
 
 	for (auto &allocator : *allocators) {
 		allocator->RemoveEmptyBuffers();

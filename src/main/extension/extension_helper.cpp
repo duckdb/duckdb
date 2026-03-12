@@ -246,6 +246,22 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
+		if (Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
+			ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+			return true;
+		}
+		return false;
+	} catch (...) {
+		return false;
+	}
+}
+
+bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
+	if (instance.ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+	try {
+		auto &fs = FileSystem::GetFileSystem(instance);
 		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
 		return true;
 	} catch (...) {

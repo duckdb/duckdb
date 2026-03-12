@@ -590,8 +590,8 @@ void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 				frame_width += frame.end - frame.start;
 			}
 
-			if (n < frame_width) {
-				const auto nth_index = gvstate.value_tree->SelectNth(frames, n - 1);
+			if (--n < frame_width) {
+				const auto nth_index = gvstate.value_tree->SelectNth(frames, n);
 				if (nth_index.second || nth_index.first >= cursor.Count()) {
 					// Past end of frame
 					FlatVector::SetNull(result, i, true);

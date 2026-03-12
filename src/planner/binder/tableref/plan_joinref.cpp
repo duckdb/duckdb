@@ -231,20 +231,25 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
                                                               unique_ptr<LogicalOperator> right_child,
                                                               vector<JoinCondition> conditions,
                                                               vector<unique_ptr<Expression>> arbitrary_expressions) {
-	const bool is_asof = ref_type == JoinRefType::ASOF;
+	auto is_asof = (ref_type == JoinRefType::ASOF);
 
 	// validate ASOF join conditions
 	if (is_asof) {
-		//	We can't support arbitrary predicates with some ASOF joins
 		switch (type) {
 		case JoinType::RIGHT:
 		case JoinType::OUTER:
-		case JoinType::SEMI:
-		case JoinType::ANTI:
+			//	We can't (yet) support arbitrary predicates with some ASOF joins
 			if (!arbitrary_expressions.empty()) {
 				throw NotImplementedException("Unsupported ASOF JOIN type (%s) with arbitrary predicate",
 				                              EnumUtil::ToChars(type));
 			}
+			break;
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+			//	For these join types, we can use a regular join because the RHS match is not important
+			//	But we will verify the requirements of an ASOF.
+			is_asof = false;
+			ref_type = JoinRefType::REGULAR;
 			break;
 		default:
 			break;

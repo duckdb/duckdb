@@ -114,6 +114,10 @@ public:
 	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
 
+	//! Autoload an extension, only if available locally
+	DUCKDB_API static bool TryAutoLoadAvailableExtension(DatabaseInstance &instance,
+	                                                     const string &extension_name) noexcept;
+
 	//! Update all extensions, return a vector of extension names that were updated;
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
 	//! Update a specific extension

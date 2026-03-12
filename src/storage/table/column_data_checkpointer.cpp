@@ -13,7 +13,7 @@ namespace duckdb {
 
 //! ColumnDataCheckpointData
 
-CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
+const CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
 	auto &db = col_data->GetDatabase();
 	auto &column_type = col_data->type;
 	auto &config = DBConfig::GetConfig(db);
@@ -104,7 +104,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 }
 
 CompressionType ForceCompression(StorageManager &storage_manager,
-                                 vector<optional_ptr<CompressionFunction>> &compression_functions,
+                                 vector<optional_ptr<const CompressionFunction>> &compression_functions,
                                  CompressionType compression_type) {
 	// One of the force_compression flags has been set
 	// check if this compression method is available

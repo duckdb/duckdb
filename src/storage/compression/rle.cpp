@@ -223,7 +223,7 @@ struct RLECompressState : public CompressionState {
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 

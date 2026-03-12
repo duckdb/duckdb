@@ -300,8 +300,18 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 		} else if (entry.type == CatalogType::VIEW_ENTRY) {
 			auto &view = entry.Cast<ViewCatalogEntry>();
 			int32_t bonus = entry.internal ? 0 : 3;
-			for (auto &col : view.aliases) {
-				suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+			auto column_info = view.GetColumnInfo();
+			if (column_info) {
+				// view has names
+				for (idx_t n = 0; n < column_info->names.size(); n++) {
+					auto &name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
+					suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+				}
+			} else {
+				// add only aliases
+				for (auto &col : view.aliases) {
+					suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+				}
 			}
 		} else {
 			if (StringUtil::CharacterIsOperator(entry.name[0])) {
@@ -592,7 +602,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	vector<MatcherToken> tokens;
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
-	MatchState state(tokens, suggestions, parse_allocator);
+	idx_t max_token_index = 0;
+	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
@@ -789,7 +800,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		}
 		vector<MatcherSuggestion> suggestions;
 		ParseResultAllocator parse_allocator;
-		MatchState state(tokens, suggestions, parse_allocator);
+		idx_t max_token_index = 0;
+		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
 		MatcherAllocator allocator;
 		auto &matcher = Matcher::RootMatcher(allocator);

@@ -550,9 +550,15 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	if (window.window_index != filter_col_idx) {
 		return false;
 	}
+	const auto &first_window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
+	for (auto &partition : first_window_expr.partitions) {
+		if (partition->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			return false;
+		}
+	}
 	if (window.expressions.size() != 1) {
 		for (idx_t i = 1; i < window.expressions.size(); ++i) {
-			if (!window.expressions[i]->Equals(*window.expressions[0])) {
+			if (!window.expressions[i]->Equals(first_window_expr)) {
 				return false;
 			}
 		}
@@ -1042,9 +1048,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::ConstructLHS(LogicalGet &rhs,
 
 		vector<unique_ptr<Expression>> projs;
 		projs.reserve(projections.size());
-		for (auto projection_id : projections) {
-			projs.push_back(make_uniq<BoundColumnRefExpression>(lhs_get->types[projection_id],
-			                                                    ColumnBinding {lhs_get->table_index, projection_id}));
+		const auto &column_ids = lhs_get->GetColumnIds();
+		for (auto column_idx : projections) {
+			D_ASSERT(column_idx < column_ids.size());
+			const auto &column_type = lhs_get->GetColumnType(column_ids[column_idx]);
+			projs.push_back(
+			    make_uniq<BoundColumnRefExpression>(column_type, ColumnBinding {lhs_get->table_index, column_idx}));
 		}
 		auto projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(projs));
 		projection->children.push_back(std::move(lhs_get));

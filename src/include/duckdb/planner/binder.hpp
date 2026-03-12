@@ -114,6 +114,10 @@ public:
 		correlated_columns.insert(correlated_columns.begin(), std::move(info));
 		delim_index++;
 	}
+	void AddColumnToBack(container_type::value_type info) {
+		// Add to end
+		correlated_columns.push_back(std::move(info));
+	}
 
 	void SetDelimIndexToZero() {
 		delim_index = 0;

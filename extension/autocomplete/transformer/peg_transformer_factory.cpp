@@ -33,12 +33,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	}
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
-	MatchState state(tokens, suggestions, parse_result_allocator);
+	idx_t max_token_index = 0;
+	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case);
 	MatcherAllocator allocator;
 	auto &matcher = Matcher::RootMatcher(allocator);
 	auto match_result = matcher.MatchParseResult(state);
 	if (match_result == nullptr || state.token_index < state.tokens.size()) {
-		// TODO(dtenwolde) add error handling
+		idx_t error_token_idx = state.GetMaxTokenIndex();
+		if (error_token_idx >= tokens.size()) {
+			error_token_idx = tokens.size() - 1;
+		}
+		auto &error_token = tokens[error_token_idx];
 		string token_list;
 		for (idx_t i = 0; i < tokens.size(); i++) {
 			if (!token_list.empty()) {
@@ -49,8 +54,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 			}
 			token_list += to_string(i) + ":" + tokens[i].text;
 		}
-		throw ParserException("Failed to parse query - did not consume all tokens (got to token %d - %s)\nTokens:\n%s",
-		                      state.token_index, tokens[state.token_index].text, token_list);
+		auto error_message = "Syntax error at or near \"" + error_token.text + "\"";
+		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
 	match_result->name = "Statement";
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
@@ -105,6 +110,8 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformSequenceName);
 	REGISTER_TRANSFORM(TransformSetSortedBy);
 	REGISTER_TRANSFORM(TransformResetSortedBy);
+	REGISTER_TRANSFORM(TransformSetOptions);
+	REGISTER_TRANSFORM(TransformResetOptions);
 }
 
 void PEGTransformerFactory::RegisterAttach() {
@@ -212,6 +219,8 @@ void PEGTransformerFactory::RegisterCreateIndex() {
 	REGISTER_TRANSFORM(TransformRelOptionOrOids);
 	REGISTER_TRANSFORM(TransformRelOptionList);
 	REGISTER_TRANSFORM(TransformOids);
+	REGISTER_TRANSFORM(TransformRelOptionName);
+	REGISTER_TRANSFORM(TransformRelOptionArgumentOpt);
 	REGISTER_TRANSFORM(TransformRelOption);
 	REGISTER_TRANSFORM(TransformIndexName);
 }
@@ -260,6 +269,11 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformIdentifierList);
 	REGISTER_TRANSFORM(TransformCreateColumnList);
 	REGISTER_TRANSFORM(TransformCreateTableColumnList);
+	REGISTER_TRANSFORM(TransformPartitionSortedOptions);
+	REGISTER_TRANSFORM(TransformPartitionOptSortedOptions);
+	REGISTER_TRANSFORM(TransformSortedOptPartitionOptions);
+	REGISTER_TRANSFORM(TransformPartitionOptions);
+	REGISTER_TRANSFORM(TransformSortedOptions);
 	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformColIdOrString);
 	REGISTER_TRANSFORM(TransformColLabelOrString);
@@ -329,6 +343,7 @@ void PEGTransformerFactory::RegisterDescribe() {
 	// describe.gram
 	REGISTER_TRANSFORM(TransformDescribeStatement);
 	REGISTER_TRANSFORM(TransformShowSelect);
+	REGISTER_TRANSFORM(TransformShowTables);
 	REGISTER_TRANSFORM(TransformShowAllTables);
 	REGISTER_TRANSFORM(TransformShowQualifiedName);
 	REGISTER_TRANSFORM(TransformShowOrDescribeOrSummarize);
@@ -405,6 +420,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformComparisonOperator);
 	REGISTER_TRANSFORM(TransformOtherOperatorExpression);
 	REGISTER_TRANSFORM(TransformOtherOperator);
+	REGISTER_TRANSFORM(TransformQualifiedOperator);
+	REGISTER_TRANSFORM(TransformAnyOp);
 	REGISTER_TRANSFORM(TransformStringOperator);
 	REGISTER_TRANSFORM(TransformJsonOperator);
 	REGISTER_TRANSFORM(TransformInetOperator);
@@ -679,6 +696,8 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformColIdExpression);
 	REGISTER_TRANSFORM(TransformExpressionOptIdentifier);
 	REGISTER_TRANSFORM(TransformTableAlias);
+	REGISTER_TRANSFORM(TransformTableAliasAs);
+	REGISTER_TRANSFORM(TransformTableAliasWithoutAs);
 	REGISTER_TRANSFORM(TransformColumnAliases);
 	REGISTER_TRANSFORM(TransformNamedParameter);
 	REGISTER_TRANSFORM(TransformTableRef);

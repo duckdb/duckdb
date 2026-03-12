@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <termios.h>
 #include <unistd.h>
+#include <fcntl.h>
 #endif
 #include <stdlib.h>
 #include <stdio.h>
@@ -65,29 +66,8 @@ int Terminal::IsUnsupportedTerm() {
 	return 0;
 }
 
-/* Raw mode: 1960 magic shit. */
-int Terminal::EnableRawMode() {
-#if defined(_WIN32) || defined(WIN32)
-	if (console_in) {
-		// already in raw mode
-		return 0;
-	}
-	console_in = GetStdHandle(STD_INPUT_HANDLE);
-
-	GetConsoleMode(console_in, &old_mode);
-	auto new_mode = old_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
-	SetConsoleMode(console_in, new_mode);
-#else
-	int fd = STDIN_FILENO;
-
-	if (!isatty(STDIN_FILENO)) {
-		errno = ENOTTY;
-		return -1;
-	}
-	if (!atexit_registered) {
-		atexit(linenoiseAtExit);
-		atexit_registered = 1;
-	}
+#if !defined(_WIN32) && !defined(WIN32)
+int EnableRawModeInternal(int fd) {
 	if (tcgetattr(fd, &orig_termios) == -1) {
 		errno = ENOTTY;
 		return -1;
@@ -118,6 +98,42 @@ int Terminal::EnableRawMode() {
 		return -1;
 	}
 	rawmode = 1;
+	return 0;
+}
+
+void DisableRawModeInternal(int fd) {
+	/* Don't even check the return value as it's too late. */
+	if (rawmode && tcsetattr(fd, TCSADRAIN, &orig_termios) != -1) {
+		rawmode = 0;
+	}
+}
+
+#endif
+
+/* Raw mode: 1960 magic shit. */
+int Terminal::EnableRawMode() {
+#if defined(_WIN32) || defined(WIN32)
+	if (console_in) {
+		// already in raw mode
+		return 0;
+	}
+	console_in = GetStdHandle(STD_INPUT_HANDLE);
+
+	GetConsoleMode(console_in, &old_mode);
+	auto new_mode = old_mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+	SetConsoleMode(console_in, new_mode);
+#else
+	int fd = STDIN_FILENO;
+
+	if (!isatty(fd)) {
+		errno = ENOTTY;
+		return -1;
+	}
+	if (!atexit_registered) {
+		atexit(linenoiseAtExit);
+		atexit_registered = 1;
+	}
+	return EnableRawModeInternal(fd);
 #endif
 	return 0;
 }
@@ -132,10 +148,7 @@ void Terminal::DisableRawMode() {
 	}
 #else
 	int fd = STDIN_FILENO;
-	/* Don't even check the return value as it's too late. */
-	if (rawmode && tcsetattr(fd, TCSADRAIN, &orig_termios) != -1) {
-		rawmode = 0;
-	}
+	DisableRawModeInternal(fd);
 #endif
 }
 
@@ -236,11 +249,10 @@ int Terminal::HasMoreData(int fd, idx_t timeout_micros) {
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
 
-	// no timeout: return immediately
 	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = static_cast<int>(timeout_micros);
-	return select(1, &rfds, NULL, NULL, &tv);
+	tv.tv_sec = static_cast<time_t>(timeout_micros / 1000000);
+	tv.tv_usec = static_cast<int>(timeout_micros % 1000000);
+	return select(fd + 1, &rfds, NULL, NULL, &tv);
 #endif
 }
 
@@ -420,6 +432,9 @@ bool ParseTerminalColor(TerminalColor &color, const char *buf, idx_t buflen) {
 void Terminal::BufferAvailableInput() {
 	// consume available input and add it to the buffer
 	int ifd = STDIN_FILENO;
+	if (!isatty(ifd)) {
+		return;
+	}
 	while (HasMoreData(ifd)) {
 		char buf[1];
 		if (read(ifd, buf, 1) != 1) {
@@ -439,8 +454,20 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 #else
 	int ifd = STDIN_FILENO;
 	int ofd = STDOUT_FILENO;
+	if (!isatty(ifd)) {
+		// if stdin is not the terminal - we need to open stdin manually
+		ifd = open("/dev/tty", O_RDWR);
+		if (ifd < 0) {
+			// failed to open stdin
+			return false;
+		}
+		ofd = ifd;
+	}
 
-	if (Terminal::EnableRawMode() == -1) {
+	if (EnableRawModeInternal(ifd) == -1) {
+		if (ifd != STDIN_FILENO) {
+			close(ifd);
+		}
 		return false;
 	}
 
@@ -472,7 +499,10 @@ bool Terminal::TryGetBackgroundColor(TerminalColor &color) {
 
 		success = ParseTerminalColor(color, buf.c_str(), buf.size());
 	}
-	Terminal::DisableRawMode();
+	DisableRawModeInternal(ifd);
+	if (ifd != STDIN_FILENO) {
+		close(ifd);
+	}
 	return success;
 #endif
 }

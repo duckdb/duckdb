@@ -461,6 +461,7 @@ jobs:
     # TODO: clean this up: we should probably be able to run this whole test suite with httpfs
     # We want to run the remainder of tests with httpfs
     - name: Setup vcpkg
+      if: (success() || failure()) && steps.build.conclusion == 'success'
       uses: lukka/run-vcpkg@v11.1
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35

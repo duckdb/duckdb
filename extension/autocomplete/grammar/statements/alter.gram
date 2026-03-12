@@ -5,7 +5,8 @@ AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDataba
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName AlterTableOptions
 AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
 
-AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy
+AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability /
+        RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
 
 AddConstraint <- 'ADD' TopLevelConstraint
 AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
@@ -19,6 +20,8 @@ SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
 SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
 ResetSortedBy <- 'RESET' 'SORTED' 'BY'
+SetOptions <- 'SET' RelOptionList
+ResetOptions <- 'RESET' RelOptionList
 
 AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
 
@@ -42,4 +45,4 @@ QualifiedSequenceName <- CatalogQualification? SchemaQualification? SequenceName
 AlterSequenceOptions <- RenameAlter / SetSequenceOption
 SetSequenceOption <- List(SequenceOption)
 
-AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'RENAME' 'TO' Identifier
+AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier

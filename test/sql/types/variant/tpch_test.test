@@ -9,7 +9,7 @@ statement ok
 call dbgen(sf=0.001)
 
 statement ok
-attach '__TEST_DIR__/tpch_sf0001_variant.db' as foo
+attach '__TEST_DIR__/tpch_sf0001_variant.db' as foo (STORAGE_VERSION 'v1.5.0');
 
 statement ok
 create table foo.variant_lineitem as select variant_normalize(STRUCT_PACK(*COLUMNS(*))::VARIANT) from lineitem;

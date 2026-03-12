@@ -39,6 +39,44 @@ IndexStorageInfo GetIndexInfo(const IndexConstraintType type, const bool v1_0_0_
 	return index_info;
 }
 
+static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDatabase &db) {
+	TypeVisitor::Contains(logical_type, [&](const LogicalType &type) {
+		switch (type.id()) {
+		case LogicalTypeId::TYPE: {
+			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
+		} break;
+		case LogicalTypeId::VARIANT: {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (storage_version < Variant::VERSION_ADDED) {
+				auto required = GetStorageVersionName(Variant::VERSION_ADDED, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException("VARIANT columns are not supported in storage versions prior to %s "
+				                            "(database \"%s\" is using storage version %s)",
+				                            required, db.GetName(), current);
+			}
+		} break;
+		case LogicalTypeId::GEOMETRY: {
+			const auto storage_version = db.GetStorageManager().GetStorageVersion();
+
+			if (GeoType::HasCRS(type) && storage_version < Geometry::VERSION_ADDED) {
+				auto required = GetStorageVersionName(Geometry::VERSION_ADDED, false);
+				auto current = GetStorageVersionName(storage_version, false);
+
+				throw InvalidInputException(
+				    "GEOMETRY columns with coordinate reference system identifiers are not supported in storage "
+				    "versions prior %s (database \"%s\" is using storage version %s)",
+				    required, db.GetName(), current);
+			}
+		} break;
+		default:
+			break;
+		}
+		return false;
+	});
+}
+
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
@@ -53,9 +91,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 	// create the physical storage
 	vector<ColumnDefinition> column_defs;
 	for (auto &col_def : columns.Physical()) {
-		if (TypeVisitor::Contains(col_def.Type(), LogicalTypeId::TYPE)) {
-			throw InvalidInputException("A table cannot be created with a 'TYPE' column");
-		}
+		CheckTypeIsSupported(col_def.Type(), catalog.GetAttached());
 
 		column_defs.push_back(col_def.Copy());
 	}
@@ -378,6 +414,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto binder = Binder::CreateBinder(context);
 	binder->SetSearchPath(catalog, schema.name);
 	binder->BindLogicalType(info.new_column.TypeMutable());
+
+	// Check if type is supported in this database version
+	CheckTypeIsSupported(info.new_column.GetType(), catalog.GetAttached());
 
 	info.new_column.SetOid(columns.LogicalColumnCount());
 	info.new_column.SetStorageOid(columns.PhysicalColumnCount());
@@ -1013,6 +1052,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 	if (info.target_type == LogicalType::UNKNOWN) {
 		info.target_type = bound_expression->return_type;
 	}
+
+	// Check if type is supported in this database version
+	CheckTypeIsSupported(info.target_type, catalog.GetAttached());
 
 	auto bound_constraints = binder->BindConstraints(constraints, name, columns);
 	for (auto &col : columns.Logical()) {
