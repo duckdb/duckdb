@@ -160,7 +160,7 @@ MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
 	int rc = 0;
 	if (args.size() > 1 && (rc = (int)ShellState::StringToInt(args[1])) != 0) {
 		// exit immediately if a custom error code is provided
-		exit(rc);
+		ShellState::Exit(rc);
 	}
 	return MetadataResult::EXIT;
 }

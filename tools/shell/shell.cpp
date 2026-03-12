@@ -395,7 +395,7 @@ void ShellState::Print(const char *str) {
 /* Indicate out-of-memory and exit. */
 static void shell_out_of_memory(void) {
 	fprintf(stderr, "Error: out of memory\n");
-	exit(1);
+	ShellState::Exit(1);
 }
 
 ShellState::ShellState() : seenInterrupt(0), program_name("duckdb") {
@@ -795,6 +795,19 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
+void ShellState::Exit(int exit_code) {
+	if (exit_code == 0) {
+		// clean-up shell state if this is a successful exit
+		auto shell_state = GetReference();
+		if (shell_state) {
+			delete shell_state;
+		}
+		shell_state = nullptr;
+	}
+	// then exit
+	exit(exit_code);
+}
+
 extern "C" {
 
 /*
@@ -805,7 +818,7 @@ static void InterruptHandler(int NotUsed) {
 	auto &state = ShellState::Get();
 	state.seenInterrupt++;
 	if (state.seenInterrupt > 2) {
-		exit(1);
+		ShellState::Exit(1);
 	}
 	if (state.conn) {
 		state.conn->Interrupt();
@@ -936,9 +949,16 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 	return false;
 }
 
+ShellState *&ShellState::GetReference() {
+	// NOTE: this is a raw pointer to avoid the ShellState from being automatically destroyed if the CLI exits
+	// Destroying a DuckDB database during exit-time destruction can lead to odd behavior due to
+	// the static-destructor order not being defined, in particular when interacting with extensions that have statics
+	static ShellState *reference = new ShellState();
+	return reference;
+}
+
 ShellState &ShellState::Get() {
-	static ShellState state;
-	return state;
+	return *GetReference();
 }
 
 SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement) {
@@ -1193,7 +1213,7 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 				RegisterShellLogger(*db, storage_ptr);
 				conn = make_uniq<duckdb::Connection>(*db);
 			} else {
-				exit(1);
+				ShellState::Exit(1);
 			}
 		}
 		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
@@ -1574,7 +1594,7 @@ void ShellState::NewTempFile(const char *zSuffix) {
 	}
 	if (zTempFile.empty()) {
 		PrintF(PrintOutput::STDERR, "out of memory\n");
-		exit(1);
+		ShellState::Exit(1);
 	}
 }
 
@@ -1693,7 +1713,7 @@ bool ShellState::ImportData(const vector<string> &args) {
 			// verbose - ignore
 		} else if (strcmp(z, "-ascii") == 0) {
 			PrintF(PrintOutput::STDERR, "-ascii mode is no longer supported for .import");
-			exit(1);
+			ShellState::Exit(1);
 		} else if (strcmp(z, "-csv") == 0) {
 			function = "read_csv";
 		} else if (strcmp(z, "-parquet") == 0) {
@@ -3033,12 +3053,6 @@ void ShellState::Initialize() {
 #endif
 #endif
 
-struct ShellStateDestroyer {
-	~ShellStateDestroyer() {
-		ShellState::Get().Destroy();
-	}
-};
-
 void ShellState::DetectDarkLightMode() {
 #ifdef HAVE_LINENOISE
 	ShellHighlight highlight(*this);
@@ -3064,15 +3078,9 @@ void ShellState::DetectDarkLightMode() {
 #endif
 }
 
-#if SQLITE_SHELL_IS_UTF8
-int main(int argc, const char **argv) {
-#else
-int wmain(int argc, wchar_t **wargv) {
-	const char **argv;
-#endif
+int RunShell(int argc, const char **argv) {
 	int rc = 0;
 	vector<string> extra_commands;
-	ShellStateDestroyer destroyer;
 
 	auto &data = ShellState::Get();
 	data.out = stdout;
@@ -3087,14 +3095,6 @@ int wmain(int argc, wchar_t **wargv) {
 
 	/* On Windows, we must translate command-line arguments into UTF-8.
 	 */
-#if !SQLITE_SHELL_IS_UTF8
-	vector<string> utf8_args;
-	utf8_args.resize(argc);
-	for (i = 0; i < argc; i++) {
-		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		argv[i] = utf8_args[i].c_str();
-	}
-#endif
 
 	assert(argc >= 1 && argv && argv[0]);
 	data.program_name = argv[0];
@@ -3273,5 +3273,41 @@ int wmain(int argc, wchar_t **wargv) {
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
+	return rc;
+}
+
+#if SQLITE_SHELL_IS_UTF8
+int main(int argc, const char **argv) {
+#else
+int wmain(int argc, wchar_t **wargv) {
+	const char **argv;
+	vector<string> utf8_args;
+	utf8_args.resize(argc);
+	for (i = 0; i < argc; i++) {
+		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
+		argv[i] = utf8_args[i].c_str();
+	}
+#endif
+
+	auto &shell_state = ShellState::GetReference();
+	int rc = 0;
+	try {
+		rc = RunShell(argc, argv);
+	} catch (std::exception &ex) {
+		rc = 1;
+		ErrorData error(ex);
+		fprintf(stderr, "Exited due to error: %s", error.Message().c_str());
+	}
+	try {
+		// destroy shell state prior to program clean-up
+		if (shell_state) {
+			delete shell_state;
+		}
+		shell_state = nullptr;
+	} catch (std::exception &ex) {
+		rc = 1;
+		ErrorData error(ex);
+		fprintf(stderr, "Error during clean-up due to error: %s", error.Message().c_str());
+	}
 	return rc;
 }

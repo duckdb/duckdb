@@ -283,7 +283,11 @@ public:
 #endif
 
 public:
+	ShellState();
+	~ShellState();
+
 	static ShellState &Get();
+	static ShellState *&GetReference();
 
 	void Initialize();
 	void Destroy();
@@ -304,6 +308,7 @@ public:
 	void ShowConfiguration();
 	void ClearInterrupt();
 
+	static void Exit(int exit_code);
 	static idx_t RenderLength(const char *str, idx_t str_len);
 	static idx_t RenderLength(duckdb::string_t str);
 	static idx_t RenderLength(const string &str);
@@ -312,6 +317,7 @@ public:
 	void SetTextMode();
 	static idx_t StringLength(const char *z);
 	void SetTableName(const char *zName);
+	static void StaticPrint(PrintOutput output, const char *str, idx_t len);
 	void Print(PrintOutput output, const char *str, idx_t len);
 	void Print(PrintOutput output, const char *str);
 	void Print(PrintOutput output, duckdb::string_t str);
@@ -429,10 +435,6 @@ public:
 	FILE *OpenOutputFile(const char *zFile, int bTextMode);
 	static void SetPrompt(char prompt[], const string &new_value);
 	static string ModeToString(RenderMode mode);
-
-private:
-	ShellState();
-	~ShellState();
 };
 
 struct PagerState {
