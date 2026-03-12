@@ -66,14 +66,30 @@ vector<unique_ptr<SQLStatement>> StatementPreprocessor::ReParse(const string &ne
 
 void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
                                        bool is_in_active_transaction) {
+	// Quick check: do we need preprocessing at all?
+	bool needs_preprocessing = false;
+	for (auto &stmt : statements) {
+		if (stmt->type == StatementType::PRAGMA_STATEMENT || stmt->type == StatementType::MULTI_STATEMENT) {
+			needs_preprocessing = true;
+			break;
+		}
+	}
+	if (!needs_preprocessing)
+		return;
+
+	context.RunFunctionInTransactionInternal(lock,
+	                                         [&] { PreprocessInternal(lock, statements, is_in_active_transaction); });
+}
+
+void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
+                                               bool is_in_active_transaction) {
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
 			string new_query;
 			bool needs_reparsing;
-			context.RunFunctionInTransactionInternal(
-			    lock, [&] { PragmaNeedsReparsing(*statements[i], new_query, needs_reparsing); });
+			PragmaNeedsReparsing(*statements[i], new_query, needs_reparsing);
 			if (needs_reparsing) {
 				vector<unique_ptr<SQLStatement>> reparsed_statements = ReParse(new_query);
 				if (is_in_active_transaction || reparsed_statements.size() == 1) {
