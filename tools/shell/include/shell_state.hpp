@@ -395,6 +395,8 @@ public:
 	void DetectDarkLightMode();
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
+	static std::wstring Win32Utf8ToUnicode(const char *) = delete;
+	static std::wstring Win32Utf8ToUnicode(char *) = delete;
 	static string Win32UnicodeToUtf8(const std::wstring &zWideText);
 	static string Win32MbcsToUtf8(const string &zText, bool useAnsi);
 	static string Win32Utf8ToMbcs(const string &zText, bool useAnsi);

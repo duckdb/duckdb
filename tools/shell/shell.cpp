@@ -345,7 +345,8 @@ void ShellState::Print(PrintOutput output, const char *str, idx_t len) {
 #if defined(_WIN32) || defined(WIN32)
 	if ((stdout_is_console && (out == stdout || out == stderr)) && !pager_is_active) {
 		// convert from utf8 to utf16
-		auto unicode_text = ShellState::Win32Utf8ToUnicode(str);
+		string data_str = str ? string(str, len) : "";
+		auto unicode_text = ShellState::Win32Utf8ToUnicode(data_str);
 		auto out_handle = GetStdHandle(output == PrintOutput::STDOUT ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
 		// use WriteConsoleW to write the unicode codepoints to the console
 		WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL);
@@ -1519,7 +1520,8 @@ static bool optionMatch(const string &str, const string &zOpt) {
 int shellDeleteFile(const char *zFilename) {
 	int rc;
 #ifdef _WIN32
-	auto z = ShellState::Win32Utf8ToUnicode(zFilename);
+	string str(zFilename);
+	auto z = ShellState::Win32Utf8ToUnicode(str);
 	rc = _wunlink(z.c_str());
 #else
 	rc = unlink(zFilename);
@@ -2347,7 +2349,7 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 SuccessState ShellState::ChangeDirectory(const string &path) {
 	int rc;
 #if defined(_WIN32) || defined(WIN32)
-	auto z = ShellState::Win32Utf8ToUnicode(path.c_str());
+	auto z = ShellState::Win32Utf8ToUnicode(path);
 	rc = !SetCurrentDirectoryW(z.c_str());
 #else
 	rc = chdir(path.c_str());
