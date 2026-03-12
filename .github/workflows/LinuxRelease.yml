@@ -40,7 +40,7 @@ jobs:
     runs-on: ${{ matrix.config.runner }}
     env:
       CCACHE_DEBUG: 1
-      CCACHE_LOGFILE: /tmp/ccache.log
+      CCACHE_LOGFILE: ${{ github.workspace }}/ccache-linux-release.log
 
     steps:
     - uses: actions/checkout@v4
@@ -60,14 +60,13 @@ jobs:
       run: |
         workdir=$(pwd)
         docker run                                                             \
-        -v /tmp:/tmp                                                           \
         -v "$workdir:$workdir"                                                 \
         -e GEN=ninja                                                           \
         -e CC='ccache gcc'                                                     \
         -e CCACHE_DEBUG=1                                                      \
         -e CXX='ccache g++'                                                    \
         -e CCACHE_DIR="$workdir/.ccache"                                       \
-        -e CCACHE_LOGFILE=/tmp/ccache.log                                      \
+        -e CCACHE_LOGFILE="$workdir/ccache-linux-release.log"                  \
         -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                      \
         -e EXTENSION_CONFIGS="$workdir/.github/config/bundled_extensions.cmake" \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
@@ -88,7 +87,7 @@ jobs:
 
     - name: Ccache stats (first)
       run: |
-        tail -n 500 /tmp/ccache.log || true
+        tail -n 500 "$CCACHE_LOGFILE" || true
         ccache -s -vv
 
     - name: Clear ccache stats
@@ -102,21 +101,20 @@ jobs:
           git config --global --add safe.directory \"$workdir\"
           make -C \"$workdir\" clean
         "
-        rm -f /tmp/ccache.log
+        rm -f "$CCACHE_LOGFILE"
         ccache -z
 
     - name: Build (second)
       run: |
         workdir=$(pwd)
         docker run                                                             \
-        -v /tmp:/tmp                                                           \
         -v "$workdir:$workdir"                                                 \
         -e GEN=ninja                                                           \
         -e CC='ccache gcc'                                                     \
         -e CCACHE_DEBUG=1                                                      \
         -e CXX='ccache g++'                                                    \
         -e CCACHE_DIR="$workdir/.ccache"                                       \
-        -e CCACHE_LOGFILE=/tmp/ccache.log                                      \
+        -e CCACHE_LOGFILE="$workdir/ccache-linux-release.log"                  \
         -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                      \
         -e EXTENSION_CONFIGS="$workdir/.github/config/bundled_extensions.cmake" \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
@@ -137,7 +135,7 @@ jobs:
 
     - name: Ccache stats (second)
       run: |
-        tail -n 500 /tmp/ccache.log || true
+        tail -n 500 "$CCACHE_LOGFILE" || true
         ccache -s -vv
 
     - name: Print platform
@@ -188,7 +186,7 @@ jobs:
     runs-on: ${{ matrix.config.runner }}
     env:
       CCACHE_DEBUG: 1
-      CCACHE_LOGFILE: /tmp/ccache.log
+      CCACHE_LOGFILE: ${{ github.workspace }}/ccache-linux-musl-release.log
 
     steps:
     - uses: actions/checkout@v4
@@ -205,14 +203,13 @@ jobs:
       run: |
         workdir=$(pwd)
         docker run                                                          \
-        -v /tmp:/tmp                                                       \
         -v "$workdir:$workdir"                                              \
         -e GEN=ninja                                                        \
         -e CC='ccache gcc'                                                  \
         -e CCACHE_DEBUG=1                                                   \
         -e CXX='ccache g++'                                                 \
         -e CCACHE_DIR="$workdir/.ccache"                                    \
-        -e CCACHE_LOGFILE=/tmp/ccache.log                                   \
+        -e CCACHE_LOGFILE="$workdir/ccache-linux-musl-release.log"          \
         -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                   \
         -e EXTENSION_CONFIGS="$workdir/.github/config/bundled_extensions.cmake" \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
@@ -237,7 +234,7 @@ jobs:
     - name: Ccache stats (first)
       shell: bash
       run: |
-        tail -n 500 /tmp/ccache.log || true
+        tail -n 500 "$CCACHE_LOGFILE" || true
         ccache -s -vv
 
     - name: Clear ccache stats
@@ -252,7 +249,7 @@ jobs:
           git config --global --add safe.directory \"$workdir\"
           make -C \"$workdir\" clean
         "
-        rm -f /tmp/ccache.log
+        rm -f "$CCACHE_LOGFILE"
         ccache -z
 
     - name: Build (second)
@@ -260,14 +257,13 @@ jobs:
       run: |
         workdir=$(pwd)
         docker run                                                          \
-        -v /tmp:/tmp                                                       \
         -v "$workdir:$workdir"                                              \
         -e GEN=ninja                                                        \
         -e CC='ccache gcc'                                                  \
         -e CCACHE_DEBUG=1                                                   \
         -e CXX='ccache g++'                                                 \
         -e CCACHE_DIR="$workdir/.ccache"                                    \
-        -e CCACHE_LOGFILE=/tmp/ccache.log                                   \
+        -e CCACHE_LOGFILE="$workdir/ccache-linux-musl-release.log"          \
         -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                   \
         -e EXTENSION_CONFIGS="$workdir/.github/config/bundled_extensions.cmake" \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                   \
@@ -292,7 +288,7 @@ jobs:
     - name: Ccache stats (second)
       shell: bash
       run: |
-        tail -n 500 /tmp/ccache.log || true
+        tail -n 500 "$CCACHE_LOGFILE" || true
         ccache -s -vv
 
     - name: Deploy
