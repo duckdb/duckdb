@@ -128,6 +128,11 @@ MetadataResult SetInitFile(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SkipInit(ShellState &state, const vector<string> &args) {
+	state.run_init = false;
+	return MetadataResult::SUCCESS;
+}
+
 template <bool EXIT>
 MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	if (EXIT) {
@@ -170,6 +175,7 @@ static const CommandLineOption command_line_options[] = {
     {"list", 0, "", nullptr, ToggleOutputMode<RenderMode::LIST>, "set output mode to 'list'"},
     {"markdown", 0, "", nullptr, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},
     {"newline", 1, "SEP", nullptr, SetNewlineSeparator, "set output row separator. Default: '\\n'"},
+    {"no-init", 0, "", SkipInit, nullptr, "skip processing the init file"},
     {"no-stdin", 0, "", nullptr, DisableStdin, "exit after processing options instead of reading stdin"},
     {"noheader", 0, "", nullptr, ToggleHeader<false>, "turn headers off"},
     {"nullvalue", 1, "TEXT", nullptr, ShellState::SetNullValue, "set text string for NULL values. Default 'NULL'"},

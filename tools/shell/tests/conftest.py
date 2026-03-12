@@ -67,7 +67,7 @@ class ShellTest:
         if not shell:
             raise ValueError("Please provide a shell binary")
         self.shell = shell
-        self.arguments = [shell, "--batch", "--init", "/dev/null"] + arguments
+        self.arguments = [shell, "--batch", "--no-init"] + arguments
         self.statements: List[str] = []
         self.input = None
         self.output = None

@@ -3188,7 +3188,7 @@ int wmain(int argc, wchar_t **wargv) {
 	** is given on the command line, look for a file named ~/.sqliterc and
 	** try to process it.
 	*/
-	if (!data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str())) {
+	if (data.run_init && !data.ProcessDuckDBRC(data.initFile.empty() ? nullptr : data.initFile.c_str())) {
 		// failed to process init file - check if we should bail
 		bool bail_on_init_fail = data.bail != BailOnError::DONT_BAIL_ON_ERROR;
 		if (bail_on_init_fail) {

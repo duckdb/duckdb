@@ -203,6 +203,7 @@ public:
 	idx_t total_changes = 0;
 	bool readStdin = true;
 	string initFile;
+	bool run_init = true;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
 	//! If the following flag is set, then command execution stops at an error
 	BailOnError bail = BailOnError::AUTOMATIC;
