@@ -252,9 +252,12 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			result_operator->SetEstimatedCardinality(cardinality);
 		} else {
 			// we have filters, create a join node
+			// Prefer non-INNER join types (LEFT/SEMI/ANTI) since WHERE clause filters default
+			// to INNER but should not override the actual join semantics of the edge.
 			auto chosen_filter = node->info->filters.at(0);
 			for (idx_t i = 0; i < node->info->filters.size(); i++) {
-				if (node->info->filters.at(i)->join_type == JoinType::INNER) {
+				auto filter_join_type = node->info->filters.at(i)->join_type;
+				if (filter_join_type != JoinType::INNER) {
 					chosen_filter = node->info->filters.at(i);
 					break;
 				}
