@@ -1,0 +1,18 @@
+# name: test/sql/join/inner/test_hash_join_many_columns.test
+# description: Divide by 0 in GetPartitioningSpaceRequirement, inlined by PhysicalHashJoin::PrepareFinalize when running a query with 20k columns (PR #21271)
+# group: [inner]
+
+statement ok
+SET threads=1;
+
+statement ok
+PRAGMA disable_optimizer;
+
+statement ok
+CREATE TABLE probe AS FROM query('SELECT ' || list_aggr(['range::HUGEINT AS c' || x for x in range(20_000)], 'string_agg', ', ') || ' FROM range(10);');
+
+statement ok
+CREATE TABLE build AS SELECT range AS c0 FROM range(10);
+
+statement ok
+SELECT probe.* FROM probe JOIN build USING (c0);
