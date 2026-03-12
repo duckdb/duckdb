@@ -17,6 +17,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
@@ -201,17 +202,19 @@ bool StorageManager::HasWAL() const {
 	return true;
 }
 
-bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options) {
+bool StorageManager::WALStartCheckpoint(optional_ptr<ClientContext> context, MetaBlockPointer meta_block,
+                                        CheckpointOptions &options,
+                                        optional_ptr<ActiveCheckpointWrapper> active_checkpoint) {
 	unique_ptr<lock_guard<mutex>> guard;
 	if (!options.wal_lock) {
 		// not holding the WAL lock yet - grab it
 		guard = GetWALLock();
 	}
-	// while holding the WAL lock - get the last committed transaction from the transaction manager
-	// this is the commit we will be checkpointing on - everything in this commit will be written to the file
-	// any new commits made will be written to the next wal
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
-	options.transaction_id = transaction_manager.GetNewCheckpointId();
+	options.transaction_id = transaction_manager.GetLastCommit();
+	if (context && active_checkpoint) {
+		active_checkpoint->SetCheckpointTransaction(DuckTransaction::Get(*context, db));
+	}
 
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.transaction_id);
 	if (!wal) {

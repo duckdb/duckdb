@@ -1,0 +1,39 @@
+# name: test/checkpoint_reset.test
+# group: [test]
+
+# Verify that active_checkpoint is properly reset after checkpoint completes.
+# If not reset, index deltas from post-checkpoint inserts go to a defunct delta buffer
+# and the index becomes inconsistent.
+
+statement ok
+ATTACH '__TEST_DIR__/checkpoint_reset.db' AS db
+
+statement ok
+CREATE TABLE db.t(a INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO db.t VALUES (1), (2), (3)
+
+statement ok
+CHECKPOINT db
+
+# This insert happens after checkpoint. If active_checkpoint is not reset,
+# the index delta goes to a checkpoint delta buffer that nobody merges.
+statement ok
+INSERT INTO db.t VALUES (4), (5)
+
+# The primary key constraint should detect the duplicate via the index.
+# If the index is missing entries 4 and 5 (stuck in unmerged delta), this succeeds when it shouldn't.
+statement error
+INSERT INTO db.t VALUES (4)
+----
+Constraint Error: Duplicate key "a: 4" violates primary key constraint.
+
+query I
+SELECT * FROM db.t ORDER BY a
+----
+1
+2
+3
+4
+5

@@ -16,12 +16,29 @@ namespace duckdb {
 class DatabaseInstance;
 class ClientContext;
 class ColumnSegment;
+class DuckTransaction;
+class DuckTransactionManager;
 class MetadataReader;
 class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TypeCatalogEntry;
+struct CheckpointOptions;
+
+struct ActiveCheckpointWrapper {
+	ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db,
+	                        DuckTransactionManager &transaction_manager);
+
+	void SetCheckpointTransaction(DuckTransaction &txn);
+	void Commit();
+
+	optional_ptr<ClientContext> context;
+	AttachedDatabase &db;
+	DuckTransactionManager &transaction_manager;
+	optional_ptr<DuckTransaction> checkpoint_txn;
+	bool owns_meta_transaction = false;
+};
 
 class CheckpointWriter {
 public:

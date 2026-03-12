@@ -18,6 +18,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -30,9 +31,44 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/common/thread.hpp"
 
 namespace duckdb {
+
+ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> context_p, AttachedDatabase &db_p,
+                                                 DuckTransactionManager &transaction_manager_p)
+    : context(context_p), db(db_p), transaction_manager(transaction_manager_p) {
+	if (!context) {
+		return;
+	}
+	if (!context->transaction.HasActiveTransaction()) {
+		context->transaction.BeginTransaction(false);
+		context->transaction.SetReadOnly();
+		owns_meta_transaction = true;
+	}
+}
+
+void ActiveCheckpointWrapper::SetCheckpointTransaction(DuckTransaction &txn) {
+	checkpoint_txn = &txn;
+	txn.is_checkpoint_transaction = true;
+	transaction_manager.SetActiveCheckpoint();
+}
+
+void ActiveCheckpointWrapper::Commit() {
+	if (!checkpoint_txn) {
+		return;
+	}
+	auto error = transaction_manager.CommitTransaction(*context, *checkpoint_txn);
+	transaction_manager.ResetActiveCheckpoint();
+	MetaTransaction::Get(*context).RemoveTransaction(db);
+	if (owns_meta_transaction) {
+		context->transaction.Commit(false);
+	}
+	if (error.HasError()) {
+		throw FatalException("Failed to commit checkpoint transaction: %s", error.Message());
+	}
+}
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
@@ -159,8 +195,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// we also know if a checkpoint was running that we need to check for the checkpoint WAL (`.checkpoint.wal`)
 	// to replay any concurrent commits that have succeeded and ensure these are not lost
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
-	ActiveCheckpointWrapper active_checkpoint(transaction_manager);
-	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options);
+	ActiveCheckpointWrapper active_checkpoint(context, db, transaction_manager);
+
+	auto has_wal = storage_manager.WALStartCheckpoint(context, meta_block, options, &active_checkpoint);
 
 	catalog_entry_vector_t catalog_entries;
 	try {
@@ -280,7 +317,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 			storage_manager.WALFinishCheckpoint(*wal_lock);
 		}
 	} catch (std::exception &ex) {
-		// any exceptions thrown here are fatal
 		ErrorData error(ex);
 		if (error.Type() == ExceptionType::FATAL) {
 			ValidChecker::Invalidate(db.GetDatabase(), error.Message());
@@ -307,7 +343,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		auto &index_list = table_info->GetIndexes();
 		index_list.MergeCheckpointDeltas(options.transaction_id);
 	}
-	active_checkpoint.Clear();
+
+	active_checkpoint.Commit();
 }
 
 void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {

@@ -1,0 +1,43 @@
+# name: test/tmp.test
+# group: [test]
+
+statement ok
+SET wal_autocheckpoint='1KB'
+
+statement ok
+ATTACH '__TEST_DIR__/checkpoint_deadlock_min.db' AS db
+
+statement ok
+CREATE TABLE db.t(a INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO db.t VALUES (1)
+
+statement ok
+DETACH db
+
+loop x 0 100
+
+statement ok
+ATTACH '__TEST_DIR__/checkpoint_deadlock_min.db' AS db
+
+concurrentloop threadid 0 3
+
+onlyif threadid==0
+statement ok
+SELECT * FROM db.t
+
+onlyif threadid==1
+statement ok
+INSERT INTO db.t VALUES (1) ON CONFLICT(a) DO UPDATE SET a=db.t.a
+
+onlyif threadid==2
+statement ok
+FORCE CHECKPOINT db
+
+endloop
+
+statement ok
+DETACH db
+
+endloop
