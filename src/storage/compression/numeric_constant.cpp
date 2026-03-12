@@ -173,13 +173,9 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		filters_nulls = bf.FiltersNullValues();
 		break;
 	}
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
 		filters_nulls = true;
-		break;
-	}
-	case duckdb::TableFilterType::PREFIX_RANGE_FILTER: {
-		auto &prf = filter.Cast<PrefixRangeTableFilter>();
-		filters_nulls = prf.FiltersNullValues();
 		break;
 	}
 	default:

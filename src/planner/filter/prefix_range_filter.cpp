@@ -271,10 +271,8 @@ bool PrefixRangeTableFilter::SupportedType(const LogicalType &type) {
 }
 
 PrefixRangeTableFilter::PrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> filter_p,
-                                               const bool filters_null_values_p, const string &key_column_name_p,
-                                               const LogicalType &key_type_p)
-    : TableFilter(TYPE), filter(filter_p), filters_null_values(filters_null_values_p),
-      key_column_name(key_column_name_p), key_type(key_type_p) {
+                                               const string &key_column_name_p, const LogicalType &key_type_p)
+    : TableFilter(TYPE), filter(filter_p), key_column_name(key_column_name_p), key_type(key_type_p) {
 }
 string PrefixRangeTableFilter::ToString(const string &column_name) const {
 	return column_name + " IN PRF(" + key_column_name + ")";
@@ -312,7 +310,11 @@ bool PrefixRangeTableFilter::FilterValue(const Value &value) const {
 	if (!filter || !filter->IsInitialized()) {
 		return true;
 	}
-	return filter->LookupOneValue(value);
+	Vector keys(value);
+	SelectionVector sel;
+	idx_t approved_tuple_count = 1;
+	Filter(keys, sel, approved_tuple_count);
+	return approved_tuple_count == 1;
 }
 
 FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &stats) const {
@@ -338,13 +340,11 @@ bool PrefixRangeTableFilter::Equals(const TableFilter &other_p) const {
 		return false;
 	}
 	const auto &other = other_p.Cast<PrefixRangeTableFilter>();
-	return key_column_name == other.key_column_name && key_type == other.key_type &&
-	       filters_null_values == other.filters_null_values;
+	return key_column_name == other.key_column_name && key_type == other.key_type;
 }
 
 unique_ptr<TableFilter> PrefixRangeTableFilter::Copy() const {
-	return make_uniq<PrefixRangeTableFilter>(this->filter, this->filters_null_values, this->key_column_name,
-	                                         this->key_type);
+	return make_uniq<PrefixRangeTableFilter>(this->filter, this->key_column_name, this->key_type);
 }
 
 unique_ptr<Expression> PrefixRangeTableFilter::ToExpression(const Expression &column) const {
@@ -354,17 +354,15 @@ unique_ptr<Expression> PrefixRangeTableFilter::ToExpression(const Expression &co
 
 void PrefixRangeTableFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
-	serializer.WriteProperty<bool>(200, "filters_null_values", filters_null_values);
-	serializer.WriteProperty<string>(201, "key_column_name", key_column_name);
-	serializer.WriteProperty<LogicalType>(202, "key_type", key_type);
+	serializer.WriteProperty<string>(200, "key_column_name", key_column_name);
+	serializer.WriteProperty<LogicalType>(201, "key_type", key_type);
 }
 
 unique_ptr<TableFilter> PrefixRangeTableFilter::Deserialize(Deserializer &deserializer) {
-	auto filters_null_values = deserializer.ReadProperty<bool>(200, "filters_null_values");
-	auto key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
-	auto key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
+	auto key_column_name = deserializer.ReadProperty<string>(200, "key_column_name");
+	auto key_type = deserializer.ReadProperty<LogicalType>(201, "key_type");
 
-	auto result = make_uniq<PrefixRangeTableFilter>(nullptr, filters_null_values, key_column_name, key_type);
+	auto result = make_uniq<PrefixRangeTableFilter>(nullptr, key_column_name, key_type);
 	return std::move(result);
 }
 

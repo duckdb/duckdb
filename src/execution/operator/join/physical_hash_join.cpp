@@ -975,6 +975,11 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 		return false;
 	}
 
+	if (ht->NullValuesAreEqual(0)) {
+		// TODO: Support "A is B" type joins
+		return false;
+	}
+
 	static constexpr idx_t BUILD_SIZE_THRESHOLD = 524288;
 	bool ht_is_small = ht->Count() <= BUILD_SIZE_THRESHOLD;
 	bool span_is_small = false;
@@ -1037,11 +1042,8 @@ void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownF
 		ht.SetBuildPrefixRangeFilter();
 	}
 
-	// If the nulls are equal, we let nulls pass. If not, we filter them
-	auto filters_null_values = !ht.NullValuesAreEqual(0);
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
-	auto rf_filter =
-	    make_uniq<PrefixRangeTableFilter>(ht.GetPrefixRangeFilter(), filters_null_values, key_name, key_type);
+	auto rf_filter = make_uniq<PrefixRangeTableFilter>(ht.GetPrefixRangeFilter(), key_name, key_type);
 
 	// TODO: Experimentally find suitable selectivity threshold
 	auto opt_rf_filter = make_uniq<SelectivityOptionalFilter>(

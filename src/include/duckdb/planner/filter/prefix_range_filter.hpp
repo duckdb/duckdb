@@ -40,7 +40,6 @@ class PrefixRangeTableFilter final : public TableFilter {
 private:
 	optional_ptr<PrefixRangeFilter> filter;
 
-	bool filters_null_values;
 	string key_column_name;
 	LogicalType key_type;
 
@@ -50,14 +49,8 @@ public:
 	static unique_ptr<PrefixRangeFilter> CreateBitmap(const LogicalType &type);
 
 public:
-	explicit PrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> filter_p, const bool filters_null_values_p,
-	                                const string &key_column_name_p, const LogicalType &key_type_p);
-
-	//! If the join condition is e.g. "A = B", the bf will filter null values.
-	//! If the condition is "A is B" the filter will let nulls pass
-	bool FiltersNullValues() const {
-		return filters_null_values;
-	}
+	explicit PrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> filter_p, const string &key_column_name_p,
+	                                const LogicalType &key_type_p);
 
 	LogicalType GetKeyType() const {
 		return key_type;
