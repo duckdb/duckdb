@@ -1,0 +1,29 @@
+# name: test/sql/peg_parser/transformer/unary_expression.test
+# description: Test unary prefix expression nesting order in peg parser
+# group: [transformer]
+
+require autocomplete
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT - + 16;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT + - 16;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT - - 16;$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT + + 16;$TEST_PEG_PARSER$);
+
+query I nosort large_unary
+SELECT + - 9223372036854775808;
+
+statement ok
+call enable_peg_parser();
+
+query I nosort large_unary
+SELECT + - 9223372036854775808;
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT x * - + 16 * y FROM (SELECT 2 AS x, 3 AS y) t;$TEST_PEG_PARSER$);
