@@ -53,10 +53,23 @@ void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_tra
 	AddStatements(multi_statement.statements, !is_pivot_statement && !is_in_active_transaction, new_statements);
 }
 
-vector<unique_ptr<SQLStatement>> StatementPreprocessor::ReParse(const string &new_query) const {
-	Parser parser(context.GetParserOptions());
-	parser.ParseQuery(new_query);
-	return std::move(parser.statements);
+vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_ptr<SQLStatement> statement) const {
+	// Try reparsing
+	const auto info = statement->Cast<PragmaStatement>().info->Copy();
+	QueryErrorContext error_context(statement->stmt_location);
+	const auto binder = Binder::CreateBinder(context);
+	const auto bound_info = binder->BindPragma(*info, error_context);
+	if (bound_info->function.query) {
+		// Needs reparsing
+		FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters};
+		const auto query_to_reparse = bound_info->function.query(context, parameters);
+		Parser parser(context.GetParserOptions());
+		parser.ParseQuery(query_to_reparse);
+		return std::move(parser.statements);
+	}
+	vector<unique_ptr<SQLStatement>> res;
+	res.push_back(std::move(statement));
+	return res;
 }
 
 void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
@@ -82,17 +95,17 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 	for (idx_t i = 0; i < statements.size(); i++) {
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
-			string new_query;
-			bool needs_reparsing;
-			PragmaNeedsReparsing(*statements[i], new_query, needs_reparsing);
-			if (needs_reparsing) {
-				vector<unique_ptr<SQLStatement>> reparsed_statements = ReParse(new_query);
-				AddStatements(reparsed_statements, !is_in_active_transaction && reparsed_statements.size() != 1,
-				              new_statements);
-				break;
-			}
-			new_statements.push_back(std::move(statements[i]));
+			// string new_query;
+			// bool needs_reparsing;
+			// PragmaNeedsReparsing(, new_query, needs_reparsing);
+			// if (needs_reparsing) {
+			vector<unique_ptr<SQLStatement>> reparsed_statements = TryReparsePragma(std::move(statements[i]));
+			AddStatements(reparsed_statements, !is_in_active_transaction && reparsed_statements.size() != 1,
+			              new_statements);
 			break;
+			// }
+			// new_statements.push_back(std::move(statements[i]));
+			// break;
 		}
 		case StatementType::MULTI_STATEMENT: {
 			auto &multi_statement = statements[i]->Cast<MultiStatement>();
@@ -118,20 +131,4 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 
 	statements = std::move(new_statements);
 }
-
-void StatementPreprocessor::PragmaNeedsReparsing(SQLStatement &statement, string &resulting_query,
-                                                 bool &expanded) const {
-	const auto info = statement.Cast<PragmaStatement>().info->Copy();
-	QueryErrorContext error_context(statement.stmt_location);
-	const auto binder = Binder::CreateBinder(context);
-	const auto bound_info = binder->BindPragma(*info, error_context);
-	if (bound_info->function.query) {
-		FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters};
-		resulting_query = bound_info->function.query(context, parameters);
-		expanded = true;
-		return;
-	}
-	expanded = false;
-}
-
 } // namespace duckdb
