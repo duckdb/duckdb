@@ -1,11 +1,13 @@
 import argparse
 import concurrent.futures
 import csv
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 parser = argparse.ArgumentParser(description='Run a full benchmark using the CLI and report the results.')
 group = parser.add_mutually_exclusive_group(required=True)
@@ -65,6 +67,7 @@ new_cli = (
 )
 summarize_failures = not args.no_summarize_failures
 workers = resolve_workers(args.workers)
+repo_root = os.getcwd()
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.run(
@@ -92,7 +95,7 @@ for line in stdout.splitlines():
     if len(line.strip()) == 0:
         continue
     splits = line.rsplit('\t', 1)
-    test_cases.append(os.path.abspath(splits[0]))
+    test_cases.append(splits[0])
 
 test_cases.sort()
 if args.compatibility != 'v1.0.0':
@@ -108,7 +111,14 @@ def escape_cmd_arg(arg):
     return arg
 
 
+def format_cmd(cmd):
+    return ' '.join(escape_cmd_arg(entry) for entry in cmd)
+
+
 error_container = []
+passed_count = 0
+skipped_count = 0
+failed_count = 0
 
 
 def handle_failure(test, cmd, msg, stdout, stderr, returncode):
@@ -116,11 +126,9 @@ def handle_failure(test, cmd, msg, stdout, stderr, returncode):
     print(test, file=sys.stderr)
     print(f"==============MESSAGE============", file=sys.stderr)
     print(msg, file=sys.stderr)
-    print(f"==============COMMAND============", file=sys.stderr)
-    cmd_str = ''
-    for entry in cmd:
-        cmd_str += escape_cmd_arg(entry) + ' '
-    print(cmd_str.strip(), file=sys.stderr)
+    print(f"==============REPRODUCE==========", file=sys.stderr)
+    cmd_str = format_cmd(cmd)
+    print(cmd_str, file=sys.stderr)
     print(f"==============RETURNCODE=========", file=sys.stderr)
     print(str(returncode), file=sys.stderr)
     print(f"==============STDOUT=============", file=sys.stderr)
@@ -131,8 +139,19 @@ def handle_failure(test, cmd, msg, stdout, stderr, returncode):
     error_container.append({'test': test, 'stderr': stderr})
 
 
-def run_program(test, cmd, description, cwd=None):
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
+def make_failure(test, cmd, msg, stdout='', stderr='', returncode=1):
+    return {
+        'test': test,
+        'cmd': cmd,
+        'msg': msg,
+        'stdout': stdout,
+        'stderr': stderr,
+        'returncode': returncode,
+    }
+
+
+def run_program(test, cmd, description):
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout = proc.stdout.decode('utf8').strip()
     stderr = proc.stderr.decode('utf8').strip()
     if proc.returncode != 0:
@@ -148,9 +167,10 @@ def run_program(test, cmd, description, cwd=None):
 
 
 def execute_test(i, test):
+    test_path = test if os.path.isabs(test) else os.path.join(repo_root, test)
     skipped = False
     if not args.run_empty_tests:
-        with open(test, 'r') as f:
+        with open(test_path, 'r') as f:
             test_contents = f.read().lower()
         if 'create table' not in test_contents and 'create view' not in test_contents:
             skipped = True
@@ -168,19 +188,38 @@ def execute_test(i, test):
     with tempfile.TemporaryDirectory(prefix='storage_compat_') as temp_dir:
         db_path = os.path.join(temp_dir, db_name)
         table_list_path = os.path.join(temp_dir, 'table_list.csv')
+        test_temp_dir = os.path.join(temp_dir, 'test_temp_dir')
+        worker_test_config = os.path.join(temp_dir, 'storage_compatibility.json')
+        with open(test_config, 'r') as f:
+            config_contents = json.load(f)
+        config_contents['initial_db'] = db_path
+        with open(worker_test_config, 'w') as f:
+            json.dump(config_contents, f)
+        unittest_cmd = [
+            unittest_program,
+            '--test-config',
+            worker_test_config,
+            '--test-temp-dir',
+            test_temp_dir,
+            test,
+        ]
         failure = run_program(
             test,
-            [unittest_program, '--test-config', test_config, test],
+            unittest_cmd,
             'Run Test',
-            cwd=temp_dir,
         )
         if failure is not None:
             result['failures'].append(failure)
-            result['messages'].append("Failed to Run Test")
             return result
 
         if not os.path.isfile(db_path):
-            result['messages'].append(f"Failed to create a database file by the name of {db_path}")
+            result['failures'].append(
+                make_failure(
+                    test,
+                    unittest_cmd,
+                    f'Failed to create a database file by the name of {db_path}',
+                )
+            )
             return result
 
         failure = run_program(
@@ -200,7 +239,6 @@ def execute_test(i, test):
         )
         if failure is not None:
             result['failures'].append(failure)
-            result['messages'].append("Failed to List Tables")
             return result
 
         tables = []
@@ -209,6 +247,7 @@ def execute_test(i, test):
             for row in reader:
                 tables.append((row[1], row[2]))
         if len(tables) == 0:
+            result['skipped'] = True
             result['messages'].append("No tables/views were created, skipping")
             return result
 
@@ -235,10 +274,18 @@ def execute_test(i, test):
 
 
 def process_result(result):
+    global passed_count, skipped_count, failed_count
+    if result['skipped']:
+        skipped_count += 1
+        return
+
     i = result['index']
     test = result['test']
-    suffix = ' (SKIPPED)' if result['skipped'] else ''
-    print(f'[{i}/{len(test_cases)}]: {test}{suffix}')
+    if result['failures'] or result['messages']:
+        failed_count += 1
+        print(f'[{i}/{len(test_cases)}]: {test}')
+    else:
+        passed_count += 1
     for failure in result['failures']:
         handle_failure(**failure)
     for message in result['messages']:
@@ -248,6 +295,7 @@ def process_result(result):
 start = 0 if args.start_offset is None else args.start_offset
 end = len(test_cases) if args.end_offset is None else args.end_offset
 selected_tests = list(enumerate(test_cases[start:end], start=start))
+start_time = time.monotonic()
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
     future_to_test = {}
@@ -271,6 +319,9 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
             i, test = selected_tests[next_test_idx]
             future_to_test[executor.submit(execute_test, i, test)] = (i, test)
             next_test_idx += 1
+
+elapsed = time.monotonic() - start_time
+print(f'tests took {elapsed:.0f}s: {passed_count} passed, {skipped_count} skipped, {failed_count} failed')
 
 if len(error_container) == 0:
     exit(0)
