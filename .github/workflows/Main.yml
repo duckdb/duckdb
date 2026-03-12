@@ -234,28 +234,9 @@ jobs:
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
-    - name: Build
-      env:
-        BUILD_BENCHMARK: 1
-        BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
-        DISABLE_SANITIZER: 1
-        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        USE_MERGED_VCPKG_MANIFEST: 1
-      run: make release
-
-    - name: Smoke tests
-      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
-
-    - name: Prepare release artifact
-      run: make release-artifact
-
-    - name: Upload release build artifact
-      uses: actions/upload-artifact@v4
+    - uses: ./.github/actions/linux_release_build
       with:
-        name: linux-release-build
-        path: build/release-artifact.tar.gz
-        if-no-files-found: error
+        artifact_name: linux-release-build
 
     - name: Build linux default release
       run: make clean release
