@@ -153,7 +153,7 @@ def test_bail_on_missing_init(shell):
 @pytest.mark.parametrize('generated_file', ["selec 42;"], indirect=True)
 def test_bail_within_init(shell, generated_file):
     test = (
-        ShellTest(shell, ['-init', generated_file])
+        ShellTest(shell, ['-init', generated_file.as_posix()])
         .statement("select 'reached here'")
     )
 
@@ -165,7 +165,7 @@ def test_bail_within_init(shell, generated_file):
 def test_bail_within_read(shell, generated_file):
     test = (
         ShellTest(shell)
-        .statement(".read \"" + str(generated_file) + "\"")
+        .statement(".read \"" + generated_file.as_posix() + "\"")
     )
 
     result = test.run()
@@ -174,7 +174,7 @@ def test_bail_within_read(shell, generated_file):
 @pytest.mark.parametrize('generated_file', [".bail off\nselec 42;"], indirect=True)
 def test_explicit_bail_within_init(shell, generated_file):
     test = (
-        ShellTest(shell, ['-init', generated_file])
+        ShellTest(shell, ['-init', generated_file.as_posix()])
         .statement("select 'reached here'")
     )
 
@@ -187,7 +187,7 @@ def test_explicit_bail_within_read(shell, generated_file):
     test = (
         ShellTest(shell)
         .statement(".bail off")
-        .statement(".read \"" + str(generated_file) + "\"")
+        .statement(".read \"" + generated_file.as_posix() + "\"")
     )
 
     result = test.run()
