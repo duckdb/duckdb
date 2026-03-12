@@ -93,7 +93,7 @@ int64_t CopyFunctionBatchAnalyzer::BatchSizeVectorDiff() const {
 }
 
 int64_t CopyFunctionBatchAnalyzer::BatchSizeBytesVectorDiff() const {
-	if (batch_size_bytes.IsValid()) {
+	if (!batch_size_bytes.IsValid()) {
 		return 0;
 	}
 	const auto size_bytes_diff =
@@ -129,18 +129,6 @@ CopyFunctionFlushBatchReason CopyFunctionBatchAnalyzer::ToReason() const {
 	}
 
 	return CopyFunctionFlushBatchReason::LAST_BATCH;
-}
-
-CopyFunctionBatchAnalyzer CopyFunctionAnalyzeBatch(const idx_t &current_batch_size,
-                                                   const idx_t &current_batch_size_bytes,
-                                                   const optional_idx &batch_size,
-                                                   const optional_idx &batch_size_bytes) {
-	return CopyFunctionBatchAnalyzer(current_batch_size, current_batch_size_bytes, batch_size, batch_size_bytes);
-}
-
-CopyFunctionBatchAnalyzer CopyFunctionAnalyzeBatch(const ColumnDataCollection &batch, const optional_idx &batch_size,
-                                                   const optional_idx &batch_size_bytes) {
-	return CopyFunctionAnalyzeBatch(batch.Count(), batch.SizeInBytes(), batch_size, batch_size_bytes);
 }
 
 } // namespace duckdb
