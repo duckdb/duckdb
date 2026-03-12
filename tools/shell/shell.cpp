@@ -2749,7 +2749,7 @@ int ShellState::RunOneSqlLine(InputMode mode, char *zSql) {
 	return 0;
 }
 
-bool ShellState::BailOnError(InputMode mode) {
+bool ShellState::GetBailOnError(InputMode mode) {
 	if (bail != BailOnError::AUTOMATIC) {
 		return bail == BailOnError::BAIL_ON_ERROR;
 	}
@@ -2777,7 +2777,7 @@ int ShellState::ProcessInput(InputMode mode) {
 	idx_t errCnt = 0;      /* Number of errors seen */
 	idx_t numCtrlC = 0;
 	lineno = 0;
-	while (errCnt == 0 || !BailOnError(mode) || (!in && stdin_is_interactive)) {
+	while (errCnt == 0 || !GetBailOnError(mode) || (!in && stdin_is_interactive)) {
 		fflush(out);
 		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {

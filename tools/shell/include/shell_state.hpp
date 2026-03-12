@@ -384,7 +384,7 @@ public:
 	bool ProcessDuckDBRC(const char *file);
 	bool ProcessFile(const string &file, InputMode input_mode = InputMode::FILE, bool default_duckdb_rc = false);
 	int ProcessInput(InputMode mode);
-	bool BailOnError(InputMode mode);
+	bool GetBailOnError(InputMode mode);
 	static bool SQLIsComplete(const char *zSql);
 	static bool IsSpace(char c);
 	static bool IsDigit(char c);
