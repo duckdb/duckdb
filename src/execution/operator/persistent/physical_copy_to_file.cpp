@@ -515,6 +515,7 @@ void CopyToFunctionLocalState::FlushPartitions() {
 		ColumnDataAppendState partition_batch_append_state;
 
 		// push the chunks into the write state
+		idx_t chunk_idx = 0;
 		for (auto &chunk : partitions[i]->Chunks()) {
 			if (!partition_batch) {
 				partition_batch = make_uniq<ColumnDataCollection>(
@@ -531,7 +532,7 @@ void CopyToFunctionLocalState::FlushPartitions() {
 			}
 
 			const CopyFunctionBatchAnalyzer batch_analyze(*partition_batch, op.batch_size, op.batch_size_bytes);
-			if (batch_analyze.MeetsFlushCriteria()) {
+			if (batch_analyze.MeetsFlushCriteria() || ++chunk_idx == partitions[i]->ChunkCount()) {
 				partition_batch_append_state.current_chunk_state.handles.clear();
 				op.FlushBatch(context.client, gstate, info.global_state, create_file_state_fun, local_copy_state,
 				              std::move(partition_batch), PhysicalCopyToFilePhase::COMBINE);
