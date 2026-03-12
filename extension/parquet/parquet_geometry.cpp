@@ -113,7 +113,7 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 
 					// Parse the CRS
 					const auto crs_val = yyjson_obj_get(column_val, "crs");
-					if (crs_val) {
+					if (crs_val && !yyjson_is_null(crs_val)) {
 						// Parse the CRS
 						if (!yyjson_is_obj(crs_val)) {
 							throw InvalidInputException("Geoparquet column '%s' has invalid CRS", column_name);
@@ -126,8 +126,10 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 
 						// Free the temporary CRS JSON string
 						free(crs_json);
+                    } else if (crs_val && yyjson_is_null(crs_val)) {
+                        // If CRS is null, do nothing
 					} else {
-						// Otherwise, default to OGC:CRS84
+						// Otherwise, if no CRS, default to OGC:CRS84
 						auto crs = CoordinateReferenceSystem::TryConvert(context, "OGC:CRS84",
 						                                                 CoordinateReferenceSystemType::PROJJSON);
 						if (crs) {
