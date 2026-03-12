@@ -3,6 +3,7 @@
 #include "ast/join_qualifier.hpp"
 #include "ast/limit_percent_result.hpp"
 #include "ast/table_alias.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -41,6 +42,22 @@ PEGTransformerFactory::TransformSelectStatementInternal(PEGTransformer &transfor
 	for (auto &result_modifier : result_modifiers) {
 		select_statement->node->modifiers.push_back(std::move(result_modifier));
 	}
+	if (select_statement->node->type != QueryNodeType::SELECT_NODE) {
+		return select_statement;
+	}
+	auto &select_node = select_statement->node->Cast<SelectNode>();
+	if (select_node.from_table->type != TableReferenceType::SHOW_REF) {
+		return select_statement;
+	}
+	auto &show_ref = select_node.from_table->Cast<ShowRef>();
+	if (!select_statement->node->cte_map.map.empty()) {
+		throw ParserException("%s with CTE not allowed - wrap the statement in a subquery instead",
+		                      EnumUtil::ToString(show_ref.show_type));
+	}
+	if (!select_statement->node->modifiers.empty()) {
+		throw ParserException("%s with ORDER BY not allowed - wrap the statement in a subquery instead",
+		                      EnumUtil::ToString(show_ref.show_type));
+	}
 	return select_statement;
 }
 
@@ -57,6 +74,16 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSelectSetOpChain(PEG
 		auto setop_list = setop->Cast<ListParseResult>();
 		auto setop_result = transformer.Transform<unique_ptr<SetOperationNode>>(setop_list.Child<ListParseResult>(0));
 		auto right_select = transformer.Transform<unique_ptr<SelectStatement>>(setop_list.Child<ListParseResult>(1));
+		if (select->node->type == QueryNodeType::SET_OPERATION_NODE && select->node->modifiers.empty() &&
+		    select->node->cte_map.map.empty()) {
+			auto &existing = select->node->Cast<SetOperationNode>();
+			if (existing.setop_type == setop_result->setop_type && existing.setop_all == setop_result->setop_all &&
+			    (existing.setop_type == SetOperationType::UNION ||
+			     existing.setop_type == SetOperationType::UNION_BY_NAME)) {
+				existing.children.push_back(std::move(right_select->node));
+				continue;
+			}
+		}
 		setop_result->children.push_back(std::move(select->node));
 		setop_result->children.push_back(std::move(right_select->node));
 		select->node = std::move(setop_result);
@@ -516,13 +543,25 @@ PEGTransformerFactory::TransformExpressionOptIdentifier(PEGTransformer &transfor
 TableAlias PEGTransformerFactory::TransformTableAlias(PEGTransformer &transformer,
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<TableAlias>(list_pr.Child<ChoiceParseResult>(0).result);
+}
+
+TableAlias PEGTransformerFactory::TransformTableAliasAs(PEGTransformer &transformer,
+                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
 	TableAlias result;
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
 	result.name = qualified_name.name;
-	auto opt_column_aliases = list_pr.Child<OptionalParseResult>(2);
-	if (opt_column_aliases.HasResult()) {
-		result.column_name_alias = transformer.Transform<vector<string>>(opt_column_aliases.optional_result);
-	}
+	transformer.TransformOptional<vector<string>>(list_pr, 2, result.column_name_alias);
+	return result;
+}
+
+TableAlias PEGTransformerFactory::TransformTableAliasWithoutAs(PEGTransformer &transformer,
+                                                               optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	TableAlias result;
+	result.name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	transformer.TransformOptional<vector<string>>(list_pr, 1, result.column_name_alias);
 	return result;
 }
 
@@ -538,42 +577,78 @@ vector<string> PEGTransformerFactory::TransformColumnAliases(PEGTransformer &tra
 	return result;
 }
 
+static bool IsConditionlessJoin(const JoinRef &join) {
+	if (join.condition || !join.using_columns.empty()) {
+		return false;
+	}
+	if (join.ref_type != JoinRefType::CROSS && join.ref_type != JoinRefType::POSITIONAL &&
+	    join.ref_type != JoinRefType::NATURAL) {
+		return false;
+	}
+	return true;
+}
+
+static unique_ptr<TableRef> ReassociateJoins(unique_ptr<TableRef> root) {
+	// Left-rotate while the current node is a conditionless join and its right child is a join.
+	// This converts right-associative join trees (from PEG grammar) to left-associative.
+	while (root->type == TableReferenceType::JOIN) {
+		auto &current = root->Cast<JoinRef>();
+		if (!IsConditionlessJoin(current) || !current.right || current.right->type != TableReferenceType::JOIN) {
+			break;
+		}
+		// Left rotation:
+		//   current(left=A, right=inner(left=B, right=C))
+		//   => inner(left=current(left=A, right=B), right=C)
+		auto inner = std::move(current.right);
+		auto &inner_join = inner->Cast<JoinRef>();
+		current.right = std::move(inner_join.left);
+		inner_join.left = std::move(root);
+		root = std::move(inner);
+	}
+	return root;
+}
+
+//! Check whether the RHS TableRef of a JoinOrPivot parse result has its own JoinOrPivot* entries.
+//! This distinguishes PEG right-recursion (has entries) from parenthesized joins (no entries).
+//! Navigation: JoinOrPivot → Choice → JoinClause → Choice → JoinWithoutOnClause → child(2)=TableRef → child(1)=Optional
+static bool RHSTableRefHasJoinOrPivot(optional_ptr<ParseResult> join_or_pivot_pr) {
+	auto &jop_list = join_or_pivot_pr->Cast<ListParseResult>();
+	auto &jop_choice = jop_list.Child<ChoiceParseResult>(0);
+	auto &join_clause = jop_choice.result->Cast<ListParseResult>();
+	auto &jc_choice = join_clause.Child<ChoiceParseResult>(0);
+	auto &join_impl = jc_choice.result->Cast<ListParseResult>();
+	// For JoinWithoutOnClause the TableRef is at index 2
+	auto &table_ref = join_impl.Child<ListParseResult>(2);
+	return table_ref.Child<OptionalParseResult>(1).HasResult();
+}
+
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableRef(PEGTransformer &transformer,
                                                               optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
-
 	auto inner_table_ref = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(0));
 	auto join_or_pivot_opt = list_pr.Child<OptionalParseResult>(1);
-	if (join_or_pivot_opt.HasResult()) {
-		auto repeat_join_or_pivot = join_or_pivot_opt.optional_result->Cast<RepeatParseResult>();
-		for (auto join_or_pivot : repeat_join_or_pivot.children) {
-			auto transform_join_or_pivot = transformer.Transform<unique_ptr<TableRef>>(join_or_pivot);
-			if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
-				auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
-				join_ref.left = std::move(inner_table_ref);
-				inner_table_ref = std::move(transform_join_or_pivot);
-			} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
-				auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
-				pivot_ref.source = std::move(inner_table_ref);
-				inner_table_ref = std::move(transform_join_or_pivot);
-			} else {
-				throw NotImplementedException("Unsupported TableRef type encountered: %s",
-				                              EnumUtil::ToString(transform_join_or_pivot->type));
-			}
-		}
+	if (!join_or_pivot_opt.HasResult()) {
+		return inner_table_ref;
 	}
-
-	auto opt_table_alias = list_pr.Child<OptionalParseResult>(2);
-	if (opt_table_alias.HasResult()) {
-		auto table_alias = transformer.Transform<TableAlias>(opt_table_alias.optional_result);
-		auto outer_select = make_uniq<SelectNode>();
-		outer_select->from_table = std::move(inner_table_ref);
-		outer_select->select_list.push_back(make_uniq<StarExpression>());
-		auto select_statement = make_uniq<SelectStatement>();
-		select_statement->node = std::move(outer_select);
-		auto subquery_ref = make_uniq<SubqueryRef>(std::move(select_statement), table_alias.name);
-		subquery_ref->column_name_alias = table_alias.column_name_alias;
-		inner_table_ref = std::move(subquery_ref);
+	auto repeat_join_or_pivot = join_or_pivot_opt.optional_result->Cast<RepeatParseResult>();
+	for (auto join_or_pivot : repeat_join_or_pivot.children) {
+		auto transform_join_or_pivot = transformer.Transform<unique_ptr<TableRef>>(join_or_pivot);
+		if (transform_join_or_pivot->type == TableReferenceType::JOIN) {
+			auto &join_ref = transform_join_or_pivot->Cast<JoinRef>();
+			join_ref.left = std::move(inner_table_ref);
+			if (IsConditionlessJoin(join_ref) && RHSTableRefHasJoinOrPivot(join_or_pivot)) {
+				inner_table_ref = ReassociateJoins(std::move(transform_join_or_pivot));
+			} else {
+				inner_table_ref = std::move(transform_join_or_pivot);
+			}
+		} else if (transform_join_or_pivot->type == TableReferenceType::PIVOT) {
+			auto &pivot_ref = transform_join_or_pivot->Cast<PivotRef>();
+			pivot_ref.source = std::move(inner_table_ref);
+			inner_table_ref = std::move(transform_join_or_pivot);
+		} else {
+			throw NotImplementedException("Unsupported TableRef type encountered: %s",
+			                              EnumUtil::ToString(transform_join_or_pivot->type));
+		}
 	}
 	return inner_table_ref;
 }
@@ -1006,9 +1081,30 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(extract_parens);
-	transformer.TransformOptional<string>(list_pr, 0, table_ref->alias);
-	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 2, table_ref->sample);
-	return table_ref;
+	auto table_alias_colon_opt = list_pr.Child<OptionalParseResult>(0);
+	auto table_alias_opt = list_pr.Child<OptionalParseResult>(2);
+	if (table_alias_colon_opt.HasResult() && table_alias_opt.HasResult()) {
+		throw ParserException("Table reference %s cannot have two aliases", table_ref->ToString());
+	}
+	if (!table_alias_colon_opt.HasResult() && !table_alias_opt.HasResult()) {
+		return table_ref;
+	}
+	auto select_statement = make_uniq<SelectStatement>();
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(table_ref);
+	select_statement->node = std::move(select_node);
+	auto subquery = make_uniq<SubqueryRef>(std::move(select_statement));
+	if (table_alias_colon_opt.HasResult()) {
+		subquery->alias = transformer.Transform<string>(table_alias_colon_opt.optional_result);
+	}
+	if (table_alias_opt.HasResult()) {
+		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.optional_result);
+		subquery->alias = table_alias.name;
+		subquery->column_name_alias = table_alias.column_name_alias;
+	}
+	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 3, subquery->sample);
+	return std::move(subquery);
 }
 
 unique_ptr<AtClause> PEGTransformerFactory::TransformAtClause(PEGTransformer &transformer,
@@ -1284,7 +1380,7 @@ GroupByNode PEGTransformerFactory::TransformGroupByClause(PEGTransformer &transf
 }
 
 struct GroupingExpressionMap {
-	parsed_expression_map_t<idx_t> map;
+	parsed_expression_map_t<ProjectionIndex> map;
 };
 
 GroupByNode PEGTransformerFactory::TransformGroupByExpressions(PEGTransformer &transformer,
@@ -1316,7 +1412,7 @@ static void CheckGroupingSetCubes(idx_t current_count, idx_t cube_count) {
 	}
 }
 
-static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
+static GroupingSet VectorToGroupingSet(vector<ProjectionIndex> &indexes) {
 	GroupingSet result;
 	for (idx_t i = 0; i < indexes.size(); i++) {
 		result.insert(indexes[i]);
@@ -1325,7 +1421,7 @@ static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
 }
 
 void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
-                                                 GroupByNode &result, vector<idx_t> &result_set) {
+                                                 GroupByNode &result, vector<ProjectionIndex> &result_set) {
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
@@ -1336,9 +1432,9 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
 		}
 	}
 	auto entry = map.map.find(*expression);
-	idx_t result_idx;
+	ProjectionIndex result_idx;
 	if (entry == map.map.end()) {
-		result_idx = result.group_expressions.size();
+		result_idx = ProjectionIndex(result.group_expressions.size());
 		map.map[*expression] = result_idx;
 		result.group_expressions.push_back(std::move(expression));
 	} else {
@@ -1366,7 +1462,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 		result_sets.emplace_back();
 
 	} else if (StringUtil::CIEquals(group_by_expr->name, "Expression")) {
-		vector<idx_t> indexes;
+		vector<ProjectionIndex> indexes;
 		auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(group_by_expr);
 		AddGroupByExpression(std::move(expr), map, result, indexes);
 		result_sets.push_back(VectorToGroupingSet(indexes));
@@ -1392,7 +1488,7 @@ vector<GroupingSet> PEGTransformerFactory::GroupByExpressionUnfolding(PEGTransfo
 
 		vector<GroupingSet> unfolding_sets;
 		for (auto &expr_node : expr_list) {
-			vector<idx_t> indexes;
+			vector<ProjectionIndex> indexes;
 			auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(expr_node);
 			AddGroupByExpression(std::move(expr), map, result, indexes);
 

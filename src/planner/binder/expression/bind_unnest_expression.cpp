@@ -62,7 +62,7 @@ void SelectBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
 		auto &unnest_node = node_pair.second;
 
 		if (unnest_node.index == column_binding.table_index) {
-			if (column_binding.column_index < unnest_node.expressions.size()) {
+			if (column_binding.column_index.index < unnest_node.expressions.size()) {
 				throw BinderException("UNNEST in lambda expressions is not supported");
 			}
 		}
@@ -206,18 +206,16 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		auto current_level = unnest_level + list_unnests - current_depth - 1;
 		auto entry = node.unnests.find(current_level);
 		TableIndex unnest_table_index;
-		idx_t unnest_column_index;
+		ProjectionIndex unnest_column_index;
 		if (entry == node.unnests.end()) {
 			BoundUnnestNode unnest_node;
 			unnest_node.index = binder.GenerateTableIndex();
-			unnest_node.expressions.push_back(std::move(result));
 			unnest_table_index = unnest_node.index;
-			unnest_column_index = 0;
+			unnest_column_index = ColumnBinding::PushExpression(unnest_node.expressions, std::move(result));
 			node.unnests.insert(make_pair(current_level, std::move(unnest_node)));
 		} else {
 			unnest_table_index = entry->second.index;
-			unnest_column_index = entry->second.expressions.size();
-			entry->second.expressions.push_back(std::move(result));
+			unnest_column_index = ColumnBinding::PushExpression(entry->second.expressions, std::move(result));
 		}
 		// now create a column reference referring to the unnest
 		unnest_expr = make_uniq<BoundColumnRefExpression>(

@@ -71,7 +71,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		column_binding_set_t distinct_group;
 		TableIndex table_idx = aggr.group_index;
 		for (idx_t i = 0; i < aggr.groups.size(); i++) {
-			distinct_group.insert(ColumnBinding(aggr.group_index, i));
+			distinct_group.insert(ColumnBinding(aggr.group_index, ProjectionIndex(i)));
 		}
 		if (!distinct_group.empty()) {
 			pipe_info.distinct_groups[table_idx] = std::move(distinct_group);
@@ -88,21 +88,21 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		auto it = pipe_info.distinct_groups.find(projection.table_index);
 		if (it != pipe_info.distinct_groups.end()) {
 			column_binding_set_t new_distinct_group;
-			auto &expression = projection.expressions.get(it->second.begin()->column_index);
-			if (expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			auto &start_expr = projection.GetExpression(*it->second.begin());
+			if (start_expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				// if the expression is not a column ref, we cannot eliminate the join
 				break;
 			}
 			bool could_add = true;
-			auto ref_id = expression->Cast<BoundColumnRefExpression>().binding.table_index;
+			auto ref_id = start_expr.Cast<BoundColumnRefExpression>().binding.table_index;
 			for (auto &col : it->second) {
-				auto &expression = projection.expressions.get(col.column_index);
-				if (expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				auto &expression = projection.GetExpression(col);
+				if (expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 					// if the expression is not a column ref, we cannot eliminate the join
 					could_add = false;
 					break;
 				}
-				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
+				auto &col_ref = expression.Cast<BoundColumnRefExpression>();
 				if (ref_id != col_ref.binding.table_index) {
 					could_add = false;
 					break;
@@ -143,8 +143,8 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		auto &projection = op.Cast<LogicalProjection>();
 		// after traversed children, here check whether any distinct group added in children
 		unordered_map<TableIndex, DistinctGroupRef> ref_table_columns;
-		for (idx_t idx = 0; idx < projection.expressions.size(); idx++) {
-			auto &expression = projection.expressions.get(idx);
+		for (idx_t proj_idx = 0; proj_idx < projection.expressions.size(); proj_idx++) {
+			auto &expression = projection.expressions.get(proj_idx);
 			if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
 				auto distinct_group_it = pipe_info.distinct_groups.find(col_ref.binding.table_index);
@@ -159,7 +159,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 					ref_table_columns[col_ref.binding.table_index] = ref;
 				}
 				ref_table_columns[col_ref.binding.table_index].distinct_group.insert(
-				    ColumnBinding(projection.table_index, idx));
+				    ColumnBinding(projection.table_index, ProjectionIndex(proj_idx)));
 				ref_table_columns[col_ref.binding.table_index].ref_column_ids.erase(col_ref.binding.column_index);
 			}
 		}
@@ -299,7 +299,7 @@ bool JoinElimination::ContainDistinctGroup(vector<ColumnBinding> &column_binding
 	if (it == pipe_info.distinct_groups.end()) {
 		return false;
 	}
-	unordered_set<idx_t> used_column_ids;
+	unordered_set<ProjectionIndex> used_column_ids;
 	for (auto &binding : column_bindings) {
 		if (it->second.find(binding) == it->second.end()) {
 			continue;

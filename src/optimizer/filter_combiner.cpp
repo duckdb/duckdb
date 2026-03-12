@@ -196,7 +196,7 @@ static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const 
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::BOUND_COLUMN_REF: {
 		auto &ref = expr.Cast<BoundColumnRefExpression>();
-		result = column_ids[ref.binding.column_index];
+		result = column_ids[ref.binding.column_index.index];
 		return true;
 	}
 	case ExpressionType::BOUND_FUNCTION: {
@@ -404,9 +404,8 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	ReplaceWithBoundReference(filter_expr);
 
 	// push the expression filter
-	auto &column_ids = get.GetColumnIds();
 	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
-	auto &column_index = column_ids[bindings[0].column_index];
+	auto &column_index = get.GetColumnIndex(bindings[0]);
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filters on a pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -436,7 +435,7 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		// empty prefix - skip
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto &column_index = column_ids[column_ref.binding.column_index];
+	auto &column_index = column_ids[column_ref.binding.column_index.index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -471,7 +470,7 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	//! This is a like function.
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
-	auto &column_index = column_ids[column_ref.binding.column_index];
+	auto &column_index = column_ids[column_ref.binding.column_index.index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -527,7 +526,7 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
-	auto &column_index = column_ids[column_ref.binding.column_index];
+	auto &column_index = column_ids[column_ref.binding.column_index.index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -626,13 +625,13 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 
 		if (i == 0) {
-			auto &col_id = column_ids[column_ref->binding.column_index];
+			auto &col_id = column_ids[column_ref->binding.column_index.index];
 			column_id = col_id.GetPrimaryIndex();
 			if (col_id.IsPushdownExtract()) {
 				//! FIXME: can't support filter pushdown on pushed down extract currently
 				return FilterPushdownResult::NO_PUSHDOWN;
 			}
-		} else if (column_id != column_ids[column_ref->binding.column_index].GetPrimaryIndex()) {
+		} else if (column_id != column_ids[column_ref->binding.column_index.index].GetPrimaryIndex()) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 

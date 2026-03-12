@@ -34,7 +34,7 @@ private:
 
 	void ReplaceTopLevelTableIndex(LogicalOperator &op, TableIndex new_index);
 	void ReplaceTableReferences(unique_ptr<Expression> &expr, TableIndex new_table_index);
-	unique_ptr<Expression> GetExpression(LogicalOperator &op, idx_t column_index);
+	unique_ptr<Expression> GetExpression(LogicalOperator &op, ProjectionIndex column_index);
 	void ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &expr);
 	bool OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset);
 

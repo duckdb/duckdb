@@ -111,6 +111,8 @@ static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType 
 		return map.find(LogicalType::ARRAY(LogicalType::ANY, optional_idx()));
 	case LogicalTypeId::DECIMAL:
 		return map.find(LogicalTypeId::DECIMAL);
+	case LogicalTypeId::ENUM:
+		return map.find(LogicalTypeId::ENUM);
 	default:
 		return map.find(LogicalType::ANY);
 	}

@@ -744,7 +744,7 @@ public:
 		if (!has_rowid) {
 			if (get.projection_ids.empty()) {
 				for (idx_t i = 0; i < get.GetColumnIds().size(); i++) {
-					get.projection_ids.push_back(i);
+					get.projection_ids.emplace_back(i);
 				}
 			}
 			get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);

@@ -91,7 +91,7 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 			if (expr.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
-			const ColumnBinding binding(projection.table_index, col_idx);
+			const ColumnBinding binding(projection.table_index, ProjectionIndex(col_idx));
 			if (null_filtered_columns.find(binding) == null_filtered_columns.end()) {
 				continue;
 			}

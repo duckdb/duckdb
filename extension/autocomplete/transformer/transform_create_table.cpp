@@ -3,6 +3,7 @@
 #include "ast/create_table_as.hpp"
 #include "ast/generated_column_definition.hpp"
 #include "ast/key_actions.hpp"
+#include "ast/partition_sorted_options.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "transformer/peg_transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -71,10 +72,16 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGT
 		auto create_table_as = transformer.Transform<CreateTableAs>(table_as_or_column_list.result);
 		info->query = std::move(create_table_as.select_statement);
 		info->columns = std::move(create_table_as.column_names);
+		info->partition_keys = std::move(create_table_as.partition_keys);
+		info->sort_keys = std::move(create_table_as.sort_keys);
+		info->options = std::move(create_table_as.options);
 	} else {
 		auto column_list = transformer.Transform<ColumnElements>(table_as_or_column_list.result);
 		info->columns = std::move(column_list.columns);
 		info->constraints = std::move(column_list.constraints);
+		info->partition_keys = std::move(column_list.partition_keys);
+		info->sort_keys = std::move(column_list.sort_keys);
+		info->options = std::move(column_list.options);
 	}
 	// On COMMIT is unused apart from checking whether it is ON COMMIT DELETE, which is unsupported
 	bool on_commit = false;
@@ -86,11 +93,23 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTableStmt(PEGT
 
 CreateTableAs PEGTransformerFactory::TransformCreateTableAs(PEGTransformer &transformer,
                                                             optional_ptr<ParseResult> parse_result) {
+	// CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' SelectStatementInternal WithData?
+	// child 0: IdentifierList?
+	// child 1: PartitionSortedOptions?
+	// child 2: WithList?
+	// child 3: 'AS'
+	// child 4: SelectStatementInternal
+	// child 5: WithData?
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	CreateTableAs result;
 	transformer.TransformOptional<ColumnList>(list_pr, 0, result.column_names);
-	result.select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(2));
-	transformer.TransformOptional<bool>(list_pr, 3, result.with_data);
+	PartitionSortedOptions pso;
+	transformer.TransformOptional<PartitionSortedOptions>(list_pr, 1, pso);
+	result.partition_keys = std::move(pso.partition_keys);
+	result.sort_keys = std::move(pso.sort_keys);
+	transformer.TransformOptional<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr, 2, result.options);
+	result.select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(4));
+	transformer.TransformOptional<bool>(list_pr, 5, result.with_data);
 	if (result.with_data) {
 		auto limit_modifier = make_uniq<LimitModifier>();
 		limit_modifier->limit = make_uniq<ConstantExpression>(0);
@@ -113,9 +132,19 @@ ColumnList PEGTransformerFactory::TransformIdentifierList(PEGTransformer &transf
 
 ColumnElements PEGTransformerFactory::TransformCreateColumnList(PEGTransformer &transformer,
                                                                 optional_ptr<ParseResult> parse_result) {
+	// CreateColumnList <- Parens(CreateTableColumnList) PartitionSortedOptions? WithList?
+	// child 0: Parens(CreateTableColumnList)
+	// child 1: PartitionSortedOptions?
+	// child 2: WithList?
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto create_table_column_list = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	return transformer.Transform<ColumnElements>(create_table_column_list);
+	auto result = transformer.Transform<ColumnElements>(create_table_column_list);
+	PartitionSortedOptions pso;
+	transformer.TransformOptional<PartitionSortedOptions>(list_pr, 1, pso);
+	result.partition_keys = std::move(pso.partition_keys);
+	result.sort_keys = std::move(pso.sort_keys);
+	transformer.TransformOptional<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr, 2, result.options);
+	return result;
 }
 
 ColumnElements PEGTransformerFactory::TransformCreateTableColumnList(PEGTransformer &transformer,
@@ -539,6 +568,66 @@ void PEGTransformerFactory::VerifyColumnRefs(const ParsedExpression &expr) {
 			    "Qualified (tbl.name) column references are not allowed inside of generated column expressions");
 		}
 	});
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformPartitionOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	// PartitionOptions <- 'PARTITIONED' 'BY' Parens(List(Expression))
+	// child 0: 'PARTITIONED', child 1: 'BY', child 2: Parens(List(Expression))
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(2));
+	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	vector<unique_ptr<ParsedExpression>> result;
+	for (auto expr_pr : expr_list) {
+		result.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr_pr));
+	}
+	return result;
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSortedOptions(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	// SortedOptions <- 'SORTED' 'BY' Parens(List(Expression))
+	// child 0: 'SORTED', child 1: 'BY', child 2: Parens(List(Expression))
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(2));
+	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	vector<unique_ptr<ParsedExpression>> result;
+	for (auto expr_pr : expr_list) {
+		result.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr_pr));
+	}
+	return result;
+}
+
+PartitionSortedOptions
+PEGTransformerFactory::TransformPartitionOptSortedOptions(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
+	// PartitionOptSortedOptions <- PartitionOptions SortedOptions?
+	// child 0: PartitionOptions, child 1: SortedOptions?
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	PartitionSortedOptions result;
+	result.partition_keys =
+	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
+	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 1, result.sort_keys);
+	return result;
+}
+
+PartitionSortedOptions
+PEGTransformerFactory::TransformSortedOptPartitionOptions(PEGTransformer &transformer,
+                                                          optional_ptr<ParseResult> parse_result) {
+	// SortedOptPartitionOptions <- SortedOptions PartitionOptions?
+	// child 0: SortedOptions, child 1: PartitionOptions?
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	PartitionSortedOptions result;
+	result.sort_keys = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(0));
+	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 1, result.partition_keys);
+	return result;
+}
+
+PartitionSortedOptions PEGTransformerFactory::TransformPartitionSortedOptions(PEGTransformer &transformer,
+                                                                              optional_ptr<ParseResult> parse_result) {
+	// PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<PartitionSortedOptions>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 } // namespace duckdb

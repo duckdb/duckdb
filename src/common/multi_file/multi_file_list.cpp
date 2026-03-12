@@ -65,8 +65,8 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 		if (IsVirtualColumn(column_idx)) {
 			continue;
 		}
-		auto column_ref =
-		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.ColumnIndex()));
+		auto column_ref = make_uniq<BoundColumnRefExpression>(
+		    types[column_idx], ColumnBinding(table_index, ProjectionIndex(entry.ColumnIndex())));
 		auto filter_expr = entry.Filter().ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}

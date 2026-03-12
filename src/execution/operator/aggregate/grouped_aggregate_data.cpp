@@ -6,13 +6,13 @@ idx_t GroupedAggregateData::GroupCount() const {
 	return groups.size();
 }
 
-const vector<vector<idx_t>> &GroupedAggregateData::GetGroupingFunctions() const {
+const vector<vector<ProjectionIndex>> &GroupedAggregateData::GetGroupingFunctions() const {
 	return grouping_functions;
 }
 
 void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> groups,
                                              vector<unique_ptr<Expression>> expressions,
-                                             vector<unsafe_vector<idx_t>> grouping_functions) {
+                                             vector<unsafe_vector<ProjectionIndex>> grouping_functions) {
 	InitializeGroupbyGroups(std::move(groups));
 	vector<LogicalType> payload_types_filters;
 
@@ -86,7 +86,7 @@ void GroupedAggregateData::InitializeGroupbyGroups(vector<unique_ptr<Expression>
 	this->groups = std::move(groups);
 }
 
-void GroupedAggregateData::SetGroupingFunctions(vector<unsafe_vector<idx_t>> &functions) {
+void GroupedAggregateData::SetGroupingFunctions(vector<unsafe_vector<ProjectionIndex>> &functions) {
 	grouping_functions.reserve(functions.size());
 	for (idx_t i = 0; i < functions.size(); i++) {
 		grouping_functions.push_back(std::move(functions[i]));

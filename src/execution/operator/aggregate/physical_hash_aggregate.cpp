@@ -129,7 +129,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
                                              vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<GroupingSet> grouping_sets_p,
-                                             vector<unsafe_vector<idx_t>> grouping_functions_p,
+                                             vector<unsafe_vector<ProjectionIndex>> grouping_functions_p,
                                              idx_t estimated_cardinality, TupleDataValidityType group_validity,
                                              TupleDataValidityType distinct_validity)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
@@ -139,7 +139,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	if (grouping_sets.empty()) {
 		GroupingSet set;
 		for (idx_t i = 0; i < group_count; i++) {
-			set.insert(i);
+			set.insert(ProjectionIndex(i));
 		}
 		grouping_sets.push_back(std::move(set));
 	}

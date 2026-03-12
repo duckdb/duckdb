@@ -1,0 +1,31 @@
+# name: test/optimizer/unused_columns/cte_unused_columns.test
+# description: Test that unused columns are removed from materialized CTEs
+# group: [unused_columns]
+
+statement ok
+CREATE TABLE o_order AS
+SELECT hash(range) col0,
+       hash(range) col1,
+       hash(range) col2,
+       hash(range) col3,
+       hash(range) col4,
+       hash(range) col5,
+       hash(range) col6,
+FROM range(10);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN
+WITH test AS MATERIALIZED (SELECT * FROM o_order)
+SELECT col0, col6 FROM test;
+----
+logical_opt	<!REGEX>:.*col[1-5].*
+
+query II
+EXPLAIN
+WITH test AS MATERIALIZED (SELECT * FROM o_order)
+SELECT col0, col6, t2.* FROM test, (SELECT col1 FROM test) t2;
+----
+logical_opt	<!REGEX>:.*col[2-5].*

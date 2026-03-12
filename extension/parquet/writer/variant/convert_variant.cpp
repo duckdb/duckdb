@@ -6,6 +6,7 @@
 #include "parquet_shredding.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 

@@ -1364,11 +1364,15 @@ void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
 	if (!DBConfig::Get(db).options.trim_free_blocks) {
 		return;
 	}
+	lock_guard<mutex> lock(single_file_block_lock);
 	for (auto itr = blocks.begin(); itr != blocks.end(); ++itr) {
+		if (!free_list.count(*itr)) {
+			continue;
+		}
 		block_id_t first = *itr;
 		block_id_t last = first;
 		// Find end of contiguous range.
-		for (++itr; itr != blocks.end() && (*itr == last + 1); ++itr) {
+		for (++itr; itr != blocks.end() && (*itr == last + 1) && free_list.count(*itr); ++itr) {
 			last = *itr;
 		}
 		// We are now one too far.

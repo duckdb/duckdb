@@ -9,14 +9,20 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+
+#include <functional>
 
 namespace duckdb {
 
@@ -29,6 +35,30 @@ struct GenerateJoinRelation {
 
 	optional_ptr<JoinRelationSet> set;
 	unique_ptr<LogicalOperator> op;
+};
+
+//! Filter info struct that is used by the cardinality estimator to set the initial cardinality
+//! but is also eventually transformed into a query edge.
+class FilterInfo {
+public:
+	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index,
+	           JoinType join_type = JoinType::INNER)
+	    : filter(std::move(filter)), set(set), filter_index(filter_index), join_type(join_type) {
+	}
+
+public:
+	unique_ptr<Expression> filter;
+	reference<JoinRelationSet> set;
+	idx_t filter_index;
+	JoinType join_type;
+	optional_ptr<JoinRelationSet> left_set;
+	optional_ptr<JoinRelationSet> right_set;
+	ColumnBinding left_binding;
+	ColumnBinding right_binding;
+	bool from_residual_predicate = false;
+
+	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
+	void SetRightSet(optional_ptr<JoinRelationSet> right_set_new);
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
@@ -76,6 +106,8 @@ private:
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
 
 	QueryGraphEdges query_graph;
+
+	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
 
 	void CreateHyperGraphEdges();
 

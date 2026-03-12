@@ -52,7 +52,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = std::move(aggregate);
 
 		// now we push a projection with a comparison to 1
-		auto left_child = make_uniq<BoundColumnRefExpression>(idx_type, ColumnBinding(aggregate_index, 0));
+		auto left_child =
+		    make_uniq<BoundColumnRefExpression>(idx_type, ColumnBinding(aggregate_index, ProjectionIndex(0)));
 		auto right_child = make_uniq<BoundConstantExpression>(Value::Numeric(idx_type, 1));
 		auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left_child),
 		                                                       std::move(right_child));
@@ -71,7 +72,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// we replace the original subquery with a ColumnRefExpression referring to the result of the projection (either
 		// TRUE or FALSE)
 		return make_uniq<BoundColumnRefExpression>(expr.GetName(), LogicalType::BOOLEAN,
-		                                           ColumnBinding(projection_index, 0));
+		                                           ColumnBinding(projection_index, ProjectionIndex(0)));
 	}
 	case SubqueryType::SCALAR: {
 		// uncorrelated scalar, we want to return the first entry
@@ -84,7 +85,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
-		auto bound = make_uniq<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, 0));
+		auto bound =
+		    make_uniq<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, ProjectionIndex(0)));
 		vector<unique_ptr<Expression>> first_children;
 		first_children.push_back(std::move(bound));
 
@@ -110,10 +112,10 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			// CASE WHEN count > 1 THEN error('Scalar subquery can only return a single row') ELSE first_agg END
 			auto proj_index = binder.GenerateTableIndex();
 
-			auto first_ref =
-			    make_uniq<BoundColumnRefExpression>(plan->expressions[0]->return_type, ColumnBinding(aggr_index, 0));
-			auto count_ref =
-			    make_uniq<BoundColumnRefExpression>(plan->expressions[1]->return_type, ColumnBinding(aggr_index, 1));
+			auto first_ref = make_uniq<BoundColumnRefExpression>(plan->expressions[0]->return_type,
+			                                                     ColumnBinding(aggr_index, ProjectionIndex(0)));
+			auto count_ref = make_uniq<BoundColumnRefExpression>(plan->expressions[1]->return_type,
+			                                                     ColumnBinding(aggr_index, ProjectionIndex(1)));
 
 			auto constant_one = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
 			auto count_check = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
@@ -147,7 +149,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the first result of the
 		// aggregation
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(aggr_index, 0));
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
+		                                           ColumnBinding(aggr_index, ProjectionIndex(0)));
 	}
 	default: {
 		D_ASSERT(expr.subquery_type == SubqueryType::ANY);
@@ -210,7 +213,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		root = std::move(join);
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
+		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	}
 }
@@ -261,7 +265,7 @@ static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &corre
 	if (perform_delim) {
 		return true;
 	}
-	auto binding = ColumnBinding(binder.GenerateTableIndex(), 0);
+	auto binding = ColumnBinding(binder.GenerateTableIndex(), ProjectionIndex(0));
 	auto type = LogicalType::BIGINT;
 	auto name = "delim_index";
 	CorrelatedColumnInfo info(binding, type, name, 0);
@@ -322,7 +326,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
+		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	default: {
 		D_ASSERT(expr.subquery_type == SubqueryType::ANY);
@@ -359,7 +364,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(std::move(dependent_join));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
+		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	}
 }
@@ -369,7 +375,7 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 		// Collect all recursive CTEs during recursive descend
 		if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
 		    op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-			auto &rec_cte = op.Cast<LogicalRecursiveCTE>();
+			auto &rec_cte = op.Cast<LogicalCTE>();
 			binder.recursive_ctes[rec_cte.table_index] = &op;
 		}
 		for (idx_t i = 0; i < op.children.size(); i++) {

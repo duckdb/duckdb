@@ -28,7 +28,7 @@ static void ReplaceExpressionBinding(vector<unique_ptr<Expression>> &proj_expres
 			if (proj_expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				if (colref.Equals(proj_expr)) {
 					colref.binding.table_index = proj_table_idx;
-					colref.binding.column_index = proj_idx;
+					colref.binding.column_index = ProjectionIndex(proj_idx);
 					found_proj_col = true;
 					break;
 				}
@@ -38,8 +38,7 @@ static void ReplaceExpressionBinding(vector<unique_ptr<Expression>> &proj_expres
 			// Project a new column
 			auto new_colref = colref.Copy();
 			colref.binding.table_index = proj_table_idx;
-			colref.binding.column_index = proj_expressions.size();
-			proj_expressions.push_back(std::move(new_colref));
+			colref.binding.column_index = ColumnBinding::PushExpression(proj_expressions, std::move(new_colref));
 		}
 	}
 	ExpressionIterator::EnumerateChildren(

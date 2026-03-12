@@ -53,6 +53,7 @@ projects/*
 # Autotools artifacts
 #==============================================================================#
 config/
+!.github/config/
 configure
 config-h.in
 autom4te.cache

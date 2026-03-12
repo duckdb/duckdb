@@ -248,7 +248,7 @@ void LogicalAggregate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<TableIndex>(203, "groupings_index", groupings_index);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", groups);
 	serializer.WritePropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", grouping_sets);
-	serializer.WritePropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", grouping_functions);
+	serializer.WritePropertyWithDefault<vector<unsafe_vector<ProjectionIndex>>>(206, "grouping_functions", grouping_functions);
 	serializer.WritePropertyWithDefault<TupleDataValidityType>(207, "distinct_validity", distinct_validity, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 }
 
@@ -260,7 +260,7 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault<TableIndex>(203, "groupings_index", result->groupings_index);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(204, "groups", result->groups);
 	deserializer.ReadPropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", result->grouping_sets);
-	deserializer.ReadPropertyWithDefault<vector<unsafe_vector<idx_t>>>(206, "grouping_functions", result->grouping_functions);
+	deserializer.ReadPropertyWithDefault<vector<unsafe_vector<ProjectionIndex>>>(206, "grouping_functions", result->grouping_functions);
 	deserializer.ReadPropertyWithExplicitDefault<TupleDataValidityType>(207, "distinct_validity", result->distinct_validity, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	return std::move(result);
 }
@@ -269,8 +269,8 @@ void LogicalAnyJoin::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty<JoinType>(200, "join_type", join_type);
 	serializer.WritePropertyWithDefault<TableIndex>(201, "mark_index", mark_index);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(202, "left_projection_map", left_projection_map);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(203, "right_projection_map", right_projection_map);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(202, "left_projection_map", left_projection_map);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(203, "right_projection_map", right_projection_map);
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(204, "condition", condition);
 }
 
@@ -278,8 +278,8 @@ unique_ptr<LogicalOperator> LogicalAnyJoin::Deserialize(Deserializer &deserializ
 	auto join_type = deserializer.ReadProperty<JoinType>(200, "join_type");
 	auto result = duckdb::unique_ptr<LogicalAnyJoin>(new LogicalAnyJoin(join_type));
 	deserializer.ReadPropertyWithDefault<TableIndex>(201, "mark_index", result->mark_index);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(202, "left_projection_map", result->left_projection_map);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(203, "right_projection_map", result->right_projection_map);
+	deserializer.ReadPropertyWithDefault<vector<ProjectionIndex>>(202, "left_projection_map", result->left_projection_map);
+	deserializer.ReadPropertyWithDefault<vector<ProjectionIndex>>(203, "right_projection_map", result->right_projection_map);
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(204, "condition", result->condition);
 	return std::move(result);
 }
@@ -324,8 +324,8 @@ void LogicalComparisonJoin::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty<JoinType>(200, "join_type", join_type);
 	serializer.WritePropertyWithDefault<TableIndex>(201, "mark_index", mark_index);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(202, "left_projection_map", left_projection_map);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(203, "right_projection_map", right_projection_map);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(202, "left_projection_map", left_projection_map);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(203, "right_projection_map", right_projection_map);
 	serializer.WritePropertyWithDefault<vector<JoinCondition>>(204, "conditions", conditions);
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(205, "mark_types", mark_types);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", duplicate_eliminated_columns);
@@ -337,8 +337,8 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(Deserializer &des
 	auto join_type = deserializer.ReadProperty<JoinType>(200, "join_type");
 	auto result = duckdb::unique_ptr<LogicalComparisonJoin>(new LogicalComparisonJoin(join_type, deserializer.Get<LogicalOperatorType>()));
 	deserializer.ReadPropertyWithDefault<TableIndex>(201, "mark_index", result->mark_index);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(202, "left_projection_map", result->left_projection_map);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(203, "right_projection_map", result->right_projection_map);
+	deserializer.ReadPropertyWithDefault<vector<ProjectionIndex>>(202, "left_projection_map", result->left_projection_map);
+	deserializer.ReadPropertyWithDefault<vector<ProjectionIndex>>(203, "right_projection_map", result->right_projection_map);
 	deserializer.ReadPropertyWithDefault<vector<JoinCondition>>(204, "conditions", result->conditions);
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(205, "mark_types", result->mark_types);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(206, "duplicate_eliminated_columns", result->duplicate_eliminated_columns);
@@ -523,13 +523,13 @@ unique_ptr<LogicalOperator> LogicalExpressionGet::Deserialize(Deserializer &dese
 void LogicalFilter::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", expressions);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projection_map", projection_map);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(201, "projection_map", projection_map);
 }
 
 unique_ptr<LogicalOperator> LogicalFilter::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalFilter>(new LogicalFilter());
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(200, "expressions", result->expressions);
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(201, "projection_map", result->projection_map);
+	deserializer.ReadPropertyWithDefault<vector<ProjectionIndex>>(201, "projection_map", result->projection_map);
 	return std::move(result);
 }
 
@@ -638,13 +638,13 @@ unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserial
 void LogicalOrder::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<BoundOrderByNode>>(200, "orders", orders);
-	serializer.WritePropertyWithDefault<vector<idx_t>>(201, "projections", projection_map);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(201, "projections", projection_map);
 }
 
 unique_ptr<LogicalOperator> LogicalOrder::Deserialize(Deserializer &deserializer) {
 	auto orders = deserializer.ReadPropertyWithDefault<vector<BoundOrderByNode>>(200, "orders");
 	auto result = duckdb::unique_ptr<LogicalOrder>(new LogicalOrder(std::move(orders)));
-	deserializer.ReadPropertyWithDefault<vector<idx_t>>(201, "projections", result->projection_map);
+	deserializer.ReadPropertyWithDefault<vector<ProjectionIndex>>(201, "projections", result->projection_map);
 	return std::move(result);
 }
 

@@ -149,7 +149,8 @@ void DynamicTableFilterSet::ClearFilters(const PhysicalOperator &op) {
 	filters.erase(op);
 }
 
-void DynamicTableFilterSet::PushFilter(const PhysicalOperator &op, idx_t column_index, unique_ptr<TableFilter> filter) {
+void DynamicTableFilterSet::PushFilter(const PhysicalOperator &op, ProjectionIndex column_index,
+                                       unique_ptr<TableFilter> filter) {
 	lock_guard<mutex> l(lock);
 	auto entry = filters.find(op);
 	optional_ptr<TableFilterSet> filter_ptr;
@@ -160,7 +161,8 @@ void DynamicTableFilterSet::PushFilter(const PhysicalOperator &op, idx_t column_
 	} else {
 		filter_ptr = entry->second.get();
 	}
-	filter_ptr->PushFilter(ColumnIndex(column_index), std::move(filter));
+	// FIXME: this is weird - converting between ProjectionIndex and ColumnIndex indicates a likely bug
+	filter_ptr->PushFilter(ColumnIndex(column_index.index), std::move(filter));
 }
 
 bool DynamicTableFilterSet::HasFilters() const {

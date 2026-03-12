@@ -237,32 +237,40 @@ jobs:
        - uses: actions/checkout@v4
          with:
            ref: ${{ inputs.git_ref }}
+
+       - uses: actions/setup-python@v5
+         with:
+           python-version: '3.12'
+
        - uses: msys2/setup-msys2@v2
          with:
            msystem: MINGW64
            update: true
-           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+           install: mingw-w64-x86_64-toolchain
            cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
-       - name: Put MSYS2_MinGW64 on PATH
-         # there is not yet an environment variable for this path from msys2/setup-msys2
-         shell: msys2 {0}
-         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+       - name: Dependencies
+         shell: bash
+         run: |
+           choco install \
+             ccache \
+             ninja \
+             --no-progress
 
        - uses: ./.github/actions/ccache-action
 
        - name: Build
-         shell: msys2 {0}
+         shell: cmd
          run: |
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+           set PATH=D:/a/_temp/msys/msys64/mingw64/bin;%PATH%
+           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="%OVERRIDE_GIT_DESCRIBE%"
            cmake --build . --config Release 
 
        - name: Test
-         shell: msys2 {0}
+         shell: cmd
          run: |
-           cp src/libduckdb.dll .
-           test/unittest.exe
+           copy src\libduckdb.dll .
+           test\unittest.exe
 
  win-packaged-upload:
    runs-on: windows-latest

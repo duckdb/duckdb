@@ -3,6 +3,7 @@
 #include "delta_kernel_ffi.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include <iostream>
 

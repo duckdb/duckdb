@@ -233,7 +233,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// removes unused columns
 	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
-		RemoveUnusedColumns unused(*this, true);
+		RemoveUnusedColumns unused(*this);
 		unused.VisitOperator(plan);
 	});
 

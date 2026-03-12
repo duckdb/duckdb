@@ -26,9 +26,27 @@ index dfc5e22..07ec473 100644
  class OrderModifier;
  class UpdateSetInfo;
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
-index fc34c7c..61476f2 100644
+index fc34c7c..9ea60d8 100644
 --- a/src/statement_generator.cpp
 +++ b/src/statement_generator.cpp
+@@ -332,7 +332,7 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
+ 				// single GROUP BY
+ 				GroupingSet set;
+ 				for (idx_t i = 0; i < group_count; i++) {
+-					set.insert(i);
++					set.emplace(i);
+ 				}
+ 				select_node->groups.grouping_sets.push_back(std::move(set));
+ 			} else {
+@@ -340,7 +340,7 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
+ 				while (true) {
+ 					GroupingSet set;
+ 					while (true) {
+-						set.insert(RandomValue(group_count));
++						set.emplace(RandomValue(group_count));
+ 						if (RandomPercentage(50)) {
+ 							break;
+ 						}
 @@ -373,8 +373,9 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
  		GenerateCTEs(*setop);
  		setop->setop_type = Choose<SetOperationType>({SetOperationType::EXCEPT, SetOperationType::INTERSECT,

@@ -22,6 +22,9 @@ rm -rf "$ARTIFACT_ROOT"
 rm -f "$ARTIFACT_TARBALL"
 mkdir -p "$ARTIFACT_DIR"/test/extension "$ARTIFACT_DIR"/src
 
+# Required by CI jobs that run the CLI from build/<type>/duckdb.
+cp -av "$BUILD_DIR/duckdb" "$ARTIFACT_DIR"/
+
 # Required by CI test jobs that run the prebuilt unittest binary.
 cp -av "$BUILD_DIR/test/unittest" "$ARTIFACT_DIR"/test/
 

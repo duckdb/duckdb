@@ -203,6 +203,7 @@ def is_zeroable(type):
         'size_t',
         'int',
         'TableIndex',
+        'ProjectionIndex',
     ]
 
 

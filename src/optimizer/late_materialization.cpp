@@ -52,10 +52,10 @@ vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperat
 			// push projection of the row-id columns
 			for (idx_t r_idx = 0; r_idx < row_id_columns.size(); r_idx++) {
 				auto &r_col = row_id_columns[r_idx];
-				proj.expressions.push_back(
-				    make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, row_id_bindings[r_idx]));
+				auto row_id_ref = make_uniq<BoundColumnRefExpression>(r_col.name, r_col.type, row_id_bindings[r_idx]);
+				auto row_id_proj = ColumnBinding::PushExpression(proj.expressions, std::move(row_id_ref));
 				// modify the row-id-binding to the new projection
-				row_id_bindings[r_idx] = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
+				row_id_bindings[r_idx] = ColumnBinding(proj.table_index, row_id_proj);
 			}
 			column_count = proj.expressions.size();
 			break;
@@ -65,7 +65,7 @@ vector<ColumnBinding> LateMaterialization::ConstructRHS(unique_ptr<LogicalOperat
 			// column bindings pass-through this operator as-is UNLESS the filter has a projection map
 			if (filter.HasProjectionMap()) {
 				// if the filter has a projection map, we need to project the new column
-				filter.projection_map.push_back(column_count - 1);
+				filter.projection_map.emplace_back(column_count - 1);
 			}
 			break;
 		}
@@ -125,19 +125,23 @@ void LateMaterialization::ReplaceTableReferences(unique_ptr<Expression> &root_ex
 	    });
 }
 
-unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, idx_t column_index) {
+unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, ProjectionIndex column_index) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		auto &column_id = get.GetColumnIds()[column_index];
+		ColumnBinding column_binding(get.table_index, column_index);
+		auto &column_id = get.GetColumnIndex(column_binding);
 		auto column_name = get.GetColumnName(column_id);
 		auto &column_type = get.GetColumnType(column_id);
-		auto expr =
-		    make_uniq<BoundColumnRefExpression>(column_name, column_type, ColumnBinding(get.table_index, column_index));
+		auto expr = make_uniq<BoundColumnRefExpression>(column_name, column_type, column_binding);
 		return std::move(expr);
 	}
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return op.expressions[column_index]->Copy();
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &proj = op.Cast<LogicalProjection>();
+		ColumnBinding column_binding(proj.table_index, column_index);
+		auto &expr = proj.GetExpression(column_binding);
+		return expr.Copy();
+	}
 	default:
 		throw InternalException("Unsupported operator type for LateMaterialization::GetExpression");
 	}
@@ -182,7 +186,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			for (auto &entry : column_references) {
 				auto &column_binding = entry.first;
 				if (column_binding.table_index == proj.table_index) {
-					referenced_columns.insert(column_binding.column_index);
+					referenced_columns.insert(column_binding.column_index.index);
 				}
 			}
 			// clear the list of referenced expressions and visit those columns
@@ -267,7 +271,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	} else {
 		// if we have no projection directly construct the columns from the root get
 		for (idx_t i = 0; i < lhs_columns; i++) {
-			final_proj_list.push_back(GetExpression(lhs_get, i));
+			final_proj_list.push_back(GetExpression(lhs_get, ProjectionIndex(i)));
 		}
 	}
 
@@ -365,7 +369,7 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	}
 
 	// run the RemoveUnusedColumns optimizer to prune the (now) unused columns the plan
-	RemoveUnusedColumns unused_optimizer(optimizer, true);
+	RemoveUnusedColumns unused_optimizer(optimizer);
 	unused_optimizer.VisitOperator(op);
 	return true;
 }

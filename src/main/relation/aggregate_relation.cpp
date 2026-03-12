@@ -31,7 +31,7 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
 		GroupingSet grouping_set;
 		for (idx_t i = 0; i < groups_p.size(); i++) {
 			groups.group_expressions.push_back(std::move(groups_p[i]));
-			grouping_set.insert(i);
+			grouping_set.emplace(i);
 		}
 		groups.grouping_sets.push_back(std::move(grouping_set));
 	}

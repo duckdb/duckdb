@@ -48,7 +48,7 @@ INSERT INTO right_small VALUES
 statement ok
 SET prefer_range_joins=true
 
-# Verify IEJoin for two predicates
+# Use IEJoin for two predicates
 query II
 EXPLAIN
 SELECT l.id, l.start, l.stop
@@ -73,7 +73,7 @@ ORDER BY 1
 ----
 physical_plan	<REGEX>:.*IE_JOIN.*
 
-# Don't use IEJoin for arbitrary predicates
+# Use IEJoin for arbitrary predicates
 query II
 EXPLAIN
 SELECT l.id, l.start, l.stop
@@ -84,7 +84,21 @@ SEMI JOIN right_small r
       AND l.price + r.bid > 300
 ORDER BY 1
 ----
-physical_plan	<!REGEX>:.*IE_JOIN.*
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+# Use IEJoin for all predicates
+query II
+EXPLAIN
+SELECT l.id, l.start, l.stop
+FROM left_small l
+SEMI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.symbol = r.symbol
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
 
 foreach prefer false true
 
@@ -113,6 +127,30 @@ SEMI JOIN right_small r
 ORDER BY 1
 ----
 1	2026-01-01	2026-01-02
+2	2026-01-02	2026-01-03
+
+query III
+SELECT l.id, l.start, l.stop
+FROM left_small l
+SEMI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
+2	2026-01-02	2026-01-03
+3	2026-01-03	2026-01-04
+
+query III
+SELECT l.id, l.start, l.stop
+FROM left_small l
+SEMI JOIN right_small r
+       ON l.start < r.stop
+      AND r.start < l.stop
+      AND l.symbol = r.symbol
+      AND l.price + r.bid > 300
+ORDER BY 1
+----
 2	2026-01-02	2026-01-03
 
 endloop
@@ -149,7 +187,7 @@ CREATE OR REPLACE TABLE narrow_ranges AS (
 statement ok
 SET prefer_range_joins=true
 
-# Verify IEJoin
+# Verify IEJoin usage
 query II
 EXPLAIN
 FROM wide_ranges l
@@ -160,9 +198,6 @@ ORDER BY id;
 ----
 physical_plan	<REGEX>:.*IE_JOIN.*
 
-#
-# Verify tail comparisons
-#
 query II
 EXPLAIN
 FROM wide_ranges l
@@ -170,6 +205,17 @@ SEMI JOIN narrow_ranges r
 	   ON l.start < r.stop
 	  AND r.start < l.stop
 	  AND r.symbol = l.symbol
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*IE_JOIN.*
+
+query II
+EXPLAIN
+FROM wide_ranges l
+SEMI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+      AND l.price + r.bid > 180
 ORDER BY id;
 ----
 physical_plan	<REGEX>:.*IE_JOIN.*
@@ -193,6 +239,7 @@ ORDER BY id;
 4	2026-01-01 01:37:31	2026-01-01 02:01:54	E	208.0142857142857
 5	2026-01-01 02:01:54	2026-01-01 02:26:17	F	222.64285714285714
 
+# Verify tail comparisons
 query IIIII
 FROM wide_ranges l
 SEMI JOIN narrow_ranges r
@@ -208,4 +255,35 @@ ORDER BY id;
 4	2026-01-01 01:37:31	2026-01-01 02:01:54	E	208.0142857142857
 5	2026-01-01 02:01:54	2026-01-01 02:26:17	F	222.64285714285714
 
+# Verify arbitrary comparisons
+query IIIII
+FROM wide_ranges l
+SEMI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+      AND l.price + r.bid < 400
+ORDER BY id;
+----
+0	2026-01-01 00:00:00	2026-01-01 00:24:22	A	149.5
+1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
+2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
+3	2026-01-01 01:13:08	2026-01-01 01:37:31	D	193.3857142857143
+
 endloop
+
+# TODO: Move back inside the loop when #21273 is fixed.
+# Verify all predicates
+query IIIII
+FROM wide_ranges l
+SEMI JOIN narrow_ranges r
+	   ON l.start < r.stop
+	  AND r.start < l.stop
+	  AND r.symbol = l.symbol
+	  AND l.price + r.bid < 375
+ORDER BY id;
+----
+0	2026-01-01 00:00:00	2026-01-01 00:24:22	A	149.5
+1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
+2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
+
+

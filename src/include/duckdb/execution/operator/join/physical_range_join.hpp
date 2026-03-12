@@ -144,7 +144,7 @@ public:
 	                  idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 
 	// Projection mappings
-	using ProjectionMapping = vector<column_t>;
+	using ProjectionMapping = vector<idx_t>;
 	ProjectionMapping left_projection_map;
 	ProjectionMapping right_projection_map;
 

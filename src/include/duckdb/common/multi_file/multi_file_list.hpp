@@ -12,9 +12,14 @@
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/common/enums/file_glob_options.hpp"
 
 namespace duckdb {
 class MultiFileList;
+class NodeStatistics;
+class LogicalGet;
 
 enum class FileExpandResult : uint8_t { NO_FILES, SINGLE_FILE, MULTIPLE_FILES };
 enum class MultiFileListScanType { ALWAYS_FETCH, FETCH_IF_AVAILABLE };

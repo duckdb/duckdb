@@ -4,6 +4,17 @@
 
 namespace duckdb {
 
+LogicalDummyScan::LogicalDummyScan(TableIndex table_index)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {
+}
+
+vector<ColumnBinding> LogicalDummyScan::GetColumnBindings() {
+	return {ColumnBinding(table_index, ProjectionIndex(0))};
+}
+
+idx_t LogicalDummyScan::EstimateCardinality(ClientContext &context) {
+	return 1;
+}
 vector<TableIndex> LogicalDummyScan::GetTableIndex() const {
 	return vector<TableIndex> {table_index};
 }

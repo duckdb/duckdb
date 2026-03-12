@@ -120,7 +120,7 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	}
 	auto join_type = JoinType::INVALID;
 	for (auto &filter_binding : best_connection->filters) {
-		if (!filter_binding->left_relation_set || !filter_binding->right_relation_set) {
+		if (!filter_binding->left_set || !filter_binding->right_set) {
 			continue;
 		}
 

@@ -31,6 +31,12 @@
       ]
     },
     {
+      "reason": "VARIANT storage requires a newer storage version than this configuration uses",
+      "paths": [
+        "test/sql/storage/types/variant/extension_types.test"
+      ]
+    },
+    {
       "reason": "Measures memory usage.",
       "paths": [
         "test/sql/delete/in_memory_bulk_delete.test_slow",

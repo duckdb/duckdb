@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "mbedtls_wrapper.hpp"
 
 namespace duckdb {

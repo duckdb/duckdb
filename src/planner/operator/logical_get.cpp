@@ -92,14 +92,25 @@ vector<ColumnIndex> &LogicalGet::GetMutableColumnIds() {
 	return column_ids;
 }
 
+const ColumnIndex &LogicalGet::GetColumnIndex(ColumnBinding binding) const {
+	if (binding.table_index != table_index) {
+		throw InternalException("LogicalGet::GetColumnIndex - table index does not match LogicalGet table index");
+	}
+	return column_ids[binding.column_index.index];
+}
+
+const ColumnIndex &LogicalGet::GetColumnIndex(ProjectionIndex proj_index) const {
+	return GetColumnIndex(ColumnBinding(table_index, proj_index));
+}
+
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	if (column_ids.empty()) {
-		return {ColumnBinding(table_index, 0)};
+		return {ColumnBinding(table_index, ProjectionIndex(0))};
 	}
 	vector<ColumnBinding> result;
 	if (projection_ids.empty()) {
-		for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-			result.emplace_back(table_index, col_idx);
+		for (auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
+			result.emplace_back(table_index, ProjectionIndex(col_idx));
 		}
 	} else {
 		for (auto proj_id : projection_ids) {
@@ -171,7 +182,7 @@ void LogicalGet::ResolveTypes() {
 		}
 	} else {
 		for (auto &proj_index : projection_ids) {
-			auto &index = column_ids[proj_index];
+			auto &index = column_ids[proj_index.index];
 			types.push_back(GetColumnType(index));
 		}
 	}

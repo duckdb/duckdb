@@ -26,6 +26,12 @@
       ]
     },
     {
+      "reason": "VARIANT storage requires a newer storage version than this configuration uses",
+      "paths": [
+        "test/sql/storage/types/variant/extension_types.test"
+      ]
+    },
+    {
       "reason": "No stats",
       "paths": [
         "test/sql/types/geo/geometry_shred_types.test_slow"

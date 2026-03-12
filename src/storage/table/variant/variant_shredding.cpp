@@ -389,7 +389,8 @@ static LogicalType SetShreddedType(const LogicalType &typed_value, bool fully_co
 	return LogicalType::STRUCT(child_types);
 }
 
-bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type) const {
+bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type,
+                                                    optional_idx parent_count) const {
 	idx_t max_count = 0;
 	uint8_t type_index = 0;
 	if (column.type_counts[0] == column.total_count) {
@@ -414,20 +415,26 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 	if (!max_count) {
 		return false;
 	}
+	if (parent_count.IsValid() && column.total_count > parent_count.GetIndex()) {
+		throw InternalException("Column count is larger than parent count - this should not be possible");
+	}
 
-	bool fully_consistent = max_count == column.total_count;
+	auto total_value_count = parent_count.IsValid() ? parent_count.GetIndex() : column.total_count;
+	bool fully_consistent = max_count == total_value_count;
 	if (type_index == static_cast<uint8_t>(VariantLogicalType::OBJECT)) {
 		child_list_t<LogicalType> child_types;
 		for (auto &entry : column.field_stats) {
 			auto &child_column = GetColumnStats(entry.second);
 			LogicalType child_type;
-			if (GetShreddedTypeInternal(child_column, child_type)) {
+			if (GetShreddedTypeInternal(child_column, child_type, total_value_count)) {
 				child_types.emplace_back(entry.first, child_type);
 			}
 		}
 		if (child_types.empty()) {
 			return false;
 		}
+		// always set objects as not being fully consistent
+		fully_consistent = false;
 		auto shredded_type = LogicalType::STRUCT(child_types);
 		out_type = SetShreddedType(shredded_type, fully_consistent);
 		return true;

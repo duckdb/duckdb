@@ -137,13 +137,14 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index)
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true)
 	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
-	      max_token_index(max_token_index) {
+	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator), max_token_index(state.max_token_index) {
+	      allocator(state.allocator), max_token_index(state.max_token_index),
+	      preserve_identifier_case(state.preserve_identifier_case) {
 	}
 
 	vector<MatcherToken> &tokens;
@@ -152,6 +153,7 @@ struct MatchState {
 	idx_t token_index;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
+	bool preserve_identifier_case = true;
 
 	void UpdateMaxTokenIndex() {
 		if (token_index > max_token_index) {

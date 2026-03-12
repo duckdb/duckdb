@@ -84,12 +84,12 @@ public:
 
 private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
-	                  idx_t filter_idx, idx_t filter_col_idx) const;
+	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 
 	void PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht, const JoinFilterPushdownFilter &info,
-	                     idx_t filter_col_idx) const;
+	                     ProjectionIndex filter_col_idx) const;
 	void PushPerfectHashJoinFilter(const PhysicalOperator &op, PerfectHashJoinExecutor &perfect_join_executor,
-	                               const JoinFilterPushdownFilter &info, idx_t filter_col_idx) const;
+	                               const JoinFilterPushdownFilter &info, ProjectionIndex filter_col_idx) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,

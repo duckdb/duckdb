@@ -1224,8 +1224,6 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 }
 
 void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
-	D_ASSERT(probe_data.ColumnCount() == result.ColumnCount());
-
 	// first scan for key matches
 	ScanKeyMatches(keys, probe_data);
 
@@ -1236,8 +1234,6 @@ void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 }
 
 void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
-	D_ASSERT(probe_data.ColumnCount() == result.ColumnCount());
-
 	// first scan for key matches
 	ScanKeyMatches(keys, probe_data);
 

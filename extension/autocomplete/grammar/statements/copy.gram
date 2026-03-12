@@ -5,7 +5,7 @@ FromOrTo <- 'FROM' / 'TO'
 
 CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
 
-CopyFileName <- Expression / StringLiteral / Identifier / (Identifier '.' ColId)
+CopyFileName <- Parameter / ParensExpression / StringLiteral / Identifier / (Identifier '.' ColId)
 CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
 SpecializedOptionList <- SpecializedOption*
 SpecializedOption <- SingleOption / NullAsOption / DelimiterAsOption / EscapeAsOption /

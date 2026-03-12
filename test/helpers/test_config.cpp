@@ -307,7 +307,15 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
+#ifndef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+#ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
+		// The first of those it's throw as a test of what would happen if a task were to be throwing
+		// It's OK that PositionalTableScanner react re-throwing a different exception, so they need to be removed in
+		// this specific test setup
 		res.push_back("ThrowAsyncTask: Test error handling when throwing mid-task");
+		res.push_back("Unexpected interrupt from table Source in PositionalTableScanner refill");
+#endif
+#endif
 	}
 	return res;
 }

@@ -21,9 +21,9 @@ struct PartitioningColumnValue {
 	string value;
 };
 
-static unordered_map<column_t, PartitioningColumnValue>
+static unordered_map<ProjectionIndex, PartitioningColumnValue>
 GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &filter_info) {
-	unordered_map<column_t, PartitioningColumnValue> result;
+	unordered_map<ProjectionIndex, PartitioningColumnValue> result;
 
 	auto &column_map = filter_info.column_map;
 	if (filter_info.filename_enabled) {
@@ -48,9 +48,10 @@ GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &f
 }
 
 // Takes an expression and converts a list of known column_refs to constants
-static void ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &expr,
-                                          const unordered_map<column_t, PartitioningColumnValue> &known_column_values,
-                                          TableIndex table_index) {
+static void
+ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &expr,
+                              const unordered_map<ProjectionIndex, PartitioningColumnValue> &known_column_values,
+                              TableIndex table_index) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 

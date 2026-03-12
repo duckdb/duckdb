@@ -55,7 +55,7 @@
       {
         "id": 201,
         "name": "projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       }
     ]
   },
@@ -97,7 +97,7 @@
       {
         "id": 206,
         "name": "grouping_functions",
-        "type": "vector<unsafe_vector<idx_t>>"
+        "type": "vector<unsafe_vector<ProjectionIndex>>"
       },
       {
         "id": 207,
@@ -186,7 +186,7 @@
       {
         "id": 201,
         "name": "projections",
-        "type": "vector<idx_t>",
+        "type": "vector<ProjectionIndex>",
         "property": "projection_map"
       }
     ],
@@ -432,12 +432,12 @@
       {
         "id": 202,
         "name": "left_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 203,
         "name": "right_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 204,
@@ -490,12 +490,12 @@
       {
         "id": 202,
         "name": "left_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 203,
         "name": "right_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 204,

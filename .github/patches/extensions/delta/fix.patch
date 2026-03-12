@@ -112,10 +112,20 @@ index 7d918bd..42a3622 100644
  		ReportFilterPushdown(context, *new_snap, column_ids, "dynamic", nullptr);
  		return std::move(new_snap);
 diff --git a/src/include/delta_utils.hpp b/src/include/delta_utils.hpp
-index 3fdce7f..64a7e07 100644
+index 3fdce7f..8ab602d 100644
 --- a/src/include/delta_utils.hpp
 +++ b/src/include/delta_utils.hpp
-@@ -431,7 +431,7 @@ public:
+@@ -11,7 +11,8 @@
+ #include "duckdb/parser/expression/conjunction_expression.hpp"
+ #include "duckdb/common/error_data.hpp"
+ #include "duckdb/parser/expression/comparison_expression.hpp"
+-#include <duckdb/planner/filter/null_filter.hpp>
++#include "duckdb/planner/table_filter_set.hpp"
++#include "duckdb/planner/filter/null_filter.hpp"
+ #include <iostream>
+ 
+ #include "duckdb/planner/tableref/bound_at_clause.hpp"
+@@ -431,7 +432,7 @@ public:
  	ErrorData error_data;
  
  private:

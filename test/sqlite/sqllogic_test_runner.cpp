@@ -1098,8 +1098,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				parser.Fail("require-env requires 1 argument: <env name> [optional: <expected env val>]");
 			}
 
+			auto &test_config = TestConfiguration::Get();
 			auto env_var = token.parameters[0];
-			const char *env_actual = std::getenv(env_var.c_str());
+			auto test_env_result = test_config.GetTestEnv(env_var, "");
+			const char *env_actual = nullptr;
+			if (!test_env_result.empty()) {
+				env_actual = test_env_result.c_str();
+			} else {
+				env_actual = std::getenv(env_var.c_str());
+			}
 			string default_local_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 			if (env_actual == nullptr && env_var == "LOCAL_EXTENSION_REPO" &&
 			    Settings::Get<AutoloadKnownExtensionsSetting>(*config)) {

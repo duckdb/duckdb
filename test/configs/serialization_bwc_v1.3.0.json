@@ -1,0 +1,74 @@
+{
+  "description": "Failed tests from backwards compatibility testing with v1.3.0.",
+  "skip_tests": [
+    {
+      "reason": "Table function deserialization failure - column type changed",
+      "paths": [
+        "test/sql/logging/file_system_logging.test",
+        "test/sql/logging/http_logging.test",
+        "test/sql/logging/logging.test",
+        "test/sql/logging/logging_types.test",
+        "test/sql/storage/compression/roaring/roaring_analyze_array.test",
+        "test/sql/storage/compression/roaring/roaring_analyze_bitset.test",
+        "test/sql/storage/compression/roaring/roaring_analyze_run.test"
+      ]
+    },
+    {
+      "reason": "Attempting to commit read-only transaction with changes",
+      "paths": [
+        "test/sql/copy/csv/unquoted_escape/human_eval.test",
+        "test/sql/copy/parquet/parquet_encryption_httpfs.test"
+      ]
+    },
+    {
+      "reason": "No files found that match the pattern",
+      "paths": [
+        "test/sql/copy/file_size_bytes.test",
+        "test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test",
+        "test/sql/copy/parquet/writer/parquet_write_memory_usage.test"
+      ]
+    },
+    {
+      "reason": "Catalog does not exist",
+      "paths": [
+        "test/sql/attach/attach_icu_collation.test",
+        "test/sql/function/list/lambdas/test_lambda_storage.test",
+        "test/sql/storage/bc/test_view_v092.test",
+        "test/sql/storage/icu_collation.test",
+        "test/sql/storage/wal/test_wal_bc.test"
+      ]
+    },
+    {
+      "reason": "Unsupported type for deserialization of LogicalOperator",
+      "paths": [
+        "test/sql/secrets/create_secret_scope_matching.test"
+      ]
+    },
+    {
+      "reason": "File system disabled by configuration",
+      "paths": [
+        "test/sql/settings/test_disabled_file_system_httpfs.test"
+      ]
+    },
+    {
+      "reason": "Compression type deprecated",
+      "paths": [
+        "test/sql/storage/compression/test_using_compression.test"
+      ]
+    },
+    {
+      "reason": "Cannot create index with outstanding updates",
+      "paths": [
+        "test/sql/upsert/insert_or_replace/unique_index.test"
+      ]
+    },
+    {
+      "reason": "Unknown failure (empty reason)",
+      "paths": [
+        "test/sql/copy/csv/test_url_with_plus.test",
+        "test/sql/cte/recursive_cte_key_variant.test",
+        "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test"
+      ]
+    }
+  ]
+}

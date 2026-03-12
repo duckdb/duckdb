@@ -79,8 +79,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	ExpressionBinder expression_binder(*aggregate_binder, context);
 
 	// Set contains column indices that are already bound
-	unordered_set<idx_t> key_references;
-	unordered_map<idx_t, unique_ptr<Expression>> payload_references;
+	unordered_set<ProjectionIndex> key_references;
+	unordered_map<ProjectionIndex, unique_ptr<Expression>> payload_references;
 	// Temporary copy of return types that we can modify without having a conflict with binding the aggregates
 	vector<LogicalType> return_types = result.types;
 
@@ -97,7 +97,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			auto bound_expr = expression_binder.Bind(expr);
 			auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
 
-			idx_t column_index = bound_ref.binding.column_index;
+			auto column_index = bound_ref.binding.column_index;
 			if (key_references.find(column_index) != key_references.end()) {
 				continue;
 			}
@@ -147,7 +147,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				bound_children.push_back(std::move(bound_child));
 			}
 
-			idx_t aggregate_idx;
+			ProjectionIndex aggregate_idx;
 			// If user provided an alias, prioritize that.
 			// Otherwise, we try to infer the target column from the first argument
 			if (func_expr.HasAlias()) {
@@ -157,7 +157,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 					                      "Could not find column with name '%s' to bind aggregate to.",
 					                      func_expr.GetAlias());
 				}
-				aggregate_idx = NumericCast<idx_t>(std::distance(result.names.begin(), names_iter));
+				aggregate_idx = ProjectionIndex(NumericCast<idx_t>(std::distance(result.names.begin(), names_iter)));
 			} else {
 				if (bound_children.empty() || bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
 					// No alias and no way to infer target column through first argument
@@ -183,17 +183,17 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				throw BinderException(func_expr.GetQueryLocation(),
 				                      "Column '%s' referenced multiple times in USING KEY clause.\n"
 				                      "Try using an alias for one of the aggregates.",
-				                      result.names[aggregate_idx]);
+				                      result.names[aggregate_idx.index]);
 			}
 
 			if (key_references.find(aggregate_idx) != key_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
 				                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
 				                      "Try using an alias for the aggregation.",
-				                      result.names[aggregate_idx]);
+				                      result.names[aggregate_idx.index]);
 			}
 
-			return_types[aggregate_idx] = aggregate->return_type;
+			return_types[aggregate_idx.index] = aggregate->return_type;
 			payload_references[aggregate_idx] = std::move(aggregate);
 		} else {
 			throw BinderException(
@@ -215,11 +215,13 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	if (!key_targets.empty()) {
 		// Bind every column that is neither referenced as a key nor by an aggregate to a LAST aggregate
 		for (idx_t i = 0; i < left.types.size(); i++) {
-			if (key_references.find(i) == key_references.end()) {
-				if (payload_references.find(i) == payload_references.end()) {
+			if (key_references.find(ProjectionIndex(i)) == key_references.end()) {
+				auto payload_entry = payload_references.find(ProjectionIndex(i));
+				if (payload_entry == payload_references.end()) {
 					// Create a new bound column reference for the missing columns
 					vector<unique_ptr<Expression>> first_children;
-					auto bound = make_uniq<BoundColumnRefExpression>(result.types[i], ColumnBinding(setop_index, i));
+					auto bound = make_uniq<BoundColumnRefExpression>(result.types[i],
+					                                                 ColumnBinding(setop_index, ProjectionIndex(i)));
 					first_children.push_back(std::move(bound));
 
 					// Create a last aggregate for the newly bound column reference
@@ -229,7 +231,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 					payload_aggregates.push_back(std::move(first_aggregate));
 				} else {
-					payload_aggregates.push_back(std::move(payload_references[i]));
+					payload_aggregates.push_back(std::move(payload_entry->second));
 				}
 			}
 		}

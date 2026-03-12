@@ -103,7 +103,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
-	binding.column_index = column_index;
+	binding.column_index = ProjectionIndex(column_index);
 	LogicalType sql_type = types[column_index];
 	if (colref.GetAlias().empty()) {
 		colref.SetAlias(names[column_index]);
@@ -237,16 +237,16 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 	ColumnBinding binding;
 
 	// Locate the column_id that matches the 'column_index'
-	binding.column_index = column_ids.size();
+	binding.column_index = ProjectionIndex(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); ++i) {
 		auto &col_id = column_ids[i];
 		if (col_id.GetPrimaryIndex() == column_index) {
-			binding.column_index = i;
+			binding.column_index = ProjectionIndex(i);
 			break;
 		}
 	}
 	// If it wasn't found, add it
-	if (binding.column_index == column_ids.size()) {
+	if (binding.column_index.index == column_ids.size()) {
 		column_ids.emplace_back(column_index);
 	}
 
@@ -310,7 +310,7 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
 	}
-	ColumnBinding binding(index, column_index);
+	ColumnBinding binding(index, ProjectionIndex(column_index));
 
 	// we are binding a parameter to create the dummy binding, no arguments are supplied
 	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
@@ -321,7 +321,7 @@ BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
 	if (!TryGetBindingIndex(lambdaref.GetName(), column_index)) {
 		throw InternalException("Column %s not found in bindings", lambdaref.GetName());
 	}
-	ColumnBinding binding(index, column_index);
+	ColumnBinding binding(index, ProjectionIndex(column_index));
 	return BindResult(make_uniq<BoundLambdaRefExpression>(lambdaref.GetName(), types[column_index], binding,
 	                                                      lambdaref.lambda_idx, depth));
 }

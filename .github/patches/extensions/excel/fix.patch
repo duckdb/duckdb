@@ -1,3 +1,15 @@
+diff --git a/src/excel/xlsx/copy_xlsx.cpp b/src/excel/xlsx/copy_xlsx.cpp
+index 63b052c..de7bccf 100644
+--- a/src/excel/xlsx/copy_xlsx.cpp
++++ b/src/excel/xlsx/copy_xlsx.cpp
+@@ -7,6 +7,7 @@
+ #include "duckdb/planner/expression/bound_reference_expression.hpp"
+ #include "xlsx/read_xlsx.hpp"
+ #include "xlsx/xlsx_writer.hpp"
++#include "duckdb/execution/expression_executor.hpp"
+ 
+ namespace duckdb {
+ 
 diff --git a/src/excel/xlsx/read_xlsx.cpp b/src/excel/xlsx/read_xlsx.cpp
 index 685f23c..342c5b8 100644
 --- a/src/excel/xlsx/read_xlsx.cpp

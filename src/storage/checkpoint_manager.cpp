@@ -31,6 +31,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 

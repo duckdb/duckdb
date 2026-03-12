@@ -42,7 +42,7 @@ BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr,
 	case ExpressionClass::DEFAULT:
 		return BindUnsupportedExpression(expr, depth, "LATERAL join cannot contain DEFAULT clause!");
 	case ExpressionClass::WINDOW:
-		return BindUnsupportedExpression(expr, depth, "LATERAL join cannot contain window functions!");
+		return BindResult("LATERAL join cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:

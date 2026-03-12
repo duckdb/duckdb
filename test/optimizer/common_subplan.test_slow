@@ -66,6 +66,10 @@ statement ok
 create view my_view as
 from probe join build on (build.a = probe.e)
 
+# FIXME: we need to disable the unused columns optimizer otherwise it interferes with the common subplan optimizer
+statement ok
+set disabled_optimizers='unused_columns'
+
 # there's one subquery that selects all columns from the join
 # and 9 other subqueries that select different column combinations
 # this should result in 10 CTE scans (we only perform the join in the view once)

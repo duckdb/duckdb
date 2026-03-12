@@ -30,6 +30,9 @@ public:
 	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
 
+	const Expression &GetExpression(ColumnBinding binding) const;
+	const Expression &GetExpression(ProjectionIndex proj_index) const;
+
 protected:
 	void ResolveTypes() override;
 };

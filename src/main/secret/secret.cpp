@@ -7,6 +7,7 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 

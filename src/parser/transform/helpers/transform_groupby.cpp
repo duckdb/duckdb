@@ -28,7 +28,7 @@ struct GroupingExpressionMap {
 static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
 	GroupingSet result;
 	for (idx_t i = 0; i < indexes.size(); i++) {
-		result.insert(indexes[i]);
+		result.emplace(indexes[i]);
 	}
 	return result;
 }

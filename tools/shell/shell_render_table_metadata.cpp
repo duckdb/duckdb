@@ -396,7 +396,7 @@ void ShellTableRenderInfo::Truncate(idx_t max_render_width) {
 	render_width = max_render_width;
 }
 
-void RenderLineDisplay(ShellHighlight &highlight, string &text, idx_t total_render_width,
+void RenderLineDisplay(ShellHighlight &highlight, string text, idx_t total_render_width,
                        HighlightElementType element_type) {
 	auto render_size = ShellState::RenderLength(text);
 	ShellTableRenderInfo::TruncateValueIfRequired(text, render_size, total_render_width - 4);

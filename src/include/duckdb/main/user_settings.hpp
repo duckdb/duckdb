@@ -45,6 +45,7 @@ struct CachedGlobalSettings {
 	optional_ptr<const GlobalUserSettings> global_user_settings;
 	idx_t version;
 	UserSettingsMap settings;
+	hugeint_t uuid;
 };
 #endif
 
@@ -63,6 +64,7 @@ public:
 	idx_t AddExtensionOption(const string &name, ExtensionOption extension_option);
 	case_insensitive_map_t<ExtensionOption> GetExtensionSettings() const;
 	bool TryGetExtensionOption(const String &name, ExtensionOption &result) const;
+	hugeint_t GetUUID() const;
 
 #ifndef __MINGW32__
 	CachedGlobalSettings &GetSettings() const;
@@ -76,6 +78,8 @@ private:
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! Current version of the settings - incremented when settings are modified
 	atomic<idx_t> settings_version;
+	//! Settings uuid
+	hugeint_t uuid;
 };
 
 struct LocalUserSettings {
