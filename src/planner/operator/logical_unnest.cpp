@@ -6,8 +6,8 @@ namespace duckdb {
 
 vector<ColumnBinding> LogicalUnnest::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();
-	for (idx_t i = 0; i < expressions.size(); i++) {
-		child_bindings.emplace_back(unnest_index, i);
+	for (auto unnest_col_idx : ProjectionIndex::GetIndexes(expressions.size())) {
+		child_bindings.emplace_back(unnest_index, unnest_col_idx);
 	}
 	return child_bindings;
 }

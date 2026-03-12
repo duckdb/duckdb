@@ -10,7 +10,7 @@ struct SpecialStringInfo {
 	idx_t prefix_len;
 };
 
-static SpecialStringInfo GetSpecialStringInfo(const string &text) {
+inline SpecialStringInfo GetSpecialStringInfo(const string &text) {
 	if (text.empty()) {
 		return {SpecialStringCharacter::STANDARD, 0};
 	}
