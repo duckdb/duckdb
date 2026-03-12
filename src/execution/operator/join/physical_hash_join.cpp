@@ -582,7 +582,7 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	bool all_constant;
 	idx_t tuple_width = GetTupleWidth(types, all_constant);
 
-	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width;
+	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width + 1;
 	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
 	if (!all_constant) {
 		blocks_per_chunk += 2;

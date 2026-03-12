@@ -110,7 +110,7 @@ public:
 private:
 	void SetRadixBitsInternal(idx_t radix_bits_p, bool external);
 	idx_t InitialSinkRadixBits() const;
-	idx_t ExternalRadixBits() const;
+	idx_t ExternalRadixBits(bool dynamic) const;
 	idx_t MaximumSinkRadixBits() const;
 	idx_t SinkCapacity() const;
 
@@ -132,8 +132,6 @@ private:
 
 	//! Current thread-global sink radix bits
 	atomic<idx_t> sink_radix_bits;
-	//! Maximum bits (if external)
-	const idx_t external_radix_bits;
 	//! Maximum Sink radix bits (set based on number of threads, if not external)
 	const idx_t maximum_sink_radix_bits;
 
@@ -158,6 +156,11 @@ public:
 	//! Destroys aggregate states (if multi-scan)
 	~RadixHTGlobalSinkState() override;
 	void Destroy();
+
+public:
+	idx_t GetThreadLimit() const {
+		return temporary_memory_state->GetReservation() / number_of_threads / 10 * 8;
+	}
 
 public:
 	ClientContext &context;
@@ -270,16 +273,16 @@ void RadixHTGlobalSinkState::Destroy() {
 
 RadixHTConfig::RadixHTConfig(RadixHTGlobalSinkState &sink_p)
     : sink(sink_p), row_width(sink.radix_ht.GetLayout().GetRowWidth()), sink_capacity(SinkCapacity()),
-      sink_radix_bits(InitialSinkRadixBits()), external_radix_bits(ExternalRadixBits()),
-      maximum_sink_radix_bits(MaximumSinkRadixBits()) {
+      sink_radix_bits(InitialSinkRadixBits()), maximum_sink_radix_bits(MaximumSinkRadixBits()) {
 }
 
 void RadixHTConfig::SetRadixBits(const idx_t &radix_bits_p) {
-	SetRadixBitsInternal(MinValue(radix_bits_p, maximum_sink_radix_bits), false);
+	const auto max_bits = MinValue(maximum_sink_radix_bits, ExternalRadixBits(true));
+	SetRadixBitsInternal(MinValue(radix_bits_p, max_bits), false);
 }
 
 bool RadixHTConfig::SetRadixBitsToExternal() {
-	SetRadixBitsInternal(external_radix_bits, true);
+	SetRadixBitsInternal(ExternalRadixBits(true), true);
 	return sink.external;
 }
 
@@ -316,13 +319,14 @@ idx_t RadixHTConfig::InitialSinkRadixBits() const {
 	                MAXIMUM_INITIAL_SINK_RADIX_BITS);
 }
 
-idx_t RadixHTConfig::ExternalRadixBits() const {
+idx_t RadixHTConfig::ExternalRadixBits(const bool dynamic) const {
 	// Going to many partitions is great for reducing memory usage during the GetData phase
 	// However, we can't go to, e.g., 256 partitions when we have 8 threads and 200 MiB of memory
 	// Because we'll have too many pages in memory to do the partitioning in the first place
 
 	// Assume we can fill half of RAM with pages, and pessimistically assume 4 pages per partition
-	const auto max_partitions = sink.memory_limit / 2 / sink.number_of_threads / sink.block_alloc_size / 4;
+	const auto memory_limit = dynamic ? sink.temporary_memory_state->GetReservation() : sink.memory_limit / 2;
+	const auto max_partitions = memory_limit / sink.number_of_threads / sink.block_alloc_size / 4;
 
 	// Compute number of bits, rounded down, at least as much as initial bits
 	const auto bits = MaxValue(RadixPartitioning::RadixBits(max_partitions) - 1, InitialSinkRadixBits());
@@ -350,7 +354,7 @@ idx_t RadixHTConfig::MaximumSinkRadixBits() const {
 		bits = MAXIMUM_FINAL_SINK_RADIX_BITS;
 	}
 	// Capped by external radix bits
-	return MinValue(bits, external_radix_bits);
+	return MinValue(bits, ExternalRadixBits(false));
 }
 
 idx_t RadixHTConfig::SinkCapacity() const {
@@ -466,26 +470,23 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const auto aggregate_allocator_size = ht.GetAggregateAllocator()->AllocationSize();
 	const auto total_size =
 	    aggregate_allocator_size + ht.GetPartitionedData().SizeInBytes() + ht.Capacity() * sizeof(ht_entry_t);
-	idx_t thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
-	if (total_size > thread_limit) {
+	if (total_size > gstate.GetThreadLimit()) {
 		// We're over the thread memory limit
 		if (!gstate.external) {
 			// We haven't yet triggered out-of-core behavior, but maybe we don't have to, grab the lock and check again
 			const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
-			thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
-			if (total_size > thread_limit) {
+			if (total_size > gstate.GetThreadLimit()) {
 				// Out-of-core would be triggered below, update minimum reservation and try to increase the reservation
 				temporary_memory_state.SetMinimumReservation(aggregate_allocator_size * gstate.number_of_threads +
 				                                             gstate.minimum_reservation);
 				auto remaining_size =
 				    MaxValue<idx_t>(gstate.number_of_threads * total_size, temporary_memory_state.GetRemainingSize());
 				temporary_memory_state.SetRemainingSizeAndUpdateReservation(context, 2 * remaining_size);
-				thread_limit = temporary_memory_state.GetReservation() / gstate.number_of_threads;
 			}
 		}
 	}
 
-	if (total_size > thread_limit) {
+	if (total_size > gstate.GetThreadLimit()) {
 		if (gstate.config.SetRadixBitsToExternal()) {
 			// We're approaching the memory limit, unpin the data
 			if (!lstate.abandoned_data) {
