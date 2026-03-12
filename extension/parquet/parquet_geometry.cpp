@@ -126,8 +126,8 @@ unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_
 
 						// Free the temporary CRS JSON string
 						free(crs_json);
-                    } else if (crs_val && yyjson_is_null(crs_val)) {
-                        // If CRS is null, do nothing
+					} else if (crs_val && yyjson_is_null(crs_val)) {
+						// If CRS is null, do nothing
 					} else {
 						// Otherwise, if no CRS, default to OGC:CRS84
 						auto crs = CoordinateReferenceSystem::TryConvert(context, "OGC:CRS84",
