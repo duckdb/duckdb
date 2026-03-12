@@ -923,6 +923,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 					Parser parser(GetParserOptions());
 					ErrorData error;
 					parser.ParseQuery(statement->ToString());
+					// FIXME: these properties don't round-trip in ToString(), so we overwrite them manually
 					if (statement->type == StatementType::UPDATE_STATEMENT) {
 						// re-apply `prioritize_table_when_binding` (which is normally set during transform)
 						parser.statements[0]->Cast<UpdateStatement>().prioritize_table_when_binding =
