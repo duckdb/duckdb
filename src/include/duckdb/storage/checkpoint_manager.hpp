@@ -30,7 +30,7 @@ struct ActiveCheckpointWrapper {
 	ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db,
 	                        DuckTransactionManager &transaction_manager);
 
-	void SetCheckpointTransaction(DuckTransaction &transaction);
+	void SetCheckpointTransaction();
 	void Commit();
 
 	optional_ptr<ClientContext> context;

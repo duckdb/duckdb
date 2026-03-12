@@ -216,7 +216,7 @@ bool StorageManager::WALStartCheckpoint(optional_ptr<ClientContext> context, Met
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 	options.transaction_id = transaction_manager.GetLastCommit();
 	if (context && active_checkpoint) {
-		active_checkpoint->SetCheckpointTransaction(DuckTransaction::Get(*context, db));
+		active_checkpoint->SetCheckpointTransaction();
 	}
 
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.transaction_id);
