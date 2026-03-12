@@ -98,7 +98,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	GeoParquetVersion geoparquet_version = GeoParquetVersion::V1;
 
 	//! Whether TIMESTAMP (without timezone) should be marked as adjusted to UTC in the Parquet schema
-	bool timestamp_is_adjusted_to_utc = false;
+	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::AUTO;
 };
 
 void ParquetWriteGlobalState::LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
@@ -142,7 +142,7 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["can_have_nan"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_ONLY);
 	copy_options["geoparquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["shredding"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
-	copy_options["timestamp_is_adjusted_to_utc"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+	copy_options["timestamp_is_adjusted_to_utc"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 }
 
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
@@ -331,8 +331,16 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				throw BinderException("Expected geoparquet_version 'NONE', 'V1' or 'BOTH'");
 			}
 		} else if (loption == "timestamp_is_adjusted_to_utc") {
-			bind_data->timestamp_is_adjusted_to_utc =
-			    BooleanValue::Get(option.second[0].DefaultCastAs(LogicalType::BOOLEAN));
+			const auto roption = StringUtil::Upper(option.second[0].ToString());
+			if (roption == "AUTO") {
+				bind_data->timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::AUTO;
+			} else if (roption == "TRUE") {
+				bind_data->timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::TRUE;
+			} else if (roption == "FALSE") {
+				bind_data->timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::FALSE;
+			} else {
+				throw BinderException("Expected timestamp_is_adjusted_to_utc 'AUTO', 'TRUE' or 'FALSE'");
+			}
 		} else {
 			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -563,6 +571,34 @@ GeoParquetVersion EnumUtil::FromString<GeoParquetVersion>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "BOTH")) {
 		return GeoParquetVersion::BOTH;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
+const char *EnumUtil::ToChars<TimeStampIsAdjustedToUTC>(TimeStampIsAdjustedToUTC value) {
+	switch (value) {
+	case TimeStampIsAdjustedToUTC::AUTO:
+		return "AUTO";
+	case TimeStampIsAdjustedToUTC::TRUE:
+		return "TRUE";
+	case TimeStampIsAdjustedToUTC::FALSE:
+		return "FALSE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+TimeStampIsAdjustedToUTC EnumUtil::FromString<TimeStampIsAdjustedToUTC>(const char *value) {
+	if (StringUtil::Equals(value, "AUTO")) {
+		return TimeStampIsAdjustedToUTC::AUTO;
+	}
+	if (StringUtil::Equals(value, "TRUE")) {
+		return TimeStampIsAdjustedToUTC::TRUE;
+	}
+	if (StringUtil::Equals(value, "FALSE")) {
+		return TimeStampIsAdjustedToUTC::FALSE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
