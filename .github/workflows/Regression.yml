@@ -86,10 +86,10 @@ jobs:
     needs:
       - linux-release
     if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc-13
+      CXX: g++-13
       GEN: ninja
       BUILD_BENCHMARK: 1
       BUILD_JEMALLOC: 1
@@ -230,10 +230,10 @@ jobs:
     needs:
       - linux-release
     if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
-    runs-on: ${{ inputs.runner_linux_small }}
+    runs-on: ubuntu-24.04
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc-13
+      CXX: g++-13
       GEN: ninja
       CORE_EXTENSIONS: "tpch;tpcds"
 
@@ -319,10 +319,10 @@ jobs:
     needs:
       - linux-release
     if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
-    runs-on: ${{ inputs.runner_linux_small }}
+    runs-on: ubuntu-24.04
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc-13
+      CXX: g++-13
       GEN: ninja
       CORE_EXTENSIONS: "tpch;tpcds;json;parquet"
       EXTENSION_STATIC_BUILD: 1
@@ -370,10 +370,10 @@ jobs:
     needs:
       - linux-release
     if: ${{ always() && needs.linux-release.result != 'failure' && needs.linux-release.result != 'cancelled' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc-13
+      CXX: g++-13
       GEN: ninja
       CORE_EXTENSIONS: "tpch;httpfs"
 
