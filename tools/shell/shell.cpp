@@ -795,8 +795,14 @@ string ShellState::EscapeCString(const string &str) {
 }
 
 void ShellState::Exit(int exit_code) {
-	// clean-up shell state
-	Get().Destroy();
+	if (exit_code == 0) {
+		// clean-up shell state if this is a successful exit
+		auto shell_state = GetReference();
+		if (shell_state) {
+			delete shell_state;
+		}
+		shell_state = nullptr;
+	}
 	// then exit
 	exit(exit_code);
 }
@@ -942,8 +948,11 @@ bool ShellState::ColumnTypeIsInteger(const char *type) {
 	return false;
 }
 
-unique_ptr<ShellState> &ShellState::GetReference() {
-	static unique_ptr<ShellState> reference = make_uniq<ShellState>();
+ShellState *&ShellState::GetReference() {
+	// NOTE: this is a raw pointer to avoid the ShellState from being automatically destroyed if the CLI exits
+	// Destroying a DuckDB database during exit-time destruction can lead to odd behavior due to
+	// the static-destructor order not being defined, in particular when interacting with extensions that have statics
+	static ShellState *reference = new ShellState();
 	return reference;
 }
 
@@ -3290,9 +3299,9 @@ int wmain(int argc, wchar_t **wargv) {
 	try {
 		// destroy shell state prior to program clean-up
 		if (shell_state) {
-			shell_state->Destroy();
+			delete shell_state;
 		}
-		shell_state.reset();
+		shell_state = nullptr;
 	} catch (std::exception &ex) {
 		rc = 1;
 		ErrorData error(ex);

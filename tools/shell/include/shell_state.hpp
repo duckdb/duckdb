@@ -287,7 +287,7 @@ public:
 	~ShellState();
 
 	static ShellState &Get();
-	static unique_ptr<ShellState> &GetReference();
+	static ShellState *&GetReference();
 
 	void Initialize();
 	void Destroy();
