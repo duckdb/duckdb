@@ -18,7 +18,14 @@ struct DuckDBColumnsData : public GlobalTableFunctionState {
 	DuckDBColumnsData() : offset(0), column_offset(0) {
 	}
 
-	vector<reference<CatalogEntry>> entries;
+	struct EntryLookupKey {
+		string database_name;
+		string schema_name;
+		string entry_name;
+		CatalogType type;
+	};
+
+	vector<EntryLookupKey> keys;
 	idx_t offset;
 	idx_t column_offset;
 };
@@ -85,11 +92,12 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 static unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBColumnsData>();
 
-	// scan all the schemas for tables and views and collect them
+	// only capture stable identifiers during scan
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::TABLE_ENTRY,
-		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			result->keys.push_back({entry.ParentCatalog().GetName(), entry.ParentSchema().name, entry.name, entry.type});
+		});
 	}
 	return std::move(result);
 }
@@ -309,7 +317,7 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 
 static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBColumnsData>();
-	if (data.offset >= data.entries.size()) {
+	if (data.offset >= data.keys.size()) {
 		// finished returning values
 		return;
 	}
@@ -321,8 +329,21 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 	idx_t next = data.offset;
 	idx_t column_offset = data.column_offset;
 	idx_t index = 0;
-	while (next < data.entries.size() && index < STANDARD_VECTOR_SIZE) {
-		auto column_helper = ColumnHelper::Create(context, data.entries[next].get());
+	while (next < data.keys.size() && index < STANDARD_VECTOR_SIZE) {
+		auto &key = data.keys[next];
+		auto schema = Catalog::GetSchema(context, key.database_name, key.schema_name, OnEntryNotFound::RETURN_NULL);
+		if (!schema) {
+			next++;
+			column_offset = 0;
+			continue;
+		}
+		auto entry = schema->GetEntry(schema->GetCatalogTransaction(context), key.type, key.entry_name);
+		if (!entry) {
+			next++;
+			column_offset = 0;
+			continue;
+		}
+		auto column_helper = ColumnHelper::Create(context, *entry);
 		idx_t columns = column_helper->NumColumns();
 
 		// Check to see if we are going to exceed the maximum index for a DataChunk

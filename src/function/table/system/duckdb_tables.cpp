@@ -17,7 +17,14 @@ struct DuckDBTablesData : public GlobalTableFunctionState {
 	DuckDBTablesData() : offset(0) {
 	}
 
-	vector<reference<CatalogEntry>> entries;
+	struct EntryLookupKey {
+		string database_name;
+		string schema_name;
+		string entry_name;
+		CatalogType type;
+	};
+
+	vector<EntryLookupKey> keys;
 	idx_t offset;
 };
 
@@ -77,12 +84,13 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBTablesData>();
 
-	// scan all the schemas for tables and collect themand collect them
+	// only capture stable identifiers during scan
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::TABLE_ENTRY,
-		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
-	};
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			result->keys.push_back({entry.ParentCatalog().GetName(), entry.ParentSchema().name, entry.name, entry.type});
+		});
+	}
 	return std::move(result);
 }
 
@@ -98,20 +106,24 @@ static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 
 void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBTablesData>();
-	if (data.offset >= data.entries.size()) {
+	if (data.offset >= data.keys.size()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
-	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++].get();
-
-		if (entry.type != CatalogType::TABLE_ENTRY) {
+	while (data.offset < data.keys.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &key = data.keys[data.offset++];
+		auto schema = Catalog::GetSchema(context, key.database_name, key.schema_name, OnEntryNotFound::RETURN_NULL);
+		if (!schema) {
 			continue;
 		}
-		auto &table = entry.Cast<TableCatalogEntry>();
+		auto entry = schema->GetEntry(schema->GetCatalogTransaction(context), key.type, key.entry_name);
+		if (!entry || entry->type != CatalogType::TABLE_ENTRY) {
+			continue;
+		}
+		auto &table = entry->Cast<TableCatalogEntry>();
 		auto storage_info = table.GetStorageInfo(context);
 		// return values:
 		idx_t col = 0;
@@ -138,7 +150,6 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		// has_primary_key, LogicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(table.HasPrimaryKey()));
 		// estimated_size, LogicalType::BIGINT
-
 		Value card_val = !storage_info.cardinality.IsValid()
 		                     ? Value()
 		                     : Value::BIGINT(NumericCast<int64_t>(storage_info.cardinality.GetIndex()));
