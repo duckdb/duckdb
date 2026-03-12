@@ -37,6 +37,9 @@ jobs:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
     runs-on: windows-latest
+    env:
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: ${{ github.workspace }}/ccache-win-release-64.log
     steps:
     - uses: actions/checkout@v4
       with:
@@ -49,12 +52,38 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Build
+    - name: Build (first)
       shell: bash
       run: |
         python scripts/windows_ci.py
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release --parallel
+
+    - name: Ccache stats (first)
+      shell: bash
+      run: |
+        tail -n 500 "$CCACHE_LOGFILE" || true
+        ccache -s -vv
+
+    - name: Clear ccache stats
+      shell: bash
+      run: |
+        cmake --build . --config Release --target clean || true
+        rm -f "$CCACHE_LOGFILE"
+        ccache -z
+
+    - name: Build (second)
+      shell: bash
+      run: |
+        python scripts/windows_ci.py
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        cmake --build . --config Release --parallel
+
+    - name: Ccache stats (second)
+      shell: bash
+      run: |
+        tail -n 500 "$CCACHE_LOGFILE" || true
+        ccache -s -vv
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
@@ -135,6 +164,9 @@ jobs:
       - win-release-64
     if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
     runs-on: windows-latest
+    env:
+      CCACHE_DEBUG: 1
+      CCACHE_LOGFILE: ${{ github.workspace }}/ccache-win-release-32.log
 
     steps:
     - uses: actions/checkout@v4
@@ -148,11 +180,36 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Build
+    - name: Build (first)
       shell: bash
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
         cmake --build . --config Release --parallel
+
+    - name: Ccache stats (first)
+      shell: bash
+      run: |
+        tail -n 500 "$CCACHE_LOGFILE" || true
+        ccache -s -vv
+
+    - name: Clear ccache stats
+      shell: bash
+      run: |
+        cmake --build . --config Release --target clean || true
+        rm -f "$CCACHE_LOGFILE"
+        ccache -z
+
+    - name: Build (second)
+      shell: bash
+      run: |
+        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        cmake --build . --config Release --parallel
+
+    - name: Ccache stats (second)
+      shell: bash
+      run: |
+        tail -n 500 "$CCACHE_LOGFILE" || true
+        ccache -s -vv
 
     - name: Test
       shell: bash
@@ -171,6 +228,9 @@ jobs:
     - win-release-64
    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
    runs-on: windows-latest
+   env:
+     CCACHE_DEBUG: 1
+     CCACHE_LOGFILE: ${{ github.workspace }}/ccache-win-release-arm64.log
 
    steps:
      - uses: actions/checkout@v4
@@ -184,11 +244,36 @@ jobs:
 
      - uses: ./.github/actions/ccache-action
 
-     - name: Build
+     - name: Build (first)
        shell: bash
        run: |
          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
          cmake --build . --config Release --parallel
+
+     - name: Ccache stats (first)
+       shell: bash
+       run: |
+         tail -n 500 "$CCACHE_LOGFILE" || true
+         ccache -s -vv
+
+     - name: Clear ccache stats
+       shell: bash
+       run: |
+         cmake --build . --config Release --target clean || true
+         rm -f "$CCACHE_LOGFILE"
+         ccache -z
+
+     - name: Build (second)
+       shell: bash
+       run: |
+         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
+         cmake --build . --config Release --parallel
+
+     - name: Ccache stats (second)
+       shell: bash
+       run: |
+         tail -n 500 "$CCACHE_LOGFILE" || true
+         ccache -s -vv
 
      - name: Sign files with Azure Trusted Signing (TM)
        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
@@ -233,6 +318,9 @@ jobs:
       - win-release-64
      if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
+     env:
+       CCACHE_DEBUG: 1
+       CCACHE_LOGFILE: ${{ github.workspace }}/ccache-mingw.log
      steps:
        - uses: actions/checkout@v4
          with:
@@ -259,12 +347,39 @@ jobs:
 
        - uses: ./.github/actions/ccache-action
 
-       - name: Build
+       - name: Build (first)
          shell: cmd
          run: |
            set PATH=D:/a/_temp/msys/msys64/mingw64/bin;%PATH%
            cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="%OVERRIDE_GIT_DESCRIBE%"
            cmake --build . --config Release 
+
+       - name: Ccache stats (first)
+         shell: bash
+         run: |
+           tail -n 500 "$CCACHE_LOGFILE" || true
+           ccache -s -vv
+
+       - name: Clear ccache stats
+         shell: cmd
+         run: |
+           set PATH=D:/a/_temp/msys/msys64/mingw64/bin;%PATH%
+           cmake --build . --config Release --target clean
+           del /f /q "%CCACHE_LOGFILE%"
+           ccache -z
+
+       - name: Build (second)
+         shell: cmd
+         run: |
+           set PATH=D:/a/_temp/msys/msys64/mingw64/bin;%PATH%
+           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="%OVERRIDE_GIT_DESCRIBE%"
+           cmake --build . --config Release 
+
+       - name: Ccache stats (second)
+         shell: bash
+         run: |
+           tail -n 500 "$CCACHE_LOGFILE" || true
+           ccache -s -vv
 
        - name: Test
          shell: cmd
