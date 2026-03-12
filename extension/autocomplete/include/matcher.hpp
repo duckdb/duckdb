@@ -232,14 +232,26 @@ private:
 	vector<unique_ptr<ParseResult>> parse_results;
 };
 
-//! Per-database cache for the compiled PEG root matcher.
-struct PEGMatcherCache : ParserExtensionInfo {
-	std::mutex mutex;
+struct PEGMatcher {
 	MatcherAllocator allocator;
-	optional_ptr<Matcher> root;
 
-	Matcher &GetRootMatcher();
+	Matcher &Root() {
+		return *root;
+	}
+
+private:
+	friend struct PEGMatcherCache;
+	optional_ptr<Matcher> root;
+};
+
+//! Per-database cache holder for the compiled PEG root matcher.
+struct PEGMatcherCache : ParserExtensionInfo {
+	shared_ptr<PEGMatcher> GetMatcher();
 	void Invalidate();
+
+private:
+	std::mutex mutex;
+	shared_ptr<PEGMatcher> matcher;
 };
 
 } // namespace duckdb
