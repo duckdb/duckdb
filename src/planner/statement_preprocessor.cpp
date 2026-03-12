@@ -17,17 +17,21 @@
 
 namespace duckdb {
 
-static void WrapInTransaction(vector<unique_ptr<SQLStatement>> &new_statements,
-                              const std::function<void()> &emit_body) {
-	auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION,
-	                                             TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-	new_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
-
-	emit_body();
-
-	auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT,
-	                                              TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-	new_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
+void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements, bool should_wrap_in_transaction,
+                   vector<unique_ptr<SQLStatement>> &result_statements) {
+	if (should_wrap_in_transaction) {
+		auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION,
+		                                             TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+		result_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
+	}
+	// insert body_statements into result_statements
+	result_statements.insert(result_statements.end(), std::make_move_iterator(body_statements.begin()),
+	                         std::make_move_iterator(body_statements.end()));
+	if (should_wrap_in_transaction) {
+		auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT,
+		                                              TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+		result_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
+	}
 }
 
 StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(context) {
@@ -40,22 +44,13 @@ void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_tra
 		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
 	}
 #endif
-	vector<unique_ptr<SQLStatement>> unpacked_statements;
 	bool is_pivot_statement = false;
 	for (auto &stmt : multi_statement.statements) {
 		if (stmt->type == StatementType::SELECT_STATEMENT) {
 			is_pivot_statement = true;
 		}
-		unpacked_statements.push_back(std::move(stmt));
 	}
-	if (is_pivot_statement || is_in_active_transaction) {
-		new_statements = std::move(unpacked_statements);
-	} else {
-		WrapInTransaction(new_statements, [&] {
-			new_statements.insert(new_statements.end(), std::make_move_iterator(unpacked_statements.begin()),
-			                      std::make_move_iterator(unpacked_statements.end()));
-		});
-	}
+	AddStatements(multi_statement.statements, !is_pivot_statement && !is_in_active_transaction, new_statements);
 }
 
 vector<unique_ptr<SQLStatement>> StatementPreprocessor::ReParse(const string &new_query) const {
@@ -92,17 +87,8 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 			PragmaNeedsReparsing(*statements[i], new_query, needs_reparsing);
 			if (needs_reparsing) {
 				vector<unique_ptr<SQLStatement>> reparsed_statements = ReParse(new_query);
-				if (is_in_active_transaction || reparsed_statements.size() == 1) {
-					for (auto &stmt : reparsed_statements) {
-						new_statements.push_back(std::move(stmt));
-					}
-					break;
-				}
-				WrapInTransaction(new_statements, [&] {
-					for (auto &stmt : reparsed_statements) {
-						new_statements.push_back(std::move(stmt));
-					}
-				});
+				AddStatements(reparsed_statements, !is_in_active_transaction && reparsed_statements.size() != 1,
+				              new_statements);
 				break;
 			}
 			new_statements.push_back(std::move(statements[i]));
