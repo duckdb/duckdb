@@ -5,6 +5,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
+#include "duckdb/common/bit_utils.hpp"
 
 #if defined(_WIN32)
 #include "duckdb/common/windows.hpp"
@@ -213,9 +214,8 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
                                const idx_t physical_memory_size_p)
     : uuid(UUID::GenerateRandomUUID()), allocator(allocator_p), block_size(block_size_p),
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
-      virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)),
-      virtual_memory_space(AllocateVirtualMemory(virtual_memory_size)), physical_memory_size(0),
-      untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()) {
+      virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)), virtual_memory_space(nullptr),
+      physical_memory_size(0), untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()) {
 	D_ASSERT(IsPowerOfTwo(block_size));
 	Resize(physical_memory_size_p);
 }
@@ -240,11 +240,15 @@ BlockAllocator &BlockAllocator::Get(AttachedDatabase &db) {
 }
 
 void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
-	if (!IsActive()) {
-		return;
+	lock_guard<mutex> guard(physical_memory_lock);
+
+	if (new_physical_memory_size != 0 && !IsActive()) {
+		virtual_memory_space = AllocateVirtualMemory(virtual_memory_size);
+		if (!IsActive()) {
+			return; // Failed to initialize
+		}
 	}
 
-	lock_guard<mutex> guard(physical_memory_lock);
 	if (new_physical_memory_size < physical_memory_size) {
 		throw InvalidInputException("The \"block_allocator_size\" setting cannot be reduced (current: %llu)",
 		                            physical_memory_size.load());
@@ -272,7 +276,7 @@ void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
 }
 
 bool BlockAllocator::IsActive() const {
-	return virtual_memory_space;
+	return virtual_memory_space.load(std::memory_order_relaxed);
 }
 
 bool BlockAllocator::IsEnabled() const {
@@ -280,7 +284,8 @@ bool BlockAllocator::IsEnabled() const {
 }
 
 bool BlockAllocator::IsInPool(const data_ptr_t pointer) const {
-	return pointer >= virtual_memory_space && pointer < virtual_memory_space + virtual_memory_size;
+	const auto virtual_memory_space_loaded = virtual_memory_space.load(std::memory_order_relaxed);
+	return pointer >= virtual_memory_space_loaded && pointer < virtual_memory_space_loaded + virtual_memory_size;
 }
 
 idx_t BlockAllocator::ModuloBlockSize(const idx_t n) const {
@@ -293,7 +298,7 @@ idx_t BlockAllocator::DivBlockSize(const idx_t n) const {
 
 uint32_t BlockAllocator::GetBlockID(const data_ptr_t pointer) const {
 	D_ASSERT(IsInPool(pointer));
-	const auto offset = NumericCast<idx_t>(pointer - virtual_memory_space);
+	const auto offset = NumericCast<idx_t>(pointer - virtual_memory_space.load(std::memory_order_relaxed));
 	D_ASSERT(ModuloBlockSize(offset) == 0);
 	const auto block_id = NumericCast<uint32_t>(DivBlockSize(offset));
 	VerifyBlockID(block_id);
@@ -306,7 +311,7 @@ void BlockAllocator::VerifyBlockID(const uint32_t block_id) const {
 
 data_ptr_t BlockAllocator::GetPointer(const uint32_t block_id) const {
 	VerifyBlockID(block_id);
-	return virtual_memory_space + NumericCast<idx_t>(block_id) * block_size;
+	return virtual_memory_space.load(std::memory_order_relaxed) + NumericCast<idx_t>(block_id) * block_size;
 }
 
 data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {

@@ -60,9 +60,11 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(bound_expr, root);
 
-			update_expressions.push_back(make_uniq<BoundColumnRefExpression>(
-			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
-			projection_expressions.push_back(std::move(bound_expr));
+			auto bound_type = bound_expr->return_type;
+			auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_expr));
+
+			update_expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(bound_type, ColumnBinding(proj_index, expr_index)));
 		}
 	}
 }
@@ -104,8 +106,8 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 				break;
 			}
 		}
-		auto row_id_expr =
-		    make_uniq<BoundColumnRefExpression>(row_id_entry->second.type, ColumnBinding(get.table_index, column_idx));
+		auto row_id_expr = make_uniq<BoundColumnRefExpression>(
+		    row_id_entry->second.type, ColumnBinding(get.table_index, ProjectionIndex(column_idx)));
 		row_id_expr->alias = row_id_entry->second.name;
 		expressions.push_back(std::move(row_id_expr));
 		if (column_idx == column_ids.size()) {

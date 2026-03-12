@@ -114,7 +114,7 @@ static void GatherAliases(BoundSetOperationNode &root, vector<BoundStatement> &c
 
 void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 	D_ASSERT(result.setop_type == SetOperationType::UNION_BY_NAME);
-	vector<case_insensitive_map_t<idx_t>> node_name_maps;
+	vector<case_insensitive_map_t<ProjectionIndex>> node_name_maps;
 	case_insensitive_set_t global_name_set;
 
 	// Build a name_map to use to check if a name exists
@@ -122,7 +122,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 	D_ASSERT(result.names.empty());
 	for (auto &child : result.bound_children) {
 		auto &child_names = child.names;
-		case_insensitive_map_t<idx_t> node_name_map;
+		case_insensitive_map_t<ProjectionIndex> node_name_map;
 		for (idx_t i = 0; i < child_names.size(); ++i) {
 			auto &col_name = child_names[i];
 			if (node_name_map.find(col_name) != node_name_map.end()) {
@@ -136,7 +136,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 				result.names.push_back(col_name);
 				global_name_set.insert(col_name);
 			}
-			node_name_map[col_name] = i;
+			node_name_map[col_name] = ProjectionIndex(i);
 		}
 		node_name_maps.push_back(std::move(node_name_map));
 	}
@@ -157,14 +157,14 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 				need_reorder = true;
 			} else {
 				auto col_idx_in_child = entry->second;
-				auto &child_col_type = child_types[col_idx_in_child];
+				auto &child_col_type = child_types[col_idx_in_child.index];
 				// the child exists in this node - compute the type
 				if (result_type.id() == LogicalTypeId::INVALID) {
 					result_type = child_col_type;
 				} else {
 					result_type = LogicalType::ForceMaxLogicalType(result_type, child_col_type);
 				}
-				if (i != col_idx_in_child) {
+				if (i != col_idx_in_child.index) {
 					// the column exists - but the children are out-of-order, so we need to re-order anyway
 					need_reorder = true;
 				}
@@ -201,7 +201,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 			} else {
 				// the column exists - reference it
 				auto col_idx_in_child = entry->second;
-				auto &child_col_type = child.types[col_idx_in_child];
+				auto &child_col_type = child.types[col_idx_in_child.index];
 				auto root_idx = child.plan->GetRootIndex();
 				expr = make_uniq<BoundColumnRefExpression>(child_col_type, ColumnBinding(root_idx, col_idx_in_child));
 			}
