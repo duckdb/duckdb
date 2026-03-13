@@ -131,8 +131,8 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    needs:
-      - win-release-64
+#    needs:
+#      - win-release-64
     if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
     runs-on: windows-latest
 
@@ -229,8 +229,8 @@ jobs:
 
  mingw:
      name: MinGW (64 Bit)
-     needs:
-      - win-release-64
+    # needs:
+    #  - win-release-64
      if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
      steps:
