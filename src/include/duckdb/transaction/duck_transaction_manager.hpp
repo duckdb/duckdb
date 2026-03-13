@@ -60,7 +60,7 @@ public:
 	transaction_t GetActiveCheckpoint() const {
 		return active_checkpoint;
 	}
-	void SetActiveCheckpoint();
+	void SetActiveCheckpoint(transaction_t checkpoint_id);
 	void ResetActiveCheckpoint();
 
 	bool IsDuckTransactionManager() override {

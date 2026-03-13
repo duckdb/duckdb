@@ -49,12 +49,13 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 	}
 }
 
-void ActiveCheckpointWrapper::SetCheckpointTransaction() {
-	transaction_manager.SetActiveCheckpoint();
+void ActiveCheckpointWrapper::SetCheckpointTransaction(CheckpointOptions &options) {
+	auto &transaction = DuckTransaction::Get(*context, db);
+	options.transaction_id = transaction.start_time;
+	transaction_manager.SetActiveCheckpoint(transaction.start_time);
 	if (!owns_meta_transaction) {
 		return;
 	}
-	auto &transaction = DuckTransaction::Get(*context, db);
 	checkpoint_transaction = &transaction;
 	transaction.is_checkpoint_transaction = true;
 }

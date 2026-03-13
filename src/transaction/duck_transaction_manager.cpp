@@ -91,8 +91,8 @@ Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	return transaction_ref;
 }
 
-void DuckTransactionManager::SetActiveCheckpoint() {
-	active_checkpoint = last_commit.load();
+void DuckTransactionManager::SetActiveCheckpoint(transaction_t checkpoint_id) {
+	active_checkpoint = checkpoint_id;
 }
 
 void DuckTransactionManager::ResetActiveCheckpoint() {
@@ -497,10 +497,6 @@ unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransa
 		}
 		lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
 		lowest_transaction_id = MinValue(lowest_transaction_id, active_transactions[i]->transaction_id);
-	}
-	auto active_checkpoint_id = active_checkpoint.load();
-	if (active_checkpoint_id != MAX_TRANSACTION_ID && active_checkpoint_id < lowest_start_time) {
-		lowest_start_time = active_checkpoint_id;
 	}
 	lowest_active_start = lowest_start_time;
 	lowest_active_id = lowest_transaction_id;
