@@ -118,7 +118,7 @@ private:
 
 	//! Assign edge_equivalence_index to INNER equality filters using union-find over column bindings.
 	//! All filters in the same transitive equality closure receive the same index.
-	void MarkEdgeEquivalences();
+	void MarkEdgeEquivalences() const;
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set,
 	                                   unordered_set<idx_t> &applied_equivalence_groups);

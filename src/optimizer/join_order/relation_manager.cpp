@@ -754,26 +754,24 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				}
 
 				// Store non-comparison ON-clause conditions as residual predicates.
-				{
-					unordered_set<RelationIndex> all_bindings;
-					for (auto &cond : join.conditions) {
-						if (cond.IsComparison()) {
-							ExtractBindings(cond.GetLHS(), all_bindings);
-							ExtractBindings(cond.GetRHS(), all_bindings);
-						} else {
-							ExtractBindings(cond.GetJoinExpression(), all_bindings);
-						}
+				unordered_set<RelationIndex> all_bindings;
+				for (auto &cond : join.conditions) {
+					if (cond.IsComparison()) {
+						ExtractBindings(cond.GetLHS(), all_bindings);
+						ExtractBindings(cond.GetRHS(), all_bindings);
+					} else {
+						ExtractBindings(cond.GetJoinExpression(), all_bindings);
 					}
-					auto full_set = &set_manager.GetJoinRelation(all_bindings);
-					if (!full_set->Empty()) {
-						for (auto &cond : join.conditions) {
-							if (!cond.IsComparison()) {
-								auto nc_expr = cond.GetJoinExpression().Copy();
-								auto new_filter = make_uniq<FilterInfo>(std::move(nc_expr), *full_set,
-								                                        filters_and_bindings.size(), join.join_type);
-								new_filter->from_residual_predicate = true;
-								filters_and_bindings.push_back(std::move(new_filter));
-							}
+				}
+				auto full_set = &set_manager.GetJoinRelation(all_bindings);
+				if (!full_set->Empty()) {
+					for (auto &cond : join.conditions) {
+						if (!cond.IsComparison()) {
+							auto nc_expr = cond.GetJoinExpression().Copy();
+							auto new_filter = make_uniq<FilterInfo>(std::move(nc_expr), *full_set,
+							                                        filters_and_bindings.size(), join.join_type);
+							new_filter->from_residual_predicate = true;
+							filters_and_bindings.push_back(std::move(new_filter));
 						}
 					}
 				}

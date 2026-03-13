@@ -20,23 +20,15 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 	});
 }
 
-void QueryGraphManager::MarkEdgeEquivalences() {
+void QueryGraphManager::MarkEdgeEquivalences() const {
 	// Assign edge_equivalence_index to INNER equality join filters using union-find over column bindings.
 	// All filters in the same transitive equality closure receive the same index, regardless of the
 	// order they appear in filters_and_bindings. This allows skipping redundant edges during
 	// plan reconstruction (GenerateJoins) and cardinality estimation (GetDenominator).
-	//
-	// Only INNER equality filters that connect two different relation sets are considered.
-	// Non-equality and non-INNER filters keep the default invalid edge_equivalence_index.
-	//
-	// Union-find invariant: on merge, the smaller (older) component ID is inherited by both sides,
-	// so all transitively connected bindings always share the same component ID.
-
-	// Maps each column binding to its component ID.
 	column_binding_map_t<idx_t> binding_to_component;
 	idx_t next_component_id = 0;
 
-	auto find_component = [&](const ColumnBinding &binding) -> optional_idx {
+	const auto find_component = [&](const ColumnBinding &binding) -> optional_idx {
 		auto it = binding_to_component.find(binding);
 		if (it == binding_to_component.end()) {
 			return optional_idx();
@@ -44,8 +36,7 @@ void QueryGraphManager::MarkEdgeEquivalences() {
 		return optional_idx(it->second);
 	};
 
-	auto merge_components = [&](idx_t comp_a, idx_t comp_b) -> idx_t {
-		// Inherit the smaller (older) component ID so all members of both components get the same ID.
+	const auto merge_components = [&](idx_t comp_a, idx_t comp_b) -> idx_t {
 		idx_t keep = MinValue(comp_a, comp_b);
 		idx_t remove = MaxValue(comp_a, comp_b);
 		if (keep == remove) {
@@ -349,7 +340,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			join->children.push_back(std::move(left.op));
 			join->children.push_back(std::move(right.op));
 
-			// set the join conditions from the join node (source 1)
+			// set the join conditions from the join node
 			for (auto &filter_ref : node->info->filters) {
 				auto f = filter_ref.get();
 				// extract the filter from the operator it originally belonged to
@@ -384,7 +375,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 						join->conditions.push_back(std::move(cond));
 					}
 				}
-				// Record the equivalence group so source 2 can skip transitively redundant filters.
+				// Record the equivalence group so we can skip transitively redundant filters
 				if (f->edge_equivalence_index.IsValid()) {
 					applied_equivalence_groups.insert(f->edge_equivalence_index.GetIndex());
 				}
@@ -456,7 +447,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				continue;
 			}
 			// Skip filters whose equivalence group was already applied as a primary join condition
-			// (source 1) somewhere in the join tree — they are transitively redundant.
 			if (info.edge_equivalence_index.IsValid() &&
 			    applied_equivalence_groups.count(info.edge_equivalence_index.GetIndex())) {
 				continue;
@@ -464,7 +454,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			if (info.set.get().count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
 				auto &filter_and_binding = filters_and_bindings[info.filter_index];
 				auto filter = std::move(filter_and_binding->filter);
-				// Record this equivalence group as applied so later pushdowns don't add it again.
+				// Record this equivalence group as applied so later pushdowns don't add it again
 				if (info.edge_equivalence_index.IsValid()) {
 					applied_equivalence_groups.insert(info.edge_equivalence_index.GetIndex());
 				}

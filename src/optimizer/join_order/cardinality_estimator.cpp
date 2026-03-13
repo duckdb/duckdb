@@ -265,23 +265,14 @@ double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterIn
 }
 
 double CardinalityEstimator::CalculateLeftJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
-	// For LEFT joins, cap the effective distinct count at |RHS|.
+	// For LEFT joins, cap the effective distinct count at |RHS|
 	// This makes the denominator min(D, |RHS|), so the estimate equals:
-	//   |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate)
-	// where inner_estimate = |LHS| * |RHS| / D.
-	// When D >= |RHS|: denom = |RHS|, estimate = |LHS| (clamped at LHS cardinality).
-	// When D <  |RHS|: denom = D,     estimate = |LHS| * |RHS| / D (multi-match fanout).
-	// Use raw_d (max of both sides' HLL) rather than only d_right, so that a high-cardinality
-	// left column still contributes to the domain — preventing fanout blow-up when D_right < right_card.
+	//   |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate) - where inner_estimate = |LHS| * |RHS| / D
 	auto left_card = GetNumerator(*filter.filter_info->left_set);
 	auto right_card = GetNumerator(*filter.filter_info->right_set);
 	auto raw_d = filter.GetDistinctCount();
 	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
-	// Floor effective_d at min(|LHS|, |RHS|) to prevent the estimate from exceeding
-	// max(|LHS|, |RHS|). This guards against multi-condition LEFT joins where the
-	// dominant single-column D underestimates the composite join key's true domain
-	// (e.g. a CTE grouped by (year, item, customer) has D_customer distinct customer
-	// values but far more rows, causing a spurious fanout from the customer-only D).
+	// Floor effective_d at min(|LHS|, |RHS|) to prevent the estimate from exceeding max(|LHS|, |RHS|)
 	if (left_card > 0 && right_card > 0) {
 		effective_d = MaxValue(effective_d, MinValue(left_card, right_card));
 	}
@@ -298,9 +289,9 @@ double CardinalityEstimator::CalculateSemiAntiJoinDenom(double base_denom, Subgr
                                                         FilterInfoWithTotalDomains &filter) {
 	if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
 	    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
-		return left.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
+		return left.denom * DEFAULT_SEMI_ANTI_SELECTIVITY;
 	}
-	return right.denom * CardinalityEstimator::DEFAULT_SEMI_ANTI_SELECTIVITY;
+	return right.denom * DEFAULT_SEMI_ANTI_SELECTIVITY;
 }
 
 // Given two subgraphs, compute the updated denominator for the join between them.
@@ -341,7 +332,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// For multi-condition LEFT joins (e.g. A LEFT JOIN B ON c1 AND c2), only apply the dominant
 	// (first/largest) condition's effective_d to the denominator. CalculateUpdatedDenom handles the
 	// first edge; subsequent edges for the same right side are skipped via this set.
-	unordered_set<string> left_join_denom_applied;
+	reference_set_t<JoinRelationSet> left_join_denom_applied;
 
 	// Track which INNER equality equivalence groups have been used to build the subgraph.
 	// When an edge falls into the "already connected" bucket, we check this set: if the edge's
@@ -365,7 +356,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			// INNER join conditions get a mild penalty via denom_multiplier — unless the edge is
 			// transitively implied by equality conditions already used to build the subgraph.
 			if (edge.filter_info->join_type == JoinType::LEFT) {
-				auto right_key = edge.filter_info->right_set->ToString();
+				auto &right_key = *edge.filter_info->right_set;
 				if (left_join_denom_applied.insert(right_key).second) {
 					auto right_card = GetNumerator(*edge.filter_info->right_set);
 					auto raw_d = edge.GetDistinctCount();
@@ -396,7 +387,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			left_subgraph.relations = &edge.filter_info->set.get();
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
 			if (edge.filter_info->join_type == JoinType::LEFT) {
-				left_join_denom_applied.insert(edge.filter_info->right_set->ToString());
+				left_join_denom_applied.insert(*edge.filter_info->right_set);
 			}
 			record_equivalence_group(edge);
 			subgraphs.push_back(left_subgraph);
@@ -415,7 +406,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 				// Edge connects the same subgraph to itself — no new relation is added.
 				// For LEFT joins, only apply the dominant condition's effective_d (first time seen).
 				if (edge.filter_info->join_type == JoinType::LEFT) {
-					auto right_key = edge.filter_info->right_set->ToString();
+					auto &right_key = *edge.filter_info->right_set;
 					if (left_join_denom_applied.insert(right_key).second) {
 						auto right_card = GetNumerator(*edge.filter_info->right_set);
 						auto raw_d = edge.GetDistinctCount();
@@ -429,7 +420,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
 			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
 			if (edge.filter_info->join_type == JoinType::LEFT) {
-				left_join_denom_applied.insert(edge.filter_info->right_set->ToString());
+				left_join_denom_applied.insert(*edge.filter_info->right_set);
 			}
 			record_equivalence_group(edge);
 		} else if (subgraph_connections.size() == 2) {
@@ -443,7 +434,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			if (edge.filter_info->join_type == JoinType::LEFT) {
-				left_join_denom_applied.insert(edge.filter_info->right_set->ToString());
+				left_join_denom_applied.insert(*edge.filter_info->right_set);
 			}
 			record_equivalence_group(edge);
 			subgraph_to_delete->relations = nullptr;
