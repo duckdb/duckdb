@@ -39,7 +39,8 @@ namespace duckdb {
 ActiveCheckpointWrapper::ActiveCheckpointWrapper(AttachedDatabase &db_p, DuckTransactionManager &transaction_manager_p)
     : db(db_p), transaction_manager(transaction_manager_p) {
 	checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
-	checkpoint_connection->BeginTransaction();
+	checkpoint_connection->context->transaction.BeginTransaction(false);
+	checkpoint_connection->context->transaction.SetReadOnly();
 }
 
 void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &options) {
@@ -56,7 +57,7 @@ void ActiveCheckpointWrapper::Commit() {
 	if (!checkpoint_transaction) {
 		return;
 	}
-	checkpoint_connection->Commit();
+	checkpoint_connection->context->transaction.Commit(false);
 }
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
