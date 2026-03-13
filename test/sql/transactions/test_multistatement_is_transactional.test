@@ -19,7 +19,7 @@ CREATE TABLE t AS SELECT range::INT AS id FROM range(10);
 statement error
 ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();
 ----
-Catalog Error
+non_existent_function
 
 query I
 from t;
