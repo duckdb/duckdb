@@ -5157,25 +5157,6 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 	return static_cast<TimestampCastResult>(StringUtil::StringToEnum(GetTimestampCastResultValues(), 5, "TimestampCastResult", value));
 }
 
-const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER), "TRANSACTION_DEFAULT_MODIFIER" },
-		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_READ_ONLY), "TRANSACTION_READ_ONLY" },
-		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_READ_WRITE), "TRANSACTION_READ_WRITE" }
-	};
-	return values;
-}
-
-template<>
-	const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value) {
-	return StringUtil::EnumToString(GetTransactionModifierTypeValues(), 3, "TransactionModifierType", static_cast<uint32_t>(value));
-}
-
-template<>
-TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value) {
-	return static_cast<TransactionModifierType>(StringUtil::StringToEnum(GetTransactionModifierTypeValues(), 3, "TransactionModifierType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TransactionInvalidationPolicy::STANDARD_POLICY), "STANDARD_POLICY" },
@@ -5189,8 +5170,28 @@ const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalida
 	return StringUtil::EnumToString(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", static_cast<uint32_t>(value));
 }
 
-template<> TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value) {
+template<>
+TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value) {
 	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_DEFAULT_MODIFIER), "TRANSACTION_DEFAULT_MODIFIER" },
+		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_READ_ONLY), "TRANSACTION_READ_ONLY" },
+		{ static_cast<uint32_t>(TransactionModifierType::TRANSACTION_READ_WRITE), "TRANSACTION_READ_WRITE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value) {
+	return StringUtil::EnumToString(GetTransactionModifierTypeValues(), 3, "TransactionModifierType", static_cast<uint32_t>(value));
+}
+
+template<>
+TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value) {
+	return static_cast<TransactionModifierType>(StringUtil::StringToEnum(GetTransactionModifierTypeValues(), 3, "TransactionModifierType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionTypeValues() {
