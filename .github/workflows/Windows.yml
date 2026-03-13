@@ -68,6 +68,7 @@ jobs:
     - name: Clear ccache stats
       shell: bash
       run: |
+        rm -rf src/amalgamation
         cmake --build . --config Release --target clean || true
         rm -f "$CCACHE_LOGFILE"
         ccache -z
@@ -140,7 +141,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python scripts/amalgamation.py
+        python scripts/amalgamation.py || true
         /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
         /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h

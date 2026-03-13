@@ -92,15 +92,7 @@ jobs:
 
     - name: Clear ccache stats
       run: |
-        workdir=$(pwd)
-        docker run                                                             \
-        -v "$workdir:$workdir"                                                 \
-        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
-        bash -c "
-          set -e
-          git config --global --add safe.directory \"$workdir\"
-          make -C \"$workdir\" clean
-        "
+        make clean
         rm -f "$CCACHE_LOGFILE"
         ccache -z
 
