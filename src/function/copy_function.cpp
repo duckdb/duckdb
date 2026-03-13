@@ -86,7 +86,7 @@ bool CopyFunctionBatchAnalyzer::MeetsFlushCriteria() const {
 
 int64_t CopyFunctionBatchAnalyzer::BatchSizeVectorDiff() const {
 	if (!batch_size.IsValid()) {
-		return 0;
+		return -1000000;
 	}
 	const auto batch_size_diff = NumericCast<int64_t>(current_batch_size) - NumericCast<int64_t>(batch_size.GetIndex());
 	return (batch_size_diff + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
@@ -94,7 +94,7 @@ int64_t CopyFunctionBatchAnalyzer::BatchSizeVectorDiff() const {
 
 int64_t CopyFunctionBatchAnalyzer::BatchSizeBytesVectorDiff() const {
 	if (!batch_size_bytes.IsValid()) {
-		return 0;
+		return -1000000;
 	}
 	const auto size_bytes_diff =
 	    NumericCast<int64_t>(current_batch_size_bytes) - NumericCast<int64_t>(batch_size_bytes.GetIndex());
@@ -103,17 +103,18 @@ int64_t CopyFunctionBatchAnalyzer::BatchSizeBytesVectorDiff() const {
 }
 
 bool CopyFunctionBatchAnalyzer::IsAcceptable() const {
-	const auto batch_size_vector_diff = BatchSizeVectorDiff();
-	const auto batch_size_bytes_vector_diff = BatchSizeBytesVectorDiff();
-
-	if (batch_size_vector_diff == 0) {
-		// Acceptable row count, require low or acceptable byte size
-		return batch_size_bytes_vector_diff <= 0;
+	if (AnyBatchQualifies()) {
+		return true;
 	}
 
-	if (batch_size_bytes_vector_diff == 0) {
-		// Acceptable byte size, require low or acceptable byte size
-		return batch_size_vector_diff <= 0;
+	if (BatchSizeVectorDiff() == 0) {
+		// Acceptable row count, require low or acceptable byte size
+		return BatchSizeBytesVectorDiff() <= 0;
+	}
+
+	if (BatchSizeBytesVectorDiff() == 0) {
+		// Acceptable byte size, require low or acceptable row count
+		return BatchSizeVectorDiff() <= 0;
 	}
 
 	return false;
