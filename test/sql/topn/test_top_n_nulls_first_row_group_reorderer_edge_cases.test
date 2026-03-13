@@ -20,26 +20,18 @@ CREATE TABLE db.null_only_ints AS SELECT NULL::BIGINT AS i FROM range(2048)
 
 statement ok
 CREATE TABLE db.mixed_ints AS
-SELECT NULL::BIGINT AS i
+SELECT i FROM repeat(NULL::BIGINT, 1023) t(i)
 UNION ALL
-SELECT i FROM repeat(NULL::BIGINT, 1022) t(i)
-UNION ALL
-SELECT 1
-UNION ALL
-SELECT i FROM repeat(1::BIGINT, 1024) t(i)
+SELECT i FROM repeat(1::BIGINT, 1025) t(i)
 
 statement ok
 CREATE TABLE db.null_only_strings AS SELECT NULL::VARCHAR AS s FROM range(2048)
 
 statement ok
 CREATE TABLE db.mixed_strings AS
-SELECT NULL::VARCHAR AS s
+SELECT s FROM repeat(NULL::VARCHAR, 1023) t(s)
 UNION ALL
-SELECT s FROM repeat(NULL::VARCHAR, 1022) t(s)
-UNION ALL
-SELECT 'a'
-UNION ALL
-SELECT s FROM repeat('a', 1024) t(s)
+SELECT s FROM repeat('a', 1025) t(s)
 
 statement ok
 CHECKPOINT

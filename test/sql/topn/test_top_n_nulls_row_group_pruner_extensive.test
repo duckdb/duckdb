@@ -17,100 +17,98 @@ statement ok
 ATTACH '__TEST_DIR__/top_n_nulls_row_group_pruner_extensive_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
 
 statement ok
-CREATE TABLE db.ints(i BIGINT)
+CREATE TABLE db.ints AS SELECT CASE WHEN i = 0 THEN 0 ELSE 3 END AS i FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.ints SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
+INSERT INTO db.ints SELECT CASE WHEN i = 0 THEN 0 ELSE 3 END AS i FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.ints SELECT 0 i UNION ALL SELECT i FROM repeat(3, 2047) t1(i)
+INSERT INTO db.ints SELECT CASE WHEN i = 0 THEN 1 ELSE 5 END AS i FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.ints SELECT 1 i UNION ALL SELECT i FROM repeat(5, 2047) t1(i)
+INSERT INTO db.ints SELECT CASE WHEN i = 2047 THEN 6 ELSE 4 END AS i FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.ints SELECT i FROM repeat(4, 2047) t1(i) UNION ALL SELECT 6 i
-
-statement ok
-INSERT INTO db.ints SELECT 7 i UNION ALL SELECT i FROM repeat(8, 2047) t1(i)
+INSERT INTO db.ints SELECT CASE WHEN i = 0 THEN 7 ELSE 8 END AS i FROM range(2048) tbl(i)
 
 statement ok
 INSERT INTO db.ints SELECT i FROM repeat(NULL, 2048) t1(i)
 
 statement ok
-INSERT INTO db.ints SELECT 9 i UNION ALL SELECT i FROM repeat(NULL, 2046) t1(i) UNION ALL SELECT 10 i
+INSERT INTO db.ints
+SELECT CASE WHEN i = 0 THEN 9 WHEN i = 2047 THEN 10 ELSE NULL END AS i FROM range(2048) tbl(i)
 
 statement ok
-CREATE TABLE db.strings(s VARCHAR)
+CREATE TABLE db.strings AS SELECT CASE WHEN i = 0 THEN 'a' ELSE 'd' END AS s FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.strings SELECT 'a' s UNION ALL SELECT s FROM repeat('d', 2047) t1(s)
+INSERT INTO db.strings SELECT CASE WHEN i = 0 THEN 'a' ELSE 'd' END AS s FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.strings SELECT 'a' s UNION ALL SELECT s FROM repeat('d', 2047) t1(s)
+INSERT INTO db.strings SELECT CASE WHEN i = 0 THEN 'b' ELSE 'f' END AS s FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.strings SELECT 'b' s UNION ALL SELECT s FROM repeat('f', 2047) t1(s)
+INSERT INTO db.strings SELECT CASE WHEN i = 2047 THEN 'g' ELSE 'e' END AS s FROM range(2048) tbl(i)
 
 statement ok
-INSERT INTO db.strings SELECT s FROM repeat('e', 2047) t1(s) UNION ALL SELECT 'g' s
-
-statement ok
-INSERT INTO db.strings SELECT 'h' s UNION ALL SELECT s FROM repeat('i', 2047) t1(s)
+INSERT INTO db.strings SELECT CASE WHEN i = 0 THEN 'h' ELSE 'i' END AS s FROM range(2048) tbl(i)
 
 statement ok
 INSERT INTO db.strings SELECT s FROM repeat(NULL, 2048) t1(s)
 
 statement ok
-INSERT INTO db.strings SELECT 'j' s UNION ALL SELECT s FROM repeat(NULL, 2046) t1(s) UNION ALL SELECT 'k' s
+INSERT INTO db.strings
+SELECT CASE WHEN i = 0 THEN 'j' WHEN i = 2047 THEN 'k' ELSE NULL END AS s FROM range(2048) tbl(i)
 
 statement ok
-CREATE TABLE db.offset_boundary(i BIGINT)
+CREATE TABLE db.offset_boundary AS SELECT 0 AS i FROM range(2048)
 
 statement ok
-INSERT INTO db.offset_boundary SELECT 0 i UNION ALL SELECT i FROM repeat(0, 2047) t(i)
+INSERT INTO db.offset_boundary SELECT 1 AS i FROM range(2048)
 
 statement ok
-INSERT INTO db.offset_boundary SELECT 1 i UNION ALL SELECT i FROM repeat(1, 2047) t(i)
-
-statement ok
-INSERT INTO db.offset_boundary SELECT 2 i UNION ALL SELECT i FROM repeat(2, 2047) t(i)
+INSERT INTO db.offset_boundary SELECT 2 AS i FROM range(2048)
 
 statement ok
 INSERT INTO db.offset_boundary SELECT NULL::BIGINT FROM range(2048)
 
-statement ok
-CREATE TABLE db.null_prefix_ints(i BIGINT)
+foreach type BIGINT VARCHAR
 
 statement ok
-INSERT INTO db.null_prefix_ints SELECT NULL::BIGINT FROM range(2048)
+CREATE TABLE db.null_prefix_${type} AS SELECT NULL::${type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_ints SELECT NULL::BIGINT FROM range(2048)
+INSERT INTO db.null_prefix_${type} SELECT NULL::${type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_ints SELECT 1 i UNION ALL SELECT i FROM repeat(1, 2047) t(i)
+INSERT INTO db.null_prefix_${type} SELECT CAST('1' AS ${type}) AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_ints SELECT 2 i UNION ALL SELECT i FROM repeat(2, 2047) t(i)
+INSERT INTO db.null_prefix_${type} SELECT CAST('2' AS ${type}) AS v FROM range(2048)
 
 statement ok
-CREATE TABLE db.null_prefix_strings(s VARCHAR)
+CREATE TABLE db.null_then_values_${type} AS SELECT NULL::${type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_strings SELECT NULL::VARCHAR FROM range(2048)
+INSERT INTO db.null_then_values_${type} SELECT NULL::${type} AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_strings SELECT NULL::VARCHAR FROM range(2048)
+INSERT INTO db.null_then_values_${type} SELECT CAST('1' AS ${type}) AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_strings SELECT 'a' s UNION ALL SELECT s FROM repeat('a', 2047) t(s)
+INSERT INTO db.null_then_values_${type} SELECT CAST('2' AS ${type}) AS v FROM range(2048)
 
 statement ok
-INSERT INTO db.null_prefix_strings SELECT 'b' s UNION ALL SELECT s FROM repeat('b', 2047) t(s)
+CREATE TABLE db.null_mixed_value_${type} AS SELECT NULL::${type} AS v FROM range(2048)
 
 statement ok
-CHECKPOINT
+INSERT INTO db.null_mixed_value_${type}
+SELECT CASE WHEN i < 1023 THEN NULL ELSE CAST('1' AS ${type}) END AS v FROM range(2048) tbl(i)
+
+statement ok
+INSERT INTO db.null_mixed_value_${type} SELECT CAST('2' AS ${type}) AS v FROM range(2048)
+
+endloop
 
 restart
 
@@ -204,21 +202,81 @@ SELECT i FROM db.offset_boundary ORDER BY i NULLS LAST LIMIT 1 OFFSET 6144
 NULL
 
 query II
-EXPLAIN ANALYZE SELECT i FROM db.null_prefix_ints ORDER BY i NULLS FIRST LIMIT 1 OFFSET 4096
+EXPLAIN ANALYZE SELECT v FROM db.null_prefix_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
 analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 query I
-SELECT i FROM db.null_prefix_ints ORDER BY i NULLS FIRST LIMIT 1 OFFSET 4096
+SELECT v FROM db.null_prefix_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
 1
 
 query II
-EXPLAIN ANALYZE SELECT s FROM db.null_prefix_strings ORDER BY s NULLS FIRST LIMIT 1 OFFSET 4096
+EXPLAIN ANALYZE SELECT v FROM db.null_prefix_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
 analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
 
 query T
-SELECT s FROM db.null_prefix_strings ORDER BY s NULLS FIRST LIMIT 1 OFFSET 4096
+SELECT v FROM db.null_prefix_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
-a
+1
+
+query II
+EXPLAIN ANALYZE SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query I
+SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6144
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query I
+SELECT v FROM db.null_then_values_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6144
+----
+2
+
+query II
+EXPLAIN ANALYZE SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query T
+SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
+----
+1
+
+query II
+EXPLAIN ANALYZE SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6144
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query T
+SELECT v FROM db.null_then_values_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 6144
+----
+2
+
+query II
+EXPLAIN ANALYZE SELECT v FROM db.null_mixed_value_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 2048
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query I
+SELECT v FROM db.null_mixed_value_BIGINT ORDER BY v NULLS FIRST LIMIT 1 OFFSET 2048
+----
+NULL
+
+query II
+EXPLAIN ANALYZE SELECT v FROM db.null_mixed_value_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 2048
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*6,144 rows.*
+
+query T
+SELECT v FROM db.null_mixed_value_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 2048
+----
+NULL
