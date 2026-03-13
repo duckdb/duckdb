@@ -43,20 +43,23 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 	if (!context) {
 		return;
 	}
-	if (!context->transaction.HasActiveTransaction()) {
-		context->transaction.BeginTransaction(false);
-		context->transaction.SetReadOnly();
-		owns_meta_transaction = true;
+	if (context->transaction.HasActiveTransaction()) {
+		checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
+		checkpoint_context = checkpoint_connection->context.get();
+		checkpoint_context->transaction.BeginTransaction(false);
+		checkpoint_context->transaction.SetReadOnly();
+	} else {
+		checkpoint_context = context;
 	}
+	context->transaction.BeginTransaction(false);
+	context->transaction.SetReadOnly();
+	owns_meta_transaction = true;
 }
 
 void ActiveCheckpointWrapper::SetCheckpointTransaction(CheckpointOptions &options) {
-	auto &transaction = DuckTransaction::Get(*context, db);
+	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	options.transaction_id = transaction.start_time;
 	transaction_manager.SetActiveCheckpoint(transaction.start_time);
-	if (!owns_meta_transaction) {
-		return;
-	}
 	checkpoint_transaction = &transaction;
 	transaction.is_checkpoint_transaction = true;
 }
@@ -66,10 +69,10 @@ void ActiveCheckpointWrapper::Commit() {
 	if (!checkpoint_transaction) {
 		return;
 	}
-	auto error = transaction_manager.CommitTransaction(*context, *checkpoint_transaction);
-	MetaTransaction::Get(*context).RemoveTransaction(db);
+	auto error = transaction_manager.CommitTransaction(*checkpoint_context, *checkpoint_transaction);
+	MetaTransaction::Get(*checkpoint_context).RemoveTransaction(db);
 	if (owns_meta_transaction) {
-		context->transaction.Commit(false);
+		checkpoint_context->transaction.Commit(false);
 	}
 	if (error.HasError()) {
 		throw FatalException("Failed to commit checkpoint transaction: %s", error.Message());

@@ -20,6 +20,7 @@ class CatalogEntry;
 struct CatalogTransaction;
 class ClientContext;
 class ColumnSegment;
+class Connection;
 class DatabaseInstance;
 class Deserializer;
 class DuckTransaction;
@@ -49,6 +50,9 @@ struct ActiveCheckpointWrapper {
 	optional_ptr<ClientContext> context;
 	AttachedDatabase &db;
 	DuckTransactionManager &transaction_manager;
+	//! If the caller already has an active transaction, we create a dedicated connection for the checkpoint
+	unique_ptr<Connection> checkpoint_connection;
+	optional_ptr<ClientContext> checkpoint_context;
 	optional_ptr<DuckTransaction> checkpoint_transaction;
 	bool owns_meta_transaction = false;
 };

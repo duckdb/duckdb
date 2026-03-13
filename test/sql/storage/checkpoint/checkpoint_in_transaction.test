@@ -1,0 +1,28 @@
+# name: test/sql/storage/checkpoint/checkpoint_in_transaction.test
+# group: [checkpoint]
+
+statement ok
+SET wal_autocheckpoint='100GB'
+
+statement ok
+ATTACH '__TEST_DIR__/checkpoint_in_transaction.db' AS db
+
+statement ok
+CREATE TABLE db.t(a INTEGER)
+
+statement ok
+INSERT INTO db.t VALUES (1)
+
+statement ok con1
+BEGIN
+
+query I con1
+SELECT * FROM db.t
+----
+1
+
+statement ok
+INSERT INTO db.t VALUES (2)
+
+statement ok con1
+CHECKPOINT db
