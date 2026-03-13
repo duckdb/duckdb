@@ -577,8 +577,14 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(ClientContext &c
 	idx_t files_with_sizes = 0;
 	idx_t estimated_file_row_count = 0;
 	while (bind_data.file_list->Scan(scan_data, file)) {
+		if (!file.extended_info) {
+			// no extended info
+			estimated_file_row_count = 0;
+			break;
+		}
 		auto entry = file.extended_info->options.find("file_size");
 		if (entry == file.extended_info->options.end()) {
+			// no file size available
 			estimated_file_row_count = 0;
 			break;
 		}
