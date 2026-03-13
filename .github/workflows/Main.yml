@@ -318,7 +318,11 @@ jobs:
  swift:
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
+    with:
+      runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_arm64 }}
 
  windows:
     uses: ./.github/workflows/Windows.yml

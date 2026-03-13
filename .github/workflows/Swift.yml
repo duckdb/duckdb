@@ -1,6 +1,9 @@
 name: Swift
 on:
   workflow_call:
+    inputs:
+      runner_macos_arm64:
+        type: string
   workflow_dispatch:
   repository_dispatch:
 
@@ -26,7 +29,7 @@ jobs:
             destination: 'iOS Simulator,name=iPhone 16'
           - isRelease: false
             destination: 'tvOS Simulator,name=Apple TV 4K (at 1080p) (3nd generation)'
-    runs-on: macos-14
+    runs-on: ${{ inputs.runner_macos_arm64 || 'macos-14' }}
     steps:
 
       - name: Checkout
