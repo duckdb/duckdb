@@ -157,12 +157,12 @@ jobs:
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      run: make relassert
+      run: python3 scripts/ci/retry.py -- make relassert
 
     - name: Smoke tests
       run: make smoke
@@ -190,7 +190,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download relassert build artifact
       uses: actions/download-artifact@v5
@@ -257,7 +257,7 @@ jobs:
         version: latest
 
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Build
       run: make wasm_ci
@@ -273,7 +273,7 @@ jobs:
     - uses: actions/checkout@v6
 
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -306,7 +306,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download release build artifact
       uses: actions/download-artifact@v5
@@ -400,12 +400,12 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        run: make relassert
+        run: python3 scripts/ci/retry.py -- make relassert
 
       - name: Test
         run: make unittest_relassert
@@ -426,7 +426,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -454,13 +454,15 @@ jobs:
 
     - name: Install
       shell: bash
-      run: make toolsci && sudo apt-get install -y -qq valgrind clang
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq valgrind clang
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
-      run: make relassert
+      run: python3 scripts/ci/retry.py -- make relassert
 
     - name: Output version info
       shell: bash
@@ -489,7 +491,7 @@ jobs:
     - uses: actions/checkout@v6
 
     - name: Install
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -540,7 +542,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v5

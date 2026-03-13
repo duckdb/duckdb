@@ -74,7 +74,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Bundle static library
         shell: bash

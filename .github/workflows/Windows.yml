@@ -52,9 +52,9 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release --parallel
+        python scripts/ci/retry.py -- python scripts/windows_ci.py
+        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
@@ -151,8 +151,8 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release --parallel
+        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
 
     - name: Test
       shell: bash
@@ -187,8 +187,8 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
-         cmake --build . --config Release --parallel
+         python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
+         python scripts/ci/retry.py -- cmake --build . --config Release --parallel
 
      - name: Sign files with Azure Trusted Signing (TM)
        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
@@ -263,8 +263,8 @@ jobs:
          shell: cmd
          run: |
            set PATH=D:/a/_temp/msys/msys64/mingw64/bin;%PATH%
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="%OVERRIDE_GIT_DESCRIBE%"
-           cmake --build . --config Release 
+           python scripts/ci/retry.py -- cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="%OVERRIDE_GIT_DESCRIBE%"
+           python scripts/ci/retry.py -- cmake --build . --config Release
 
        - name: Test
          shell: cmd

@@ -44,7 +44,9 @@ jobs:
 
     - name: Install
       shell: bash
-      run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 
@@ -89,10 +91,10 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         LTO=full make
-         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+         python3 scripts/ci/retry.py -- bash -lc 'LTO=full make'
+         python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
-         make
+         python3 ../scripts/ci/retry.py -- make
          cd ..
 
      - name: Set up benchmarks
@@ -165,10 +167,10 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make
-         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+         python3 scripts/ci/retry.py -- bash -lc "CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make"
+         python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
-         make
+         python3 ../scripts/ci/retry.py -- make
          cd ..
 
      - name: Set up benchmarks
@@ -234,7 +236,10 @@ jobs:
 
        - name: Install
          shell: bash
-         run: make toolsci && sudo apt-get install -y -qq llvm && pip install requests
+         run: |
+           python3 scripts/ci/retry.py -- make toolsci
+           python3 scripts/ci/retry.py -- sudo apt-get install -y -qq llvm
+           python3 scripts/ci/retry.py -- pip install requests
 
        - uses: ./.github/actions/ccache-action
 
@@ -246,10 +251,10 @@ jobs:
            # chmod +x llvm.sh
            # sudo ./llvm.sh 17
            #####
-           CMAKE_LLVM_PATH='/usr/lib/llvm-14' make
-           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+           python3 scripts/ci/retry.py -- bash -lc "CMAKE_LLVM_PATH='/usr/lib/llvm-14' make"
+           python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
-           make
+           python3 ../scripts/ci/retry.py -- make
            cd ..
 
        - name: Set up benchmarks
@@ -315,17 +320,19 @@ jobs:
 
        - name: Install
          shell: bash
-         run: make toolsci && pip install requests
+         run: |
+           python3 scripts/ci/retry.py -- make toolsci
+           python3 scripts/ci/retry.py -- pip install requests
 
        - uses: ./.github/actions/ccache-action
 
        - name: Build
          shell: bash
          run: |
-           LTO='full' make
-           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+           python3 scripts/ci/retry.py -- bash -lc "LTO='full' make"
+           python3 scripts/ci/retry.py -- git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
-           make
+           python3 ../scripts/ci/retry.py -- make
            cd ..
 
        - name: Set up benchmarks

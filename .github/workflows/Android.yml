@@ -69,7 +69,7 @@ jobs:
 
     - name: Install Ninja
       shell: bash
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Checkout (again)
       shell: bash
@@ -84,7 +84,7 @@ jobs:
 
     - name:  Build
       shell: bash
-      run: make
+      run: python3 scripts/ci/retry.py -- make
 
     - name: Deploy
       shell: bash

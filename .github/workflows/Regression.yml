@@ -54,7 +54,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install tools
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -117,7 +117,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install
-        run: make toolsci && pip install requests
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+          python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
         uses: actions/download-artifact@v4
@@ -181,7 +183,9 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci && pip install requests
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+          python3 scripts/ci/retry.py -- pip install requests
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
@@ -228,7 +232,9 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci && pip install requests
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+          python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
         uses: actions/download-artifact@v5
@@ -301,7 +307,9 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci && pip install requests
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+          python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
         uses: actions/download-artifact@v5
@@ -339,7 +347,9 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci && pip install tqdm
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+          python3 scripts/ci/retry.py -- pip install tqdm
 
       - name: Download current release artifact
         uses: actions/download-artifact@v5

@@ -73,7 +73,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: GEN=ninja make release
+      run: python3 scripts/ci/retry.py -- bash -lc 'GEN=ninja make release'
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -130,7 +130,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash

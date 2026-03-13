@@ -288,7 +288,7 @@ jobs:
 
       - name: Setup Build Environment
         run: |
-          make toolsci
+          python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -312,7 +312,7 @@ jobs:
           ENABLE_EXTENSION_AUTOLOADING: 1
           ENABLE_EXTENSION_AUTOINSTALL: 1
         run: |
-          make release
+          python3 scripts/ci/retry.py -- make release
 
       - name: Run Tests
         env:
@@ -343,7 +343,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -353,7 +353,7 @@ jobs:
           GENERATE_EXTENSION_ENTRIES: 1
           LOCAL_EXTENSION_REPO: build/release/repository_other
         run: |
-          make
+          python3 scripts/ci/retry.py -- make
 
       - uses: actions/download-artifact@v5
         name: Download extension repository artifact

@@ -58,7 +58,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
@@ -112,7 +112,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
@@ -209,13 +209,13 @@ jobs:
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
@@ -274,13 +274,13 @@ jobs:
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
