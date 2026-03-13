@@ -92,8 +92,8 @@ jobs:
         with:
           artifact_name: linux-base-build
 
-  regression-test-benchmark-runner:
-    name: Regression Tests (${{ matrix.name }})
+  regression-bench:
+    name: Bench ${{ matrix.name }}
     needs:
       - linux-base
     runs-on: ubuntu-24.04
@@ -170,8 +170,8 @@ jobs:
 
           exit $status
 
-  regression-test-fivetran:
-    name: Regression Test Fivetran
+  regression-bench-fivetran:
+    name: Bench Fivetran
     if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
     needs:
       - linux-base
