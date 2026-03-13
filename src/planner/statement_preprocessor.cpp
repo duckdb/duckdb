@@ -88,41 +88,52 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 	context.RunFunctionInTransactionInternal(lock, [&] { PreprocessInternal(lock, statements, transaction_context); });
 }
 
+void MakeAllErrorsInvalidateTransaction(optional_ptr<TransactionContext> transaction_context,
+                                        TransactionStatement *chained_transaction) {
+	// this policy change persists for the entire transaction, not just during pragma/multistatement execution,
+	// affecting subsequent queries
+#ifdef DEBUG // should not have a transaction within a transaction
+	D_ASSERT(!(transaction_context && chained_transaction));
+#endif
+	if (transaction_context) {
+		transaction_context->SetInvalidationPolicy(TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+	} else if (chained_transaction) {
+		chained_transaction->info->invalidation_policy =
+		    TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION;
+	}
+}
 void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
                                                optional_ptr<TransactionContext> transaction_context) {
-	bool is_in_active_transaction = transaction_context != nullptr;
+	TransactionStatement *chained_transaction = nullptr;
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto query = statements[i]->query;
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
 			vector<unique_ptr<SQLStatement>> reparsed_statements = TryReparsePragma(std::move(statements[i]));
-			if (transaction_context) {
-				transaction_context->SetInvalidationPolicy(
-				    TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-			}
-			AddStatements(reparsed_statements, !is_in_active_transaction && reparsed_statements.size() != 1,
+
+			MakeAllErrorsInvalidateTransaction(transaction_context, chained_transaction);
+			AddStatements(reparsed_statements,
+			              !(transaction_context || chained_transaction) && reparsed_statements.size() != 1,
 			              new_statements);
 			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
 			auto &multi_statement = statements[i]->Cast<MultiStatement>();
-			if (transaction_context) {
-				transaction_context->SetInvalidationPolicy(
-				    TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
-			}
-			UnpackMultiStatement(multi_statement, is_in_active_transaction, new_statements);
+			MakeAllErrorsInvalidateTransaction(transaction_context, chained_transaction);
+			UnpackMultiStatement(multi_statement, transaction_context || chained_transaction, new_statements);
 			break;
 		}
 		case StatementType::TRANSACTION_STATEMENT: {
 			const auto transaction_stmt = static_cast<TransactionStatement *>(statements[i].get());
-			transaction_stmt->info->invalidation_policy =
-			    TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION;
 			if (transaction_stmt->info->type == TransactionType::BEGIN_TRANSACTION) {
-				is_in_active_transaction = true;
-			} else if (transaction_stmt->info->type == TransactionType::COMMIT ||
-			           transaction_stmt->info->type == TransactionType::ROLLBACK) {
-				is_in_active_transaction = false;
+				new_statements.push_back(std::move(statements[i]));
+				chained_transaction = static_cast<TransactionStatement *>(new_statements.back().get());
+				break;
+			}
+			if (transaction_stmt->info->type == TransactionType::COMMIT ||
+			    transaction_stmt->info->type == TransactionType::ROLLBACK) {
+				chained_transaction = nullptr;
 			}
 			new_statements.push_back(std::move(statements[i]));
 			break;
