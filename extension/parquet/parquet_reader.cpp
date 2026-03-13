@@ -1211,6 +1211,18 @@ idx_t ParquetReader::NumRowGroups() const {
 	return GetFileMetadata()->row_groups.size();
 }
 
+idx_t ParquetReader::GetFileSize() const {
+	return file_handle->GetFileSize();
+}
+
+idx_t ParquetReader::GetDataSize() const {
+	idx_t data_size = 0;
+	for (auto &row_group : GetFileMetadata()->row_groups) {
+		data_size += row_group.total_compressed_size;
+	}
+	return data_size;
+}
+
 ParquetScanFilter::ParquetScanFilter(ClientContext &context, idx_t filter_idx, TableFilter &filter)
     : filter_idx(filter_idx), filter(filter) {
 	filter_state = TableFilterState::Initialize(context, filter);
