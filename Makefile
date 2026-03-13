@@ -508,8 +508,9 @@ bloaty: reldebug bloaty/bloaty
 	./bloaty/bloaty  build/reldebug/duckdb -d symbols -n 20 --debug-file=build/reldebug/duckdb.dSYM/Contents/Resources/DWARF/duckdb
 	# ./bloaty/bloaty  build/reldebug/extension/parquet/parquet.duckdb_extension -d symbols -n 20 # to execute on extension
 
+# Generate compile commands without actually building
 clangd:
-	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B build/clangd .
+	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B .cache/clangd/debug .
 
 coverage-check:
 	./scripts/coverage_check.sh
