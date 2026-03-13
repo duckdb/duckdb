@@ -226,6 +226,67 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 	}
 }
 
+bool Parser::ExtensionParseQuery(const string &query) {
+	Transformer transformer(options);
+	// split sql string into statements and re-parse using extension
+	auto queries = SplitQueries(query);
+	idx_t stmt_loc = 0;
+	for (auto const &query_statement : queries) {
+		ErrorData another_parser_error;
+		// Creating a new scope to allow extensions to use PostgresParser, which is not reentrant
+		{
+			PostgresParser another_parser;
+			another_parser.Parse(query_statement);
+			// LCOV_EXCL_START
+			// first see if DuckDB can parse this individual query statement
+			if (another_parser.success) {
+				if (!another_parser.parse_tree) {
+					// empty statement
+					continue;
+				}
+				transformer.TransformParseTree(another_parser.parse_tree, statements);
+				// important to set in the case of a mixture of DDB and parser ext statements
+				statements.back()->stmt_length = query_statement.size() - 1;
+				statements.back()->stmt_location = stmt_loc;
+				stmt_loc += query_statement.size();
+				continue;
+			} else {
+				another_parser_error = ErrorData(another_parser.error_message);
+				if (another_parser.error_location > 0) {
+					another_parser_error.AddQueryLocation(NumericCast<idx_t>(another_parser.error_location - 1));
+				}
+			}
+		} // LCOV_EXCL_STOP
+		// LCOV_EXCL_START
+		// let extensions parse the statement which DuckDB failed to parse
+		bool parsed_single_statement = false;
+		for (auto &ext : options.extensions->ParserExtensions()) {
+			D_ASSERT(!parsed_single_statement);
+			if (!ext.parse_function) {
+				continue;
+			}
+			auto result = ext.parse_function(ext.parser_info.get(), query_statement);
+			if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+				auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+				statement->stmt_length = query_statement.size() - 1;
+				statement->stmt_location = stmt_loc;
+				stmt_loc += query_statement.size();
+				statements.push_back(std::move(statement));
+				parsed_single_statement = true;
+				return true;
+			} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+				throw ParserException::SyntaxError(query, result.error, result.error_location);
+			} else {
+				// We move to the next one!
+			}
+		}
+		if (!parsed_single_statement) {
+			return false;
+		} // LCOV_EXCL_STOP
+	}
+	return false;
+}
+
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
@@ -255,7 +316,15 @@ void Parser::ParseQuery(const string &query) {
 					return;
 				}
 				if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
-					ThrowParserOverrideError(result);
+					if (!options.extensions || !options.extensions->HasParserExtensions()) {
+						ThrowParserOverrideError(result);
+					} else {
+						auto extension_parse_succesful = ExtensionParseQuery(query);
+						if (!extension_parse_succesful) {
+							ThrowParserOverrideError(result);
+						}
+						return;
+					}
 				}
 				if (options.parser_override_setting == AllowParserOverride::STRICT_WHEN_SUPPORTED) {
 					auto statement = GetStatement(query);

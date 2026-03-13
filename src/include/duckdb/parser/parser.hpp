@@ -77,6 +77,7 @@ public:
 
 	unique_ptr<SQLStatement> GetStatement(const string &query);
 	void ThrowParserOverrideError(ParserOverrideResult &result);
+	bool ExtensionParseQuery(const string &query);
 
 private:
 	ParserOptions options;
