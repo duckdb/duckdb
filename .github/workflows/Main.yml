@@ -260,7 +260,7 @@ jobs:
       run: make toolsci
 
     - name: Build
-      run: make wasm_eh_ci
+      run: make wasm_ci
 
  linux-release:
     name: Linux Release
