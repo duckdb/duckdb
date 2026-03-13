@@ -1,7 +1,6 @@
 #include "capi_tester.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test MAP getters", "[capi]") {
 	auto uint_val = duckdb_create_uint64(42);

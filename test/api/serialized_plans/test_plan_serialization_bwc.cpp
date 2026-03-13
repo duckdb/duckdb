@@ -12,7 +12,6 @@
 #include <fstream>
 
 using namespace duckdb;
-using namespace std;
 
 string get_full_file_name(const string &file_name) {
 	auto my_name = string("test_plan_serialization_bwc.cpp");

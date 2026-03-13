@@ -5,7 +5,6 @@
 #include <iostream>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test replaying mismatching WAL files", "[persistence][.]") {
 	duckdb::unique_ptr<QueryResult> result;
