@@ -1,4 +1,4 @@
-# name: test/sql/transactions/statement-preprocessor/test_multistatement_is_transactional_chained_BEGIN_body_COMMIT.test
+# name: test/sql/transactions/statement-preprocessor/multistatement_is_transactional_chained_BEGIN.test
 # group: [statement-preprocessor]
 
 statement ok
@@ -17,7 +17,7 @@ statement ok
 CREATE OR REPLACE TABLE t AS SELECT range::INT AS id FROM range(10);
 
 statement error
-BEGIN TRANSACTION; ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function(); COMMIT;
+BEGIN TRANSACTION; ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();
 ----
 non_existent_function
 

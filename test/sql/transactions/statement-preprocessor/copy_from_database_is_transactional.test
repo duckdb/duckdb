@@ -1,4 +1,4 @@
-# name: test/sql/transactions/statement-preprocessor/test_copy_from_database_is_transactional.test
+# name: test/sql/transactions/statement-preprocessor/copy_from_database_is_transactional.test
 # group: [statement-preprocessor]
 
 require tpch

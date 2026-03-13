@@ -1,4 +1,4 @@
-# name: test/sql/transactions/statement-preprocessor/test_multistatement_is_transactional_after_BEGIN_chained_COMMIT.test
+# name: test/sql/transactions/statement-preprocessor/multistatement_is_transactional_chained_BEGIN_body_COMMIT.test
 # group: [statement-preprocessor]
 
 statement ok
@@ -16,11 +16,8 @@ SET wal_autocheckpoint='1TB'
 statement ok
 CREATE OR REPLACE TABLE t AS SELECT range::INT AS id FROM range(10);
 
-statement ok
-BEGIN TRANSACTION;
-
 statement error
-ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function(); COMMIT;
+BEGIN TRANSACTION; ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function(); COMMIT;
 ----
 non_existent_function
 
