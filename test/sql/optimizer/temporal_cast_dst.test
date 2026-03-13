@@ -1,0 +1,61 @@
+# name: test/sql/optimizer/temporal_cast_dst.test
+# description: Test temporal cast filter pushdown around DST boundaries
+# group: [optimizer]
+
+require icu
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+SET timezone='Europe/Amsterdam';
+
+# Create a table spanning the autumn DST switch (2026-10-25, clocks go back at 3:00 -> 2:00)
+# This creates 5 hours of TIMESTAMPTZ data in 1-minute intervals around the switch
+statement ok
+CREATE TABLE dst_table AS
+    SELECT '2026-10-25 00:00:00+02'::TIMESTAMPTZ + (i * INTERVAL '1 minute') AS col
+    FROM range(300) t(i);
+
+# ---------------------------------------------------------------------------
+# TIMESTAMPTZ -> TIMESTAMP around DST boundary
+# The cast to TIMESTAMP creates ambiguity: two different TIMESTAMPTZ values
+# (pre- and post-switch) map to the same TIMESTAMP value.
+# The relaxed filter must not miss any rows.
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM dst_table WHERE CAST(col AS TIMESTAMP) > '2026-10-25 02:30:00'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+query II
+EXPLAIN SELECT * FROM dst_table WHERE CAST(col AS TIMESTAMP) <= '2026-10-25 02:30:00'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# Correctness: the two halves must add up to the full table (no rows lost)
+query I
+SELECT (SELECT count(*) FROM dst_table WHERE CAST(col AS TIMESTAMP) > '2026-10-25 02:30:00'::TIMESTAMP)
+     + (SELECT count(*) FROM dst_table WHERE CAST(col AS TIMESTAMP) <= '2026-10-25 02:30:00'::TIMESTAMP);
+----
+300
+
+# ---------------------------------------------------------------------------
+# TIMESTAMP -> TIMESTAMPTZ around DST boundary
+# ---------------------------------------------------------------------------
+statement ok
+CREATE TABLE ts_dst_table AS
+    SELECT ('2026-10-25 00:00:00'::TIMESTAMP + (i * INTERVAL '1 minute')) AS col
+    FROM range(300) t(i);
+
+query II
+EXPLAIN SELECT * FROM ts_dst_table WHERE CAST(col AS TIMESTAMPTZ) > '2026-10-25 02:30:00+01'::TIMESTAMPTZ;
+----
+physical_plan	<REGEX>:.*optional.*col.*
+
+# Correctness: the two halves must add up to the full table
+query I
+SELECT (SELECT count(*) FROM ts_dst_table WHERE CAST(col AS TIMESTAMPTZ) > '2026-10-25 02:30:00+01'::TIMESTAMPTZ)
+     + (SELECT count(*) FROM ts_dst_table WHERE CAST(col AS TIMESTAMPTZ) <= '2026-10-25 02:30:00+01'::TIMESTAMPTZ);
+----
+300
