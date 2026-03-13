@@ -1387,17 +1387,17 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				bool lazy_fetch = filters != nullptr;
 
 				// Prefetch column-wise
+				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 				for (idx_t i = 0; i < column_ids.size(); i++) {
 					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = column_ids[col_idx];
-					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
 					bool has_filter = false;
 					if (filters) {
 						auto entry = filters->filters.find(col_idx);
 						has_filter = entry != filters->filters.end();
 					}
-					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
+					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !has_filter);
 				}
 
 				trans.FinalizeRegistration();
