@@ -38,6 +38,7 @@ namespace duckdb {
 
 ActiveCheckpointWrapper::ActiveCheckpointWrapper(AttachedDatabase &db_p, DuckTransactionManager &transaction_manager_p)
     : db(db_p), transaction_manager(transaction_manager_p) {
+	// Each checkpoint gets its own connection + MetaTransaction.
 	checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
 	checkpoint_connection->context->transaction.BeginTransaction(false);
 	checkpoint_connection->context->transaction.SetReadOnly();
