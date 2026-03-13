@@ -572,9 +572,9 @@ const char *EnumUtil::ToChars<TimeStampIsAdjustedToUTC>(TimeStampIsAdjustedToUTC
 	switch (value) {
 	case TimeStampIsAdjustedToUTC::AUTO:
 		return "AUTO";
-	case TimeStampIsAdjustedToUTC::TRUE:
+	case TimeStampIsAdjustedToUTC::ALWAYS_TRUE:
 		return "TRUE";
-	case TimeStampIsAdjustedToUTC::FALSE:
+	case TimeStampIsAdjustedToUTC::ALWAYS_FALSE:
 		return "FALSE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
@@ -587,10 +587,10 @@ TimeStampIsAdjustedToUTC EnumUtil::FromString<TimeStampIsAdjustedToUTC>(const ch
 		return TimeStampIsAdjustedToUTC::AUTO;
 	}
 	if (StringUtil::Equals(value, "TRUE")) {
-		return TimeStampIsAdjustedToUTC::TRUE;
+		return TimeStampIsAdjustedToUTC::ALWAYS_TRUE;
 	}
 	if (StringUtil::Equals(value, "FALSE")) {
-		return TimeStampIsAdjustedToUTC::FALSE;
+		return TimeStampIsAdjustedToUTC::ALWAYS_FALSE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -61,9 +61,9 @@ enum class TimeStampIsAdjustedToUTC : uint8_t {
 	//! true if TZ, false if not
 	AUTO,
 	//! Always true
-	TRUE,
+	ALWAYS_TRUE,
 	//! Always false
-	FALSE,
+	ALWAYS_FALSE,
 };
 
 class ParquetWriteTransformData {

@@ -157,9 +157,9 @@ static bool GetTimestampIsAdjustedToUTC(const LogicalTypeId type_id, const TimeS
 	switch (setting) {
 	case TimeStampIsAdjustedToUTC::AUTO:
 		return type_id == LogicalTypeId::TIMESTAMP_TZ;
-	case TimeStampIsAdjustedToUTC::TRUE:
+	case TimeStampIsAdjustedToUTC::ALWAYS_TRUE:
 		return true;
-	case TimeStampIsAdjustedToUTC::FALSE:
+	case TimeStampIsAdjustedToUTC::ALWAYS_FALSE:
 		return false;
 	default:
 		throw InternalException("Unhandled TimeStampIsAdjustedToUTC setting");
