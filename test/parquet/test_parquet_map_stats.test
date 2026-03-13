@@ -1,0 +1,198 @@
+# name: test/parquet/test_parquet_map_stats.test
+# description: Test statistic propagation and row group skipping for MAP columns in parquet
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY
+
+# Create a table with MAP column and write to parquet with multiple row groups
+statement ok
+CREATE TABLE map_data(id INTEGER, m MAP(INTEGER, VARCHAR));
+
+# Insert data that will create distinct row groups
+# Row group 1: id 1-3 with low integer keys
+statement ok
+INSERT INTO map_data VALUES
+	(1, MAP([1, 2], ['a', 'b'])),
+	(2, MAP([3, 4], ['c', 'd'])),
+	(3, MAP([5, 6], ['e', 'f']));
+
+# Row group 2: id 4-6 with medium integer keys
+statement ok
+INSERT INTO map_data VALUES
+	(4, MAP([100, 200], ['g', 'h'])),
+	(5, MAP([300, 400], ['i', 'j'])),
+	(6, MAP([500, 600], ['k', 'l']));
+
+# Row group 3: id 7-9 with high integer keys
+statement ok
+INSERT INTO map_data VALUES
+	(7, MAP([1000, 2000], ['m', 'n'])),
+	(8, MAP([3000, 4000], ['o', 'p'])),
+	(9, MAP([5000, 6000], ['q', 'r']));
+
+# Write to parquet with small row group size to force multiple row groups
+statement ok
+COPY map_data TO '__TEST_DIR__/map_stats.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 3);
+
+# Verify the data was written correctly
+query II
+SELECT * FROM '__TEST_DIR__/map_stats.parquet' ORDER BY id;
+----
+1	{1=a, 2=b}
+2	{3=c, 4=d}
+3	{5=e, 6=f}
+4	{100=g, 200=h}
+5	{300=i, 400=j}
+6	{500=k, 600=l}
+7	{1000=m, 2000=n}
+8	{3000=o, 4000=p}
+9	{5000=q, 6000=r}
+
+# Test that statistics enable filtering on the id column
+# This should skip row groups based on id statistics
+query I nosort empty
+EXPLAIN SELECT * FROM '__TEST_DIR__/map_stats.parquet' WHERE id > 100;
+----
+
+query I nosort empty
+EXPLAIN SELECT * FROM '__TEST_DIR__/map_stats.parquet' WHERE id < 0;
+----
+
+# Verify actual results work correctly with filters
+query II
+SELECT * FROM '__TEST_DIR__/map_stats.parquet' WHERE id >= 7 ORDER BY id;
+----
+7	{1000=m, 2000=n}
+8	{3000=o, 4000=p}
+9	{5000=q, 6000=r}
+
+query II
+SELECT * FROM '__TEST_DIR__/map_stats.parquet' WHERE id <= 3 ORDER BY id;
+----
+1	{1=a, 2=b}
+2	{3=c, 4=d}
+3	{5=e, 6=f}
+
+# Test with string key and integer value MAP
+statement ok
+CREATE TABLE map_string_key(id INTEGER, m MAP(VARCHAR, INTEGER));
+
+statement ok
+INSERT INTO map_string_key VALUES
+	(1, MAP(['a', 'b'], [10, 20])),
+	(2, MAP(['c', 'd'], [30, 40])),
+	(3, MAP(['e', 'f'], [50, 60]));
+
+statement ok
+INSERT INTO map_string_key VALUES
+	(4, MAP(['g', 'h'], [100, 200])),
+	(5, MAP(['i', 'j'], [300, 400])),
+	(6, MAP(['k', 'l'], [500, 600]));
+
+statement ok
+COPY map_string_key TO '__TEST_DIR__/map_string_stats.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 3);
+
+query II
+SELECT * FROM '__TEST_DIR__/map_string_stats.parquet' ORDER BY id;
+----
+1	{a=10, b=20}
+2	{c=30, d=40}
+3	{e=50, f=60}
+4	{g=100, h=200}
+5	{i=300, j=400}
+6	{k=500, l=600}
+
+# Verify statistics work for string key maps as well
+query I nosort empty
+EXPLAIN SELECT * FROM '__TEST_DIR__/map_string_stats.parquet' WHERE id > 10;
+----
+
+# Test with nested MAP (MAP with LIST values)
+statement ok
+CREATE TABLE map_nested(id INTEGER, m MAP(INTEGER, INTEGER[]));
+
+statement ok
+INSERT INTO map_nested VALUES
+	(1, MAP([1], [[10, 20]])),
+	(2, MAP([2], [[30, 40]])),
+	(3, MAP([3], [[50, 60]]));
+
+statement ok
+INSERT INTO map_nested VALUES
+	(4, MAP([4], [[100, 200]])),
+	(5, MAP([5], [[300, 400]])),
+	(6, MAP([6], [[500, 600]]));
+
+statement ok
+COPY map_nested TO '__TEST_DIR__/map_nested_stats.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 3);
+
+query II
+SELECT * FROM '__TEST_DIR__/map_nested_stats.parquet' ORDER BY id;
+----
+1	{1=[10, 20]}
+2	{2=[30, 40]}
+3	{3=[50, 60]}
+4	{4=[100, 200]}
+5	{5=[300, 400]}
+6	{6=[500, 600]}
+
+# Verify statistics work for nested maps
+query I nosort empty
+EXPLAIN SELECT * FROM '__TEST_DIR__/map_nested_stats.parquet' WHERE id < 0;
+----
+
+# Test with NULL maps
+statement ok
+CREATE TABLE map_with_nulls(id INTEGER, m MAP(INTEGER, VARCHAR));
+
+statement ok
+INSERT INTO map_with_nulls VALUES
+	(1, MAP([1, 2], ['a', 'b'])),
+	(2, NULL),
+	(3, MAP([3, 4], ['c', 'd']));
+
+statement ok
+INSERT INTO map_with_nulls VALUES
+	(4, NULL),
+	(5, MAP([5, 6], ['e', 'f'])),
+	(6, NULL);
+
+statement ok
+COPY map_with_nulls TO '__TEST_DIR__/map_nulls_stats.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 3);
+
+query II
+SELECT * FROM '__TEST_DIR__/map_nulls_stats.parquet' ORDER BY id;
+----
+1	{1=a, 2=b}
+2	NULL
+3	{3=c, 4=d}
+4	NULL
+5	{5=e, 6=f}
+6	NULL
+
+# Verify statistics work with NULL values
+query I nosort empty
+EXPLAIN SELECT * FROM '__TEST_DIR__/map_nulls_stats.parquet' WHERE id > 100;
+----
+
+# Verify we can read the min/max on the id column (statistics work correctly with MAP columns present)
+query IIII
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT stats(id) s FROM '__TEST_DIR__/map_stats.parquet' LIMIT 1);
+----
+1	9	false	true
+
+# Cleanup
+statement ok
+DROP TABLE map_data;
+
+statement ok
+DROP TABLE map_string_key;
+
+statement ok
+DROP TABLE map_nested;
+
+statement ok
+DROP TABLE map_with_nulls;

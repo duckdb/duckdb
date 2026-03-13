@@ -404,13 +404,23 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
                                                                              bool can_have_nan) {
 	// Not supported types
 	auto &type = schema.type;
-	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP) {
+	if (type.id() == LogicalTypeId::ARRAY) {
 		return nullptr;
 	}
 
 	unique_ptr<BaseStatistics> row_group_stats;
 
 	if (type.id() == LogicalTypeId::LIST) {
+		auto list_stats = ListStats::CreateUnknown(type);
+		auto &child_schema = schema.children[0];
+		auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns, can_have_nan);
+		ListStats::SetChildStats(list_stats, std::move(child_stats));
+		row_group_stats = list_stats.ToUnique();
+		return row_group_stats;
+	}
+	// MAP types are internally represented as LIST<STRUCT<key, value>>
+	// We handle them the same way as LIST types
+	if (type.id() == LogicalTypeId::MAP) {
 		auto list_stats = ListStats::CreateUnknown(type);
 		auto &child_schema = schema.children[0];
 		auto child_stats = ParquetStatisticsUtils::TransformColumnStatistics(child_schema, columns, can_have_nan);
