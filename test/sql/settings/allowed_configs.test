@@ -20,8 +20,20 @@ SET allowed_configs=['']
 ----
 Cannot provide an empty string for allowed_configs
 
+# unknown config names are rejected
+statement error
+SET allowed_configs=['not_a_real_setting']
+----
+Unknown configuration option 'not_a_real_setting' in allowed_configs
+
+# extension configs are rejected when extension (icu) is not loaded
+statement error
+SET allowed_configs=['TimeZone']
+----
+Unknown configuration option 'TimeZone' in allowed_configs
+
 statement ok
-SET allowed_configs=['pivot_limit', 'EXPLAIN_output']
+SET allowed_configs=['pivot_limit', 'EXPLAIN_output', 'memory_limit']
 
 statement ok
 SET lock_configuration=true
@@ -31,6 +43,14 @@ SET pivot_limit=20000
 
 statement ok
 SET explain_output='OPTIMIZED_ONLY'
+
+# aliases: 'memory_limit' is an alias for 'max_memory' - setting via alias should work
+statement ok
+SET memory_limit='2GB'
+
+# setting via canonical name should also work when alias was used in allowed_configs
+statement ok
+SET max_memory='2GB'
 
 # other settings are still locked
 statement error

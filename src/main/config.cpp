@@ -562,9 +562,13 @@ void DBConfig::CheckLock(const String &name) {
 		// we are always allowed to change these settings
 		return;
 	}
-	if (options.allowed_configs.find(name.ToStdString()) != options.allowed_configs.end()) {
-		// settings that are allowed through allowed_configs
-		return;
+	if (!options.allowed_configs.empty()) {
+		auto option = GetOptionByName(name);
+		auto canonical_name = option ? string(option->name) : name.ToStdString();
+		if (options.allowed_configs.find(canonical_name) != options.allowed_configs.end()) {
+			// settings that are allowed through allowed_configs
+			return;
+		}
 	}
 	// not allowed!
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
@@ -805,6 +809,18 @@ void DBConfig::AddAllowedConfig(const string &config_name) {
 	duckdb::case_insensitive_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
 	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
 		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
+	}
+	// Validate that the config name refers to a known setting (built-in or extension)
+	// and resolve aliases to canonical names
+	auto option = GetOptionByName(config_name);
+	if (option) {
+		// Store the canonical name so alias lookups work in CheckLock
+		options.allowed_configs.insert(option->name);
+		return;
+	}
+	ExtensionOption extension_option;
+	if (!TryGetExtensionOption(config_name, extension_option)) {
+		throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
 	}
 	options.allowed_configs.insert(config_name);
 }
