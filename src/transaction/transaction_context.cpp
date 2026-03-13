@@ -29,7 +29,7 @@ TransactionContext::~TransactionContext() {
 	}
 }
 
-void TransactionContext::BeginTransaction() {
+void TransactionContext::BeginTransaction(bool notify_states) {
 	if (current_transaction) {
 		throw TransactionException("cannot start a transaction within a transaction");
 	}
@@ -38,12 +38,14 @@ void TransactionContext::BeginTransaction() {
 	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, global_transaction_id);
 
 	// Notify any registered state of transaction begin
-	for (auto &state : context.registered_state->States()) {
-		state->TransactionBegin(*current_transaction, context);
+	if (notify_states) {
+		for (auto &state : context.registered_state->States()) {
+			state->TransactionBegin(*current_transaction, context);
+		}
 	}
 }
 
-void TransactionContext::Commit() {
+void TransactionContext::Commit(bool notify_states) {
 	if (!current_transaction) {
 		throw TransactionException("failed to commit: no transaction active");
 	}
@@ -52,17 +54,21 @@ void TransactionContext::Commit() {
 	auto error = transaction->Commit();
 	// Notify any registered state of transaction commit
 	if (error.HasError()) {
-		for (auto const &s : context.registered_state->States()) {
-			s->TransactionRollback(*transaction, context, error);
-		}
-		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
-			// throw fatal / internal exceptions directly
-			error.Throw();
+		if (notify_states) {
+			for (auto const &s : context.registered_state->States()) {
+				s->TransactionRollback(*transaction, context, error);
+			}
+			if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
+				// throw fatal / internal exceptions directly
+				error.Throw();
+			}
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	}
-	for (auto &state : context.registered_state->States()) {
-		state->TransactionCommit(*transaction, context);
+	if (notify_states) {
+		for (auto &state : context.registered_state->States()) {
+			state->TransactionCommit(*transaction, context);
+		}
 	}
 	transaction->Finalize();
 }

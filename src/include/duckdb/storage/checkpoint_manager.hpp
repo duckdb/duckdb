@@ -22,6 +22,8 @@ class ClientContext;
 class ColumnSegment;
 class DatabaseInstance;
 class Deserializer;
+class DuckTransaction;
+class DuckTransactionManager;
 class IndexCatalogEntry;
 class MetadataManager;
 class MetadataReader;
@@ -35,6 +37,21 @@ class ViewCatalogEntry;
 class TableDataWriter;
 class TypeCatalogEntry;
 struct BoundCreateTableInfo;
+struct CheckpointOptions;
+
+struct ActiveCheckpointWrapper {
+	ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db,
+	                        DuckTransactionManager &transaction_manager);
+
+	void SetCheckpointTransaction(CheckpointOptions &options);
+	void Commit();
+
+	optional_ptr<ClientContext> context;
+	AttachedDatabase &db;
+	DuckTransactionManager &transaction_manager;
+	optional_ptr<DuckTransaction> checkpoint_transaction;
+	bool owns_meta_transaction = false;
+};
 
 class CheckpointWriter {
 public:

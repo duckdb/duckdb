@@ -39,8 +39,8 @@ public:
 		return current_transaction.get();
 	}
 
-	void BeginTransaction();
-	void Commit();
+	void BeginTransaction(bool notify_states = true);
+	void Commit(bool notify_states = true);
 	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
 
