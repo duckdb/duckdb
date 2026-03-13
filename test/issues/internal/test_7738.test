@@ -79,6 +79,9 @@ CREATE OR REPLACE TABLE narrow_ranges AS (
 	FROM range(2048*5) tbl(id)
 );
 
+statement ok
+SET disabled_optimizers TO 'build_side_probe_side';
+
 # Verify all predicates
 query IIIII
 FROM wide_ranges l
