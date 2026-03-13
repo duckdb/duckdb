@@ -482,7 +482,15 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(const MultiFileB
 	if (bind_data.explicit_cardinality) {
 		return make_uniq<NodeStatistics>(bind_data.explicit_cardinality);
 	}
-	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) * file_count);
+	idx_t min_per_file_cardinality = 1ULL;
+	if (file_count > 1) {
+		// if we have several files, our cardinality estimate can be way off if our initial file is ~empty
+		// we set the minimum per file cardinality to 1000 in this case
+		min_per_file_cardinality = 1000ULL;
+	}
+	auto per_file_cardinality = MaxValue<idx_t>(bind_data.initial_file_cardinality, min_per_file_cardinality);
+
+	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
 }
 
 unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const string &name) {

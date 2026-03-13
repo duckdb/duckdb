@@ -864,7 +864,7 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 	}
 }
 
-void SingleFileBlockManager::MarkBlockACheckpointed(block_id_t block_id) {
+void SingleFileBlockManager::MarkBlockAsCheckpointed(block_id_t block_id) {
 	lock_guard<mutex> lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	newly_used_blocks.erase(block_id);
@@ -1181,11 +1181,17 @@ vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	auto block_size = metadata_manager.GetMetadataBlockSize() - sizeof(idx_t);
 	idx_t allocated_size = 0;
 	while (true) {
-		auto free_list_count =
-		    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
+		idx_t free_list_count;
+		idx_t multi_use_blocks_count;
+		{
+			lock_guard<mutex> guard(single_file_block_lock);
+			free_list_count =
+			    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
+			multi_use_blocks_count = multi_use_blocks.size();
+		}
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * free_list_count;
 		auto multi_use_blocks_size =
-		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
+		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks_count;
 		auto metadata_blocks =
 		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(idx_t)) * GetMetadataManager().BlockCount();
 		auto total_size = free_list_size + multi_use_blocks_size + metadata_blocks;

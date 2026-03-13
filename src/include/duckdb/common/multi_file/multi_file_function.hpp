@@ -769,6 +769,22 @@ public:
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
+		if (data.file_options.union_by_name) {
+			// for UNION BY NAME - check if we can get a cardinality estimate from the (already opened) union readers
+			bool has_exact_cardinality = true;
+			idx_t cardinality = 0;
+			for (auto &union_data : data.union_readers) {
+				auto file_cardinality = union_data->TryGetCardinalityEstimate();
+				if (!file_cardinality.IsValid()) {
+					has_exact_cardinality = false;
+					break;
+				}
+				cardinality += file_cardinality.GetIndex();
+			}
+			if (has_exact_cardinality) {
+				return make_uniq<NodeStatistics>(cardinality);
+			}
+		}
 		// get the file count - for >500 files we allow an estimate
 		auto count_info = data.file_list->GetFileCount(500);
 		idx_t estimated_file_count = count_info.count;
