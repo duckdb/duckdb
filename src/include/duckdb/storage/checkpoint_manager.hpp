@@ -43,6 +43,7 @@ struct CheckpointOptions;
 
 struct ActiveCheckpointWrapper {
 	ActiveCheckpointWrapper(AttachedDatabase &db, DuckTransactionManager &transaction_manager);
+	~ActiveCheckpointWrapper();
 
 	void GetCheckpointTransaction(CheckpointOptions &options);
 	void Commit();

@@ -43,6 +43,13 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(AttachedDatabase &db_p, DuckTra
 	checkpoint_connection->context->transaction.SetReadOnly();
 }
 
+ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
+	transaction_manager.ResetActiveCheckpoint();
+	if (checkpoint_connection) {
+		checkpoint_connection->context->transaction.ClearTransaction();
+	}
+}
+
 void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &options) {
 	auto &context = *checkpoint_connection->context;
 	auto &transaction = DuckTransaction::Get(context, db);
@@ -57,7 +64,13 @@ void ActiveCheckpointWrapper::Commit() {
 	if (!checkpoint_transaction) {
 		return;
 	}
-	checkpoint_connection->context->transaction.Commit(false);
+	auto &transaction_context = checkpoint_connection->context->transaction;
+	auto &meta_transaction = transaction_context.ActiveTransaction();
+	auto error = meta_transaction.Commit();
+	transaction_context.ClearTransaction();
+	if (error.HasError()) {
+		throw FatalException("Failed to commit checkpoint transaction: %s", error.Message());
+	}
 }
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
