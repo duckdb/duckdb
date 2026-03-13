@@ -59,6 +59,7 @@ public:
 	Transaction &GetTransaction(AttachedDatabase &db);
 	optional_ptr<Transaction> TryGetTransaction(AttachedDatabase &db);
 	void RemoveTransaction(AttachedDatabase &db);
+	void RestoreTransaction(AttachedDatabase &db, Transaction &transaction);
 
 	ErrorData Commit();
 	void Rollback();

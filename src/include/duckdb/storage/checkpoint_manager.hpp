@@ -20,12 +20,13 @@ class CatalogEntry;
 struct CatalogTransaction;
 class ClientContext;
 class ColumnSegment;
-class Connection;
 class DatabaseInstance;
 class Deserializer;
+class Connection;
 class DuckTransaction;
 class DuckTransactionManager;
 class IndexCatalogEntry;
+
 class MetadataManager;
 class MetadataReader;
 class SchemaCatalogEntry;
@@ -41,20 +42,16 @@ struct BoundCreateTableInfo;
 struct CheckpointOptions;
 
 struct ActiveCheckpointWrapper {
-	ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db,
-	                        DuckTransactionManager &transaction_manager);
+	ActiveCheckpointWrapper(AttachedDatabase &db, DuckTransactionManager &transaction_manager);
 
-	void SetCheckpointTransaction(CheckpointOptions &options);
+	void GetCheckpointTransaction(CheckpointOptions &options);
 	void Commit();
 
-	optional_ptr<ClientContext> context;
 	AttachedDatabase &db;
 	DuckTransactionManager &transaction_manager;
-	//! If the caller already has an active transaction, we create a dedicated connection for the checkpoint
+	//! Dedicated connection for the checkpoint transaction.
 	unique_ptr<Connection> checkpoint_connection;
-	optional_ptr<ClientContext> checkpoint_context;
 	optional_ptr<DuckTransaction> checkpoint_transaction;
-	bool owns_meta_transaction = false;
 };
 
 class CheckpointWriter {

@@ -32,32 +32,19 @@
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
-ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> context_p, AttachedDatabase &db_p,
-                                                 DuckTransactionManager &transaction_manager_p)
-    : context(context_p), db(db_p), transaction_manager(transaction_manager_p) {
-	if (!context) {
-		return;
-	}
-	if (context->transaction.HasActiveTransaction()) {
-		checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
-		checkpoint_context = checkpoint_connection->context.get();
-		checkpoint_context->transaction.BeginTransaction(false);
-		checkpoint_context->transaction.SetReadOnly();
-	} else {
-		checkpoint_context = context;
-	}
-	context->transaction.BeginTransaction(false);
-	context->transaction.SetReadOnly();
-	owns_meta_transaction = true;
+ActiveCheckpointWrapper::ActiveCheckpointWrapper(AttachedDatabase &db_p, DuckTransactionManager &transaction_manager_p)
+    : db(db_p), transaction_manager(transaction_manager_p) {
+	checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
+	checkpoint_connection->BeginTransaction();
 }
 
-void ActiveCheckpointWrapper::SetCheckpointTransaction(CheckpointOptions &options) {
-	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
+void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &options) {
+	auto &context = *checkpoint_connection->context;
+	auto &transaction = DuckTransaction::Get(context, db);
 	options.transaction_id = transaction.start_time;
 	transaction_manager.SetActiveCheckpoint(transaction.start_time);
 	checkpoint_transaction = &transaction;
@@ -69,14 +56,7 @@ void ActiveCheckpointWrapper::Commit() {
 	if (!checkpoint_transaction) {
 		return;
 	}
-	auto error = transaction_manager.CommitTransaction(*checkpoint_context, *checkpoint_transaction);
-	MetaTransaction::Get(*checkpoint_context).RemoveTransaction(db);
-	if (owns_meta_transaction) {
-		checkpoint_context->transaction.Commit(false);
-	}
-	if (error.HasError()) {
-		throw FatalException("Failed to commit checkpoint transaction: %s", error.Message());
-	}
+	checkpoint_connection->Commit();
 }
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
@@ -204,9 +184,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// we also know if a checkpoint was running that we need to check for the checkpoint WAL (`.checkpoint.wal`)
 	// to replay any concurrent commits that have succeeded and ensure these are not lost
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
-	ActiveCheckpointWrapper active_checkpoint(context, db, transaction_manager);
+	ActiveCheckpointWrapper active_checkpoint(db, transaction_manager);
 
-	auto has_wal = storage_manager.WALStartCheckpoint(context, meta_block, options, &active_checkpoint);
+	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, &active_checkpoint);
 
 	catalog_entry_vector_t catalog_entries;
 	try {

@@ -80,8 +80,7 @@ public:
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
-	bool WALStartCheckpoint(optional_ptr<ClientContext> context, MetaBlockPointer meta_block,
-	                        CheckpointOptions &options,
+	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
 	                        optional_ptr<ActiveCheckpointWrapper> active_checkpoint = nullptr);
 	//! Finishes a checkpoint
 	void WALFinishCheckpoint(lock_guard<mutex> &wal_lock);
