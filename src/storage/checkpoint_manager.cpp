@@ -43,18 +43,11 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 	if (!context_p) {
 		return;
 	}
-	if (context_p->transaction.HasActiveTransaction()) {
-		checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
-		checkpoint_context = checkpoint_connection->context.get();
-		checkpoint_context->transaction.BeginTransaction(false);
-		checkpoint_context->transaction.SetReadOnly();
-		owns_meta_transaction = true;
-	} else {
-		context_p->transaction.BeginTransaction(false);
-		context_p->transaction.SetReadOnly();
-		checkpoint_context = context_p;
-		owns_meta_transaction = true;
-	}
+	checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
+	checkpoint_context = checkpoint_connection->context.get();
+	checkpoint_context->transaction.BeginTransaction(false);
+	checkpoint_context->transaction.SetReadOnly();
+	owns_meta_transaction = true;
 }
 
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
@@ -84,14 +77,10 @@ void ActiveCheckpointWrapper::Commit() {
 	if (!checkpoint_transaction) {
 		return;
 	}
-	auto error = transaction_manager.CommitTransaction(*checkpoint_context, *checkpoint_transaction);
-	MetaTransaction::Get(*checkpoint_context).RemoveTransaction(db);
-	if (owns_meta_transaction) {
-		checkpoint_context->transaction.Commit(false);
-	}
+	transaction_manager.RollbackTransaction(*checkpoint_transaction);
 	checkpoint_transaction = nullptr;
-	if (error.HasError()) {
-		throw FatalException("Failed to commit checkpoint transaction: %s", error.Message());
+	if (owns_meta_transaction && checkpoint_context) {
+		checkpoint_context->transaction.ClearTransaction();
 	}
 }
 
