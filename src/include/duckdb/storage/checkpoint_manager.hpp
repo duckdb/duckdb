@@ -42,17 +42,19 @@ struct BoundCreateTableInfo;
 struct CheckpointOptions;
 
 struct ActiveCheckpointWrapper {
-	ActiveCheckpointWrapper(AttachedDatabase &db, DuckTransactionManager &transaction_manager);
+	ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db,
+	                        DuckTransactionManager &transaction_manager);
 	~ActiveCheckpointWrapper();
 
-	void GetCheckpointTransaction(CheckpointOptions &options);
+	void SetCheckpointTransaction(CheckpointOptions &options);
 	void Commit();
 
+	optional_ptr<ClientContext> checkpoint_context;
 	AttachedDatabase &db;
 	DuckTransactionManager &transaction_manager;
-	//! Dedicated connection for the checkpoint transaction.
 	unique_ptr<Connection> checkpoint_connection;
 	optional_ptr<DuckTransaction> checkpoint_transaction;
+	bool owns_meta_transaction = false;
 };
 
 class CheckpointWriter {
