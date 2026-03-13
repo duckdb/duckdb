@@ -5,10 +5,13 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
@@ -225,6 +228,19 @@ private:
 	uint64_t *bitmap;
 };
 
+template <typename T>
+bool ComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result) {
+	T lb_value = lower_bound.GetValueUnsafe<T>();
+	T ub_value = upper_bound.GetValueUnsafe<T>();
+	T res;
+	if (TrySubtractOperator::Operation(ub_value, lb_value, res)) {
+		result = Uhugeint::Convert(res);
+		return true;
+	} else {
+		return false;
+	}
+}
+
 } // namespace
 
 unique_ptr<PrefixRangeFilter> PrefixRangeFilter::CreatePrefixRangeFilter(const LogicalType &key_type) {
@@ -249,6 +265,38 @@ unique_ptr<PrefixRangeFilter> PrefixRangeFilter::CreatePrefixRangeFilter(const L
 	case PhysicalType::UINT128:
 	default:
 		throw NotImplementedException("Prefix range filter is not implemented for type %s", key_type.ToString());
+	}
+}
+
+bool PrefixRangeFilter::TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result) {
+	if (!TypeIsIntegral(lower_bound.type().InternalType())) {
+		return false;
+	}
+	if (lower_bound.type().InternalType() != upper_bound.type().InternalType()) {
+		return false;
+	}
+
+	switch (lower_bound.type().InternalType()) {
+	case PhysicalType::UINT8:
+		return ComputeSpan<uint8_t>(lower_bound, upper_bound, result);
+	case PhysicalType::UINT16:
+		return ComputeSpan<uint16_t>(lower_bound, upper_bound, result);
+	case PhysicalType::UINT32:
+		return ComputeSpan<uint32_t>(lower_bound, upper_bound, result);
+	case PhysicalType::UINT64:
+		return ComputeSpan<uint64_t>(lower_bound, upper_bound, result);
+	case PhysicalType::INT8:
+		return ComputeSpan<int8_t>(lower_bound, upper_bound, result);
+	case PhysicalType::INT16:
+		return ComputeSpan<int16_t>(lower_bound, upper_bound, result);
+	case PhysicalType::INT32:
+		return ComputeSpan<int32_t>(lower_bound, upper_bound, result);
+	case PhysicalType::INT64:
+		return ComputeSpan<int64_t>(lower_bound, upper_bound, result);
+	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
+	default:
+		return false;
 	}
 }
 

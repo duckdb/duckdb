@@ -13,6 +13,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
@@ -34,6 +35,7 @@ public:
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
 	virtual bool IsInitialized() const = 0;
 	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
+	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);
 };
 
 class PrefixRangeTableFilter final : public TableFilter {

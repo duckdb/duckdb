@@ -2,9 +2,11 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value_map.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
@@ -984,19 +986,12 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 	bool ht_is_small = ht->Count() <= BUILD_SIZE_THRESHOLD;
 	bool span_is_small = false;
 
-	if (min.type().IsIntegral()) {
-		static const auto SPAN_THRESHOLD = Hugeint::Convert(1048576);
-		Value min_hugeint;
-		Value max_hugeint;
-		if (max.TryCastAs(context, LogicalTypeId::HUGEINT, max_hugeint, nullptr) &&
-		    min.TryCastAs(context, LogicalTypeId::HUGEINT, min_hugeint, nullptr)) {
-			const auto max_value = max_hugeint.GetValueUnsafe<hugeint_t>();
-			const auto min_value = min_hugeint.GetValueUnsafe<hugeint_t>();
-			hugeint_t span;
-			if (TrySubtractOperator::Operation(max_value, min_value, span)) {
-				span_is_small = span <= SPAN_THRESHOLD;
-			}
-		}
+	uhugeint_t span;
+	if (PrefixRangeFilter::TryComputeSpan(min, max, span)) {
+		static const auto SPAN_THRESHOLD = Uhugeint::Convert(1048576);
+		span_is_small = span <= SPAN_THRESHOLD;
+	} else {
+		return false;
 	}
 
 	if (!ht_is_small && !span_is_small) {
@@ -1032,7 +1027,7 @@ void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &o
 
 void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context,
                                                        JoinHashTable &ht, const PhysicalOperator &op,
-                                                       idx_t filter_col_idx, const Value &min_val,
+                                                       ProjectionIndex filter_col_idx, const Value &min_val,
                                                        const Value &max_val) const {
 	const auto key_type = ht.conditions[0].GetLHS().return_type;
 	if (!ht.GetPrefixRangeFilter()) {
@@ -1045,9 +1040,7 @@ void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownF
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
 	auto rf_filter = make_uniq<PrefixRangeTableFilter>(ht.GetPrefixRangeFilter(), key_name, key_type);
 
-	// TODO: Experimentally find suitable selectivity threshold
-	auto opt_rf_filter = make_uniq<SelectivityOptionalFilter>(
-	    std::move(rf_filter), SelectivityOptionalFilter::BF_THRESHOLD, SelectivityOptionalFilter::BF_CHECK_N);
+	auto opt_rf_filter = make_uniq<SelectivityOptionalFilter>(std::move(rf_filter), SelectivityOptionalFilterType::PRF);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(opt_rf_filter));
 }
 
