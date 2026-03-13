@@ -34,7 +34,7 @@ jobs:
       BASE_BRANCH: ${{ github.base_ref || 'main' }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
@@ -72,7 +72,7 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-     - uses: actions/checkout@v4
+     - uses: actions/checkout@v6
        with:
          fetch-depth: 0
 
@@ -148,7 +148,7 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-     - uses: actions/checkout@v4
+     - uses: actions/checkout@v6
        with:
          fetch-depth: 0
 
@@ -224,7 +224,7 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-       - uses: actions/checkout@v4
+       - uses: actions/checkout@v6
          with:
            fetch-depth: 0
 
@@ -305,7 +305,7 @@ jobs:
        CORE_EXTENSIONS: "tpch;tpcds;httpfs"
 
      steps:
-       - uses: actions/checkout@v4
+       - uses: actions/checkout@v6
          with:
            fetch-depth: 0
 
