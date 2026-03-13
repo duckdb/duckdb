@@ -872,6 +872,16 @@ shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(Client
 ParquetUnionData::~ParquetUnionData() {
 }
 
+optional_idx ParquetUnionData::TryGetCardinalityEstimate() const {
+	if (reader) {
+		return reader->Cast<ParquetReader>().NumRows();
+	}
+	if (metadata) {
+		return metadata->metadata->num_rows;
+	}
+	return optional_idx();
+}
+
 unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &context, const string &name) {
 	if (reader) {
 		return reader->Cast<ParquetReader>().GetStatistics(context, name);

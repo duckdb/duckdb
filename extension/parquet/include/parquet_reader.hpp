@@ -134,6 +134,7 @@ struct ParquetUnionData : public BaseUnionData {
 	}
 	~ParquetUnionData() override;
 
+	optional_idx TryGetCardinalityEstimate() const override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const string &name) override;
 
 	ParquetOptions options;
