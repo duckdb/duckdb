@@ -902,11 +902,7 @@ FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table
 	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
 		return pushdown_result;
 	}
-	pushdown_result = TryPushdownTemporalCastFilter(table_filters, column_ids, expr);
-	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
-		return pushdown_result;
-	}
-	return FilterPushdownResult::NO_PUSHDOWN;
+	return TryPushdownTemporalCastFilter(table_filters, column_ids, expr);
 }
 
 void FilterCombiner::TryPushdownRelaxedFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
