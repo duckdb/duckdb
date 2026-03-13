@@ -18,7 +18,7 @@ select getvariable('x');
 statement error
 x := 5,5,5
 ----
-Parser Error: Parser override could not parse this query.
+Parser Error: Syntax error at or near ","
 
 # You can override variables
 statement ok
