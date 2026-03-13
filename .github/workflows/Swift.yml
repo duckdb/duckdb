@@ -38,6 +38,15 @@ jobs:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'
 
+      - name: Configure Xcode Caching
+        if: ${{ startsWith(inputs.runner_macos_arm64 || 'macos-14', 'namespace-profile-') }}
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: |
+            xcode
+            swiftpm
+            cocoapods
+
       - name: Prepare Package
         run: python3 tools/swift/create_package.py tools/swift
 
