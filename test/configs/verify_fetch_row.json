@@ -53,18 +53,6 @@
         "test/sql/attach/show_databases.test",
         "test/sql/attach/show_schemas.test"
       ]
-    },
-    {
-      "reason": "Requires latest storage version.",
-      "paths": [
-        "test/geoparquet/mixed.test",
-        "test/parquet/variant/variant_comparison.test",
-        "test/parquet/variant/variant_json_copy.test",
-        "test/sql/storage/types/variant/index_fetch.test",
-        "test/sql/storage/types/variant/update.test",
-        "test/sql/types/geo/geometry_crs.test",
-        "test/sql/types/geo/geometry_stats.test"
-      ]
     }
   ]
 }
