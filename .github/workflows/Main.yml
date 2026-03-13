@@ -290,7 +290,7 @@ jobs:
  windows:
     uses: ./.github/workflows/Windows.yml
     secrets: inherit
-    needs: prepare
+    needs: linux-debug
     with:
       git_ref: ${{ github.sha }}
       skip_tests: 'false'
