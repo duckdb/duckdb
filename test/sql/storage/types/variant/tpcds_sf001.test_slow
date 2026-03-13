@@ -1,4 +1,4 @@
-# name: test/sql/storage/types/variant/tpcds_sf1.test_slow
+# name: test/sql/storage/types/variant/tpcds_sf001.test_slow
 # group: [variant]
 
 require tpcds

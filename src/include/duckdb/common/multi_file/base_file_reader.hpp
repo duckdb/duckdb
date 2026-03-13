@@ -11,7 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/column_index.hpp"
-#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/planner/expression.hpp"

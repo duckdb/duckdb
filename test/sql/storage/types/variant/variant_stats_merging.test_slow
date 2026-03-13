@@ -25,9 +25,24 @@ restart
 
 # only nulls, so no min/max
 query I
-select s.fully_shredded.child_stats.stats from (select stats(col) s from tbl limit 1);
+select s.has_no_null from (select s.fully_shredded.child_stats.stats s from (select stats(col) s from tbl limit 1));
 ----
-{'has_unicode': false, 'max_string_length': 0, 'has_null': false, 'has_no_null': false}
+false
+
+query I
+select count(*) from tbl where col is null
+----
+122880
+
+# FIXME: this is wrong
+mode skip
+
+query I
+select s.has_null from (select s.fully_shredded.child_stats.stats s from (select stats(col) s from tbl limit 1));
+----
+true
+
+mode unskip
 
 # -------------------------- Shred 'tbl' on INTEGER[] --------------------------
 

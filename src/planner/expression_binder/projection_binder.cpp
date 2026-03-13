@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-ProjectionBinder::ProjectionBinder(Binder &binder, ClientContext &context, idx_t proj_index_p,
+ProjectionBinder::ProjectionBinder(Binder &binder, ClientContext &context, TableIndex proj_index_p,
                                    vector<unique_ptr<Expression>> &proj_expressions_p, string clause_p)
     : ExpressionBinder(binder, context), proj_index(proj_index_p), proj_expressions(proj_expressions_p),
       clause(std::move(clause_p)) {
@@ -18,10 +18,11 @@ BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 		return result;
 	}
 	// we have successfully bound a column - push it into the projection and emit a reference
-	auto proj_ref = make_uniq<BoundColumnRefExpression>(result.expression->return_type,
-	                                                    ColumnBinding(proj_index, proj_expressions.size()));
-	proj_ref->alias = result.expression->GetName();
-	proj_expressions.push_back(std::move(result.expression));
+	auto return_type = result.expression->return_type;
+	auto alias = result.expression->GetName();
+	auto proj_col_idx = ColumnBinding::PushExpression(proj_expressions, std::move(result.expression));
+	auto proj_ref = make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(proj_index, proj_col_idx));
+	proj_ref->alias = std::move(alias);
 	return BindResult(std::move(proj_ref));
 }
 

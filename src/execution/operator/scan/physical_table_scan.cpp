@@ -311,9 +311,9 @@ void AddProjectionNames(const ColumnIndex &index, const string &name, const Logi
 static string GetFilterInfo(const PhysicalTableScan *scan, const unique_ptr<TableFilterSet> &filter_set) {
 	string filters_info;
 	bool first_item = true;
-	for (auto &f : filter_set->filters) {
-		auto &column_index = f.first;
-		auto &filter = f.second;
+	for (auto &f : *filter_set) {
+		auto column_index = f.ColumnIndex();
+		auto &filter = f.Filter();
 		if (column_index < scan->names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
@@ -326,9 +326,9 @@ static string GetFilterInfo(const PhysicalTableScan *scan, const unique_ptr<Tabl
 				if (entry == scan->virtual_columns.end()) {
 					throw InternalException("Virtual column not found");
 				}
-				filters_info += filter->ToString(entry->second.name);
+				filters_info += filter.ToString(entry->second.name);
 			} else {
-				filters_info += filter->ToString(scan->names[col_id]);
+				filters_info += filter.ToString(scan->names[col_id]);
 			}
 		}
 	}

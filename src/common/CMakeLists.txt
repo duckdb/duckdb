@@ -49,6 +49,7 @@ add_library_unity(
   file_buffer.cpp
   file_system.cpp
   filename_pattern.cpp
+  path.cpp
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
@@ -63,6 +64,7 @@ add_library_unity(
   stacktrace.cpp
   string_util.cpp
   enum_util.cpp
+  serialization_compatibility.cpp
   symbols.cpp
   render_tree.cpp
   thread_util.cpp

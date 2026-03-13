@@ -25,7 +25,7 @@ unique_ptr<LogicalOperator> CTEInlining::Optimize(unique_ptr<LogicalOperator> op
 	return op;
 }
 
-static idx_t CountCTEReferences(const LogicalOperator &op, idx_t cte_index) {
+static idx_t CountCTEReferences(const LogicalOperator &op, TableIndex cte_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cte = op.Cast<LogicalCTERef>();
 		if (cte.cte_index == cte_index) {

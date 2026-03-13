@@ -15,8 +15,75 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto expr_list = ExtractParseResultsFromList(list_pr.GetChild(0));
+
+	vector<unique_ptr<ParsedExpression>> expressions;
+	for (auto &expr : expr_list) {
+		expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	}
+
+	auto select_statement = make_uniq<SelectStatement>();
+	auto select_node = make_uniq<SelectNode>();
+
+	bool any_column_ref = false;
+	for (auto &expr : expressions) {
+		if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			any_column_ref = true;
+			break;
+		}
+	}
+
+	if (any_column_ref && expressions.size() > 1) {
+		throw ParserException("Mix of table names and expressions is not supported. "
+		                      "Use SELECT to explicitly specify what you want to query.");
+	}
+
+	if (any_column_ref) {
+		// Single COLUMN_REF: treat as table scan
+		auto &col_expr = expressions[0]->Cast<ColumnRefExpression>();
+		if (col_expr.IsQualified()) {
+			if (col_expr.column_names.size() >= 4) {
+				throw ParserException(
+				    "Too many qualifiers encountered. Expected \"catalog.schema.table\" or \"schema.table\"");
+			}
+			if (col_expr.column_names.size() == 3) {
+				auto table_description =
+				    TableDescription(col_expr.column_names[0], col_expr.column_names[1], col_expr.column_names[2]);
+				select_node->from_table = make_uniq<BaseTableRef>(table_description);
+			} else if (col_expr.column_names.size() == 2) {
+				auto table_description =
+				    TableDescription(INVALID_CATALOG, col_expr.column_names[0], col_expr.column_names[1]);
+				select_node->from_table = make_uniq<BaseTableRef>(table_description);
+			}
+		} else {
+			auto base_table = make_uniq<BaseTableRef>();
+			base_table->table_name = col_expr.GetColumnName();
+			select_node->from_table = std::move(base_table);
+		}
+		select_node->select_list.push_back(make_uniq<StarExpression>());
+	} else {
+		for (auto &expr : expressions) {
+			select_node->select_list.push_back(std::move(expr));
+		}
+		select_node->from_table = make_uniq<EmptyTableRef>();
+	}
+
+	select_statement->node = std::move(select_node);
+	return std::move(select_statement);
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionAlias(PEGTransformer &transformer,
+                                                                             optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ChoiceParseResult>(0).result);
+}
 
 // BaseExpression <- SingleExpression Indirection*
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGTransformer &transformer,
@@ -593,6 +660,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructField(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	if (alias[0] >= '0' && alias[0] <= '9') {
+		throw ParserException("syntax error at or near \"%s\"", alias);
+	}
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	expr->SetAlias(alias);
 	return expr;
@@ -777,7 +847,7 @@ PEGTransformerFactory::TransformIsDistinctFromExpression(PEGTransformer &transfo
 	return expr;
 }
 
-// ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator BetweenInLikeExpression)*
+// ComparisonExpression <- BetweenInLikeExpression (ComparisonOperator 'NOT'* BetweenInLikeExpression)*
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformComparisonExpression(PEGTransformer &transformer,
                                                      optional_ptr<ParseResult> parse_result) {
@@ -791,7 +861,17 @@ PEGTransformerFactory::TransformComparisonExpression(PEGTransformer &transformer
 	for (auto &comparison_expr : comparison_repeat.children) {
 		auto &inner_list_pr = comparison_expr->Cast<ListParseResult>();
 		auto comparison_operator = transformer.Transform<ExpressionType>(inner_list_pr.Child<ListParseResult>(0));
-		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
+		auto not_expr_opt = inner_list_pr.Child<OptionalParseResult>(1);
+		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(2));
+		if (not_expr_opt.HasResult()) {
+			auto not_expr_repeat = not_expr_opt.optional_result->Cast<RepeatParseResult>();
+			for (size_t i = 0; i < not_expr_repeat.children.size(); i++) {
+				vector<unique_ptr<ParsedExpression>> inner_list_children;
+				inner_list_children.push_back(std::move(right_expr));
+				right_expr =
+				    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
+			}
+		}
 		expr = make_uniq<ComparisonExpression>(comparison_operator, std::move(expr), std::move(right_expr));
 	}
 	return expr;
@@ -1070,6 +1150,21 @@ string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer
 	return transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
+// QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transformer,
+                                                         optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto any_op_pr = ExtractResultFromParens(list_pr.GetChild(1));
+	return transformer.Transform<string>(any_op_pr);
+}
+
+// AnyOp <- '!~~*' / '>>=' / ... / '!'
+string PEGTransformerFactory::TransformAnyOp(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
+	return choice_pr->Cast<KeywordParseResult>().keyword;
+}
+
 string PEGTransformerFactory::TransformJsonOperator(PEGTransformer &transformer,
                                                     optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
@@ -1161,6 +1256,9 @@ PEGTransformerFactory::TransformAdditiveExpression(PEGTransformer &transformer,
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		auto func_expr = make_uniq<FunctionExpression>(std::move(term), std::move(term_children));
 		func_expr->is_operator = true;
+		if (inner_list_pr.offset.IsValid()) {
+			transformer.SetQueryLocation(*func_expr, inner_list_pr.offset);
+		}
 		expr = std::move(func_expr);
 	}
 	return expr;
@@ -1379,6 +1477,9 @@ string PEGTransformerFactory::TransformPrefixOperator(PEGTransformer &transforme
                                                       optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	if (StringUtil::CIEquals(choice_pr.result->name, "QualifiedOperator")) {
+		return transformer.Transform<string>(choice_pr.result);
+	}
 	return transformer.TransformEnum<string>(choice_pr.result);
 }
 
@@ -1847,13 +1948,7 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrame(PEGTran
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
 		auto window_name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
-		auto it = transformer.window_clauses.find(string(window_name));
-		if (it == transformer.window_clauses.end()) {
-			throw ParserException("window \"%s\" does not exist", window_name);
-		}
-		auto copied_expr = unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
-
-		return unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(copied_expr));
+		return transformer.GetWindowClause(window_name);
 	}
 	return transformer.Transform<unique_ptr<WindowExpression>>(choice_pr.result);
 }
@@ -1863,12 +1958,12 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformParensIdentifier(PE
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto extract_parens = ExtractResultFromParens(list_pr.GetChild(0));
 	auto window_name = extract_parens->Cast<IdentifierParseResult>().identifier;
-	auto it = transformer.window_clauses.find(string(window_name));
-	if (it == transformer.window_clauses.end()) {
-		throw ParserException("window \"%s\" does not exist", window_name);
+	auto window_clause = transformer.GetWindowClause(window_name);
+	if (window_clause->start_expr || window_clause->end_expr ||
+	    !transformer.IsWindowFrameDefault(window_clause->start, window_clause->end)) {
+		throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_name);
 	}
-	auto copied_expr = it->second->Copy();
-	return unique_ptr_cast<ParsedExpression, WindowExpression>(std::move(copied_expr));
+	return window_clause;
 }
 
 unique_ptr<WindowExpression>
@@ -1886,12 +1981,6 @@ PEGTransformerFactory::TransformWindowFrameContentsParens(PEGTransformer &transf
 	return transformer.Transform<unique_ptr<WindowExpression>>(extract_parens);
 }
 
-bool IsWindowFrameDefault(WindowBoundary start, WindowBoundary end) {
-	bool start_is_default = (start == WindowBoundary::UNBOUNDED_PRECEDING);
-	bool end_is_default = (end == WindowBoundary::CURRENT_ROW_RANGE);
-	return start_is_default && end_is_default;
-}
-
 unique_ptr<WindowExpression>
 PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &transformer,
                                                               optional_ptr<ParseResult> parse_result) {
@@ -1899,18 +1988,18 @@ PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &tr
 	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0))->Cast<ListParseResult>();
 	string window_name;
 	transformer.TransformOptional<string>(extract_parens, 0, window_name);
+	auto lower_name = StringUtil::Lower(window_name);
+	if (lower_name == "partition" || lower_name == "range" || lower_name == "rows" || lower_name == "groups") {
+		throw ParserException("Invalid window name \"%s\"", window_name);
+	}
 	auto window_frame_contents =
 	    transformer.Transform<unique_ptr<WindowExpression>>(extract_parens.Child<ListParseResult>(1));
 	if (window_name.empty()) {
 		return window_frame_contents;
 	}
-	auto it = transformer.window_clauses.find(string(window_name));
-	if (it == transformer.window_clauses.end()) {
-		throw ParserException("window \"%s\" does not exist", window_name);
-	}
-	auto copied_window = unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
+	auto copied_window = transformer.GetWindowClause(window_name);
 	if (copied_window->start_expr || copied_window->end_expr ||
-	    !IsWindowFrameDefault(copied_window->start, copied_window->end)) {
+	    !transformer.IsWindowFrameDefault(copied_window->start, copied_window->end)) {
 		throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_name);
 	}
 	copied_window->start = window_frame_contents->start;
@@ -1924,7 +2013,9 @@ PEGTransformerFactory::TransformWindowFrameNameContentsParens(PEGTransformer &tr
 	if (!copied_window->orders.empty() && !window_frame_contents->orders.empty()) {
 		throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
 	}
-	copied_window->orders = std::move(window_frame_contents->orders);
+	if (copied_window->orders.empty()) {
+		copied_window->orders = std::move(window_frame_contents->orders);
+	}
 	if (!copied_window->partitions.empty() && !window_frame_contents->partitions.empty()) {
 		throw ParserException("Cannot override PARTITION BY clause of window \"%s\"", window_name);
 	}
@@ -2495,12 +2586,17 @@ PEGTransformerFactory::TransformSubqueryExpression(PEGTransformer &transformer,
 	} else {
 		result->subquery_type = SubqueryType::SCALAR;
 	}
-	auto select_statement = make_uniq<SelectStatement>();
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(subquery_reference);
-	select_statement->node = std::move(select_node);
-	result->subquery = std::move(select_statement);
+	if (subquery_reference->type == TableReferenceType::SUBQUERY) {
+		auto &subquery_ref = subquery_reference->Cast<SubqueryRef>();
+		result->subquery = std::move(subquery_ref.subquery);
+	} else {
+		auto select_statement = make_uniq<SelectStatement>();
+		auto select_node = make_uniq<SelectNode>();
+		select_node->select_list.push_back(make_uniq<StarExpression>());
+		select_node->from_table = std::move(subquery_reference);
+		select_statement->node = std::move(select_node);
+		result->subquery = std::move(select_statement);
+	}
 	if (is_not) {
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(result));

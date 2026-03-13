@@ -209,7 +209,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -274,7 +274,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: make toolsci
 
       - uses: ./.github/actions/ccache-action
 

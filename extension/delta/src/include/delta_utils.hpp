@@ -3,6 +3,7 @@
 #include "delta_kernel_ffi.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include <iostream>
 
@@ -141,7 +142,7 @@ public:
 	PredicateVisitor(const vector<string> &column_names, optional_ptr<TableFilterSet> filters);
 
 private:
-	unordered_map<string, TableFilter *> column_filters;
+	unordered_map<string, optional_ptr<const TableFilter>> column_filters;
 
 	static uintptr_t VisitPredicate(PredicateVisitor *predicate, ffi::KernelExpressionVisitorState *state);
 

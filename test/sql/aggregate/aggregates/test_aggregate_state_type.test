@@ -68,9 +68,9 @@ true
 
 # other aggregate functions that are not opted-in are not broken
 query T
-SELECT typeof(min(1::BIGINT) EXPORT_STATE);
+SELECT typeof(skewness(1) EXPORT_STATE);
 ----
-LEGACY_AGGREGATE_STATE<min(BIGINT)::BIGINT>
+LEGACY_AGGREGATE_STATE<skewness(DOUBLE)::DOUBLE>
 
 # Test with interval type
 query T

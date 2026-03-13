@@ -11,6 +11,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -663,6 +664,15 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			auto expr =
 			    multi_file_reader.GetVirtualColumnExpression(context, reader_data, local_columns, global_column_id,
 			                                                 virtual_column_type, local_idx, global_column_reference);
+			if ((!expr && !global_column_reference) || (expr && global_column_reference.get())) {
+				throw InternalException(R"(
+					The GetVirtualColumnExpression is expected to either:"
+					- return an expression applied in FinalizeChunk to create the value for this global column,
+					  forwarding the (potentially changed) 'global_column_id' to the reader to create the needed data for the expression.
+					- set the 'global_column_reference' to replace this virtual column with a MultiFileColumnDefinition, as if it was defined in the schema.
+					Doing neither or both is not a valid option.
+				)");
+			}
 			if (expr && expr->type == ExpressionType::VALUE_CONSTANT) {
 				// the column is constant after all - handle it
 				expressions.push_back(std::move(expr));
@@ -905,20 +915,20 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 		return ReaderInitializeType::INITIALIZED;
 	}
 	auto &global_to_local = mapping.global_to_local;
-	for (auto &it : global_filters->filters) {
-		auto &global_index = it.first;
-		auto &global_filter = it.second;
+	for (auto &it : *global_filters) {
+		auto global_index = it.ColumnIndex();
+		auto &global_filter = it.Filter();
 
-		auto local_it = global_to_local.find(it.first);
+		auto local_it = global_to_local.find(global_index);
 		if (local_it != global_to_local.end()) {
 			//! File has this column, filter needs to be evaluated later
-			remaining_filters.emplace(global_index, *global_filter);
+			remaining_filters.emplace(global_index, global_filter);
 			continue;
 		}
 
 		//! FIXME: this does not check for filters against struct fields that are not present in the file
 		auto constant_value = GetConstantValue(global_index);
-		if (!EvaluateFilterAgainstConstant(*global_filter, constant_value)) {
+		if (!EvaluateFilterAgainstConstant(global_filter, constant_value)) {
 			return ReaderInitializeType::SKIP_READING_FILE;
 		}
 	}
@@ -1040,8 +1050,20 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 }
 
 void SetIndexToZero(unique_ptr<Expression> &root_expr) {
+#ifdef DEBUG
+	optional_idx index;
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(root_expr, [&](BoundReferenceExpression &ref,
+	                                                                                    unique_ptr<Expression> &expr) {
+		if (index.IsValid() && index.GetIndex() != ref.index) {
+			throw InternalException("Expected an expression that only references a single column, but found multiple!");
+		}
+		index = ref.index;
+		ref.index = 0;
+	});
+#else
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
 	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index = 0; });
+#endif
 }
 
 bool CanPropagateCast(const MultiFileIndexMapping &mapping, const LogicalType &local_type,
@@ -1093,10 +1115,10 @@ unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, refer
 		}
 		if (local_filter) {
 			// succeeded in casting - push the local filter
-			result->filters.emplace(local_id, std::move(local_filter));
+			result->SetFilterByColumnIndex(local_id, std::move(local_filter));
 		} else {
 			// failed to cast - copy the global filter and evaluate the conversion expression in the reader
-			result->filters.emplace(local_id, global_filter.Copy());
+			result->SetFilterByColumnIndex(local_id, global_filter.Copy());
 
 			// add the expression to the expression map - we are now evaluating this inside the reader directly
 			// we need to set the index of the references inside the expression to 0

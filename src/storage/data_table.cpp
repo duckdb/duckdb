@@ -1767,7 +1767,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	vector<unique_ptr<Expression>> expressions;
 
 	for (const auto column_index : column_indexes) {
-		auto binding = ColumnBinding(0, physical_ids.size());
+		auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(physical_ids.size()));
 		auto &col = columns.GetColumn(column_index);
 		auto ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 		expressions.push_back(std::move(ref));

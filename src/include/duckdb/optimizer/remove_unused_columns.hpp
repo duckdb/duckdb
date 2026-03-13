@@ -14,10 +14,15 @@
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/column_index_map.hpp"
 
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+
 namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
 class ClientContext;
+class Optimizer;
 
 struct ReferencedExtractComponent {
 public:
@@ -69,6 +74,12 @@ enum class BaseColumnPrunerMode : uint8_t {
 	DISABLE_PUSHDOWN_EXTRACT
 };
 
+struct MaterializedCTEInfo {
+public:
+	column_binding_map_t<ReferencedColumn> column_references;
+	bool everything_referenced = true;
+};
+
 class BaseColumnPruner : public LogicalOperatorVisitor {
 protected:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
@@ -116,27 +127,48 @@ private:
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public BaseColumnPruner {
 public:
-	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false)
-	    : binder(binder), context(context), everything_referenced(is_root) {
-	}
+	explicit RemoveUnusedColumns(Optimizer &optimizer);
+	RemoveUnusedColumns(RemoveUnusedColumns &parent, bool is_root);
 
-	void VisitOperator(LogicalOperator &op) override;
+	void VisitOperator(unique_ptr<LogicalOperator> &op) override;
 
 private:
+	Optimizer &optimizer;
 	Binder &binder;
 	ClientContext &context;
 	//! Whether or not all the columns are referenced. This happens in the case of the root expression (because the
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
 
+	RemoveUnusedColumns &root;
+	unique_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> root_cte_map;
+
 private:
 	template <class T>
-	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
-	void RemoveColumnsFromLogicalGet(LogicalGet &get);
+	void ClearUnusedExpressions(vector<T> &list, TableIndex table_idx, bool replace = true);
+	void RemoveColumnsFromLogicalGet(LogicalGet &get, unique_ptr<LogicalOperator> &op_ref);
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void WritePushdownExtractColumns(
-	    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
-	    const std::function<idx_t(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)> &callback);
+	    ReferencedColumn &col,
+	    const std::function<ProjectionIndex(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)>
+	        &callback);
+	unordered_map<TableIndex, MaterializedCTEInfo> &GetCTEMap();
+	optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> TryGetCTEMap();
 };
+
+class CTERefPruner : public LogicalOperatorVisitor {
+public:
+	CTERefPruner(const TableIndex table_index, const unordered_set<ProjectionIndex> &referenced_columns);
+
+	void VisitOperator(LogicalOperator &op) override;
+
+private:
+	const TableIndex cte_index;
+	const unordered_set<ProjectionIndex> &referenced_columns;
+
+public:
+	vector<ReplacementBinding> binding_replacements;
+};
+
 } // namespace duckdb

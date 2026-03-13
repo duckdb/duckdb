@@ -1,7 +1,235 @@
+diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+index 263d413..63d35f1 100644
+--- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+@@ -32,7 +32,7 @@ void LogicalCreateRTreeIndex::ResolveTypes() {
+ }
+ 
+ void LogicalCreateRTreeIndex::ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings) {
+-	bindings = LogicalOperator::GenerateColumnBindings(0, table.GetColumns().LogicalColumnCount());
++	bindings = LogicalOperator::GenerateColumnBindings(TableIndex(0), table.GetColumns().LogicalColumnCount());
+ 
+ 	// Visit the operator's expressions
+ 	LogicalOperatorVisitor::EnumerateExpressions(*this,
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index 3b37ca8..dc9a8c4 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -27,6 +27,7 @@
+ #include "duckdb/storage/data_table.hpp"
+ #include "duckdb/planner/filter/expression_filter.hpp"
+ #include "duckdb/main/database.hpp"
++#include "duckdb/planner/expression_iterator.hpp"
+ 
+ namespace duckdb {
+ //-----------------------------------------------------------------------------
+@@ -45,11 +46,11 @@ public:
+ 			bound_colref.binding.table_index = get.table_index;
+ 			auto &column_ids = index.GetColumnIds();
+ 			auto &get_column_ids = get.GetColumnIds();
+-			column_t referenced_column = column_ids[bound_colref.binding.column_index];
++			column_t referenced_column = column_ids[bound_colref.binding.column_index.index];
+ 			// search for the referenced column in the set of column_ids
+ 			for (idx_t i = 0; i < get_column_ids.size(); i++) {
+ 				if (get_column_ids[i].GetPrimaryIndex() == referenced_column) {
+-					bound_colref.binding.column_index = i;
++					bound_colref.binding.column_index.index = i;
+ 					return;
+ 				}
+ 			}
+@@ -175,13 +176,15 @@ public:
+ 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+ 			// this is a LogicalGet - check if there is an ExpressionFilter
+ 			auto &get = op.Cast<LogicalGet>();
+-			for (auto &entry : get.table_filters.filters) {
+-				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
++			for (auto &entry : get.table_filters) {
++				auto column_id = entry.ColumnIndex();
++				auto &filter = entry.Filter();
++				if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+ 					// not an expression filter
+ 					continue;
+ 				}
+-				auto &expr_filter = entry.second->Cast<ExpressionFilter>();
+-				if (TryOptimizeGet(binder, context, plan, root, nullptr, entry.first, expr_filter.expr)) {
++				auto &expr_filter = filter.Cast<ExpressionFilter>();
++				if (TryOptimizeGet(binder, context, plan, root, nullptr, column_id, expr_filter.expr)) {
+ 					return true;
+ 				}
+ 			}
+@@ -281,14 +284,14 @@ public:
+ 		get.has_estimated_cardinality = cardinality->has_estimated_cardinality;
+ 		get.estimated_cardinality = cardinality->estimated_cardinality;
+ 		get.bind_data = std::move(bind_data);
+-		if (get.table_filters.filters.empty()) {
++		if (!get.table_filters.HasFilters()) {
+ 			return true;
+ 		}
+ 
+ 		// Before we clear projection ids, replace projection map in the filter
+ 		if (!get.projection_ids.empty() && filter) {
+ 			for (auto &id : filter->projection_map) {
+-				id = get.projection_ids[id];
++				id = get.projection_ids[id.index];
+ 			}
+ 		}
+ 
+@@ -299,22 +302,21 @@ public:
+ 		// does not support regular filter pushdown.
+ 		auto new_filter = make_uniq<LogicalFilter>();
+ 		auto &column_ids = get.GetColumnIds();
+-		for (const auto &entry : get.table_filters.filters) {
+-			idx_t column_id = entry.first;
++		for (const auto &entry : get.table_filters) {
++			idx_t column_id = entry.ColumnIndex();
+ 			auto &type = get.returned_types[column_id];
+-			bool found = false;
++			ProjectionIndex index_ref;
+ 			for (idx_t i = 0; i < column_ids.size(); i++) {
+ 				if (column_ids[i].GetPrimaryIndex() == column_id) {
+-					column_id = i;
+-					found = true;
++					index_ref = ProjectionIndex(i);
+ 					break;
+ 				}
+ 			}
+-			if (!found) {
++			if (!index_ref.IsValid()) {
+ 				throw InternalException("Could not find column id for filter");
+ 			}
+-			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, column_id));
+-			new_filter->expressions.push_back(entry.second->ToExpression(*column));
++			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, index_ref));
++			new_filter->expressions.push_back(entry.Filter().ToExpression(*column));
+ 		}
+ 		new_filter->children.push_back(std::move(get_ptr));
+ 		new_filter->ResolveOperatorTypes();
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index d111f0b..84f49f4 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -8,6 +8,7 @@
+ #include "duckdb/common/vector_operations/generic_executor.hpp"
+ #include "duckdb/planner/expression/bound_constant_expression.hpp"
+ #include "duckdb/planner/expression/bound_function_expression.hpp"
++#include "duckdb/execution/expression_executor.hpp"
+ #include "spatial/geometry/geometry_serialization.hpp"
+ #include "spatial/geometry/sgl.hpp"
+ 
+diff --git a/src/spatial/modules/main/spatial_functions_table.cpp b/src/spatial/modules/main/spatial_functions_table.cpp
+index 8dd850a..1323a04 100644
+--- a/src/spatial/modules/main/spatial_functions_table.cpp
++++ b/src/spatial/modules/main/spatial_functions_table.cpp
+@@ -2,6 +2,7 @@
+ #include "spatial/modules/main/spatial_functions.hpp"
+ #include "spatial/spatial_types.hpp"
+ #include "spatial/util/function_builder.hpp"
++#include "duckdb/common/random_engine.hpp"
+ 
+ namespace duckdb {
+ 
+diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
+index 6039454..0ec562b 100644
+--- a/src/spatial/modules/mvt/mvt_module.cpp
++++ b/src/spatial/modules/mvt/mvt_module.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "duckdb/common/types/hash.hpp"
+ #include "duckdb/common/vector_operations/generic_executor.hpp"
++#include "duckdb/execution/expression_executor.hpp"
+ #include "spatial/geometry/geometry_serialization.hpp"
+ #include "spatial/geometry/sgl.hpp"
+ #include "spatial/spatial_types.hpp"
+diff --git a/src/spatial/operators/spatial_join_logical.cpp b/src/spatial/operators/spatial_join_logical.cpp
+index 0e5c07c..48596c5 100644
+--- a/src/spatial/operators/spatial_join_logical.cpp
++++ b/src/spatial/operators/spatial_join_logical.cpp
+@@ -21,7 +21,7 @@ vector<ColumnBinding> LogicalSpatialJoin::GetColumnBindings() {
+ 
+ 	if (join_type == JoinType::MARK) {
+ 		// for MARK join we project the left hand side plus the MARK column
+-		left_bindings.emplace_back(mark_index, 0);
++		left_bindings.emplace_back(mark_index, ProjectionIndex(0));
+ 		return left_bindings;
+ 	}
+ 	// for other join types we project both the LHS and the RHS
+@@ -84,9 +84,9 @@ void LogicalSpatialJoin::Serialize(Serializer &writer) const {
+ 	writer.WritePropertyWithDefault(300, "operator_type", string(OPERATOR_TYPE_NAME));
+ 
+ 	writer.WritePropertyWithDefault<JoinType>(400, "join_type", join_type, JoinType::INNER);
+-	writer.WritePropertyWithDefault<idx_t>(401, "mark_index", mark_index);
+-	writer.WritePropertyWithDefault<vector<idx_t>>(402, "left_projection_map", left_projection_map);
+-	writer.WritePropertyWithDefault<vector<idx_t>>(403, "right_projection_map", right_projection_map);
++	writer.WritePropertyWithDefault<TableIndex>(401, "mark_index", mark_index);
++	writer.WritePropertyWithDefault<vector<ProjectionIndex>>(402, "left_projection_map", left_projection_map);
++	writer.WritePropertyWithDefault<vector<ProjectionIndex>>(403, "right_projection_map", right_projection_map);
+ 	writer.WritePropertyWithDefault<unique_ptr<Expression>>(404, "spatial_predicate", spatial_predicate);
+ 	writer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(405, "extra_conditions", extra_conditions);
+ 	writer.WritePropertyWithDefault<bool>(406, "has_const_distance", has_const_distance);
+@@ -97,9 +97,9 @@ void LogicalSpatialJoin::Serialize(Serializer &writer) const {
+ 
+ unique_ptr<LogicalExtensionOperator> LogicalSpatialJoin::Deserialize(Deserializer &reader) {
+ 	auto join_type = reader.ReadPropertyWithExplicitDefault<JoinType>(400, "join_type", JoinType::INNER);
+-	auto mark_index = reader.ReadPropertyWithDefault<idx_t>(401, "mark_index");
+-	auto left_projection_map = reader.ReadPropertyWithDefault<vector<idx_t>>(402, "left_projection_map");
+-	auto right_projection_map = reader.ReadPropertyWithDefault<vector<idx_t>>(403, "right_projection_map");
++	auto mark_index = reader.ReadPropertyWithDefault<TableIndex>(401, "mark_index");
++	auto left_projection_map = reader.ReadPropertyWithDefault<vector<ProjectionIndex>>(402, "left_projection_map");
++	auto right_projection_map = reader.ReadPropertyWithDefault<vector<ProjectionIndex>>(403, "right_projection_map");
+ 	auto spatial_predicate = reader.ReadPropertyWithDefault<unique_ptr<Expression>>(404, "spatial_predicate");
+ 	auto extra_conditions = reader.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(405, "extra_conditions");
+ 	auto has_const_distance = reader.ReadPropertyWithExplicitDefault<bool>(406, "has_const_distance", false);
+diff --git a/src/spatial/operators/spatial_join_logical.hpp b/src/spatial/operators/spatial_join_logical.hpp
+index 3714311..a4bc929 100644
+--- a/src/spatial/operators/spatial_join_logical.hpp
++++ b/src/spatial/operators/spatial_join_logical.hpp
+@@ -13,7 +13,7 @@ public:
+ 	//! The type of the join (INNER, OUTER, etc...)
+ 	JoinType join_type;
+ 	//! Table index used to refer to the MARK column (in case of a MARK join)
+-	idx_t mark_index {};
++	TableIndex mark_index {};
+ 
+ 	//! The spatial predicate of the join
+ 	unique_ptr<Expression> spatial_predicate;
+@@ -22,9 +22,9 @@ public:
+ 	vector<unique_ptr<Expression>> extra_conditions;
+ 
+ 	//! The columns of the LHS that are output by the join
+-	vector<idx_t> left_projection_map;
++	vector<ProjectionIndex> left_projection_map;
+ 	//! The columns of the RHS that are output by the join
+-	vector<idx_t> right_projection_map;
++	vector<ProjectionIndex> right_projection_map;
+ 	//! Join Keys statistics (optional)
+ 	vector<unique_ptr<BaseStatistics>> join_stats;
+ 
 diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
-index e46d5ad..7c08e82 100644
+index e46d5ad..f660a78 100644
 --- a/src/spatial/operators/spatial_join_optimizer.cpp
 +++ b/src/spatial/operators/spatial_join_optimizer.cpp
+@@ -66,8 +66,8 @@ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique
+ 	                                                           nullptr, func.is_operator);
+ }
+ 
+-static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const unordered_set<idx_t> &left_bindings,
+-                                   const unordered_set<idx_t> &right_bindings, bool &needs_flipping) {
++static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const unordered_set<TableIndex> &left_bindings,
++                                   const unordered_set<TableIndex> &right_bindings, bool &needs_flipping) {
+ 
+ 	const auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
+ 
+@@ -143,8 +143,8 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+ 	// Get the table indexes that are reachable from the left and right children
+ 	const auto &left_child = cmp_join.children[0];
+ 	const auto &right_child = cmp_join.children[1];
+-	unordered_set<idx_t> left_bindings;
+-	unordered_set<idx_t> right_bindings;
++	unordered_set<TableIndex> left_bindings;
++	unordered_set<TableIndex> right_bindings;
+ 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
+ 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
+ 
 @@ -167,7 +167,6 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
  	spatial_join->types = std::move(cmp_join.types);
  	spatial_join->left_projection_map = std::move(cmp_join.left_projection_map);
@@ -10,6 +238,17 @@ index e46d5ad..7c08e82 100644
  	spatial_join->mark_index = cmp_join.mark_index;
  	spatial_join->has_estimated_cardinality = cmp_join.has_estimated_cardinality;
  	spatial_join->estimated_cardinality = cmp_join.estimated_cardinality;
+@@ -224,8 +223,8 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+ 	// Get the table indexes that are reachable from the left and right children
+ 	auto &left_child = any_join.children[0];
+ 	auto &right_child = any_join.children[1];
+-	unordered_set<idx_t> left_bindings;
+-	unordered_set<idx_t> right_bindings;
++	unordered_set<TableIndex> left_bindings;
++	unordered_set<TableIndex> right_bindings;
+ 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
+ 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
+ 
 @@ -274,7 +273,6 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
  	spatial_join->types = std::move(any_join.types);
  	spatial_join->left_projection_map = std::move(any_join.left_projection_map);
@@ -18,3 +257,51 @@ index e46d5ad..7c08e82 100644
  	spatial_join->mark_index = any_join.mark_index;
  	spatial_join->has_estimated_cardinality = any_join.has_estimated_cardinality;
  	spatial_join->estimated_cardinality = any_join.estimated_cardinality;
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index 5738f83..4b88fdd 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -426,14 +426,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
+ 
+ 	// Probe-side
+ 	const auto &probe_side_input_types = children[0].get().types;
+-	probe_side_output_columns = lop.left_projection_map;
+-	if (probe_side_output_columns.empty()) {
+-		probe_side_output_columns.reserve(probe_side_input_types.size());
+-		for (idx_t i = 0; i < probe_side_input_types.size(); i++) {
+-			probe_side_output_columns.emplace_back(i);
+-		}
+-	}
+-
++	probe_side_output_columns = FillProjectionMap(children[0].get(), lop.left_projection_map);
+ 	for (const auto &probe_col_idx : probe_side_output_columns) {
+ 		const auto type = probe_side_input_types[probe_col_idx];
+ 		probe_side_output_types.push_back(type);
+@@ -452,14 +445,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
+ 	build_side_key_types.push_back(build_side_key->return_type);
+ 
+ 	const auto &build_side_input_types = children[1].get().types;
+-	auto right_projection_map_copy = lop.right_projection_map;
+-	if (right_projection_map_copy.empty()) {
+-		right_projection_map_copy.reserve(build_side_input_types.size());
+-		for (idx_t i = 0; i < build_side_input_types.size(); i++) {
+-			right_projection_map_copy.emplace_back(i);
+-		}
+-	}
+-
++	auto right_projection_map_copy = FillProjectionMap(children[1].get(), lop.right_projection_map);
+ 	for (auto &rhs_col : right_projection_map_copy) {
+ 		auto &rhs_type = build_side_input_types[rhs_col];
+ 
+diff --git a/src/spatial/spatial_settings.cpp b/src/spatial/spatial_settings.cpp
+index dd2659d..656da67 100644
+--- a/src/spatial/spatial_settings.cpp
++++ b/src/spatial/spatial_settings.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/main/extension/extension_loader.hpp"
++#include "duckdb/main/client_context.hpp"
+ 
+ namespace duckdb {
+ 

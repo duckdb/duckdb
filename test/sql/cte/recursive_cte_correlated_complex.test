@@ -1,0 +1,37 @@
+# name: test/sql/cte/recursive_cte_correlated_complex.test
+# description: Must not report "More than one row returned by a subquery used as an expression"
+# group: [cte]
+
+require tpch
+
+statement ok
+call dbgen(sf=0.001);
+
+query II
+SELECT s.s_name, COUNT(*) AS numwait
+FROM   supplier AS s, nation AS n, (SELECT *
+                                    FROM orders
+                                    WHERE o_orderstatus = 'F'
+                                    ORDER BY o_orderkey) AS o
+WHERE  o.o_orderstatus = 'F'
+AND    s.s_nationkey = n.n_nationkey
+AND
+(WITH RECURSIVE "@loop" ("$label", "$output", "0", "1") AS (
+  (SELECT CAST('$' AS VARCHAR) AS "$label", CAST(NULL AS BOOLEAN) AS "$output", CAST(o.o_orderkey AS BIGINT) AS "0", CAST(s.s_suppkey AS BIGINT) AS "1")
+    UNION  ALL
+  (WITH "0" (suppkey, orderkey) AS (SELECT "@loop"."1" AS suppkey, "@loop"."0" AS orderkey FROM "@loop" WHERE ("@loop"."$label" IS NOT DISTINCT FROM '$')),
+        "1" (orderkey, suppkey, found) AS (SELECT "0".orderkey AS orderkey, "0".suppkey AS suppkey, CAST(NULL AS BOOLEAN) AS found FROM "0" AS "0"(suppkey, orderkey)),
+        "2" (suppkey, orderkey, lis) AS (SELECT "1".suppkey AS suppkey, "1".orderkey AS orderkey, CAST(NULL AS BIGINT[]) AS lis FROM "1" AS "1"(orderkey, suppkey, found)),
+        "3" (orderkey, suppkey, li) AS (SELECT "2".orderkey AS orderkey, "2".suppkey AS suppkey, CAST(NULL AS BIGINT) AS li FROM "2" AS "2"(suppkey, orderkey, lis)),
+        "4" (suppkey, orderkey, blame) AS (SELECT "3".suppkey AS suppkey, "3".orderkey AS orderkey, CAST('f' AS BOOLEAN) AS blame FROM "3" AS "3"(orderkey, suppkey, li)),
+        "5" (orderkey, blame, suppkey, multi) AS (SELECT "4".orderkey AS orderkey, "4".blame AS blame, "4".suppkey AS suppkey, CAST('f' AS BOOLEAN) AS multi FROM "4" AS "4"(suppkey, orderkey, blame)),
+        "6" (suppkey, multi, blame, lis) AS (SELECT "5".suppkey AS suppkey, "5".multi AS multi, "5".blame AS blame, (SELECT CAST((SELECT * FROM (SELECT array_agg(l.l_suppkey) FROM lineitem AS l WHERE (l.l_orderkey = "5".orderkey)) AS subquery LIMIT 1) AS BIGINT[])) AS lis FROM "5" AS "5"(orderkey, blame, suppkey, multi)),
+        "7" (blame, multi) AS (SELECT "6".blame AS blame, (SELECT CAST((SELECT ("6".multi OR (("6".lis[1]) != "6".suppkey))) AS BOOLEAN)) AS multi FROM "6" AS "6"(suppkey, multi, blame, lis)),
+        "8" (return_value) AS (SELECT ("7".multi AND "7".blame) AS return_value FROM "7" AS "7"(blame, multi)),
+        "9" ("$output") AS (SELECT "8".return_value AS "$output" FROM "8" AS "8"(return_value))
+        SELECT CAST(NULL AS VARCHAR) AS "$label", CAST("9"."$output" AS BOOLEAN) AS "$output", CAST(NULL AS BIGINT) AS "0", CAST(NULL AS BIGINT) AS "1" FROM "9" AS "9"("$output")))
+        SELECT "@loop"."$output" FROM "@loop" AS "@loop"("$label", "$output", "0", "1") WHERE ("@loop"."$label" IS NULL)
+)
+GROUP BY s.s_name
+ORDER BY numwait DESC, s_name;
+----

@@ -20,7 +20,7 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(LogicalGet &get)
 	}
 }
 
-MultiFilePushdownInfo::MultiFilePushdownInfo(idx_t table_index, const vector<string> &column_names,
+MultiFilePushdownInfo::MultiFilePushdownInfo(TableIndex table_index, const vector<string> &column_names,
                                              const vector<column_t> &column_ids, ExtraOperatorInfo &extra_info)
     : table_index(table_index), column_names(column_names), column_ids(column_ids), extra_info(extra_info) {
 }
@@ -51,7 +51,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, M
 bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, const vector<string> &names,
                       const vector<LogicalType> &types, const vector<column_t> &column_ids,
                       const TableFilterSet &filters, vector<OpenFileInfo> &expanded_files) {
-	idx_t table_index = 0;
+	TableIndex table_index(0);
 	ExtraOperatorInfo extra_info;
 
 	// construct the pushdown info
@@ -59,15 +59,15 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;
-	for (auto &entry : filters.filters) {
-		idx_t local_index = entry.first;
+	for (auto &entry : filters) {
+		idx_t local_index = entry.ColumnIndex();
 		idx_t column_idx = column_ids[local_index];
 		if (IsVirtualColumn(column_idx)) {
 			continue;
 		}
-		auto column_ref =
-		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.first));
-		auto filter_expr = entry.second->ToExpression(*column_ref);
+		auto column_ref = make_uniq<BoundColumnRefExpression>(
+		    types[column_idx], ColumnBinding(table_index, ProjectionIndex(entry.ColumnIndex())));
+		auto filter_expr = entry.Filter().ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}
 
