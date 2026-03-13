@@ -194,10 +194,9 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 		}
 
 		if (!can_pull_through) {
-			// Recurse into child
-			parents.push_back(*op);
-			Optimize(op->children[0]);
-			PopParents(*op);
+			// Recurse into child;
+			ProjectionPullup next(optimizer, root);
+			next.Optimize(proj.children[0]);
 			return;
 		}
 
@@ -263,15 +262,28 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 			insert_at_node.ResolveOperatorTypes();
 			auto insert_bindings = insert_at_node.GetColumnBindings();
 			const auto insert_types = insert_at_node.types;
-			column_binding_set_t existing_bindings(proj_bindings.begin(), proj_bindings.end());
 
+			// Build the set of bindings that actually exist BELOW insert_at_node
+			// by checking its child's bindings, not insert_at_node itself
+			// insert_at_node's own bindings may include stale refs that
+			// were already rewritten by a previous pass
+			column_binding_set_t child_available_bindings;
+			if (!insert_at_node.children.empty()) {
+				insert_at_node.children[0]->ResolveOperatorTypes();
+				for (auto &b : insert_at_node.children[0]->GetColumnBindings()) {
+					child_available_bindings.insert(b);
+				}
+			}
+			column_binding_set_t existing_bindings(proj_bindings.begin(), proj_bindings.end());
 			auto projection_to_move = std::move(op);
 			op = std::move(projection_to_move->children[0]);
 
-			// Any bindings produced by insert_at_node that are still
-			// referenced above must be passed through the projection
 			idx_t next_col = proj.expressions.size();
 			for (idx_t i = 0; i < insert_bindings.size(); i++) {
+				// Skip bindings that no longer exist in the plan
+				if (child_available_bindings.find(insert_bindings[i]) == child_available_bindings.end()) {
+					continue;
+				}
 				if (existing_bindings.find(insert_bindings[i]) == existing_bindings.end()) {
 					proj.expressions.push_back(
 					    make_uniq<BoundColumnRefExpression>(insert_types[i], insert_bindings[i]));
