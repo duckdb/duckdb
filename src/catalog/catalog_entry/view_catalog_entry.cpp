@@ -17,14 +17,19 @@ namespace duckdb {
 void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
-	if (!info.types.empty() && !info.names.empty()) {
+	if (!info.types.empty()) {
 		bind_state = ViewBindState::BOUND;
 		view_columns = make_shared_ptr<ViewColumnInfo>();
 		view_columns->types = info.types;
 		view_columns->names = info.names;
-		if (info.types.size() != info.names.size()) {
-			throw InternalException("Error creating view %s - view types / names size mismatch (%d types, %d names)",
-			                        name, info.types.size(), info.names.size());
+		if (view_columns->names.empty()) {
+			// DuckDB v0.9.2 and below store their names in the "aliases" field
+			view_columns->names = info.aliases;
+		}
+		if (view_columns->types.size() != view_columns->names.size()) {
+			throw InvalidInputException(
+			    "Error creating view %s - view types / names size mismatch (%d types, %d names)", name,
+			    view_columns->types.size(), view_columns->names.size());
 		}
 	}
 	this->temporary = info.temporary;
@@ -133,13 +138,21 @@ void ViewCatalogEntry::BindView(ClientContext &context, BindViewAction action) {
 		// already bound
 		return;
 	}
+	auto prev_bind_state = bind_state.load();
 	bind_state = ViewBindState::BINDING;
 	bind_thread = ThreadUtil::GetThreadId();
-	auto columns = make_shared_ptr<ViewColumnInfo>();
-	Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases,
-	                 columns->types, columns->names);
-	view_columns.atomic_store(columns);
+	try {
+		auto columns = make_shared_ptr<ViewColumnInfo>();
+		Binder::BindView(context, GetQuery(), ParentCatalog().GetName(), ParentSchema().name, nullptr, aliases,
+		                 columns->types, columns->names);
+		view_columns.atomic_store(columns);
+	} catch (...) {
+		bind_state = prev_bind_state;
+		bind_thread = thread_id {};
+		throw;
+	}
 	bind_state = ViewBindState::BOUND;
+	bind_thread = thread_id {};
 }
 
 void ViewCatalogEntry::UpdateBinding(const vector<LogicalType> &types_p, const vector<string> &names_p) {

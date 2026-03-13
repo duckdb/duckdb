@@ -1,6 +1,7 @@
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/types/string.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -47,12 +48,12 @@ bool UserSettingsMap::TryGetSetting(idx_t setting_index, Value &result_value) co
 //===--------------------------------------------------------------------===//
 // GlobalUserSettings
 //===--------------------------------------------------------------------===//
-GlobalUserSettings::GlobalUserSettings() : settings_version(0) {
+GlobalUserSettings::GlobalUserSettings() : settings_version(0), uuid(UUID::GenerateRandomUUID()) {
 }
 
 GlobalUserSettings::GlobalUserSettings(const GlobalUserSettings &other)
     : settings_map(other.settings_map), extension_parameters(other.extension_parameters),
-      settings_version(other.settings_version.load()) {
+      settings_version(other.settings_version.load()), uuid(UUID::GenerateRandomUUID()) {
 }
 
 GlobalUserSettings &GlobalUserSettings::operator=(const GlobalUserSettings &other) {
@@ -139,7 +140,7 @@ CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
 
 	const auto current_version = settings_version.load(std::memory_order_relaxed);
 	if (!current_cache.global_user_settings || this != current_cache.global_user_settings.get() ||
-	    current_cache.version != current_version) {
+	    current_cache.uuid != uuid || current_cache.version != current_version) {
 		// out-of-date, refresh the cache
 		lock_guard<mutex> guard(lock);
 		current_cache = CachedGlobalSettings(*this, settings_version, settings_map);
@@ -147,12 +148,17 @@ CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
 	return current_cache;
 }
 
-CachedGlobalSettings::CachedGlobalSettings() : version(0) {
+hugeint_t GlobalUserSettings::GetUUID() const {
+	return uuid;
+}
+
+CachedGlobalSettings::CachedGlobalSettings() : version(0), uuid(0) {
 }
 
 CachedGlobalSettings::CachedGlobalSettings(const GlobalUserSettings &global_user_settings_p, idx_t version,
                                            UserSettingsMap settings_p)
-    : global_user_settings(global_user_settings_p), version(version), settings(std::move(settings_p)) {
+    : global_user_settings(global_user_settings_p), version(version), settings(std::move(settings_p)),
+      uuid(global_user_settings_p.GetUUID()) {
 }
 #endif
 

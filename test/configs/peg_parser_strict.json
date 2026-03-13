@@ -5,21 +5,16 @@
   "statically_loaded_extensions": ["core_functions", "autocomplete"],
   "skip_tests": [
     {
-      "reason": "Error handling",
+      "reason": "Does not produce prepared statement",
       "paths": [
-        "test/sql/error/error_position.test",
-        "test/sql/catalog/table/test_default_values.test",
-        "test/sql/cast/cast_error_location.test",
-        "test/sql/copy/parquet/copy_option_suggestion.test",
-        "test/sql/copy/parquet/parquet_list.test",
-        "test/sql/copy/csv/glob/read_csv_glob.test",
-        "test/sql/error/qualified_column_error.test",
-        "test/sql/types/nested/array/array_invalid.test",
-        "test/sql/types/nested/struct/struct_dict.test",
-        "test/sql/types/map/map_empty.test",
-        "test/sql/binder/column_ref_as_alias.test",
-        "test/sql/error/lineitem_errors.test",
-        "test/sql/copy/csv/test_encodings.test_slow"
+        "test/sql/types/map/map_empty.test"
+      ]
+    },
+    {
+      "reason": "Test expects lowercase option name",
+      "paths": [
+        "test/sql/copy/csv/test_encodings.test_slow",
+        "test/sql/copy/parquet/copy_option_suggestion.test"
       ]
     },
     {
@@ -48,14 +43,6 @@
         "test/sql/function/string/test_subscript.test",
         "test/sql/prepared/parameter_variants.test",
         "test/sql/parser/digit_separators.test"
-      ]
-    },
-    {
-      "reason": "New syntax",
-      "paths": [
-        "test/sql/alter/alter_table_set_table_options.test",
-        "test/sql/create/create_table_extra_options.test",
-        "test/sql/create/create_as_partition_sorted_options.test"
       ]
     }
   ]

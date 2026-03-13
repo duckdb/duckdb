@@ -14,6 +14,10 @@
 #include "duckdb/common/column_index.hpp"
 #include "duckdb/common/column_index_map.hpp"
 
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+
 namespace duckdb {
 class Binder;
 class BoundColumnRefExpression;
@@ -69,6 +73,12 @@ enum class BaseColumnPrunerMode : uint8_t {
 	DISABLE_PUSHDOWN_EXTRACT
 };
 
+struct MaterializedCTEInfo {
+public:
+	column_binding_map_t<ReferencedColumn> column_references;
+	bool everything_referenced = true;
+};
+
 class BaseColumnPruner : public LogicalOperatorVisitor {
 protected:
 	void VisitExpression(unique_ptr<Expression> *expression) override;
@@ -116,8 +126,9 @@ private:
 //! The RemoveUnusedColumns optimizer traverses the logical operator tree and removes any columns that are not required
 class RemoveUnusedColumns : public BaseColumnPruner {
 public:
-	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false)
-	    : binder(binder), context(context), everything_referenced(is_root) {
+	RemoveUnusedColumns(Binder &binder, ClientContext &context, bool is_root = false,
+	                    shared_ptr<unordered_map<idx_t, MaterializedCTEInfo>> cte_info_map = nullptr)
+	    : binder(binder), context(context), everything_referenced(is_root), cte_info_map(std::move(cte_info_map)) {
 	}
 
 	void VisitOperator(LogicalOperator &op) override;
@@ -129,6 +140,9 @@ private:
 	//! output implicitly refers all the columns below it)
 	bool everything_referenced;
 
+	shared_ptr<unordered_map<idx_t, MaterializedCTEInfo>> cte_info_map;
+	RemoveUnusedColumns CreateChildOptimizer();
+
 private:
 	template <class T>
 	void ClearUnusedExpressions(vector<T> &list, idx_t table_idx, bool replace = true);
@@ -139,4 +153,19 @@ private:
 	    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
 	    const std::function<idx_t(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)> &callback);
 };
+
+class CTERefPruner : public LogicalOperatorVisitor {
+public:
+	CTERefPruner(const idx_t table_index, const unordered_set<idx_t> &referenced_columns);
+
+	void VisitOperator(LogicalOperator &op) override;
+
+private:
+	const idx_t cte_index;
+	const unordered_set<idx_t> &referenced_columns;
+
+public:
+	vector<ReplacementBinding> binding_replacements;
+};
+
 } // namespace duckdb
