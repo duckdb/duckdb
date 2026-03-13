@@ -932,6 +932,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 						// re-apply invalidation policy
 						parser.statements[0]->Cast<TransactionStatement>().info->invalidation_policy =
 						    statement->Cast<TransactionStatement>().info->invalidation_policy;
+						// re-apply auto rollback
+						parser.statements[0]->Cast<TransactionStatement>().info->auto_rollback =
+						    statement->Cast<TransactionStatement>().info->auto_rollback;
 					}
 					statement = std::move(parser.statements[0]);
 				} catch (const NotImplementedException &) {
@@ -1028,7 +1031,7 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameters query_parameters) {
 	auto lock = LockContext();
-
+	bool condition = query == "copy from database memory to backup;";
 	vector<unique_ptr<SQLStatement>> statements;
 	try {
 		statements = ParseStatements(*lock, query);
@@ -1064,6 +1067,9 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 		}
 		if (current_result->HasError()) {
+			if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
+				transaction.Rollback(current_result->GetErrorObject());
+			}
 			// Reset the interrupted flag, this was set by the task that found the error
 			// Next statements should not be bothered by that interruption
 			interrupted = false;

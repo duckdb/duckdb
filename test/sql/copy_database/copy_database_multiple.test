@@ -22,9 +22,6 @@ COPY FROM DATABASE db1 TO db2;
 ----
 Table with name "tbl1" already exists!
 
-statement ok
-rollback
-
 query I
 FROM db2.tbl1
 ----

@@ -33,6 +33,7 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 				client.transaction.SetReadOnly();
 			}
 			client.transaction.SetInvalidationPolicy(info->invalidation_policy);
+			client.transaction.SetAutoRollback(info->auto_rollback);
 			if (Settings::Get<ImmediateTransactionModeSetting>(context.client)) {
 				// if immediate transaction mode is enabled then start all transactions immediately
 				auto databases = DatabaseManager::Get(client).GetDatabases(client);

@@ -248,11 +248,6 @@
       "paths": [
         "test/geoparquet/with_crs.test"
       ]
-    },{
-      "reason": "Transaction-wrapped multistatement loses transactionality with verification reparsing",
-      "paths": [
-        "test/sql/transactions/test_multistatement_is_transactional.test"
-      ]
     }
   ]
 }

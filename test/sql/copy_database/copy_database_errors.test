@@ -27,9 +27,6 @@ COPY FROM DATABASE db1 TO db1
 ----
 FROM and TO databases are the same
 
-statement ok
-rollback
-
 # read-only test
 statement ok
 ATTACH DATABASE '__TEST_DIR__/read_only.db' AS read_only
@@ -48,9 +45,6 @@ statement error
 COPY FROM DATABASE db1 TO read_only
 ----
 attached in read-only mode
-
-statement ok
-rollback
 
 # we can copy FROM a read-only database
 statement ok

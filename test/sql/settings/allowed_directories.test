@@ -190,10 +190,6 @@ IMPORT DATABASE '{TEMP_DIR}/export_test'
 ----
 Table with name "integers" already exists!
 
-statement ok
-rollback
-
-# This fails during TryExpandPragma, before wrapping in transaction, so no rollback needed here
 statement error
 IMPORT DATABASE 'export_test'
 ----

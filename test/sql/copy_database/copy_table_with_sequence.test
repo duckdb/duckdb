@@ -100,9 +100,6 @@ copy from database memory to backup;
 <REGEX>:TransactionContext Error: Attempting to write to database .* in a transaction that has already modified database .*
 
 statement ok
-rollback
-
-statement ok
 drop sequence memory.backup.seq cascade;
 
 query IIIIIIIIIIIIIIII

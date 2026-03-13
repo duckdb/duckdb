@@ -37,9 +37,6 @@ PRAGMA copy_database('test_table''); DROP TABLE test_table; --', 'target')
 ----
 Binder Error
 
-statement ok
-rollback
-
 # Verify that the test_table still exists and was not dropped
 query II
 SELECT * FROM test_table ORDER BY i

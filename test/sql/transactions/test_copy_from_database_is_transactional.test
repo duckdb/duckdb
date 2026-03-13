@@ -29,14 +29,6 @@ copy from database db1 to db2;
 ----
 <REGEX>:.*Out of Memory Error.*
 
-statement error
-SHOW TABLES;
-----
-TransactionContext Error: Current transaction is aborted (please ROLLBACK)
-
-statement ok
-rollback;
-
 # Should not have copied schema
 query I
 SHOW TABLES;

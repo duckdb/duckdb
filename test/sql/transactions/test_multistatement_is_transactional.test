@@ -21,14 +21,6 @@ ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_functio
 ----
 <REGEX>:.*Catalog Error.*
 
-statement error
-from t;
-----
-TransactionContext Error: Current transaction is aborted (please ROLLBACK)
-
-statement ok
-ROLLBACK;
-
 query I
 from t;
 ----

@@ -20,16 +20,16 @@ namespace duckdb {
 void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements, bool should_wrap_in_transaction,
                    vector<unique_ptr<SQLStatement>> &result_statements) {
 	if (should_wrap_in_transaction) {
-		auto begin_info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION,
-		                                             TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+		auto begin_info = make_uniq<TransactionInfo>(
+		    TransactionType::BEGIN_TRANSACTION, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
 		result_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
 	}
 	// insert body_statements into result_statements
 	result_statements.insert(result_statements.end(), std::make_move_iterator(body_statements.begin()),
 	                         std::make_move_iterator(body_statements.end()));
 	if (should_wrap_in_transaction) {
-		auto commit_info = make_uniq<TransactionInfo>(TransactionType::COMMIT,
-		                                              TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION);
+		auto commit_info = make_uniq<TransactionInfo>(
+		    TransactionType::COMMIT, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
 		result_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
 	}
 }
@@ -93,19 +93,13 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
                                                bool is_in_active_transaction) {
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
+		auto query = statements[i]->query;
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
-			// string new_query;
-			// bool needs_reparsing;
-			// PragmaNeedsReparsing(, new_query, needs_reparsing);
-			// if (needs_reparsing) {
 			vector<unique_ptr<SQLStatement>> reparsed_statements = TryReparsePragma(std::move(statements[i]));
 			AddStatements(reparsed_statements, !is_in_active_transaction && reparsed_statements.size() != 1,
 			              new_statements);
 			break;
-			// }
-			// new_statements.push_back(std::move(statements[i]));
-			// break;
 		}
 		case StatementType::MULTI_STATEMENT: {
 			auto &multi_statement = statements[i]->Cast<MultiStatement>();
