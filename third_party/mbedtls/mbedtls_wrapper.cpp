@@ -344,7 +344,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::EncryptionNon
 	mode = duckdb::EncryptionTypes::ENCRYPT;
 
 	if (mbedtls_cipher_setkey(context.get(), key, metadata->GetKeyLen() * 8, MBEDTLS_ENCRYPT) != 0) {
-		runtime_error("Failed to set AES key for encryption");
+		throw std::runtime_error("Failed to set AES key for encryption");
 	}
 
 	InitializeInternal(nonce, aad, aad_len);
