@@ -30,9 +30,9 @@ UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
 
-ifeq ($(CI),1)
 CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
 CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+ifeq ($(CI),1)
 ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
@@ -367,17 +367,19 @@ release: ${EXTENSION_CONFIG_STEP}
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM="wasm_mvp" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
-	emmake make -j8 -Cbuild/wasm_mvp
+	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_mvp
 
-wasm_eh: ${EXTENSION_CONFIG_STEP}
+wasm_eh: WASM_EH_CMAKE_VARS=-DBUILD_EXTENSIONS_ONLY=1
+wasm_eh_ci: WASM_EH_CMAKE_VARS=
+wasm_eh wasm_eh_ci: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_eh && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
-	emmake make -j8 -Cbuild/wasm_eh
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 $(WASM_EH_CMAKE_VARS) -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
+	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_eh
 
 wasm_threads: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_threads && \
 	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads -pthread" -DDUCKDB_EXPLICIT_PLATFORM="wasm_threads" ${COMMON_CMAKE_VARS} -DUSE_WASM_THREADS=1 -DCMAKE_C_FLAGS="-pthread" ${TOOLCHAIN_FLAGS} && \
-	emmake make -j8 -Cbuild/wasm_threads
+	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \

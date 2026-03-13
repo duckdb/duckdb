@@ -242,6 +242,26 @@ jobs:
       skip_tests: 'false'
       run_all: 'true'
 
+ wasm-eh:
+    name: Wasm EH
+    needs:
+      - prepare
+      - linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: mymindstorm/setup-emsdk@v13
+      with:
+        version: latest
+
+    - name: Install tools
+      run: make toolsci
+
+    - name: Build
+      run: make wasm_eh_ci
+
  linux-release:
     name: Linux Release
     needs: prepare
