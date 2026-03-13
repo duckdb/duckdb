@@ -1588,7 +1588,7 @@ SourceResultType PhysicalAsOfJoin::GetDataInternal(ExecutionContext &context, Da
 		} else {
 			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
 			if (!gsource.HasMoreTasks()) {
-				gsource.UnblockTasks(guard);
+				gsource.UnblockTasks();
 				break;
 			} else {
 				// there are more tasks available, but we can't execute them yet
