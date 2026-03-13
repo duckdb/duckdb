@@ -528,7 +528,7 @@ MetadataResult ToggleCompletionRendering(ShellState &state, const vector<string>
 }
 
 MetadataResult ToggleMultiLine(ShellState &state, const vector<string> &args) {
-	if (!args.empty()) {
+	if (args.size() != 1) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	linenoiseSetMultiLine(true);
@@ -536,7 +536,7 @@ MetadataResult ToggleMultiLine(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ToggleSingleLine(ShellState &state, const vector<string> &args) {
-	if (!args.empty()) {
+	if (args.size() != 1) {
 		return MetadataResult::PRINT_USAGE;
 	}
 	linenoiseSetMultiLine(false);
