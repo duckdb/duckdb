@@ -31,6 +31,10 @@ public:
 		return db.TryGetCurrentSetting(key, result);
 	}
 
+	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &) override {
+		return db.TryGetCurrentSetting(key, result);
+	}
+
 	optional_ptr<ClientContext> TryGetClientContext() override {
 		return nullptr;
 	}
