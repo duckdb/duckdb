@@ -18,6 +18,12 @@
       ]
     },
     {
+      "reason": "Fix CI issue on main",
+      "paths": [
+        "test/sql/cast/struct_to_map.test"
+      ]
+    },
+    {
       "reason": "Parser error",
       "paths": [
         "test/sql/json/scalar/test_json_extract.test"

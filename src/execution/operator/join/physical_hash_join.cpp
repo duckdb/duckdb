@@ -950,8 +950,7 @@ void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHas
 	ht.SetBuildBloomFilter(true);
 	auto filter =
 	    make_uniq_base<TableFilter, BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
-	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilter::BF_THRESHOLD,
-	                                              SelectivityOptionalFilter::BF_CHECK_N);
+	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::BF);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
@@ -961,8 +960,7 @@ void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &o
                                                        ProjectionIndex filter_col_idx) const {
 	const auto key_name = op.Cast<PhysicalHashJoin>().conditions[0].GetRHS().ToString();
 	auto filter = make_uniq_base<TableFilter, PerfectHashJoinFilter>(perfect_join_executor, key_name);
-	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilter::PHJ_THRESHOLD,
-	                                              SelectivityOptionalFilter::PHJ_CHECK_N);
+	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::PHJ);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
@@ -981,10 +979,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalSta
 
 static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
                                       const ProjectionIndex &filter_col_idx, unique_ptr<TableFilter> filter) {
-	info.dynamic_filters->PushFilter(op, filter_col_idx,
-	                                 make_uniq<SelectivityOptionalFilter>(std::move(filter),
-	                                                                      SelectivityOptionalFilter::MIN_MAX_THRESHOLD,
-	                                                                      SelectivityOptionalFilter::MIN_MAX_CHECK_N));
+	info.dynamic_filters->PushFilter(
+	    op, filter_col_idx,
+	    make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::MIN_MAX));
 }
 
 unique_ptr<DataChunk>
