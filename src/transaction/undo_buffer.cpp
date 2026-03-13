@@ -16,6 +16,7 @@
 #include "duckdb/transaction/rollback_state.hpp"
 #include "duckdb/transaction/wal_write_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
@@ -195,14 +196,18 @@ void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState>
 void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info) {
 	active_transaction_state = info.active_transactions;
 
-	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::COMMIT);
+	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
+	commit_checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
+
+	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::COMMIT, commit_checkpoint_id);
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 
 	state.Verify();
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT);
+	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT,
+	                  commit_checkpoint_id);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 

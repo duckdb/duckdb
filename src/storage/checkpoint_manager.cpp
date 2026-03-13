@@ -45,9 +45,6 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 	}
 	checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
 	checkpoint_context = checkpoint_connection->context.get();
-	checkpoint_context->transaction.BeginTransaction(false);
-	checkpoint_context->transaction.SetReadOnly();
-	owns_meta_transaction = true;
 }
 
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
@@ -56,20 +53,19 @@ ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 		transaction_manager.RollbackTransaction(*checkpoint_transaction);
 		checkpoint_transaction = nullptr;
 	}
-	if (owns_meta_transaction && checkpoint_context) {
+	if (checkpoint_context) {
 		checkpoint_context->transaction.ClearTransaction();
 	}
 }
 
-void ActiveCheckpointWrapper::SetCheckpointTransaction(CheckpointOptions &options) {
+void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &options) {
+	checkpoint_context->transaction.BeginTransaction(false);
+	checkpoint_context->transaction.SetReadOnly();
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
+	transaction.is_checkpoint_transaction = true;
+	checkpoint_transaction = &transaction;
 	options.transaction_id = transaction.start_time;
 	transaction_manager.SetActiveCheckpoint(transaction.start_time);
-	if (!owns_meta_transaction) {
-		return;
-	}
-	checkpoint_transaction = &transaction;
-	transaction.is_checkpoint_transaction = true;
 }
 
 void ActiveCheckpointWrapper::Commit() {
@@ -77,11 +73,8 @@ void ActiveCheckpointWrapper::Commit() {
 	if (!checkpoint_transaction) {
 		return;
 	}
-	transaction_manager.RollbackTransaction(*checkpoint_transaction);
+	transaction_manager.CommitTransaction(*checkpoint_context, *checkpoint_transaction);
 	checkpoint_transaction = nullptr;
-	if (owns_meta_transaction && checkpoint_context) {
-		checkpoint_context->transaction.ClearTransaction();
-	}
 }
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);

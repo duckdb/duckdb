@@ -214,7 +214,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	// this is the commit we will be checkpointing on - everything in this commit will be written to the file
 	// any new commits made will be written to the next wal
 	if (active_checkpoint && active_checkpoint->checkpoint_context) {
-		active_checkpoint->SetCheckpointTransaction(options);
+		active_checkpoint->GetCheckpointTransaction(options);
 	} else {
 		auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 		options.transaction_id = transaction_manager.GetLastCommit();

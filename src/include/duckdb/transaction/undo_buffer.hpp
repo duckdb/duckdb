@@ -68,6 +68,7 @@ private:
 	DuckTransaction &transaction;
 	UndoBufferAllocator allocator;
 	ActiveTransactionState active_transaction_state = ActiveTransactionState::UNSET;
+	optional_idx commit_checkpoint_id;
 
 private:
 	template <class T>

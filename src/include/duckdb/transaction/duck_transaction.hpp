@@ -50,7 +50,7 @@ public:
 	bool awaiting_cleanup;
 
 	//! Flag to prevent auto-checkpointing inside of a checkpointing transaction.
-	bool is_checkpoint_transaction = false;
+	atomic<bool> is_checkpoint_transaction {false};
 
 public:
 	static DuckTransaction &Get(ClientContext &context, AttachedDatabase &db);

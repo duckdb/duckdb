@@ -46,7 +46,7 @@ struct ActiveCheckpointWrapper {
 	                        DuckTransactionManager &transaction_manager);
 	~ActiveCheckpointWrapper();
 
-	void SetCheckpointTransaction(CheckpointOptions &options);
+	void GetCheckpointTransaction(CheckpointOptions &options);
 	void Commit();
 
 	optional_ptr<ClientContext> checkpoint_context;
@@ -54,7 +54,6 @@ struct ActiveCheckpointWrapper {
 	DuckTransactionManager &transaction_manager;
 	unique_ptr<Connection> checkpoint_connection;
 	optional_ptr<DuckTransaction> checkpoint_transaction;
-	bool owns_meta_transaction = false;
 };
 
 class CheckpointWriter {
