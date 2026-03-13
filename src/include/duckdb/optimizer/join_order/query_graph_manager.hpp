@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -56,6 +57,10 @@ public:
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
 	bool from_residual_predicate = false;
+	//! Index of the equivalence group for INNER equality join filters.
+	//! All filters transitively connected by equality (a=b, b=c → a=c all share the same index).
+	//! Used to skip redundant conditions during plan reconstruction and cardinality estimation.
+	optional_idx edge_equivalence_index;
 
 	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
 	void SetRightSet(optional_ptr<JoinRelationSet> right_set_new);
@@ -111,7 +116,12 @@ private:
 
 	void CreateHyperGraphEdges();
 
-	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
+	//! Assign edge_equivalence_index to INNER equality filters using union-find over column bindings.
+	//! All filters in the same transitive equality closure receive the same index.
+	void MarkEdgeEquivalences();
+
+	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set,
+	                                   unordered_set<idx_t> &applied_equivalence_groups);
 };
 
 } // namespace duckdb

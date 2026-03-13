@@ -343,14 +343,27 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// first edge; subsequent edges for the same right side are skipped via this set.
 	unordered_set<string> left_join_denom_applied;
 
+	// Track which INNER equality equivalence groups have been used to build the subgraph.
+	// When an edge falls into the "already connected" bucket, we check this set: if the edge's
+	// equivalence group was already applied, it is transitively implied and should not penalise
+	// the estimate via unused_edge_tdoms.
+	unordered_set<idx_t> applied_equivalence_groups;
+
 	unordered_set<idx_t> unused_edge_tdoms;
+	// Record edge_equivalence_index whenever an edge is actively used to build the subgraph.
+	auto record_equivalence_group = [&](const FilterInfoWithTotalDomains &edge) {
+		if (edge.filter_info->edge_equivalence_index.IsValid()) {
+			applied_equivalence_groups.insert(edge.filter_info->edge_equivalence_index.GetIndex());
+		}
+	};
 	auto edges = GetEdges(relation_set_stats, set);
 	for (auto &edge : edges) {
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
 			// The subgraph already connects all desired relations.
 			// For LEFT joins, only apply the dominant condition's effective_d once (first time seen).
 			// Subsequent conditions for the same right side are skipped.
-			// INNER join conditions get a mild penalty via denom_multiplier.
+			// INNER join conditions get a mild penalty via denom_multiplier — unless the edge is
+			// transitively implied by equality conditions already used to build the subgraph.
 			if (edge.filter_info->join_type == JoinType::LEFT) {
 				auto right_key = edge.filter_info->right_set->ToString();
 				if (left_join_denom_applied.insert(right_key).second) {
@@ -359,6 +372,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 					auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
 					subgraphs.at(0).denom *= effective_d;
 				}
+			} else if (edge.filter_info->edge_equivalence_index.IsValid() &&
+			           applied_equivalence_groups.count(edge.filter_info->edge_equivalence_index.GetIndex())) {
+				// This edge's equality constraint is already captured by previously applied edges
+				// in the same equivalence group — skip the penalty entirely.
 			} else if (edge.has_distinct_count_hll) {
 				unused_edge_tdoms.insert(edge.distinct_count_hll);
 			}
@@ -381,6 +398,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			if (edge.filter_info->join_type == JoinType::LEFT) {
 				left_join_denom_applied.insert(edge.filter_info->right_set->ToString());
 			}
+			record_equivalence_group(edge);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {
 			auto left_subgraph = &subgraphs.at(subgraph_connections.at(0));
@@ -413,6 +431,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			if (edge.filter_info->join_type == JoinType::LEFT) {
 				left_join_denom_applied.insert(edge.filter_info->right_set->ToString());
 			}
+			record_equivalence_group(edge);
 		} else if (subgraph_connections.size() == 2) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
 			D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
@@ -426,6 +445,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			if (edge.filter_info->join_type == JoinType::LEFT) {
 				left_join_denom_applied.insert(edge.filter_info->right_set->ToString());
 			}
+			record_equivalence_group(edge);
 			subgraph_to_delete->relations = nullptr;
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });
