@@ -515,7 +515,6 @@ void CopyToFunctionLocalState::FlushPartitions() {
 		ColumnDataAppendState partition_batch_append_state;
 
 		// push the chunks into the write state
-		idx_t chunk_idx = 0;
 		for (auto &chunk : partitions[i]->Chunks()) {
 			if (!partition_batch.get()) {
 				partition_batch = make_uniq<ColumnDataCollection>(
