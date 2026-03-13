@@ -24,7 +24,7 @@ statement ok
 CREATE TABLE tss_table AS SELECT ('2020-01-01'::TIMESTAMP + (i * INTERVAL '1 minute'))::TIMESTAMP_S AS col FROM range(1000000) t(i);
 
 # ---------------------------------------------------------------------------
-# TIMESTAMP <-> TIMESTAMPTZ (margin = 26h)
+# TIMESTAMP <-> TIMESTAMPTZ (margin = 2h for DST ambiguity)
 # ---------------------------------------------------------------------------
 query II
 EXPLAIN SELECT * FROM ts_table WHERE CAST(col AS TIMESTAMPTZ) > TIMESTAMPTZ '2020-06-01 00:00:00+00';
@@ -124,7 +124,7 @@ EXPLAIN SELECT * FROM tsms_table WHERE CAST(col AS TIMESTAMP_S) > '2020-06-01'::
 physical_plan	<REGEX>:.*optional.*col.*
 
 # ---------------------------------------------------------------------------
-# DATE -> TIMESTAMPTZ (margin = 26h) - requires ICU for TIMESTAMPTZ->DATE cast
+# DATE -> TIMESTAMPTZ (margin = 2h) - requires ICU for TIMESTAMPTZ->DATE cast
 # so we skip this test here; it would work with LOAD icu
 # ---------------------------------------------------------------------------
 

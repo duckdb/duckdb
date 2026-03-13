@@ -674,87 +674,75 @@ static bool IsLessThan(ExpressionType type) {
 	return type == ExpressionType::COMPARE_LESSTHAN || type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 }
 
-//! Returns the relaxation margin in microseconds for a temporal cast, or -1 if not relaxable.
-static int64_t GetTemporalCastRelaxationMicros(LogicalTypeId source, LogicalTypeId target) {
+//! Returns the relaxation margin in native units of the source type for a temporal cast.
+//! Returns -1 if the cast pair is not supported for relaxed pushdown.
+//! Margins: 2h for DST ambiguity (TIMESTAMP<->TIMESTAMPTZ), 24h for time-of-day loss, 1s for rounding loss.
+static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target) {
 	if (source == target) {
 		return 0;
 	}
-	// margins: 26h for tz offset (±14h both ways), 24h for time-of-day loss, 1s for rounding loss
-	static constexpr int64_t TZ = 26LL * Interval::MICROS_PER_HOUR;
-	static constexpr int64_t DAY = Interval::MICROS_PER_DAY;
-	static constexpr int64_t SEC = Interval::MICROS_PER_SEC;
-
-	// encode (source, target) pair as a single key for map lookup
 	using L = LogicalTypeId;
-	auto K = [](L s, L t) -> uint32_t {
-		return (uint32_t(s) << 8) | uint32_t(t);
-	};
-	static const unordered_map<uint32_t, int64_t> MARGINS = {
-	    {K(L::TIMESTAMP, L::TIMESTAMP_TZ), TZ},
-	    {K(L::TIMESTAMP_TZ, L::TIMESTAMP), TZ},
-	    {K(L::TIMESTAMP, L::DATE), DAY},
-	    {K(L::TIMESTAMP_MS, L::DATE), DAY},
-	    {K(L::TIMESTAMP_SEC, L::DATE), DAY},
-	    {K(L::TIMESTAMP_NS, L::DATE), DAY},
-	    {K(L::DATE, L::TIMESTAMP_TZ), TZ},
-	    {K(L::DATE, L::TIMESTAMP), 0},
-	    {K(L::DATE, L::TIMESTAMP_MS), 0},
-	    {K(L::DATE, L::TIMESTAMP_SEC), 0},
-	    {K(L::DATE, L::TIMESTAMP_NS), 0},
-	    {K(L::TIMESTAMP_NS, L::TIMESTAMP), SEC},
-	    {K(L::TIMESTAMP, L::TIMESTAMP_SEC), SEC},
-	    {K(L::TIMESTAMP, L::TIMESTAMP_MS), SEC},
-	    {K(L::TIMESTAMP_NS, L::TIMESTAMP_MS), SEC},
-	    {K(L::TIMESTAMP_NS, L::TIMESTAMP_SEC), SEC},
-	    {K(L::TIMESTAMP_MS, L::TIMESTAMP_SEC), SEC},
-	};
-
-	auto it = MARGINS.find(K(source, target));
-	if (it != MARGINS.end()) {
-		return it->second;
-	}
-	return -1;
-}
-
-//! Convert delta_micros to native units for the given type, rounding away from zero.
-//! Divide rounding away from zero (towards ±infinity).
-static int64_t DivAwayFromZero(int64_t num, int64_t denom) {
-	return ((num > 0) ? (num + denom - 1) : -(-num + denom - 1)) / denom;
-}
-
-//! Returns the delta in native units and the raw value from the Value.
-static bool GetTemporalRawAndDelta(const Value &val, int64_t delta_micros, int64_t &raw, int64_t &delta) {
-	switch (val.type().id()) {
-	case LogicalTypeId::TIMESTAMP:
-		raw = val.GetValueUnsafe<timestamp_t>().value;
-		delta = delta_micros;
-		return true;
-	case LogicalTypeId::TIMESTAMP_TZ:
-		raw = val.GetValueUnsafe<timestamp_tz_t>().value;
-		delta = delta_micros;
-		return true;
-	case LogicalTypeId::TIMESTAMP_MS:
-		raw = val.GetValueUnsafe<timestamp_ms_t>().value;
-		delta = DivAwayFromZero(delta_micros, Interval::MICROS_PER_MSEC);
-		return true;
-	case LogicalTypeId::TIMESTAMP_SEC:
-		raw = val.GetValueUnsafe<timestamp_sec_t>().value;
-		delta = DivAwayFromZero(delta_micros, Interval::MICROS_PER_SEC);
-		return true;
-	case LogicalTypeId::TIMESTAMP_NS:
-		raw = val.GetValueUnsafe<timestamp_ns_t>().value;
-		if (delta_micros > NumericLimits<int64_t>::Maximum() / 1000 ||
-		    delta_micros < NumericLimits<int64_t>::Minimum() / 1000) {
-			return false;
+	switch (source) {
+	case L::TIMESTAMP:
+	case L::TIMESTAMP_TZ:
+		// native unit: microseconds
+		switch (target) {
+		case L::TIMESTAMP:
+		case L::TIMESTAMP_TZ:
+			return 2LL * Interval::MICROS_PER_HOUR;
+		case L::DATE:
+			return Interval::MICROS_PER_DAY;
+		case L::TIMESTAMP_MS:
+		case L::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC;
+		default:
+			return -1;
 		}
-		delta = delta_micros * 1000;
-		return true;
-	case LogicalTypeId::DATE:
-		raw = val.GetValueUnsafe<date_t>().days;
-		delta = DivAwayFromZero(delta_micros, Interval::MICROS_PER_DAY);
-		return true;
+	case L::TIMESTAMP_NS:
+		// native unit: nanoseconds
+		switch (target) {
+		case L::TIMESTAMP:
+		case L::TIMESTAMP_MS:
+		case L::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC * 1000LL;
+		case L::DATE:
+			return Interval::MICROS_PER_DAY * 1000LL;
+		default:
+			return -1;
+		}
+	case L::TIMESTAMP_MS:
+		// native unit: milliseconds
+		switch (target) {
+		case L::DATE:
+			return Interval::MICROS_PER_DAY / Interval::MICROS_PER_MSEC;
+		case L::TIMESTAMP_SEC:
+			return Interval::MICROS_PER_SEC / Interval::MICROS_PER_MSEC;
+		default:
+			return -1;
+		}
+	case L::TIMESTAMP_SEC:
+		// native unit: seconds
+		switch (target) {
+		case L::DATE:
+			return Interval::MICROS_PER_DAY / Interval::MICROS_PER_SEC;
+		default:
+			return -1;
+		}
+	case L::DATE:
+		// native unit: days
+		switch (target) {
+		case L::TIMESTAMP:
+		case L::TIMESTAMP_MS:
+		case L::TIMESTAMP_SEC:
+		case L::TIMESTAMP_NS:
+			return 0;
+		case L::TIMESTAMP_TZ:
+			return 1;
+		default:
+			return -1;
+		}
 	default:
-		return false;
+		return -1;
 	}
 }
 
@@ -771,30 +759,46 @@ static Value MakeTemporalValue(LogicalTypeId type_id, int64_t result) {
 		return Value::TIMESTAMPSEC(timestamp_sec_t(result));
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_ns_t(result));
-	case LogicalTypeId::DATE: {
-		auto clamped = std::max<int64_t>(std::min<int64_t>(result, NumericLimits<int32_t>::Maximum()),
-		                                 NumericLimits<int32_t>::Minimum());
-		return Value::DATE(date_t(static_cast<int32_t>(clamped)));
-	}
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t(static_cast<int32_t>(std::max<int64_t>(
+		    std::min<int64_t>(result, NumericLimits<int32_t>::Maximum()), NumericLimits<int32_t>::Minimum()))));
 	default:
 		throw InternalException("MakeTemporalValue: unsupported type");
 	}
 }
 
-//! Adjust a temporal Value by delta_micros (positive = add, negative = subtract).
-//! Returns false if the adjustment would overflow.
-static bool AdjustTemporalValue(Value &val, int64_t delta_micros) {
-	if (delta_micros == 0) {
+//! Adjust a temporal Value by margin (positive = widen upper bound, negative = widen lower bound).
+//! The margin is in native units of the value's type. Returns false on overflow (filter not useful).
+static bool AdjustTemporalValue(Value &val, int64_t margin) {
+	if (margin == 0) {
 		return true;
 	}
-	int64_t raw, delta;
-	if (!GetTemporalRawAndDelta(val, delta_micros, raw, delta)) {
+	int64_t raw;
+	switch (val.type().id()) {
+	case LogicalTypeId::TIMESTAMP:
+		raw = val.GetValueUnsafe<timestamp_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ:
+		raw = val.GetValueUnsafe<timestamp_tz_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_MS:
+		raw = val.GetValueUnsafe<timestamp_ms_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		raw = val.GetValueUnsafe<timestamp_sec_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_NS:
+		raw = val.GetValueUnsafe<timestamp_ns_t>().value;
+		break;
+	case LogicalTypeId::DATE:
+		raw = val.GetValueUnsafe<date_t>().days;
+		break;
+	default:
 		return false;
 	}
-	// saturating addition
 	int64_t result;
-	if (!TryAddOperator::Operation(raw, delta, result)) {
-		result = (delta > 0) ? NumericLimits<int64_t>::Maximum() : NumericLimits<int64_t>::Minimum();
+	if (!TryAddOperator::Operation(raw, margin, result)) {
+		return false;
 	}
 	val = MakeTemporalValue(val.type().id(), result);
 	return true;
@@ -815,24 +819,21 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	// identify which side is CAST(col) and which is the scalar constant
-	Expression *cast_side = nullptr;
-	Expression *const_side = nullptr;
 	bool invert = false;
 	if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_CAST && comp.right->IsFoldable()) {
-		cast_side = comp.left.get();
-		const_side = comp.right.get();
+		// cast on left, constant on right
 	} else if (comp.right->GetExpressionClass() == ExpressionClass::BOUND_CAST && comp.left->IsFoldable()) {
-		cast_side = comp.right.get();
-		const_side = comp.left.get();
 		invert = true;
 	} else {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto &cast_expr = cast_side->Cast<BoundCastExpression>();
+	auto &cast_side = invert ? *comp.right : *comp.left;
+	auto &const_side = invert ? *comp.left : *comp.right;
+	auto &cast_expr = cast_side.Cast<BoundCastExpression>();
 	auto source_type = cast_expr.source_type();
 	auto &target_type = cast_expr.return_type;
-	int64_t margin_micros = GetTemporalCastRelaxationMicros(source_type.id(), target_type.id());
-	if (margin_micros < 0) {
+	int64_t margin = GetTemporalCastMargin(source_type.id(), target_type.id());
+	if (margin < 0) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
@@ -848,7 +849,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	// evaluate the constant side
 	Value constant_value, casted_value;
 	string error_msg;
-	if (!ExpressionExecutor::TryEvaluateScalar(context, *const_side, constant_value)) {
+	if (!ExpressionExecutor::TryEvaluateScalar(context, const_side, constant_value)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (constant_value.IsNull()) {
@@ -869,14 +870,14 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
 	if (IsGreaterThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
 		Value lower = casted_value;
-		if (!AdjustTemporalValue(lower, -margin_micros)) {
+		if (!AdjustTemporalValue(lower, -margin)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 		push_optional(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(lower));
 	}
 	if (IsLessThan(comparison_type) || comparison_type == ExpressionType::COMPARE_EQUAL) {
 		Value upper = casted_value;
-		if (!AdjustTemporalValue(upper, margin_micros)) {
+		if (!AdjustTemporalValue(upper, margin)) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 		push_optional(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(upper));
