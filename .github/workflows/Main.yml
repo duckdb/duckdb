@@ -58,6 +58,7 @@ jobs:
       runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
       runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
     env:
       CC: gcc-10
       CXX: g++-10
@@ -79,6 +80,7 @@ jobs:
               echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
               echo "runner_linux_arm64=namespace-profile-linux-arm64"
               echo "runner_macos_arm64=namespace-profile-macos-arm64"
+              echo "runner_macos_14_arm64=namespace-profile-macos-14-arm64"
             } >> "$GITHUB_OUTPUT"
           else
             {
@@ -87,6 +89,7 @@ jobs:
               echo "runner_linux_22_x64=ubuntu-22.04"
               echo "runner_linux_arm64=ubuntu-24.04-arm"
               echo "runner_macos_arm64=macos-14"
+              echo "runner_macos_14_arm64=macos-14"
             } >> "$GITHUB_OUTPUT"
           fi
 
@@ -322,7 +325,7 @@ jobs:
       - prepare
       - linux-debug
     with:
-      runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_arm64 }}
+      runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
     uses: ./.github/workflows/Windows.yml
