@@ -47,6 +47,9 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(AttachedDatabase &db_p, DuckTra
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 	transaction_manager.ResetActiveCheckpoint();
 	if (checkpoint_connection) {
+		if (checkpoint_transaction) {
+			transaction_manager.RollbackTransaction(*checkpoint_transaction);
+		}
 		checkpoint_connection->context->transaction.ClearTransaction();
 	}
 }
@@ -69,6 +72,7 @@ void ActiveCheckpointWrapper::Commit() {
 	auto &meta_transaction = transaction_context.ActiveTransaction();
 	auto error = meta_transaction.Commit();
 	transaction_context.ClearTransaction();
+	checkpoint_transaction = nullptr;
 	if (error.HasError()) {
 		throw FatalException("Failed to commit checkpoint transaction: %s", error.Message());
 	}
