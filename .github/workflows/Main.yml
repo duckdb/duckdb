@@ -150,7 +150,7 @@ jobs:
       run: make relassert-artifact
 
     - name: Upload relassert build artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: linux-debug-relassert-build
         path: build/relassert-artifact.tar.gz
@@ -169,7 +169,7 @@ jobs:
       run: make toolsci
 
     - name: Download relassert build artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-debug-relassert-build
         path: build
@@ -243,7 +243,7 @@ jobs:
         mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
 
     - name: Upload linux default release artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: linux-default-release-build
         path: build/linux-default-release.tar.gz
@@ -262,7 +262,7 @@ jobs:
       run: make toolsci
 
     - name: Download release build artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-release-build
         path: build
@@ -286,12 +286,12 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Download linux default release artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-default-release-build
         path: build
@@ -465,7 +465,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -487,7 +487,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -496,7 +496,7 @@ jobs:
       run: make toolsci
 
     - name: Download linux release artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-release-build
         path: build

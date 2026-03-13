@@ -43,7 +43,7 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -117,7 +117,7 @@ jobs:
         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: duckdb-binaries-windows-amd64
         path: |
@@ -142,7 +142,7 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -178,7 +178,7 @@ jobs:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}
 
-     - uses: actions/setup-python@v5
+     - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
 
@@ -220,7 +220,7 @@ jobs:
          /c/msys64/usr/bin/zip.exe -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
-     - uses: actions/upload-artifact@v4
+     - uses: actions/upload-artifact@v7
        with:
          name: duckdb-binaries-windows-arm64
          path: |
@@ -238,7 +238,7 @@ jobs:
          with:
            ref: ${{ inputs.git_ref }}
 
-       - uses: actions/setup-python@v5
+       - uses: actions/setup-python@v6
          with:
            python-version: '3.12'
 
@@ -278,15 +278,15 @@ jobs:
      - win-release-64
      - win-release-arm64
    steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         name: duckdb-binaries-windows-arm64
 
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         name: duckdb-binaries-windows-amd64
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: duckdb-binaries-windows
         path: |

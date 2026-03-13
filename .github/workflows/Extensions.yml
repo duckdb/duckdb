@@ -217,19 +217,19 @@ jobs:
 
       - uses: ./.github/actions/cleanup_runner
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download main extensions
         with:
           pattern: main-extensions*
           path: /tmp/repository_generation/main-extensions
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download rust-based extensions
         with:
           pattern: rust-based-extensions*
           path: /tmp/repository_generation/rust-based-extensions
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download external extensions
         with:
           pattern: external-extensions*
@@ -245,7 +245,7 @@ jobs:
           cp -r  /tmp/repository_generation/*/*/* /tmp/merged_repository
           tree /tmp/merged_repository
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
           name: extension-repository
@@ -266,7 +266,7 @@ jobs:
 
       - uses: ./.github/actions/cleanup_runner
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: extension-repository
           path: /tmp
@@ -306,7 +306,7 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: extension-repository
           path: /tmp
@@ -351,7 +351,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.9'
 
@@ -369,7 +369,7 @@ jobs:
         run: |
           make
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download extension repository artifact
         with:
           pattern: extension-repository
@@ -395,7 +395,7 @@ jobs:
           pip install "clang_format==11.0.1"
           make format-fix
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: extension_entries.hpp
           path: |

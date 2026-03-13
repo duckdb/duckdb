@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ matrix.version }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -70,7 +70,7 @@ jobs:
           ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
           rm -rf my_local_folder/hive
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: files-osx-${{ matrix.version }}
           path: |
@@ -101,7 +101,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ matrix.version }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -118,51 +118,51 @@ jobs:
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.0.0
           path: osx_v1_0_0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.1.3
           path: osx_v1_1_3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.2.2
           path: osx_v1_2_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.3.2
           path: osx_v1_3_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.4-andium
           path: osx_v1_4-andium
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-main
           path: osx_main
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.0.0
           path: linux_v1_0_0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.1.3
           path: linux_v1_1_3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.2.2
           path: linux_v1_2_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.3.2
           path: linux_v1_3_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.4-andium
           path: linux_v1_4-andium
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-main
           path: linux_main
@@ -203,7 +203,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ matrix.version }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -227,7 +227,7 @@ jobs:
           ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
           rm -rf my_local_folder/hive
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: files-linux-${{ matrix.version }}
           path: |
@@ -268,7 +268,7 @@ jobs:
           remove_folders: /opt/az /opt/ghc /opt/google /opt/hostedtoolcache /opt/microsoft /usr/lib/firefox /usr/lib/jvm /usr/local/.ghcup /usr/local/julia* /usr/local/lib/android /usr/local/share/boost /usr/local/share/chromium /usr/local/share/powershell /usr/share/dotnet /usr/share/swift /var/lib/apt/lists/*
 
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -286,51 +286,51 @@ jobs:
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.0.0
           path: osx_v1_0_0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.1.3
           path: osx_v1_1_3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.2.2
           path: osx_v1_2_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.3.2
           path: osx_v1_3_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-v1.4-andium
           path: osx_v1_4-andium
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-osx-main
           path: osx_main
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.0.0
           path: linux_v1_0_0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.1.3
           path: linux_v1_1_3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.2.2
           path: linux_v1_2_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.3.2
           path: linux_v1_3_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-v1.4-andium
           path: linux_v1_4-andium
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: files-linux-main
           path: linux_main
