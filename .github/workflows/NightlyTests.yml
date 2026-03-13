@@ -49,7 +49,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v5
+     - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
 
@@ -132,7 +132,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -328,7 +328,7 @@ jobs:
         shell: bash
         run: make toolsci
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
@@ -388,7 +388,7 @@ jobs:
          fetch-depth: 0
          path: unsafe
 
-     - uses: actions/setup-python@v5
+     - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
 
@@ -631,7 +631,7 @@ jobs:
       run: |
         zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: duckdb-wasm32
         path: |
@@ -694,7 +694,7 @@ jobs:
             DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
 
       - name: Upload DuckDB binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: duckdb-binary
           path: build/release/duckdb
@@ -727,12 +727,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
       - name: Download DuckDB binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: duckdb-binary
           path: build/release
@@ -773,14 +773,14 @@ jobs:
 
       - name: Upload BWC cache
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bwc-cache-${{ matrix.old_duckdb_version }}
           path: duckdb_unittest_tempdir/bwc/cache/runtime_${{ matrix.old_duckdb_version }}.tar.gz
 
       - name: Upload test artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bwc-test-results-${{ matrix.old_duckdb_version }}
           path: |
@@ -794,7 +794,7 @@ jobs:
     if: always()
     steps:
       - name: Download all test artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: bwc-test-results-*
           merge-multiple: true

@@ -63,7 +63,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -92,7 +92,7 @@ jobs:
           zip -r -j static-libs-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libs/
           ./scripts/upload-assets-to-staging.sh github_release static-libs-osx-${{ matrix.architecture }}.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: duckdb-static-libs-osx-${{ matrix.architecture }}
           path: |
@@ -111,7 +111,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -152,7 +152,7 @@ jobs:
           zip -r -j static-libs-windows-mingw.zip src/include/duckdb.h build/release/libs/
           ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: duckdb-static-libs-windows-mingw
           path: |
@@ -213,7 +213,7 @@ jobs:
           python3 scripts/amalgamation.py
           zip -r -j static-libs-linux-${{ matrix.config.arch }}.zip src/include/duckdb.h build/release/libs/
           ./scripts/upload-assets-to-staging.sh github_release static-libs-linux-${{ matrix.config.arch }}.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: duckdb-static-libs-linux-${{ matrix.config.arch }}
           path: |

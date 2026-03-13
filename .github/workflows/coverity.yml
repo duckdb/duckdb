@@ -32,7 +32,7 @@ jobs:
     - name: Install dependencies
       run: make toolsci && sudo apt install -y git g++ cmake libssl-dev default-jdk
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 

@@ -114,7 +114,7 @@ jobs:
           path: benchmark/fivetran
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: linux-release-build
           path: build/current
@@ -125,7 +125,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: linux-base-build
           path: build/base
@@ -200,7 +200,7 @@ jobs:
         run: make toolsci && pip install requests
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: linux-release-build
           path: build/current
@@ -211,7 +211,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: linux-base-build
           path: build/base
@@ -273,7 +273,7 @@ jobs:
         run: make toolsci && pip install requests
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: linux-release-build
           path: build/current
@@ -284,7 +284,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: linux-base-build
           path: build/base
@@ -311,7 +311,7 @@ jobs:
         run: make toolsci && pip install tqdm
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: linux-release-build
           path: build/current
@@ -322,7 +322,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: linux-base-build
           path: build/base
