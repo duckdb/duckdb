@@ -602,8 +602,6 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(ClientContext &c
 	if (per_file_cardinality < min_per_file_cardinality) {
 		per_file_cardinality = min_per_file_cardinality;
 	}
-	Printer::PrintF("For files %s - estimate per file cardinality of %d (file count %d)", file.path,
-	                per_file_cardinality, file_count);
 	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
 }
 
