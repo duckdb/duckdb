@@ -3,8 +3,6 @@
 
 #include "duckdb.h"
 
-using namespace std;
-
 // we only use functions that are cool to use in the 1.0 API
 TEST_CASE("Test without deprecated or future moved functions", "[capi]") {
 	duckdb_database database;
