@@ -159,3 +159,141 @@ SELECT * FROM t WHERE j >= 20 ORDER BY j;
 ----
 2	new_20	20
 3	new_30	30
+
+# -----------------------------------------------------------------------------
+# MERGE INTO DELETE with indexed table
+# -----------------------------------------------------------------------------
+
+# reset table
+statement ok
+DELETE FROM t;
+
+statement ok
+INSERT INTO t VALUES (1, 'a', 10), (2, 'b', 20), (3, 'c', 30);
+
+# create source table for merge
+statement ok
+CREATE TABLE source (id INT, s TEXT, j BIGINT);
+
+statement ok
+INSERT INTO source VALUES (2, 'x', 200), (3, 'y', 300);
+
+# MERGE INTO DELETE using primary key
+statement ok
+MERGE INTO t USING source ON t.id = source.id
+WHEN MATCHED THEN DELETE;
+
+query III
+SELECT * FROM t ORDER BY id;
+----
+1	a	10
+
+# verify we can insert rows with the deleted primary keys
+statement ok
+INSERT INTO t VALUES (2, 'new_b', 25), (3, 'new_c', 35);
+
+query III
+SELECT * FROM t ORDER BY id;
+----
+1	a	10
+2	new_b	25
+3	new_c	35
+
+# verify index lookup works
+query III
+SELECT * FROM t WHERE j = 25;
+----
+2	new_b	25
+
+# -----------------------------------------------------------------------------
+# MERGE INTO DELETE and INSERT in same transaction with overlapping values
+# -----------------------------------------------------------------------------
+
+statement ok
+DELETE FROM t;
+
+statement ok
+INSERT INTO t VALUES (1, 'a', 10), (2, 'b', 20), (3, 'c', 30);
+
+statement ok
+DELETE FROM source;
+
+statement ok
+INSERT INTO source VALUES (2, 'x', 200), (3, 'y', 300);
+
+statement ok
+BEGIN TRANSACTION;
+
+# MERGE INTO DELETE rows with id=2,3
+statement ok
+MERGE INTO t USING source ON t.id = source.id
+WHEN MATCHED THEN DELETE;
+
+# insert new rows with same ids
+statement ok
+INSERT INTO t VALUES (2, 'merge_20', 20), (3, 'merge_30', 30);
+
+# verify index lookup during transaction
+query III
+SELECT * FROM t WHERE j = 20;
+----
+2	merge_20	20
+
+query III
+SELECT * FROM t WHERE j = 30;
+----
+3	merge_30	30
+
+statement ok
+COMMIT;
+
+# verify index lookups after commit
+query III
+SELECT * FROM t WHERE j = 20;
+----
+2	merge_20	20
+
+query III
+SELECT * FROM t WHERE j = 30;
+----
+3	merge_30	30
+
+# -----------------------------------------------------------------------------
+# MERGE INTO DELETE with rollback
+# -----------------------------------------------------------------------------
+
+statement ok
+BEGIN TRANSACTION;
+
+# MERGE INTO DELETE rows
+statement ok
+MERGE INTO t USING source ON t.id = source.id
+WHEN MATCHED THEN DELETE;
+
+# insert rows with same ids
+statement ok
+INSERT INTO t VALUES (2, 'tmp_20', 20), (3, 'tmp_30', 30);
+
+# verify during transaction
+query III
+SELECT * FROM t WHERE j = 20;
+----
+2	tmp_20	20
+
+statement ok
+ROLLBACK;
+
+# verify index lookups after rollback - should see original values
+query III
+SELECT * FROM t WHERE j = 20;
+----
+2	merge_20	20
+
+query III
+SELECT * FROM t WHERE j = 30;
+----
+3	merge_30	30
+
+# cleanup
+statement ok
+DROP TABLE source;

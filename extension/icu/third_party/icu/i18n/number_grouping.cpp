@@ -18,7 +18,7 @@ namespace {
 int16_t getMinGroupingForLocale(const Locale& locale) {
     // TODO: Cache this?
     UErrorCode localStatus = U_ZERO_ERROR;
-    LocalUResourceBundlePointer bundle(ures_open(NULL, locale.getName(), &localStatus));
+    LocalUResourceBundlePointer bundle(ures_open(nullptr, locale.getName(), &localStatus));
     int32_t resultLen = 0;
     const char16_t* result = ures_getStringByKeyWithFallback(
         bundle.getAlias(),
@@ -47,7 +47,7 @@ Grouper Grouper::forStrategy(UNumberGroupingStrategy grouping) {
     case UNUM_GROUPING_THOUSANDS:
         return {3, 3, 1, grouping};
     default:
-        UPRV_UNREACHABLE;
+        UPRV_UNREACHABLE_EXIT;
     }
 }
 
@@ -63,7 +63,14 @@ Grouper Grouper::forProperties(const DecimalFormatProperties& properties) {
     return {grouping1, grouping2, minGrouping, UNUM_GROUPING_COUNT};
 }
 
-void Grouper::setLocaleData(const number::impl::ParsedPatternInfo &patternInfo, const Locale& locale) {
+void Grouper::setLocaleData(const impl::ParsedPatternInfo &patternInfo, const Locale& locale) {
+    if (fMinGrouping == -2) {
+        fMinGrouping = getMinGroupingForLocale(locale);
+    } else if (fMinGrouping == -3) {
+        fMinGrouping = static_cast<int16_t>(uprv_max(2, getMinGroupingForLocale(locale)));
+    } else {
+        // leave fMinGrouping alone
+    }
     if (fGrouping1 != -2 && fGrouping2 != -4) {
         return;
     }
@@ -76,18 +83,11 @@ void Grouper::setLocaleData(const number::impl::ParsedPatternInfo &patternInfo, 
     if (grouping3 == -1) {
         grouping2 = grouping1;
     }
-    if (fMinGrouping == -2) {
-        fMinGrouping = getMinGroupingForLocale(locale);
-    } else if (fMinGrouping == -3) {
-        fMinGrouping = static_cast<int16_t>(uprv_max(2, getMinGroupingForLocale(locale)));
-    } else {
-        // leave fMinGrouping alone
-    }
     fGrouping1 = grouping1;
     fGrouping2 = grouping2;
 }
 
-bool Grouper::groupAtPosition(int32_t position, const number::impl::DecimalQuantity &value) const {
+bool Grouper::groupAtPosition(int32_t position, const impl::DecimalQuantity &value) const {
     U_ASSERT(fGrouping1 > -2);
     if (fGrouping1 == -1 || fGrouping1 == 0) {
         // Either -1 or 0 means "no grouping"

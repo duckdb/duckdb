@@ -33,7 +33,7 @@ U_NAMESPACE_BEGIN
 class U_COMMON_API MessageImpl {
 public:
     /**
-     * @return TRUE if getApostropheMode()==UMSGPAT_APOS_DOUBLE_REQUIRED
+     * @return true if getApostropheMode()==UMSGPAT_APOS_DOUBLE_REQUIRED
      */
     static UBool jdkAposMode(const MessagePattern &msgPattern) {
         return msgPattern.getApostropheMode()==UMSGPAT_APOS_DOUBLE_REQUIRED;
@@ -55,7 +55,7 @@ public:
                                                             UnicodeString &result);
 
 private:
-    MessageImpl();  // no constructor: all static methods
+    MessageImpl() = delete;  // no constructor: all static methods
 };
 
 U_NAMESPACE_END

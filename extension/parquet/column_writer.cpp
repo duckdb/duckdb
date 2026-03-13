@@ -321,7 +321,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		                                      std::move(child_writers));
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION ||
+	    type.id() == LogicalTypeId::AGGREGATE_STATE) {
 		auto struct_column =
 		    ParquetColumnSchema::FromLogicalType(name, type, max_define, max_repeat, 0, null_type, allow_geometry);
 		if (field_id && field_id->set) {
@@ -489,6 +490,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		    writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::ENUM:
 		return make_uniq<EnumColumnWriter>(writer, std::move(schema), std::move(path_in_schema));
+	case LogicalTypeId::SQLNULL:
+		// All values are NULL - use INT32 as physical type (values are never read, only definition levels matter)
+		return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, std::move(schema), std::move(path_in_schema));
 	default:
 		throw InternalException("Unsupported type \"%s\" in Parquet writer", type.ToString());
 	}

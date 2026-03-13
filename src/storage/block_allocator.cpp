@@ -1,10 +1,11 @@
 #include "duckdb/storage/block_allocator.hpp"
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
-#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/bit_utils.hpp"
 
 #if defined(_WIN32)
 #include "duckdb/common/windows.hpp"

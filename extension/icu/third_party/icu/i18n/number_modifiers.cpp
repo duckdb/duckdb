@@ -17,35 +17,35 @@ using namespace icu::number::impl;
 namespace {
 
 // TODO: This is copied from simpleformatter.cpp
-const int32_t NUMBER_MODIFIERS_ARG_NUM_LIMIT = 0x100;
+const int32_t ARG_NUM_LIMIT = 0x100;
 
 // These are the default currency spacing UnicodeSets in CLDR.
 // Pre-compute them for performance.
 // The Java unit test testCurrencySpacingPatternStability() will start failing if these change in CLDR.
-icu::UInitOnce gDefaultCurrencySpacingInitOnce = U_INITONCE_INITIALIZER;
+icu::UInitOnce gDefaultCurrencySpacingInitOnce {};
 
 UnicodeSet *UNISET_DIGIT = nullptr;
-UnicodeSet *UNISET_NOTS = nullptr;
+UnicodeSet *UNISET_NOTSZ = nullptr;
 
 UBool U_CALLCONV cleanupDefaultCurrencySpacing() {
     delete UNISET_DIGIT;
     UNISET_DIGIT = nullptr;
-    delete UNISET_NOTS;
-    UNISET_NOTS = nullptr;
+    delete UNISET_NOTSZ;
+    UNISET_NOTSZ = nullptr;
     gDefaultCurrencySpacingInitOnce.reset();
-    return TRUE;
+    return true;
 }
 
 void U_CALLCONV initDefaultCurrencySpacing(UErrorCode &status) {
     ucln_i18n_registerCleanup(UCLN_I18N_CURRENCY_SPACING, cleanupDefaultCurrencySpacing);
     UNISET_DIGIT = new UnicodeSet(UnicodeString(u"[:digit:]"), status);
-    UNISET_NOTS = new UnicodeSet(UnicodeString(u"[:^S:]"), status);
-    if (UNISET_DIGIT == nullptr || UNISET_NOTS == nullptr) {
+    UNISET_NOTSZ = new UnicodeSet(UnicodeString(u"[[:^S:]&[:^Z:]]"), status);
+    if (UNISET_DIGIT == nullptr || UNISET_NOTSZ == nullptr) {
         status = U_MEMORY_ALLOCATION_ERROR;
         return;
     }
     UNISET_DIGIT->freeze();
-    UNISET_NOTS->freeze();
+    UNISET_NOTSZ->freeze();
 }
 
 }  // namespace
@@ -62,10 +62,19 @@ Modifier::Parameters::Parameters(
 
 ModifierStore::~ModifierStore() = default;
 
-AdoptingModifierStore::~AdoptingModifierStore()  {
+AdoptingSignumModifierStore::~AdoptingSignumModifierStore()  {
     for (const Modifier *mod : mods) {
         delete mod;
     }
+}
+
+AdoptingSignumModifierStore&
+AdoptingSignumModifierStore::operator=(AdoptingSignumModifierStore&& other) noexcept {
+    for (size_t i=0; i<SIGNUM_COUNT; i++) {
+        this->mods[i] = other.mods[i];
+        other.mods[i] = nullptr;
+    }
+    return *this;
 }
 
 
@@ -89,16 +98,16 @@ bool ConstantAffixModifier::isStrong() const {
     return fStrong;
 }
 
-bool ConstantAffixModifier::containsField(UNumberFormatFields field) const {
+bool ConstantAffixModifier::containsField(Field field) const {
     (void)field;
     // This method is not currently used.
-    UPRV_UNREACHABLE;
+    UPRV_UNREACHABLE_EXIT;
 }
 
 void ConstantAffixModifier::getParameters(Parameters& output) const {
     (void)output;
     // This method is not currently used.
-    UPRV_UNREACHABLE;
+    UPRV_UNREACHABLE_EXIT;
 }
 
 bool ConstantAffixModifier::semanticallyEquivalent(const Modifier& other) const {
@@ -124,7 +133,7 @@ SimpleModifier::SimpleModifier(const SimpleFormatter &simpleFormatter, Field fie
             fCompiledPattern.getBuffer(), fCompiledPattern.length());
     if (argLimit == 0) {
         // No arguments in compiled pattern
-        fPrefixLength = fCompiledPattern.charAt(1) - NUMBER_MODIFIERS_ARG_NUM_LIMIT;
+        fPrefixLength = fCompiledPattern.charAt(1) - ARG_NUM_LIMIT;
         U_ASSERT(2 + fPrefixLength == fCompiledPattern.length());
         // Set suffixOffset = -1 to indicate no arguments in compiled pattern.
         fSuffixOffset = -1;
@@ -133,7 +142,7 @@ SimpleModifier::SimpleModifier(const SimpleFormatter &simpleFormatter, Field fie
         U_ASSERT(argLimit == 1);
         if (fCompiledPattern.charAt(1) != 0) {
             // Found prefix
-            fPrefixLength = fCompiledPattern.charAt(1) - NUMBER_MODIFIERS_ARG_NUM_LIMIT;
+            fPrefixLength = fCompiledPattern.charAt(1) - ARG_NUM_LIMIT;
             fSuffixOffset = 3 + fPrefixLength;
         } else {
             // No prefix
@@ -142,7 +151,7 @@ SimpleModifier::SimpleModifier(const SimpleFormatter &simpleFormatter, Field fie
         }
         if (3 + fPrefixLength < fCompiledPattern.length()) {
             // Found suffix
-            fSuffixLength = fCompiledPattern.charAt(fSuffixOffset) - NUMBER_MODIFIERS_ARG_NUM_LIMIT;
+            fSuffixLength = fCompiledPattern.charAt(fSuffixOffset) - ARG_NUM_LIMIT;
         } else {
             // No suffix
             fSuffixLength = 0;
@@ -151,7 +160,7 @@ SimpleModifier::SimpleModifier(const SimpleFormatter &simpleFormatter, Field fie
 }
 
 SimpleModifier::SimpleModifier()
-        : fField(UNUM_FIELD_COUNT), fStrong(false), fPrefixLength(0), fSuffixLength(0) {
+        : fField(kUndefinedField), fStrong(false), fPrefixLength(0), fSuffixLength(0) {
 }
 
 int32_t SimpleModifier::apply(FormattedStringBuilder &output, int leftIndex, int rightIndex,
@@ -178,10 +187,10 @@ bool SimpleModifier::isStrong() const {
     return fStrong;
 }
 
-bool SimpleModifier::containsField(UNumberFormatFields field) const {
+bool SimpleModifier::containsField(Field field) const {
     (void)field;
     // This method is not currently used.
-    UPRV_UNREACHABLE;
+    UPRV_UNREACHABLE_EXIT;
 }
 
 void SimpleModifier::getParameters(Parameters& output) const {
@@ -242,11 +251,11 @@ SimpleModifier::formatTwoArgPattern(const SimpleFormatter& compiled, FormattedSt
 
     int32_t prefixLength = compiledPattern.charAt(offset);
     offset++;
-    if (prefixLength < NUMBER_MODIFIERS_ARG_NUM_LIMIT) {
+    if (prefixLength < ARG_NUM_LIMIT) {
         // No prefix
         prefixLength = 0;
     } else {
-        prefixLength -= NUMBER_MODIFIERS_ARG_NUM_LIMIT;
+        prefixLength -= ARG_NUM_LIMIT;
         result.insert(index + length, compiledPattern, offset, offset + prefixLength, field, status);
         offset += prefixLength;
         length += prefixLength;
@@ -255,11 +264,11 @@ SimpleModifier::formatTwoArgPattern(const SimpleFormatter& compiled, FormattedSt
 
     int32_t infixLength = compiledPattern.charAt(offset);
     offset++;
-    if (infixLength < NUMBER_MODIFIERS_ARG_NUM_LIMIT) {
+    if (infixLength < ARG_NUM_LIMIT) {
         // No infix
         infixLength = 0;
     } else {
-        infixLength -= NUMBER_MODIFIERS_ARG_NUM_LIMIT;
+        infixLength -= ARG_NUM_LIMIT;
         result.insert(index + length, compiledPattern, offset, offset + infixLength, field, status);
         offset += infixLength;
         length += infixLength;
@@ -271,7 +280,7 @@ SimpleModifier::formatTwoArgPattern(const SimpleFormatter& compiled, FormattedSt
         // No suffix
         suffixLength = 0;
     } else {
-        suffixLength = compiledPattern.charAt(offset) -  NUMBER_MODIFIERS_ARG_NUM_LIMIT;
+        suffixLength = compiledPattern.charAt(offset) -  ARG_NUM_LIMIT;
         offset++;
         result.insert(index + length, compiledPattern, offset, offset + suffixLength, field, status);
         length += suffixLength;
@@ -292,7 +301,7 @@ int32_t ConstantMultiFieldModifier::apply(FormattedStringBuilder &output, int le
             leftIndex + length,
             rightIndex + length,
             UnicodeString(), 0, 0,
-            UNUM_FIELD_COUNT, status);
+            kUndefinedField, status);
     }
     length += output.insert(rightIndex + length, fSuffix, status);
     return length;
@@ -310,7 +319,7 @@ bool ConstantMultiFieldModifier::isStrong() const {
     return fStrong;
 }
 
-bool ConstantMultiFieldModifier::containsField(UNumberFormatFields field) const {
+bool ConstantMultiFieldModifier::containsField(Field field) const {
     return fPrefix.containsField(field) || fSuffix.containsField(field);
 }
 
@@ -342,7 +351,7 @@ CurrencySpacingEnabledModifier::CurrencySpacingEnabledModifier(const FormattedSt
         : ConstantMultiFieldModifier(prefix, suffix, overwrite, strong) {
     // Check for currency spacing. Do not build the UnicodeSets unless there is
     // a currency code point at a boundary.
-    if (prefix.length() > 0 && prefix.fieldAt(prefix.length() - 1) == UNUM_CURRENCY_FIELD) {
+    if (prefix.length() > 0 && prefix.fieldAt(prefix.length() - 1) == Field(UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD)) {
         int prefixCp = prefix.getLastCodePoint();
         UnicodeSet prefixUnicodeSet = getUnicodeSet(symbols, IN_CURRENCY, PREFIX, status);
         if (prefixUnicodeSet.contains(prefixCp)) {
@@ -357,8 +366,8 @@ CurrencySpacingEnabledModifier::CurrencySpacingEnabledModifier(const FormattedSt
         fAfterPrefixUnicodeSet.setToBogus();
         fAfterPrefixInsert.setToBogus();
     }
-    if (suffix.length() > 0 && suffix.fieldAt(0) == UNUM_CURRENCY_FIELD) {
-        int suffixCp = suffix.getLastCodePoint();
+    if (suffix.length() > 0 && suffix.fieldAt(0) == Field(UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD)) {
+        int suffixCp = suffix.getFirstCodePoint();
         UnicodeSet suffixUnicodeSet = getUnicodeSet(symbols, IN_CURRENCY, SUFFIX, status);
         if (suffixUnicodeSet.contains(suffixCp)) {
             fBeforeSuffixUnicodeSet = getUnicodeSet(symbols, IN_NUMBER, SUFFIX, status);
@@ -381,12 +390,20 @@ int32_t CurrencySpacingEnabledModifier::apply(FormattedStringBuilder &output, in
     if (rightIndex - leftIndex > 0 && !fAfterPrefixUnicodeSet.isBogus() &&
         fAfterPrefixUnicodeSet.contains(output.codePointAt(leftIndex))) {
         // TODO: Should we use the CURRENCY field here?
-        length += output.insert(leftIndex, fAfterPrefixInsert, UNUM_FIELD_COUNT, status);
+        length += output.insert(
+            leftIndex,
+            fAfterPrefixInsert,
+            kUndefinedField,
+            status);
     }
     if (rightIndex - leftIndex > 0 && !fBeforeSuffixUnicodeSet.isBogus() &&
         fBeforeSuffixUnicodeSet.contains(output.codePointBefore(rightIndex))) {
         // TODO: Should we use the CURRENCY field here?
-        length += output.insert(rightIndex + length, fBeforeSuffixInsert, UNUM_FIELD_COUNT, status);
+        length += output.insert(
+            rightIndex + length,
+            fBeforeSuffixInsert,
+            kUndefinedField,
+            status);
     }
 
     // Call super for the remaining logic
@@ -422,7 +439,7 @@ CurrencySpacingEnabledModifier::applyCurrencySpacingAffix(FormattedStringBuilder
     // This works even if the last code point in the prefix is 2 code units because the
     // field value gets populated to both indices in the field array.
     Field affixField = (affix == PREFIX) ? output.fieldAt(index - 1) : output.fieldAt(index);
-    if (affixField != UNUM_CURRENCY_FIELD) {
+    if (affixField != Field(UFIELD_CATEGORY_NUMBER, UNUM_CURRENCY_FIELD)) {
         return 0;
     }
     int affixCp = (affix == PREFIX) ? output.codePointBefore(index) : output.codePointAt(index);
@@ -443,7 +460,7 @@ CurrencySpacingEnabledModifier::applyCurrencySpacingAffix(FormattedStringBuilder
     // However, the build code path is more efficient, and this is the most natural
     // place to put currency spacing in the non-build code path.
     // TODO: Should we use the CURRENCY field here?
-    return output.insert(index, spacingString, UNUM_FIELD_COUNT, status);
+    return output.insert(index, spacingString, kUndefinedField, status);
 }
 
 UnicodeSet
@@ -461,8 +478,8 @@ CurrencySpacingEnabledModifier::getUnicodeSet(const DecimalFormatSymbols &symbol
             status);
     if (pattern.compare(u"[:digit:]", -1) == 0) {
         return *UNISET_DIGIT;
-    } else if (pattern.compare(u"[:^S:]", -1) == 0) {
-        return *UNISET_NOTS;
+    } else if (pattern.compare(u"[[:^S:]&[:^Z:]]", -1) == 0) {
+        return *UNISET_NOTSZ;
     } else {
         return UnicodeSet(pattern, status);
     }

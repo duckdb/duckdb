@@ -33,18 +33,18 @@ bool SelectBindState::AliasHasSubquery(idx_t index) const {
 
 void SelectBindState::AddExpandedColumn(idx_t expand_count) {
 	if (expanded_column_indices.empty()) {
-		expanded_column_indices.push_back(0);
+		expanded_column_indices.emplace_back(0);
 	}
-	expanded_column_indices.push_back(expanded_column_indices.back() + expand_count);
+	expanded_column_indices.push_back(ProjectionIndex(expanded_column_indices.back().index + expand_count));
 }
 
 void SelectBindState::AddRegularColumn() {
 	AddExpandedColumn(1);
 }
 
-idx_t SelectBindState::GetFinalIndex(idx_t index) const {
+ProjectionIndex SelectBindState::GetFinalIndex(idx_t index) const {
 	if (index >= expanded_column_indices.size()) {
-		return index;
+		return ProjectionIndex(index);
 	}
 	return expanded_column_indices[index];
 }

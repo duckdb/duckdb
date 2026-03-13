@@ -25,11 +25,11 @@
  */
  
 /** Should permutation skip characters with combining class zero
- *  Should be either TRUE or FALSE. This is a compile time option
+ *  Should be either true or false. This is a compile time option
  *  @stable ICU 2.4
  */
 #ifndef CANITER_SKIP_ZEROES
-#define CANITER_SKIP_ZEROES TRUE
+#define CANITER_SKIP_ZEROES true
 #endif
 
 U_NAMESPACE_BEGIN
@@ -73,7 +73,7 @@ Results for: {LATIN CAPITAL LETTER A WITH RING ABOVE}{LATIN SMALL LETTER D}{COMB
  * @author C++ port by V. Weinstein
  * @stable ICU 2.4
  */
-class U_COMMON_API CanonicalIterator U_FINAL : public UObject {
+class U_COMMON_API CanonicalIterator final : public UObject {
 public:
     /**
      * Construct a CanonicalIterator object
@@ -145,25 +145,25 @@ public:
      *
      * @stable ICU 2.2
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
 private:
     // ===================== PRIVATES ==============================
     // private default constructor
-    CanonicalIterator();
+    CanonicalIterator() = delete;
 
 
     /**
      * Copy constructor. Private for now.
      * @internal (private)
      */
-    CanonicalIterator(const CanonicalIterator& other);
+    CanonicalIterator(const CanonicalIterator& other) = delete;
 
     /**
      * Assignment operator. Private for now.
      * @internal (private)
      */
-    CanonicalIterator& operator=(const CanonicalIterator& other);
+    CanonicalIterator& operator=(const CanonicalIterator& other) = delete;
 
     // fields
     UnicodeString source;
@@ -194,7 +194,7 @@ private:
 
     /**
      * See if the decomposition of cp2 is at segment starting at segmentPos
-     * (with canonical rearrangment!)
+     * (with canonical rearrangement!)
      * If so, take the remainder, and return the equivalents
      */
     //Set extract(int comp, String segment, int segmentPos, StringBuffer buffer);

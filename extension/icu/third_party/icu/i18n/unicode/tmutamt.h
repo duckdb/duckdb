@@ -39,7 +39,7 @@ public:
     /**
      * Construct TimeUnitAmount object with the given number and the
      * given time unit. 
-     * @param number        a numeric object; number.isNumeric() must be TRUE
+     * @param number        a numeric object; number.isNumeric() must be true
      * @param timeUnitField the time unit field of a time unit
      * @param status        the input-output error code. 
      *                      If the number is not numeric or the timeUnitField
@@ -87,7 +87,7 @@ public:
      * @return a polymorphic clone of this object. The result will have the same               class as returned by getDynamicClassID().
      * @stable ICU 4.2
      */
-    virtual TimeUnitAmount* clone() const;
+    virtual TimeUnitAmount* clone() const override;
 
     
     /**
@@ -140,7 +140,7 @@ public:
      *                  other classes have different class IDs.
      * @stable ICU 4.2
      */
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID(void) const override;
 
 
     /**

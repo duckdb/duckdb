@@ -12,9 +12,11 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -25,12 +27,13 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/main/settings.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 
 namespace duckdb {
 
@@ -766,7 +769,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	// Create a binder to bind the parsed expressions.
 	vector<ColumnIndex> column_indexes;
-	binder->bind_context.AddBaseTable(0, string(), column_names, column_types, column_indexes, table);
+	binder->bind_context.AddBaseTable(TableIndex(0), string(), column_names, column_types, column_indexes, table);
 	IndexBinder idx_binder(*binder, context);
 
 	// Bind the parsed expressions to create unbound expressions.

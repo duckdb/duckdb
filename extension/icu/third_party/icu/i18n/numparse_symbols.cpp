@@ -7,9 +7,7 @@
 
 // Allow implicit conversion from char16_t* to UnicodeString for this file:
 // Helpful in toString methods and elsewhere.
-#ifndef UNISTR_FROM_STRING_EXPLICIT
 #define UNISTR_FROM_STRING_EXPLICIT
-#endif
 
 #include "numparse_types.h"
 #include "numparse_symbols.h"
@@ -75,8 +73,8 @@ IgnorablesMatcher::IgnorablesMatcher(parse_flags_t parseFlags) :
         SymbolMatcher(
             {},
             (0 != (parseFlags & PARSE_FLAG_STRICT_IGNORABLES)) ?
-                unisets::UNISET_KEY_STRICT_IGNORABLES :
-                unisets::UNISET_KEY_DEFAULT_IGNORABLES) {
+                unisets::STRICT_IGNORABLES :
+                unisets::DEFAULT_IGNORABLES) {
 }
 
 bool IgnorablesMatcher::isFlexible() const {
@@ -97,7 +95,7 @@ void IgnorablesMatcher::accept(StringSegment&, ParsedNumber&) const {
 
 
 InfinityMatcher::InfinityMatcher(const DecimalFormatSymbols& dfs)
-        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kInfinitySymbol), unisets::UNISET_KEY_INFINITY_SIGN) {
+        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kInfinitySymbol), unisets::INFINITY_SIGN) {
 }
 
 bool InfinityMatcher::isDisabled(const ParsedNumber& result) const {
@@ -111,7 +109,7 @@ void InfinityMatcher::accept(StringSegment& segment, ParsedNumber& result) const
 
 
 MinusSignMatcher::MinusSignMatcher(const DecimalFormatSymbols& dfs, bool allowTrailing)
-        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kMinusSignSymbol), unisets::UNISET_KEY_MINUS_SIGN),
+        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kMinusSignSymbol), unisets::MINUS_SIGN),
           fAllowTrailing(allowTrailing) {
 }
 
@@ -126,7 +124,7 @@ void MinusSignMatcher::accept(StringSegment& segment, ParsedNumber& result) cons
 
 
 NanMatcher::NanMatcher(const DecimalFormatSymbols& dfs)
-        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kNaNSymbol), unisets::UNISET_KEY_EMPTY) {
+        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kNaNSymbol), unisets::EMPTY) {
 }
 
 bool NanMatcher::isDisabled(const ParsedNumber& result) const {
@@ -140,7 +138,7 @@ void NanMatcher::accept(StringSegment& segment, ParsedNumber& result) const {
 
 
 PaddingMatcher::PaddingMatcher(const UnicodeString& padString)
-        : SymbolMatcher(padString, unisets::UNISET_KEY_EMPTY) {}
+        : SymbolMatcher(padString, unisets::EMPTY) {}
 
 bool PaddingMatcher::isFlexible() const {
     return true;
@@ -156,7 +154,7 @@ void PaddingMatcher::accept(StringSegment&, ParsedNumber&) const {
 
 
 PercentMatcher::PercentMatcher(const DecimalFormatSymbols& dfs)
-        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kPercentSymbol), unisets::UNISET_KEY_PERCENT_SIGN) {
+        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kPercentSymbol), unisets::PERCENT_SIGN) {
 }
 
 bool PercentMatcher::isDisabled(const ParsedNumber& result) const {
@@ -170,7 +168,7 @@ void PercentMatcher::accept(StringSegment& segment, ParsedNumber& result) const 
 
 
 PermilleMatcher::PermilleMatcher(const DecimalFormatSymbols& dfs)
-        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kPerMillSymbol), unisets::UNISET_KEY_PERMILLE_SIGN) {
+        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kPerMillSymbol), unisets::PERMILLE_SIGN) {
 }
 
 bool PermilleMatcher::isDisabled(const ParsedNumber& result) const {
@@ -184,7 +182,7 @@ void PermilleMatcher::accept(StringSegment& segment, ParsedNumber& result) const
 
 
 PlusSignMatcher::PlusSignMatcher(const DecimalFormatSymbols& dfs, bool allowTrailing)
-        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kPlusSignSymbol), unisets::UNISET_KEY_PLUS_SIGN),
+        : SymbolMatcher(dfs.getConstSymbol(DecimalFormatSymbols::kPlusSignSymbol), unisets::PLUS_SIGN),
           fAllowTrailing(allowTrailing) {
 }
 

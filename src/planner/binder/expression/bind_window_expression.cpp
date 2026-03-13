@@ -423,11 +423,11 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->end = window.end;
 	result->exclude_clause = window.exclude_clause;
 
-	// create a BoundColumnRef that references this entry
-	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), result->return_type,
-	                                                  ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
-	node.windows.push_back(std::move(result));
+	auto &window_type = result->return_type;
+	auto window_idx = ColumnBinding::PushExpression(node.windows, std::move(result));
+	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), window_type,
+	                                                  ColumnBinding(node.window_index, window_idx), depth);
 	return BindResult(std::move(colref));
 }
 

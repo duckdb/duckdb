@@ -35,6 +35,8 @@ public:
 
 	OrderPreservationType OperatorOrder() const override;
 	bool ParallelOperator() const override;
+
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

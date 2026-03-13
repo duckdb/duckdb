@@ -182,14 +182,14 @@ CaseCheck CaseCheck::Deserialize(Deserializer &deserializer) {
 }
 
 void ColumnBinding::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<idx_t>(100, "table_index", table_index);
-	serializer.WritePropertyWithDefault<idx_t>(101, "column_index", column_index);
+	serializer.WritePropertyWithDefault<TableIndex>(100, "table_index", table_index);
+	serializer.WritePropertyWithDefault<ProjectionIndex>(101, "column_index", column_index);
 }
 
 ColumnBinding ColumnBinding::Deserialize(Deserializer &deserializer) {
 	ColumnBinding result;
-	deserializer.ReadPropertyWithDefault<idx_t>(100, "table_index", result.table_index);
-	deserializer.ReadPropertyWithDefault<idx_t>(101, "column_index", result.column_index);
+	deserializer.ReadPropertyWithDefault<TableIndex>(100, "table_index", result.table_index);
+	deserializer.ReadPropertyWithDefault<ProjectionIndex>(101, "column_index", result.column_index);
 	return result;
 }
 
@@ -262,6 +262,7 @@ void CommonTableExpressionInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", query);
 	serializer.WriteProperty<CTEMaterialize>(102, "materialized", GetMaterializedForSerialization(serializer));
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", key_targets);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates", payload_aggregates);
 }
 
 unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Deserializer &deserializer) {
@@ -270,6 +271,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Deserialize(Des
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(101, "query", result->query);
 	deserializer.ReadProperty<CTEMaterialize>(102, "materialized", result->materialized);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(103, "key_targets", result->key_targets);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "payload_aggregates", result->payload_aggregates);
 	return result;
 }
 
@@ -346,10 +348,10 @@ void JoinCondition::Serialize(Serializer &serializer) const {
 }
 
 JoinCondition JoinCondition::Deserialize(Deserializer &deserializer) {
-	JoinCondition result;
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "left", result.left);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "right", result.right);
-	deserializer.ReadProperty<ExpressionType>(102, "comparison", result.comparison);
+	auto left = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "left");
+	auto right = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "right");
+	auto comparison = deserializer.ReadProperty<ExpressionType>(102, "comparison");
+	JoinCondition result(std::move(left), std::move(right), comparison);
 	return result;
 }
 
@@ -486,6 +488,7 @@ void SampleOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(101, "is_percentage", is_percentage);
 	serializer.WriteProperty<SampleMethod>(102, "method", method);
 	serializer.WritePropertyWithDefault<int64_t>(103, "seed", GetSeed());
+	serializer.WritePropertyWithDefault<bool>(104, "repeatable", repeatable);
 }
 
 unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer) {
@@ -497,6 +500,7 @@ unique_ptr<SampleOptions> SampleOptions::Deserialize(Deserializer &deserializer)
 	result->sample_size = sample_size;
 	result->is_percentage = is_percentage;
 	result->method = method;
+	deserializer.ReadPropertyWithDefault<bool>(104, "repeatable", result->repeatable);
 	return result;
 }
 

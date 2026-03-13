@@ -1,9 +1,13 @@
 #include "linenoise.hpp"
 #include "linenoise.h"
 #include "highlighting.hpp"
+
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/string.hpp"
 #include "shell_highlight.hpp"
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+#include "parser/tokenizer/highlight_tokenizer.hpp"
+#endif
 
 namespace duckdb {
 
@@ -11,6 +15,30 @@ bool Highlighting::IsEnabled() {
 	return duckdb_shell::ShellHighlight::IsEnabled();
 }
 
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+static tokenType convertToken(TokenType token_type) {
+	switch (token_type) {
+	case TokenType::IDENTIFIER:
+		return tokenType::TOKEN_IDENTIFIER;
+	case TokenType::NUMBER_LITERAL:
+		return tokenType::TOKEN_NUMERIC_CONSTANT;
+	case TokenType::STRING_LITERAL:
+		return tokenType::TOKEN_STRING_CONSTANT;
+	case TokenType::OPERATOR:
+	case TokenType::TERMINATOR: // FIXME(Dtenwolde): Should become a special token for highlighting
+		return tokenType::TOKEN_OPERATOR;
+	case TokenType::KEYWORD:
+		return tokenType::TOKEN_KEYWORD;
+	case TokenType::COMMENT:
+		return tokenType::TOKEN_COMMENT;
+	case TokenType::ERROR:
+		return tokenType::TOKEN_ERROR;
+	default:
+		throw duckdb::InternalException("Unrecognized token type");
+	}
+}
+#endif
+#ifndef SHELL_INLINE_AUTOCOMPLETE
 static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 	switch (token_type) {
 	case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER:
@@ -29,18 +57,36 @@ static tokenType convertToken(duckdb::SimplifiedTokenType token_type) {
 		throw duckdb::InternalException("Unrecognized token type");
 	}
 }
+#endif
 
 static vector<highlightToken> GetParseTokens(char *buf, size_t len) {
 	string sql(buf, len);
-	auto parseTokens = duckdb::Parser::Tokenize(sql);
-
 	vector<highlightToken> tokens;
+#ifndef SHELL_INLINE_AUTOCOMPLETE
+	auto parseTokens = duckdb::Parser::Tokenize(sql);
 	for (auto &token : parseTokens) {
 		highlightToken new_token;
 		new_token.type = convertToken(token.type);
 		new_token.start = token.start;
 		tokens.push_back(new_token);
 	}
+#endif
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+	HighlightTokenizer tokenizer(sql);
+	tokenizer.TokenizeInput();
+	vector<SimplifiedToken> result;
+	result.reserve(tokenizer.tokens.size());
+	for (auto &token : tokenizer.tokens) {
+		highlightToken new_token;
+		if (token.unterminated) {
+			new_token.type = tokenType::TOKEN_ERROR;
+		} else {
+			new_token.type = convertToken(token.type);
+		}
+		new_token.start = token.offset;
+		tokens.push_back(new_token);
+	}
+#endif
 
 	if (!tokens.empty() && tokens[0].start > 0) {
 		highlightToken new_token;

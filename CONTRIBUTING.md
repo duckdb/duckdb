@@ -29,15 +29,14 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * When maintaining a branch, merge frequently with the main.
 * When maintaining a branch, submit pull requests to the main frequently.
 * If you are working on a bigger issue try to split it up into several smaller issues.
-* Please do not open "Draft" pull requests. Rather, use issues or discussion topics to discuss whatever needs discussing.
+* Please do not open "Draft" pull requests and ensure that you run CI on your fork + branch first before opening a PR (see CI section below). GH actions is free for public forks of open source projects.
 * We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.
 
 ## CI for pull requests
 
 * Pull requests will need to pass all continuous integration checks before merging.
-* For faster iteration and more control, consider running CI on your own fork or when possible directly locally.
-* Submitting changes to an open pull request will move it to 'draft' state.
-* Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
+* When all checks look good on your local CI, you can open a PR to run the CI on the main DuckDB repo. Submitting changes to an open pull request will move it to 'Draft' state. In that case you can mark it as "Ready for Review" once you've applied all fixes and it passes in your fork to run the public CI again ('ready for review', via the Web UI button on the bottom right).
+* Note that occasionally CI failures may be unrelated. You should check whether it's related to your changes (because if it is, that means your changes are breaking something). Otherwise, you should 1) remember to merge with main frequently and run make format-fix (sometimes you need to run generate-files) 2) check if other PR CI's are failing on the same tests (that's usually a giveaway that it's a temporary problem with the CI) and generally 3) investigate that there is no overlap between your changes and the breaking CI.
 
 ## Nightly CI
 

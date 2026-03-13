@@ -299,7 +299,7 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
-// Custom Profiling Settings
+// Configure Profiling
 //===----------------------------------------------------------------------===//
 bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_optimizers) {
 	auto matching_optimizer_type = MetricsUtils::GetOptimizerTypeByMetric(metric);
@@ -414,7 +414,7 @@ void ConstructInvalidSettingsAndThrow(const vector<string> &invalid_settings) {
 	throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings_str);
 }
 
-void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Value &input) {
+void ConfigureProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	auto &db_config = DBConfig::GetConfig(context);
@@ -442,14 +442,14 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	config.profiler_settings = enabled_metrics;
 }
 
-void CustomProfilingSettingsSetting::ResetLocal(ClientContext &context) {
+void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
 	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
 	config.profiler_settings_type = LogicalTypeId::VARCHAR;
 }
 
-Value CustomProfilingSettingsSetting::GetSetting(const ClientContext &context) {
+Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
 	set<string> enabled_settings;
@@ -1306,6 +1306,31 @@ Value MaxTempDirectorySizeSetting::GetSetting(const ClientContext &context) {
 		// The temp directory has not been used yet
 		return Value("90% of available disk space");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Operator Memory Limit
+//===----------------------------------------------------------------------===//
+void OperatorMemoryLimitSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (input.IsNull()) {
+		config.operator_memory_limit.SetInvalid();
+	} else {
+		config.operator_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	}
+}
+
+void OperatorMemoryLimitSetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.operator_memory_limit.SetInvalid();
+}
+
+Value OperatorMemoryLimitSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.operator_memory_limit.IsValid()) {
+		return Value();
+	}
+	return Value(StringUtil::BytesToHumanReadableString(config.operator_memory_limit.GetIndex()));
 }
 
 //===----------------------------------------------------------------------===//

@@ -51,6 +51,18 @@
 // ICU PATCH: Wrap in ICU namespace
 U_NAMESPACE_BEGIN
 
+#ifdef _MSC_VER
+#  if _MSC_VER >= 1900
+// Fix MSVC >= 2015 (_MSC_VER == 1900) warning
+// C4244: 'argument': conversion from 'const uc16' to 'char', possible loss of data
+// against Advance and friends, when instantiated with **it as char, not uc16.
+ __pragma(warning(disable: 4244))
+#  endif
+#  if _MSC_VER <= 1700 // VS2012, see IsDecimalDigitForRadix warning fix, below
+#    define VS2012_RADIXWARN
+#  endif
+#endif
+
 namespace double_conversion {
 
 namespace {
@@ -170,9 +182,9 @@ static double SignedZero(bool sign) {
 //
 // The function is small and could be inlined, but VS2012 emitted a warning
 // because it constant-propagated the radix and concluded that the last
-// condition was always true. By moving it into a separate function the
-// compiler wouldn't warn anymore.
-#ifdef _MSC_VER
+// condition was always true. Moving it into a separate function and
+// suppressing optimisation keeps the compiler from warning.
+#ifdef VS2012_RADIXWARN
 #pragma optimize("",off)
 static bool IsDecimalDigitForRadix(int c, int radix) {
   return '0' <= c && c <= '9' && (c - '0') < radix;
@@ -462,11 +474,6 @@ double StringToDoubleConverter::StringToIeee(
     }
   }
 
-  // The longest form of simplified number is: "-<significant digits>.1eXXX\0".
-  const int kBufferSize = kMaxSignificantDigits + 10;
-  char buffer[kBufferSize];  // NOLINT: size is known at compile time.
-  int buffer_pos = 0;
-
   // Exponent will be adjusted if insignificant digits of the integer part
   // or insignificant leading zeros of the fractional part are dropped.
   int exponent = 0;
@@ -488,7 +495,7 @@ double StringToDoubleConverter::StringToIeee(
     current = next_non_space;
   }
 
-  if (infinity_symbol_ != NULL) {
+  if (infinity_symbol_ != DOUBLE_CONVERSION_NULLPTR) {
     if (ConsumeFirstCharacter(*current, infinity_symbol_, allow_case_insensitivity)) {
       if (!ConsumeSubString(&current, end, infinity_symbol_, allow_case_insensitivity)) {
         return junk_string_value_;
@@ -501,13 +508,12 @@ double StringToDoubleConverter::StringToIeee(
         return junk_string_value_;
       }
 
-      DOUBLE_CONVERSION_ASSERT(buffer_pos == 0);
       *processed_characters_count = static_cast<int>(current - input);
       return sign ? -Double::Infinity() : Double::Infinity();
     }
   }
 
-  if (nan_symbol_ != NULL) {
+  if (nan_symbol_ != DOUBLE_CONVERSION_NULLPTR) {
     if (ConsumeFirstCharacter(*current, nan_symbol_, allow_case_insensitivity)) {
       if (!ConsumeSubString(&current, end, nan_symbol_, allow_case_insensitivity)) {
         return junk_string_value_;
@@ -520,7 +526,6 @@ double StringToDoubleConverter::StringToIeee(
         return junk_string_value_;
       }
 
-      DOUBLE_CONVERSION_ASSERT(buffer_pos == 0);
       *processed_characters_count = static_cast<int>(current - input);
       return sign ? -Double::NaN() : Double::NaN();
     }
@@ -576,6 +581,12 @@ double StringToDoubleConverter::StringToIeee(
   }
 
   bool octal = leading_zero && (flags_ & ALLOW_OCTALS) != 0;
+
+  // The longest form of simplified number is: "-<significant digits>.1eXXX\0".
+  const int kBufferSize = kMaxSignificantDigits + 10;
+  DOUBLE_CONVERSION_STACK_UNINITIALIZED char
+      buffer[kBufferSize];  // NOLINT: size is known at compile time.
+  int buffer_pos = 0;
 
   // Copy significant digits of the integer part (if any) to the buffer.
   while (*current >= '0' && *current <= '9') {
@@ -739,11 +750,17 @@ double StringToDoubleConverter::StringToIeee(
   DOUBLE_CONVERSION_ASSERT(buffer_pos < kBufferSize);
   buffer[buffer_pos] = '\0';
 
+  // Code above ensures there are no leading zeros and the buffer has fewer than
+  // kMaxSignificantDecimalDigits characters. Trim trailing zeros.
+  Vector<const char> chars(buffer, buffer_pos);
+  chars = TrimTrailingZeros(chars);
+  exponent += buffer_pos - chars.length();
+
   double converted;
   if (read_as_double) {
-    converted = Strtod(Vector<const char>(buffer, buffer_pos), exponent);
+    converted = StrtodTrimmed(chars, exponent);
   } else {
-    converted = Strtof(Vector<const char>(buffer, buffer_pos), exponent);
+    converted = StrtofTrimmed(chars, exponent);
   }
   *processed_characters_count = static_cast<int>(current - input);
   return sign? -converted: converted;
@@ -781,6 +798,42 @@ float StringToDoubleConverter::StringToFloat(
     int* processed_characters_count) const {
   return static_cast<float>(StringToIeee(buffer, length, false,
                                          processed_characters_count));
+}
+
+
+template<>
+double StringToDoubleConverter::StringTo<double>(
+    const char* buffer,
+    int length,
+    int* processed_characters_count) const {
+    return StringToDouble(buffer, length, processed_characters_count);
+}
+
+
+template<>
+float StringToDoubleConverter::StringTo<float>(
+    const char* buffer,
+    int length,
+    int* processed_characters_count) const {
+    return StringToFloat(buffer, length, processed_characters_count);
+}
+
+
+template<>
+double StringToDoubleConverter::StringTo<double>(
+    const uc16* buffer,
+    int length,
+    int* processed_characters_count) const {
+    return StringToDouble(buffer, length, processed_characters_count);
+}
+
+
+template<>
+float StringToDoubleConverter::StringTo<float>(
+    const uc16* buffer,
+    int length,
+    int* processed_characters_count) const {
+    return StringToFloat(buffer, length, processed_characters_count);
 }
 
 }  // namespace double_conversion

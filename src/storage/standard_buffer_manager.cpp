@@ -13,6 +13,7 @@
 #include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
 
 namespace duckdb {
 
@@ -112,8 +113,8 @@ idx_t StandardBufferManager::GetBlockSize() const {
 	return temp_block_manager->GetBlockSize();
 }
 
-idx_t StandardBufferManager::GetQueryMaxMemory() const {
-	return GetBufferPool().GetQueryMaxMemory();
+idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
+	return GetBufferPool().GetOperatorMemoryLimit();
 }
 
 template <typename... ARGS>

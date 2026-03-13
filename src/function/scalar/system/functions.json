@@ -4,14 +4,14 @@
         "parameters": "col0",
         "description": "",
         "example": "",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "combine",
         "parameters": "col0,col1",
         "description": "",
         "example": "",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "write_log",

@@ -57,6 +57,12 @@ uint32_t UnifiedVariantVectorData::GetKeysIndex(idx_t row, idx_t child_index) co
 	auto list_entry = GetChildrenListEntry(row);
 	return keys_index_data[keys_index.sel->get_index(list_entry.offset + child_index)];
 }
+
+idx_t UnifiedVariantVectorData::GetKeysCount(idx_t row) const {
+	auto list_entry = keys_data[keys.sel->get_index(row)];
+	return list_entry.length;
+}
+
 uint32_t UnifiedVariantVectorData::GetValuesIndex(idx_t row, idx_t child_index) const {
 	auto list_entry = GetChildrenListEntry(row);
 	return values_index_data[values_index.sel->get_index(list_entry.offset + child_index)];

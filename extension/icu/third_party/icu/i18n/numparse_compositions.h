@@ -1,12 +1,11 @@
 // © 2018 and later: Unicode, Inc. and others.
 // License & terms of use: http://www.unicode.org/copyright.html
 
-#ifndef __SOURCE_NUMPARSE_COMPOSITIONS_H_
-#define __SOURCE_NUMPARSE_COMPOSITIONS_H_
-
 #include "unicode/utypes.h"
 
 #if !UCONFIG_NO_FORMATTING
+#ifndef __SOURCE_NUMPARSE_COMPOSITIONS__
+#define __SOURCE_NUMPARSE_COMPOSITIONS__
 
 #include "numparse_types.h"
 

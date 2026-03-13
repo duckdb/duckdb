@@ -1,16 +1,19 @@
 #include "duckdb/main/client_data.hpp"
 
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
@@ -104,8 +107,13 @@ public:
 	idx_t GetBlockSize() const override {
 		return buffer_manager.GetBlockSize();
 	}
-	idx_t GetQueryMaxMemory() const override {
-		return buffer_manager.GetQueryMaxMemory();
+	idx_t GetOperatorMemoryLimit() const override {
+		idx_t global_budget = buffer_manager.GetOperatorMemoryLimit();
+		const auto &config = ClientConfig::GetConfig(context);
+		if (!config.operator_memory_limit.IsValid()) {
+			return global_budget;
+		}
+		return MinValue(global_budget, config.operator_memory_limit.GetIndex());
 	}
 
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) override {

@@ -29,7 +29,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -55,7 +55,7 @@
       {
         "id": 201,
         "name": "projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       }
     ]
   },
@@ -72,17 +72,17 @@
       {
         "id": 201,
         "name": "group_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
         "name": "aggregate_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 203,
         "name": "groupings_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 204,
@@ -97,7 +97,7 @@
       {
         "id": 206,
         "name": "grouping_functions",
-        "type": "vector<unsafe_vector<idx_t>>"
+        "type": "vector<unsafe_vector<ProjectionIndex>>"
       },
       {
         "id": 207,
@@ -120,7 +120,7 @@
       {
         "id": 200,
         "name": "window_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -140,7 +140,7 @@
       {
         "id": 200,
         "name": "unnest_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -186,7 +186,7 @@
       {
         "id": 201,
         "name": "projections",
-        "type": "vector<idx_t>",
+        "type": "vector<ProjectionIndex>",
         "property": "projection_map"
       }
     ],
@@ -267,7 +267,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -294,7 +294,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -315,7 +315,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -342,7 +342,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       }
     ],
     "constructor": [
@@ -374,12 +374,12 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
         "name": "cte_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -427,17 +427,17 @@
       {
         "id": 201,
         "name": "mark_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
         "name": "left_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 203,
         "name": "right_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 204,
@@ -463,7 +463,8 @@
       {
         "id": 208,
         "name": "predicate",
-        "type": "Expression*"
+        "type": "Expression*",
+        "status": "deleted"
       }
     ],
     "constructor": [
@@ -484,17 +485,17 @@
       {
         "id": 201,
         "name": "mark_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
         "name": "left_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 203,
         "name": "right_projection_map",
-        "type": "vector<idx_t>"
+        "type": "vector<ProjectionIndex>"
       },
       {
         "id": 204,
@@ -532,7 +533,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -578,7 +579,7 @@
       {
         "id": 202,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 203,
@@ -594,6 +595,16 @@
         "id": 205,
         "name": "ref_recurring",
         "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "payload_aggregates",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 207,
+        "name": "internal_types",
+        "type": "vector<LogicalType>"
       }
     ]
   },
@@ -605,7 +616,7 @@
       {
         "id": 200,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,
@@ -658,7 +669,7 @@
       {
         "id": 204,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 205,
@@ -715,7 +726,7 @@
       {
         "id": 214,
         "name": "excluded_table_index",
-        "type": "idx_t",
+        "type": "TableIndex",
         "property": "on_conflict_info.excluded_table_index"
       },
       {
@@ -763,7 +774,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -774,6 +785,11 @@
         "id": 203,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 204,
+        "name": "return_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": [
@@ -795,7 +811,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -842,7 +858,7 @@
       {
         "id": 201,
         "name": "table_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 202,
@@ -868,6 +884,11 @@
         "id": 206,
         "name": "return_chunk",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "delete_return_columns",
+        "type": "vector<idx_t>"
       }
     ],
     "constructor": ["$ClientContext", "table_info&"]
@@ -1056,7 +1077,7 @@
       {
         "id": 200,
         "name": "pivot_index",
-        "type": "idx_t"
+        "type": "TableIndex"
       },
       {
         "id": 201,

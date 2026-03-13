@@ -76,6 +76,53 @@ SELECT SUM(b)::BIGINT FROM bigints
 ----
 Conversion Error: Type INT128 with value 4611686018427388403500
 
+# struct-based aggregate state
+# When the return type's physical type matches the state type, the value type in the struct should use the return type
+
+# SUM(INTEGER): state is hugeint_t, return is HUGEINT -> match -> value type is HUGEINT
+query T
+SELECT typeof(sum(1::INTEGER) EXPORT_STATE) = 'AGGREGATE_STATE<sum(INTEGER)::HUGEINT, STRUCT(isset BOOLEAN, "value" HUGEINT)>';
+----
+true
+
+# SUM(BIGINT): state is hugeint_t, return is HUGEINT -> match -> value type is HUGEINT
+query T
+SELECT typeof(sum(1::BIGINT) EXPORT_STATE) = 'AGGREGATE_STATE<sum(BIGINT)::HUGEINT, STRUCT(isset BOOLEAN, "value" HUGEINT)>';
+----
+true
+
+# SUM(DOUBLE): state is double, return is DOUBLE -> match -> value type is DOUBLE
+query T
+SELECT typeof(sum(1.0::DOUBLE) EXPORT_STATE) = 'AGGREGATE_STATE<sum(DOUBLE)::DOUBLE, STRUCT(isset BOOLEAN, "value" DOUBLE)>';
+----
+true
+
+# SUM(DECIMAL): state is hugeint_t (INT128), return is DECIMAL(38,3) (INT128) -> match -> value type is DECIMAL(38,3)
+query T
+SELECT typeof(sum(1.12::DECIMAL) EXPORT_STATE) = 'AGGREGATE_STATE<sum(DECIMAL(18,3))::DECIMAL(38,3), STRUCT(isset BOOLEAN, "value" DECIMAL(38,3))>';
+----
+true
+
+# When the return type's physical type does NOT match the state type, the value type falls back to the state's physical logical type
+
+# SUM(BOOL): state is int64_t (INT64), return is HUGEINT (INT128) -> no match -> value type is BIGINT
+query T
+SELECT typeof(sum(true) EXPORT_STATE) = 'AGGREGATE_STATE<sum(BOOLEAN)::HUGEINT, STRUCT(isset BOOLEAN, "value" BIGINT)>';
+----
+true
+
+# SUM(SMALLINT): state is int64_t (INT64), return is HUGEINT (INT128) -> no match -> value type is BIGINT
+query T
+SELECT typeof(sum(1::SMALLINT) EXPORT_STATE) = 'AGGREGATE_STATE<sum(SMALLINT)::HUGEINT, STRUCT(isset BOOLEAN, "value" BIGINT)>';
+----
+true
+
+# SUM(DECIMAL(4,2)): state is int64_t (INT64), return is DECIMAL(38,2) (INT128) -> no match -> value type is BIGINT
+query T
+SELECT typeof(sum(1.00::DECIMAL(4,2)) EXPORT_STATE) = 'AGGREGATE_STATE<sum(DECIMAL(4,2))::DECIMAL(38,2), STRUCT(isset BOOLEAN, "value" BIGINT)>';
+----
+true
+
 #
 # Order by
 #

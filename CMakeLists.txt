@@ -58,6 +58,18 @@ if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
     endif()
 endif()
 
+if(NOT DUCKDB_LINKER AND DEFINED ENV{CI} AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(DUCKDB_LINKER "mold")
+endif()
+
+if (DUCKDB_LINKER)
+  set(DUCKDB_LINKER_FLAG "-fuse-ld=${DUCKDB_LINKER}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
+  message(STATUS "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
+endif()
+
 
 # Determine install paths
 # default to gnu standard installation directories (lib, bin, include)
@@ -86,7 +98,7 @@ set(DUCKDB_EXPORT_SET "DuckDBExports")
 if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
-  elseif(WIN32 AND MVSC)
+  elseif(WIN32 AND MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
   endif()
 endif()
@@ -115,6 +127,12 @@ if(${FORCE_COLORED_OUTPUT})
   elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
     add_compile_options(-fcolor-diagnostics)
   endif()
+endif()
+
+# Enable Clang thread-safety annotations when using Clang compiler
+# TODO(hjiang): enable error for thread annotation warnings, because of certain extensions.
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wthread-safety")
 endif()
 
 if (DUCKDB_EXPLICIT_PLATFORM)
@@ -251,7 +269,7 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
-option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" FALSE)
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")
 endif()
@@ -662,6 +680,25 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE
       "${DEFAULT_BUILD_TYPE}"
       CACHE STRING "Choose the type of build." FORCE)
+endif()
+
+set(DUCKDB_RELEASE_LINK_JOBS
+    4
+    CACHE STRING "Maximum number of concurrent linker jobs for Release builds")
+set(DUCKDB_DEBUG_LINK_JOBS
+    2
+    CACHE STRING "Maximum number of concurrent linker jobs for non-Release builds")
+
+# Throttle linker concurrency (mainly effective for Ninja) to avoid OOM in debug-like builds.
+set_property(GLOBAL PROPERTY JOB_POOLS
+             release_link_jobs=${DUCKDB_RELEASE_LINK_JOBS}
+             debug_link_jobs=${DUCKDB_DEBUG_LINK_JOBS})
+if(NOT DEFINED CMAKE_JOB_POOL_LINK)
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_JOB_POOL_LINK release_link_jobs)
+  else()
+    set(CMAKE_JOB_POOL_LINK debug_link_jobs)
+  endif()
 endif()
 
 if(OS_NAME STREQUAL "windows")
