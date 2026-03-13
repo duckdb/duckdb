@@ -49,7 +49,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -99,14 +99,14 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
         run: make toolsci && pip install requests
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: duckdblabs/fivetran_regression
           ref: main
@@ -194,7 +194,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
         run: make toolsci && pip install requests
@@ -267,7 +267,7 @@ jobs:
       EXTENSION_STATIC_BUILD: 1
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
         run: make toolsci && pip install requests
@@ -305,7 +305,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
         run: make toolsci && pip install tqdm

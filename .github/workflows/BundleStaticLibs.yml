@@ -58,7 +58,7 @@ jobs:
       DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -106,7 +106,7 @@ jobs:
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -168,7 +168,7 @@ jobs:
     runs-on: ${{ matrix.config.runner }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}

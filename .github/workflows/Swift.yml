@@ -33,7 +33,7 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'

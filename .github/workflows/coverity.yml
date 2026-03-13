@@ -23,7 +23,7 @@ jobs:
     env:
       COVERITY_PROJECT_NAME: DuckDB
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Download and extract the Coverity Build Tool
       run: |
           wget https://scan.coverity.com/download/cxx/linux64 --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ env.COVERITY_PROJECT_NAME  }}" -O cov-analysis-linux64.tar.gz
