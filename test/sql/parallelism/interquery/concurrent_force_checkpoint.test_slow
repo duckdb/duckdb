@@ -1,5 +1,5 @@
-# name: test/tmp.test
-# group: [test]
+# name: test/sql/parallelism/interquery/concurrent_force_checkpoint.test_slow
+# group: [interquery]
 
 statement ok
 SET wal_autocheckpoint='1KB'
