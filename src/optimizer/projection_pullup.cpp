@@ -242,7 +242,7 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 
 			LogicalOperator &insert_at_node = parents[parents.size() - pull_up_to_here].get();
 
-			// FIXME: would like to make that faster/better
+			// FIXME: this can be done faster/better
 			auto parent_of_insert = FindParent(insert_at_node, *root);
 
 			// Prepare the column binding replacer once
@@ -263,15 +263,13 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 			auto insert_bindings = insert_at_node.GetColumnBindings();
 			const auto insert_types = insert_at_node.types;
 
-			// Build the set of bindings that actually exist BELOW insert_at_node
-			// by checking its child's bindings, not insert_at_node itself
-			// insert_at_node's own bindings may include stale refs that
-			// were already rewritten by a previous pass
-			column_binding_set_t child_available_bindings;
-			if (!insert_at_node.children.empty()) {
-				insert_at_node.children[0]->ResolveOperatorTypes();
-				for (auto &b : insert_at_node.children[0]->GetColumnBindings()) {
-					child_available_bindings.insert(b);
+			// Build set of bindings we already replaced above
+			column_binding_set_t already_replaced;
+			// The replacer we ran on parents replaced proj_bindings[i]
+			// Those proj_bindings[i] are the ones that are now gone
+			for (idx_t i = 0; i < proj.expressions.size(); i++) {
+				if (proj.expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
+					already_replaced.insert(proj_bindings[i]);
 				}
 			}
 			column_binding_set_t existing_bindings(proj_bindings.begin(), proj_bindings.end());
@@ -280,8 +278,8 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 
 			idx_t next_col = proj.expressions.size();
 			for (idx_t i = 0; i < insert_bindings.size(); i++) {
-				// Skip bindings that no longer exist in the plan
-				if (child_available_bindings.find(insert_bindings[i]) == child_available_bindings.end()) {
+				// Skip bindings that were already rewritten away by the replacer
+				if (already_replaced.find(insert_bindings[i]) != already_replaced.end()) {
 					continue;
 				}
 				if (existing_bindings.find(insert_bindings[i]) == existing_bindings.end()) {
