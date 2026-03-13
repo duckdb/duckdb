@@ -24,9 +24,9 @@ public:
 	explicit StatementPreprocessor(ClientContext &context);
 
 	void Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-	                bool is_in_active_transaction);
+	                optional_ptr<TransactionContext> transaction_context);
 	void PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-	                        bool is_in_active_transaction);
+	                        optional_ptr<TransactionContext> transaction_context);
 
 private:
 	ClientContext &context;

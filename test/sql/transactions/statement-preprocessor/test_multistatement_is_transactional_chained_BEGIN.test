@@ -1,0 +1,44 @@
+# name: test/sql/transactions/statement-preprocessor/test_multistatement_is_transactional_chained_BEGIN.test
+# group: [statement-preprocessor]
+
+statement ok
+ATTACH '__TEST_DIR__/wal_replay.db';
+
+statement ok
+USE wal_replay;
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET wal_autocheckpoint='1TB'
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT range::INT AS id FROM range(10);
+
+statement error
+BEGIN TRANSACTION; ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();
+----
+non_existent_function
+
+statement error
+from t;
+----
+TransactionContext Error: Current transaction is aborted (please ROLLBACK)
+
+statement ok
+ROLLBACK;
+
+query I
+from t;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

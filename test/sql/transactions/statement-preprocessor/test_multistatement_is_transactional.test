@@ -1,5 +1,5 @@
-# name: test/sql/transactions/test_multistatement_is_transactional.test
-# group: [transactions]
+# name: test/sql/transactions/statement-preprocessor/test_multistatement_is_transactional.test
+# group: [statement-preprocessor]
 
 statement ok
 ATTACH '__TEST_DIR__/wal_replay.db';
@@ -14,7 +14,7 @@ statement ok
 SET wal_autocheckpoint='1TB'
 
 statement ok
-CREATE TABLE t AS SELECT range::INT AS id FROM range(10);
+CREATE OR REPLACE TABLE t AS SELECT range::INT AS id FROM range(10);
 
 statement error
 ALTER TABLE t ADD COLUMN d TIMESTAMP WITH TIME ZONE DEFAULT non_existent_function();
