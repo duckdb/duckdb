@@ -1,5 +1,6 @@
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/enums/filter_propagate_result.hpp"
@@ -12,11 +13,22 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 namespace {
+
+AllocatedData AllocateBitmap(ClientContext &context, const idx_t word_count, uint64_t *&bitmap_begin) {
+	const idx_t size = word_count * sizeof(uint64_t);
+	BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
+	auto buffer = buffer_manager.GetBufferAllocator().Allocate(64ULL + size);
+	bitmap_begin = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buffer.get())) & ~63ULL);
+	std::fill_n(bitmap_begin, word_count, 0);
+	return buffer;
+}
 
 template <typename T>
 class NumericPrefixRangeFilter : public PrefixRangeFilter {
@@ -48,24 +60,17 @@ public:
 
 		const idx_t buckets = (span >> shift) + 1;
 		word_count = buckets == 0 ? 1 : (buckets + 63) >> WORD_SHIFT;
-		const idx_t bitmap_byte_size = word_count * sizeof(uint64_t);
 
-		BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
-		buf_ = buffer_manager.GetBufferAllocator().Allocate(64ULL + bitmap_byte_size);
-		bitmap = reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(buf_.get())) & ~63ULL);
-		std::fill_n(bitmap, word_count, 0);
+		buf_ = AllocateBitmap(context, word_count, bitmap);
 
+		// Only mark initialized as true, when local bitmaps are merged
 		initialized = false;
 	}
 
 	unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const override {
 		D_ASSERT(bitmap);
-		BufferManager &buffer_manager = BufferManager::GetBufferManager(context);
-		const idx_t bitmap_byte_size = word_count * sizeof(uint64_t);
-		auto state_data = buffer_manager.GetBufferAllocator().Allocate(64ULL + bitmap_byte_size);
-		auto state_bitmap =
-		    reinterpret_cast<uint64_t *>((64ULL + reinterpret_cast<uint64_t>(state_data.get())) & ~63ULL);
-		std::fill_n(state_bitmap, word_count, 0);
+		uint64_t *state_bitmap;
+		auto state_data = AllocateBitmap(context, word_count, state_bitmap);
 
 		return make_uniq<NumericBuildState>(std::move(state_data), state_bitmap, word_count);
 	}
