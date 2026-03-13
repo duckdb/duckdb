@@ -213,13 +213,13 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 		// positive values
 		duckdb::vector<float> values;
 		float current_value = 0.00001f;
-		while (isfinite(current_value)) {
+		while (std::isfinite(current_value)) {
 			values.push_back(current_value);
 			current_value *= 2;
 		}
 		// negative values
 		current_value = -0.00001f;
-		while (isfinite(current_value)) {
+		while (std::isfinite(current_value)) {
 			values.push_back(current_value);
 			current_value *= 2;
 		}
@@ -242,13 +242,13 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 		// positive values
 		duckdb::vector<double> values;
 		double current_value = 0.0000001;
-		while (isfinite(current_value)) {
+		while (std::isfinite(current_value)) {
 			values.push_back(current_value);
 			current_value *= 2;
 		}
 		// negative values
 		current_value = -0.0000001;
-		while (isfinite(current_value)) {
+		while (std::isfinite(current_value)) {
 			values.push_back(current_value);
 			current_value *= 2;
 		}
