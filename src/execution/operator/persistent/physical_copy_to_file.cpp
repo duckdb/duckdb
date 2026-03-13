@@ -532,12 +532,19 @@ void CopyToFunctionLocalState::FlushPartitions() {
 			}
 
 			const CopyFunctionBatchAnalyzer batch_analyze(*partition_batch, op.batch_size, op.batch_size_bytes);
-			if (batch_analyze.MeetsFlushCriteria() || ++chunk_idx == partitions[i]->ChunkCount()) {
+			if (batch_analyze.MeetsFlushCriteria()) {
 				partition_batch_append_state.current_chunk_state.handles.clear();
 				op.FlushBatch(context.client, gstate, info.global_state, create_file_state_fun, local_copy_state,
 				              std::move(partition_batch), PhysicalCopyToFilePhase::COMBINE);
 				partition_batch = nullptr;
 			}
+		}
+
+		if (partition_batch) {
+			partition_batch_append_state.current_chunk_state.handles.clear();
+			op.FlushBatch(context.client, gstate, info.global_state, create_file_state_fun, local_copy_state,
+			              std::move(partition_batch), PhysicalCopyToFilePhase::COMBINE);
+			partition_batch = nullptr;
 		}
 
 		local_copy_state.reset();

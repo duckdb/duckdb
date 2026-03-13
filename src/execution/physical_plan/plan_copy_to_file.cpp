@@ -54,8 +54,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 
 		cast_copy.batch_size = op.batch_size;
 		cast_copy.batch_size_bytes = op.batch_size_bytes;
-		cast_copy.batches_per_file = op.batches_per_file;
-		cast_copy.file_size_bytes = op.file_size_bytes;
 
 		return copy;
 	}
