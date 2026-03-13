@@ -59,6 +59,8 @@ jobs:
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
       runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
       runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
+      extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
+      extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
     env:
       CC: gcc-10
       CXX: g++-10
@@ -68,6 +70,25 @@ jobs:
 
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
+
+      - name: Detect changes
+        id: changed
+        uses: tj-actions/changed-files@v47
+        with:
+          files_yaml: |
+            extensions:
+              - .github/config/**
+              - .github/patches/**
+              - extensions/**
+
+      - name: Configure extensions
+        id: extensions
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+            echo "extra_exclude_archs=" >> "$GITHUB_OUTPUT"
+          else
+            echo "extra_exclude_archs=windows_amd64;wasm_eh" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Select CI runner
         id: select_runner
@@ -212,9 +233,12 @@ jobs:
  extensions:
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
     with:
       git_ref: ${{ github.sha }}
+      extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: 'false'
       run_all: 'true'
 
