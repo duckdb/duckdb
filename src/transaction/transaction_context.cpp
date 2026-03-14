@@ -58,10 +58,10 @@ void TransactionContext::Commit(bool notify_states) {
 			for (auto const &s : context.registered_state->States()) {
 				s->TransactionRollback(*transaction, context, error);
 			}
-			if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
-				// throw fatal / internal exceptions directly
-				error.Throw();
-			}
+		}
+		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
+			// throw fatal / internal exceptions directly
+			error.Throw();
 		}
 		throw TransactionException("Failed to commit: %s", error.RawMessage());
 	}

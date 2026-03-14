@@ -72,7 +72,7 @@ void ActiveCheckpointWrapper::Commit() {
 	if (!checkpoint_transaction) {
 		return;
 	}
-	transaction_manager.CommitTransaction(*checkpoint_context, *checkpoint_transaction);
+	checkpoint_context->transaction.Commit(false);
 	checkpoint_transaction = nullptr;
 }
 
