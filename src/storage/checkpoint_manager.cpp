@@ -59,7 +59,7 @@ ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 }
 
 void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &options) {
-	checkpoint_context->transaction.BeginTransaction(false);
+	checkpoint_context->transaction.BeginTransaction();
 	checkpoint_context->transaction.SetReadOnly();
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
 	transaction.is_checkpoint_transaction = true;
@@ -73,7 +73,7 @@ void ActiveCheckpointWrapper::Commit() {
 	if (!checkpoint_transaction) {
 		return;
 	}
-	checkpoint_context->transaction.Commit(false);
+	checkpoint_context->transaction.Commit();
 	checkpoint_transaction = nullptr;
 }
 
