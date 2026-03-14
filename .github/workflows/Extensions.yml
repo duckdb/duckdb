@@ -255,7 +255,7 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           pattern: extension-repository
-          path: /tmp
+          path: /tmp/extension-repository
 
       - name: List extensions to deploy
         shell: bash
@@ -295,7 +295,7 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           pattern: extension-repository
-          path: /tmp
+          path: /tmp/extension-repository
 
       - name: List extensions to test with
         shell: bash
@@ -359,7 +359,7 @@ jobs:
         name: Download extension repository artifact
         with:
           pattern: extension-repository
-          path: /tmp
+          path: /tmp/extension-repository
 
       - name: Copy over local extension repository
         shell: bash
