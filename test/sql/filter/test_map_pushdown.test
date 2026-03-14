@@ -1,0 +1,62 @@
+# name: test/sql/filter/test_map_pushdown.test
+# description: Test filter pushdown for MAP element access
+# group: [filter]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test_maps(id INTEGER, data MAP(VARCHAR, INTEGER));
+
+statement ok
+INSERT INTO test_maps VALUES
+    (1, MAP(['a', 'b'], [10, 20])),
+    (2, MAP(['a', 'c'], [30, 40])),
+    (3, MAP(['b', 'c'], [50, 60]));
+
+# Test that MAP subscript filters are pushed down
+query II
+EXPLAIN SELECT * FROM test_maps WHERE data['a'] > 25;
+----
+physical_plan	<REGEX>:.*Filters:.*map_extract_value\(data.*25.*
+
+query II
+SELECT * FROM test_maps WHERE data['a'] > 25 ORDER BY id;
+----
+2	{a=30, c=40}
+
+# Test various MAP filter conditions
+query II
+SELECT * FROM test_maps WHERE data['a'] < 20 ORDER BY id;
+----
+1	{a=10, b=20}
+
+query II
+SELECT * FROM test_maps WHERE data['b'] = 20 ORDER BY id;
+----
+1	{a=10, b=20}
+
+query II
+SELECT * FROM test_maps WHERE data['c'] >= 40 ORDER BY id;
+----
+2	{a=30, c=40}
+3	{b=50, c=60}
+
+# Test with NULL handling
+statement ok
+INSERT INTO test_maps VALUES (4, NULL), (5, MAP(['d'], [NULL]));
+
+query II
+SELECT * FROM test_maps WHERE data['d'] IS NULL ORDER BY id;
+----
+1	{a=10, b=20}
+2	{a=30, c=40}
+3	{b=50, c=60}
+4	NULL
+5	{d=NULL}
+
+# Test combined filters (MAP and regular column)
+query II
+SELECT * FROM test_maps WHERE id > 2 AND data['c'] > 45 ORDER BY id;
+----
+3	{b=50, c=60}

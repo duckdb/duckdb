@@ -1,0 +1,134 @@
+# name: test/parquet/test_parquet_map_filter_pushdown.test
+# description: Test row group skipping with MAP column filters in Parquet
+# group: [parquet]
+
+require parquet
+
+# Create a table with MAP column and write to parquet with multiple row groups
+statement ok
+CREATE TABLE map_data(id INTEGER, data MAP(VARCHAR, INTEGER));
+
+# Row group 1: values [10-30]
+statement ok
+INSERT INTO map_data VALUES
+	(1, MAP(['a'], [10])),
+	(2, MAP(['a'], [20])),
+	(3, MAP(['a'], [30]));
+
+# Row group 2: values [100-300]
+statement ok
+INSERT INTO map_data VALUES
+	(4, MAP(['a'], [100])),
+	(5, MAP(['a'], [200])),
+	(6, MAP(['a'], [300]));
+
+# Row group 3: values [1000-3000]
+statement ok
+INSERT INTO map_data VALUES
+	(7, MAP(['a'], [1000])),
+	(8, MAP(['a'], [2000])),
+	(9, MAP(['a'], [3000]));
+
+# Write to parquet with small row group size to force multiple row groups
+statement ok
+COPY map_data TO '__TEST_DIR__/map_filter_test.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 3);
+
+# Verify statistics are collected for MAP values
+query III
+SELECT
+    path_in_schema,
+    stats_min,
+    stats_max
+FROM parquet_metadata('__TEST_DIR__/map_filter_test.parquet')
+WHERE path_in_schema = 'data, key_value, value';
+----
+data, key_value, value	10	3000
+
+# Test 1: Filter with value outside all ranges (should return no rows)
+query II
+SELECT * FROM '__TEST_DIR__/map_filter_test.parquet' WHERE data['a'] > 5000;
+----
+
+# Test 2: Filter with value below all ranges (should return no rows)
+query II
+SELECT * FROM '__TEST_DIR__/map_filter_test.parquet' WHERE data['a'] < 5;
+----
+
+# Test 3: Filter that matches only row group 3 (boundary condition)
+query II
+SELECT * FROM '__TEST_DIR__/map_filter_test.parquet' WHERE data['a'] > 500 ORDER BY id;
+----
+7	{a=1000}
+8	{a=2000}
+9	{a=3000}
+
+# Test 4: Filter that matches only row group 1 (boundary condition)
+query II
+SELECT * FROM '__TEST_DIR__/map_filter_test.parquet' WHERE data['a'] < 50 ORDER BY id;
+----
+1	{a=10}
+2	{a=20}
+3	{a=30}
+
+# Test 5: Filter within a range (cannot skip, needs to read row groups)
+query II
+SELECT * FROM '__TEST_DIR__/map_filter_test.parquet' WHERE data['a'] = 100 ORDER BY id;
+----
+4	{a=100}
+
+# Test 6: Combined filter (id column AND map column)
+query II
+SELECT * FROM '__TEST_DIR__/map_filter_test.parquet' WHERE id > 6 AND data['a'] < 1500 ORDER BY id;
+----
+7	{a=1000}
+
+# Test with different keys
+statement ok
+CREATE TABLE map_multi_key(id INTEGER, data MAP(VARCHAR, INTEGER));
+
+statement ok
+INSERT INTO map_multi_key VALUES
+	(1, MAP(['x'], [100])),
+	(2, MAP(['y'], [200])),
+	(3, MAP(['z'], [300]));
+
+statement ok
+COPY map_multi_key TO '__TEST_DIR__/map_multi_key.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 3);
+
+# Filter on specific key - statistics are aggregated across all keys
+# Can still benefit from boundary conditions
+query II
+SELECT * FROM '__TEST_DIR__/map_multi_key.parquet' WHERE data['x'] > 500;
+----
+
+query II
+SELECT * FROM '__TEST_DIR__/map_multi_key.parquet' WHERE data['x'] < 50;
+----
+
+query II
+SELECT * FROM '__TEST_DIR__/map_multi_key.parquet' WHERE data['x'] = 100;
+----
+1	{x=100}
+
+# Test with NULL handling
+statement ok
+CREATE TABLE map_nulls(id INTEGER, data MAP(VARCHAR, INTEGER));
+
+statement ok
+INSERT INTO map_nulls VALUES
+	(1, MAP(['a'], [10])),
+	(2, NULL),
+	(3, MAP(['a'], [30]));
+
+statement ok
+COPY map_nulls TO '__TEST_DIR__/map_nulls.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 3);
+
+query II
+SELECT * FROM '__TEST_DIR__/map_nulls.parquet' WHERE data['a'] > 5000;
+----
+
+query II
+SELECT * FROM '__TEST_DIR__/map_nulls.parquet' WHERE data['a'] < 50 ORDER BY id;
+----
+1	{a=10}
+3	{a=30}

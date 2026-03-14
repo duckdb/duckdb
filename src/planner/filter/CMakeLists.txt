@@ -7,6 +7,7 @@ add_library_unity(
   dynamic_filter.cpp
   expression_filter.cpp
   in_filter.cpp
+  map_filter.cpp
   null_filter.cpp
   struct_filter.cpp
   optional_filter.cpp
