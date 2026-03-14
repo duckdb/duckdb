@@ -49,7 +49,7 @@ public:
 	//! Some (after rollback) enter cleanup_queue, but do not require Cleanup.
 	bool awaiting_cleanup;
 
-	//! Flag to prevent auto-checkpointing inside of a checkpointing transaction.
+	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	atomic<bool> is_checkpoint_transaction {false};
 
 public:

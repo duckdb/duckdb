@@ -9,8 +9,6 @@ require noforcestorage
 
 require skip_reload
 
-# Setup.
-
 statement ok
 SET threads = 1;
 
@@ -23,8 +21,6 @@ PRAGMA disable_checkpoint_on_shutdown;
 statement ok
 ATTACH '__TEST_DIR__/concurrent_ops.db';
 
-# Create a table with an index.
-
 statement ok
 CREATE TABLE concurrent_ops.tbl(id INTEGER, category INTEGER);
 
@@ -34,12 +30,6 @@ INSERT INTO concurrent_ops.tbl SELECT range, range % 100 FROM range(10000);
 statement ok
 CREATE INDEX idx_category ON concurrent_ops.tbl(category);
 
-# ============================================================
-# Part 1: Checkpoint with concurrent read transaction using index.
-# ============================================================
-
-# con1 starts a read transaction scanning through the index.
-
 statement ok con1
 BEGIN;
 
@@ -48,14 +38,8 @@ SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
 ----
 100
 
-# Default connection inserts more data (modifies table and index).
-
 statement ok
 INSERT INTO concurrent_ops.tbl SELECT range + 10000, range % 100 FROM range(10000);
-
-# Enable profiling and checkpoint.
-# The checkpoint exercises the ActiveCheckpointWrapper code path
-# because con1 holds an active read transaction.
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -86,8 +70,6 @@ FROM metrics_output;
 ----
 true
 
-# Verify con1 snapshot isolation: still sees old data through the index.
-
 query I con1
 SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
 ----
@@ -96,21 +78,13 @@ SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
 statement ok con1
 COMMIT;
 
-# After commit, con1 sees the new data through the index.
-
 query I con1
 SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
 ----
 200
 
-# ============================================================
-# Part 2: Checkpoint with multiple concurrent readers and a second index.
-# ============================================================
-
 statement ok
 CREATE INDEX idx_id ON concurrent_ops.tbl(id);
-
-# con1 and con2 start read transactions before the new insert.
 
 statement ok con1
 BEGIN;
@@ -128,12 +102,8 @@ SELECT COUNT(*) FROM concurrent_ops.tbl WHERE id < 5000;
 ----
 5000
 
-# Default connection inserts more data while both readers hold snapshots.
-
 statement ok
 INSERT INTO concurrent_ops.tbl SELECT range + 20000, range % 100 FROM range(10000);
-
-# Checkpoint with profiling while both readers are active.
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -164,8 +134,6 @@ FROM metrics_output;
 ----
 true
 
-# Both readers still see their snapshots.
-
 query I con1
 SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
 ----
@@ -182,29 +150,18 @@ COMMIT;
 statement ok con2
 COMMIT;
 
-# After commit, con1 sees the new data (30000 rows total).
-
 query I con1
 SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
 ----
 300
-
-# con2 sees 5000 (no new ids below 5000 were inserted).
 
 query I con2
 SELECT COUNT(*) FROM concurrent_ops.tbl WHERE id < 5000;
 ----
 5000
 
-# ============================================================
-# Part 3: Aborted checkpoint, then successful checkpoint with profiling.
-# ============================================================
-
 statement ok
 INSERT INTO concurrent_ops.tbl SELECT range + 30000, range % 100 FROM range(10000);
-
-# Abort the checkpoint before the header is written.
-# This throws a FatalException which invalidates the database.
 
 statement ok
 SET debug_checkpoint_abort = 'before_header';
@@ -215,8 +172,6 @@ CHECKPOINT concurrent_ops;
 Checkpoint aborted before header write
 
 restart
-
-# After restart, re-attach and verify data survived via WAL replay.
 
 statement ok
 SET threads = 1;
@@ -237,8 +192,6 @@ query I
 SELECT COUNT(*) FROM concurrent_ops.tbl;
 ----
 40000
-
-# Verify profiling works for a successful checkpoint after a prior abort.
 
 statement ok
 PRAGMA enable_profiling = 'json';

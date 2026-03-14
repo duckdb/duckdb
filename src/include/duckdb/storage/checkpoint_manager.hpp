@@ -41,12 +41,17 @@ class TypeCatalogEntry;
 struct BoundCreateTableInfo;
 struct CheckpointOptions;
 
+//! Wrapper to manage the lifetime of a checkpoint connection and transaction.
 class ActiveCheckpointWrapper {
 public:
+	//! Creates a connection if we have a context.
+	//! If there is no context, we are on shutdown and a checkpoint connection/transaction is not created.
 	ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db,
 	                        DuckTransactionManager &transaction_manager);
+
 	~ActiveCheckpointWrapper();
 
+	//! Begin the transaction withint the newly created connection.
 	void GetCheckpointTransaction(CheckpointOptions &options);
 	void Commit();
 	bool HasCheckpointContext() const;

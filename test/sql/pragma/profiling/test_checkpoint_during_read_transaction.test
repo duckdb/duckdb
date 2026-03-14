@@ -9,8 +9,6 @@ require noforcestorage
 
 require skip_reload
 
-# Setup.
-
 statement ok
 SET threads = 1;
 
@@ -26,8 +24,6 @@ ATTACH '__TEST_DIR__/checkpoint_read_txn.db';
 statement ok
 CREATE TABLE checkpoint_read_txn.tbl AS SELECT range AS id FROM range(1000);
 
-# con1 starts a read transaction, holding a snapshot.
-
 statement ok con1
 BEGIN;
 
@@ -36,14 +32,8 @@ SELECT COUNT(*) FROM checkpoint_read_txn.tbl;
 ----
 1000
 
-# Default connection inserts more data.
-
 statement ok
 INSERT INTO checkpoint_read_txn.tbl SELECT range + 1000 AS id FROM range(1000);
-
-# Enable profiling and run CHECKPOINT on the default connection.
-# This exercises the checkpoint-during-read-transaction code path
-# (ActiveCheckpointWrapper creates a new connection for the checkpoint).
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -66,8 +56,6 @@ PRAGMA disable_profiling;
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/checkpoint_read_txn.json';
 
-# Verify CHECKPOINT_LATENCY is attributed to the original connection.
-
 query I
 SELECT
 	CASE WHEN checkpoint_latency >= 0 THEN 'true'
@@ -76,8 +64,6 @@ FROM metrics_output;
 ----
 true
 
-# Verify con1 data consistency: still sees the old snapshot.
-
 query I con1
 SELECT COUNT(*) FROM checkpoint_read_txn.tbl;
 ----
@@ -85,8 +71,6 @@ SELECT COUNT(*) FROM checkpoint_read_txn.tbl;
 
 statement ok con1
 COMMIT;
-
-# After committing, con1 sees the new data.
 
 query I con1
 SELECT COUNT(*) FROM checkpoint_read_txn.tbl;

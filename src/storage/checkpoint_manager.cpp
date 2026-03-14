@@ -48,6 +48,7 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 }
 
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
+	// This happens on failure before we commit the transaction.
 	if (checkpoint_transaction) {
 		transaction_manager.RollbackTransaction(*checkpoint_transaction);
 		checkpoint_transaction = nullptr;
@@ -207,6 +208,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 	ActiveCheckpointWrapper active_checkpoint(context, db, transaction_manager);
 
+	// Lock ordering: WAL lock -> transaction lock (if there is a context and we create a new checkpointing transaction,
+	// otherwise we just grab the WAL lock here.
 	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, &active_checkpoint);
 
 	catalog_entry_vector_t catalog_entries;
