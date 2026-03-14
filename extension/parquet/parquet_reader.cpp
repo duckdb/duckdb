@@ -1396,7 +1396,19 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
-				bool lazy_fetch = filters != nullptr;
+				bool lazy_fetch = false;
+				if (filters) {
+					// check if any filter is non-optional
+					bool has_non_optional_filter = false;
+					for (auto &entry : filters->filters) {
+						if (entry.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+							has_non_optional_filter = true;
+						}
+					}
+					if (has_non_optional_filter) {
+						lazy_fetch = true;
+					}
+				}
 
 				// Prefetch column-wise
 				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
@@ -1407,7 +1419,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					bool has_filter = false;
 					if (filters) {
 						auto entry = filters->filters.find(col_idx);
-						has_filter = entry != filters->filters.end();
+						if (entry != filters->filters.end()) {
+							if (entry->second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+								has_filter = true;
+							}
+						}
 					}
 					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !has_filter);
 				}
