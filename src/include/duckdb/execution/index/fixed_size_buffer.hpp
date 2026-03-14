@@ -170,7 +170,7 @@ public:
 
 	template <class T = data_t>
 	const T *GetPtr() const {
-		return reinterpret_cast<T *>(ptr);
+		return reinterpret_cast<const T *>(ptr);
 	}
 
 	void MarkModified() {

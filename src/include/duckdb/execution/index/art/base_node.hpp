@@ -32,12 +32,12 @@ private:
 
 public:
 	//! Get a new BaseNode handle and initialize the base node.
-	static NodeHandle<BaseNode> New(ART &art, Node &node) {
+	static NodeHandle New(ART &art, Node &node) {
 		node = Node::GetAllocator(art, TYPE).New();
 		node.SetMetadata(static_cast<uint8_t>(TYPE));
 
-		NodeHandle<BaseNode> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<BaseNode>();
 
 		// Reset the node (count).
 		n.count = 0;
@@ -64,6 +64,27 @@ public:
 				return;
 			}
 		}
+	}
+
+	//! Get the child node at byte (returns Node by value).
+	static Node GetChildNode(const BaseNode &n, const uint8_t byte) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			if (n.key[i] == byte) {
+				return n.children[i];
+			}
+		}
+		return Node();
+	}
+
+	//! Get the first child node >= byte (returns Node by value, updates byte).
+	static Node GetNextChildNode(const BaseNode &n, uint8_t &byte) {
+		for (uint8_t i = 0; i < n.count; i++) {
+			if (n.key[i] >= byte) {
+				byte = n.key[i];
+				return n.children[i];
+			}
+		}
+		return Node();
 	}
 
 	//! Get the child at byte.
@@ -117,7 +138,7 @@ public:
 
 private:
 	static void InsertChildInternal(BaseNode &n, const uint8_t byte, const Node child);
-	static NodeHandle<BaseNode> DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
+	static NodeHandle DeleteChildInternal(ART &art, Node &node, const uint8_t byte);
 };
 
 //! Node4 holds up to four children sorted by their key byte.

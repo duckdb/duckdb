@@ -227,6 +227,42 @@ unsafe_optional_ptr<Node> Node::GetChildMutable(ART &art, const uint8_t byte, co
 	return GetChildInternal(art, *this, byte, unsafe);
 }
 
+Node Node::GetChildNode(const ART &art, const uint8_t byte) const {
+	D_ASSERT(HasMetadata());
+	auto type = GetType();
+	ConstNodeHandle handle(art, *this);
+	switch (type) {
+	case NType::NODE_4:
+		return Node4::GetChildNode(handle.Get<Node4>(), byte);
+	case NType::NODE_16:
+		return Node16::GetChildNode(handle.Get<Node16>(), byte);
+	case NType::NODE_48:
+		return Node48::GetChildNode(handle.Get<Node48>(), byte);
+	case NType::NODE_256:
+		return Node256::GetChildNode(handle.Get<Node256>(), byte);
+	default:
+		throw InternalException("Invalid node type for GetChildNode: %d.", type);
+	}
+}
+
+Node Node::GetNextChildNode(const ART &art, uint8_t &byte) const {
+	D_ASSERT(HasMetadata());
+	auto type = GetType();
+	ConstNodeHandle handle(art, *this);
+	switch (type) {
+	case NType::NODE_4:
+		return Node4::GetNextChildNode(handle.Get<Node4>(), byte);
+	case NType::NODE_16:
+		return Node16::GetNextChildNode(handle.Get<Node16>(), byte);
+	case NType::NODE_48:
+		return Node48::GetNextChildNode(handle.Get<Node48>(), byte);
+	case NType::NODE_256:
+		return Node256::GetNextChildNode(handle.Get<Node256>(), byte);
+	default:
+		throw InternalException("Invalid node type for GetNextChildNode: %d.", type);
+	}
+}
+
 template <class NODE>
 unsafe_optional_ptr<Node> GetNextChildInternal(ART &art, NODE &node, uint8_t &byte) {
 	D_ASSERT(node.HasMetadata());
@@ -361,10 +397,13 @@ bool Node::IsAnyLeaf() const {
 
 template <class NODE>
 static void TransformToDeprecatedPushChildren(ART &art, Node &node, NType type, vector<reference<Node>> &stack) {
-	auto ptr = Node::InMemoryRef<NODE>(art, node, type);
-	if (ptr) {
-		NODE::Iterator(*ptr, [&](Node &child) { stack.emplace_back(child); });
+	auto &alloc = Node::GetAllocator(art, type);
+	if (!alloc.LoadedFromStorage(node)) {
+		return;
 	}
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<NODE>();
+	NODE::Iterator(n, [&](Node &child) { stack.emplace_back(child); });
 }
 
 void Node::TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state) {

@@ -5,46 +5,13 @@
 
 namespace duckdb {
 
-PrefixHandle::PrefixHandle(const ART &art, const Node node)
-    : segment_handle(Node::GetAllocator(art, PREFIX).GetHandle(node)) {
-	data = segment_handle.GetPtr();
-	child = reinterpret_cast<Node *>(data + art.PrefixCount() + 1);
-	segment_handle.MarkModified();
-}
-
-PrefixHandle::PrefixHandle(FixedSizeAllocator &allocator, const Node node, const uint8_t count)
-    : segment_handle(allocator.GetHandle(node)) {
-	data = segment_handle.GetPtr();
-	child = reinterpret_cast<Node *>(data + count + 1);
-	segment_handle.MarkModified();
-}
-
-PrefixHandle::PrefixHandle(PrefixHandle &&other) noexcept
-    : data(other.data), child(other.child), segment_handle(std::move(other.segment_handle)) {
-	other.data = nullptr;
-	other.child = nullptr;
-}
-
-PrefixHandle &PrefixHandle::operator=(PrefixHandle &&other) noexcept {
-	if (this != &other) {
-		// old segment handle reader count gets decremented on this move.
-		segment_handle = std::move(other.segment_handle);
-
-		data = other.data;
-		child = other.child;
-
-		other.data = nullptr;
-		other.child = nullptr;
-	}
-	return *this;
-}
-
-PrefixHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, Node &node) {
+NodeHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, Node &node) {
 	node = allocator.New();
 	node.SetMetadata(static_cast<uint8_t>(PREFIX));
 
-	PrefixHandle handle(allocator, node, DEPRECATED_COUNT);
-	handle.data[DEPRECATED_COUNT] = 0;
+	NodeHandle handle(allocator, node, PREFIX);
+	auto data = handle.GetPtr();
+	data[DEPRECATED_COUNT] = 0;
 	return handle;
 }
 
@@ -57,8 +24,9 @@ optional_ptr<Node> PrefixHandle::TransformToDeprecated(ART &art, Node &node, Tra
 			if (!allocator.LoadedFromStorage(ref)) {
 				return nullptr;
 			}
-			PrefixHandle handle(art, ref);
-			ref = *handle.child;
+			NodeHandle handle(art, ref);
+			auto child = reinterpret_cast<Node *>(handle.GetPtr() + art.PrefixCount() + 1);
+			ref = *child;
 		}
 		return ref.get();
 	}
@@ -76,32 +44,42 @@ optional_ptr<Node> PrefixHandle::TransformToDeprecated(ART &art, Node &node, Tra
 		}
 		{
 			// Decrease the readers on current_handle after moving all data over.
-			PrefixHandle current_handle(art, current_node);
-			for (idx_t i = 0; i < current_handle.data[art.PrefixCount()]; i++) {
-				new_handle = new_handle.TransformToDeprecatedAppend(art, deprecated_allocator, current_handle.data[i]);
+			NodeHandle current_handle(art, current_node);
+			auto current_data = current_handle.GetPtr();
+			auto current_child = reinterpret_cast<Node *>(current_data + art.PrefixCount() + 1);
+
+			for (idx_t i = 0; i < current_data[art.PrefixCount()]; i++) {
+				new_handle =
+				    TransformToDeprecatedAppend(std::move(new_handle), art, deprecated_allocator, current_data[i]);
 			}
-			*new_handle.child = *current_handle.child;
+			auto new_child = reinterpret_cast<Node *>(new_handle.GetPtr() + art.PrefixCount() + 1);
+			*new_child = *current_child;
 		}
 
 		// Freeing the node here can trigger a buffer removal (last segment on the buffer).
 		// In that case, there cannot be any readers left on the buffer.
 		Node::FreeNode(art, current_node);
-		current_node = *new_handle.child;
+		auto new_child = reinterpret_cast<Node *>(new_handle.GetPtr() + art.PrefixCount() + 1);
+		current_node = *new_child;
 	}
 
 	node = new_node;
-	return new_handle.child;
+	auto new_child = reinterpret_cast<Node *>(new_handle.GetPtr() + art.PrefixCount() + 1);
+	return new_child;
 }
 
-PrefixHandle PrefixHandle::TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, const uint8_t byte) {
+NodeHandle PrefixHandle::TransformToDeprecatedAppend(NodeHandle handle, ART &art, FixedSizeAllocator &allocator,
+                                                     const uint8_t byte) {
+	auto data = handle.GetPtr();
 	if (data[DEPRECATED_COUNT] != DEPRECATED_COUNT) {
 		data[data[DEPRECATED_COUNT]] = byte;
 		data[DEPRECATED_COUNT]++;
-		return std::move(*this);
+		return handle;
 	}
 
+	auto child = reinterpret_cast<Node *>(data + art.PrefixCount() + 1);
 	auto new_prefix = NewDeprecated(allocator, *child);
-	return new_prefix.TransformToDeprecatedAppend(art, allocator, byte);
+	return TransformToDeprecatedAppend(std::move(new_prefix), art, allocator, byte);
 }
 
 } // namespace duckdb

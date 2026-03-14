@@ -574,8 +574,8 @@ ErrorData ART::InsertKeys(ArenaAllocator &arena, unsafe_vector<ARTKey> &keys, un
 			continue;
 		}
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
-		D_ASSERT(leaf);
-		D_ASSERT(ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]));
+		D_ASSERT(leaf.HasMetadata());
+		D_ASSERT(ARTOperator::LookupInLeaf(*this, leaf, row_id_keys[i]));
 	}
 #endif
 	return ErrorData();
@@ -671,8 +671,8 @@ idx_t ART::DeleteKeys(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id
 			continue;
 		}
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
-		if (leaf) {
-			auto contains_row_id = ARTOperator::LookupInLeaf(*this, *leaf, row_id_keys[i]);
+		if (leaf.HasMetadata()) {
+			auto contains_row_id = ARTOperator::LookupInLeaf(*this, leaf, row_id_keys[i]);
 			D_ASSERT(!contains_row_id);
 		}
 	}
@@ -696,12 +696,12 @@ bool ART::FullScan(idx_t max_count, set<row_t> &row_ids) {
 
 bool ART::SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids) {
 	auto leaf = ARTOperator::Lookup(*this, tree, key, 0);
-	if (!leaf) {
+	if (!leaf.HasMetadata()) {
 		return true;
 	}
 
 	Iterator it(*this);
-	it.FindMinimum(*leaf);
+	it.FindMinimum(leaf);
 	ARTKey empty_key = ARTKey();
 	RowIdSetOutput output(row_ids, max_count);
 	return it.Scan(empty_key, output, false) == ARTScanResult::COMPLETED;
@@ -853,14 +853,14 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete
 		for (auto &index : *delete_index_info.delete_indexes) {
 			auto &delete_art = index.get().Cast<ART>();
 			auto deleted_leaf = ARTOperator::Lookup(delete_art, delete_art.tree, key, 0);
-			if (!deleted_leaf) {
+			if (!deleted_leaf.HasMetadata()) {
 				continue;
 			}
 			// All leaves in the delete ART are inlined.
-			if (deleted_leaf->GetType() != NType::LEAF_INLINED) {
+			if (deleted_leaf.GetType() != NType::LEAF_INLINED) {
 				throw InternalException("Non-inlined leaf?");
 			}
-			auto deleted_row_id = deleted_leaf->GetRowId();
+			auto deleted_row_id = deleted_leaf.GetRowId();
 			deleted_row_ids.push_back(deleted_row_id);
 		}
 	}
@@ -946,10 +946,10 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 		}
 
 		auto leaf = ARTOperator::Lookup(*this, tree, keys[i], 0);
-		if (!leaf) {
+		if (!leaf.HasMetadata()) {
 			continue;
 		}
-		VerifyLeaf(*leaf, keys[i], DeleteIndexInfo(info.delete_indexes), manager, conflict_idx, i);
+		VerifyLeaf(leaf, keys[i], DeleteIndexInfo(info.delete_indexes), manager, conflict_idx, i);
 	}
 
 	manager.FinishLookup();

@@ -34,12 +34,12 @@ private:
 
 public:
 	//! Get a new Node256 handle and initialize the Node256.
-	static NodeHandle<Node256> New(ART &art, Node &node) {
+	static NodeHandle New(ART &art, Node &node) {
 		node = Node::GetAllocator(art, NODE_256).New();
 		node.SetMetadata(static_cast<uint8_t>(NODE_256));
 
-		NodeHandle<Node256> handle(art, node);
-		auto &n = handle.Get();
+		NodeHandle handle(art, node);
+		auto &n = handle.Get<Node256>();
 
 		// Reset the node (count and children).
 		n.count = 0;
@@ -73,6 +73,25 @@ public:
 				lambda(n.children[i]);
 			}
 		}
+	}
+
+	//! Get the child node at byte (returns Node by value).
+	static Node GetChildNode(const Node256 &n, const uint8_t byte) {
+		if (n.children[byte].HasMetadata()) {
+			return n.children[byte];
+		}
+		return Node();
+	}
+
+	//! Get the first child node >= byte (returns Node by value, updates byte).
+	static Node GetNextChildNode(const Node256 &n, uint8_t &byte) {
+		for (idx_t i = byte; i < CAPACITY; i++) {
+			if (n.children[i].HasMetadata()) {
+				byte = UnsafeNumericCast<uint8_t>(i);
+				return n.children[i];
+			}
+		}
+		return Node();
 	}
 
 	template <class NODE>

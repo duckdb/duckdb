@@ -19,47 +19,42 @@ namespace duckdb {
 //! ARTOperator provides functionality for different ART operations.
 class ARTOperator {
 public:
-	//! Lookup returns a pointer to the leaf matching the key,
-	//! or nullptr, if no such leaf exists.
-	static unsafe_optional_ptr<const Node> Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
-		reference<const Node> ref(node);
+	//! Lookup returns a Node by value matching the key,
+	//! or an empty Node, if no such leaf exists.
+	static Node Lookup(ART &art, const Node &node, const ARTKey &key, idx_t depth) {
+		Node current(node);
 
-		while (ref.get().HasMetadata()) {
-			// Return the leaf.
-			if (ref.get().IsAnyLeaf() || ref.get().GetGateStatus() == GateStatus::GATE_SET) {
-				return unsafe_optional_ptr<const Node>(ref.get());
+		while (current.HasMetadata()) {
+			if (current.IsAnyLeaf() || current.GetGateStatus() == GateStatus::GATE_SET) {
+				return current;
 			}
 
-			// Traverse the prefix.
-			if (ref.get().GetType() == NType::PREFIX) {
-				Prefix prefix(art, ref.get());
-				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
-					if (prefix.data[i] != key[depth]) {
-						// The key and the prefix don't match.
-						return nullptr;
+			if (current.GetType() == NType::PREFIX) {
+				ConstNodeHandle handle(art, current);
+				auto data = handle.GetPtr();
+				auto child = reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
+				for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
+					if (data[i] != key[depth]) {
+						return Node();
 					}
 					depth++;
 				}
-				ref = *prefix.ptr;
+				current = *child;
 				continue;
 			}
 
-			// Get the child node.
 			D_ASSERT(depth < key.len);
-			auto child = ref.get().GetChild(art, key[depth]);
-
-			// No child at the key byte, return nullptr.
-			if (!child) {
-				return nullptr;
+			auto child = current.GetChildNode(art, key[depth]);
+			if (!child.HasMetadata()) {
+				return Node();
 			}
 
-			// Continue in the child.
-			ref = *child;
-			D_ASSERT(ref.get().HasMetadata());
+			current = child;
+			D_ASSERT(current.HasMetadata());
 			depth++;
 		}
 
-		return nullptr;
+		return Node();
 	}
 
 	//! LookupInLeaf returns true if the rowid is in the leaf:
@@ -346,14 +341,14 @@ private:
 			for (auto &delete_index : *delete_index_info.delete_indexes) {
 				auto &delete_art = delete_index.get().Cast<ART>();
 				auto delete_leaf = Lookup(delete_art, delete_art.tree, key, 0);
-				if (!delete_leaf) {
+				if (!delete_leaf.HasMetadata()) {
 					continue;
 				}
 
 				// The row ID has changed.
 				// Thus, the local index has a newer (local) row ID, and this is a constraint violation.
-				D_ASSERT(delete_leaf->GetType() == NType::LEAF_INLINED);
-				auto deleted_row_id = delete_leaf->GetRowId();
+				D_ASSERT(delete_leaf.GetType() == NType::LEAF_INLINED);
+				auto deleted_row_id = delete_leaf.GetRowId();
 				auto this_row_id = node.GetRowId();
 				if (deleted_row_id != this_row_id) {
 					continue;

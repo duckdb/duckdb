@@ -163,8 +163,8 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, 
 
 	reference<const Node> ref(node);
 	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+		ConstNodeHandle handle(art, ref.get());
+		auto &leaf = handle.Get<Leaf>();
 		if (row_ids.size() + leaf.count > max_count) {
 			return false;
 		}
@@ -221,8 +221,8 @@ void Leaf::DeprecatedVerify(ART &art, const Node &node) {
 	reference<const Node> ref(node);
 
 	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+		ConstNodeHandle handle(art, ref.get());
+		auto &leaf = handle.Get<Leaf>();
 		D_ASSERT(leaf.count <= LEAF_SIZE);
 		ref = leaf.ptr;
 	}
@@ -234,8 +234,8 @@ void Leaf::DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &
 
 	reference<const Node> ref(ptr);
 	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+		ConstNodeHandle handle(art, ref.get());
+		auto &leaf = handle.Get<Leaf>();
 		node_counts[idx]++;
 		ref = leaf.ptr;
 	}
