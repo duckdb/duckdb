@@ -37,10 +37,10 @@
 
 namespace duckdb {
 
-ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> context_p, AttachedDatabase &db_p,
+ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db_p,
                                                  DuckTransactionManager &transaction_manager_p)
     : db(db_p), transaction_manager(transaction_manager_p) {
-	if (!context_p) {
+	if (!context) {
 		return;
 	}
 	checkpoint_connection = make_uniq<Connection>(db.GetDatabase());
@@ -74,6 +74,10 @@ void ActiveCheckpointWrapper::Commit() {
 	}
 	checkpoint_context->transaction.Commit(false);
 	checkpoint_transaction = nullptr;
+}
+
+bool ActiveCheckpointWrapper::HasCheckpointContext() const {
+	return checkpoint_context;
 }
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);

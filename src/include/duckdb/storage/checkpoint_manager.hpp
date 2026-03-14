@@ -41,18 +41,21 @@ class TypeCatalogEntry;
 struct BoundCreateTableInfo;
 struct CheckpointOptions;
 
-struct ActiveCheckpointWrapper {
+class ActiveCheckpointWrapper {
+public:
 	ActiveCheckpointWrapper(optional_ptr<ClientContext> context, AttachedDatabase &db,
 	                        DuckTransactionManager &transaction_manager);
 	~ActiveCheckpointWrapper();
 
 	void GetCheckpointTransaction(CheckpointOptions &options);
 	void Commit();
+	bool HasCheckpointContext() const;
 
-	optional_ptr<ClientContext> checkpoint_context;
+private:
 	AttachedDatabase &db;
 	DuckTransactionManager &transaction_manager;
 	unique_ptr<Connection> checkpoint_connection;
+	optional_ptr<ClientContext> checkpoint_context;
 	optional_ptr<DuckTransaction> checkpoint_transaction;
 };
 

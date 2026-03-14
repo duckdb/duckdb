@@ -1,0 +1,270 @@
+# name: test/sql/pragma/profiling/test_checkpoint_concurrent_operations.test
+# group: [profiling]
+
+require notwindows
+
+require json
+
+require noforcestorage
+
+require skip_reload
+
+# Setup.
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_ops.db';
+
+# Create a table with an index.
+
+statement ok
+CREATE TABLE concurrent_ops.tbl(id INTEGER, category INTEGER);
+
+statement ok
+INSERT INTO concurrent_ops.tbl SELECT range, range % 100 FROM range(10000);
+
+statement ok
+CREATE INDEX idx_category ON concurrent_ops.tbl(category);
+
+# ============================================================
+# Part 1: Checkpoint with concurrent read transaction using index.
+# ============================================================
+
+# con1 starts a read transaction scanning through the index.
+
+statement ok con1
+BEGIN;
+
+query I con1
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
+----
+100
+
+# Default connection inserts more data (modifies table and index).
+
+statement ok
+INSERT INTO concurrent_ops.tbl SELECT range + 10000, range % 100 FROM range(10000);
+
+# Enable profiling and checkpoint.
+# The checkpoint exercises the ActiveCheckpointWrapper code path
+# because con1 holds an active read transaction.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/concurrent_ops_p1.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CHECKPOINT concurrent_ops;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/concurrent_ops_p1.json';
+
+query I
+SELECT
+	CASE WHEN checkpoint_latency >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Verify con1 snapshot isolation: still sees old data through the index.
+
+query I con1
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
+----
+100
+
+statement ok con1
+COMMIT;
+
+# After commit, con1 sees the new data through the index.
+
+query I con1
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
+----
+200
+
+# ============================================================
+# Part 2: Checkpoint with multiple concurrent readers and a second index.
+# ============================================================
+
+statement ok
+CREATE INDEX idx_id ON concurrent_ops.tbl(id);
+
+# con1 and con2 start read transactions before the new insert.
+
+statement ok con1
+BEGIN;
+
+query I con1
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
+----
+200
+
+statement ok con2
+BEGIN;
+
+query I con2
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE id < 5000;
+----
+5000
+
+# Default connection inserts more data while both readers hold snapshots.
+
+statement ok
+INSERT INTO concurrent_ops.tbl SELECT range + 20000, range % 100 FROM range(10000);
+
+# Checkpoint with profiling while both readers are active.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/concurrent_ops_p2.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CHECKPOINT concurrent_ops;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/concurrent_ops_p2.json';
+
+query I
+SELECT
+	CASE WHEN checkpoint_latency >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Both readers still see their snapshots.
+
+query I con1
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
+----
+200
+
+query I con2
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE id < 5000;
+----
+5000
+
+statement ok con1
+COMMIT;
+
+statement ok con2
+COMMIT;
+
+# After commit, con1 sees the new data (30000 rows total).
+
+query I con1
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE category = 42;
+----
+300
+
+# con2 sees 5000 (no new ids below 5000 were inserted).
+
+query I con2
+SELECT COUNT(*) FROM concurrent_ops.tbl WHERE id < 5000;
+----
+5000
+
+# ============================================================
+# Part 3: Aborted checkpoint, then successful checkpoint with profiling.
+# ============================================================
+
+statement ok
+INSERT INTO concurrent_ops.tbl SELECT range + 30000, range % 100 FROM range(10000);
+
+# Abort the checkpoint before the header is written.
+# This throws a FatalException which invalidates the database.
+
+statement ok
+SET debug_checkpoint_abort = 'before_header';
+
+statement error
+CHECKPOINT concurrent_ops;
+----
+Checkpoint aborted before header write
+
+restart
+
+# After restart, re-attach and verify data survived via WAL replay.
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET debug_checkpoint_abort = 'none';
+
+statement ok
+ATTACH '__TEST_DIR__/concurrent_ops.db';
+
+query I
+SELECT COUNT(*) FROM concurrent_ops.tbl;
+----
+40000
+
+# Verify profiling works for a successful checkpoint after a prior abort.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/concurrent_ops_p3.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CHECKPOINT concurrent_ops;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/concurrent_ops_p3.json';
+
+query I
+SELECT
+	CASE WHEN checkpoint_latency >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
