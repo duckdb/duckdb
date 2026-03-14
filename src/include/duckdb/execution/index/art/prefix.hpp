@@ -17,7 +17,7 @@ class ARTKey;
 
 //! Prefix is a wrapper class to access a prefix.
 //! The prefix contains up to the ART's prefix size bytes and an additional byte for the count.
-//! It also contains a Node pointer to a child node.
+//! It also contains a NodePointer pointer to a child node.
 class Prefix {
 public:
 	static constexpr NType PREFIX = NType::PREFIX;
@@ -26,52 +26,55 @@ public:
 	static constexpr uint8_t ROW_ID_COUNT = ROW_ID_SIZE - 1;
 	static constexpr uint8_t DEPRECATED_COUNT = 15;
 	// The child pointer and the in_memory boolean.
-	static constexpr uint8_t METADATA_SIZE = sizeof(Node) + 1;
+	static constexpr uint8_t METADATA_SIZE = sizeof(NodePointer) + 1;
 
 public:
 	Prefix() = delete;
-	Prefix(const ART &art, const Node ptr_p, const bool is_mutable = false, const bool set_in_memory = false);
-	Prefix(FixedSizeAllocator &allocator, const Node ptr_p, const idx_t count);
+	Prefix(const ART &art, const NodePointer ptr_p, const bool is_mutable = false, const bool set_in_memory = false);
+	Prefix(FixedSizeAllocator &allocator, const NodePointer ptr_p, const idx_t count);
 
 	data_ptr_t data;
-	Node *ptr;
+	NodePointer *ptr;
 	bool in_memory;
 
 public:
-	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
+	static uint8_t GetByte(const ART &art, const NodePointer &node, const uint8_t pos);
 
 public:
 	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
-	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
+	static void New(ART &art, reference<NodePointer> &ref, const ARTKey &key, const idx_t depth, idx_t count);
 
 	//! Concatenates parent -> prev_node4 -> child.
-	static void Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
+	static void Concat(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child, uint8_t byte,
 	                   const GateStatus node4_status, const GateStatus status);
 
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
-	static void Reduce(ART &art, Node &node, const idx_t pos);
+	static void Reduce(ART &art, NodePointer &node, const idx_t pos);
 	//! Splits the prefix at pos.
 	//! node references the node that replaces the split byte.
 	//! child references the remaining node after the split.
 	//! Returns GATE_SET, if a gate node was freed, else GATE_NOT_SET.
 	//! If it returns GATE_SET, then the caller must set the gate for the node replacing the split byte,
 	//! after its creation.
-	static GateStatus Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos);
+	static GateStatus Split(ART &art, reference<NodePointer> &node, NodePointer &child, const uint8_t pos);
 
 private:
-	static Prefix NewInternal(ART &art, Node &node, const data_ptr_t data, const uint8_t count, const idx_t offset);
+	static Prefix NewInternal(ART &art, NodePointer &node, const data_ptr_t data, const uint8_t count,
+	                          const idx_t offset);
 
-	static Prefix GetTail(ART &art, const Node &node);
+	static Prefix GetTail(ART &art, const NodePointer &node);
 
-	static void ConcatInternal(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,
+	static void ConcatInternal(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child, uint8_t byte,
 	                           const GateStatus status);
-	static void ConcatNode4WasGate(ART &art, Node &node4, const Node child, uint8_t byte);
-	static void ConcatChildIsGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);
-	static void ConcatOutsideGate(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte);
+	static void ConcatNode4WasGate(ART &art, NodePointer &node4, const NodePointer child, uint8_t byte);
+	static void ConcatChildIsGate(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child,
+	                              uint8_t byte);
+	static void ConcatOutsideGate(ART &art, NodePointer &parent, NodePointer &node4, const NodePointer child,
+	                              uint8_t byte);
 
 	Prefix Append(ART &art, const uint8_t byte);
-	void Append(ART &art, Node other);
+	void Append(ART &art, NodePointer other);
 	Prefix TransformToDeprecatedAppend(ART &art, FixedSizeAllocator &allocator, uint8_t byte);
 
 private:

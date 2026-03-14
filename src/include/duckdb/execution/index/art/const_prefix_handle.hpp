@@ -19,18 +19,18 @@ public:
 	static constexpr NType PREFIX = NType::PREFIX;
 
 	//! Traverses and verifies the node and its subtree.
-	static void Verify(ART &art, const Node &node);
+	static void Verify(ART &art, const NodePointer &node);
 
 	//! Returns the string representation of the node using ToStringOptions.
-	static string ToString(ART &art, const Node &node, const ToStringOptions &options);
+	static string ToString(ART &art, const NodePointer &node, const ToStringOptions &options);
 
 private:
 	template <class F>
-	static void Iterator(ART &art, reference<const Node> &ref, const bool exit_gate, F &&lambda) {
+	static void Iterator(ART &art, reference<const NodePointer> &ref, const bool exit_gate, F &&lambda) {
 		while (ref.get().HasMetadata() && ref.get().GetType() == PREFIX) {
 			ConstNodeHandle handle(art, ref);
 			auto data = handle.GetPtr();
-			auto child = reinterpret_cast<const Node *>(data + art.PrefixCount() + 1);
+			auto child = reinterpret_cast<const NodePointer *>(data + art.PrefixCount() + 1);
 
 			lambda(handle, data, child);
 

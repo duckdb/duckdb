@@ -100,7 +100,7 @@ private:
 
 	template <class FUNC, class NODE_TYPE>
 	void IterateChildren(FUNC &&handler, NODE &node, const NType type) {
-		auto &n = Node::Ref<NODE_TYPE>(art, node, type);
+		auto &n = NodePointer::Ref<NODE_TYPE>(art, node, type);
 		NODE_TYPE::Iterator(n, [&](NODE &child) { Emplace(handler, child); });
 	}
 

@@ -63,7 +63,7 @@ public:
 	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
-	Node tree = Node();
+	NodePointer tree = NodePointer();
 	//! Fixed-size allocators holding the ART nodes.
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
@@ -177,14 +177,14 @@ private:
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
-	                optional_idx &conflict_idx, idx_t i);
+	void VerifyLeaf(const NodePointer &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info,
+	                ConflictManager &manager, optional_idx &conflict_idx, idx_t i);
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
-	void InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);

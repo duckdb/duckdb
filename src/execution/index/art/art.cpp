@@ -845,8 +845,8 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 }
 
-void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
-                     optional_idx &conflict_idx, idx_t i) {
+void ART::VerifyLeaf(const NodePointer &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info,
+                     ConflictManager &manager, optional_idx &conflict_idx, idx_t i) {
 	// Get the set of deleted row ids for this value if we have any delete indexes
 	vector<row_t> deleted_row_ids;
 	if (delete_index_info.delete_indexes) {
@@ -974,7 +974,7 @@ string ART::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t
 //===--------------------------------------------------------------------===//
 
 void ART::TransformToDeprecated() {
-	auto idx = Node::GetAllocatorIdx(NType::PREFIX);
+	auto idx = NodePointer::GetAllocatorIdx(NType::PREFIX);
 	auto &block_manager = (*allocators)[idx]->block_manager;
 	unsafe_unique_ptr<FixedSizeAllocator> deprecated_allocator = nullptr;
 	if (prefix_count != Prefix::DEPRECATED_COUNT) {
@@ -987,7 +987,7 @@ void ART::TransformToDeprecated() {
 
 	// Transform all leaves, and possibly the prefixes.
 	if (tree.HasMetadata()) {
-		Node::TransformToDeprecated(*this, tree, *state);
+		NodePointer::TransformToDeprecated(*this, tree, *state);
 	}
 
 	// Replace the prefix allocator with the deprecated allocator.
@@ -1021,10 +1021,10 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 
 #ifdef DEBUG
 	if (v1_0_0_storage) {
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->Empty());
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->Empty());
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->Empty());
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::PREFIX)]->GetSegmentSize() ==
+		D_ASSERT((*allocators)[NodePointer::GetAllocatorIdx(NType::NODE_7_LEAF)]->Empty());
+		D_ASSERT((*allocators)[NodePointer::GetAllocatorIdx(NType::NODE_15_LEAF)]->Empty());
+		D_ASSERT((*allocators)[NodePointer::GetAllocatorIdx(NType::NODE_256_LEAF)]->Empty());
+		D_ASSERT((*allocators)[NodePointer::GetAllocatorIdx(NType::PREFIX)]->GetSegmentSize() ==
 		         Prefix::DEPRECATED_COUNT + Prefix::METADATA_SIZE);
 	}
 #endif
@@ -1094,7 +1094,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 
 	auto &metadata_manager = table_io_manager.GetMetadataManager();
 	MetadataReader reader(metadata_manager, pointer);
-	tree = reader.Read<Node>();
+	tree = reader.Read<NodePointer>();
 
 	for (idx_t i = 0; i < DEPRECATED_ALLOCATOR_COUNT; i++) {
 		(*allocators)[i]->Deserialize(metadata_manager, reader.Read<BlockPointer>());
@@ -1196,14 +1196,14 @@ void ART::Vacuum(IndexLock &state) {
 
 	// Traverse the allocated memory of the tree to perform a vacuum.
 	auto &art = *this;
-	auto handler = [&art, &indexes](Node &node) {
+	auto handler = [&art, &indexes](NodePointer &node) {
 		ARTHandlingResult result;
 		const auto type = node.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
 			return ARTHandlingResult::SKIP;
 		case NType::LEAF: {
-			if (indexes.find(Node::GetAllocatorIdx(type)) == indexes.end()) {
+			if (indexes.find(NodePointer::GetAllocatorIdx(type)) == indexes.end()) {
 				return ARTHandlingResult::SKIP;
 			}
 			Leaf::DeprecatedVacuum(art, node);
@@ -1227,8 +1227,8 @@ void ART::Vacuum(IndexLock &state) {
 			throw InternalException("invalid node type for Vacuum: %d", type);
 		}
 
-		const auto idx = Node::GetAllocatorIdx(type);
-		auto &allocator = Node::GetAllocator(art, type);
+		const auto idx = NodePointer::GetAllocatorIdx(type);
+		auto &allocator = NodePointer::GetAllocator(art, type);
 		const auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(node);
 		if (needs_vacuum) {
 			const auto status = node.GetGateStatus();
@@ -1239,7 +1239,7 @@ void ART::Vacuum(IndexLock &state) {
 		return result;
 	};
 
-	ARTScanner<ARTScanHandling::EMPLACE, Node> scanner(*this, handler, tree);
+	ARTScanner<ARTScanHandling::EMPLACE, NodePointer> scanner(*this, handler, tree);
 	scanner.Scan(handler);
 
 	// Finalize the vacuum operation.
@@ -1257,10 +1257,10 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 	}
 }
 
-void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
+void ART::InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(node.HasMetadata());
 
-	auto handler = [&upper_bounds](Node &node) {
+	auto handler = [&upper_bounds](NodePointer &node) {
 		const auto type = node.GetType();
 		if (node.GetType() == NType::LEAF_INLINED) {
 			return ARTHandlingResult::NONE;
@@ -1268,12 +1268,12 @@ void ART::InitializeMerge(Node &node, unsafe_vector<idx_t> &upper_bounds) {
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
-		const auto idx = Node::GetAllocatorIdx(type);
+		const auto idx = NodePointer::GetAllocatorIdx(type);
 		node.IncreaseBufferId(upper_bounds[idx]);
 		return ARTHandlingResult::NONE;
 	};
 
-	ARTScanner<ARTScanHandling::POP, Node> scanner(*this, handler, node);
+	ARTScanner<ARTScanHandling::POP, NodePointer> scanner(*this, handler, node);
 	scanner.Scan(handler);
 }
 

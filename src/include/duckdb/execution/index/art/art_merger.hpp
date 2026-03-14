@@ -26,7 +26,7 @@ public:
 
 public:
 	//! Init the merge by setting the initial nodes.
-	void Init(Node &left, Node &right);
+	void Init(NodePointer &left, NodePointer &right);
 	//! Merge until (1) triggering constraint violation or (2) all nodes have been processed.
 	ARTConflictType Merge();
 
@@ -37,11 +37,11 @@ private:
 	//! The depth resets when entering a gate.
 	struct NodeEntry {
 		NodeEntry() = delete;
-		NodeEntry(Node &left, Node &right, const GateStatus status, const idx_t depth)
+		NodeEntry(NodePointer &left, NodePointer &right, const GateStatus status, const idx_t depth)
 		    : left(left), right(right), status(status), depth(depth) {};
 
-		Node &left;
-		Node &right;
+		NodePointer &left;
+		NodePointer &right;
 		GateStatus status;
 		idx_t depth;
 	};
@@ -57,23 +57,24 @@ private:
 	// When pushing anything on the stack, we ensure that:
 	// - if left is LEAF_INLINED, then right is also LEAF_INLINED.
 	// - if left is PREFIX, then right is also PREFIX (except for PREFIX + LEAF_INLINED).
-	void Emplace(Node &left, Node &right, const GateStatus parent_status, const idx_t depth);
+	void Emplace(NodePointer &left, NodePointer &right, const GateStatus parent_status, const idx_t depth);
 
 	ARTConflictType MergeNodeAndInlined(NodeEntry &entry);
 
-	array_ptr<uint8_t> GetBytes(Node &leaf);
+	array_ptr<uint8_t> GetBytes(NodePointer &leaf);
 	void MergeLeaves(NodeEntry &entry);
 
-	NodeChildren ExtractChildren(Node &node);
+	NodePointerChildren ExtractChildren(NodePointer &node);
 	void MergeNodes(NodeEntry &entry);
 
 	//! Merges a node and a prefix.
 	//! pos determines up to which position we need to reduce the prefix.
 	//! If we call into this function via MergePrefixes (case: one prefix contains the other),
 	//! then pos is the length of the shorter prefix.
-	void MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth,
-	                        const uint8_t pos);
-	void MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth);
+	void MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const GateStatus parent_status,
+	                        const idx_t parent_depth, const uint8_t pos);
+	void MergeNodeAndPrefix(NodePointer &node, NodePointer &prefix, const GateStatus parent_status,
+	                        const idx_t parent_depth);
 	void MergePrefixes(NodeEntry &entry);
 };
 
