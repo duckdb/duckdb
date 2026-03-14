@@ -17,7 +17,7 @@ namespace duckdb {
 CleanupState::CleanupState(DuckTransaction &transaction, transaction_t lowest_active_transaction,
                            ActiveTransactionState transaction_state)
     : lowest_active_transaction(lowest_active_transaction), transaction_state(transaction_state),
-      index_data_remover(transaction, QueryContext(), IndexRemovalType::DELETED_ROWS_IN_USE, optional_idx()) {
+      index_data_remover(transaction, QueryContext(), IndexRemovalType::DELETED_ROWS_IN_USE) {
 }
 
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {

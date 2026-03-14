@@ -29,8 +29,7 @@ enum class CommitMode { COMMIT, REVERT_COMMIT };
 
 struct IndexDataRemover {
 public:
-	explicit IndexDataRemover(DuckTransaction &transaction, QueryContext context, IndexRemovalType removal_type,
-	                          optional_idx checkpoint_id);
+	explicit IndexDataRemover(DuckTransaction &transaction, QueryContext context, IndexRemovalType removal_type);
 
 	void PushDelete(DeleteInfo &info);
 	void Verify();
@@ -44,8 +43,6 @@ private:
 	QueryContext context;
 	//! While committing, we remove data from any indexes that was deleted
 	IndexRemovalType removal_type;
-	//! The active checkpoint id at the time of commit (captured once to ensure consistency between commit and revert)
-	optional_idx checkpoint_id;
 	DataChunk chunk;
 	//! Debug mode only - list of indexes to verify
 	reference_map_t<DataTable, shared_ptr<DataTableInfo>> verify_indexes;
@@ -54,7 +51,7 @@ private:
 class CommitState {
 public:
 	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
-	                     ActiveTransactionState transaction_state, CommitMode commit_mode, optional_idx checkpoint_id);
+	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);

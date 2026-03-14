@@ -48,7 +48,6 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 }
 
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
-	transaction_manager.ResetActiveCheckpoint();
 	if (checkpoint_transaction) {
 		transaction_manager.RollbackTransaction(*checkpoint_transaction);
 		checkpoint_transaction = nullptr;
