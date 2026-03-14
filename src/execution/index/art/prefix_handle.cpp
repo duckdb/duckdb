@@ -53,19 +53,19 @@ optional_ptr<NodePointer> PrefixHandle::TransformToDeprecated(ART &art, NodePoin
 				new_handle =
 				    TransformToDeprecatedAppend(std::move(new_handle), art, deprecated_allocator, current_data[i]);
 			}
-			auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + art.PrefixCount() + 1);
+			auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
 			*new_child = *current_child;
 		}
 
 		// Freeing the node here can trigger a buffer removal (last segment on the buffer).
 		// In that case, there cannot be any readers left on the buffer.
 		NodePointer::FreeNode(art, current_node);
-		auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + art.PrefixCount() + 1);
+		auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
 		current_node = *new_child;
 	}
 
 	node = new_node;
-	auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + art.PrefixCount() + 1);
+	auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
 	return new_child;
 }
 
@@ -78,7 +78,7 @@ NodeHandle PrefixHandle::TransformToDeprecatedAppend(NodeHandle handle, ART &art
 		return handle;
 	}
 
-	auto child = reinterpret_cast<NodePointer *>(data + art.PrefixCount() + 1);
+	auto child = reinterpret_cast<NodePointer *>(data + DEPRECATED_COUNT + 1);
 	auto new_prefix = NewDeprecated(allocator, *child);
 	return TransformToDeprecatedAppend(std::move(new_prefix), art, allocator, byte);
 }
