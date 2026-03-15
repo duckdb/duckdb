@@ -93,7 +93,7 @@ jobs:
   cmake-reconfigure-check:
     name: CMake Reconfigure Check
     runs-on: ${{ matrix.os }}
-    needs: format-draft
+    needs: format-check
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
