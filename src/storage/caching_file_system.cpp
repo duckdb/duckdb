@@ -68,24 +68,33 @@ public:
 				block->state = CacheBlockState::LOADING;
 				lk.unlock();
 
-				const idx_t offset = block_idx * ExternalFileCache::CACHE_BLOCK_SIZE;
-				const idx_t to_read = MinValue(ExternalFileCache::CACHE_BLOCK_SIZE, file_size - offset);
-				auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
-				file_handle.Read(context, buf.Ptr(), to_read, offset);
+				try {
+					const idx_t offset = block_idx * ExternalFileCache::CACHE_BLOCK_SIZE;
+					const idx_t to_read = MinValue(ExternalFileCache::CACHE_BLOCK_SIZE, file_size - offset);
+					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
+					file_handle.Read(context, buf.Ptr(), to_read, offset);
 
-				lk.lock();
-				block->block_handle = buf.GetBlockHandle();
-				block->state = CacheBlockState::LOADED;
-				result_pin = std::move(buf);
-				block->cv.notify_all();
+					lk.lock();
+					block->block_handle = buf.GetBlockHandle();
+					block->state = CacheBlockState::LOADED;
+					result_pin = std::move(buf);
+					block->cv.notify_all();
+				} catch (std::exception &e) {
+					lk.lock();
+					block->state = CacheBlockState::ERROR;
+					block->error_message = e.what();
+					block->cv.notify_all();
+					throw;
+				}
 				return;
 			}
 			case CacheBlockState::LOADING: {
 				block->cv.wait(lk, [&] { return block->state != CacheBlockState::LOADING; });
 				continue;
 			}
-			default:
-				throw InternalException("Unknown CacheBlockState");
+			case CacheBlockState::ERROR: {
+				throw IOException("Cached block read failed: %s", block->error_message);
+			}
 			}
 		}
 	}

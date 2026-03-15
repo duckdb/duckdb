@@ -13,6 +13,33 @@
 
 namespace {
 constexpr idx_t TEST_BUFFER_SIZE = 200;
+
+class FailingFileSystem : public duckdb::LocalFileSystem {
+public:
+	mutable std::mutex mu;
+	bool should_fail = false;
+
+	duckdb::string GetName() const override {
+		return "FailingFileSystem";
+	}
+
+	void Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes, duckdb::idx_t location) override {
+		const std::lock_guard<std::mutex> lock(mu);
+		if (should_fail) {
+			throw duckdb::IOException("Injected read failure");
+		}
+		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
+	}
+
+	bool CanHandleFile(const duckdb::string &path) override {
+		return duckdb::StringUtil::StartsWith(path, duckdb::TestDirectoryPath());
+	}
+
+	bool CanSeek() override {
+		return true;
+	}
+};
+
 } // namespace
 
 namespace duckdb {
@@ -535,6 +562,49 @@ TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system]
 	}
 
 	REQUIRE(tracking_fs_ptr->GetReadCount(test_file.GetPath(), 0, test_content.size()) == 1);
+}
+
+TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_system][caching]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto failing_fs = make_uniq<FailingFileSystem>();
+	auto failing_fs_ptr = failing_fs.get();
+	auto caching_wrapper =
+	    make_shared_ptr<CachingFileSystemWrapper>(*failing_fs, db_instance, CachingMode::ALWAYS_CACHE);
+
+	const string test_content = "Test content for IO error propagation testing across multiple threads.";
+	TestFileGuard test_file("test_caching_io_error.txt", test_content);
+
+	OpenFileInfo file_info(test_file.GetPath());
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+
+	failing_fs_ptr->should_fail = true;
+
+	constexpr idx_t THREAD_COUNT = 4;
+	std::mutex results_mutex;
+	vector<bool> got_error(THREAD_COUNT, false);
+	vector<std::thread> threads;
+
+	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
+		threads.emplace_back([&, idx]() {
+			try {
+				auto handle = caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+				string buffer(TEST_BUFFER_SIZE, '\0');
+				handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0);
+			} catch (...) {
+				const lock_guard<mutex> lock(results_mutex);
+				got_error[idx] = true;
+			}
+		});
+	}
+	for (auto &thd : threads) {
+		thd.join();
+	}
+
+	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
+		REQUIRE(got_error[idx]);
+	}
 }
 
 } // namespace duckdb
