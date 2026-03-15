@@ -1549,7 +1549,7 @@ void IEJoinLocalSourceState::ResolveAntiJoin(ExecutionContext &context, DataChun
 
 		//	Scan through Li, skipping anything in lsel.
 		//	They are both ordered in the same way, so we can ratchet
-		const auto &i = joiner->i;
+		const auto i = MinValue(joiner->i, joiner->n);
 		auto &anti_i = joiner->anti_i;
 		auto &p = joiner->p;
 		auto &li = joiner->li;
@@ -1561,9 +1561,9 @@ void IEJoinLocalSourceState::ResolveAntiJoin(ExecutionContext &context, DataChun
 		//	Scan through the SEMI JOIN rids
 		//	Note that if there are no more matches, then lsel will be empty()
 		//	and i will be at the end of the range
-		for (; anti_i < i; ++anti_i) {
+		while (anti_i < i) {
 			//	Get the next lrid
-			auto pos = p[anti_i];
+			auto pos = p[anti_i++];
 			auto rid = li[pos];
 			if (rid <= 0) {
 				continue;
