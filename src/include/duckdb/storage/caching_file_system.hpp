@@ -25,14 +25,11 @@ class DatabaseInstance;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
-class StorageLockKey;
 class QueryContext;
 class CachingFileSystem;
 
 struct CachingFileHandle {
 public:
-	using CachedFileRangeOverlap = ExternalFileCache::CachedFileRangeOverlap;
-	using CachedFileRange = ExternalFileCache::CachedFileRange;
 	using CachedFile = ExternalFileCache::CachedFile;
 
 public:
@@ -61,26 +58,6 @@ public:
 	DUCKDB_API void Seek(idx_t location);
 
 private:
-	//! Get the version tag of the file (for checking cache invalidation)
-	const string &GetVersionTag(const unique_ptr<StorageLockKey> &guard);
-	//! Tries to read from the cache, filling "overlapping_ranges" with ranges that overlap with the request.
-	//! Returns an invalid BufferHandle if it fails
-	BufferHandle TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-	                              vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
-	                              optional_idx &start_location_of_next_range);
-	//! Try to read from the specified range, return an invalid BufferHandle if it fails
-	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
-	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
-	//! Try to insert the file range into the cache
-	BufferHandle TryInsertFileRange(BufferHandle &pin, data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-	                                shared_ptr<CachedFileRange> &new_file_range);
-	//! Read from file and copy from cached buffers until the requested read is complete
-	//! If actually_read is false, no reading happens, only the number of non-cached reads is counted and returned
-	idx_t ReadAndCopyInterleaved(const vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
-	                             const shared_ptr<CachedFileRange> &new_file_range, data_ptr_t buffer, idx_t nr_bytes,
-	                             idx_t location, bool actually_read);
-
-private:
 	QueryContext context;
 
 	//! The client caching file system that was used to create this CachingFileHandle
@@ -95,7 +72,7 @@ private:
 	optional_ptr<FileOpener> opener;
 	//! Cache validation mode for this file
 	CacheValidationMode validate;
-	//! The associated CachedFile with cached ranges
+	//! The associated CachedFile with cached blocks
 	CachedFile &cached_file;
 
 	//! The underlying FileHandle (optional)

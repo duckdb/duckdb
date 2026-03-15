@@ -1,6 +1,5 @@
 #include "duckdb/storage/external_file_cache.hpp"
 
-#include "duckdb/common/checksum.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -8,70 +7,17 @@
 
 namespace duckdb {
 
-ExternalFileCache::CachedFileRange::CachedFileRange(shared_ptr<BlockHandle> block_handle_p, idx_t nr_bytes_p,
-                                                    idx_t location_p, string version_tag_p)
-    : block_handle(std::move(block_handle_p)), nr_bytes(nr_bytes_p), location(location_p),
-      version_tag(std::move(version_tag_p)) {
+ExternalFileCache::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
 }
 
-ExternalFileCache::CachedFileRange::~CachedFileRange() {
-	VerifyCheckSum();
-}
-
-ExternalFileCache::CachedFileRangeOverlap
-ExternalFileCache::CachedFileRange::GetOverlap(const idx_t other_nr_bytes, const idx_t other_location) const {
-	const auto this_end = this->location + this->nr_bytes;
-	const auto other_end = other_nr_bytes + other_location;
-	if (this->location <= other_location && this_end >= other_end) {
-		return CachedFileRangeOverlap::FULL;
+bool ExternalFileCache::CachedFile::IsValid(bool validate, const string &current_version_tag,
+                                            timestamp_t current_last_modified) {
+	if (!validate) {
+		return true; // Assume valid
 	}
-	if (this->location < other_end && other_location < this_end) {
-		return CachedFileRangeOverlap::PARTIAL;
-	}
-	return CachedFileRangeOverlap::NONE;
-}
-
-ExternalFileCache::CachedFileRangeOverlap
-ExternalFileCache::CachedFileRange::GetOverlap(const CachedFileRange &other) const {
-	return GetOverlap(other.nr_bytes, other.location);
-}
-
-void ExternalFileCache::CachedFileRange::AddCheckSum() {
-#ifdef DEBUG
-	D_ASSERT(checksum == 0);
-	auto buffer_handle = block_handle->GetMemory().GetBufferManager().Pin(block_handle);
-	checksum = Checksum(buffer_handle.Ptr(), nr_bytes);
-#endif
-}
-
-void ExternalFileCache::CachedFileRange::VerifyCheckSum() {
-#ifdef DEBUG
-	if (checksum == 0) {
-		return;
-	}
-	auto buffer_handle = block_handle->GetMemory().GetBufferManager().Pin(block_handle);
-	if (!buffer_handle.IsValid()) {
-		return;
-	}
-	D_ASSERT(checksum == Checksum(buffer_handle.Ptr(), nr_bytes));
-#endif
-}
-
-ExternalFileCache::CachedFile::CachedFile(string path_p)
-    : path(std::move(path_p)), file_size(0), last_modified(0), can_seek(false), on_disk_file(false) {
-}
-
-void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &guard) const {
-#ifdef DEBUG
-	for (const auto &range1 : ranges) {
-		for (const auto &range2 : ranges) {
-			if (range1.first == range2.first) {
-				continue;
-			}
-			D_ASSERT(range1.second->GetOverlap(*range2.second) != CachedFileRangeOverlap::FULL);
-		}
-	}
-#endif
+	annotated_lock_guard<annotated_mutex> guard(meta_lock);
+	return ExternalFileCache::IsValid(validate, version_tag, last_modified, current_version_tag,
+	                                  current_last_modified);
 }
 
 bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
@@ -96,40 +42,6 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 	return access_time - current_last_modified > LAST_MODIFIED_THRESHOLD;
 }
 
-bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &guard, bool validate,
-                                            const string &current_version_tag, timestamp_t current_last_modified) {
-	if (!validate) {
-		return true; // Assume valid
-	}
-	return ExternalFileCache::IsValid(validate, VersionTag(guard), LastModified(guard), current_version_tag,
-	                                  current_last_modified);
-}
-
-idx_t &ExternalFileCache::CachedFile::FileSize(const unique_ptr<StorageLockKey> &guard) {
-	return file_size;
-}
-
-timestamp_t &ExternalFileCache::CachedFile::LastModified(const unique_ptr<StorageLockKey> &guard) {
-	return last_modified;
-}
-
-string &ExternalFileCache::CachedFile::VersionTag(const unique_ptr<StorageLockKey> &guard) {
-	return version_tag;
-}
-
-bool &ExternalFileCache::CachedFile::CanSeek(const unique_ptr<StorageLockKey> &guard) {
-	return can_seek;
-}
-
-bool &ExternalFileCache::CachedFile::OnDiskFile(const unique_ptr<StorageLockKey> &guard) {
-	return on_disk_file;
-}
-
-map<idx_t, shared_ptr<ExternalFileCache::CachedFileRange>> &
-ExternalFileCache::CachedFile::Ranges(const unique_ptr<StorageLockKey> &guard) {
-	return ranges;
-}
-
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
     : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p) {
 }
@@ -150,11 +62,24 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	unique_lock<mutex> files_guard(lock);
 	vector<CachedFileInformation> result;
 	for (const auto &file : cached_files) {
-		auto ranges_guard = file.second->lock.GetSharedLock();
-		for (const auto &range_entry : file.second->Ranges(ranges_guard)) {
-			const auto &range = *range_entry.second;
-			result.push_back(
-			    {file.first, range.nr_bytes, range.location, !range.block_handle->GetMemory().IsUnloaded()});
+		idx_t fs;
+		{
+			annotated_lock_guard<annotated_mutex> meta_guard(file.second->meta_lock);
+			fs = file.second->file_size;
+		}
+		annotated_lock_guard<annotated_mutex> map_guard(file.second->map_lock);
+		for (const auto &block_entry : file.second->blocks) {
+			const idx_t block_idx = block_entry.first;
+			const auto &block = *block_entry.second;
+
+			annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
+			if (block.state != CacheBlockState::LOADED || !block.block_handle) {
+				continue;
+			}
+			const idx_t location = block_idx * CACHE_BLOCK_SIZE;
+			const idx_t nr_bytes = MinValue(CACHE_BLOCK_SIZE, fs - location);
+			const bool loaded = !block.block_handle->GetMemory().IsUnloaded();
+			result.push_back({file.first, nr_bytes, location, loaded});
 		}
 	}
 	return result;

@@ -212,9 +212,9 @@ TEST_CASE("CachingFileSystemWrapper caches reads", "[file_system][caching]") {
 		handle3->Read(QueryContext(), &buffer3[0], chunk_size, /*location=*/0);
 		handle3.reset();
 
-		// Verify underlying FS access
-		REQUIRE(tracking_fs_ptr->GetReadCount(test_file2.GetPath(), 0, chunk_size) == 1);
-		REQUIRE(tracking_fs_ptr->GetReadCount(test_file2.GetPath(), chunk_size, chunk_size) == 1);
+		// With block-aligned caching, both 20-byte reads fall within block 0.
+		// Only one underlying read of the full file at offset 0.
+		REQUIRE(tracking_fs_ptr->GetReadCount(test_file2.GetPath(), 0, test_content2.size()) == 1);
 	}
 }
 
@@ -489,6 +489,52 @@ TEST_CASE("Request over-sized range read", "[file_system][caching]") {
 	const idx_t actual_read = handle->Read(QueryContext(), &buffer[0], test_content.length() + 1);
 	REQUIRE(actual_read == test_content.length());
 	REQUIRE(buffer.substr(0, test_content.length()) == test_content);
+}
+
+TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system][caching]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<TrackingFileSystem>();
+	auto tracking_fs_ptr = tracking_fs.get();
+	auto caching_wrapper =
+	    make_shared_ptr<CachingFileSystemWrapper>(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
+
+	const string test_content =
+	    "Test content for concurrent same-block access. All threads read the same region of this file.";
+	TestFileGuard test_file("test_caching_concurrent_block.txt", test_content);
+	constexpr idx_t THREAD_COUNT = 8;
+
+	OpenFileInfo file_info(test_file.GetPath());
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+
+	tracking_fs_ptr->Clear();
+
+	std::mutex results_mutex;
+	vector<bool> results(THREAD_COUNT, false);
+	vector<std::thread> threads;
+
+	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
+		threads.emplace_back([&, idx]() {
+			auto handle = caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+			string buffer(TEST_BUFFER_SIZE, '\0');
+			handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0);
+			bool ok = (buffer.substr(0, test_content.size()) == test_content);
+			{
+				const lock_guard<mutex> lock(results_mutex);
+				results[idx] = ok;
+			}
+		});
+	}
+	for (auto &thd : threads) {
+		thd.join();
+	}
+
+	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
+		REQUIRE(results[idx]);
+	}
+
+	REQUIRE(tracking_fs_ptr->GetReadCount(test_file.GetPath(), 0, test_content.size()) == 1);
 }
 
 } // namespace duckdb
