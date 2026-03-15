@@ -395,62 +395,39 @@ bool NodePointer::IsAnyLeaf() const {
 // TransformToDeprecated
 //===--------------------------------------------------------------------===//
 
-template <class NODE>
-static void TransformToDeprecatedPushChildren(ART &art, NodePointer &node, NType type,
-                                              vector<reference<NodePointer>> &stack) {
-	auto &alloc = NodePointer::GetAllocator(art, type);
-	if (!alloc.LoadedFromStorage(node)) {
-		return;
-	}
-	NodeHandle handle(art, node);
-	auto &n = handle.Get<NODE>();
-	NODE::Iterator(n, [&](NodePointer &child) { stack.emplace_back(child); });
-}
-
 void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformToDeprecatedState &state) {
-	vector<reference<NodePointer>> stack;
-	stack.emplace_back(node);
-
-	while (!stack.empty()) {
-		NodePointer &current = stack.back().get();
-		stack.pop_back();
-
-		D_ASSERT(current.HasMetadata());
-
-		if (current.GetGateStatus() == GateStatus::GATE_SET) {
-			D_ASSERT(current.GetType() != NType::LEAF_INLINED);
-			Leaf::TransformToDeprecated(art, current);
-			continue;
-		}
-
+	auto node_handler = [&](NodePointer current) -> ScanNodeResult {
 		auto type = current.GetType();
-		switch (type) {
-		case NType::PREFIX: {
-			auto child = PrefixHandle::TransformToDeprecated(art, current, state);
-			if (child) {
-				stack.emplace_back(*child);
+		if (type == NType::NODE_4 || type == NType::NODE_16 || type == NType::NODE_48 || type == NType::NODE_256) {
+			auto &alloc = NodePointer::GetAllocator(art, type);
+			if (!alloc.LoadedFromStorage(current)) {
+				return ScanNodeResult::SKIP;
 			}
-			break;
 		}
+		return ScanNodeResult::SCAN_CHILDREN;
+	};
+
+	auto child_handler = [&](NodePointer &child) -> NodePointer {
+		if (!child.HasMetadata()) {
+			return NodePointer();
+		}
+		if (child.GetGateStatus() == GateStatus::GATE_SET) {
+			Leaf::TransformToDeprecated(art, child);
+			return NodePointer();
+		}
+		auto type = child.GetType();
+		switch (type) {
+		case NType::PREFIX:
+			return PrefixHandle::TransformToDeprecated(art, child, state);
 		case NType::LEAF_INLINED:
 		case NType::LEAF:
-			break;
-		case NType::NODE_4:
-			TransformToDeprecatedPushChildren<Node4>(art, current, type, stack);
-			break;
-		case NType::NODE_16:
-			TransformToDeprecatedPushChildren<Node16>(art, current, type, stack);
-			break;
-		case NType::NODE_48:
-			TransformToDeprecatedPushChildren<Node48>(art, current, type, stack);
-			break;
-		case NType::NODE_256:
-			TransformToDeprecatedPushChildren<Node256>(art, current, type, stack);
-			break;
+			return NodePointer();
 		default:
-			throw InternalException("invalid node type for TransformToDeprecated: %d", type);
+			return child;
 		}
-	}
+	};
+
+	BufferManagedScan(art, node, node_handler, child_handler);
 }
 
 //===--------------------------------------------------------------------===//

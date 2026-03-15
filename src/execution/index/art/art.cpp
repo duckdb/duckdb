@@ -1204,7 +1204,6 @@ void ART::Vacuum(IndexLock &state) {
 		}
 		return;
 	}
-
 	// True, if an allocator needs a vacuum, false otherwise.
 	unordered_set<uint8_t> indexes;
 	InitializeVacuum(indexes);

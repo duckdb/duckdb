@@ -1,6 +1,7 @@
 #include "duckdb/execution/index/art/prefix_handle.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
@@ -15,21 +16,25 @@ NodeHandle PrefixHandle::NewDeprecated(FixedSizeAllocator &allocator, NodePointe
 	return handle;
 }
 
-optional_ptr<NodePointer> PrefixHandle::TransformToDeprecated(ART &art, NodePointer &node,
-                                                              TransformToDeprecatedState &state) {
+NodePointer PrefixHandle::TransformToDeprecated(ART &art, NodePointer &node, TransformToDeprecatedState &state) {
 	// Early-out, if we do not need any transformations.
 	if (!state.HasAllocator()) {
-		reference<NodePointer> ref(node);
+		NodePointer current = node;
 		auto &allocator = NodePointer::GetAllocator(art, PREFIX);
-		while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
-			if (!allocator.LoadedFromStorage(ref)) {
-				return nullptr;
+		while (current.GetType() == PREFIX && current.GetGateStatus() == GateStatus::GATE_NOT_SET) {
+			if (!allocator.LoadedFromStorage(current)) {
+				return NodePointer();
 			}
-			NodeHandle handle(art, ref);
+			NodeHandle handle(art, current);
 			auto child = reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
-			ref = *child;
+			current = *child;
+			// Handle gated endpoints while the prefix is still pinned.
+			if (current.HasMetadata() && current.GetGateStatus() == GateStatus::GATE_SET) {
+				Leaf::TransformToDeprecated(art, *child);
+				return NodePointer();
+			}
 		}
-		return ref.get();
+		return current;
 	}
 
 	// We need to create a new prefix (chain) in the deprecated format.
@@ -41,7 +46,7 @@ optional_ptr<NodePointer> PrefixHandle::TransformToDeprecated(ART &art, NodePoin
 	NodePointer current_node = node;
 	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
 		if (!allocator.LoadedFromStorage(current_node)) {
-			return nullptr;
+			return NodePointer();
 		}
 		{
 			// Decrease the readers on current_handle after moving all data over.
@@ -66,7 +71,13 @@ optional_ptr<NodePointer> PrefixHandle::TransformToDeprecated(ART &art, NodePoin
 
 	node = new_node;
 	auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
-	return new_child;
+	// Handle gated endpoints while the new prefix is still pinned.
+	NodePointer endpoint = *new_child;
+	if (endpoint.HasMetadata() && endpoint.GetGateStatus() == GateStatus::GATE_SET) {
+		Leaf::TransformToDeprecated(art, *new_child);
+		return NodePointer();
+	}
+	return endpoint;
 }
 
 NodeHandle PrefixHandle::TransformToDeprecatedAppend(NodeHandle handle, ART &art, FixedSizeAllocator &allocator,
