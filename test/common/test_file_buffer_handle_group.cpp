@@ -96,9 +96,9 @@ TEST_CASE("FileBufferHandleGroup copy partial across handles", "[file_buffer_han
 
 	constexpr idx_t BUF_SIZE = 64;
 	constexpr idx_t H1_OFFSET = 20;
-	constexpr idx_t H1_LENGTH = BUF_SIZE - H1_OFFSET; // 44 bytes from first block
+	constexpr idx_t H1_LENGTH = BUF_SIZE - H1_OFFSET;  // 44 bytes from first block
 	constexpr idx_t H2_LENGTH = 16;                    // 16 bytes from second block
-	constexpr idx_t COPY_SIZE = H1_LENGTH + H2_LENGTH;  // 60 total
+	constexpr idx_t COPY_SIZE = H1_LENGTH + H2_LENGTH; // 60 total
 
 	auto h1 = AllocateAndFill(bm, BUF_SIZE, 0x11);
 	auto h2 = AllocateAndFill(bm, BUF_SIZE, 0x22);

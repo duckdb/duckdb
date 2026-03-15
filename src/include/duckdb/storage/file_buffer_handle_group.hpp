@@ -15,7 +15,8 @@
 namespace duckdb {
 
 // A shallow span for a number of BufferHandles together for contiguous content, used for zero-copy potential access.
-// For example, ZSTD supports stream-based decompression, which doesn't require to prepare a contiguous buffer; insteads users are able to iterate all handles and decompress them on the fly.
+// For example, ZSTD supports stream-based decompression, which doesn't require to prepare a contiguous buffer; insteads
+// users are able to iterate all handles and decompress them on the fly.
 class FileBufferHandleGroup {
 public:
 	// A single BufferHandle and its offset/length within the file.
