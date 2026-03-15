@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
@@ -775,6 +776,10 @@ public:
 				col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i + 1));
 			}
 			const auto &primary_subplan_bindings = primary_subplan.canonical_bindings;
+			column_binding_map_t<idx_t> primary_binding_index;
+			for (idx_t i = 0; i < primary_subplan_bindings.size(); i++) {
+				primary_binding_index.emplace(primary_subplan_bindings[i], i);
+			}
 			vector<vector<idx_t>> cte_column_indexes(subplan_info.subplans.size());
 			vector<bool> needs_projection(subplan_info.subplans.size(), false);
 			bool incompatible_types = false;
@@ -787,13 +792,9 @@ public:
 				needs_projection[subplan_idx] = canonical_bindings.size() != types.size();
 				for (idx_t i = 0; i < canonical_bindings.size(); i++) {
 					const auto &cb = canonical_bindings[i];
-					idx_t cte_col_idx = 0;
-					for (; cte_col_idx < primary_subplan_bindings.size(); cte_col_idx++) {
-						if (cb == primary_subplan_bindings[cte_col_idx]) {
-							break;
-						}
-					}
-					D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
+					const auto entry = primary_binding_index.find(cb);
+					D_ASSERT(entry != primary_binding_index.end());
+					const auto cte_col_idx = entry->second;
 					if (subplan_types[i] != types[cte_col_idx]) {
 						incompatible_types = true;
 						break;

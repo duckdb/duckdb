@@ -11,7 +11,7 @@ statement ok
 CREATE TABLE pp_test_cohort_set AS
 SELECT 1 AS cohort_definition_id, 'cohort_1' AS cohort_name;
 
-query IIIII
+query TTITT
 SELECT
   cohort_name AS cohort_name_reference,
   cohort_start_date,
