@@ -117,4 +117,72 @@ private:
 	stack<NodeEntry> s;
 };
 
+//===--------------------------------------------------------------------===//
+// Buffer-managed scan
+//===--------------------------------------------------------------------===//
+
+enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
+
+template <class NODE_TYPE, class CHILD_HANDLER>
+static void ScanChildren(ART &art, NodePointer node, CHILD_HANDLER &&child_handler, vector<NodePointer> &stack) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<NODE_TYPE>();
+	NODE_TYPE::Iterator(n, [&](NodePointer &child) {
+		auto push = child_handler(child);
+		if (push.HasMetadata()) {
+			stack.push_back(push);
+		}
+	});
+}
+
+template <class NODE_HANDLER, class CHILD_HANDLER>
+void BufferManagedScan(ART &art, NodePointer &root, NODE_HANDLER &&node_handler, CHILD_HANDLER &&child_handler) {
+	vector<NodePointer> stack;
+	auto root_push = child_handler(root);
+	if (root_push.HasMetadata()) {
+		stack.push_back(root_push);
+	}
+
+	while (!stack.empty()) {
+		NodePointer current = stack.back();
+		stack.pop_back();
+
+		if (node_handler(current) == ScanNodeResult::SKIP) {
+			continue;
+		}
+
+		switch (current.GetType()) {
+		case NType::LEAF_INLINED:
+		case NType::LEAF:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			break;
+		case NType::PREFIX: {
+			NodeHandle handle(art, current);
+			auto child = reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
+			auto push = child_handler(*child);
+			if (push.HasMetadata()) {
+				stack.push_back(push);
+			}
+			break;
+		}
+		case NType::NODE_4:
+			ScanChildren<Node4>(art, current, child_handler, stack);
+			break;
+		case NType::NODE_16:
+			ScanChildren<Node16>(art, current, child_handler, stack);
+			break;
+		case NType::NODE_48:
+			ScanChildren<Node48>(art, current, child_handler, stack);
+			break;
+		case NType::NODE_256:
+			ScanChildren<Node256>(art, current, child_handler, stack);
+			break;
+		default:
+			throw InternalException("invalid node type for BufferManagedScan: %d", static_cast<int>(current.GetType()));
+		}
+	}
+}
+
 } // namespace duckdb
