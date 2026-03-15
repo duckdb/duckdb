@@ -20,31 +20,14 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
-
-#include <condition_variable>
+#include "duckdb/storage/external_file_cache_block.hpp"
 
 namespace duckdb {
 
 // Forward declaration.
 class ClientContext;
 class DatabaseInstance;
-class BlockHandle;
 class BufferManager;
-
-enum class CacheBlockState : uint8_t {
-	EMPTY,   // no data, no one fetching
-	LOADING, // a thread is actively performing I/O
-	LOADED,  // data available in block_handle (may be evicted by buffer manager)
-	ERROR    // I/O failed, error_message contains the reason
-};
-
-struct CacheBlock {
-	mutable annotated_mutex mtx;
-	mutable std::condition_variable cv;
-	CacheBlockState state DUCKDB_GUARDED_BY(mtx) = CacheBlockState::EMPTY;
-	shared_ptr<BlockHandle> block_handle DUCKDB_GUARDED_BY(mtx);
-	string error_message DUCKDB_GUARDED_BY(mtx);
-};
 
 class ExternalFileCache {
 public:
