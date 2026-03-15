@@ -1175,6 +1175,36 @@ void ART::FinalizeVacuum(const unordered_set<uint8_t> &indexes) {
 	}
 }
 
+static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexes, NodePointer &node) {
+	const auto type = node.GetType();
+	if (type == NType::LEAF_INLINED) {
+		return;
+	}
+	const auto idx = NodePointer::GetAllocatorIdx(type);
+	if (indexes.find(idx) == indexes.end()) {
+		return;
+	}
+	auto &allocator = NodePointer::GetAllocator(art, type);
+	if (!allocator.NeedsVacuum(node)) {
+		return;
+	}
+	const auto status = node.GetGateStatus();
+	node = allocator.VacuumPointer(node);
+	node.SetMetadata(static_cast<uint8_t>(type));
+	node.SetGateStatus(status);
+}
+
+template <class NODE>
+static void VacuumChildren(ART &art, const unordered_set<uint8_t> &indexes, NodePointer node,
+                           vector<NodePointer> &stack) {
+	NodeHandle handle(art, node);
+	auto &n = handle.Get<NODE>();
+	NODE::Iterator(n, [&](NodePointer &child) {
+		VacuumPointerIfNeeded(art, indexes, child);
+		stack.push_back(child);
+	});
+}
+
 void ART::Vacuum(IndexLock &state) {
 	D_ASSERT(owns_data);
 
@@ -1194,53 +1224,51 @@ void ART::Vacuum(IndexLock &state) {
 		return;
 	}
 
-	// Traverse the allocated memory of the tree to perform a vacuum.
 	auto &art = *this;
-	auto handler = [&art, &indexes](NodePointer &node) {
-		ARTHandlingResult result;
-		const auto type = node.GetType();
+
+	VacuumPointerIfNeeded(art, indexes, tree);
+
+	vector<NodePointer> stack;
+	stack.push_back(tree);
+
+	while (!stack.empty()) {
+		NodePointer current = stack.back();
+		stack.pop_back();
+
+		const auto type = current.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			return ARTHandlingResult::SKIP;
-		case NType::LEAF: {
-			if (indexes.find(NodePointer::GetAllocatorIdx(type)) == indexes.end()) {
-				return ARTHandlingResult::SKIP;
-			}
-			Leaf::DeprecatedVacuum(art, node);
-			return ARTHandlingResult::SKIP;
-		}
+			break;
+		case NType::LEAF:
+			Leaf::DeprecatedVacuum(art, indexes, current);
+			break;
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF: {
-			result = ARTHandlingResult::SKIP;
+		case NType::NODE_256_LEAF:
+			break;
+		case NType::PREFIX: {
+			NodeHandle handle(art, current);
+			auto child = reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
+			VacuumPointerIfNeeded(art, indexes, *child);
+			stack.push_back(*child);
 			break;
 		}
-		case NType::PREFIX:
 		case NType::NODE_4:
-		case NType::NODE_16:
-		case NType::NODE_48:
-		case NType::NODE_256: {
-			result = ARTHandlingResult::CONTINUE;
+			VacuumChildren<Node4>(art, indexes, current, stack);
 			break;
-		}
+		case NType::NODE_16:
+			VacuumChildren<Node16>(art, indexes, current, stack);
+			break;
+		case NType::NODE_48:
+			VacuumChildren<Node48>(art, indexes, current, stack);
+			break;
+		case NType::NODE_256:
+			VacuumChildren<Node256>(art, indexes, current, stack);
+			break;
 		default:
 			throw InternalException("invalid node type for Vacuum: %d", type);
 		}
-
-		const auto idx = NodePointer::GetAllocatorIdx(type);
-		auto &allocator = NodePointer::GetAllocator(art, type);
-		const auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(node);
-		if (needs_vacuum) {
-			const auto status = node.GetGateStatus();
-			node = allocator.VacuumPointer(node);
-			node.SetMetadata(static_cast<uint8_t>(type));
-			node.SetGateStatus(status);
-		}
-		return result;
-	};
-
-	ARTScanner<ARTScanHandling::EMPLACE, NodePointer> scanner(*this, handler, tree);
-	scanner.Scan(handler);
+	}
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);

@@ -177,19 +177,23 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const NodePointer &node, set<row_t> &ro
 	return true;
 }
 
-void Leaf::DeprecatedVacuum(ART &art, NodePointer &node) {
+void Leaf::DeprecatedVacuum(ART &art, const unordered_set<uint8_t> &indexes, NodePointer node) {
 	D_ASSERT(node.HasMetadata());
 	D_ASSERT(node.GetType() == LEAF);
 
+	if (indexes.find(NodePointer::GetAllocatorIdx(LEAF)) == indexes.end()) {
+		return;
+	}
+
 	auto &allocator = NodePointer::GetAllocator(art, LEAF);
-	reference<NodePointer> ref(node);
-	while (ref.get().HasMetadata()) {
-		if (allocator.NeedsVacuum(ref)) {
-			ref.get() = allocator.VacuumPointer(ref);
-			ref.get().SetMetadata(static_cast<uint8_t>(LEAF));
+	while (node.HasMetadata()) {
+		NodeHandle handle(art, node);
+		auto &leaf = handle.Get<Leaf>();
+		if (leaf.ptr.HasMetadata() && allocator.NeedsVacuum(leaf.ptr)) {
+			leaf.ptr = allocator.VacuumPointer(leaf.ptr);
+			leaf.ptr.SetMetadata(static_cast<uint8_t>(LEAF));
 		}
-		auto &leaf = NodePointer::Ref<Leaf>(art, ref, LEAF);
-		ref = leaf.ptr;
+		node = leaf.ptr;
 	}
 }
 
