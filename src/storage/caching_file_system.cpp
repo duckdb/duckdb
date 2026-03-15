@@ -44,9 +44,8 @@ public:
 	FetchBlockTask(TaskExecutor &executor, FileHandle &file_handle_p, QueryContext context_p,
 	               BufferManager &buffer_manager_p, shared_ptr<CacheBlock> block_p, idx_t block_idx_p,
 	               idx_t file_size_p, BufferHandle &result_pin_p)
-	    : BaseExecutorTask(executor), file_handle(file_handle_p), context(context_p),
-	      buffer_manager(buffer_manager_p), block(std::move(block_p)), block_idx(block_idx_p),
-	      file_size(file_size_p), result_pin(result_pin_p) {
+	    : BaseExecutorTask(executor), file_handle(file_handle_p), context(context_p), buffer_manager(buffer_manager_p),
+	      block(std::move(block_p)), block_idx(block_idx_p), file_size(file_size_p), result_pin(result_pin_p) {
 	}
 
 	void ExecuteTask() override {
@@ -230,9 +229,8 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	TaskExecutor executor(scheduler);
 
 	for (idx_t i = 0; i < num_blocks; i++) {
-		executor.ScheduleTask(make_uniq<FetchBlockTask>(executor, fh, context,
-		                                                external_file_cache.GetBufferManager(), blocks[i],
-		                                                first_block + i, fs, pins[i]));
+		executor.ScheduleTask(make_uniq<FetchBlockTask>(executor, fh, context, external_file_cache.GetBufferManager(),
+		                                                blocks[i], first_block + i, fs, pins[i]));
 	}
 	executor.WorkOnTasks();
 

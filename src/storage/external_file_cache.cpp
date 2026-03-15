@@ -16,8 +16,7 @@ bool ExternalFileCache::CachedFile::IsValid(bool validate, const string &current
 		return true; // Assume valid
 	}
 	annotated_lock_guard<annotated_mutex> guard(meta_lock);
-	return ExternalFileCache::IsValid(validate, version_tag, last_modified, current_version_tag,
-	                                  current_last_modified);
+	return ExternalFileCache::IsValid(validate, version_tag, last_modified, current_version_tag, current_last_modified);
 }
 
 bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
