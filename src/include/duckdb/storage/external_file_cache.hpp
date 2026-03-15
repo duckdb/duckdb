@@ -31,6 +31,7 @@ class BufferManager;
 
 class ExternalFileCache {
 public:
+	// TODO(hjiang): Make cache block size configurable in the followup PR.
 	static constexpr idx_t CACHE_BLOCK_SIZE = 2ULL * 1024 * 1024; // 2 MiB
 
 	//! Cached files

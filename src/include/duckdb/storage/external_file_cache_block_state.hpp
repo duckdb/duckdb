@@ -13,13 +13,13 @@
 namespace duckdb {
 
 enum class CacheBlockState : uint8_t {
-	// initialize state, no data, no one fetching
+	// Initial state.
 	EMPTY,
-	// a thread is actively performing I/O
+	// A thread is actively performing I/O.
 	LOADING,
-	// data available in block_handle (may be evicted by buffer manager)
+	// Data is already available in block_handle.
 	LOADED,
-	// I/O failed, error_message contains the reason
+	// I/O failed.
 	ERROR
 };
 

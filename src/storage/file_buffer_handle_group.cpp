@@ -27,8 +27,4 @@ data_ptr_t FileBufferHandleGroup::Ptr() const {
 	return handles[0].handle.Ptr() + handles[0].start_offset;
 }
 
-bool FileBufferHandleGroup::IsOneHandle() const {
-	return handles.size() == 1;
-}
-
 } // namespace duckdb

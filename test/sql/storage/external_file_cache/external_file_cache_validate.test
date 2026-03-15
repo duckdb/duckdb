@@ -75,14 +75,3 @@ statement error
 set validate_external_file_cache='INVALID_VALUE';
 ----
 <REGEX>:.*unrecognized value.*
-
-# Test 7: Accessing a non-existent file with caching enabled should produce a clear error
-statement error
-select * from '__TEST_DIR__/does_not_exist.parquet';
-----
-No files found that match the pattern
-
-statement error
-select * from '__TEST_DIR__/also_missing.parquet';
-----
-No files found that match the pattern

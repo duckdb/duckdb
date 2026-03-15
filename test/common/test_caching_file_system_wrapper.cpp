@@ -4,6 +4,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/caching_file_system_wrapper.hpp"
@@ -11,38 +13,40 @@
 
 #include <thread>
 
-namespace {
+namespace duckdb {
+
 constexpr idx_t TEST_BUFFER_SIZE = 200;
 
-class FailingFileSystem : public duckdb::LocalFileSystem {
+class FailingFileSystem : public LocalFileSystem {
 public:
-	mutable std::mutex mu;
-	bool should_fail = false;
+	mutable annotated_mutex mu;
+	bool should_fail DUCKDB_GUARDED_BY(mu) = false;
 
-	duckdb::string GetName() const override {
+	string GetName() const override {
 		return "FailingFileSystem";
 	}
 
-	void Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes, duckdb::idx_t location) override {
-		const std::lock_guard<std::mutex> lock(mu);
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, duckdb::idx_t location) override {
+		const annotated_lock_guard<duckdb::annotated_mutex> lock(mu);
 		if (should_fail) {
-			throw duckdb::IOException("Injected read failure");
+			throw IOException("Injected read failure");
 		}
 		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
 	}
 
-	bool CanHandleFile(const duckdb::string &path) override {
-		return duckdb::StringUtil::StartsWith(path, duckdb::TestDirectoryPath());
+	void SetShouldFail(bool value) DUCKDB_EXCLUDES(mu) {
+		const annotated_lock_guard<duckdb::annotated_mutex> lock(mu);
+		should_fail = value;
+	}
+
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, TestDirectoryPath());
 	}
 
 	bool CanSeek() override {
 		return true;
 	}
 };
-
-} // namespace
-
-namespace duckdb {
 
 // RAII wrapper for test file creation and cleanup
 class TestFileGuard {
@@ -579,7 +583,7 @@ TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_syst
 	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
 
-	failing_fs_ptr->should_fail = true;
+	failing_fs_ptr->SetShouldFail(true);
 
 	constexpr idx_t THREAD_COUNT = 4;
 	std::mutex results_mutex;
