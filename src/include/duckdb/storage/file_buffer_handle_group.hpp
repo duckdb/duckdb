@@ -28,10 +28,7 @@ public:
 		idx_t length;
 	};
 
-	//! Construct an empty group (no handles).
 	FileBufferHandleGroup() = default;
-
-	//! Construct a group from a pre-built vector of MemoryHandles.
 	explicit FileBufferHandleGroup(vector<MemoryHandle> handles_p);
 
 	//! Read-only access to the underlying handles.
@@ -45,7 +42,7 @@ public:
 	data_ptr_t Ptr() const;
 
 private:
-	// The list of MemoryHandles, could be empty. Immutable after construction.
+	// The list of MemoryHandles, could be empty.
 	vector<MemoryHandle> handles;
 };
 
