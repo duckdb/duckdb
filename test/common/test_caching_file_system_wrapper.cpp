@@ -413,7 +413,8 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 	    make_shared_ptr<CachingFileSystemWrapper>(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
 
 	const string test_content =
-	    "Test content for parallel read access. This is a longer string to allow multiple reads.";
+	    "Test content for parallel read access. This is a longer string to allow multiple reads."
+	    " Adding more content so that eight threads can each read twenty bytes without going past the end of the file.";
 	TestFileGuard test_file("test_caching_parallel.txt", test_content);
 	constexpr idx_t THREAD_COUNT = 8;
 
