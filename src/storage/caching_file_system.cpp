@@ -54,19 +54,19 @@ public:
 
 		while (true) {
 			switch (block->state) {
-		case CacheBlockState::LOADED: {
-			auto pin = buffer_manager.Pin(block->block_handle);
-			if (pin.IsValid()) {
+			case CacheBlockState::LOADED: {
+				auto pin = buffer_manager.Pin(block->block_handle);
+				if (pin.IsValid()) {
 #ifdef DEBUG
-				D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
+					D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
 #endif
-				result_pin = std::move(pin);
-				return;
+					result_pin = std::move(pin);
+					return;
+				}
+				// Evicted by buffer manager, need to re-fetch
+				block->state = CacheBlockState::EMPTY;
+				continue;
 			}
-			// Evicted by buffer manager, need to re-fetch
-			block->state = CacheBlockState::EMPTY;
-			continue;
-		}
 			case CacheBlockState::EMPTY: {
 				block->state = CacheBlockState::LOADING;
 				lk.unlock();
@@ -77,15 +77,15 @@ public:
 					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
 					file_handle.Read(context, buf.Ptr(), to_read, offset);
 
-				lk.lock();
-				block->block_handle = buf.GetBlockHandle();
-				block->state = CacheBlockState::LOADED;
+					lk.lock();
+					block->block_handle = buf.GetBlockHandle();
+					block->state = CacheBlockState::LOADED;
 #ifdef DEBUG
-				block->nr_bytes = to_read;
-				block->checksum = Checksum(buf.Ptr(), to_read);
+					block->nr_bytes = to_read;
+					block->checksum = Checksum(buf.Ptr(), to_read);
 #endif
-				result_pin = std::move(buf);
-				block->cv.notify_all();
+					result_pin = std::move(buf);
+					block->cv.notify_all();
 				} catch (std::exception &e) {
 					lk.lock();
 					block->state = CacheBlockState::ERROR;
