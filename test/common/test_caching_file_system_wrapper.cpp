@@ -662,4 +662,65 @@ TEST_CASE("CachingFileSystemWrapper zero-byte read", "[file_system][caching]") {
 	REQUIRE_NOTHROW(handle->Read(QueryContext(), &buffer[0], /*nr_bytes=*/0, /*location=*/10));
 }
 
+TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file_system][caching]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<TrackingFileSystem>();
+
+	const idx_t BLOCK_SIZE = ExternalFileCache::CACHE_BLOCK_SIZE;
+	const idx_t EXTRA = 100;
+	const idx_t FILE_SIZE = BLOCK_SIZE + EXTRA;
+
+	string content(FILE_SIZE, '\0');
+	for (idx_t i = 0; i < FILE_SIZE; i++) {
+		content[i] = static_cast<char>('A' + (i % 26));
+	}
+	TestFileGuard test_file("test_multi_block.bin", content);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	OpenFileInfo file_info(test_file.GetPath());
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+
+	auto handle = cfs.OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+
+	// Full file read: should produce 2 handles
+	{
+		auto group = handle->Read(FILE_SIZE, 0);
+		REQUIRE(group.handles.size() == 2);
+		REQUIRE(group.handles[0].start_offset == 0);
+		REQUIRE(group.handles[0].length == BLOCK_SIZE);
+		REQUIRE(group.handles[1].start_offset == 0);
+		REQUIRE(group.handles[1].length == EXTRA);
+
+		string result(FILE_SIZE, '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(result.data()), FILE_SIZE);
+		REQUIRE(result == content);
+	}
+
+	// Cross-boundary read: last 200 bytes of block 0 + first 50 bytes of block 1
+	{
+		const idx_t read_offset = BLOCK_SIZE - 200;
+		const idx_t read_size = 250;
+		auto group = handle->Read(read_size, read_offset);
+		REQUIRE(group.handles.size() == 2);
+		REQUIRE(group.handles[0].start_offset == BLOCK_SIZE - 200);
+		REQUIRE(group.handles[0].length == 200);
+		REQUIRE(group.handles[1].start_offset == 0);
+		REQUIRE(group.handles[1].length == 50);
+
+		string result(read_size, '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(result.data()), read_size);
+		REQUIRE(result == content.substr(read_offset, read_size));
+	}
+
+	// Single block read: should produce 1 handle
+	{
+		auto group = handle->Read(100, 0);
+		REQUIRE(group.handles.size() == 1);
+		REQUIRE(group.handles[0].start_offset == 0);
+		REQUIRE(group.handles[0].length == 100);
+	}
+}
+
 } // namespace duckdb
