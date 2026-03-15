@@ -1,0 +1,58 @@
+commit b397187da1ffa7034c06019a2c58974c0a3cdb02
+Author: dentiny <dentinyhao@gmail.com>
+Date:   Sun Mar 15 10:48:02 2026 +0000
+
+    Adapt caching filesystem interface change
+
+diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
+index 5317c43..98b6ad8 100644
+--- a/src/avro_reader.cpp
++++ b/src/avro_reader.cpp
+@@ -123,13 +123,17 @@ AvroReader::AvroReader(ClientContext &context, OpenFileInfo file) : BaseFileRead
+ 
+ 	auto caching_file_handle = caching_file_system.OpenFile(this->file, FileOpenFlags::FILE_FLAGS_READ);
+ 	auto total_size = caching_file_handle->GetFileSize();
+-	data_ptr_t data = nullptr;
+ 
+-	buf_handle = caching_file_handle->Read(data, total_size);
+-	auto buffer_data = buf_handle.Ptr();
++	buf_handle_group = caching_file_handle->Read(total_size);
++	data_ptr_t buffer_data;
++	if (buf_handle_group.handles.size() == 1) {
++		buffer_data = buf_handle_group.Ptr();
++	} else {
++		buf_data = Allocator::DefaultAllocator().Allocate(total_size);
++		buf_handle_group.CopyTo(buf_data.get(), total_size);
++		buffer_data = buf_data.get();
++	}
+ 
+-	D_ASSERT(buf_handle.IsValid());
+-	D_ASSERT(buffer_data == data);
+ 	auto avro_reader = avro_reader_memory(const_char_ptr_cast(buffer_data), total_size);
+ 
+ 	if (avro_reader_reader(avro_reader, &reader)) {
+diff --git a/src/include/avro_reader.hpp b/src/include/avro_reader.hpp
+index ebb941a..af5b41b 100644
+--- a/src/include/avro_reader.hpp
++++ b/src/include/avro_reader.hpp
+@@ -1,8 +1,10 @@
+ #pragma once
+ 
++#include "duckdb/common/allocator.hpp"
+ #include "duckdb/common/helper.hpp"
+ #include "avro_type.hpp"
+ #include "duckdb/common/multi_file/base_file_reader.hpp"
++#include "duckdb/storage/file_buffer_handle_group.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -32,7 +34,8 @@ public:
+ 	avro_value_t value;
+ 	unique_ptr<Vector> read_vec;
+ 
+-	BufferHandle buf_handle;
++	FileBufferHandleGroup buf_handle_group;
++	AllocatedData buf_data;
+ 	AvroType avro_type;
+ 	LogicalType duckdb_type;
+ };
