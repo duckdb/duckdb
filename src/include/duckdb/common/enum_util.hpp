@@ -128,8 +128,6 @@ enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
 
-enum class CompressionFunctionSetLoadResult : uint8_t;
-
 enum class CompressionType : uint8_t;
 
 enum class CompressionValidity : uint8_t;
@@ -394,6 +392,8 @@ enum class SecretPersistType : uint8_t;
 
 enum class SecretSerializationType : uint8_t;
 
+enum class SelectivityOptionalFilterType : uint8_t;
+
 enum class SequenceInfo : uint8_t;
 
 enum class SetOperationType : uint8_t;
@@ -648,9 +648,6 @@ const char* EnumUtil::ToChars<ColumnSegmentType>(ColumnSegmentType value);
 
 template<>
 const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMaterializationDirection value);
-
-template<>
-const char* EnumUtil::ToChars<CompressionFunctionSetLoadResult>(CompressionFunctionSetLoadResult value);
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
@@ -1049,6 +1046,9 @@ template<>
 const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
 
 template<>
+const char* EnumUtil::ToChars<SelectivityOptionalFilterType>(SelectivityOptionalFilterType value);
+
+template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
 
 template<>
@@ -1357,9 +1357,6 @@ ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value);
 
 template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value);
-
-template<>
-CompressionFunctionSetLoadResult EnumUtil::FromString<CompressionFunctionSetLoadResult>(const char *value);
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
@@ -1756,6 +1753,9 @@ SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
 
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
+
+template<>
+SelectivityOptionalFilterType EnumUtil::FromString<SelectivityOptionalFilterType>(const char *value);
 
 template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);

@@ -29,8 +29,8 @@ BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expr
       bound_cast(BindCastFunction(context, child->return_type, return_type)) {
 }
 
-unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
-                                                 BoundCastInfo bound_cast, bool try_cast) {
+static unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
+                                                        BoundCastInfo bound_cast, bool try_cast) {
 	if (ExpressionBinder::GetExpressionReturnType(*expr) == target_type) {
 		return expr;
 	}
@@ -47,9 +47,9 @@ unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, co
 	return std::move(result);
 }
 
-unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
-                                             CastFunctionSet &cast_functions, GetCastFunctionInput &get_input,
-                                             bool try_cast) {
+static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
+                                                    CastFunctionSet &cast_functions, GetCastFunctionInput &get_input,
+                                                    bool try_cast) {
 	D_ASSERT(expr);
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = expr->Cast<BoundParameterExpression>();

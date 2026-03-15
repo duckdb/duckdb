@@ -471,7 +471,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		                                              vector<unique_ptr<Expression>>());
 		dummy_aggr->grouping_sets.emplace_back();
 		for (auto &delim_col : delim_join.duplicate_eliminated_columns) {
-			dummy_aggr->grouping_sets.back().insert(dummy_aggr->groups.size());
+			dummy_aggr->grouping_sets.back().insert(ProjectionIndex(dummy_aggr->groups.size()));
 			dummy_aggr->groups.push_back(delim_col->Copy());
 		}
 		auto lhs_delim_stats = RelationStatisticsHelper::ExtractAggregationStats(*dummy_aggr, lhs_stats);
@@ -560,21 +560,6 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<Rela
 		}
 	});
 	return can_reorder;
-}
-
-//! Flatten a predicate into individual conjuncts
-static inline void FlattenConjunction(Expression &expr, vector<unique_ptr<Expression>> &result) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
-		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		if (conj.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-			for (auto &child : conj.children) {
-				FlattenConjunction(*child, result);
-			}
-			return;
-		}
-	}
-	// not an AND conjunction - add as is
-	result.push_back(expr.Copy());
 }
 
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,

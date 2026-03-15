@@ -28,8 +28,30 @@ set(DUCKDB_MODULE_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_STANDARD "17" CACHE STRING "C++ standard to enforce")
+# Copy compile_commands.json into <repo-root>/.cache/clangd/ after every successful build.
+# .cache/ is intentionally outside build/ so it survives `make clean` (which does rm -rf build).
+# The build-type name is derived from the last component of CMAKE_BINARY_DIR, so build dirs must
+# be two levels below the repo root (e.g. build/debug, .cache/clangd/debug) for the repo-root
+# derivation (CMAKE_BINARY_DIR/../..) to be correct. This works in both standalone duckdb builds
+# and extension builds where duckdb/ is a submodule.
+if(CMAKE_EXPORT_COMPILE_COMMANDS AND UNIX)
+  get_filename_component(_clangd_build_name "${CMAKE_BINARY_DIR}" NAME)
+  get_filename_component(_repo_root "${CMAKE_BINARY_DIR}/../.." ABSOLUTE)
+  set(_clangd_cache_dir "${_repo_root}/.cache/clangd")
+  add_custom_target(clangd_cache ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${_clangd_cache_dir}/${_clangd_build_name}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${_clangd_cache_dir}/${_clangd_build_name}/compile_commands.json"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/compile_commands.json"
+      "${_clangd_cache_dir}/compile_commands.json"
+    COMMENT "Updating .cache/clangd (${_clangd_build_name})"
+    VERBATIM
+  )
+endif()
 
+set(CMAKE_CXX_STANDARD "17" CACHE STRING "C++ standard to enforce")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 

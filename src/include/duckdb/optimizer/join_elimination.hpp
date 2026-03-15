@@ -25,7 +25,7 @@ class PipelineInfo;
 
 struct DistinctGroupRef {
 	column_binding_set_t distinct_group;
-	unordered_set<idx_t> ref_column_ids;
+	unordered_set<ProjectionIndex> ref_column_ids;
 };
 
 class PipelineInfo {

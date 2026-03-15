@@ -54,12 +54,12 @@ jobs:
       FORCE_ASSERT: 1
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -73,7 +73,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: GEN=ninja make release
+      run: python3 scripts/ci/retry.py -- bash -lc 'GEN=ninja make release'
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
@@ -110,12 +110,12 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -130,7 +130,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
@@ -188,7 +188,7 @@ jobs:
 
           ./scripts/upload-assets-to-staging.sh github_release libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_cli-osx-universal.gz duckdb_cli-osx-arm64.zip duckdb_cli-osx-arm64.gz duckdb_cli-osx-amd64.zip duckdb_cli-osx-amd64.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: duckdb-binaries-osx
           path: |
