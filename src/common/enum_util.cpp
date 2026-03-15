@@ -943,7 +943,7 @@ const StringUtil::EnumStringLiteral *GetCacheBlockStateValues() {
 		{ static_cast<uint32_t>(CacheBlockState::EMPTY), "EMPTY" },
 		{ static_cast<uint32_t>(CacheBlockState::LOADING), "LOADING" },
 		{ static_cast<uint32_t>(CacheBlockState::LOADED), "LOADED" },
-		{ static_cast<uint32_t>(CacheBlockState::ERROR), "ERROR" }
+		{ static_cast<uint32_t>(CacheBlockState::IO_ERROR), "IO_ERROR" }
 	};
 	return values;
 }

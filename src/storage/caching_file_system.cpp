@@ -88,7 +88,7 @@ public:
 					block->cv.notify_all();
 				} catch (std::exception &e) {
 					lk.lock();
-					block->state = CacheBlockState::ERROR;
+					block->state = CacheBlockState::IO_ERROR;
 					block->cv.notify_all();
 					throw;
 				}
@@ -99,7 +99,7 @@ public:
 				               [&]() DUCKDB_REQUIRES(block->mtx) { return block->state != CacheBlockState::LOADING; });
 				continue;
 			}
-			case CacheBlockState::ERROR: {
+			case CacheBlockState::IO_ERROR: {
 				// IO operation failed, reset the block to empty state for another attempt.
 				block->state = CacheBlockState::EMPTY;
 				continue;

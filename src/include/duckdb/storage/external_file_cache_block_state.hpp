@@ -20,7 +20,7 @@ enum class CacheBlockState : uint8_t {
 	// Data is already available in block_handle.
 	LOADED,
 	// I/O failed.
-	ERROR
+	IO_ERROR
 };
 
 } // namespace duckdb
