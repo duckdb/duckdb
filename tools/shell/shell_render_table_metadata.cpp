@@ -595,6 +595,16 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 		// we should use a pager
 		pager_setup = SetupPager();
 	}
+	// compute the metadata render width
+	idx_t metadata_render_width = 0;
+	for (auto &metadata_display : metadata_displays) {
+		auto metadata_render_size = ShellState::RenderLength(metadata_display.database_name);
+		metadata_render_size =
+		    duckdb::MaxValue<idx_t>(metadata_render_size, ShellState::RenderLength(metadata_display.schema_name));
+		metadata_render_size = duckdb::MinValue<idx_t>(max_render_width, metadata_render_size + 6);
+		metadata_render_width = duckdb::MaxValue<idx_t>(metadata_render_width, metadata_render_size);
+		metadata_render_width = duckdb::MaxValue<idx_t>(metadata_render_width, metadata_display.render_width);
+	}
 	// render the metadata
 	ShellHighlight highlight(*this);
 	string last_displayed_database;
@@ -602,13 +612,13 @@ void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
 	for (auto &metadata_display : metadata_displays) {
 		// check if we should render the database and/or schema name for this batch of tables
 		if (!metadata_display.database_name.empty() && last_displayed_database != metadata_display.database_name) {
-			RenderLineDisplay(highlight, metadata_display.database_name, metadata_display.render_width,
+			RenderLineDisplay(highlight, metadata_display.database_name, metadata_render_width,
 			                  HighlightElementType::DATABASE_NAME);
 			last_displayed_database = metadata_display.database_name;
 			last_displayed_schema = string();
 		}
 		if (!metadata_display.schema_name.empty() && last_displayed_schema != metadata_display.schema_name) {
-			RenderLineDisplay(highlight, metadata_display.schema_name, metadata_display.render_width,
+			RenderLineDisplay(highlight, metadata_display.schema_name, metadata_render_width,
 			                  HighlightElementType::SCHEMA_NAME);
 			last_displayed_schema = metadata_display.schema_name;
 		}
