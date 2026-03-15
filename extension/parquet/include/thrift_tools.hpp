@@ -29,11 +29,22 @@ struct ReadHead {
 
 	// Current info
 	FileBufferHandleGroup handle_group;
+	AllocatedData local_buffer;
 	data_ptr_t buffer_ptr = nullptr;
 	bool data_isset = false;
 
 	idx_t GetEnd() const {
 		return size + location;
+	}
+
+	void Materialize() {
+		if (handle_group.handles.size() == 1) {
+			buffer_ptr = handle_group.Ptr();
+		} else {
+			local_buffer = Allocator::DefaultAllocator().Allocate(size);
+			handle_group.CopyTo(local_buffer.get(), size);
+			buffer_ptr = local_buffer.get();
+		}
 	}
 };
 
@@ -118,7 +129,7 @@ struct ReadAheadBuffer {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
 			read_head.handle_group = file_handle.Read(read_head.size, read_head.location);
-			read_head.buffer_ptr = read_head.handle_group.Ptr();
+			read_head.Materialize();
 			read_head.data_isset = true;
 		}
 	}
@@ -140,7 +151,7 @@ public:
 
 			if (!prefetch_buffer->data_isset) {
 				prefetch_buffer->handle_group = file_handle.Read(prefetch_buffer->size, prefetch_buffer->location);
-				prefetch_buffer->buffer_ptr = prefetch_buffer->handle_group.Ptr();
+				prefetch_buffer->Materialize();
 				prefetch_buffer->data_isset = true;
 			}
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
