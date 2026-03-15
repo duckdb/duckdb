@@ -207,6 +207,10 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return group;
 	}
 
+	// Ensure the file is open so metadata is set before blocks are visible to other threads
+	auto &fh = GetFileHandle();
+	const idx_t fs = fh.GetFileSize();
+
 	const idx_t block_size = ExternalFileCache::CACHE_BLOCK_SIZE;
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
@@ -225,10 +229,6 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 			blocks[i] = entry;
 		}
 	}
-
-	// Ensure the file is open so we have file_size and a valid file_handle for I/O
-	auto &fh = GetFileHandle();
-	const idx_t fs = fh.GetFileSize();
 
 	// Schedule one FetchBlockTask per block
 	vector<BufferHandle> pins(num_blocks);
