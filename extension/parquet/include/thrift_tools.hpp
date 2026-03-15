@@ -139,8 +139,7 @@ public:
 			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 
 			if (!prefetch_buffer->data_isset) {
-				prefetch_buffer->handle_group =
-				    file_handle.Read(prefetch_buffer->size, prefetch_buffer->location);
+				prefetch_buffer->handle_group = file_handle.Read(prefetch_buffer->size, prefetch_buffer->location);
 				prefetch_buffer->buffer_ptr = prefetch_buffer->handle_group.Ptr();
 				prefetch_buffer->data_isset = true;
 			}
