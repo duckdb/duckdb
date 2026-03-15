@@ -89,7 +89,7 @@ public:
 			}
 			case CacheBlockState::LOADING: {
 				block->cv.wait(lk,
-				               [&] DUCKDB_REQUIRES(block->mtx) { return block->state != CacheBlockState::LOADING; });
+				               [&]() DUCKDB_REQUIRES(block->mtx) { return block->state != CacheBlockState::LOADING; });
 				continue;
 			}
 			case CacheBlockState::ERROR: {
