@@ -166,16 +166,19 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 
 		{
 			annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-			if (!ExternalFileCache::IsValid(Validate(), cached_file.version_tag, cached_file.last_modified,
-			                                version_tag, last_modified)) {
-				annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
-				cached_file.blocks.clear();
+			bool first_access = (cached_file.file_size == 0);
+			if (first_access || Validate()) {
+				if (!ExternalFileCache::IsValid(Validate(), cached_file.version_tag, cached_file.last_modified,
+				                                version_tag, last_modified)) {
+					annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+					cached_file.blocks.clear();
+				}
+				cached_file.file_size = file_handle->GetFileSize();
+				cached_file.last_modified = last_modified;
+				cached_file.version_tag = version_tag;
+				cached_file.can_seek = file_handle->CanSeek();
+				cached_file.on_disk_file = file_handle->OnDiskFile();
 			}
-			cached_file.file_size = file_handle->GetFileSize();
-			cached_file.last_modified = last_modified;
-			cached_file.version_tag = version_tag;
-			cached_file.can_seek = file_handle->CanSeek();
-			cached_file.on_disk_file = file_handle->OnDiskFile();
 		}
 	}
 	return *file_handle;
