@@ -28,14 +28,17 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/filter/dynamic_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
                                    PhysicalOperator &right, vector<JoinCondition> conds, JoinType join_type,
-                                   const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
-                                   vector<LogicalType> delim_types, idx_t estimated_cardinality,
-                                   unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
+                                   const vector<ProjectionIndex> &left_projection_map,
+                                   const vector<ProjectionIndex> &right_projection_map, vector<LogicalType> delim_types,
+                                   idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(conds), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
@@ -61,13 +64,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 	}
 
 	// build lhs_output_columns
-	lhs_output_columns.col_idxs = left_projection_map;
-	if (lhs_output_columns.col_idxs.empty()) {
-		for (idx_t i = 0; i < lhs_input_types.size(); i++) {
-			lhs_output_columns.col_idxs.emplace_back(i);
-		}
-	}
-
+	lhs_output_columns.col_idxs = FillProjectionMap(left, left_projection_map);
 	for (auto &lhs_col : lhs_output_columns.col_idxs) {
 		lhs_output_columns.col_types.push_back(lhs_input_types[lhs_col]);
 	}
@@ -168,7 +165,8 @@ void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lh
 
 void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_types,
                                            const vector<LogicalType> &rhs_input_types,
-                                           const vector<idx_t> &right_projection_map, const vector<idx_t> &build_cols) {
+                                           const vector<ProjectionIndex> &right_projection_map,
+                                           const vector<idx_t> &build_cols) {
 	unordered_map<idx_t, idx_t> build_columns_in_conditions;
 	unordered_map<idx_t, idx_t> build_input_to_layout;
 
@@ -194,12 +192,7 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 	}
 
 	// for other join types
-	auto right_projection_map_copy = right_projection_map;
-	if (right_projection_map_copy.empty()) {
-		for (idx_t i = 0; i < rhs_input_types.size(); i++) {
-			right_projection_map_copy.emplace_back(i);
-		}
-	}
+	auto right_projection_map_copy = FillProjectionMap(children[1].get(), right_projection_map);
 
 	// map ALL predicate columns (both in conditions and not)
 	MapResidualBuildColumns(lhs_input_types, rhs_input_types, build_cols, build_columns_in_conditions,
@@ -589,7 +582,7 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	bool all_constant;
 	idx_t tuple_width = GetTupleWidth(types, all_constant);
 
-	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width;
+	auto tuples_per_block = buffer_manager.GetBlockSize() / tuple_width + 1;
 	auto blocks_per_chunk = (STANDARD_VECTOR_SIZE + tuples_per_block) / tuples_per_block + 1;
 	if (!all_constant) {
 		blocks_per_chunk += 2;
@@ -868,7 +861,8 @@ bool JoinFilterPushdownInfo::CanUseInFilter(const ClientContext &context, option
 }
 
 void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
-                                          const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx) const {
+                                          const PhysicalOperator &op, idx_t filter_idx,
+                                          ProjectionIndex filter_col_idx) const {
 	// generate a "OR" filter (i.e. x=1 OR x=535 OR x=997)
 	// first scan the entire vector at the probe side
 	auto build_idx = join_condition[filter_idx];
@@ -947,7 +941,8 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 }
 
 void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht,
-                                             const JoinFilterPushdownFilter &info, idx_t filter_col_idx) const {
+                                             const JoinFilterPushdownFilter &info,
+                                             ProjectionIndex filter_col_idx) const {
 	// If the nulls are equal, we let nulls pass. If not, we filter them
 	auto filters_null_values = !ht.NullValuesAreEqual(0);
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
@@ -955,19 +950,17 @@ void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHas
 	ht.SetBuildBloomFilter(true);
 	auto filter =
 	    make_uniq_base<TableFilter, BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
-	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilter::BF_THRESHOLD,
-	                                              SelectivityOptionalFilter::BF_CHECK_N);
+	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::BF);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
 void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &op,
                                                        PerfectHashJoinExecutor &perfect_join_executor,
                                                        const JoinFilterPushdownFilter &info,
-                                                       idx_t filter_col_idx) const {
+                                                       ProjectionIndex filter_col_idx) const {
 	const auto key_name = op.Cast<PhysicalHashJoin>().conditions[0].GetRHS().ToString();
 	auto filter = make_uniq_base<TableFilter, PerfectHashJoinFilter>(perfect_join_executor, key_name);
-	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilter::PHJ_THRESHOLD,
-	                                              SelectivityOptionalFilter::PHJ_CHECK_N);
+	filter = make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::PHJ);
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 
@@ -985,11 +978,10 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalSta
 }
 
 static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const JoinFilterPushdownFilter &info,
-                                      const idx_t &filter_col_idx, unique_ptr<TableFilter> filter) {
-	info.dynamic_filters->PushFilter(op, filter_col_idx,
-	                                 make_uniq<SelectivityOptionalFilter>(std::move(filter),
-	                                                                      SelectivityOptionalFilter::MIN_MAX_THRESHOLD,
-	                                                                      SelectivityOptionalFilter::MIN_MAX_CHECK_N));
+                                      const ProjectionIndex &filter_col_idx, unique_ptr<TableFilter> filter) {
+	info.dynamic_filters->PushFilter(
+	    op, filter_col_idx,
+	    make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::MIN_MAX));
 }
 
 unique_ptr<DataChunk>

@@ -91,6 +91,7 @@
         "test/sql/copy/csv/rejects/test_multiple_errors_same_line.test",
         "test/sql/copy/csv/test_non_unicode_header.test",
         "test/sql/logging/file_system_logging.test",
+        "test/sql/logging/http_log_timing.test",
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_buffer_size.test",
         "test/sql/logging/logging_csv.test",

@@ -36,7 +36,7 @@ public:
 	//! The set of grouping sets (optional).
 	vector<GroupingSet> grouping_sets;
 	//! The list of grouping function calls (optional)
-	vector<unsafe_vector<idx_t>> grouping_functions;
+	vector<unsafe_vector<ProjectionIndex>> grouping_functions;
 	//! Group statistics (optional)
 	vector<unique_ptr<BaseStatistics>> group_stats;
 	//! Whether the inputs to all expression are non-NULL
@@ -52,6 +52,9 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override;
 	vector<TableIndex> GetTableIndex() const override;
 	string GetName() const override;
+
+	const Expression &GetExpression(ColumnBinding binding) const;
+	const Expression &GetGroupExpression(ProjectionIndex group_index) const;
 
 protected:
 	void ResolveTypes() override;

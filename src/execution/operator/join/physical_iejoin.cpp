@@ -1042,6 +1042,14 @@ public:
 	void ResolveInnerJoin(ExecutionContext &context, DataChunk &result);
 	//	Derive an SV that applies the remaining conditions
 	const SelectionVector *ApplyTailConditions();
+	//	Combine the two payloads into a single chunk that can be used for projection or predicate evaluation
+	void MergePayloads(DataChunk &chunk);
+	//	Separate a merged chunk back into the two payloads.
+	void SplitPayloads(DataChunk &chunk);
+	// Apply any arbitrary predicate and return the new SV
+	const SelectionVector *ApplyArbitraryPredicate(DataChunk &chunk);
+	// Use the given SV to strip out LHS duplicates. Return the number of unique rows
+	idx_t FilterSemiJoin(const SelectionVector *sel);
 	// 	Resolve SEMI joins
 	void ResolveSemiJoin(ExecutionContext &context, DataChunk &result);
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, RIGHT, FULL)
@@ -1343,6 +1351,78 @@ const SelectionVector *IEJoinLocalSourceState::ApplyTailConditions() {
 	return sel;
 }
 
+void IEJoinLocalSourceState::MergePayloads(DataChunk &chunk) {
+	//	Merge the payloads
+	auto &op = gsource.op;
+	const auto left_cols = op.children[0].get().GetTypes().size();
+	chunk.Reset();
+	for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
+		if (col_idx < left_cols) {
+			chunk.data[col_idx].Reference(lpayload.data[col_idx]);
+		} else {
+			chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
+		}
+	}
+	chunk.SetCardinality(lpayload.size());
+}
+
+void IEJoinLocalSourceState::SplitPayloads(DataChunk &chunk) {
+	//	Extract the payloads from a merged chunk
+	auto &op = gsource.op;
+	const auto left_cols = op.children[0].get().GetTypes().size();
+	lpayload.Reset();
+	rpayload.Reset();
+	for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
+		if (col_idx < left_cols) {
+			lpayload.data[col_idx].Reference(chunk.data[col_idx]);
+		} else {
+			rpayload.data[col_idx - left_cols].Reference(chunk.data[col_idx - left_cols]);
+		}
+	}
+	lpayload.SetCardinality(chunk.size());
+	rpayload.SetCardinality(chunk.size());
+}
+
+const SelectionVector *IEJoinLocalSourceState::ApplyArbitraryPredicate(DataChunk &chunk) {
+	//	Apply any arbitrary predicate
+	auto &op = gsource.op;
+	D_ASSERT(op.predicate);
+
+	const auto result_count = pred_executor.SelectExpression(chunk, pred_matches);
+	chunk.Slice(pred_matches, result_count);
+	return &pred_matches;
+}
+
+idx_t IEJoinLocalSourceState::FilterSemiJoin(const SelectionVector *sel) {
+	//	Strip out remaining left side duplicates
+	const auto result_count = lpayload.size();
+	idx_t unique_count = 0;
+	if (!result_count) {
+		return unique_count;
+	}
+
+	simple_sel.set_index(unique_count, 0);
+	lsel[unique_count++] = lsel[sel->get_index(0)];
+	for (idx_t i = 1; i < result_count; ++i) {
+		const auto iprev = sel->get_index(i - 1);
+		const auto icurr = sel->get_index(i - 0);
+		if (lsel[icurr] == lsel[iprev]) {
+			continue;
+		}
+		simple_sel.set_index(unique_count, i);
+		lsel[unique_count++] = lsel[icurr];
+	}
+	lsel.resize(unique_count);
+
+	//	Slice the join pairs down to the unique rows
+	if (unique_count < result_count) {
+		lpayload.Slice(simple_sel, unique_count);
+		rpayload.Slice(simple_sel, unique_count);
+	}
+
+	return unique_count;
+}
+
 void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChunk &result) {
 	auto &op = gsource.op;
 	const auto &conditions = op.conditions;
@@ -1360,7 +1440,7 @@ void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChun
 		}
 
 		// Apply any remaining filters
-		if (conditions.size() > 2) {
+		if (conditions.size() > 2 || op.predicate) {
 			//	Read all the LHS rows because we need to apply the filters to every possible match
 			left_table.Repin(*left_iterator);
 			op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, lsel,
@@ -1371,34 +1451,38 @@ void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChun
 			op.SliceSortedPayload(rpayload, right_table, *right_iterator, right_chunk_state, right_block_index, rsel,
 			                      *right_scan_state);
 
-			auto sel = ApplyTailConditions();
+			//	Apply any tail conditions
+			if (conditions.size() > 2) {
+				//	Strip out remaining left side duplicates
+				auto sel = ApplyTailConditions();
+				result_count = FilterSemiJoin(sel);
 
-			//	If we filtered out everything, go back for more
-			result_count = lpayload.size();
-			if (result_count == 0) {
-				continue;
-			}
-
-			//	Strip out remaining left side duplicates
-			idx_t unique_count = 0;
-			simple_sel.set_index(unique_count++, 0);
-			for (idx_t i = 1; i < result_count; ++i) {
-				const auto iprev = sel->get_index(i - 1);
-				const auto icurr = sel->get_index(i - 0);
-				if (lsel[icurr] == lsel[iprev]) {
+				//	If we filtered out everything, go back for more
+				if (result_count == 0) {
 					continue;
 				}
-				simple_sel.set_index(unique_count, i);
-				lsel[unique_count++] = lsel[icurr];
 			}
-			lsel.resize(unique_count);
 
-			//	Slice the LHS down to the unique rows
-			if (unique_count < result_count) {
-				lpayload.Slice(simple_sel, unique_count);
-				result_count = unique_count;
+			//	Apply any arbitrary predicate
+			if (op.predicate) {
+				//	Arbitrary predicates require a merged chunk,
+				//	but we need to make sure no one is reusing SVs so we resplit.
+				auto &chunk = unprojected;
+				MergePayloads(chunk);
+
+				auto sel = ApplyArbitraryPredicate(chunk);
+				SplitPayloads(chunk);
+
+				//	Strip out remaining left side duplicates
+				result_count = FilterSemiJoin(sel);
+
+				//	If we filtered out everything, go back for more
+				if (!result_count) {
+					continue;
+				}
 			}
 		} else {
+			//	Fast track for only two predicates
 			//	Strip out left side duplicates
 			idx_t unique_count = 1;
 			for (idx_t i = 1; i < result_count; ++i) {
@@ -1437,8 +1521,6 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 	auto &chunk = unprojected;
 
 	auto &left_table = *ie_sink.tables[0];
-	const auto left_cols = op.children[0].get().GetTypes().size();
-
 	auto &right_table = *ie_sink.tables[1];
 
 	do {
@@ -1460,30 +1542,21 @@ void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataC
 		                      *right_scan_state);
 
 		auto sel = ApplyTailConditions();
+
+		//	If we filtered out everything, go back for more
 		result_count = lpayload.size();
 		if (!result_count) {
 			continue;
 		}
 
-		//	Merge the payloads
-		chunk.Reset();
-		for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
-			if (col_idx < left_cols) {
-				chunk.data[col_idx].Reference(lpayload.data[col_idx]);
-			} else {
-				chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
-			}
-		}
-		chunk.SetCardinality(result_count);
-
 		//	Apply any arbitrary predicate
+		MergePayloads(chunk);
 		if (op.predicate) {
-			result_count = pred_executor.SelectExpression(chunk, pred_matches);
+			sel = ApplyArbitraryPredicate(chunk);
+			result_count = chunk.size();
 			if (!result_count) {
 				continue;
 			}
-			chunk.Slice(pred_matches, result_count);
-			sel = &pred_matches;
 		}
 
 		//	We need all of the data to compute other predicates,

@@ -38,12 +38,12 @@ jobs:
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -52,9 +52,9 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release --parallel
+        python scripts/ci/retry.py -- python scripts/windows_ci.py
+        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
@@ -117,7 +117,7 @@ jobs:
         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: duckdb-binaries-windows-amd64
         path: |
@@ -137,12 +137,12 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -151,8 +151,8 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        cmake --build . --config Release --parallel
+        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
+        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
 
     - name: Test
       shell: bash
@@ -173,12 +173,12 @@ jobs:
    runs-on: windows-latest
 
    steps:
-     - uses: actions/checkout@v4
+     - uses: actions/checkout@v6
        with:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}
 
-     - uses: actions/setup-python@v5
+     - uses: actions/setup-python@v6
        with:
          python-version: '3.12'
 
@@ -187,8 +187,8 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
-         cmake --build . --config Release --parallel
+         python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
+         python scripts/ci/retry.py -- cmake --build . --config Release --parallel
 
      - name: Sign files with Azure Trusted Signing (TM)
        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
@@ -220,7 +220,7 @@ jobs:
          /c/msys64/usr/bin/zip.exe -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
-     - uses: actions/upload-artifact@v4
+     - uses: actions/upload-artifact@v7
        with:
          name: duckdb-binaries-windows-arm64
          path: |
@@ -234,35 +234,43 @@ jobs:
      if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
      steps:
-       - uses: actions/checkout@v4
+       - uses: actions/checkout@v6
          with:
            ref: ${{ inputs.git_ref }}
+
+       - uses: actions/setup-python@v6
+         with:
+           python-version: '3.12'
+
        - uses: msys2/setup-msys2@v2
          with:
            msystem: MINGW64
            update: true
-           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
+           install: mingw-w64-x86_64-toolchain
            cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
-       - name: Put MSYS2_MinGW64 on PATH
-         # there is not yet an environment variable for this path from msys2/setup-msys2
-         shell: msys2 {0}
-         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+       - name: Dependencies
+         shell: bash
+         run: |
+           choco install \
+             ccache \
+             ninja \
+             --no-progress
 
        - uses: ./.github/actions/ccache-action
 
        - name: Build
-         shell: msys2 {0}
+         shell: cmd
          run: |
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-           cmake --build . --config Release 
+           set PATH=D:/a/_temp/msys/msys64/mingw64/bin;%PATH%
+           python scripts/ci/retry.py -- cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="%OVERRIDE_GIT_DESCRIBE%"
+           python scripts/ci/retry.py -- cmake --build . --config Release
 
        - name: Test
-         shell: msys2 {0}
+         shell: cmd
          run: |
-           cp src/libduckdb.dll .
-           test/unittest.exe
+           copy src\libduckdb.dll .
+           test\unittest.exe
 
  win-packaged-upload:
    runs-on: windows-latest
@@ -270,15 +278,15 @@ jobs:
      - win-release-64
      - win-release-arm64
    steps:
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         name: duckdb-binaries-windows-arm64
 
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v5
       with:
         name: duckdb-binaries-windows-amd64
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: duckdb-binaries-windows
         path: |

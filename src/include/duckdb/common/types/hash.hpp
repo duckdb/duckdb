@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/table_index.hpp"
 
 namespace duckdb {
@@ -62,6 +63,10 @@ DUCKDB_API inline hash_t Hash(int64_t val) {
 }
 template <>
 DUCKDB_API inline hash_t Hash(TableIndex val) {
+	return MurmurHash64(val.index);
+}
+template <>
+DUCKDB_API inline hash_t Hash(ProjectionIndex val) {
 	return MurmurHash64(val.index);
 }
 template <>

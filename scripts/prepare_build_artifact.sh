@@ -22,6 +22,9 @@ rm -rf "$ARTIFACT_ROOT"
 rm -f "$ARTIFACT_TARBALL"
 mkdir -p "$ARTIFACT_DIR"/test/extension "$ARTIFACT_DIR"/src
 
+# Required by CI jobs that run the CLI from build/<type>/duckdb.
+cp -av "$BUILD_DIR/duckdb" "$ARTIFACT_DIR"/
+
 # Required by CI test jobs that run the prebuilt unittest binary.
 cp -av "$BUILD_DIR/test/unittest" "$ARTIFACT_DIR"/test/
 
@@ -34,7 +37,18 @@ else
 	echo "No $BUILD_DIR/src/libduckdb.so* files found"
 fi
 
-# Required by extension tests using __BUILD_DIRECTORY__/test/extension/*.duckdb_extension.
+# Required by regression jobs that run the prebuilt benchmark runner.
+if [[ -f "$BUILD_DIR/benchmark/benchmark_runner" ]]; then
+	mkdir -p "$ARTIFACT_DIR"/benchmark "$ARTIFACT_DIR"/scripts
+	mkdir -p "$ARTIFACT_DIR"/test/sql/storage_version
+	cp -av "$BUILD_DIR/benchmark/benchmark_runner" "$ARTIFACT_DIR"/benchmark/
+	cp -av scripts/generate_storage_version.py "$ARTIFACT_DIR"/scripts/
+	cp -av test/sql/storage_version/. "$ARTIFACT_DIR"/test/sql/storage_version/
+else
+	echo "No $BUILD_DIR/benchmark/benchmark_runner file found"
+fi
+
+# Required by extension tests using build/<type>/test/extension/*.duckdb_extension.
 extension_files=("$BUILD_DIR"/test/extension/*.duckdb_extension)
 if ((${#extension_files[@]} > 0)); then
 	for extension in "${extension_files[@]}"; do
@@ -42,6 +56,18 @@ if ((${#extension_files[@]} > 0)); then
 	done
 else
 	echo "No $BUILD_DIR/test/extension/*.duckdb_extension files found"
+fi
+
+# Required by regression tests using build/<type>/extension/*.duckdb_extension.
+extension_files=("$BUILD_DIR"/extension/*/*.duckdb_extension)
+if ((${#extension_files[@]} > 0)); then
+	for extension in "${extension_files[@]}"; do
+		relative_path="${extension#"$BUILD_DIR"/}"
+		mkdir -p "$ARTIFACT_DIR/$(dirname "$relative_path")"
+		cp -av "$extension" "$ARTIFACT_DIR/$relative_path"
+	done
+else
+	echo "No $BUILD_DIR/extension/*/*.duckdb_extension files found"
 fi
 
 # Required by tests that use the local extension repository under the build directory.
