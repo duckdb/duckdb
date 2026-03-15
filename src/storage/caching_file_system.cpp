@@ -196,6 +196,10 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
 	FileBufferHandleGroup group;
 
+	if (nr_bytes == 0) {
+		return group;
+	}
+
 	if (!external_file_cache.IsEnabled()) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		GetFileHandle().Read(context, buf.Ptr(), nr_bytes, location);

@@ -607,4 +607,25 @@ TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_syst
 	}
 }
 
+TEST_CASE("CachingFileSystemWrapper zero-byte read", "[file_system][caching]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<TrackingFileSystem>();
+	auto caching_wrapper =
+	    make_shared_ptr<CachingFileSystemWrapper>(*tracking_fs, db_instance, CachingMode::ALWAYS_CACHE);
+
+	const string test_content = "Some content for zero-byte read testing.";
+	TestFileGuard test_file("test_caching_zero_read.txt", test_content);
+
+	OpenFileInfo file_info(test_file.GetPath());
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+
+	auto handle = caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
+	string buffer(TEST_BUFFER_SIZE, '\0');
+
+	REQUIRE_NOTHROW(handle->Read(QueryContext(), &buffer[0], /*nr_bytes=*/0, /*location=*/0));
+	REQUIRE_NOTHROW(handle->Read(QueryContext(), &buffer[0], /*nr_bytes=*/0, /*location=*/10));
+}
+
 } // namespace duckdb
