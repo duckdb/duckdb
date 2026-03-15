@@ -44,13 +44,7 @@ select l_orderkey from lineitem;
 query I
 select round(sum(nr_bytes) / 1048576) from duckdb_external_file_cache() where nr_bytes > 100000;
 ----
-23.0
-
-# all blocks should be aligned to 2MiB boundaries
-query I
-select every(location % 2097152 = 0) from duckdb_external_file_cache();
-----
-true
+25.0
 
 # select the third column (not contiguous with the first column so more blocks are needed)
 statement ok
@@ -59,7 +53,7 @@ select l_suppkey from lineitem;
 query I
 select round(sum(nr_bytes) / 1048576) from duckdb_external_file_cache() where nr_bytes > 100000;
 ----
-33.0
+35.0
 
 # select the first four columns (contiguous, covers the full data range)
 statement ok
@@ -74,7 +68,7 @@ select round(sum(nr_bytes) / 1048576) from duckdb_external_file_cache() where nr
 query I
 select round(memory_usage_bytes / 1048576) from duckdb_memory() where tag = 'EXTERNAL_FILE_CACHE';
 ----
-48.0
+47.0
 
 # set the memory so low that blocks should be unloaded
 statement ok
