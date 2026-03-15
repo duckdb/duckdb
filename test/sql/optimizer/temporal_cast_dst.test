@@ -11,11 +11,13 @@ statement ok
 SET timezone='Europe/Amsterdam';
 
 # Create a table spanning the autumn DST switch (2026-10-25, clocks go back at 3:00 -> 2:00)
-# This creates 5 hours of TIMESTAMPTZ data in 1-minute intervals around the switch
+# This creates 10 hours of TIMESTAMPTZ data in 1-minute intervals around the switch
+# We need enough data so that the relaxed filter bounds (with 2h margin) are not trivially true,
+# otherwise the statistics propagator will remove them.
 statement ok
 CREATE TABLE dst_table AS
     SELECT '2026-10-25 00:00:00+02'::TIMESTAMPTZ + (i * INTERVAL '1 minute') AS col
-    FROM range(300) t(i);
+    FROM range(600) t(i);
 
 # ---------------------------------------------------------------------------
 # TIMESTAMPTZ -> TIMESTAMP around DST boundary
@@ -38,7 +40,7 @@ query I
 SELECT (SELECT count(*) FROM dst_table WHERE CAST(col AS TIMESTAMP) > '2026-10-25 02:30:00'::TIMESTAMP)
      + (SELECT count(*) FROM dst_table WHERE CAST(col AS TIMESTAMP) <= '2026-10-25 02:30:00'::TIMESTAMP);
 ----
-300
+600
 
 # ---------------------------------------------------------------------------
 # TIMESTAMP -> TIMESTAMPTZ around DST boundary
