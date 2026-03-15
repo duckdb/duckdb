@@ -11,6 +11,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/thread_annotation.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/external_file_cache_block_state.hpp"
 
 #include <condition_variable>
@@ -25,6 +26,12 @@ struct CacheBlock {
 	mutable std::condition_variable cv DUCKDB_GUARDED_BY(mtx);
 	CacheBlockState state DUCKDB_GUARDED_BY(mtx) = CacheBlockState::EMPTY;
 	shared_ptr<BlockHandle> block_handle DUCKDB_GUARDED_BY(mtx);
+#ifdef DEBUG
+	//! Checksum over the buffer contents, used for verifying data was not modified after caching
+	hash_t checksum DUCKDB_GUARDED_BY(mtx) = 0;
+	//! Number of bytes that were read into this block (needed for checksum verification)
+	idx_t nr_bytes DUCKDB_GUARDED_BY(mtx) = 0;
+#endif
 };
 
 } // namespace duckdb

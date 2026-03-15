@@ -1,5 +1,6 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
+#include "duckdb/common/checksum.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -53,16 +54,19 @@ public:
 
 		while (true) {
 			switch (block->state) {
-			case CacheBlockState::LOADED: {
-				auto pin = buffer_manager.Pin(block->block_handle);
-				if (pin.IsValid()) {
-					result_pin = std::move(pin);
-					return;
-				}
-				// Evicted by buffer manager, need to re-fetch
-				block->state = CacheBlockState::EMPTY;
-				continue;
+		case CacheBlockState::LOADED: {
+			auto pin = buffer_manager.Pin(block->block_handle);
+			if (pin.IsValid()) {
+#ifdef DEBUG
+				D_ASSERT(Checksum(pin.Ptr(), block->nr_bytes) == block->checksum);
+#endif
+				result_pin = std::move(pin);
+				return;
 			}
+			// Evicted by buffer manager, need to re-fetch
+			block->state = CacheBlockState::EMPTY;
+			continue;
+		}
 			case CacheBlockState::EMPTY: {
 				block->state = CacheBlockState::LOADING;
 				lk.unlock();
@@ -73,11 +77,15 @@ public:
 					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
 					file_handle.Read(context, buf.Ptr(), to_read, offset);
 
-					lk.lock();
-					block->block_handle = buf.GetBlockHandle();
-					block->state = CacheBlockState::LOADED;
-					result_pin = std::move(buf);
-					block->cv.notify_all();
+				lk.lock();
+				block->block_handle = buf.GetBlockHandle();
+				block->state = CacheBlockState::LOADED;
+#ifdef DEBUG
+				block->nr_bytes = to_read;
+				block->checksum = Checksum(buf.Ptr(), to_read);
+#endif
+				result_pin = std::move(buf);
+				block->cv.notify_all();
 				} catch (std::exception &e) {
 					lk.lock();
 					block->state = CacheBlockState::ERROR;
@@ -197,16 +205,16 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
-	FileBufferHandleGroup group;
 	if (nr_bytes == 0) {
-		return group;
+		return FileBufferHandleGroup();
 	}
 
 	if (!external_file_cache.IsEnabled()) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		GetFileHandle().Read(context, buf.Ptr(), nr_bytes, location);
-		group.handles.push_back({std::move(buf), 0, nr_bytes});
-		return group;
+		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+		mem_handles.push_back({std::move(buf), 0, nr_bytes});
+		return FileBufferHandleGroup(std::move(mem_handles));
 	}
 
 	// Ensure the file is open so metadata is set before blocks are visible to other threads
@@ -243,26 +251,28 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	executor.WorkOnTasks();
 
 	// Build the handle group.
+	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+	mem_handles.reserve(num_blocks);
 	idx_t remaining = nr_bytes;
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const idx_t block_start = (first_block + idx) * block_size;
 		const idx_t offset_in_block = (idx == 0) ? (location - block_start) : 0;
 		const idx_t length = MinValue(block_size - offset_in_block, remaining);
-		group.handles.push_back({std::move(pins[idx]), offset_in_block, length});
+		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
 		remaining -= length;
 	}
 
-	return group;
+	return FileBufferHandleGroup(std::move(mem_handles));
 }
 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 	if (!external_file_cache.IsEnabled() || !CanSeek()) {
-		FileBufferHandleGroup group;
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buf.Ptr(), nr_bytes));
-		group.handles.push_back({std::move(buf), 0, nr_bytes});
+		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		position += nr_bytes;
-		return group;
+		return FileBufferHandleGroup(std::move(mem_handles));
 	}
 
 	const idx_t file_size = GetFileSize();

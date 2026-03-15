@@ -28,8 +28,14 @@ public:
 		idx_t length;
 	};
 
-	// A list of MemoryHandles, could be empty.
-	vector<MemoryHandle> handles;
+	//! Construct an empty group (no handles).
+	FileBufferHandleGroup() = default;
+
+	//! Construct a group from a pre-built vector of MemoryHandles.
+	explicit FileBufferHandleGroup(vector<MemoryHandle> handles_p);
+
+	//! Read-only access to the underlying handles.
+	const vector<MemoryHandle> &GetHandles() const;
 
 	// Util function to copy from the start of the group to the destination address for the requested number of bytes
 	void CopyTo(data_ptr_t dest, idx_t nr_bytes) const;
@@ -37,6 +43,10 @@ public:
 	// Return a pointer to the start of the first handle in the group.
 	// Warning: this function requires exactly one handle for zero-copy access, otherwise it will throw an exception.
 	data_ptr_t Ptr() const;
+
+private:
+	// The list of MemoryHandles, could be empty. Immutable after construction.
+	vector<MemoryHandle> handles;
 };
 
 } // namespace duckdb

@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/file_buffer_handle_group.hpp"
@@ -7,7 +8,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 
 namespace {
 BufferHandle AllocateAndFill(BufferManager &bm, idx_t size, uint8_t fill) {
@@ -28,8 +29,9 @@ TEST_CASE("FileBufferHandleGroup copy with single handle", "[file_buffer_handle_
 		handle.Ptr()[i] = static_cast<uint8_t>(i & 0xFF);
 	}
 
-	FileBufferHandleGroup group;
-	group.handles.push_back({std::move(handle), /*start_offset=*/0, /*length=*/BUF_SIZE});
+	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+	mem_handles.push_back({std::move(handle), /*start_offset=*/0, /*length=*/BUF_SIZE});
+	FileBufferHandleGroup group(std::move(mem_handles));
 
 	array<uint8_t, 64> dest {};
 	group.CopyTo(dest.data(), dest.size());
@@ -49,9 +51,10 @@ TEST_CASE("FileBufferHandleGroup copy with single handle with offset", "[file_bu
 		handle.Ptr()[i] = static_cast<uint8_t>(i & 0xFF);
 	}
 
-	FileBufferHandleGroup group;
 	constexpr idx_t OFFSET = 50;
-	group.handles.push_back({std::move(handle), OFFSET, BUF_SIZE - OFFSET});
+	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+	mem_handles.push_back({std::move(handle), OFFSET, BUF_SIZE - OFFSET});
+	FileBufferHandleGroup group(std::move(mem_handles));
 
 	array<uint8_t, 32> dest {};
 	group.CopyTo(dest.data(), dest.size());
@@ -71,10 +74,11 @@ TEST_CASE("FileBufferHandleGroup copy with multiple handles", "[file_buffer_hand
 	auto h2 = AllocateAndFill(bm, CHUNK, 0xBB);
 	auto h3 = AllocateAndFill(bm, CHUNK, 0xCC);
 
-	FileBufferHandleGroup group;
-	group.handles.push_back({std::move(h1), 0, CHUNK});
-	group.handles.push_back({std::move(h2), 0, CHUNK});
-	group.handles.push_back({std::move(h3), 0, CHUNK});
+	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+	mem_handles.push_back({std::move(h1), 0, CHUNK});
+	mem_handles.push_back({std::move(h2), 0, CHUNK});
+	mem_handles.push_back({std::move(h3), 0, CHUNK});
+	FileBufferHandleGroup group(std::move(mem_handles));
 
 	array<uint8_t, CHUNK * 3> dest {};
 	group.CopyTo(dest.data(), dest.size());
@@ -103,9 +107,10 @@ TEST_CASE("FileBufferHandleGroup copy partial across handles", "[file_buffer_han
 	auto h1 = AllocateAndFill(bm, BUF_SIZE, 0x11);
 	auto h2 = AllocateAndFill(bm, BUF_SIZE, 0x22);
 
-	FileBufferHandleGroup group;
-	group.handles.push_back({std::move(h1), /*start_offset=*/H1_OFFSET, /*length=*/H1_LENGTH});
-	group.handles.push_back({std::move(h2), /*start_offset=*/0, /*length=*/H2_LENGTH});
+	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
+	mem_handles.push_back({std::move(h1), /*start_offset=*/H1_OFFSET, /*length=*/H1_LENGTH});
+	mem_handles.push_back({std::move(h2), /*start_offset=*/0, /*length=*/H2_LENGTH});
+	FileBufferHandleGroup group(std::move(mem_handles));
 
 	array<uint8_t, COPY_SIZE> dest {};
 	group.CopyTo(dest.data(), dest.size());
@@ -117,3 +122,5 @@ TEST_CASE("FileBufferHandleGroup copy partial across handles", "[file_buffer_han
 		REQUIRE(dest[i] == 0x22);
 	}
 }
+
+} // namespace duckdb

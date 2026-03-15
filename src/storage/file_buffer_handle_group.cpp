@@ -4,6 +4,13 @@
 
 namespace duckdb {
 
+FileBufferHandleGroup::FileBufferHandleGroup(vector<MemoryHandle> handles_p) : handles(std::move(handles_p)) {
+}
+
+const vector<FileBufferHandleGroup::MemoryHandle> &FileBufferHandleGroup::GetHandles() const {
+	return handles;
+}
+
 void FileBufferHandleGroup::CopyTo(data_ptr_t dest, idx_t nr_bytes) const {
 	idx_t copied = 0;
 	for (auto &mh : handles) {

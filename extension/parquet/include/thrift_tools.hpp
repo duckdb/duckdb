@@ -38,7 +38,7 @@ struct ReadHead {
 	}
 
 	void Materialize() {
-		if (handle_group.handles.size() == 1) {
+		if (handle_group.GetHandles().size() == 1) {
 			buffer_ptr = handle_group.Ptr();
 		} else {
 			local_buffer = Allocator::DefaultAllocator().Allocate(size);

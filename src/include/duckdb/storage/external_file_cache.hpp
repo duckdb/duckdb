@@ -45,6 +45,7 @@ public:
 
 		const string path;
 
+		//! Lock ordering: meta_lock must always be acquired before map_lock to avoid deadlocks.
 		mutable annotated_mutex map_lock;
 		unordered_map<idx_t, shared_ptr<CacheBlock>> blocks DUCKDB_GUARDED_BY(map_lock);
 
