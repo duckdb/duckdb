@@ -1,11 +1,11 @@
-commit b397187da1ffa7034c06019a2c58974c0a3cdb02
+commit f74b8c3487ed9a435ad996473a1746b9c9f5a815
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 15 10:48:02 2026 +0000
 
     Adapt caching filesystem interface change
 
 diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
-index 5317c43..98b6ad8 100644
+index 5317c43..876bb8b 100644
 --- a/src/avro_reader.cpp
 +++ b/src/avro_reader.cpp
 @@ -123,13 +123,17 @@ AvroReader::AvroReader(ClientContext &context, OpenFileInfo file) : BaseFileRead
@@ -18,7 +18,7 @@ index 5317c43..98b6ad8 100644
 -	auto buffer_data = buf_handle.Ptr();
 +	buf_handle_group = caching_file_handle->Read(total_size);
 +	data_ptr_t buffer_data;
-+	if (buf_handle_group.handles.size() == 1) {
++	if (buf_handle_group.GetHandles().size() == 1) {
 +		buffer_data = buf_handle_group.Ptr();
 +	} else {
 +		buf_data = Allocator::DefaultAllocator().Allocate(total_size);
