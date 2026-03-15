@@ -1175,6 +1175,7 @@ void ART::FinalizeVacuum(const unordered_set<uint8_t> &indexes) {
 	}
 }
 
+// Assumes NodePointer& node is a reference to a parent node that is pinned in memory.
 static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexes, NodePointer &node) {
 	const auto type = node.GetType();
 	if (type == NType::LEAF_INLINED) {
@@ -1192,17 +1193,6 @@ static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexe
 	node = allocator.VacuumPointer(node);
 	node.SetMetadata(static_cast<uint8_t>(type));
 	node.SetGateStatus(status);
-}
-
-template <class NODE>
-static void VacuumChildren(ART &art, const unordered_set<uint8_t> &indexes, NodePointer node,
-                           vector<NodePointer> &stack) {
-	NodeHandle handle(art, node);
-	auto &n = handle.Get<NODE>();
-	NODE::Iterator(n, [&](NodePointer &child) {
-		VacuumPointerIfNeeded(art, indexes, child);
-		stack.push_back(child);
-	});
 }
 
 void ART::Vacuum(IndexLock &state) {
@@ -1226,49 +1216,20 @@ void ART::Vacuum(IndexLock &state) {
 
 	auto &art = *this;
 
-	VacuumPointerIfNeeded(art, indexes, tree);
-
-	vector<NodePointer> stack;
-	stack.push_back(tree);
-
-	while (!stack.empty()) {
-		NodePointer current = stack.back();
-		stack.pop_back();
-
-		const auto type = current.GetType();
-		switch (type) {
-		case NType::LEAF_INLINED:
-			break;
-		case NType::LEAF:
+	auto node_handler = [&](NodePointer current) -> ScanNodeResult {
+		if (current.GetType() == NType::LEAF) {
 			Leaf::DeprecatedVacuum(art, indexes, current);
-			break;
-		case NType::NODE_7_LEAF:
-		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF:
-			break;
-		case NType::PREFIX: {
-			NodeHandle handle(art, current);
-			auto child = reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
-			VacuumPointerIfNeeded(art, indexes, *child);
-			stack.push_back(*child);
-			break;
+			return ScanNodeResult::SKIP;
 		}
-		case NType::NODE_4:
-			VacuumChildren<Node4>(art, indexes, current, stack);
-			break;
-		case NType::NODE_16:
-			VacuumChildren<Node16>(art, indexes, current, stack);
-			break;
-		case NType::NODE_48:
-			VacuumChildren<Node48>(art, indexes, current, stack);
-			break;
-		case NType::NODE_256:
-			VacuumChildren<Node256>(art, indexes, current, stack);
-			break;
-		default:
-			throw InternalException("invalid node type for Vacuum: %d", type);
-		}
-	}
+		return ScanNodeResult::SCAN_CHILDREN;
+	};
+
+	auto child_handler = [&](NodePointer &child) -> NodePointer {
+		VacuumPointerIfNeeded(art, indexes, child);
+		return child;
+	};
+
+	BufferManagedScan(art, tree, node_handler, child_handler);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
