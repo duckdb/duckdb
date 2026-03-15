@@ -775,6 +775,36 @@ public:
 				col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i + 1));
 			}
 			const auto &primary_subplan_bindings = primary_subplan.canonical_bindings;
+			vector<vector<idx_t>> cte_column_indexes(subplan_info.subplans.size());
+			vector<bool> needs_projection(subplan_info.subplans.size(), false);
+			bool incompatible_types = false;
+			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size() && !incompatible_types;
+			     subplan_idx++) {
+				const auto &subplan = subplan_info.subplans[subplan_idx];
+				const auto &canonical_bindings = subplan.canonical_bindings;
+				const auto &subplan_types = subplan.op.get()->types;
+				cte_column_indexes[subplan_idx].reserve(canonical_bindings.size());
+				needs_projection[subplan_idx] = canonical_bindings.size() != types.size();
+				for (idx_t i = 0; i < canonical_bindings.size(); i++) {
+					const auto &cb = canonical_bindings[i];
+					idx_t cte_col_idx = 0;
+					for (; cte_col_idx < primary_subplan_bindings.size(); cte_col_idx++) {
+						if (cb == primary_subplan_bindings[cte_col_idx]) {
+							break;
+						}
+					}
+					D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
+					if (subplan_types[i] != types[cte_col_idx]) {
+						incompatible_types = true;
+						break;
+					}
+					cte_column_indexes[subplan_idx].push_back(cte_col_idx);
+					needs_projection[subplan_idx] = needs_projection[subplan_idx] || cte_col_idx != i;
+				}
+			}
+			if (incompatible_types) {
+				continue;
+			}
 
 			// Create CTE refs and figure out column binding replacements
 			vector<unique_ptr<LogicalOperator>> cte_refs;
@@ -788,18 +818,11 @@ public:
 				}
 				const auto old_bindings = subplan.op.get()->GetColumnBindings();
 				auto new_bindings = cte_refs.back()->GetColumnBindings();
-				if (old_bindings.size() != new_bindings.size()) {
-					// Different number of output columns - project columns out
-					const auto &canonical_bindings = subplan.canonical_bindings;
+				if (needs_projection[subplan_idx]) {
+					// Preserve each subplan's original output order when it differs from the
+					// primary materialized CTE.
 					vector<unique_ptr<Expression>> select_list;
-					for (auto &cb : canonical_bindings) {
-						idx_t cte_col_idx = 0;
-						for (; cte_col_idx < primary_subplan_bindings.size(); cte_col_idx++) {
-							if (cb == primary_subplan_bindings[cte_col_idx]) {
-								break;
-							}
-						}
-						D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
+					for (auto cte_col_idx : cte_column_indexes[subplan_idx]) {
 						select_list.emplace_back(make_uniq<BoundColumnRefExpression>(
 						    types[cte_col_idx], ColumnBinding(cte_ref_index, cte_col_idx)));
 					}
