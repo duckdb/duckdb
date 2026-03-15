@@ -264,6 +264,12 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 		return group;
 	}
 
+	const idx_t file_size = GetFileSize();
+	if (position >= file_size) {
+		nr_bytes = 0;
+		return {};
+	}
+	nr_bytes = MinValue(nr_bytes, file_size - position);
 	auto group = Read(nr_bytes, position);
 	position += nr_bytes;
 	return group;
