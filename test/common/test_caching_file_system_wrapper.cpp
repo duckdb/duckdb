@@ -80,7 +80,7 @@ public:
 		idx_t size;
 	};
 
-	mutable std::mutex read_calls_mutex;
+	mutable mutex read_calls_mutex;
 	vector<ReadCall> read_calls;
 
 	string GetName() const override {
@@ -415,7 +415,7 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 	const string test_content =
 	    "Test content for parallel read access. This is a longer string to allow multiple reads.";
 	TestFileGuard test_file("test_caching_parallel.txt", test_content);
-	constexpr idx_t THREAD_COUNT = 2;
+	constexpr idx_t THREAD_COUNT = 8;
 
 	// Open file with parallel access flag - single handle shared by all threads
 	OpenFileInfo file_info(test_file.GetPath());
@@ -424,34 +424,20 @@ TEST_CASE("CachingFileSystemWrapper read with parallel accesses", "[file_system]
 	auto shared_handle =
 	    caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_PARALLEL_ACCESS);
 
-	// Use two threads to read from the same file handle in parallel using pread semantics
+	// Use multiple threads to read from the same file handle in parallel using pread semantics
 	vector<std::thread> threads;
-	std::mutex results_mutex;
-	vector<bool> results(THREAD_COUNT, false);
-
 	const idx_t chunk_size = 20;
 	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
 		threads.emplace_back([&, idx]() {
 			const idx_t read_location = idx * chunk_size;
 			string buffer(TEST_BUFFER_SIZE, '\0');
 			shared_handle->Read(QueryContext(), &buffer[0], chunk_size, read_location);
-			bool result = (buffer.substr(0, chunk_size) == test_content.substr(read_location, chunk_size));
-			{
-				const lock_guard<mutex> lock(results_mutex);
-				results[idx] = result;
-			}
+			REQUIRE(buffer.substr(0, chunk_size) == test_content.substr(read_location, chunk_size));
 		});
 	}
 	for (auto &thd : threads) {
-		REQUIRE(thd.joinable());
 		thd.join();
 	}
-
-	// Verify both threads read correctly from the same handle
-	REQUIRE(results[0]);
-	REQUIRE(results[1]);
-
-	shared_handle.reset();
 }
 
 // Testing scenario: mimic open file with duckdb instance, which open a file goes through opener filesystem, meanwhile
@@ -541,8 +527,7 @@ TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system]
 
 	tracking_fs_ptr->Clear();
 
-	std::mutex results_mutex;
-	vector<bool> results(THREAD_COUNT, false);
+	mutex results_mutex;
 	vector<std::thread> threads;
 
 	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
@@ -550,19 +535,11 @@ TEST_CASE("CachingFileSystemWrapper concurrent reads same block", "[file_system]
 			auto handle = caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
 			string buffer(TEST_BUFFER_SIZE, '\0');
 			handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0);
-			bool ok = (buffer.substr(0, test_content.size()) == test_content);
-			{
-				const lock_guard<mutex> lock(results_mutex);
-				results[idx] = ok;
-			}
+			REQUIRE(buffer.substr(0, test_content.size()) == test_content);
 		});
 	}
 	for (auto &thd : threads) {
 		thd.join();
-	}
-
-	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
-		REQUIRE(results[idx]);
 	}
 
 	REQUIRE(tracking_fs_ptr->GetReadCount(test_file.GetPath(), 0, test_content.size()) == 1);
@@ -586,8 +563,6 @@ TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_syst
 	failing_fs_ptr->SetShouldFail(true);
 
 	constexpr idx_t THREAD_COUNT = 4;
-	std::mutex results_mutex;
-	vector<bool> got_error(THREAD_COUNT, false);
 	vector<std::thread> threads;
 
 	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
@@ -596,18 +571,13 @@ TEST_CASE("CachingFileSystemWrapper IO error propagates to waiters", "[file_syst
 				auto handle = caching_wrapper->OpenFile(file_info, FileFlags::FILE_FLAGS_READ);
 				string buffer(TEST_BUFFER_SIZE, '\0');
 				handle->Read(QueryContext(), &buffer[0], test_content.size(), /*location=*/0);
+				REQUIRE(false);
 			} catch (...) {
-				const lock_guard<mutex> lock(results_mutex);
-				got_error[idx] = true;
 			}
 		});
 	}
 	for (auto &thd : threads) {
 		thd.join();
-	}
-
-	for (size_t idx = 0; idx < THREAD_COUNT; ++idx) {
-		REQUIRE(got_error[idx]);
 	}
 }
 

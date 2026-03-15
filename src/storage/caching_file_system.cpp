@@ -92,6 +92,7 @@ public:
 				continue;
 			}
 			case CacheBlockState::ERROR: {
+				// IO operation failed, reset the block to empty state for another attempt.
 				block->state = CacheBlockState::EMPTY;
 				continue;
 			}
@@ -154,7 +155,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 		return;
 	}
 	// If we don't have any cached blocks, we must also open the file.
-	bool needs_open;
+	bool needs_open = false;
 	{
 		annotated_lock_guard<annotated_mutex> guard(cached_file.map_lock);
 		needs_open = cached_file.blocks.empty();
@@ -168,26 +169,28 @@ CachingFileHandle::~CachingFileHandle() {
 }
 
 FileHandle &CachingFileHandle::GetFileHandle() {
-	if (!file_handle) {
-		file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
-		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
-		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
+	if (file_handle) {
+		return *file_handle;
+	}
 
-		{
-			annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-			bool first_access = (cached_file.file_size == 0);
-			if (first_access || Validate()) {
-				if (!ExternalFileCache::IsValid(Validate(), cached_file.version_tag, cached_file.last_modified,
-				                                version_tag, last_modified)) {
-					annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
-					cached_file.blocks.clear();
-				}
-				cached_file.file_size = file_handle->GetFileSize();
-				cached_file.last_modified = last_modified;
-				cached_file.version_tag = version_tag;
-				cached_file.can_seek = file_handle->CanSeek();
-				cached_file.on_disk_file = file_handle->OnDiskFile();
+	file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
+	last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
+	version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
+
+	{
+		annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
+		const bool first_access = (cached_file.file_size == 0);
+		if (first_access || Validate()) {
+			if (!ExternalFileCache::IsValid(Validate(), cached_file.version_tag, cached_file.last_modified,
+											version_tag, last_modified)) {
+				annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+				cached_file.blocks.clear();
 			}
+			cached_file.file_size = file_handle->GetFileSize();
+			cached_file.last_modified = last_modified;
+			cached_file.version_tag = version_tag;
+			cached_file.can_seek = file_handle->CanSeek();
+			cached_file.on_disk_file = file_handle->OnDiskFile();
 		}
 	}
 	return *file_handle;
@@ -195,7 +198,6 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
 	FileBufferHandleGroup group;
-
 	if (nr_bytes == 0) {
 		return group;
 	}
@@ -209,24 +211,23 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	// Ensure the file is open so metadata is set before blocks are visible to other threads
 	auto &fh = GetFileHandle();
-	const idx_t fs = fh.GetFileSize();
+	const idx_t file_size = fh.GetFileSize();
 
 	const idx_t block_size = ExternalFileCache::CACHE_BLOCK_SIZE;
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
 	const idx_t num_blocks = last_block - first_block + 1;
 
-	// Get-or-create CacheBlock for each block_idx
 	vector<shared_ptr<CacheBlock>> blocks(num_blocks);
 	{
 		annotated_lock_guard<annotated_mutex> guard(cached_file.map_lock);
-		for (idx_t i = 0; i < num_blocks; i++) {
-			const idx_t block_idx = first_block + i;
+		for (idx_t idx = 0; idx < num_blocks; idx++) {
+			const idx_t block_idx = first_block + idx;
 			auto &entry = cached_file.blocks[block_idx];
 			if (!entry) {
 				entry = make_shared_ptr<CacheBlock>();
 			}
-			blocks[i] = entry;
+			blocks[idx] = entry;
 		}
 	}
 
@@ -235,19 +236,19 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
 	TaskExecutor executor(scheduler);
 
-	for (idx_t i = 0; i < num_blocks; i++) {
+	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		executor.ScheduleTask(make_uniq<FetchBlockTask>(executor, fh, context, external_file_cache.GetBufferManager(),
-		                                                blocks[i], first_block + i, fs, pins[i]));
+		                                                blocks[idx], first_block + idx, file_size, pins[idx]));
 	}
 	executor.WorkOnTasks();
 
-	// Build the handle group -- each block contributes a slice
+	// Build the handle group.
 	idx_t remaining = nr_bytes;
-	for (idx_t i = 0; i < num_blocks; i++) {
-		const idx_t block_start = (first_block + i) * block_size;
-		const idx_t offset_in_block = (i == 0) ? (location - block_start) : 0;
+	for (idx_t idx = 0; idx < num_blocks; idx++) {
+		const idx_t block_start = (first_block + idx) * block_size;
+		const idx_t offset_in_block = (idx == 0) ? (location - block_start) : 0;
 		const idx_t length = MinValue(block_size - offset_in_block, remaining);
-		group.handles.push_back({std::move(pins[i]), offset_in_block, length});
+		group.handles.push_back({std::move(pins[idx]), offset_in_block, length});
 		remaining -= length;
 	}
 
@@ -269,6 +270,7 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 		nr_bytes = 0;
 		return {};
 	}
+
 	nr_bytes = MinValue(nr_bytes, file_size - position);
 	auto group = Read(nr_bytes, position);
 	position += nr_bytes;
