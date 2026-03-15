@@ -687,14 +687,15 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 	// Full file read: should produce 2 handles
 	{
 		auto group = handle->Read(FILE_SIZE, 0);
-		REQUIRE(group.handles.size() == 2);
-		REQUIRE(group.handles[0].start_offset == 0);
-		REQUIRE(group.handles[0].length == BLOCK_SIZE);
-		REQUIRE(group.handles[1].start_offset == 0);
-		REQUIRE(group.handles[1].length == EXTRA);
+		auto &handles = group.GetHandles();
+		REQUIRE(handles.size() == 2);
+		REQUIRE(handles[0].start_offset == 0);
+		REQUIRE(handles[0].length == BLOCK_SIZE);
+		REQUIRE(handles[1].start_offset == 0);
+		REQUIRE(handles[1].length == EXTRA);
 
 		string result(FILE_SIZE, '\0');
-		group.CopyTo(reinterpret_cast<data_ptr_t>(result.data()), FILE_SIZE);
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), FILE_SIZE);
 		REQUIRE(result == content);
 	}
 
@@ -703,23 +704,25 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 		const idx_t read_offset = BLOCK_SIZE - 200;
 		const idx_t read_size = 250;
 		auto group = handle->Read(read_size, read_offset);
-		REQUIRE(group.handles.size() == 2);
-		REQUIRE(group.handles[0].start_offset == BLOCK_SIZE - 200);
-		REQUIRE(group.handles[0].length == 200);
-		REQUIRE(group.handles[1].start_offset == 0);
-		REQUIRE(group.handles[1].length == 50);
+		auto &handles = group.GetHandles();
+		REQUIRE(handles.size() == 2);
+		REQUIRE(handles[0].start_offset == BLOCK_SIZE - 200);
+		REQUIRE(handles[0].length == 200);
+		REQUIRE(handles[1].start_offset == 0);
+		REQUIRE(handles[1].length == 50);
 
 		string result(read_size, '\0');
-		group.CopyTo(reinterpret_cast<data_ptr_t>(result.data()), read_size);
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), read_size);
 		REQUIRE(result == content.substr(read_offset, read_size));
 	}
 
 	// Single block read: should produce 1 handle
 	{
 		auto group = handle->Read(100, 0);
-		REQUIRE(group.handles.size() == 1);
-		REQUIRE(group.handles[0].start_offset == 0);
-		REQUIRE(group.handles[0].length == 100);
+		auto &handles = group.GetHandles();
+		REQUIRE(handles.size() == 1);
+		REQUIRE(handles[0].start_offset == 0);
+		REQUIRE(handles[0].length == 100);
 	}
 }
 

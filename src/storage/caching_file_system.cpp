@@ -257,7 +257,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const idx_t block_start = (first_block + idx) * block_size;
 		const idx_t offset_in_block = (idx == 0) ? (location - block_start) : 0;
-		const idx_t block_valid_bytes = MinValue(block_size, fs - block_start);
+		const idx_t block_valid_bytes = MinValue(block_size, file_size - block_start);
 		const idx_t available_in_block = block_valid_bytes - offset_in_block;
 		const idx_t length = MinValue(available_in_block, remaining);
 		mem_handles.push_back({std::move(pins[idx]), offset_in_block, length});
