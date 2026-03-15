@@ -53,19 +53,42 @@ jobs:
       (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
     outputs:
+      runner_linux_small: ${{ steps.select_runner.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.select_runner.outputs.runner_linux_x64 }}
       runner_linux_22_x64: ${{ steps.select_runner.outputs.runner_linux_22_x64 }}
       runner_linux_arm64: ${{ steps.select_runner.outputs.runner_linux_arm64 }}
       runner_macos_arm64: ${{ steps.select_runner.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.select_runner.outputs.runner_macos_14_arm64 }}
+      extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
+      extensions_extra_exclude_archs: ${{ steps.extensions.outputs.extra_exclude_archs }}
     env:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
+
+      - name: Detect changes
+        id: changed
+        uses: tj-actions/changed-files@v47
+        with:
+          files_yaml: |
+            extensions:
+              - .github/config/**
+              - .github/patches/**
+              - extensions/**
+
+      - name: Configure extensions
+        id: extensions
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" || "${{ steps.changed.outputs.extensions_any_changed }}" == "true" ]]; then
+            echo "extra_exclude_archs=" >> "$GITHUB_OUTPUT"
+          else
+            echo "extra_exclude_archs=windows_amd64;wasm_eh" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Select CI runner
         id: select_runner
@@ -73,17 +96,21 @@ jobs:
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
             {
+              echo "runner_linux_small=namespace-profile-linux-small"
               echo "runner_linux_x64=namespace-profile-linux-x64"
               echo "runner_linux_22_x64=namespace-profile-linux-22-x64"
               echo "runner_linux_arm64=namespace-profile-linux-arm64"
               echo "runner_macos_arm64=namespace-profile-macos-arm64"
+              echo "runner_macos_14_arm64=namespace-profile-macos-14-arm64"
             } >> "$GITHUB_OUTPUT"
           else
             {
+              echo "runner_linux_small=ubuntu-latest"
               echo "runner_linux_x64=ubuntu-latest"
               echo "runner_linux_22_x64=ubuntu-22.04"
               echo "runner_linux_arm64=ubuntu-24.04-arm"
               echo "runner_macos_arm64=macos-14"
+              echo "runner_macos_14_arm64=macos-14"
             } >> "$GITHUB_OUTPUT"
           fi
 
@@ -121,20 +148,21 @@ jobs:
       FORCE_DEBUG: 1
       FORCE_ASSERT: 1
       REDUCE_SYMBOLS: 1
+      EXTENSIONS_STATIC_BUILD: 0
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
-      run: make relassert
+      run: python3 scripts/ci/retry.py -- make relassert
 
     - name: Smoke tests
       run: make smoke
@@ -146,7 +174,7 @@ jobs:
       run: make relassert-artifact
 
     - name: Upload relassert build artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: linux-debug-relassert-build
         path: build/relassert-artifact.tar.gz
@@ -160,12 +188,12 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download relassert build artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-debug-relassert-build
         path: build
@@ -188,7 +216,14 @@ jobs:
  regression:
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
+      - linux-release
+    with:
+      build_current_release: 'false'
+      runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
+      runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
 
  code-quality:
     uses: ./.github/workflows/CodeQuality.yml
@@ -198,11 +233,34 @@ jobs:
  extensions:
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
     with:
       git_ref: ${{ github.sha }}
+      extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: 'false'
       run_all: 'true'
+
+ wasm-eh:
+    name: Wasm EH
+    needs:
+      - prepare
+      - linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: mymindstorm/setup-emsdk@v13
+      with:
+        version: latest
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - name: Build
+      run: make wasm_ci
 
  linux-release:
     name: Linux Release
@@ -212,39 +270,16 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+    - uses: ./.github/actions/linux_release_build
       with:
-        vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
-
-    - name: Build
-      env:
-        BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
-        DISABLE_SANITIZER: 1
-        VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        USE_MERGED_VCPKG_MANIFEST: 1
-      run: make release
-
-    - name: Smoke tests
-      run: make smoke SMOKE_UNITTEST=build/release/test/unittest
-
-    - name: Prepare release artifact
-      run: make release-artifact
-
-    - name: Upload release build artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-release-build
-        path: build/release-artifact.tar.gz
-        if-no-files-found: error
+        artifact_name: linux-release-build
 
     - name: Build linux default release
       run: make clean release
@@ -255,7 +290,7 @@ jobs:
         mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
 
     - name: Upload linux default release artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: linux-default-release-build
         path: build/linux-default-release.tar.gz
@@ -269,12 +304,12 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install tools
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download release build artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-release-build
         path: build
@@ -296,14 +331,14 @@ jobs:
       - linux-release
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Download linux default release artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-default-release-build
         path: build
@@ -330,7 +365,11 @@ jobs:
  swift:
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
+    with:
+      runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
     uses: ./.github/workflows/Windows.yml
@@ -358,15 +397,15 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
-        run: make relassert
+        run: python3 scripts/ci/retry.py -- make relassert
 
       - name: Test
         run: make unittest_relassert
@@ -384,10 +423,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -411,17 +450,19 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install
       shell: bash
-      run: make toolsci && sudo apt-get install -y -qq valgrind clang
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq valgrind clang
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
-      run: make relassert
+      run: python3 scripts/ci/retry.py -- make relassert
 
     - name: Output version info
       shell: bash
@@ -447,10 +488,10 @@ jobs:
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -462,16 +503,18 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
-    runs-on: ubuntu-24.04
-    needs: linux-debug
+    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: clang
       CXX: clang++
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
@@ -491,18 +534,18 @@ jobs:
       - linux-release
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Install
       shell: bash
-      run: make toolsci
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: linux-release-build
         path: build
