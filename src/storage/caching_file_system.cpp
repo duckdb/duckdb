@@ -81,7 +81,6 @@ public:
 				} catch (std::exception &e) {
 					lk.lock();
 					block->state = CacheBlockState::ERROR;
-					block->error_message = e.what();
 					block->cv.notify_all();
 					throw;
 				}
@@ -93,7 +92,8 @@ public:
 				continue;
 			}
 			case CacheBlockState::ERROR: {
-				throw IOException("Cached block read failed: %s", block->error_message);
+				block->state = CacheBlockState::EMPTY;
+				continue;
 			}
 			}
 		}
