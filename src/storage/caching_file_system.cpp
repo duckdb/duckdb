@@ -193,12 +193,14 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 	return *file_handle;
 }
 
-BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
+FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
+	FileBufferHandleGroup group;
+
 	if (!external_file_cache.IsEnabled()) {
-		auto result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		buffer = result.Ptr();
-		GetFileHandle().Read(context, buffer, nr_bytes, location);
-		return result;
+		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+		GetFileHandle().Read(context, buf.Ptr(), nr_bytes, location);
+		group.handles.push_back({std::move(buf), 0, nr_bytes});
+		return group;
 	}
 
 	const idx_t block_size = ExternalFileCache::CACHE_BLOCK_SIZE;
@@ -235,40 +237,32 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	}
 	executor.WorkOnTasks();
 
-	// Assemble result
-	if (num_blocks == 1) {
-		const idx_t offset_in_block = location - first_block * block_size;
-		buffer = pins[0].Ptr() + offset_in_block;
-		return std::move(pins[0]);
-	}
-
-	auto result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-	buffer = result.Ptr();
-	idx_t bytes_copied = 0;
-
+	// Build the handle group -- each block contributes a slice
+	idx_t remaining = nr_bytes;
 	for (idx_t i = 0; i < num_blocks; i++) {
 		const idx_t block_start = (first_block + i) * block_size;
 		const idx_t offset_in_block = (i == 0) ? (location - block_start) : 0;
-		const idx_t bytes_to_copy = MinValue(block_size - offset_in_block, nr_bytes - bytes_copied);
-		memcpy(buffer + bytes_copied, pins[i].Ptr() + offset_in_block, bytes_to_copy);
-		bytes_copied += bytes_to_copy;
+		const idx_t length = MinValue(block_size - offset_in_block, remaining);
+		group.handles.push_back({std::move(pins[i]), offset_in_block, length});
+		remaining -= length;
 	}
 
-	return result;
+	return group;
 }
 
-BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
+FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 	if (!external_file_cache.IsEnabled() || !CanSeek()) {
-		auto result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		buffer = result.Ptr();
-		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buffer, nr_bytes));
+		FileBufferHandleGroup group;
+		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buf.Ptr(), nr_bytes));
+		group.handles.push_back({std::move(buf), 0, nr_bytes});
 		position += nr_bytes;
-		return result;
+		return group;
 	}
 
-	auto result = Read(buffer, nr_bytes, position);
+	auto group = Read(nr_bytes, position);
 	position += nr_bytes;
-	return result;
+	return group;
 }
 
 string CachingFileHandle::GetPath() const {

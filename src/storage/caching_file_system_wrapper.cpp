@@ -157,15 +157,8 @@ void CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr
 		return underlying_file_system.Read(handle, buffer, nr_bytes, location);
 	}
 
-	data_ptr_t cached_buffer = nullptr;
-	auto buffer_handle = caching_handle->Read(cached_buffer, NumericCast<idx_t>(nr_bytes), location);
-	if (!buffer_handle.IsValid()) {
-		throw IOException("Failed to read from caching file handle: file=\"%s\", offset=%llu, bytes=%lld",
-		                  handle.GetPath().c_str(), location, nr_bytes);
-	}
-
-	// Copy data from cached buffer handle to user's buffer.
-	memcpy(buffer, cached_buffer, NumericCast<size_t>(nr_bytes));
+	auto group = caching_handle->Read(NumericCast<idx_t>(nr_bytes), location);
+	group.CopyTo(static_cast<data_ptr_t>(buffer), NumericCast<idx_t>(nr_bytes));
 }
 
 int64_t CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {

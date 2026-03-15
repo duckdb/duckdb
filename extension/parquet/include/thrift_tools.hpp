@@ -14,6 +14,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/file_buffer_handle_group.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
 
@@ -27,8 +28,8 @@ struct ReadHead {
 	uint64_t size;
 
 	// Current info
-	BufferHandle buffer_handle;
-	data_ptr_t buffer_ptr;
+	FileBufferHandleGroup handle_group;
+	data_ptr_t buffer_ptr = nullptr;
 	bool data_isset = false;
 
 	idx_t GetEnd() const {
@@ -116,8 +117,8 @@ struct ReadAheadBuffer {
 			if (read_head.GetEnd() > file_handle.GetFileSize()) {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
-			read_head.buffer_handle = file_handle.Read(read_head.buffer_ptr, read_head.size, read_head.location);
-			D_ASSERT(read_head.buffer_handle.IsValid());
+			read_head.handle_group = file_handle.Read(read_head.size, read_head.location);
+			read_head.buffer_ptr = read_head.handle_group.Ptr();
 			read_head.data_isset = true;
 		}
 	}
@@ -138,12 +139,11 @@ public:
 			D_ASSERT(location - prefetch_buffer->location + len <= prefetch_buffer->size);
 
 			if (!prefetch_buffer->data_isset) {
-				prefetch_buffer->buffer_handle =
-				    file_handle.Read(prefetch_buffer->buffer_ptr, prefetch_buffer->size, prefetch_buffer->location);
-				D_ASSERT(prefetch_buffer->buffer_handle.IsValid());
+				prefetch_buffer->handle_group =
+				    file_handle.Read(prefetch_buffer->size, prefetch_buffer->location);
+				prefetch_buffer->buffer_ptr = prefetch_buffer->handle_group.Ptr();
 				prefetch_buffer->data_isset = true;
 			}
-			D_ASSERT(prefetch_buffer->buffer_handle.IsValid());
 			memcpy(buf, prefetch_buffer->buffer_ptr + location - prefetch_buffer->location, len);
 		} else if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
 			Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, file_handle.GetFileSize() - location));

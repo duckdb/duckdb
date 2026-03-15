@@ -16,6 +16,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/file_buffer_handle_group.hpp"
 
 namespace duckdb {
 
@@ -40,11 +41,11 @@ public:
 public:
 	//! Get the underlying FileHandle
 	DUCKDB_API FileHandle &GetFileHandle();
-	//! Read (seek) nr_bytes from the file (or cache) at location. The pointer will be set to the requested range
-	//! The buffer is guaranteed to stay in memory as long as the returned BufferHandle is in scope
-	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
-	//! Read (non-seeking) nr bytes from the file (or cache), same as above, also sets nr_bytes to actually read bytes
-	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t &nr_bytes);
+	//! Read nr_bytes from the file (or cache) at location.
+	//! Returns a FileBufferHandleGroup that keeps the data pinned in memory.
+	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
+	//! Read (non-seeking) nr bytes from the file (or cache), sets nr_bytes to actually read bytes
+	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
