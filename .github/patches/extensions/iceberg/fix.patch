@@ -1,11 +1,11 @@
-commit 05d8866888b5683929e4529d46941904d79daa21
+commit ee90e7deab0c28c894b307edae7c17f0e27dd5b0
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 15 22:26:54 2026 +0000
 
     Sync DuckDB core interfaces
 
 diff --git a/src/deletes/deletion_vector.cpp b/src/deletes/deletion_vector.cpp
-index a3974c21..66a7bc11 100644
+index a3974c21..8c92993d 100644
 --- a/src/deletes/deletion_vector.cpp
 +++ b/src/deletes/deletion_vector.cpp
 @@ -2,6 +2,8 @@
@@ -34,7 +34,7 @@ index a3974c21..66a7bc11 100644
 +	auto handle_group = caching_file_handle->Read(length, offset);
 +	data_ptr_t buffer_data;
 +	AllocatedData local_buffer;
-+	if (handle_group.handles.size() == 1) {
++	if (handle_group.GetHandles().size() == 1) {
 +		buffer_data = handle_group.Ptr();
 +	} else {
 +		local_buffer = Allocator::DefaultAllocator().Allocate(length);
