@@ -19,7 +19,7 @@ enum class CacheBlockState : uint8_t {
 	LOADING,
 	// data available in block_handle (may be evicted by buffer manager)
 	LOADED,
-	 // I/O failed, error_message contains the reason
+	// I/O failed, error_message contains the reason
 	ERROR
 };
 
