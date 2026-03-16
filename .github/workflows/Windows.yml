@@ -274,6 +274,10 @@ jobs:
       - check-draft
      if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
+     env:
+       GEN: ninja
+       ENABLE_EXTENSION_AUTOLOADING: 1
+       ENABLE_EXTENSION_AUTOINSTALL: 1
      steps:
        - uses: actions/checkout@v4
          with:
@@ -283,35 +287,49 @@ jobs:
          with:
            python-version: '3.12'
 
-       - uses: msys2/setup-msys2@v2
-         with:
-           msystem: MINGW64
-           update: true
-           install: mingw-w64-x86_64-toolchain
-           cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
        - name: Dependencies
          shell: bash
          run: |
            choco install \
              ccache \
+             make \
              ninja \
+             --no-progress
+           choco install \
+             mingw --version 14.2.0 \
              --no-progress
 
        - uses: ./.github/actions/ccache-action
 
-       - name: Build
-         shell: cmd
+       - name: Build Environment
+         shell: bash
          run: |
-           set PATH=D:/a/_temp/msys/msys64/mingw64/bin;%PATH%
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="%OVERRIDE_GIT_DESCRIBE%"
-           cmake --build . --config Release 
+           # bash from Git
+           echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
+           # make, ninja and ccache from Chocolatey
+           echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
+           # g++ from Chocolatey
+           echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
 
-       - name: Test
+       - name: Build Environment Check
          shell: cmd
          run: |
-           copy src\libduckdb.dll .
-           test\unittest.exe
+           where bash
+           bash --version
+           where make
+           make --version
+           where ninja
+           ninja --version
+           where ccache
+           ccache --version
+           where g++
+           g++ --version
+           echo %PATH%
+
+       - name: Build and Test
+         shell: cmd
+         run: |
+           make unittest_release
 
  win-packaged-upload:
    runs-on: windows-latest
