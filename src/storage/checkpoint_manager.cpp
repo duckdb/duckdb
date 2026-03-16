@@ -62,7 +62,7 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	checkpoint_context->transaction.BeginTransaction();
 	checkpoint_context->transaction.SetReadOnly();
 	auto &transaction = DuckTransaction::Get(*checkpoint_context, db);
-	transaction.is_checkpoint_transaction = true;
+	transaction.SetIsCheckpointTransaction();
 	checkpoint_transaction = &transaction;
 	options.transaction_id = transaction.start_time;
 	transaction_manager.SetActiveCheckpoint(transaction.start_time);
@@ -210,7 +210,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// If there is a context (non shutdown path): this will create a new connection for the checkpoint, then in
 	// WALStartCheckpoint we will create a transaction for the checkpoint.
 	ActiveCheckpointWrapper active_checkpoint(context, db, transaction_manager);
-	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, &active_checkpoint);
+	auto has_wal = storage_manager.WALStartCheckpoint(meta_block, options, active_checkpoint);
 
 	catalog_entry_vector_t catalog_entries;
 	try {

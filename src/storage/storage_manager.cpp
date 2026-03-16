@@ -204,18 +204,18 @@ bool StorageManager::HasWAL() const {
 }
 
 bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
-                                        optional_ptr<ActiveCheckpointWrapper> active_checkpoint) {
+                                        ActiveCheckpointWrapper &active_checkpoint) {
 	unique_ptr<lock_guard<mutex>> guard;
 	// Lock ordering: WAL lock -> transaction lock (in GetCheckpointTransaction)
 	if (!options.wal_lock) {
 		// not holding the WAL lock yet - grab it
 		guard = GetWALLock();
 	}
-	if (active_checkpoint && active_checkpoint->HasCheckpointContext()) {
+	if (active_checkpoint.HasCheckpointContext()) {
 		// While holding the WAL lock, if we have a context then start a checkpoint transaction.
 		// The start time of this transaction defines the visibility for checkpointing, any new commits are written
 		// to the next WAL.
-		active_checkpoint->GetCheckpointTransaction(options);
+		active_checkpoint.GetCheckpointTransaction(options);
 	} else {
 		auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
 		options.transaction_id = transaction_manager.GetLastCommit();

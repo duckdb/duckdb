@@ -111,7 +111,7 @@ DuckTransactionManager::CheckpointDecision::~CheckpointDecision() {
 
 bool DuckTransactionManager::HasOtherTransactions(DuckTransaction &transaction) {
 	for (auto &active_transaction : active_transactions) {
-		if (!RefersToSameObject(*active_transaction, transaction) && !active_transaction->is_checkpoint_transaction) {
+		if (!RefersToSameObject(*active_transaction, transaction)) {
 			return true;
 		}
 	}

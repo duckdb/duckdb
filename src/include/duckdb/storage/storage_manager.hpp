@@ -81,7 +81,7 @@ public:
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
 	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
-	                        optional_ptr<ActiveCheckpointWrapper> active_checkpoint = nullptr);
+	                        ActiveCheckpointWrapper &active_checkpoint);
 	//! Finishes a checkpoint
 	void WALFinishCheckpoint(lock_guard<mutex> &wal_lock);
 	// Get the WAL lock
