@@ -26,8 +26,9 @@ private:
 public:
 	//! Compute cost of a join relation set
 	double ComputeCost(DPJoinNode &left, DPJoinNode &right);
+	CardinalityEstimator &GetCardinalityEstimator();
 
-public:
+private:
 	CardinalityEstimator &cardinality_estimator;
 };
 

@@ -568,7 +568,7 @@ optional_ptr<JoinRelationSet> RelationManager::GetJoinRelations(column_binding_s
 	return *ret;
 }
 
-bool RelationManager::ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings) {
+void RelationManager::ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
@@ -580,20 +580,20 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<Rela
 			// Here we return true and don't fill the bindings, the expression can be reordered.
 			// A filter will be created using this expression, and pushed back on top of the parent
 			// operator during plan reconstruction
-			return true;
+			return;
 		}
 		if (relation_mapping.find(colref.binding.table_index) != relation_mapping.end()) {
 			bindings.insert(relation_mapping[colref.binding.table_index]);
 		}
 	}
 	if (expression.GetExpressionType() == ExpressionType::BOUND_REF) {
-		// bound expression
+		// bound expression, clear bindings as we can't use this
 		bindings.clear();
-		return false;
+		return;
 	}
 	D_ASSERT(expression.GetExpressionType() != ExpressionType::SUBQUERY);
+	// Recurse into children. Any child that is a BOUND_REF will clear `bindings` and return false
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { ExtractBindings(expr, bindings); });
-	return true;
 }
 
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,

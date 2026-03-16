@@ -264,19 +264,24 @@ double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterIn
 	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
 }
 
+static double CalculateLeftJoinEffectiveD(double left_card, double right_card, double raw_d) {
+	// Compute the effective distinct count for a LEFT join condition.
+	// Caps raw_d at |RHS| so the estimate equals max(|LHS|, inner_estimate), and floors it at
+	// min(|LHS|, |RHS|) to prevent the estimate from exceeding max(|LHS|, |RHS|).
+	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
+	if (left_card > 0 && right_card > 0) {
+		effective_d = MaxValue(effective_d, MinValue(left_card, right_card));
+	}
+	return effective_d;
+}
+
 double CardinalityEstimator::CalculateLeftJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
 	// For LEFT joins, cap the effective distinct count at |RHS|
 	// This makes the denominator min(D, |RHS|), so the estimate equals:
 	//   |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate) - where inner_estimate = |LHS| * |RHS| / D
 	auto left_card = GetNumerator(*filter.filter_info->left_set);
 	auto right_card = GetNumerator(*filter.filter_info->right_set);
-	auto raw_d = filter.GetDistinctCount();
-	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
-	// Floor effective_d at min(|LHS|, |RHS|) to prevent the estimate from exceeding max(|LHS|, |RHS|)
-	if (left_card > 0 && right_card > 0) {
-		effective_d = MaxValue(effective_d, MinValue(left_card, right_card));
-	}
-
+	auto effective_d = CalculateLeftJoinEffectiveD(left_card, right_card, filter.GetDistinctCount());
 	auto comparison_type = GetComparisonType(filter);
 	if (comparison_type == ExpressionType::INVALID) {
 		return base_denom * effective_d;
@@ -358,15 +363,16 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			if (edge.filter_info->join_type == JoinType::LEFT) {
 				auto &right_key = *edge.filter_info->right_set;
 				if (left_join_denom_applied.insert(right_key).second) {
+					auto left_card = GetNumerator(*edge.filter_info->left_set);
 					auto right_card = GetNumerator(*edge.filter_info->right_set);
-					auto raw_d = edge.GetDistinctCount();
-					auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
-					subgraphs.at(0).denom *= effective_d;
+					subgraphs.at(0).denom *=
+					    CalculateLeftJoinEffectiveD(left_card, right_card, edge.GetDistinctCount());
 				}
 			} else if (edge.filter_info->edge_equivalence_index.IsValid() &&
 			           applied_equivalence_groups.count(edge.filter_info->edge_equivalence_index.GetIndex())) {
-				// This edge's equality constraint is already captured by previously applied edges
-				// in the same equivalence group — skip the penalty entirely.
+				// Transitively implied by equality conditions already used to build the subgraph,
+				// skip the penalty entirely
+				continue;
 			} else if (edge.has_distinct_count_hll) {
 				unused_edge_tdoms.insert(edge.distinct_count_hll);
 			}
@@ -408,10 +414,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 				if (edge.filter_info->join_type == JoinType::LEFT) {
 					auto &right_key = *edge.filter_info->right_set;
 					if (left_join_denom_applied.insert(right_key).second) {
+						auto left_card = GetNumerator(*edge.filter_info->left_set);
 						auto right_card = GetNumerator(*edge.filter_info->right_set);
-						auto raw_d = edge.GetDistinctCount();
-						auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
-						left_subgraph->denom *= effective_d;
+						left_subgraph->denom *=
+						    CalculateLeftJoinEffectiveD(left_card, right_card, edge.GetDistinctCount());
 					}
 				}
 				continue;

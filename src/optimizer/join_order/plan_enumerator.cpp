@@ -134,7 +134,7 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	// need the filter info from the Neighborhood info.
 	auto cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<DPJoinNode>(set, best_connection, left.set, right.set, cost);
-	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet<idx_t>(set);
+	result->cardinality = cost_model.GetCardinalityEstimator().EstimateCardinalityWithSet<idx_t>(set);
 	return result;
 }
 
@@ -465,8 +465,8 @@ void PlanEnumerator::InitLeafPlans() {
 	// first initialize equivalent relations based on the filters
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 
-	cost_model.cardinality_estimator.InitEquivalentRelations(query_graph_manager.GetFilterBindings());
-	cost_model.cardinality_estimator.AddRelationNamesToRelationStats(relation_stats);
+	cost_model.GetCardinalityEstimator().InitEquivalentRelations(query_graph_manager.GetFilterBindings());
+	cost_model.GetCardinalityEstimator().AddRelationNamesToRelationStats(relation_stats);
 
 	// then update the total domains based on the cardinalities of each relation.
 	for (idx_t i = 0; i < relation_stats.size(); i++) {
@@ -477,7 +477,7 @@ void PlanEnumerator::InitLeafPlans() {
 		join_node->cardinality = stats.cardinality;
 		D_ASSERT(join_node->set.count == 1);
 		plans[relation_set] = std::move(join_node);
-		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(&relation_set, stats);
+		cost_model.GetCardinalityEstimator().InitCardinalityEstimatorProps(&relation_set, stats);
 	}
 }
 

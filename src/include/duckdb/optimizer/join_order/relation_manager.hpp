@@ -53,11 +53,8 @@ public:
 	                                            JoinRelationSetManager &set_manager);
 
 	//! Extract the set of relations referred to inside an expression
-	bool ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings);
+	void ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings);
 
-	optional_ptr<JoinRelationSet> GetJoinRelations(column_binding_set_t &column_bindings,
-	                                               JoinRelationSetManager &set_manager);
-	void GetColumnBindingsFromExpression(Expression &expression, column_binding_set_t &column_bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
 	//! Add an unnest relation which can come from a logical unnest or a logical get which has an unnest function
 	void AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
@@ -81,6 +78,10 @@ private:
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<SingleJoinRelation>> relations;
 	unordered_set<idx_t> no_cross_product_relations;
+
+	optional_ptr<JoinRelationSet> GetJoinRelations(column_binding_set_t &column_bindings,
+	                                               JoinRelationSetManager &set_manager);
+	void GetColumnBindingsFromExpression(Expression &expression, column_binding_set_t &column_bindings);
 };
 
 } // namespace duckdb
