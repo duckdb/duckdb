@@ -1211,6 +1211,18 @@ idx_t ParquetReader::NumRowGroups() const {
 	return GetFileMetadata()->row_groups.size();
 }
 
+idx_t ParquetReader::GetFileSize() const {
+	return file_handle->GetFileSize();
+}
+
+idx_t ParquetReader::GetDataSize() const {
+	idx_t data_size = 0;
+	for (auto &row_group : GetFileMetadata()->row_groups) {
+		data_size += row_group.total_compressed_size;
+	}
+	return data_size;
+}
+
 ParquetScanFilter::ParquetScanFilter(ClientContext &context, idx_t filter_idx, TableFilter &filter)
     : filter_idx(filter_idx), filter(filter) {
 	filter_state = TableFilterState::Initialize(context, filter);
@@ -1384,20 +1396,36 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
-				bool lazy_fetch = filters != nullptr;
+				bool lazy_fetch = false;
+				if (filters) {
+					// check if any filter is non-optional
+					bool has_non_optional_filter = false;
+					for (auto &entry : filters->filters) {
+						if (entry.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+							has_non_optional_filter = true;
+						}
+					}
+					if (has_non_optional_filter) {
+						lazy_fetch = true;
+					}
+				}
 
 				// Prefetch column-wise
+				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 				for (idx_t i = 0; i < column_ids.size(); i++) {
 					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = column_ids[col_idx];
-					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
 					bool has_filter = false;
 					if (filters) {
 						auto entry = filters->filters.find(col_idx);
-						has_filter = entry != filters->filters.end();
+						if (entry != filters->filters.end()) {
+							if (entry->second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+								has_filter = true;
+							}
+						}
 					}
-					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
+					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !has_filter);
 				}
 
 				trans.FinalizeRegistration();
