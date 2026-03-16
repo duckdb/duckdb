@@ -198,10 +198,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileName(PEGTra
                                                                           optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
-	if (choice_pr->name == "Expression") {
+	if (choice_pr->name == "ParensExpression" || choice_pr->name == "Parameter") {
 		return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
 	}
-	auto file_name = transformer.Transform<string>(list_pr.Child<ChoiceParseResult>(0).result);
+	string file_name;
+	if (choice_pr->type == ParseResultType::IDENTIFIER) {
+		file_name = choice_pr->Cast<IdentifierParseResult>().identifier;
+	} else {
+		file_name = transformer.Transform<string>(choice_pr);
+	}
 	return make_uniq<ConstantExpression>(Value(file_name));
 }
 

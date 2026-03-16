@@ -1,0 +1,52 @@
+{
+  "description": "Failed tests from backwards compatibility testing with v1.4.0.",
+  "skip_tests": [
+    {
+      "reason": "Attempting to commit read-only transaction with changes",
+      "paths": [
+        "test/sql/copy/csv/unquoted_escape/human_eval.test",
+        "test/sql/copy/parquet/parquet_encryption_httpfs.test"
+      ]
+    },
+    {
+      "reason": "Catalog does not exist",
+      "paths": [
+        "test/sql/copy/encryption/different_aes_ciphers.test"
+      ]
+    },
+    {
+      "reason": "No files found that match the pattern",
+      "paths": [
+        "test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test"
+      ]
+    },
+    {
+      "reason": "Unsupported type for deserialization of LogicalOperator",
+      "paths": [
+        "test/sql/secrets/create_secret_scope_matching.test"
+      ]
+    },
+    {
+      "reason": "File system disabled by configuration",
+      "paths": [
+        "test/sql/settings/test_disabled_file_system_httpfs.test"
+      ]
+    },
+    {
+      "reason": "Unknown failure (empty reason)",
+      "paths": [
+        "test/sql/copy/parquet/test_parquet_remote.test",
+        "test/sql/cte/recursive_cte_key_variant.test",
+        "test/sql/table_function/test_information_schema_columns.test",
+        "test/sql/table_function/test_range_function.test"
+      ]
+    },
+    {
+      "reason": "Profiling result type mismatch",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_blocked_thread_time.test",
+        "test/sql/pragma/profiling/test_profiling_fs.test"
+      ]
+    }
+  ]
+}

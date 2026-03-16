@@ -88,8 +88,11 @@ const string &HTTPResponse::GetError() const {
 	return request_error.empty() ? reason : request_error;
 }
 
+HTTPUtil::HTTPUtil() {
+}
+
 HTTPUtil &HTTPUtil::Get(DatabaseInstance &db) {
-	return *db.config.http_util;
+	return db.config.GetHTTPUtil();
 }
 
 string HTTPUtil::GetName() const {

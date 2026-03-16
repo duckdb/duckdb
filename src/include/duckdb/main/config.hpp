@@ -97,7 +97,7 @@ struct DBConfigOptions {
 	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
-	//! Checkpoint when WAL reaches this size (default: 16MB)
+	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
@@ -201,8 +201,6 @@ public:
 	shared_ptr<BufferManager> buffer_manager;
 	//! Encryption Util for OpenSSL and MbedTLS
 	shared_ptr<EncryptionUtil> encryption_util;
-	//! HTTP Request utility functions
-	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 	//! Reference to the database file path manager
@@ -308,6 +306,8 @@ public:
 	string SanitizeAllowedPath(const string &path) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
+	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
+	HTTPUtil &GetHTTPUtil() const;
 
 private:
 	mutable mutex config_lock;
@@ -319,6 +319,10 @@ private:
 	unique_ptr<IndexTypeSet> index_types;
 	unique_ptr<ExtensionCallbackManager> callback_manager;
 	bool is_user_config = true;
+	//! HTTP Request utility functions
+	shared_ptr<HTTPUtil> http_util;
+	vector<shared_ptr<HTTPUtil>> old_http_utils;
+	mutex http_util_lock;
 };
 
 } // namespace duckdb

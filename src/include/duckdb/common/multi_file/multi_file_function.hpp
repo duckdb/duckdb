@@ -53,7 +53,13 @@ struct MultiFileReaderInterface {
 	                                                const MultiFileOptions &file_options);
 	virtual void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                           LocalTableFunctionState &local_state);
-	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;
+	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
+		return nullptr;
+	}
+	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context, const MultiFileBindData &bind_data,
+	                                                  idx_t file_count) {
+		return GetCardinality(bind_data, file_count);
+	}
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
 	virtual FileGlobInput GetGlobInput();
@@ -635,7 +641,7 @@ public:
 			}
 			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 				// Loop back to the same block
-				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					continue;
 				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
@@ -648,14 +654,14 @@ public:
 			}
 
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				if (scan_chunk.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					gstate.finished = true;
 					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				} else {
 					data_p.async_result = SourceResultType::FINISHED;
 				}
 			} else {
-				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					continue;
 				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
@@ -769,6 +775,22 @@ public:
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
+		if (data.file_options.union_by_name) {
+			// for UNION BY NAME - check if we can get a cardinality estimate from the (already opened) union readers
+			bool has_exact_cardinality = true;
+			idx_t cardinality = 0;
+			for (auto &union_data : data.union_readers) {
+				auto file_cardinality = union_data->TryGetCardinalityEstimate();
+				if (!file_cardinality.IsValid()) {
+					has_exact_cardinality = false;
+					break;
+				}
+				cardinality += file_cardinality.GetIndex();
+			}
+			if (has_exact_cardinality) {
+				return make_uniq<NodeStatistics>(cardinality);
+			}
+		}
 		// get the file count - for >500 files we allow an estimate
 		auto count_info = data.file_list->GetFileCount(500);
 		idx_t estimated_file_count = count_info.count;
@@ -776,7 +798,7 @@ public:
 			// not all files have been expanded - it's probably twice as many files
 			estimated_file_count *= 2;
 		}
-		return data.interface->GetCardinality(data, estimated_file_count);
+		return data.interface->GetCardinality(context, data, estimated_file_count);
 	}
 
 	static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
