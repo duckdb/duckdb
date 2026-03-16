@@ -252,6 +252,7 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 	multimap<Value, RowGroupOffsetEntry> ordered_row_groups;
 	idx_t new_row_offset = row_offset;
 	idx_t leading_null_group_offset = 0;
+	bool encountered_maybe_null_group = false;
 
 	for (auto &partition_stats : stats) {
 		if (partition_stats.count_type == CountType::COUNT_APPROXIMATE || !partition_stats.partition_row_group) {
@@ -275,15 +276,23 @@ OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatis
 				continue;
 			}
 			// The row group might still contribute ordered values, but we cannot position it safely.
+			if (null_order == OrderByNullType::NULLS_FIRST) {
+				encountered_maybe_null_group = true;
+				continue;
+			}
 			return {new_row_offset, 0, leading_null_group_offset};
 		}
 		if (null_order == OrderByNullType::NULLS_FIRST && column_stats->CanHaveNull()) {
 			// Groups that might contain NULLs are scanned before definitely non-null groups with NULLS_FIRST.
 			// Without exact NULL counts, they block further offset pruning into the non-null region.
-			return {new_row_offset, 0, leading_null_group_offset};
+			encountered_maybe_null_group = true;
+			continue;
 		}
 		auto entry = RowGroupOffsetEntry {partition_stats.count, std::move(column_stats)};
 		ordered_row_groups.emplace(comparison_value, std::move(entry));
+	}
+	if (null_order == OrderByNullType::NULLS_FIRST && encountered_maybe_null_group) {
+		return {new_row_offset, 0, leading_null_group_offset};
 	}
 
 	switch (order_type) {
