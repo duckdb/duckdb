@@ -1,7 +1,6 @@
 #include "capi_tester.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test Custom Configuration Options in C API", "[capi]") {
 	CAPITester tester;
