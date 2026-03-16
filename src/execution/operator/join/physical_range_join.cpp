@@ -349,23 +349,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(PhysicalPlan &physical_plan, LogicalCompari
 	children.push_back(right);
 
 	//	Fill out the left projection map.
-	left_projection_map = op.left_projection_map;
-	if (left_projection_map.empty()) {
-		const auto left_count = children[0].get().GetTypes().size();
-		left_projection_map.reserve(left_count);
-		for (column_t i = 0; i < left_count; ++i) {
-			left_projection_map.emplace_back(i);
-		}
-	}
-	//	Fill out the right projection map.
-	right_projection_map = op.right_projection_map;
-	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().GetTypes().size();
-		right_projection_map.reserve(right_count);
-		for (column_t i = 0; i < right_count; ++i) {
-			right_projection_map.emplace_back(i);
-		}
-	}
+	left_projection_map = FillProjectionMap(children[0].get(), op.left_projection_map);
+	right_projection_map = FillProjectionMap(children[1].get(), op.right_projection_map);
 
 	//	Construct the unprojected type layout from the children's types
 	unprojected_types = children[0].get().GetTypes();

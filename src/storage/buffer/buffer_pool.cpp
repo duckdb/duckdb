@@ -1,5 +1,5 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
-
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/typedefs.hpp"

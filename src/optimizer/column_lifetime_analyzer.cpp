@@ -28,7 +28,7 @@ void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(const vector<ColumnBind
 
 void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> bindings,
                                                    column_binding_set_t &unused_bindings,
-                                                   vector<idx_t> &projection_map) {
+                                                   vector<ProjectionIndex> &projection_map) {
 	projection_map.clear();
 	if (unused_bindings.empty()) {
 		return;
@@ -37,7 +37,7 @@ void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> binding
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		// if this binding does not belong to the unused bindings, add it to the projection map
 		if (unused_bindings.find(bindings[i]) == unused_bindings.end()) {
-			projection_map.push_back(i);
+			projection_map.emplace_back(i);
 		}
 	}
 	if (projection_map.size() == bindings.size()) {
@@ -240,8 +240,8 @@ void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperato
 	ColumnBindingReplacer replacer;
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		const auto &old_binding = child_bindings[col_idx];
-		const auto new_col_idx = projection_column_count - 2 - col_idx * 2;
-		expressions[new_col_idx] = make_uniq<BoundColumnRefExpression>(child_types[col_idx], old_binding);
+		ProjectionIndex new_col_idx(projection_column_count - 2 - col_idx * 2);
+		expressions[new_col_idx.index] = make_uniq<BoundColumnRefExpression>(child_types[col_idx], old_binding);
 		replacer.replacement_bindings.emplace_back(old_binding, ColumnBinding(table_index, new_col_idx));
 	}
 

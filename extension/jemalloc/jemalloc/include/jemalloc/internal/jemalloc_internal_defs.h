@@ -205,7 +205,7 @@
 /* #undef JEMALLOC_EXPERIMENTAL_SMALLOCX_API */
 
 /* JEMALLOC_PROF enables allocation profiling. */
-/* #undef JEMALLOC_PROF */
+#define JEMALLOC_PROF
 
 /* Use libunwind for profile backtracing if defined. */
 /* #undef JEMALLOC_PROF_LIBUNWIND */
@@ -214,7 +214,7 @@
 /* #undef JEMALLOC_PROF_LIBGCC */
 
 /* Use gcc intrinsics for profile backtracing if defined. */
-/* #undef JEMALLOC_PROF_GCC */
+#define JEMALLOC_PROF_GCC
 
 /* JEMALLOC_PAGEID enabled page id */
 /* #undef JEMALLOC_PAGEID */

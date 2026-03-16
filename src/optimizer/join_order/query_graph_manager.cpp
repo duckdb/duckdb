@@ -131,11 +131,11 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				relation_manager.ExtractBindings(*comparison.left, left_bindings);
 				relation_manager.ExtractBindings(*comparison.right, right_bindings);
 				if (!filter_info->left_binding.table_index.IsValid() &&
-				    filter_info->left_binding.column_index == DConstants::INVALID_INDEX) {
+				    !filter_info->left_binding.column_index.IsValid()) {
 					GetColumnBinding(*comparison.left, filter_info->left_binding);
 				}
 				if (!filter_info->right_binding.table_index.IsValid() &&
-				    filter_info->right_binding.column_index == DConstants::INVALID_INDEX) {
+				    !filter_info->right_binding.column_index.IsValid()) {
 					GetColumnBinding(*comparison.right, filter_info->right_binding);
 				}
 			}

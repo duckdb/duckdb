@@ -122,14 +122,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				idx_t column_id_filter = filter_idx;
 				bool found_projection = false;
 				for (idx_t i = 0; i < projection_ids.size(); i++) {
-					if (column_ids[projection_ids[i]] == column_ids[filter_idx]) {
+					if (column_ids[projection_ids[i].index] == column_ids[filter_idx]) {
 						column_id_filter = i;
 						found_projection = true;
 						break;
 					}
 				}
 				if (!found_projection) {
-					projection_ids.push_back(filter_idx);
+					projection_ids.push_back(ProjectionIndex(filter_idx));
 					column_id_filter = projection_ids.size() - 1;
 				}
 				auto column = make_uniq<BoundReferenceExpression>(column_type, column_id_filter);
@@ -144,7 +144,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		if (!select_list.empty()) {
 			vector<LogicalType> filter_types;
 			for (auto &c : projection_ids) {
-				auto column_id = column_ids[c].GetPrimaryIndex();
+				auto column_id = column_ids[c.index].GetPrimaryIndex();
 				if (IsVirtualColumn(column_id)) {
 					auto &column = virtual_columns.at(column_id);
 					filter_types.push_back(column.type);
@@ -204,11 +204,15 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		proj.children.push_back(table_scan);
 		return proj;
 	}
+	vector<idx_t> projection_indices;
+	for (auto &proj_id : op.projection_ids) {
+		projection_indices.push_back(proj_id.index);
+	}
 
-	auto &table_scan =
-	    Make<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types, column_ids,
-	                            op.projection_ids, op.names, std::move(table_filters), op.estimated_cardinality,
-	                            std::move(op.extra_info), std::move(op.parameters), std::move(op.virtual_columns));
+	auto &table_scan = Make<PhysicalTableScan>(
+	    op.types, op.function, std::move(op.bind_data), op.returned_types, column_ids, std::move(projection_indices),
+	    op.names, std::move(table_filters), op.estimated_cardinality, std::move(op.extra_info),
+	    std::move(op.parameters), std::move(op.virtual_columns));
 	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
 	cast_table_scan.dynamic_filters = op.dynamic_filters;
 	if (filter) {

@@ -660,6 +660,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructField(PEGTran
                                                                          optional_ptr<ParseResult> parse_result) {
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	if (alias[0] >= '0' && alias[0] <= '9') {
+		throw ParserException("syntax error at or near \"%s\"", alias);
+	}
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	expr->SetAlias(alias);
 	return expr;
@@ -1253,6 +1256,9 @@ PEGTransformerFactory::TransformAdditiveExpression(PEGTransformer &transformer,
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		auto func_expr = make_uniq<FunctionExpression>(std::move(term), std::move(term_children));
 		func_expr->is_operator = true;
+		if (inner_list_pr.offset.IsValid()) {
+			transformer.SetQueryLocation(*func_expr, inner_list_pr.offset);
+		}
 		expr = std::move(func_expr);
 	}
 	return expr;

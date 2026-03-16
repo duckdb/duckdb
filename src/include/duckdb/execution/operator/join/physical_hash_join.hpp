@@ -42,8 +42,9 @@ public:
 
 public:
 	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-	                 vector<JoinCondition> conds, JoinType join_type, const vector<idx_t> &left_projection_map,
-	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
+	                 vector<JoinCondition> conds, JoinType join_type,
+	                 const vector<ProjectionIndex> &left_projection_map,
+	                 const vector<ProjectionIndex> &right_projection_map, vector<LogicalType> delim_types,
 	                 idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 	PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
@@ -129,7 +130,7 @@ private:
 	void InitializeResidualPredicate(const vector<LogicalType> &lhs_input_types, const vector<idx_t> &probe_cols);
 
 	void InitializeBuildSide(const vector<LogicalType> &lhs_input_types, const vector<LogicalType> &rhs_input_types,
-	                         const vector<idx_t> &right_projection_map, const vector<idx_t> &build_cols);
+	                         const vector<ProjectionIndex> &right_projection_map, const vector<idx_t> &build_cols);
 	void MapResidualBuildColumns(const vector<LogicalType> &lhs_input_types, const vector<LogicalType> &rhs_input_types,
 	                             const vector<idx_t> &build_cols,
 	                             const unordered_map<idx_t, idx_t> &build_columns_in_conditions,
