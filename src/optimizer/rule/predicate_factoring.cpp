@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
@@ -36,6 +37,10 @@ static bool ColumnBindingIsvalid(const ColumnBinding &column_binding) {
 }
 
 static bool GetSingleColumnBinding(const Expression &expr, ColumnBinding &column_binding) {
+	if (expr.IsVolatile()) {
+		return false;
+	}
+
 	column_binding.table_index = DConstants::INVALID_INDEX;
 	column_binding.column_index = DConstants::INVALID_INDEX;
 

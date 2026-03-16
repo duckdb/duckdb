@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
