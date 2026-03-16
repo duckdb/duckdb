@@ -4,7 +4,6 @@
 #include "duckdb/main/db_instance_cache.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 void TestConnectToDatabase(const string &path, bool create_table = false) {
 	// connect to the database using the standard syntax
