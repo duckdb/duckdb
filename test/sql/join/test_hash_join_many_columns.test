@@ -1,5 +1,5 @@
 # name: test/sql/join/test_hash_join_many_columns.test
-# description: Test hash join with many columns
+# description: Divide by 0 in GetPartitioningSpaceRequirement, inlined by PhysicalHashJoin::PrepareFinalize when running a query with 20k columns (PR #21271)
 # group: [join]
 
 statement ok
