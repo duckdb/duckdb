@@ -9,7 +9,6 @@
 #include "duckdb/main/extension_manager.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 struct TestSecretLog {
 	duckdb::mutex lock;

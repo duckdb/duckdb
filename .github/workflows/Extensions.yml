@@ -10,6 +10,10 @@ on:
         type: string
       git_ref:
         type: string
+      extra_exclude_archs:
+        type: string
+        required: false
+        default: ''
       skip_tests:
         type: string
       run_all:
@@ -67,27 +71,10 @@ env:
   BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
 
 jobs:
-  check-draft:
-    # We run all other jobs on PRs only if they are not draft PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Preliminary checks on CI
-        run: echo "Event name is ${{ github.event_name }}"
-
-  vars:
-    runs-on: ubuntu-24.04
-    needs: check-draft
-    outputs:
-      BRANCHES_TO_BE_CACHED: ${{ env.BRANCHES_TO_BE_CACHED }}
-    steps:
-      - run: echo "Exposing env vars"
-
   # This first step loads the various extension configs from the ~/.github/config directory storing them to drive the build jobs
   load-extension-configs:
     name: Load Extension Configs
     runs-on: ubuntu-latest
-    needs: check-draft
     outputs:
       # NOTE: on PRs we exclude some archs to speed things up
       reduced_ci_mode: ${{ (github.event_name == 'pull_request' || inputs.run_all != 'true') && 'enabled' || 'disabled' }}
@@ -103,7 +90,7 @@ jobs:
       EXTRA_EXCLUDE_ARCHS: ${{ inputs.extra_exclude_archs }}
       OPT_IN_ARCHS: ${{ inputs.opt_in_archs }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -158,7 +145,6 @@ jobs:
     name: ${{ matrix.name }}
     needs:
       - load-extension-configs
-      - vars
     strategy:
       fail-fast: false
       matrix:
@@ -200,7 +186,7 @@ jobs:
       use_merged_vcpkg_manifest: '1'
       duckdb_tag: ${{ inputs.override_git_describe }}
       skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
-      save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
+      save_cache: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
       extensions_test_selection: 'complete'
       extra_extension_config: ${{ matrix.extension_config }}
 
@@ -211,25 +197,25 @@ jobs:
     needs:
       - extensions-build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - uses: ./.github/actions/cleanup_runner
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download main extensions
         with:
           pattern: main-extensions*
           path: /tmp/repository_generation/main-extensions
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download rust-based extensions
         with:
           pattern: rust-based-extensions*
           path: /tmp/repository_generation/rust-based-extensions
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download external extensions
         with:
           pattern: external-extensions*
@@ -241,11 +227,11 @@ jobs:
 
       - name: Merge into single repository
         run: |
-          mkdir /tmp/merged_repository
-          cp -r  /tmp/repository_generation/*/*/* /tmp/merged_repository
+          mkdir -p /tmp/merged_repository/${{ inputs.git_ref }}
+          cp -r /tmp/repository_generation/*/*/* /tmp/merged_repository/${{ inputs.git_ref }}
           tree /tmp/merged_repository
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
           name: extension-repository
@@ -260,16 +246,16 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - uses: ./.github/actions/cleanup_runner
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: extension-repository
-          path: /tmp
+          path: /tmp/extension-repository
 
       - name: List extensions to deploy
         shell: bash
@@ -295,21 +281,21 @@ jobs:
     needs: create-extension-repository
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
       - name: Setup Build Environment
         run: |
-          make toolsci
+          python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           pattern: extension-repository
-          path: /tmp
+          path: /tmp/extension-repository
 
       - name: List extensions to test with
         shell: bash
@@ -326,7 +312,7 @@ jobs:
           ENABLE_EXTENSION_AUTOLOADING: 1
           ENABLE_EXTENSION_AUTOINSTALL: 1
         run: |
-          make release
+          python3 scripts/ci/retry.py -- make release
 
       - name: Run Tests
         env:
@@ -346,18 +332,18 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.9'
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -367,13 +353,13 @@ jobs:
           GENERATE_EXTENSION_ENTRIES: 1
           LOCAL_EXTENSION_REPO: build/release/repository_other
         run: |
-          make
+          python3 scripts/ci/retry.py -- make
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         name: Download extension repository artifact
         with:
           pattern: extension-repository
-          path: /tmp
+          path: /tmp/extension-repository
 
       - name: Copy over local extension repository
         shell: bash
@@ -395,7 +381,7 @@ jobs:
           pip install "clang_format==11.0.1"
           make format-fix
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: extension_entries.hpp
           path: |
