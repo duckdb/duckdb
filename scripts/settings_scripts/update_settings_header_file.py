@@ -54,7 +54,7 @@ def extract_declarations(setting) -> str:
             definition += f"    static constexpr SettingScopeTarget Scope = SettingScopeTarget::{setting.scope}_ONLY;\n"
         if setting.setting_index is None:
             raise Exception("Setting index was not set")
-        definition += f"    static constexpr idx_t SettingIndex = {setting.setting_index};\n"
+        definition += f"    static constexpr idx_t SettingIndex = __COUNTER__ - SETTING_INDEX_BASE;\n"
         if setting.on_set:
             definition += f"    static void OnSet(SettingCallbackInfo &info, Value &input);\n"
 
