@@ -51,6 +51,57 @@ SELECT CASE WHEN checkpoint_latency = 0 THEN 'true' ELSE 'false' END FROM '__TES
 true
 
 statement ok
+INSERT INTO checkpoint_prof.tbl SELECT range + 100000, range % 100 FROM range(10000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/cp_first.json';
+
+statement ok
+CHECKPOINT checkpoint_prof;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE TABLE first_cp AS SELECT checkpoint_latency AS latency FROM '__TEST_DIR__/cp_first.json';
+
+query I
+SELECT CASE WHEN latency > 0 THEN 'true' ELSE 'false' END FROM first_cp;
+----
+true
+
+statement ok
+INSERT INTO checkpoint_prof.tbl SELECT range + 200000, range % 100 FROM range(10000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/cp_second.json';
+
+statement ok
+CHECKPOINT checkpoint_prof;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE TABLE second_cp AS SELECT checkpoint_latency AS latency FROM '__TEST_DIR__/cp_second.json';
+
+query I
+SELECT CASE WHEN latency > 0 THEN 'true' ELSE 'false' END FROM second_cp;
+----
+true
+
+query I
+SELECT CASE WHEN (SELECT latency FROM first_cp) + (SELECT latency FROM second_cp) > (SELECT latency FROM first_cp) THEN 'true' ELSE 'false' END;
+----
+true
+
+statement ok
 INSERT INTO checkpoint_prof.tbl SELECT range + 1000000, range % 100 FROM range(10000);
 
 concurrentloop threadid 0 10
