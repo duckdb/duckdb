@@ -93,8 +93,9 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 			break;
 		}
 	}
-	if (!needs_preprocessing)
+	if (!needs_preprocessing) {
 		return;
+	}
 
 	context.RunFunctionInTransactionInternal(lock, [&] { PreprocessInternal(lock, statements, transaction_context); });
 }
