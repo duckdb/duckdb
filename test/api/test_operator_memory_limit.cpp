@@ -2,7 +2,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test operator_memory_limit session isolation", "[api][memory]") {
 	DuckDB db(nullptr);

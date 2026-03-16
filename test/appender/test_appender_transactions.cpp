@@ -5,7 +5,6 @@
 #include <vector>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test the way appenders interact with transactions", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;

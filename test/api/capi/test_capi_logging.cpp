@@ -4,7 +4,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 class CustomLogStore {
 public:

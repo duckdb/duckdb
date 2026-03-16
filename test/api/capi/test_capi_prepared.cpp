@@ -4,7 +4,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test prepared statements in C API", "[capi]") {
 	CAPITester tester;
@@ -327,10 +326,10 @@ TEST_CASE("Test duckdb_prepared_statement return value APIs", "[capi]") {
 	                       DUCKDB_TYPE_DOUBLE};
 
 	for (idx_t i = 0; i < 5; i++) {
-		REQUIRE(duckdb_prepared_statement_column_type(stmt, i) == *next(expected_types.begin(), i));
+		REQUIRE(duckdb_prepared_statement_column_type(stmt, i) == *std::next(expected_types.begin(), i));
 		auto logical_type = duckdb_prepared_statement_column_logical_type(stmt, i);
 		REQUIRE(logical_type);
-		REQUIRE(duckdb_get_type_id(logical_type) == *next(expected_types.begin(), i));
+		REQUIRE(duckdb_get_type_id(logical_type) == *std::next(expected_types.begin(), i));
 		duckdb_destroy_logical_type(&logical_type);
 	}
 

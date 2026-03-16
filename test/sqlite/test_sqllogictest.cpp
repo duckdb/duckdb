@@ -13,7 +13,6 @@
 #include <vector>
 
 using namespace duckdb;
-using namespace std;
 
 // code below traverses the test directory and makes individual test cases out
 // of each script

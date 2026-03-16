@@ -2,7 +2,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test prepared statements API", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;

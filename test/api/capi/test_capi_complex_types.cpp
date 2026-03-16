@@ -5,7 +5,6 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test decimal types C API", "[capi]") {
 	CAPITester tester;

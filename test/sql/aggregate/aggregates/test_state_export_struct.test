@@ -14,11 +14,11 @@ create table dummy as select range % 10 g, range d from range(100);
 # ungrouped aggr
 
 query IIIIIIIIIII nosort res0
-SELECT sum(d), avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM dummy;
+SELECT sum(d), avg(d)::integer, count(d), min(d), max(d), first(d), last(d), kurtosis(d), kurtosis_pop(d) FROM dummy;
 ----
 
 query IIIIIIIIIII nosort res0
-SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy;
+SELECT finalize(sum(d) EXPORT_STATE), finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(kurtosis(d) EXPORT_STATE), finalize(kurtosis_pop(d) EXPORT_STATE) FROM dummy;
 ----
 
 # grouped aggr
@@ -268,29 +268,29 @@ select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join sta
 
 # empty groups
 query IIIIIIIIIII nosort res4
-SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM dummy WHERE FALSE;
+SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d), kurtosis(d), kurtosis_pop(d) FROM dummy WHERE FALSE;
 ----
 
 query IIIIIIIIIII nosort res4
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(kurtosis(d) EXPORT_STATE), finalize(kurtosis_pop(d) EXPORT_STATE) FROM dummy WHERE FALSE;
 ----
 
 # only null scanned
 query IIIIIIIIIII nosort res5
-SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM (SELECT NULL::integer d);
+SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d), kurtosis(d), kurtosis_pop(d) FROM (SELECT NULL::integer d);
 ----
 
 query IIIIIIIIIII nosort res5
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(kurtosis(d) EXPORT_STATE), finalize(kurtosis_pop(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
 ----
 
 # only null scanned, but grouped
 query IIIIIIIIIII nosort res6
-SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d) FROM (SELECT NULL::integer d, g FROM dummy);
+SELECT avg(d)::integer, count(d), min(d), max(d), first(d), last(d), kurtosis(d), kurtosis_pop(d) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 query IIIIIIIIIII nosort res6
-SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(kurtosis(d) EXPORT_STATE), finalize(kurtosis_pop(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
 ----
 
 
@@ -373,6 +373,50 @@ query T
 SELECT (bit_xor(100) export_state)::struct(is_set boolean, value bigint);
 ----
 {'is_set': true, 'value': 100}
+
+# kurtosis and kurtosis_pop
+
+query I nosort res_kurtosis0
+SELECT kurtosis(d) FROM dummy;
+----
+
+query I nosort res_kurtosis0
+SELECT finalize(kurtosis(d) EXPORT_STATE) FROM dummy;
+----
+
+query I nosort res_kurtosis_pop0
+SELECT kurtosis_pop(d) FROM dummy;
+----
+
+query I nosort res_kurtosis_pop0
+SELECT finalize(kurtosis_pop(d) EXPORT_STATE) FROM dummy;
+----
+
+query II nosort res_kurtosis1
+SELECT g, kurtosis(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res_kurtosis1
+SELECT g, finalize(kurtosis(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res_kurtosis_pop1
+SELECT g, kurtosis_pop(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res_kurtosis_pop1
+SELECT g, finalize(kurtosis_pop(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query T
+SELECT kurtosis(d) EXPORT_STATE FROM dummy;
+----
+{'n': 100, 'sum': 4950.0, 'sum_sqr': 328350.0, 'sum_cub': 24502500.0, 'sum_four': 1950333330.0}
+
+query T
+SELECT kurtosis_pop(d) EXPORT_STATE FROM dummy;
+----
+{'n': 100, 'sum': 4950.0, 'sum_sqr': 328350.0, 'sum_cub': 24502500.0, 'sum_four': 1950333330.0}
 
 # You're holding it wrong:
 

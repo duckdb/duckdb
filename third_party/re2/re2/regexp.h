@@ -518,7 +518,7 @@ class Regexp {
   void AllocSub(int n) {
     DCHECK(n >= 0 && static_cast<uint16_t>(n) == n);
     if (n > 1)
-      submany_ = new Regexp*[n];
+      submany_ = new Regexp*[static_cast<size_t>(n)];
     nsub_ = static_cast<uint16_t>(n);
   }
 

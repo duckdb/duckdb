@@ -2,7 +2,6 @@
 #include "duckdb.h"
 
 using namespace duckdb;
-using namespace std;
 
 int64_t Difference(int64_t left, int64_t right) {
 	return abs(left - right);

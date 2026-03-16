@@ -16,7 +16,6 @@
 #endif
 
 using namespace duckdb;
-using namespace std;
 
 static void create_dummy_file(string fname) {
 	string normalized_string;
@@ -848,7 +847,7 @@ TEST_CASE("Path attributes", "[file_system]") {
 	std::string input;
 
 	SECTION("IsAbsolute + IsLocal") {
-		bool is_absolute_exp, is_local_exp;
+		bool is_absolute_exp = false, is_local_exp = false;
 		enum AbsType { REL = false, ABS = true };
 		enum LocalTypeType { REMOTE = false, LOCAL_ = true };
 
@@ -885,7 +884,7 @@ TEST_CASE("Path attributes", "[file_system]") {
 	}
 
 	SECTION("HasTrailingSeparator") {
-		bool exp;
+		bool exp = false;
 
 		// clang-format off
 		SECTION("posix and URI") {

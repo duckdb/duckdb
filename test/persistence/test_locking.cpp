@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 using namespace duckdb;
-using namespace std;
 
 #define BOOL_COUNT 3
 

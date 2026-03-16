@@ -5,7 +5,6 @@
 #include <vector>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Abort appender due to primary key conflict", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;

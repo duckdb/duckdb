@@ -4,7 +4,6 @@
 #include "duckdb/common/types/hugeint.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 template <class SRC>
 void TestAppendingSingleDecimalValue(SRC value, Value expected_result, uint8_t width, uint8_t scale) {

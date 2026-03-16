@@ -3,7 +3,6 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 // Dummy TableInOutFunction that:
 // - sums all INTEGER values in each row

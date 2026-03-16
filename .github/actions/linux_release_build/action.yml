@@ -45,7 +45,7 @@ runs:
         DISABLE_SANITIZER: ${{ inputs.disable_sanitizer }}
         VCPKG_TOOLCHAIN_PATH: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         USE_MERGED_VCPKG_MANIFEST: 1
-      run: make release
+      run: python3 scripts/ci/retry.py -- make release
 
     - name: Smoke tests
       if: ${{ inputs.run_smoke_tests == 'true' }}

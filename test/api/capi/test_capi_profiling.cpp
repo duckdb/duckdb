@@ -1,7 +1,6 @@
 #include "capi_tester.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 string BuildSettingsString(const duckdb::vector<string> &settings) {
 	string result = "'{";

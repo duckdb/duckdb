@@ -3,7 +3,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Simple In-Memory DB Start Up and Shutdown", "[simplestartup]") {
 	duckdb_database database;

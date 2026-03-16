@@ -5,7 +5,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test query profiler", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
@@ -71,12 +70,12 @@ TEST_CASE("Test latency when interrupting query", "[api]") {
 
 	// Test interupting a query and running a new one afterward.
 	// The latency should reflect the new one.
-	thread t([&con]() {
+	std::thread t([&con]() {
 		string query = "explain analyze select sum(range) from range(1_000_000_000);";
 		con.Query(query);
 	});
 
-	this_thread::sleep_for(chrono::milliseconds(100));
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	con.Interrupt();
 	t.join();
 

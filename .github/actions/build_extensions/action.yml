@@ -171,7 +171,7 @@ runs:
         pwd
         echo "$USER"
         git config --global --add safe.directory '*'
-        make
+        python scripts/ci/retry.py -- make
         ls
 
     # Tests extension using regular require mechanism:
@@ -207,7 +207,7 @@ runs:
         rm -rf duckdb_unittest_tempdir/*
         mv build/release/extension build/extension_tmp
         rm -rf build/release
-        VCPKG_TOOLCHAIN_PATH="" make
+        python scripts/ci/retry.py -- bash -lc 'VCPKG_TOOLCHAIN_PATH="" make'
 
     # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
     - name: Run tests with auto loading

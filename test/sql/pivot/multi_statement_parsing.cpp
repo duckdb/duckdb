@@ -2,7 +2,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 // This test that the parser keeps statements in the right order, also when a multi-statement (i.e. a PIVOT is included
 // See https://github.com/duckdb/duckdb/issues/18710

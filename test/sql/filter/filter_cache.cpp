@@ -2,7 +2,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 // This test triggers an edge case where data that is flushed from a caching operator in pulled into an operator
 // that needs to see this chunk more that once. handling this case requires temporarily caching the flushed result.

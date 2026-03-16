@@ -3,7 +3,6 @@
 #include "duckdb/common/numeric_utils.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 struct my_bind_data_struct {
 	int64_t size;

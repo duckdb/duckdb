@@ -7,7 +7,6 @@
 #include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	duckdb::unique_ptr<QueryResult> result;

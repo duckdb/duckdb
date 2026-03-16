@@ -6,7 +6,6 @@
 #include "duckdb/common/random_engine.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 bool VerifyWipe(const void *input_string, size_t string_size) {
 	const volatile char *p = static_cast<const volatile char *>(input_string);

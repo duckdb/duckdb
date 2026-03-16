@@ -1,7 +1,6 @@
 #include "capi_tester.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 static void test_file_system(duckdb_file_system fs, string file_name) {
 	REQUIRE(fs != nullptr);

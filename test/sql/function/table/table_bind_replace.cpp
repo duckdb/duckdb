@@ -8,7 +8,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 // This function demonstrates/tests how the TableFunction::bind_replace works.
 // The bind_replace_demo function has two params: depth and name. It generates custom plan recursively by using

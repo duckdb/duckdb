@@ -2,7 +2,6 @@
 #include <regex>
 
 using namespace duckdb;
-using namespace std;
 
 static void require_hugeint_eq(duckdb_hugeint left, duckdb_hugeint right) {
 	REQUIRE(left.lower == right.lower);

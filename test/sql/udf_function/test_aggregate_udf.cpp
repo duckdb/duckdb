@@ -6,7 +6,6 @@
 #include "udf_functions_to_test.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Aggregate UDFs", "[udf_function]") {
 	duckdb::unique_ptr<QueryResult> result;

@@ -60,7 +60,7 @@ std::ostream& operator<<(std::ostream& out, const Symbol& s) {
 	return out;
 }
 
-SymbolTable *buildSymbolTable(Counters& counters, vector<const u8*> line, const size_t len[], bool zeroTerminated=false) {
+SymbolTable *buildSymbolTable(Counters& counters, std::vector<const u8*> line, const size_t len[], bool zeroTerminated=false) {
 	SymbolTable *st = new SymbolTable(), *bestTable = new SymbolTable();
 	int bestGain = (int) -FSST_SAMPLEMAXSZ; // worst case (everything exception)
 	size_t sampleFrac = 128;
@@ -161,13 +161,13 @@ SymbolTable *buildSymbolTable(Counters& counters, vector<const u8*> line, const 
 
 	auto makeTable = [&](SymbolTable *st, Counters &counters) {
 		// hashmap of c (needed because we can generate duplicate candidates)
-		unordered_set<QSymbol> cands;
+		std::unordered_set<QSymbol> cands;
 
 		// artificially make terminater the most frequent symbol so it gets included
 		u16 terminator = st->nSymbols?FSST_CODE_BASE:st->terminator;
 		counters.count1Set(terminator,65535);
 
-		auto addOrInc = [&](unordered_set<QSymbol> &cands, Symbol s, u64 count) {
+		auto addOrInc = [&](std::unordered_set<QSymbol> &cands, Symbol s, u64 count) {
 			if (count < (5*sampleFrac)/128) return; // improves both compression speed (less candidates), but also quality!!
 			QSymbol q;
 			q.symbol = s;
@@ -209,7 +209,7 @@ SymbolTable *buildSymbolTable(Counters& counters, vector<const u8*> line, const 
 
 		// insert candidates into priority queue (by gain)
 		auto cmpGn = [](const QSymbol& q1, const QSymbol& q2) { return (q1.gain < q2.gain) || (q1.gain == q2.gain && q1.symbol.load_num() > q2.symbol.load_num()); };
-		priority_queue<QSymbol,vector<QSymbol>,decltype(cmpGn)> pq(cmpGn);
+		std::priority_queue<QSymbol,std::vector<QSymbol>,decltype(cmpGn)> pq(cmpGn);
 		for (auto& q : cands)
 			pq.push(q);
 
@@ -323,10 +323,10 @@ static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_
 #define FSST_SAMPLELINE ((size_t) 512)
 
 // quickly select a uniformly random set of lines such that we have between [FSST_SAMPLETARGET,FSST_SAMPLEMAXSZ) string bytes
-vector<const u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t nlines,
-                                                    duckdb::unique_ptr<vector<size_t>>& sample_len_out) {
+std::vector<const u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t nlines,
+                                                    duckdb::unique_ptr<std::vector<size_t>>& sample_len_out) {
 	size_t totSize = 0;
-	vector<const u8*> sample;
+	std::vector<const u8*> sample;
 
 	for(size_t i=0; i<nlines; i++)
 		totSize += lenIn[i];
@@ -338,7 +338,7 @@ vector<const u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t n
 		size_t sampleRnd = FSST_HASH(4637947);
 		const u8* sampleLim = sampleBuf + FSST_SAMPLETARGET;
 
-		sample_len_out = duckdb::unique_ptr<vector<size_t>>(new vector<size_t>());
+		sample_len_out = duckdb::unique_ptr<std::vector<size_t>>(new std::vector<size_t>());
 		sample_len_out->reserve(nlines + FSST_SAMPLEMAXSZ/FSST_SAMPLELINE);
 
 		// This fails if we have a lot of small strings and a few big ones?
@@ -355,7 +355,7 @@ vector<const u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t n
 			size_t chunk = FSST_SAMPLELINE*(sampleRnd % chunks);
 
 			// add the chunk to the sample
-			size_t len = min(lenIn[linenr]-chunk,FSST_SAMPLELINE);
+			size_t len = std::min(lenIn[linenr]-chunk,FSST_SAMPLELINE);
 			memcpy(sampleBuf, strIn[linenr]+chunk, len);
 			sample.push_back(sampleBuf);
 
@@ -368,11 +368,11 @@ vector<const u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t *lenIn, size_t n
 
 extern "C" duckdb_fsst_encoder_t* duckdb_fsst_create(size_t n, size_t lenIn[], u8 *strIn[], int zeroTerminated) {
 	u8* sampleBuf = new u8[FSST_SAMPLEMAXSZ];
-	duckdb::unique_ptr<vector<size_t>> sample_sizes;
-	vector<const u8*> sample = makeSample(sampleBuf, strIn, lenIn, n?n:1, sample_sizes); // careful handling of input to get a right-size and representative sample
+	duckdb::unique_ptr<std::vector<size_t>> sample_sizes;
+	std::vector<const u8*> sample = makeSample(sampleBuf, strIn, lenIn, n?n:1, sample_sizes); // careful handling of input to get a right-size and representative sample
 	Encoder *encoder = new Encoder();
 	const size_t* sampleLen = sample_sizes ? sample_sizes->data() : &lenIn[0];
-	encoder->symbolTable = shared_ptr<SymbolTable>(buildSymbolTable(encoder->counters, sample, sampleLen, zeroTerminated));
+	encoder->symbolTable = std::shared_ptr<SymbolTable>(buildSymbolTable(encoder->counters, sample, sampleLen, zeroTerminated));
 	delete[] sampleBuf;
 	return (duckdb_fsst_encoder_t*) encoder;
 }
@@ -495,7 +495,7 @@ using namespace libfsst;
 // the main compression function (everything automatic)
 extern "C" size_t duckdb_fsst_compress(duckdb_fsst_encoder_t *encoder, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[]) {
 	// to be faster than scalar, simd needs 64 lines or more of length >=12; or fewer lines, but big ones (totLen > 32KB)
-	size_t totLen = accumulate(lenIn, lenIn+nlines, 0);
+	size_t totLen = std::accumulate(lenIn, lenIn+nlines, 0);
 	int simd = totLen > nlines*12 && (nlines > 64 || totLen > (size_t) 1<<15);
 	return _compressAuto((Encoder*) encoder, nlines, lenIn, strIn, size, output, lenOut, strOut, 3*simd);
 }

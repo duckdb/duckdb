@@ -6,7 +6,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 static void background_thread_connect(duckdb_instance_cache instance_cache, const char *path) {
 	try {
@@ -30,7 +29,7 @@ TEST_CASE("Test the database instance cache in the C API", "[api][.]") {
 		    duckdb_get_or_create_from_cache(instance_cache, path.c_str(), &shared_out_database, nullptr, nullptr);
 		REQUIRE(state == DuckDBSuccess);
 
-		thread background_thread(background_thread_connect, instance_cache, path.c_str());
+		std::thread background_thread(background_thread_connect, instance_cache, path.c_str());
 		duckdb_close(&shared_out_database);
 		background_thread.join();
 		TestDeleteFile(path);

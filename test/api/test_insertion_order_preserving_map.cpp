@@ -5,7 +5,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test Insertion Order Preserving Map: duplicate insert", "[api][.]") {
 	InsertionOrderPreservingMap<int> map;

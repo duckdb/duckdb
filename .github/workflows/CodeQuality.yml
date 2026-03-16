@@ -31,7 +31,7 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
@@ -57,13 +57,16 @@ jobs:
       TIDY_CHECKS: ${{ inputs.explicit_checks && inputs.explicit_checks || '' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Install
         shell: bash
-        run: make toolsci && sudo apt-get install -y -qq clang-tidy && sudo pip3 install pybind11[global] --break-system-packages
+        run: |
+          python3 scripts/ci/retry.py -- make toolsci
+          python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
+          python3 scripts/ci/retry.py -- sudo pip3 install pybind11[global] --break-system-packages
 
       - uses: ./.github/actions/ccache-action
 

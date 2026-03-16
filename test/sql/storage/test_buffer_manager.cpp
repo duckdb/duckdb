@@ -10,7 +10,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storage][.]") {
 	duckdb::unique_ptr<MaterializedQueryResult> result;

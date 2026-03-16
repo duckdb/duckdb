@@ -10,7 +10,6 @@
 #include "duckdb/logging/log_manager.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 template <class SOURCE, typename FUN>
 void LogSimpleCustomType(SOURCE &src, FUN f) {

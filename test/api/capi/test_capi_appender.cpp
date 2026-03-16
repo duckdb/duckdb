@@ -6,7 +6,6 @@
 #include <random>
 
 using namespace duckdb;
-using namespace std;
 
 namespace {
 

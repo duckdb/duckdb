@@ -5,7 +5,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 void run_query_multiple_times(duckdb::unique_ptr<string> query, duckdb::unique_ptr<Connection> con) {
 	for (int i = 0; i < 10; ++i) {

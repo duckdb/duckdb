@@ -14,7 +14,6 @@
 #include <string>
 
 using namespace duckdb;
-using namespace std;
 
 //! CSV Files
 const string csv = "*.csv";

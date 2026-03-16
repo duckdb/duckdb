@@ -22,28 +22,30 @@ jobs:
     CORE_EXTENSIONS: "tpcd;tpcds;httpfs"
 
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
 
     - name: Install
       shell: bash
-      run: make toolsci && pip install requests
+      run: |
+        python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- pip install requests
 
     - uses: ./.github/actions/ccache-action
 
     - name: Build Last Release
       shell: bash
       run: |
-        make
-        git clone https://github.com/duckdb/duckdb.git
+        python3 scripts/ci/retry.py -- make
+        python3 scripts/ci/retry.py -- git clone https://github.com/duckdb/duckdb.git
         cd duckdb
         git checkout `git tag --list | tail -n 1`
-        make
+        python3 ../scripts/ci/retry.py -- make
         cd ..
 
     - name: Set up benchmarks
