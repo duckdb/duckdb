@@ -1,0 +1,26 @@
+# name: test/sql/window/topn_window_struct_pack_fallback.test
+# description: ROW_NUMBER()=1 with wide schema should fall back to WINDOW plan
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT id, ts FROM (
+  SELECT i%10 AS id, i AS c1, i AS c2, i AS c3, i AS c4, i AS c5,
+    i AS c6, i AS c7, i AS c8, i AS c9, i AS c10, i AS ts
+  FROM range(100) tbl(i)
+) t
+QUALIFY row_number() OVER (PARTITION BY id ORDER BY ts DESC) = 1
+ORDER BY id;
+----
+0	90
+1	91
+2	92
+3	93
+4	94
+5	95
+6	96
+7	97
+8	98
+9	99

@@ -202,6 +202,12 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload);
 		if (late_mat_lhs && aggregate_payload.size() == 1) {
 			params.payload_type = TopNPayloadType::SINGLE_COLUMN;
+		} else if (!late_mat_lhs) {
+			// Issue #21348: struct-packing without late materialization causes a second
+			// full-column scan. For remote sources (S3/Parquet) this explodes into
+			// thousands of individual HTTP range requests — one per column chunk per file.
+			// Since we cannot avoid the double-scan here, fall back to the WINDOW plan.
+			return op;
 		}
 	}
 
