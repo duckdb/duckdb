@@ -4320,6 +4320,24 @@ SamplingState EnumUtil::FromString<SamplingState>(const char *value) {
 	return static_cast<SamplingState>(StringUtil::StringToEnum(GetSamplingStateValues(), 2, "SamplingState", value));
 }
 
+const StringUtil::EnumStringLiteral *GetScanNodeResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ScanNodeResult::SCAN_CHILDREN), "SCAN_CHILDREN" },
+		{ static_cast<uint32_t>(ScanNodeResult::SKIP), "SKIP" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ScanNodeResult>(ScanNodeResult value) {
+	return StringUtil::EnumToString(GetScanNodeResultValues(), 2, "ScanNodeResult", static_cast<uint32_t>(value));
+}
+
+template<>
+ScanNodeResult EnumUtil::FromString<ScanNodeResult>(const char *value) {
+	return static_cast<ScanNodeResult>(StringUtil::StringToEnum(GetScanNodeResultValues(), 2, "ScanNodeResult", value));
+}
+
 const StringUtil::EnumStringLiteral *GetScanTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ScanType::TABLE), "TABLE" },
