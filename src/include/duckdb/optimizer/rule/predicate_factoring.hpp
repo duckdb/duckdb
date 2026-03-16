@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/rule/timestamp_comparison.hpp
+// duckdb/optimizer/rule/predicate_factoring.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,22 +9,17 @@
 #pragma once
 
 #include "duckdb/optimizer/rule.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
-class TimeStampComparison : public Rule {
+//! The Predicate Factoring rule extracts predicates on a common column from disjunctive or conjunctive clauses
+class PredicateFactoringRule : public Rule {
 public:
-	explicit TimeStampComparison(ExpressionRewriter &rewriter);
+	explicit PredicateFactoringRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
 	                             bool is_root) override;
-
-	unique_ptr<Expression> ApplyRule(BoundFunctionExpression *expr, ScalarFunction function, string pattern,
-	                                 bool is_not_like);
-
-private:
-	ClientContext &context;
 };
 
 } // namespace duckdb

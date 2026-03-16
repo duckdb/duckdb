@@ -40,6 +40,7 @@
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -66,7 +67,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<TimeStampComparison>(context, rewriter));
+	rewriter.rules.push_back(make_uniq<TimeStampComparison>(rewriter));
+	rewriter.rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
