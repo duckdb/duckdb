@@ -28,16 +28,16 @@ statement ok
 CHECKPOINT checkpoint_prof;
 
 statement ok
-PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true"}';
-
-statement ok
-SET profiling_coverage='ALL';
-
-statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
 PRAGMA profiling_output = '__TEST_DIR__/cp_noop.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
 
 statement ok
 CHECKPOINT checkpoint_prof;
