@@ -422,8 +422,16 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 		case NType::LEAF_INLINED:
 		case NType::LEAF:
 			return NodePointer();
-		default:
+		case NType::NODE_4:
+		case NType::NODE_16:
+		case NType::NODE_48:
+		case NType::NODE_256:
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
 			return child;
+		default:
+			throw InternalException("invalid node type for TransformToDeprecated: %d", static_cast<int>(type));
 		}
 	};
 
