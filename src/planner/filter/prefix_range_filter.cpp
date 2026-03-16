@@ -158,6 +158,9 @@ public:
 	}
 
 	bool LookupOneValue(const Value &key) const override {
+		if (key.IsNull()) {
+			return false;
+		}
 		return LookupOne(key.GetValueUnsafe<T>());
 	}
 

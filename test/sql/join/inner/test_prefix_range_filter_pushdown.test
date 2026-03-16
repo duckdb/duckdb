@@ -29,6 +29,31 @@ JOIN build b
 analyzed_plan	<REGEX>:.*IN PRF\(k\).*
 
 statement ok
+SELECT count(*)
+FROM probe p
+JOIN build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+
+statement ok
+CREATE OR REPLACE TABLE probe_with_null AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 20480) t(i)
+UNION ALL
+SELECT NULL::BIGINT as k, (i % 7)::INTEGER AS g
+FROM range(20480, 24576) t2(i)
+UNION ALL
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(24576, 100000) t3(i)
+
+statement ok
+SELECT count(*)
+FROM probe_with_null p
+JOIN build b
+  ON p.k = b.k
+ AND p.g >= b.g;
+
+statement ok
 CREATE OR REPLACE TABLE probe_timestamp AS
 SELECT make_timestamp(i * 1000) AS k, (i % 7)::INTEGER AS g
 FROM range(0, 100000) t(i);
