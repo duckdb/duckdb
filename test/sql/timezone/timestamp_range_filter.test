@@ -1,0 +1,16 @@
+statement ok
+CREATE TABLE datas (Station_Id_c VARCHAR, Datetime TIMESTAMP);
+
+statement ok
+INSERT INTO datas VALUES
+('F5481','2023-04-02 16:00:00'),
+('F5481','2023-04-02 18:00:00');
+
+query I
+SELECT *
+FROM datas
+WHERE '2023-04-02 16:00:00'::timestamp <= Datetime
+AND Datetime <= '2023-04-02 20:00:00'::timestamp;
+----
+F5481 2023-04-02 16:00:00
+F5481 2023-04-02 18:00:00
