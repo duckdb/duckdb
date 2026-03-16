@@ -14,12 +14,13 @@
 
 namespace duckdb {
 
-// A shallow span for a number of BufferHandles together for contiguous content, used for zero-copy potential access.
-// For example, ZSTD supports stream-based decompression, which doesn't require to prepare a contiguous buffer; insteads
-// users are able to iterate all handles and decompress them on the fly.
+// A group of BufferHandles that together represent contiguous file content.
+// For example, ZSTD supports stream-based decompression, which doesn't require to prepare a contiguous buffer;
+// insteads users are able to iterate all handles and decompress them on the fly.
 class FileBufferHandleGroup {
 public:
 	// A single BufferHandle and its offset/length within the file.
+	// In detail, the valid bytes of the handle are [start_offset, start_offset + length).
 	struct MemoryHandle {
 		BufferHandle handle;
 		// Byte offset within handle's buffer where the relevant data begins
@@ -31,7 +32,7 @@ public:
 	FileBufferHandleGroup() = default;
 	explicit FileBufferHandleGroup(vector<MemoryHandle> handles_p);
 
-	//! Read-only access to the underlying handles.
+	// Read-only access to the underlying handles.
 	const vector<MemoryHandle> &GetHandles() const;
 
 	// Util function to copy from the start of the group to the destination address for the requested number of bytes

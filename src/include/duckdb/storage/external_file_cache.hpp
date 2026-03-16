@@ -46,6 +46,7 @@ public:
 		const string path;
 
 		mutable annotated_mutex map_lock;
+		// Maps from block index to cached block.
 		unordered_map<idx_t, shared_ptr<CacheBlock>> blocks DUCKDB_GUARDED_BY(map_lock);
 
 		mutable annotated_mutex meta_lock;

@@ -14,6 +14,7 @@ copy (
 ) to '__TEST_DIR__/test_efc_lineitem.parquet' (row_group_size 6_000_000);
 
 # this is empty since we didn't query anything yet
+# throughout this file we round the bytes to whole MBs due to small differences between OSs somehow
 query II
 select round(nr_bytes / 1048576), loaded from duckdb_external_file_cache() order by location;
 ----
@@ -30,7 +31,7 @@ create view lineitem as from '__TEST_DIR__/test_efc_lineitem.parquet';
 # otherwise, we run into problems with file systems with low time resolution for last modified time
 sleep 11 seconds
 
-# creating the view has loaded the footer (at least one block cached)
+# creating the view has loaded the footer, and validate at least one block cached
 query I
 select count(*) > 0 from duckdb_external_file_cache();
 ----
@@ -40,7 +41,7 @@ true
 statement ok
 select l_orderkey from lineitem;
 
-# with block-aligned caching, we should have multiple 2MiB blocks covering ~23MiB of data
+# with block-aligned caching, we should have multiple 2MiB blocks
 query I
 select round(sum(nr_bytes) / 1048576) from duckdb_external_file_cache() where nr_bytes > 100000;
 ----
@@ -65,6 +66,7 @@ select round(sum(nr_bytes) / 1048576) from duckdb_external_file_cache() where nr
 47.0
 
 # shows up in duckdb_memory under its own tag
+# this is slightly higher than the sum of nr_bytes above due buffers having a header and are rounded up to sector size
 query I
 select round(memory_usage_bytes / 1048576) from duckdb_memory() where tag = 'EXTERNAL_FILE_CACHE';
 ----

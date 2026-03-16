@@ -37,6 +37,8 @@ struct ReadHead {
 		return size + location;
 	}
 
+	// Materialize [buffer_ptr], should call before access.
+	// TODO(hjiang): Currently it's only used for `Prefetch` operation, should be able to save one copy.
 	void Materialize() {
 		if (handle_group.GetHandles().size() == 1) {
 			buffer_ptr = handle_group.Ptr();
