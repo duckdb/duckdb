@@ -184,7 +184,7 @@ unique_ptr<Expression> PredicateFactoringRule::Apply(LogicalOperator &op, vector
 	auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 	result->children.push_back(bindings[0].get().Copy());
 	result->children.push_back(std::move(derived_filter));
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
