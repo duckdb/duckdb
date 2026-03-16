@@ -692,6 +692,16 @@
         "id": 201,
         "name": "modifier",
         "type": "TransactionModifierType"
+      },
+      {
+        "id": 202,
+        "name": "invalidation_policy",
+        "type": "TransactionInvalidationPolicy"
+      },
+      {
+        "id": 203,
+        "name": "auto_rollback",
+        "type": "bool"
       }
     ]
   },

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/transaction/transaction_context.hpp"
 
 namespace duckdb {
 class ClientContext;
