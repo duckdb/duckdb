@@ -3,7 +3,17 @@ runs:
   using: "composite"
   steps:
      - name: Setup Ccache
+       if: ${{ github.workflow != 'NightlyTests' && github.ref_name != 'v1.4-andium' }}
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.repository != 'duckdb/duckdb' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref) }}
+         save: ${{ github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name) }}
+         # Dump verbose ccache statistics report at end of CI job.
+         verbose: 1
+         # Increase per-directory limit: 5*1024 MB / 16 = 320 MB.
+         # Note: `layout=subdirs` computes the size limit divided by 16 dirs.
+         # See also: https://ccache.dev/manual/4.9.html#_cache_size_management
+         max-size: 5GB
+         # Evicts all cache files that were not touched during the job run.
+         # Removing cache files from previous runs avoids creating huge caches.
+         evict-old-files: 'job'

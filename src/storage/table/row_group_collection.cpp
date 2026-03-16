@@ -362,7 +362,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 
 	// start writing to the row_groups
 	auto l = row_groups->Lock();
-	if (IsEmpty(l) || requires_new_row_group) {
+	if (IsEmpty(l) || (requires_new_row_group && info->GetIndexes().Empty())) {
 		// empty row group collection: empty first row group
 		AppendRowGroup(l, row_start + total_rows);
 	}

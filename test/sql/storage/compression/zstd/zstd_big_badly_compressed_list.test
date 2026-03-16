@@ -1,0 +1,46 @@
+# name: test/sql/storage/compression/zstd/zstd_big_badly_compressed_list.test
+# group: [zstd]
+
+statement ok
+ATTACH '__TEST_DIR__/zstd.db' (STORAGE_VERSION 'latest', BLOCK_SIZE 16384);
+
+statement ok
+USE zstd
+
+statement ok
+SET zstd_min_string_length = 1;
+
+statement ok
+SET force_compression = 'zstd';
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE zstd(big_list VARCHAR[]);
+
+statement ok
+set threads=1;
+
+statement ok
+INSERT INTO zstd select [
+	chr(x::INT)
+	for
+		x
+	in
+		generate_series(
+			ord('a'),
+			ord('z')
+		)
+] FROM range(1_000_000);
+
+statement ok
+COMMIT;
+
+statement ok
+CHECKPOINT zstd;
+
+query I
+SELECT avg(len(big_list)) FROM zstd
+----
+26
