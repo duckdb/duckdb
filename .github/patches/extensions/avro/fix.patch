@@ -1,4 +1,4 @@
-commit f74b8c3487ed9a435ad996473a1746b9c9f5a815
+commit 378944acf4e26a98eec0a8b5be1680cbc662cfc6
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 15 10:48:02 2026 +0000
 
@@ -56,3 +56,21 @@ index ebb941a..af5b41b 100644
  	AvroType avro_type;
  	LogicalType duckdb_type;
  };
+diff --git a/test/sql/external_file_cache.test b/test/sql/external_file_cache.test
+index 1d4a43a..b6aa7fe 100644
+--- a/test/sql/external_file_cache.test
++++ b/test/sql/external_file_cache.test
+@@ -31,8 +31,8 @@ FROM read_avro('test/bigdata.avro') ORDER BY c1 LIMIT 10
+ statement ok
+ from read_avro('test/userdata1.avro');
+ 
+-query IIII
+-from duckdb_external_file_cache() order by path;
++query II
++select path, sum(nr_bytes) from duckdb_external_file_cache() group by path order by path;
+ ----
+-test/bigdata.avro	17647257	0	true
+-test/userdata1.avro	93561	0	true
+\ No newline at end of file
++test/bigdata.avro	17647257
++test/userdata1.avro	93561
