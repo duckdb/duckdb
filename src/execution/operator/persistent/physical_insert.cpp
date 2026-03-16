@@ -21,6 +21,7 @@
 #include "duckdb/storage/table/update_state.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/execution/trigger_executor.hpp"
 
 namespace duckdb {
 
@@ -634,9 +635,12 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 		if (return_chunk) {
 			gstate.return_collection.Append(insert_chunk);
 		}
+
+		idx_t appended_count = insert_chunk.size();
 		// When action_type is throw, we already verify constraints in `OnConflictHandling`
 		storage.LocalAppend(table, context.client, insert_chunk, bound_constraints,
 		                    action_type == OnConflictAction::THROW);
+		TriggerExecutor::FireAfterInsert(context.client, table, appended_count);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
 			(void)HandleInsertConflicts<true>(table, context, lstate, gstate, lstate.update_chunk, *this);
 			(void)HandleInsertConflicts<false>(table, context, lstate, gstate, lstate.update_chunk, *this);

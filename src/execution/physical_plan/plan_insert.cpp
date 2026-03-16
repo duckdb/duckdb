@@ -9,6 +9,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -115,6 +116,23 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 		// When we potentially need to perform updates, we have to check that row is not updated twice
 		// that currently needs to be done for every chunk, which would add a huge bottleneck to parallelized insertion
 		parallel_streaming_insert = false;
+	}
+	{
+		// Disable parallel insert when the table has AFTER INSERT triggers.
+		// Triggers fire per-row inside Sink(), which only runs on the non-parallel path.
+		auto &schema = op.table.ParentSchema();
+		bool has_after_insert_trigger = false;
+		schema.Scan(context, CatalogType::TRIGGER_ENTRY, [&](CatalogEntry &entry) {
+			auto &trigger = entry.Cast<TriggerCatalogEntry>();
+			if (trigger.timing == TriggerTiming::AFTER && trigger.event_type == TriggerEventType::INSERT_EVENT &&
+			    trigger.base_table->table_name == op.table.name) {
+				has_after_insert_trigger = true;
+			}
+		});
+		if (has_after_insert_trigger) {
+			parallel_streaming_insert = false;
+			use_batch_index = false;
+		}
 	}
 	if (!op.column_index_map.empty()) {
 		plan = planner.ResolveDefaultsProjection(op, *plan);

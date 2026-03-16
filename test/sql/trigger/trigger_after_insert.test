@@ -1,0 +1,107 @@
+# name: test/sql/trigger/trigger_after_insert.test
+# description: Test AFTER INSERT trigger firing
+# group: [trigger]
+
+require autocomplete
+
+statement ok
+call enable_peg_parser();
+
+statement ok
+CREATE TABLE target (id INTEGER);
+
+statement ok
+CREATE TABLE audit (msg VARCHAR);
+
+# Basic: trigger fires once after INSERT, audit row created
+statement ok
+CREATE TRIGGER trg_basic AFTER INSERT ON target INSERT INTO audit VALUES ('inserted');
+
+statement ok
+INSERT INTO target VALUES (1);
+
+query I
+SELECT COUNT(*) FROM audit WHERE msg = 'inserted';
+----
+1
+
+# Trigger fires again on a second INSERT
+statement ok
+INSERT INTO target VALUES (2);
+
+query I
+SELECT COUNT(*) FROM audit WHERE msg = 'inserted';
+----
+2
+
+# Multiple triggers on same table: all fire
+statement ok
+CREATE TABLE audit2 (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_second AFTER INSERT ON target INSERT INTO audit2 VALUES ('second_trigger');
+
+statement ok
+INSERT INTO target VALUES (3);
+
+query I
+SELECT COUNT(*) FROM audit WHERE msg = 'inserted';
+----
+3
+
+query I
+SELECT COUNT(*) FROM audit2 WHERE msg = 'second_trigger';
+----
+1
+
+# Trigger body failure rolls back original INSERT
+statement ok
+CREATE TABLE strict_target (id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE strict_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_fail AFTER INSERT ON strict_target INSERT INTO strict_target VALUES (999);
+
+# Inserting 999, then trigger tries to insert 999 again => PK violation
+statement error
+INSERT INTO strict_target VALUES (999);
+----
+<REGEX>:.*
+
+# Neither the insert into strict_target nor the trigger's insert should persist
+query I
+SELECT COUNT(*) FROM strict_target;
+----
+0
+
+# Multi-row INSERT fires trigger once per row
+statement ok
+CREATE TABLE multi_target (id INTEGER);
+
+statement ok
+CREATE TABLE multi_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi AFTER INSERT ON multi_target INSERT INTO multi_audit VALUES ('row');
+
+statement ok
+INSERT INTO multi_target VALUES (1), (2), (3);
+
+query I
+SELECT COUNT(*) FROM multi_audit;
+----
+3
+
+# Recursive trigger guard: depth limit error
+statement ok
+CREATE TABLE recurse_tbl (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_recurse AFTER INSERT ON recurse_tbl INSERT INTO recurse_tbl VALUES (1);
+
+statement error
+INSERT INTO recurse_tbl VALUES (1);
+----
+<REGEX>:.*
