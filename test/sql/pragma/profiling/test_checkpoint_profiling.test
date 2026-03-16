@@ -34,10 +34,10 @@ statement ok
 SET profiling_coverage='ALL';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/cp_noop.json';
+PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA enable_profiling = 'json';
+PRAGMA profiling_output = '__TEST_DIR__/cp_noop.json';
 
 statement ok
 CHECKPOINT checkpoint_prof;
