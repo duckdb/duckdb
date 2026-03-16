@@ -138,9 +138,11 @@ static void ScanChildren(ART &art, NodePointer node, CHILD_HANDLER &&child_handl
 template <class NODE_HANDLER, class CHILD_HANDLER>
 void BufferManagedScan(ART &art, NodePointer &root, NODE_HANDLER &&node_handler, CHILD_HANDLER &&child_handler) {
 	vector<NodePointer> stack;
-	auto root_push = child_handler(root);
-	if (root_push.HasMetadata()) {
-		stack.push_back(root_push);
+
+	// root node is always pinned, handle it first.
+	auto node = child_handler(root);
+	if (node.HasMetadata()) {
+		stack.push_back(node);
 	}
 
 	while (!stack.empty()) {
@@ -161,9 +163,9 @@ void BufferManagedScan(ART &art, NodePointer &root, NODE_HANDLER &&node_handler,
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
 			auto child = reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
-			auto push = child_handler(*child);
-			if (push.HasMetadata()) {
-				stack.push_back(push);
+			node = child_handler(*child);
+			if (node.HasMetadata()) {
+				stack.push_back(node);
 			}
 			break;
 		}

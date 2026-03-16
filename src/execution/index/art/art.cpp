@@ -1248,21 +1248,43 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 void ART::InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(node.HasMetadata());
 
-	auto handler = [&upper_bounds](NodePointer &node) {
-		const auto type = node.GetType();
-		if (node.GetType() == NType::LEAF_INLINED) {
-			return ARTHandlingResult::NONE;
+	auto node_handler = [](NodePointer) -> ScanNodeResult {
+		return ScanNodeResult::SCAN_CHILDREN;
+	};
+
+	auto child_handler = [&](NodePointer &child) -> NodePointer {
+		if (!child.HasMetadata()) {
+			return NodePointer();
+		}
+		auto type = child.GetType();
+		if (type == NType::LEAF_INLINED) {
+			return NodePointer();
 		}
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
-		const auto idx = NodePointer::GetAllocatorIdx(type);
-		node.IncreaseBufferId(upper_bounds[idx]);
-		return ARTHandlingResult::NONE;
+
+		auto original = child;
+		auto idx = NodePointer::GetAllocatorIdx(type);
+		child.IncreaseBufferId(upper_bounds[idx]);
+
+		switch (type) {
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			return NodePointer();
+		case NType::PREFIX:
+		case NType::NODE_4:
+		case NType::NODE_16:
+		case NType::NODE_48:
+		case NType::NODE_256:
+			return original;
+		default:
+			throw InternalException("invalid node type for InitializeMerge: %d", static_cast<int>(type));
+		}
 	};
 
-	ARTScanner<ARTScanHandling::POP, NodePointer> scanner(*this, handler, node);
-	scanner.Scan(handler);
+	BufferManagedScan(*this, node, node_handler, child_handler);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
