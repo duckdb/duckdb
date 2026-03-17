@@ -51,7 +51,7 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransform
 	auto result = make_uniq<ShowRef>();
 	// Legacy reasons, see bind_showref.cpp
 	result->table_name = "__show_tables_expanded";
-	result->show_type = ShowType::DESCRIBE;
+	result->show_type = ShowType::SHOW_UNQUALIFIED;
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(result);
