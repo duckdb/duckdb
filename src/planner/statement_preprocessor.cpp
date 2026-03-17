@@ -37,6 +37,9 @@ void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements,
 		    TransactionType::BEGIN_TRANSACTION, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
 		result_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
 	} else if (transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
+		// Here we do a `SET current_transaction_invalidation_policy='ALL_ERRORS_INVALIDATE_TRANSACTION';`, for the
+		// current transaction, to make sure multistatements/pragmas are fully transactional, and invalidate even with
+		// minor errors such as binder, parser, etc.
 		result_statements.push_back(make_uniq<SetVariableStatement>(
 		    "current_transaction_invalidation_policy",
 		    make_uniq<ConstantExpression>(Value("ALL_ERRORS_INVALIDATE_TRANSACTION")), SetScope::GLOBAL));
