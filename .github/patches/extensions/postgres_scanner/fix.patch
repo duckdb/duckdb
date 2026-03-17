@@ -12,7 +12,7 @@ index d3dc0b6..471bc4c 100644
  #include "duckdb/planner/filter/constant_filter.hpp"
  
 diff --git a/src/postgres_filter_pushdown.cpp b/src/postgres_filter_pushdown.cpp
-index c2f981a..fcdcf3e 100644
+index c2f981a..bfe0b28 100644
 --- a/src/postgres_filter_pushdown.cpp
 +++ b/src/postgres_filter_pushdown.cpp
 @@ -127,20 +127,20 @@ string PostgresFilterPushdown::TransformFilter(string &column_name, TableFilter
@@ -29,7 +29,7 @@ index c2f981a..fcdcf3e 100644
 +	for (auto &entry : *filters) {
  		string column_name;
 -		auto column_id = column_ids[entry.first];
-+		auto column_id = column_ids[entry.ColumnIndex()];
++		auto column_id = column_ids[entry.ColumnIndex().index];
  		if (IsVirtualColumn(column_id)) {
  			column_name = "ctid";
  		} else {

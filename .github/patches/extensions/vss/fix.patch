@@ -193,7 +193,7 @@ index 783db2a..3e17e93 100644
  		}
  	}
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
-index 84dbda7..178b00f 100644
+index 84dbda7..d1850a8 100644
 --- a/src/hnsw/hnsw_optimize_scan.cpp
 +++ b/src/hnsw/hnsw_optimize_scan.cpp
 @@ -64,8 +64,7 @@ public:
@@ -215,39 +215,38 @@ index 84dbda7..178b00f 100644
  
  			// Remove the TopN operator
  			plan = std::move(top_n.children[0]);
-@@ -172,22 +171,22 @@ public:
+@@ -172,22 +171,13 @@ public:
  
  		auto new_filter = make_uniq<LogicalFilter>();
  		auto &column_ids = get.GetColumnIds();
 -		for (const auto &entry : get.table_filters.filters) {
 -			idx_t column_id = entry.first;
-+		for (const auto &entry : get.table_filters) {
-+			idx_t column_id = entry.ColumnIndex();
-+			auto &filter = entry.Filter();
- 			auto &type = get.returned_types[column_id];
+-			auto &type = get.returned_types[column_id];
 -			bool found = false;
-+			ProjectionIndex proj_id;
- 			for (idx_t i = 0; i < column_ids.size(); i++) {
- 				if (column_ids[i].GetPrimaryIndex() == column_id) {
+-			for (idx_t i = 0; i < column_ids.size(); i++) {
+-				if (column_ids[i].GetPrimaryIndex() == column_id) {
 -					column_id = i;
 -					found = true;
-+					proj_id = ProjectionIndex(i);
- 					break;
- 				}
- 			}
+-					break;
+-				}
+-			}
 -			if (!found) {
-+			if (!proj_id.IsValid()) {
- 				throw InternalException("Could not find column id for filter");
- 			}
+-				throw InternalException("Could not find column id for filter");
+-			}
 -			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, column_id));
 -			new_filter->expressions.push_back(entry.second->ToExpression(*column));
-+			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, proj_id));
++		for (const auto &entry : get.table_filters) {
++			auto filter_idx = entry.ColumnIndex();
++			auto &column_id = get.GetColumnIndex(filter_idx);
++			auto &type = get.returned_types[column_id.GetPrimaryIndex()];
++			auto &filter = entry.Filter();
++			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, filter_idx));
 +			new_filter->expressions.push_back(filter.ToExpression(*column));
  		}
  		new_filter->children.push_back(std::move(get_ptr));
  		new_filter->ResolveOperatorTypes();
 diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
-index 14f68e7..c700b02 100644
+index 14f68e7..3454f7b 100644
 --- a/src/hnsw/hnsw_optimize_topk.cpp
 +++ b/src/hnsw/hnsw_optimize_topk.cpp
 @@ -91,7 +91,7 @@ public:
@@ -272,32 +271,31 @@ index 14f68e7..c700b02 100644
  			return true;
  		}
  
-@@ -203,22 +203,21 @@ public:
+@@ -203,22 +203,12 @@ public:
  
  		auto new_filter = make_uniq<LogicalFilter>();
  		auto &column_ids = get.GetColumnIds();
 -		for (const auto &entry : get.table_filters.filters) {
 -			idx_t column_id = entry.first;
-+		for (const auto &entry : get.table_filters) {
-+			idx_t column_id = entry.ColumnIndex();
- 			auto &type = get.returned_types[column_id];
+-			auto &type = get.returned_types[column_id];
 -			bool found = false;
-+			ProjectionIndex proj_id;
- 			for (idx_t i = 0; i < column_ids.size(); i++) {
- 				if (column_ids[i].GetPrimaryIndex() == column_id) {
+-			for (idx_t i = 0; i < column_ids.size(); i++) {
+-				if (column_ids[i].GetPrimaryIndex() == column_id) {
 -					column_id = i;
 -					found = true;
-+					proj_id = ProjectionIndex(i);
- 					break;
- 				}
- 			}
+-					break;
+-				}
+-			}
 -			if (!found) {
-+			if (!proj_id.IsValid()) {
- 				throw InternalException("Could not find column id for filter");
- 			}
+-				throw InternalException("Could not find column id for filter");
+-			}
 -			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, column_id));
 -			new_filter->expressions.push_back(entry.second->ToExpression(*column));
-+			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, proj_id));
++		for (const auto &entry : get.table_filters) {
++			auto filter_idx = entry.ColumnIndex();
++			auto &column_id = get.GetColumnIndex(filter_idx);
++			auto &type = get.returned_types[column_id.GetPrimaryIndex()];
++			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, filter_idx));
 +			new_filter->expressions.push_back(entry.Filter().ToExpression(*column));
  		}
  

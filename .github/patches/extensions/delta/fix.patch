@@ -1,5 +1,5 @@
 diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
-index 8c08714..9894acf 100644
+index 8c08714..92310e1 100644
 --- a/src/delta_utils.cpp
 +++ b/src/delta_utils.cpp
 @@ -856,8 +856,8 @@ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition>
@@ -9,22 +9,30 @@ index 8c08714..9894acf 100644
 -		for (auto &filter : filters->filters) {
 -			column_filters[columns[filter.first].name] = filter.second.get();
 +		for (auto &entry : *filters) {
-+			column_filters[columns[entry.ColumnIndex()].name] = &entry.Filter();
++			column_filters[columns[entry.ColumnIndex().index].name] = &entry.Filter();
  		}
  	}
  }
 diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
-index 7d918bd..42a3622 100644
+index 7d918bd..577b4f8 100644
 --- a/src/functions/delta_scan/delta_multi_file_list.cpp
 +++ b/src/functions/delta_scan/delta_multi_file_list.cpp
-@@ -793,14 +793,14 @@ unique_ptr<DeltaMultiFileList> DeltaMultiFileList::PushdownInternal(ClientContex
+@@ -787,20 +787,22 @@ void DeltaMultiFileList::EnsureScanInitialized() const {
+ }
+ 
+ unique_ptr<DeltaMultiFileList> DeltaMultiFileList::PushdownInternal(ClientContext &context,
+-                                                                    TableFilterSet &new_filters) const {
++                                                                    TableFilterSet &new_filters,
++                                                                    vector<column_t> column_indexes) const {
+ 	auto filtered_list = make_uniq<DeltaMultiFileList>(context, paths[0].path, version);
+ 
  	TableFilterSet result_filter_set;
  
  	// Add pre-existing filters
 -	for (auto &entry : table_filters.filters) {
 -		result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
 +	for (auto &entry : table_filters) {
-+		result_filter_set.PushFilter(ColumnIndex(entry.ColumnIndex()), entry.Filter().Copy());
++		result_filter_set.PushFilter(entry.ColumnIndex(), entry.Filter().Copy());
  	}
  
  	// Add new filters
@@ -32,12 +40,21 @@ index 7d918bd..42a3622 100644
 -		if (entry.first < global_columns.size()) {
 -			result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
 +	for (auto &entry : new_filters) {
-+		if (entry.ColumnIndex() < global_columns.size()) {
-+			result_filter_set.PushFilter(ColumnIndex(entry.ColumnIndex()), entry.Filter().Copy());
++		auto &column_id = column_indexes[entry.ColumnIndex().index];
++		if (column_id < global_columns.size()) {
++			result_filter_set.PushFilter(entry.ColumnIndex(), entry.Filter().Copy());
  		}
  	}
  
-@@ -849,7 +849,7 @@ unique_ptr<MultiFileList> DeltaMultiFileList::ComplexFilterPushdown(ClientContex
+@@ -809,6 +811,7 @@ unique_ptr<DeltaMultiFileList> DeltaMultiFileList::PushdownInternal(ClientContex
+ 	filtered_list->table_filters = std::move(result_filter_set);
+ 	filtered_list->global_columns = global_columns;
+ 	filtered_list->lazy_loaded_schema = lazy_loaded_schema;
++	filtered_list->column_indexes = std::move(column_indexes);
+ 
+ 	// Copy over the snapshot, this avoids reparsing metadata
+ 	{
+@@ -849,11 +852,11 @@ unique_ptr<MultiFileList> DeltaMultiFileList::ComplexFilterPushdown(ClientContex
  
  	vector<FilterPushdownResult> pushdown_results;
  	auto filter_set = combiner.GenerateTableScanFilters(info.column_indexes, pushdown_results);
@@ -46,19 +63,27 @@ index 7d918bd..42a3622 100644
  		return nullptr;
  	}
  
-@@ -916,24 +916,24 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+-	auto filtered_list = PushdownInternal(context, filter_set);
++	auto filtered_list = PushdownInternal(context, filter_set, info.column_ids);
+ 
+ 	ReportFilterPushdown(context, *filtered_list, info.column_ids, "constant", info);
+ 
+@@ -916,24 +919,26 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
  
  	// Report the new filters
  	vector<Value> old_filters_value_list;
 -	for (auto &f : table_filters.filters) {
 -		auto &column_index = f.first;
 -		auto &filter = f.second;
-+	for (auto &entry : table_filters) {
-+		auto column_index = entry.ColumnIndex();
-+		auto &filter = entry.Filter();
- 		if (column_index < global_columns.size()) {
- 			auto &col_name = global_columns[column_index].name;
+-		if (column_index < global_columns.size()) {
+-			auto &col_name = global_columns[column_index].name;
 -			old_filters_value_list.push_back(filter->ToString(col_name));
++	for (auto &entry : table_filters) {
++		auto proj_index = entry.ColumnIndex();
++		auto &filter = entry.Filter();
++		auto column_id = column_ids[proj_index.index];
++		if (column_id < global_columns.size()) {
++			auto &col_name = global_columns[column_id].name;
 +			old_filters_value_list.push_back(filter.ToString(col_name));
  		}
  	}
@@ -69,17 +94,20 @@ index 7d918bd..42a3622 100644
 -	for (auto &f : new_list.table_filters.filters) {
 -		auto &column_index = f.first;
 -		auto &filter = f.second;
-+	for (auto &entry : new_list.table_filters) {
-+		auto column_index = entry.ColumnIndex();
-+		auto &filter = entry.Filter();
- 		if (column_index < global_columns.size()) {
- 			auto &col_name = global_columns[column_index].name;
+-		if (column_index < global_columns.size()) {
+-			auto &col_name = global_columns[column_index].name;
 -			filters_value_list.push_back(filter->ToString(col_name));
++	for (auto &entry : new_list.table_filters) {
++		auto proj_index = entry.ColumnIndex();
++		auto &filter = entry.Filter();
++		auto column_id = column_ids[proj_index.index];
++		if (column_id < global_columns.size()) {
++			auto &col_name = global_columns[column_id].name;
 +			filters_value_list.push_back(filter.ToString(col_name));
  		}
  	}
  	auto filters_value = Value::LIST(LogicalType::VARCHAR, filters_value_list);
-@@ -970,23 +970,23 @@ DeltaMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFil
+@@ -970,24 +975,24 @@ DeltaMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFil
  		return nullptr;
  	}
  
@@ -95,22 +123,24 @@ index 7d918bd..42a3622 100644
 -		if (previously_pushed_down_filter != this->table_filters.filters.end() &&
 -		    filter.second->Equals(*previously_pushed_down_filter->second)) {
 +	for (auto &entry : filters) {
-+		auto column_id = column_ids[entry.ColumnIndex()];
++		auto proj_id = entry.ColumnIndex();
 +		auto &filter = entry.Filter();
-+		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(column_id);
++		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(proj_id);
 +		if (previously_pushed_down_filter && filter.Equals(*previously_pushed_down_filter)) {
  			// Skip filters that we already have pushed down
  			continue;
  		}
 -		filters_copy.PushFilter(ColumnIndex(column_id), filter.second->Copy());
-+		filters_copy.PushFilter(ColumnIndex(column_id), filter.Copy());
++		filters_copy.PushFilter(proj_id, filter.Copy());
  	}
  
 -	if (!filters_copy.filters.empty()) {
+-		auto new_snap = PushdownInternal(context, filters_copy);
 +	if (filters_copy.HasFilters()) {
- 		auto new_snap = PushdownInternal(context, filters_copy);
++		auto new_snap = PushdownInternal(context, filters_copy, column_ids);
  		ReportFilterPushdown(context, *new_snap, column_ids, "dynamic", nullptr);
  		return std::move(new_snap);
+ 	}
 diff --git a/src/include/delta_utils.hpp b/src/include/delta_utils.hpp
 index 3fdce7f..8ab602d 100644
 --- a/src/include/delta_utils.hpp
@@ -134,3 +164,24 @@ index 3fdce7f..8ab602d 100644
  
  	static uintptr_t VisitPredicate(PredicateVisitor *predicate, ffi::KernelExpressionVisitorState *state);
  
+diff --git a/src/include/functions/delta_scan/delta_multi_file_list.hpp b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+index b196db7..e4eed67 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_list.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+@@ -73,7 +73,7 @@ public:
+ 	                                                const vector<column_t> &column_ids,
+ 	                                                TableFilterSet &filters) const override;
+ 
+-	unique_ptr<DeltaMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters) const;
++	unique_ptr<DeltaMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters, vector<column_t> column_indexes) const;
+ 
+ 	vector<OpenFileInfo> GetAllFiles() const override;
+ 	FileExpandResult GetExpandResult() const override;
+@@ -143,6 +143,7 @@ protected:
+ 
+ 	mutable vector<OpenFileInfo> resolved_files;
+ 	mutable TableFilterSet table_filters;
++	vector<column_t> column_indexes;
+ 
+ 	mutable vector<NestedNotNullConstraint> not_null_constraints;
+ 	mutable bool has_null_constraints_in_arrays = false;
