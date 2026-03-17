@@ -1,0 +1,61 @@
+# name: test/sql/trigger/create_trigger_catalog.test
+# description: Test CREATE TRIGGER stores in catalog and duckdb_triggers()
+# group: [trigger]
+
+require autocomplete
+
+statement ok
+call enable_peg_parser();
+
+# Create table for trigger
+statement ok
+CREATE TABLE t1 (id INTEGER, data VARCHAR);
+
+# Create log table for trigger body
+statement ok
+CREATE TABLE log_table (id INTEGER);
+
+# Basic AFTER INSERT trigger - should succeed
+statement ok
+CREATE TRIGGER my_trigger AFTER INSERT ON t1 INSERT INTO log_table VALUES (1);
+
+# Verify trigger appears in duckdb_triggers
+query TTTT
+SELECT trigger_name, table_name, timing, event_manipulation FROM duckdb_triggers() WHERE trigger_name = 'my_trigger';
+----
+my_trigger	t1	AFTER	INSERT
+
+# Create another trigger - BEFORE DELETE
+statement ok
+CREATE TRIGGER del_trigger BEFORE DELETE ON t1 INSERT INTO log_table VALUES (2);
+
+# Verify both triggers
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't1';
+----
+2
+
+# AFTER UPDATE trigger
+statement ok
+CREATE TRIGGER upd_trigger AFTER UPDATE ON t1 INSERT INTO log_table VALUES (3);
+
+# AFTER UPDATE OF specific columns - need col in t1
+statement ok
+CREATE TRIGGER upd_col_trigger AFTER UPDATE OF id ON t1 INSERT INTO log_table VALUES (4);
+
+# Verify UPDATE OF columns
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'upd_col_trigger';
+----
+upd_col_trigger	[id]
+
+# IF NOT EXISTS - should not error
+statement ok
+CREATE TRIGGER IF NOT EXISTS my_trigger AFTER INSERT ON t1 INSERT INTO log_table VALUES (1);
+
+# Cleanup - CASCADE to drop dependent triggers
+statement ok
+DROP TABLE t1 CASCADE;
+
+statement ok
+DROP TABLE log_table;

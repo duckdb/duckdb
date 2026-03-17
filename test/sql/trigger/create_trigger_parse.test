@@ -7,79 +7,79 @@ require autocomplete
 statement ok
 call enable_peg_parser();
 
-# Parsing succeeds but bind/execution will fail since catalog support is not yet implemented
+# Parsing succeeds - bind fails because tables do not exist
 
-# Basic AFTER INSERT trigger
+# Basic AFTER INSERT trigger - table does not exist
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # Basic BEFORE DELETE trigger
 statement error
 CREATE TRIGGER my_trigger BEFORE DELETE ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # INSTEAD OF trigger
 statement error
 CREATE TRIGGER my_trigger INSTEAD OF INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # AFTER UPDATE trigger
 statement error
 CREATE TRIGGER my_trigger AFTER UPDATE ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
-# AFTER UPDATE OF specific columns
+# AFTER UPDATE OF specific columns - table does not exist
 statement error
 CREATE TRIGGER my_trigger AFTER UPDATE OF col1, col2 ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # FOR EACH ROW
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table FOR EACH ROW INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
-# FOR EACH STATEMENT
+# FOR EACH STATEMENT - table check happens first
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table FOR EACH STATEMENT INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # IF NOT EXISTS
 statement error
 CREATE TRIGGER IF NOT EXISTS my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
-# Schema-qualified trigger name
+# Schema-qualified trigger name - schema checked first
 statement error
 CREATE TRIGGER my_schema.my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Schema with name my_schema does not exist
 
-# Schema-qualified table name
+# Schema-qualified table name - schema may not exist
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_schema.my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+schema "my_schema" does not exist
 
-# DELETE as trigger body
+# DELETE as trigger body - my_table does not exist
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table DELETE FROM other_table WHERE id = 1;
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # UPDATE as trigger body
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table UPDATE other_table SET col = 1;
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # Syntax errors - missing ON keyword
 statement error

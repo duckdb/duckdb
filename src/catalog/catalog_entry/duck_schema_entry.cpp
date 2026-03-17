@@ -33,7 +33,9 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -79,7 +81,8 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
                       catalog.IsSystemCatalog() ? make_uniq<DefaultTableFunctionGenerator>(catalog, *this) : nullptr),
       copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultFunctionGenerator>(catalog, *this) : nullptr),
-      sequences(catalog), collations(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
+      sequences(catalog), triggers(catalog), collations(catalog),
+      types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)),
       coordinate_systems(
           catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultCoordinateSystemGenerator>(catalog, *this) : nullptr) {
 }
@@ -235,6 +238,11 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntry(CatalogTransaction transact
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) {
 	auto sequence = make_uniq<SequenceCatalogEntry>(catalog, *this, info);
 	return AddEntry(transaction, std::move(sequence), info.on_conflict);
+}
+
+optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
+	auto trigger = make_uniq<TriggerCatalogEntry>(catalog, *this, info);
+	return AddEntry(transaction, std::move(trigger), info.on_conflict);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
@@ -406,6 +414,8 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 		return functions;
 	case CatalogType::SEQUENCE_ENTRY:
 		return sequences;
+	case CatalogType::TRIGGER_ENTRY:
+		return triggers;
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
 	case CatalogType::COORDINATE_SYSTEM_ENTRY:
@@ -427,6 +437,7 @@ void DuckSchemaEntry::Verify(Catalog &catalog) {
 	pragma_functions.Verify(catalog);
 	functions.Verify(catalog);
 	sequences.Verify(catalog);
+	triggers.Verify(catalog);
 	collations.Verify(catalog);
 	types.Verify(catalog);
 }

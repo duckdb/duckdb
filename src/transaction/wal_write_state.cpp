@@ -94,6 +94,9 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			case CatalogType::TABLE_MACRO_ENTRY:
 				log.WriteCreateTableMacro(parent.Cast<TableMacroCatalogEntry>());
 				break;
+			case CatalogType::TRIGGER_ENTRY:
+				// WAL persistence for triggers is not yet implemented
+				break;
 			default:
 				throw InternalException("Don't know how to create this type!");
 			}
@@ -146,6 +149,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		case CatalogType::SECRET_ENTRY:
 		case CatalogType::SECRET_TYPE_ENTRY:
 		case CatalogType::SECRET_FUNCTION_ENTRY:
+		case CatalogType::TRIGGER_ENTRY:
 			// do nothing, prepared statements and scalar functions aren't persisted to disk
 			break;
 		default:
@@ -164,6 +168,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::SECRET_ENTRY:
 	case CatalogType::SECRET_TYPE_ENTRY:
 	case CatalogType::SECRET_FUNCTION_ENTRY:
+	case CatalogType::TRIGGER_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:

@@ -31,6 +31,7 @@ struct CreateViewInfo;
 struct BoundCreateTableInfo;
 struct CreatePragmaFunctionInfo;
 struct CreateSequenceInfo;
+struct CreateTriggerInfo;
 struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
@@ -70,6 +71,8 @@ public:
 	virtual optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) = 0;
 	//! Creates a sequence with the given name in the schema
 	virtual optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) = 0;
+	//! Creates a trigger with the given name in the schema
+	virtual optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) = 0;
 	//! Create a table function within the given schema
 	virtual optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction,
 	                                                       CreateTableFunctionInfo &info) = 0;

@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -184,6 +185,20 @@ optional_ptr<CatalogEntry> Catalog::CreateSequence(ClientContext &context, Creat
 optional_ptr<CatalogEntry> Catalog::CreateSequence(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                                    CreateSequenceInfo &info) {
 	return schema.CreateSequence(transaction, info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
+	auto &schema = GetSchema(transaction, info.schema);
+	return CreateTrigger(transaction, schema, info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateTrigger(ClientContext &context, CreateTriggerInfo &info) {
+	return CreateTrigger(GetCatalogTransaction(context), info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateTrigger(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                                 CreateTriggerInfo &info) {
+	return schema.CreateTrigger(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//

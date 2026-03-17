@@ -20,6 +20,7 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -445,6 +446,57 @@ void Binder::BindLogicalType(LogicalType &type) {
 	});
 }
 
+SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
+	auto &schema = BindCreateSchema(create_trigger_info);
+
+	// Resolve table catalog/schema from trigger's if not specified
+	auto table_catalog = IsInvalidCatalog(create_trigger_info.base_table->catalog_name)
+	                         ? create_trigger_info.catalog
+	                         : create_trigger_info.base_table->catalog_name;
+	auto table_schema = IsInvalidSchema(create_trigger_info.base_table->schema_name)
+	                        ? create_trigger_info.schema
+	                        : create_trigger_info.base_table->schema_name;
+
+	// Validate the table exists
+	TableDescription table_description(table_catalog, table_schema,
+	                                   create_trigger_info.base_table->table_name);
+	auto table_ref = make_uniq<BaseTableRef>(table_description);
+	auto bound_table = Bind(*table_ref);
+	auto &get = bound_table.plan->Cast<LogicalGet>();
+	auto table_ptr = get.GetTable();
+	if (!table_ptr) {
+		throw BinderException("CREATE TRIGGER requires a base table");
+	}
+	auto &table = *table_ptr;
+
+	// Validate UPDATE OF columns exist
+	if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT && !create_trigger_info.columns.empty()) {
+		auto &columns = table.GetColumns();
+		for (const auto &col_name : create_trigger_info.columns) {
+			bool found = false;
+			for (const auto &col : columns.Logical()) {
+				if (StringUtil::CIEquals(col.GetName(), col_name)) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				throw BinderException("Column \"%s\" does not exist in table \"%s\"", col_name, table.name);
+			}
+		}
+	}
+
+	// Bind the trigger body to validate it
+	if (create_trigger_info.sql_body) {
+		Bind(*create_trigger_info.sql_body);
+	}
+
+	// Add table dependency
+	create_trigger_info.dependencies.AddDependency(table);
+
+	return schema;
+}
+
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
                                                          TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
@@ -660,8 +712,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 	}
-	case CatalogType::TRIGGER_ENTRY:
-		throw NotImplementedException("CREATE TRIGGER is not yet supported");
+	case CatalogType::TRIGGER_ENTRY: {
+		auto &create_trigger_info = stmt.info->Cast<CreateTriggerInfo>();
+		auto &schema = BindCreateTriggerInfo(create_trigger_info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TRIGGER, std::move(stmt.info), &schema);
+		break;
+	}
 	default:
 		throw InternalException("Unrecognized type!");
 	}

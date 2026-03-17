@@ -408,6 +408,9 @@ static string EntryToString(CatalogEntryInfo &info) {
 	case CatalogType::SECRET_FUNCTION_ENTRY: {
 		return StringUtil::Format("secret function \"%s\"", info.name);
 	}
+	case CatalogType::TRIGGER_ENTRY: {
+		return StringUtil::Format("trigger \"%s\"", info.name);
+	}
 	default:
 		throw InternalException("CatalogType not handled in EntryToString (DependencyManager) for %s",
 		                        CatalogTypeToString(type));
