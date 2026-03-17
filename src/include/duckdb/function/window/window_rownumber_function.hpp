@@ -9,8 +9,13 @@
 #pragma once
 
 #include "duckdb/function/window/window_executor.hpp"
+#include "duckdb/function/window_function.hpp"
 
 namespace duckdb {
+
+struct RowNumberFunc {
+	static WindowFunction GetFunction();
+};
 
 class WindowRowNumberExecutor : public WindowExecutor {
 public:
@@ -32,6 +37,10 @@ protected:
 };
 
 // NTILE is just scaled ROW_NUMBER
+struct NtileFunc {
+	static WindowFunction GetFunction();
+};
+
 class WindowNtileExecutor : public WindowRowNumberExecutor {
 public:
 	WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);

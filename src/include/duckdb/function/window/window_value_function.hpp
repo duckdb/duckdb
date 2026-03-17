@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/function/window/window_executor.hpp"
+#include "duckdb/function/window_function.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 
@@ -36,6 +38,14 @@ public:
 	vector<column_t> arg_order_idx;
 };
 
+struct LeadFun {
+	static WindowFunctionSet GetFunctions();
+};
+
+struct LagFun {
+	static WindowFunctionSet GetFunctions();
+};
+
 class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
 	WindowLeadLagExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
@@ -50,6 +60,10 @@ protected:
 	                      OperatorSinkInput &sink) const override;
 };
 
+struct FirstValueFun {
+	static WindowFunction GetFunction();
+};
+
 class WindowFirstValueExecutor : public WindowValueExecutor {
 public:
 	WindowFirstValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
@@ -57,6 +71,10 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
 	                      OperatorSinkInput &sink) const override;
+};
+
+struct LastValueFun {
+	static WindowFunction GetFunction();
 };
 
 class WindowLastValueExecutor : public WindowValueExecutor {
@@ -68,6 +86,10 @@ protected:
 	                      OperatorSinkInput &sink) const override;
 };
 
+struct NthValueFun {
+	static WindowFunction GetFunction();
+};
+
 class WindowNthValueExecutor : public WindowValueExecutor {
 public:
 	WindowNthValueExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
@@ -75,6 +97,11 @@ public:
 protected:
 	void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx,
 	                      OperatorSinkInput &sink) const override;
+};
+
+struct FillFun {
+public:
+	static WindowFunction GetFunction();
 };
 
 class WindowFillExecutor : public WindowValueExecutor {

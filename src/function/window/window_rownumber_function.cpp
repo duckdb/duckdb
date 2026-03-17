@@ -104,6 +104,11 @@ void WindowRowNumberLocalState::Finalize(ExecutionContext &context, CollectionPt
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
+WindowFunction RowNumberFunc::GetFunction() {
+	WindowFunction fun("row_number", {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER);
+	return fun;
+}
+
 WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, shared) {
 	for (const auto &order : wexpr.arg_orders) {
@@ -174,6 +179,11 @@ public:
 		WindowBoundariesState::AddImpliedBounds(required, wexpr);
 	}
 };
+
+WindowFunction NtileFunc::GetFunction() {
+	WindowFunction fun("ntile", {LogicalType::BIGINT}, LogicalType::BIGINT, ExpressionType::WINDOW_NTILE);
+	return fun;
+}
 
 WindowNtileExecutor::WindowNtileExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
     : WindowRowNumberExecutor(wexpr, shared) {

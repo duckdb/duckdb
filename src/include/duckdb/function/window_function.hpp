@@ -30,13 +30,25 @@ struct WindowFunctionInfo {
 class WindowFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
+	               ExpressionType window_enum,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
-	                         LogicalType(LogicalTypeId::INVALID), null_handling) {
+	                         LogicalType(LogicalTypeId::INVALID), null_handling),
+	      window_enum(window_enum) {
+	}
+
+	WindowFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, ExpressionType window_enum,
+	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING)
+	    : BaseScalarFunction(string(), arguments, return_type, FunctionStability::CONSISTENT,
+	                         LogicalType(LogicalTypeId::INVALID), null_handling),
+	      window_enum(window_enum) {
 	}
 
 	// clang-format off
 	// clang-format on
+
+	//! The expression enum for the window function
+	const ExpressionType window_enum;
 
 public:
 	//! Additional function info, passed to the bind

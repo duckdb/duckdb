@@ -4,6 +4,10 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
 
+#include "duckdb/function/window/window_rank_function.hpp"
+#include "duckdb/function/window/window_rownumber_function.hpp"
+#include "duckdb/function/window/window_value_function.hpp"
+
 namespace duckdb {
 
 WindowFunctionCatalogEntry::WindowFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
@@ -24,94 +28,83 @@ vector<unique_ptr<WindowFunctionCatalogEntry>> WindowFunctionCatalogEntry::GetEn
 	vector<unique_ptr<WindowFunctionCatalogEntry>> entries;
 
 	{
-		WindowFunction fun("row_number", {}, LogicalType::BIGINT);
+		CreateWindowFunctionInfo info(RowNumberFunc::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		CreateWindowFunctionInfo info(RankFunc::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		CreateWindowFunctionInfo info(DenseRankFun::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		CreateWindowFunctionInfo info(RankDenseFun::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		CreateWindowFunctionInfo info(NtileFunc::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		CreateWindowFunctionInfo info(PercentRankFun::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		CreateWindowFunctionInfo info(CumeDistFun::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		CreateWindowFunctionInfo info(FirstValueFun::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		//	first is also an aggregate...
+		auto fun = FirstValueFun::GetFunction();
+		fun.name = "first";
 		CreateWindowFunctionInfo info(fun);
 		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
 	}
 
 	{
-		WindowFunction fun("rank", {}, LogicalType::BIGINT);
+		CreateWindowFunctionInfo info(LastValueFun::GetFunction());
+		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
+	}
+
+	{
+		//	last is also an aggregate...
+		auto fun = LastValueFun::GetFunction();
+		fun.name = "last";
 		CreateWindowFunctionInfo info(fun);
 		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
 	}
 
 	{
-		WindowFunction fun("dense_rank", {}, LogicalType::BIGINT);
-		CreateWindowFunctionInfo info(fun);
+		CreateWindowFunctionInfo info(NthValueFun::GetFunction());
 		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
 	}
 
 	{
-		WindowFunction fun("rank_dense", {}, LogicalType::BIGINT);
-		CreateWindowFunctionInfo info(fun);
+		CreateWindowFunctionInfo info(LeadFun::GetFunctions());
 		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
 	}
 
 	{
-		WindowFunction fun("ntile", {LogicalType::BIGINT}, LogicalType::BIGINT);
-		CreateWindowFunctionInfo info(fun);
+		CreateWindowFunctionInfo info(LagFun::GetFunctions());
 		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
 	}
 
 	{
-		WindowFunction fun("percent_rank", {}, LogicalType::DOUBLE);
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("cume_dist", {}, LogicalType::DOUBLE);
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("first_value", {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"));
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("first", {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"));
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("last_value", {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"));
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("last", {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"));
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("nth_value", {LogicalType::TEMPLATE("T"), LogicalType::BIGINT}, LogicalType::TEMPLATE("T"));
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("lead", {LogicalType::TEMPLATE("T"), LogicalType::BIGINT, LogicalType::TEMPLATE("T")},
-		                   LogicalType::TEMPLATE("T"));
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("lag", {LogicalType::TEMPLATE("T"), LogicalType::BIGINT, LogicalType::TEMPLATE("T")},
-		                   LogicalType::TEMPLATE("T"));
-		CreateWindowFunctionInfo info(fun);
-		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
-	}
-
-	{
-		WindowFunction fun("fill", {LogicalType::TEMPLATE("T")}, LogicalType::TEMPLATE("T"));
-		CreateWindowFunctionInfo info(fun);
+		CreateWindowFunctionInfo info(FillFun::GetFunction());
 		entries.emplace_back(make_uniq<WindowFunctionCatalogEntry>(catalog, schema, info));
 	}
 
