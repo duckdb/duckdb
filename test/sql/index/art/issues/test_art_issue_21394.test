@@ -1,0 +1,18 @@
+# name: test/sql/index/art/issues/test_art_issue_21394.test
+# description: Issue #21394 - Reading stale update during index removal after UPDATE + CREATE INDEX + DELETE
+# group: [issues]
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (2);
+
+statement ok
+UPDATE t0 SET c0=0;
+
+statement ok
+CREATE INDEX i1 ON t0(c0);
+
+statement ok
+DELETE FROM t0;
