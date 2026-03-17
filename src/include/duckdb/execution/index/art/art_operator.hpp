@@ -32,14 +32,14 @@ public:
 			if (current.GetType() == NType::PREFIX) {
 				ConstNodeHandle handle(art, current);
 				auto data = handle.GetPtr();
-				auto child = reinterpret_cast<const NodePointer *>(data + art.PrefixCount() + 1);
+				auto &child = *reinterpret_cast<const NodePointer *>(data + art.PrefixCount() + 1);
 				for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
 					if (data[i] != key[depth]) {
 						return NodePointer();
 					}
 					depth++;
 				}
-				current = *child;
+				current = child;
 				continue;
 			}
 

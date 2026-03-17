@@ -28,7 +28,7 @@ string ConstPrefixHandle::ToString(ART &art, const NodePointer &node, const ToSt
 	auto str = options.tree_prefix + PREFIX_BRANCH_END + "Prefix: |";
 	reference<const NodePointer> ref(node);
 	auto child_options = options;
-	Iterator(art, ref, true, [&](const ConstNodeHandle &handle, const_data_ptr_t data, const NodePointer *child) {
+	Iterator(art, ref, true, [&](const ConstNodeHandle &handle, const_data_ptr_t data, const NodePointer &child) {
 		for (idx_t i = 0; i < data[art.PrefixCount()]; i++) {
 			str += format_byte(data[i]) + "|";
 			if (options.key_path) {
@@ -47,7 +47,7 @@ string ConstPrefixHandle::ToString(ART &art, const NodePointer &node, const ToSt
 void ConstPrefixHandle::Verify(ART &art, const NodePointer &node) {
 	reference<const NodePointer> ref(node);
 
-	Iterator(art, ref, true, [&](const ConstNodeHandle &handle, const_data_ptr_t data, const NodePointer *child) {
+	Iterator(art, ref, true, [&](const ConstNodeHandle &handle, const_data_ptr_t data, const NodePointer &child) {
 		D_ASSERT(data[art.PrefixCount()] != 0);
 		D_ASSERT(data[art.PrefixCount()] <= art.PrefixCount());
 	});

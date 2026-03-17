@@ -30,11 +30,11 @@ private:
 		while (ref.get().HasMetadata() && ref.get().GetType() == PREFIX) {
 			ConstNodeHandle handle(art, ref);
 			auto data = handle.GetPtr();
-			auto child = reinterpret_cast<const NodePointer *>(data + art.PrefixCount() + 1);
+			auto &child = *reinterpret_cast<const NodePointer *>(data + art.PrefixCount() + 1);
 
 			lambda(handle, data, child);
 
-			ref = *child;
+			ref = child;
 			if (exit_gate && ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 				break;
 			}

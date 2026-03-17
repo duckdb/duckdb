@@ -163,8 +163,8 @@ void BufferManagedScan(ART &art, NodePointer &root, NODE_HANDLER &&node_handler,
 			break;
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
-			auto child = reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
-			push_node = child_handler(*child);
+			auto &child = *reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
+			push_node = child_handler(child);
 			if (push_node.HasMetadata()) {
 				stack.push_back(push_node);
 			}
