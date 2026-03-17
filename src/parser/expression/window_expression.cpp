@@ -30,6 +30,11 @@ WindowExpression::WindowExpression(ExpressionType type, string catalog_name, str
 	}
 }
 
+struct WindowFunctionDefinition {
+	const char *name;
+	ExpressionType expression_type;
+};
+
 static const WindowFunctionDefinition internal_window_functions[] = {
     {"rank", ExpressionType::WINDOW_RANK},
     {"rank_dense", ExpressionType::WINDOW_RANK_DENSE},
@@ -48,13 +53,9 @@ static const WindowFunctionDefinition internal_window_functions[] = {
     {"fill", ExpressionType::WINDOW_FILL},
     {nullptr, ExpressionType::INVALID}};
 
-const WindowFunctionDefinition *WindowExpression::WindowFunctions() {
-	return internal_window_functions;
-}
-
 ExpressionType WindowExpression::WindowToExpressionType(string &fun_name) {
 	D_ASSERT(StringUtil::IsLower(fun_name));
-	auto functions = WindowFunctions();
+	auto functions = internal_window_functions;
 	for (idx_t i = 0; functions[i].name != nullptr; i++) {
 		if (fun_name == functions[i].name) {
 			return functions[i].expression_type;

@@ -26,6 +26,7 @@ add_library_unity(
   create_table_info.cpp
   create_type_info.cpp
   create_view_info.cpp
+  create_window_function_info.cpp
   detach_info.cpp
   drop_info.cpp
   exported_table_data.cpp

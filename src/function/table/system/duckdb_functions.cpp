@@ -10,25 +10,23 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 constexpr const char *AggregateFunctionCatalogEntry::Name;
 
 struct DuckDBFunctionsData : public GlobalTableFunctionState {
-	DuckDBFunctionsData() : window_iterator(WindowExpression::WindowFunctions()), offset(0), offset_in_entry(0) {
+	DuckDBFunctionsData() : offset(0), offset_in_entry(0) {
 	}
 
 	vector<reference<CatalogEntry>> entries;
-	const WindowFunctionDefinition *window_iterator;
+	vector<unique_ptr<WindowFunctionCatalogEntry>> window_entries;
 	idx_t offset;
 	idx_t offset_in_entry;
 };
@@ -117,6 +115,11 @@ unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context,
 		ExtractFunctionsFromSchema(context, schema.get(), *result);
 	};
 
+	result->window_entries = WindowFunctionCatalogEntry::GetEntries(context);
+	for (auto &entry : result->window_entries) {
+		result->entries.push_back(*entry);
+	}
+
 	std::sort(result->entries.begin(), result->entries.end(),
 	          [&](reference<CatalogEntry> a, reference<CatalogEntry> b) {
 		          return (int32_t)a.get().type < (int32_t)b.get().type;
@@ -191,30 +194,9 @@ struct ScalarFunctionExtractor {
 	}
 };
 
-namespace {
-
-struct WindowFunctionCatalogEntry : CatalogEntry {
-public:
-	WindowFunctionCatalogEntry(const SchemaCatalogEntry &schema, const string &name, vector<LogicalType> arguments,
-	                           LogicalType return_type)
-	    : CatalogEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, name, 0), schema(schema), arguments(std::move(arguments)),
-	      return_type(std::move(return_type)) {
-		internal = true;
-	}
-
-public:
-	const SchemaCatalogEntry &schema;
-	vector<LogicalType> arguments;
-	LogicalType return_type;
-	vector<FunctionDescription> descriptions;
-	string alias_of;
-};
-
-} // namespace
-
 struct WindowFunctionExtractor {
 	static idx_t FunctionCount(WindowFunctionCatalogEntry &entry) {
-		return 1;
+		return entry.functions.Size();
 	}
 
 	static Value GetFunctionType() {
@@ -223,12 +205,12 @@ struct WindowFunctionExtractor {
 	}
 
 	static Value GetReturnType(WindowFunctionCatalogEntry &entry, idx_t offset) {
-		return Value(entry.return_type.ToString());
+		return Value(entry.functions.GetFunctionByOffset(offset).GetReturnType().ToString());
 	}
 
 	static vector<Value> GetParameters(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.arguments.size(); i++) {
+		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).arguments.size(); i++) {
 			results.emplace_back("col" + to_string(i));
 		}
 		return results;
@@ -236,14 +218,16 @@ struct WindowFunctionExtractor {
 
 	static Value GetParameterTypes(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.arguments.size(); i++) {
-			results.emplace_back(entry.arguments[i].ToString());
+		auto fun = entry.functions.GetFunctionByOffset(offset);
+		for (idx_t i = 0; i < fun.arguments.size(); i++) {
+			results.emplace_back(fun.arguments[i].ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(WindowFunctionCatalogEntry &entry, idx_t offset) {
-		return entry.arguments;
+		auto fun = entry.functions.GetFunctionByOffset(offset);
+		return fun.arguments;
 	}
 
 	static Value GetVarArgs(WindowFunctionCatalogEntry &entry, idx_t offset) {
@@ -571,7 +555,7 @@ struct PragmaFunctionExtractor {
 static vector<Value> ToValueVector(vector<string> &string_vector) {
 	vector<Value> result;
 	for (string &str : string_vector) {
-		result.emplace_back(Value(str));
+		result.emplace_back(str);
 	}
 	return result;
 }
@@ -725,70 +709,11 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	return function_idx + 1 == OP::FunctionCount(function);
 }
 
-void ExtractWindowFunctionData(ClientContext &context, const WindowFunctionDefinition *it, DataChunk &output,
-                               idx_t output_offset) {
-	D_ASSERT(it && it->name != nullptr);
-	string name(it->name);
-
-	auto &system_catalog = Catalog::GetSystemCatalog(DatabaseInstance::GetDatabase(context));
-	string schema_name(DEFAULT_SCHEMA);
-	EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name);
-	auto &default_schema = system_catalog.GetSchema(context, schema_lookup);
-
-	switch (it->expression_type) {
-	case ExpressionType::WINDOW_FILL:
-	case ExpressionType::WINDOW_LAST_VALUE:
-	case ExpressionType::WINDOW_FIRST_VALUE: {
-		WindowFunctionCatalogEntry function(default_schema, name, {LogicalType::TEMPLATE("T")},
-		                                    LogicalType::TEMPLATE("T"));
-		ExtractFunctionData<WindowFunctionCatalogEntry, WindowFunctionExtractor>(function, 0, output, output_offset);
-		break;
-	}
-	case ExpressionType::WINDOW_NTH_VALUE: {
-		WindowFunctionCatalogEntry function(default_schema, name, {LogicalType::TEMPLATE("T"), LogicalType::BIGINT},
-		                                    LogicalType::TEMPLATE("T"));
-		ExtractFunctionData<WindowFunctionCatalogEntry, WindowFunctionExtractor>(function, 0, output, output_offset);
-		break;
-	}
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_RANK_DENSE: {
-		WindowFunctionCatalogEntry function(default_schema, name, {}, LogicalType::BIGINT);
-		ExtractFunctionData<WindowFunctionCatalogEntry, WindowFunctionExtractor>(function, 0, output, output_offset);
-		break;
-	}
-	case ExpressionType::WINDOW_NTILE: {
-		WindowFunctionCatalogEntry function(default_schema, name, {LogicalType::BIGINT}, LogicalType::BIGINT);
-		ExtractFunctionData<WindowFunctionCatalogEntry, WindowFunctionExtractor>(function, 0, output, output_offset);
-		break;
-	}
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_CUME_DIST: {
-		WindowFunctionCatalogEntry function(default_schema, name, {}, LogicalType::DOUBLE);
-		ExtractFunctionData<WindowFunctionCatalogEntry, WindowFunctionExtractor>(function, 0, output, output_offset);
-		break;
-	}
-	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_LEAD: {
-		WindowFunctionCatalogEntry function(
-		    default_schema, name, {LogicalType::TEMPLATE("T"), LogicalType::BIGINT, LogicalType::TEMPLATE("T")},
-		    LogicalType::TEMPLATE("T"));
-		ExtractFunctionData<WindowFunctionCatalogEntry, WindowFunctionExtractor>(function, 0, output, output_offset);
-		break;
-	}
-	default:
-		throw InternalException("Window function '%s' not implemented", name);
-	}
-}
-
 static bool Finished(const DuckDBFunctionsData &data) {
 	if (data.offset < data.entries.size()) {
 		return false;
 	}
-	if (data.window_iterator->name == nullptr) {
-		return true;
-	}
-	return false;
+	return true;
 }
 
 void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -829,6 +754,10 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 			finished = ExtractFunctionData<PragmaFunctionCatalogEntry, PragmaFunctionExtractor>(
 			    entry, data.offset_in_entry, output, count);
 			break;
+		case CatalogType::WINDOW_FUNCTION_ENTRY:
+			finished = ExtractFunctionData<WindowFunctionCatalogEntry, WindowFunctionExtractor>(
+			    entry, data.offset_in_entry, output, count);
+			break;
 		default:
 			throw InternalException("FIXME: unrecognized function type in duckdb_functions");
 		}
@@ -841,11 +770,6 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 			data.offset_in_entry++;
 		}
 		count++;
-	}
-	while (data.window_iterator->name != nullptr && count < STANDARD_VECTOR_SIZE) {
-		ExtractWindowFunctionData(context, data.window_iterator, output, count);
-		count++;
-		data.window_iterator++;
 	}
 	output.SetCardinality(count);
 }
