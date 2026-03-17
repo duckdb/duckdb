@@ -228,9 +228,6 @@ public:
 	operator idx_t() { // NOLINT: allow implicit conversion
 		return index;
 	}
-	operator size_t() { // NOLINT: allow implicit conversion
-		return static_cast<size_t>(index);
-	}
 	idx_t GetIndex() const {
 		return index;
 	}
