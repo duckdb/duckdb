@@ -2014,9 +2014,10 @@ void IEJoinLocalSourceState::ExecuteAntiTask(ExecutionContext &context, DataChun
 	auto &op = gsource.op;
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 
+	outer_sel.reserve(STANDARD_VECTOR_SIZE);
 	outer_sel.resize(0);
-	for (; outer_idx < outer_count; ++outer_idx) {
-		outer_sel.emplace_back(outer_idx);
+	while (outer_idx < outer_count) {
+		outer_sel.emplace_back(outer_idx++);
 		if (outer_sel.size() >= STANDARD_VECTOR_SIZE) {
 			break;
 		}
