@@ -197,7 +197,7 @@ optional_ptr<CatalogEntry> Catalog::CreateTrigger(ClientContext &context, Create
 }
 
 optional_ptr<CatalogEntry> Catalog::CreateTrigger(CatalogTransaction transaction, SchemaCatalogEntry &schema,
-                                                 CreateTriggerInfo &info) {
+                                                  CreateTriggerInfo &info) {
 	return schema.CreateTrigger(transaction, info);
 }
 

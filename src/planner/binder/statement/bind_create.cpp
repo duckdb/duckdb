@@ -458,8 +458,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	                        : create_trigger_info.base_table->schema_name;
 
 	// Validate the table exists
-	TableDescription table_description(table_catalog, table_schema,
-	                                   create_trigger_info.base_table->table_name);
+	TableDescription table_description(table_catalog, table_schema, create_trigger_info.base_table->table_name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	auto &get = bound_table.plan->Cast<LogicalGet>();

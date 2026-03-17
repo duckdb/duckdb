@@ -9,9 +9,8 @@ namespace duckdb {
 
 TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTriggerInfo &info)
     : StandardEntry(CatalogType::TRIGGER_ENTRY, schema, catalog, info.trigger_name),
-      base_table(unique_ptr_cast<TableRef, BaseTableRef>(info.base_table->Copy())),
-      timing(info.timing), event_type(info.event_type), columns(info.columns),
-      for_each_row(info.for_each == TriggerForEach::ROW),
+      base_table(unique_ptr_cast<TableRef, BaseTableRef>(info.base_table->Copy())), timing(info.timing),
+      event_type(info.event_type), columns(info.columns), for_each_row(info.for_each == TriggerForEach::ROW),
       sql_body_text(info.sql_body_text) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
