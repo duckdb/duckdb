@@ -683,7 +683,7 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 
 	// CreateProjectionOperator only includes referenced group columns, ordered by partition index.
 	// So the projection position is determined by how many smaller partition indices are also referenced.
-	std::set<idx_t> ordered_group_vals;
+	set<idx_t> ordered_group_vals;
 	for (const auto &g : group_idxs) {
 		ordered_group_vals.insert(g.second);
 	}
