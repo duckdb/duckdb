@@ -3194,6 +3194,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION), "OPTIMIZER_OUTER_JOIN_SIMPLIFICATION" },
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
+		{ static_cast<uint32_t>(MetricType::PARSER), "PARSER" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_COLUMN_BINDING), "PHYSICAL_PLANNER_COLUMN_BINDING" },
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_CREATE_PLAN), "PHYSICAL_PLANNER_CREATE_PLAN" },
@@ -3206,12 +3207,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 69, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 70, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 69, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 70, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
