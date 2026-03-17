@@ -16,6 +16,7 @@
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/common/enums/active_transaction_state.hpp"
 
 namespace duckdb {
 
@@ -29,7 +30,7 @@ enum class PreprocessingTransactionHandling : uint8_t {
 };
 
 void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements,
-                   PreprocessingTransactionHandling transaction_handling,
+                   const PreprocessingTransactionHandling transaction_handling,
                    vector<unique_ptr<SQLStatement>> &result_statements) {
 	if (transaction_handling == PreprocessingTransactionHandling::WRAP_IN_TRANSACTION) {
 		auto begin_info = make_uniq<TransactionInfo>(
@@ -58,20 +59,21 @@ StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(c
 }
 
 PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLStatement>> &body_statements,
-                                                        bool is_in_active_transaction, bool can_wrap = true) {
+                                                        ActiveTransactionState full_transaction_state,
+                                                        bool can_wrap = true) {
 	if (body_statements.size() <= 1) {
 		return PreprocessingTransactionHandling::NONE;
 	}
-	if (!is_in_active_transaction && can_wrap) {
+	if (full_transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS && can_wrap) {
 		return PreprocessingTransactionHandling::WRAP_IN_TRANSACTION;
 	}
-	if (is_in_active_transaction) {
+	if (full_transaction_state == ActiveTransactionState::OTHER_TRANSACTIONS) {
 		return PreprocessingTransactionHandling::SET_INVALIDATION_POLICY;
 	}
 	return PreprocessingTransactionHandling::NONE;
 }
 
-void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_transaction,
+void UnpackMultiStatement(MultiStatement &multi_statement, const ActiveTransactionState active_transaction_state,
                           vector<unique_ptr<SQLStatement>> &new_statements) {
 #ifdef DEBUG // MultiStatement should not contain transaction statements
 	for (auto &sub_statement : multi_statement.statements) {
@@ -85,7 +87,7 @@ void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_tra
 			has_select = true;
 		}
 	}
-	auto handling = GetTransactionHandling(multi_statement.statements, is_in_active_transaction, !has_select);
+	auto handling = GetTransactionHandling(multi_statement.statements, active_transaction_state, !has_select);
 	AddStatements(multi_statement.statements, handling, new_statements);
 }
 
@@ -109,7 +111,7 @@ vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_
 }
 
 void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-                                       optional_ptr<TransactionContext> transaction_context) {
+                                       ActiveTransactionState transaction_context_state) {
 	// Quick check: do we need preprocessing at all?
 	bool needs_preprocessing = false;
 	for (auto &stmt : statements) {
@@ -122,26 +124,32 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 		return;
 	}
 
-	context.RunFunctionInTransactionInternal(lock, [&] { PreprocessInternal(lock, statements, transaction_context); });
+	context.RunFunctionInTransactionInternal(lock,
+	                                         [&] { PreprocessInternal(lock, statements, transaction_context_state); });
 }
 
 void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-                                               optional_ptr<TransactionContext> transaction_context) {
-	optional_ptr<TransactionStatement> chained_transaction = nullptr;
+                                               const ActiveTransactionState transaction_context_state) {
+	ActiveTransactionState local_transaction_state = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto query = statements[i]->query;
+		const ActiveTransactionState full_transaction_state =
+		    (transaction_context_state == ActiveTransactionState::OTHER_TRANSACTIONS ||
+		     local_transaction_state == ActiveTransactionState::OTHER_TRANSACTIONS)
+		        ? ActiveTransactionState::OTHER_TRANSACTIONS
+		        : ActiveTransactionState::NO_OTHER_TRANSACTIONS;
+
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
 			auto reparsed_statements = TryReparsePragma(std::move(statements[i]));
-			const bool is_in_active_transaction = transaction_context || chained_transaction;
-			auto handling = GetTransactionHandling(reparsed_statements, is_in_active_transaction);
+			const auto handling = GetTransactionHandling(reparsed_statements, full_transaction_state);
 			AddStatements(reparsed_statements, handling, new_statements);
 			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
 			auto &multi_statement = statements[i]->Cast<MultiStatement>();
-			UnpackMultiStatement(multi_statement, transaction_context || chained_transaction, new_statements);
+			UnpackMultiStatement(multi_statement, full_transaction_state, new_statements);
 			break;
 		}
 		case StatementType::TRANSACTION_STATEMENT: {
@@ -149,12 +157,12 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 
 			if (transaction_stmt.info->type == TransactionType::BEGIN_TRANSACTION) {
 				new_statements.push_back(std::move(statements[i]));
-				chained_transaction = new_statements.back()->Cast<TransactionStatement>();
+				local_transaction_state = ActiveTransactionState::OTHER_TRANSACTIONS;
 				break;
 			}
 			if (transaction_stmt.info->type == TransactionType::COMMIT ||
 			    transaction_stmt.info->type == TransactionType::ROLLBACK) {
-				chained_transaction = nullptr;
+				local_transaction_state = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
 			}
 			new_statements.push_back(std::move(statements[i]));
 			break;
