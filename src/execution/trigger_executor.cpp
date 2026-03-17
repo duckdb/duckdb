@@ -67,7 +67,11 @@ void TriggerExecutor::FireAfterInsert(ClientContext &context, TableCatalogEntry 
 	// The schema.Scan holds catalog_lock for its entire duration.
 	// ExecuteTriggerBody may call FireAfterInsert again (recursive triggers),
 	// which also tries to acquire catalog_lock => deadlock.
-	vector<string> trigger_bodies;
+	struct TriggerInfo {
+		string body;
+		TriggerForEach for_each;
+	};
+	vector<TriggerInfo> triggers;
 	{
 		auto &schema = table.ParentSchema();
 		schema.Scan(context, CatalogType::TRIGGER_ENTRY, [&](CatalogEntry &entry) {
@@ -78,15 +82,20 @@ void TriggerExecutor::FireAfterInsert(ClientContext &context, TableCatalogEntry 
 			if (trigger.base_table->table_name != table.name) {
 				return;
 			}
-			trigger_bodies.push_back(trigger.sql_body_text);
+			triggers.push_back({trigger.sql_body_text, trigger.for_each});
 		});
 	}
 
 	trigger_depth++;
 	try {
-		for (idx_t i = 0; i < row_count; i++) {
-			for (auto &body : trigger_bodies) {
-				ExecuteTriggerBody(context, body);
+		for (auto &trigger : triggers) {
+			if (trigger.for_each == TriggerForEach::ROW) {
+				for (idx_t i = 0; i < row_count; i++) {
+					ExecuteTriggerBody(context, trigger.body);
+				}
+			} else {
+				// FOR EACH STATEMENT: fire once regardless of row count
+				ExecuteTriggerBody(context, trigger.body);
 			}
 		}
 	} catch (...) {
