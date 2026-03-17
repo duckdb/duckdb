@@ -6,8 +6,7 @@ ExtraDropTriggerInfo::ExtraDropTriggerInfo() : ExtraDropInfo(ExtraDropInfoType::
 }
 
 ExtraDropTriggerInfo::ExtraDropTriggerInfo(const ExtraDropTriggerInfo &info)
-    : ExtraDropInfo(ExtraDropInfoType::TRIGGER_INFO),
-      base_table(info.base_table ? info.base_table->Copy() : nullptr) {
+    : ExtraDropInfo(ExtraDropInfoType::TRIGGER_INFO), base_table(info.base_table ? info.base_table->Copy() : nullptr) {
 }
 
 unique_ptr<ExtraDropInfo> ExtraDropTriggerInfo::Copy() const {

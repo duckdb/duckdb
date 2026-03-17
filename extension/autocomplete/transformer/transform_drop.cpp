@@ -248,7 +248,7 @@ string PEGTransformerFactory::TransformDropSecretStorage(PEGTransformer &transfo
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransformer &transformer,
-                                                                     optional_ptr<ParseResult> parse_result) {
+                                                                      optional_ptr<ParseResult> parse_result) {
 	// DropTrigger <- 'TRIGGER' IfExists? QualifiedName 'ON' BaseTableName
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
