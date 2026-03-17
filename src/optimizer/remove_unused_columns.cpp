@@ -833,6 +833,25 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	}
 	get.SetColumnIds(std::move(new_column_ids));
 
+	// remap table filters so they point towards the new set of ids
+	if (get.table_filters.HasFilters()) {
+		// Build a mapping from old ProjectionIndex -> new ProjectionIndex using original_ids
+		unordered_map<ProjectionIndex, ProjectionIndex> old_to_new_pos;
+		old_to_new_pos.reserve(original_ids.size());
+		for (idx_t new_pos = 0; new_pos < original_ids.size(); new_pos++) {
+			old_to_new_pos[original_ids[new_pos]] = ProjectionIndex(new_pos);
+		}
+		TableFilterSet remapped_filters;
+		for (auto &entry : get.table_filters) {
+			auto it = old_to_new_pos.find(entry.ColumnIndex());
+			if (it == old_to_new_pos.end()) {
+				throw InternalException("RemoveUnusedColumns: removed a filter column");
+			}
+			remapped_filters.PushFilter(it->second, entry.TakeFilter());
+		}
+		get.table_filters = std::move(remapped_filters);
+	}
+
 	if (has_pushdown_extract && !filter_expressions.empty()) {
 		// if we have performed pushdown extract and we have filter expressions we might have adjusted the filter
 		// expressions remove the table filters and push a filter, then try to re-push the filters with the new set of

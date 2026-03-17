@@ -680,8 +680,8 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 						continue;
 					}
 					auto &col_data = GetColumn(column_idx);
-					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx.index], result_vector, sel,
-					                approved_tuple_count, filter.filter, table_filter_state);
+					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx.index], result_vector,
+					                sel, approved_tuple_count, filter.filter, table_filter_state);
 				}
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {

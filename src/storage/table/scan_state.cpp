@@ -47,7 +47,8 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 	return sampling_info;
 }
 
-ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids, TableFilter &filter)
+ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
+                       TableFilter &filter)
     : scan_column_index(index), table_column_index(column_ids[index.index]), filter(filter), always_true(false) {
 	filter_state = TableFilterState::Initialize(context, filter);
 }
@@ -62,7 +63,7 @@ void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
 		filter_list.emplace_back(context, entry.ColumnIndex(), column_ids, entry.Filter());
 	}
 	column_has_filter.reserve(column_ids.size());
-	for(auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
+	for (auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
 		bool has_filter = table_filters->HasFilter(col_idx);
 		column_has_filter.push_back(has_filter);
 	}

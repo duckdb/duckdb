@@ -169,7 +169,8 @@ struct ColumnFetchState {
 };
 
 struct ScanFilter {
-	ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids, TableFilter &filter);
+	ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
+	           TableFilter &filter);
 
 	ProjectionIndex scan_column_index;
 	StorageIndex table_column_index;

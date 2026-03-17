@@ -126,7 +126,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 					column_statistics = get.function.statistics_extended(context, input);
 				} else {
 					D_ASSERT(get.function.statistics);
-					column_statistics = get.function.statistics(context, get.bind_data.get(), column_index.GetPrimaryIndex());
+					column_statistics =
+					    get.function.statistics(context, get.bind_data.get(), column_index.GetPrimaryIndex());
 				}
 			}
 
@@ -452,8 +453,8 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : and_filter.child_filters) {
-			cardinality_after_filters = MinValue(
-			    cardinality_after_filters, InspectTableFilter(cardinality, *child_filter, base_stats));
+			cardinality_after_filters =
+			    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, *child_filter, base_stats));
 		}
 		return cardinality_after_filters;
 	}

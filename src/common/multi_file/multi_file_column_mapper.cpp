@@ -551,8 +551,8 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	D_ASSERT(global_column.type.IsNested());
 	switch (global_column.type.id()) {
 	case LogicalTypeId::STRUCT:
-		return MapColumnStruct(context, global_column, global_index, local_column, local_idx, mapper, std::move(mapping),
-		                       is_root);
+		return MapColumnStruct(context, global_column, global_index, local_column, local_idx, mapper,
+		                       std::move(mapping), is_root);
 	case LogicalTypeId::LIST:
 		return MapColumnList(context, global_column, global_index, local_column, local_idx, mapper, std::move(mapping),
 		                     is_root);
@@ -568,8 +568,8 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	}
 }
 
-unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileLocalIndex local_idx, ColumnMapResult &mapping,
-                                              const MultiFileColumnDefinition &global_column,
+unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileLocalIndex local_idx,
+                                              ColumnMapResult &mapping, const MultiFileColumnDefinition &global_column,
                                               bool is_trivially_mappable) {
 	auto &local_column = *mapping.local_column;
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx.GetIndex());
@@ -1065,8 +1065,9 @@ bool CanPropagateCast(const MultiFileIndexMapping &mapping, const LogicalType &l
 	return StatisticsPropagator::CanPropagateCast(local_type, global_type);
 }
 
-unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFilter>> &filters,
-                                                                ResultColumnMapping &mapping) {
+unique_ptr<TableFilterSet>
+MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFilter>> &filters,
+                                     ResultColumnMapping &mapping) {
 	if (filters.empty()) {
 		return nullptr;
 	}
