@@ -1,4 +1,4 @@
-#include "duckdb/storage/file_buffer_handle_group.hpp"
+#include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 
 #include "duckdb/common/exception.hpp"
 

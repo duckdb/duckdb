@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/external_file_cache_block.hpp
+// duckdb/storage/external_file_cache/external_file_cache_block.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,7 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/typedefs.hpp"
-#include "duckdb/storage/external_file_cache_block_state.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_block_state.hpp"
 
 #include <condition_variable>
 

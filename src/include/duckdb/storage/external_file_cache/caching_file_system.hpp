@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/caching_file_system.hpp
+// duckdb/storage/external_file_cache/caching_file_system.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,8 +15,8 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
-#include "duckdb/storage/file_buffer_handle_group.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 
 namespace duckdb {
 

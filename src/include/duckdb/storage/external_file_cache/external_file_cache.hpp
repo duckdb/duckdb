@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/external_file_cache.hpp
+// duckdb/storage/external_file_cache/external_file_cache.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -20,7 +20,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
-#include "duckdb/storage/external_file_cache_block.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_block.hpp"
 
 namespace duckdb {
 

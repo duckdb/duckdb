@@ -1,49 +1,53 @@
-commit ee90e7deab0c28c894b307edae7c17f0e27dd5b0
+commit e48276625819bc201704f232ab1c7a0dfedd0fec
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 15 22:26:54 2026 +0000
 
     Sync DuckDB core interfaces
 
 diff --git a/src/deletes/deletion_vector.cpp b/src/deletes/deletion_vector.cpp
-index a3974c21..8c92993d 100644
+index a3974c21..2b1fd8cc 100644
 --- a/src/deletes/deletion_vector.cpp
 +++ b/src/deletes/deletion_vector.cpp
-@@ -2,6 +2,8 @@
+@@ -1,8 +1,9 @@
+ #include "deletes/deletion_vector.hpp"
  #include "iceberg_multi_file_list.hpp"
  
- #include "duckdb/storage/caching_file_system.hpp"
-+#include "duckdb/storage/file_buffer_handle_group.hpp"
+-#include "duckdb/storage/caching_file_system.hpp"
 +#include "duckdb/common/allocator.hpp"
  #include "duckdb/common/bswap.hpp"
++#include "duckdb/common/file_system.hpp"
  
  namespace duckdb {
-@@ -64,7 +66,6 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
- 	auto caching_file_system = CachingFileSystem::Get(context);
  
- 	auto caching_file_handle = caching_file_system.OpenFile(file_path, FileOpenFlags::FILE_FLAGS_READ);
+@@ -61,10 +62,9 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
+ 	auto file_path = entry.file_path;
+ 	D_ASSERT(!entry.referenced_data_file.empty());
+ 
+-	auto caching_file_system = CachingFileSystem::Get(context);
+-
+-	auto caching_file_handle = caching_file_system.OpenFile(file_path, FileOpenFlags::FILE_FLAGS_READ);
 -	data_ptr_t data = nullptr;
++	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ;
++	flags.SetCachingMode(CachingMode::CACHE_REMOTE_ONLY);
++	auto file_handle = fs.OpenFile(file_path, flags);
  
  	D_ASSERT(!entry.content_offset.IsNull());
  	D_ASSERT(!entry.content_size_in_bytes.IsNull());
-@@ -72,8 +73,16 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
+@@ -72,11 +72,11 @@ void IcebergMultiFileList::ScanPuffinFile(const IcebergDataFile &entry) const {
  	auto offset = entry.content_offset.GetValue<int64_t>();
  	auto length = entry.content_size_in_bytes.GetValue<int64_t>();
  
 -	auto buf_handle = caching_file_handle->Read(data, length, offset);
 -	auto buffer_data = buf_handle.Ptr();
-+	auto handle_group = caching_file_handle->Read(length, offset);
-+	data_ptr_t buffer_data;
-+	AllocatedData local_buffer;
-+	if (handle_group.GetHandles().size() == 1) {
-+		buffer_data = handle_group.Ptr();
-+	} else {
-+		local_buffer = Allocator::DefaultAllocator().Allocate(length);
-+		handle_group.CopyTo(local_buffer.get(), length);
-+		buffer_data = local_buffer.get();
-+	}
++	auto local_buffer = Allocator::DefaultAllocator().Allocate(length);
++	fs.Read(*file_handle, local_buffer.get(), length, offset);
  
  	positional_delete_data.emplace(entry.referenced_data_file,
- 	                               IcebergDeletionVectorData::FromBlob(buffer_data, length));
+-	                               IcebergDeletionVectorData::FromBlob(buffer_data, length));
++	                               IcebergDeletionVectorData::FromBlob(local_buffer.get(), length));
+ }
+ 
+ idx_t IcebergDeletionVector::Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) {
 diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
 index 02a3b3d3..e0d90035 100644
 --- a/src/iceberg_functions/iceberg_multi_file_list.cpp

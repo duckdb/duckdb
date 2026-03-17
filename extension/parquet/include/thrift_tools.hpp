@@ -13,8 +13,8 @@
 #include "thrift/transport/TBufferTransports.h"
 
 #include "duckdb.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
-#include "duckdb/storage/file_buffer_handle_group.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
+#include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
 

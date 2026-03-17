@@ -180,7 +180,7 @@
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
-#include "duckdb/storage/external_file_cache_block_state.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_block_state.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"

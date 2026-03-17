@@ -1,4 +1,4 @@
-#include "duckdb/storage/caching_file_system_wrapper.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"

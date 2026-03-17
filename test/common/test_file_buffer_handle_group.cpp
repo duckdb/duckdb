@@ -3,7 +3,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/file_buffer_handle_group.hpp"
+#include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 #include "test_helpers.hpp"
 
 #include <cstring>

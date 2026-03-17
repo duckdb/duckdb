@@ -8,7 +8,7 @@
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/storage/caching_file_system_wrapper.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system_wrapper.hpp"
 #include "test_helpers.hpp"
 
 #include <thread>

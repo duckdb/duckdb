@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/file_buffer_handle_group.hpp
+// duckdb/storage/external_file_cache/file_buffer_handle_group.hpp
 //
 //
 //===----------------------------------------------------------------------===//

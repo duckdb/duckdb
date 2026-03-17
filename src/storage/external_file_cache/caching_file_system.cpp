@@ -1,4 +1,4 @@
-#include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
@@ -8,8 +8,8 @@
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
-#include "duckdb/storage/external_file_cache_util.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_util.hpp"
 
 namespace duckdb {
 

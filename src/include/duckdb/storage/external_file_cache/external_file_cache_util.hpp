@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/external_file_cache_util.hpp
+// duckdb/storage/external_file_cache/external_file_cache_util.hpp
 //
 //
 //===----------------------------------------------------------------------===//
