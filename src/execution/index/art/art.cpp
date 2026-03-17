@@ -1248,23 +1248,24 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 void ART::InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(node.HasMetadata());
 
+	// We want to scan every node.
 	auto node_handler = [](NodePointer) -> ScanNodeResult {
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
 	auto child_handler = [&](NodePointer &child) -> NodePointer {
-		if (!child.HasMetadata()) {
-			return NodePointer();
-		}
+		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
+		// If the leaf is inlined return a no-op.
 		if (type == NType::LEAF_INLINED) {
 			return NodePointer();
 		}
+		// FIXME: Implement merging for deprecated leaves.
 		if (type == NType::LEAF) {
 			throw InternalException("deprecated ART storage in InitializeMerge");
 		}
-
 		auto original = child;
+		// remap BufferId in-place within the parent.
 		auto idx = NodePointer::GetAllocatorIdx(type);
 		child.IncreaseBufferId(upper_bounds[idx]);
 
@@ -1272,12 +1273,14 @@ void ART::InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds)
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
+			// no-op
 			return NodePointer();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256:
+			// Original pointer is pushed onto the stack.
 			return original;
 		default:
 			throw InternalException("invalid node type for InitializeMerge: %d", static_cast<int>(type));
