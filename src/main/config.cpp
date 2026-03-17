@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -819,10 +820,18 @@ void DBConfig::AddAllowedConfig(const string &config_name) {
 		return;
 	}
 	ExtensionOption extension_option;
-	if (!TryGetExtensionOption(config_name, extension_option)) {
-		throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
+	if (TryGetExtensionOption(config_name, extension_option)) {
+		options.allowed_configs.insert(config_name);
+		return;
 	}
-	options.allowed_configs.insert(config_name);
+	// Check if the setting belongs to a known extension (even if not yet loaded)
+	auto extension_name = ExtensionHelper::FindExtensionInEntries(config_name, EXTENSION_SETTINGS);
+	if (!extension_name.empty()) {
+		// Accept the setting - the extension may be autoloaded later when the setting is used
+		options.allowed_configs.insert(config_name);
+		return;
+	}
+	throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
 }
 
 void DBConfig::AddAllowedDirectory(const string &path) {

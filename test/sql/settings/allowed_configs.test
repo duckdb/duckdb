@@ -26,11 +26,10 @@ SET allowed_configs=['not_a_real_setting']
 ----
 Unknown configuration option 'not_a_real_setting' in allowed_configs
 
-# extension configs are rejected when extension (icu) is not loaded
-statement error
+# known extension configs are accepted even when the extension is not yet loaded
+# (the extension can be autoloaded later when the setting is actually used)
+statement ok
 SET allowed_configs=['TimeZone']
-----
-Unknown configuration option 'TimeZone' in allowed_configs
 
 statement ok
 SET allowed_configs=['pivot_limit', 'EXPLAIN_output', 'memory_limit']
