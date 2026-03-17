@@ -159,6 +159,31 @@ SELECT COUNT(*) FROM mix_stmt_audit;
 ----
 1
 
+# INSERT failure does not fire the trigger
+statement ok
+CREATE TABLE insert_fail_target (id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE insert_fail_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_insert_fail AFTER INSERT ON insert_fail_target INSERT INTO insert_fail_audit VALUES ('fired');
+
+statement ok
+INSERT INTO insert_fail_target VALUES (1);
+
+# Duplicate PK — INSERT fails before trigger can fire
+statement error
+INSERT INTO insert_fail_target VALUES (1);
+----
+<REGEX>:.*
+
+# Trigger must not have fired for the failed INSERT
+query I
+SELECT COUNT(*) FROM insert_fail_audit;
+----
+1
+
 # Recursive trigger guard: depth limit error
 statement ok
 CREATE TABLE recurse_tbl (id INTEGER);
