@@ -27,6 +27,7 @@ enum class CatalogType : uint8_t {
 	TYPE_ENTRY = 8,
 	DATABASE_ENTRY = 9,
 	COORDINATE_SYSTEM_ENTRY = 10,
+	TRIGGER_ENTRY = 11,
 
 	// functions
 	TABLE_FUNCTION_ENTRY = 25,
