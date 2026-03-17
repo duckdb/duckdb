@@ -782,29 +782,21 @@ public:
 			}
 			vector<vector<idx_t>> cte_column_indexes(subplan_info.subplans.size());
 			vector<bool> needs_projection(subplan_info.subplans.size(), false);
-			bool incompatible_types = false;
-			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size() && !incompatible_types;
-			     subplan_idx++) {
+			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				const auto &canonical_bindings = subplan.canonical_bindings;
-				const auto &subplan_types = subplan.op.get()->types;
 				cte_column_indexes[subplan_idx].reserve(canonical_bindings.size());
 				needs_projection[subplan_idx] = canonical_bindings.size() != types.size();
 				for (idx_t i = 0; i < canonical_bindings.size(); i++) {
 					const auto &cb = canonical_bindings[i];
 					const auto entry = primary_binding_index.find(cb);
-					D_ASSERT(entry != primary_binding_index.end());
+					D_ASSERT(entry != primary_binding_index.end()); // guaranteed by FilterSubplans
 					const auto cte_col_idx = entry->second;
-					if (subplan_types[i] != types[cte_col_idx]) {
-						incompatible_types = true;
-						break;
-					}
+					// Types must match: same canonical binding = same base column = same type
+					D_ASSERT(subplan.op.get()->types[i] == types[cte_col_idx]);
 					cte_column_indexes[subplan_idx].push_back(cte_col_idx);
 					needs_projection[subplan_idx] = needs_projection[subplan_idx] || cte_col_idx != i;
 				}
-			}
-			if (incompatible_types) {
-				continue;
 			}
 
 			// Create CTE refs and figure out column binding replacements
