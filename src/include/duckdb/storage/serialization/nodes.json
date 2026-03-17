@@ -1156,9 +1156,14 @@
         "id": 106,
         "name": "row_group_offset",
         "type": "idx_t"
+      },
+      {
+        "id": 107,
+        "name": "leading_null_group_offset",
+        "type": "idx_t"
       }
     ],
-    "constructor": ["column_idx", "order_by", "order_type", "null_order", "column_type",  "row_limit", "row_group_offset"]
+    "constructor": ["column_idx", "order_by", "order_type", "null_order", "column_type",  "row_limit", "row_group_offset", "leading_null_group_offset"]
   },
   {
     "class": "StorageIndex",

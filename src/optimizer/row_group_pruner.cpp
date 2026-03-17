@@ -113,14 +113,6 @@ optional_ptr<LogicalOrder> RowGroupPruner::FindLogicalOrder(const LogicalLimit &
 	}
 
 	auto &logical_order = current_op.get().Cast<LogicalOrder>();
-	for (const auto &order : logical_order.orders) {
-		// FIXME: the logic to handle this has now been implemented in the row group reorderer,
-		// but we do not enable the optimization until more thorough testing
-		if (order.null_order == OrderByNullType::NULLS_FIRST) {
-			return nullptr;
-		}
-	}
-
 	auto order_column_type = logical_order.orders[0].expression->return_type;
 	if (!order_column_type.IsNumeric() && !order_column_type.IsTemporal() &&
 	    order_column_type != LogicalType::VARCHAR) {
@@ -183,8 +175,8 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 		if (!partition_stats.empty()) {
 			auto offset_puning_result = RowGroupReorderer::GetOffsetAfterPruning(
 			    order_by, column_type, order_type, null_order, storage_index, row_offset.GetIndex(), partition_stats);
-			if (offset_puning_result.pruned_row_group_count > 0) {
-				// We can prune row groups and reduce the offset
+			if (offset_puning_result.pruned_row_group_count > 0 || offset_puning_result.leading_null_group_offset > 0) {
+				// We can prune row groups and/or reduce the offset by consuming definite NULL-only groups
 				logical_limit.offset_val =
 				    BoundLimitNode::ConstantValue(NumericCast<int64_t>(offset_puning_result.offset_remainder));
 
@@ -193,7 +185,8 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 				}
 
 				return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, null_order, column_type,
-				                                       combined_limit, offset_puning_result.pruned_row_group_count);
+				                                       combined_limit, offset_puning_result.pruned_row_group_count,
+				                                       offset_puning_result.leading_null_group_offset);
 			}
 		}
 	}

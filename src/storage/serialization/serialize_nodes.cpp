@@ -467,6 +467,7 @@ void RowGroupOrderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<OrderByColumnType>(104, "column_type", column_type);
 	serializer.WriteProperty<optional_idx>(105, "row_limit", row_limit);
 	serializer.WritePropertyWithDefault<idx_t>(106, "row_group_offset", row_group_offset);
+	serializer.WritePropertyWithDefault<idx_t>(107, "leading_null_group_offset", leading_null_group_offset);
 }
 
 unique_ptr<RowGroupOrderOptions> RowGroupOrderOptions::Deserialize(Deserializer &deserializer) {
@@ -477,7 +478,8 @@ unique_ptr<RowGroupOrderOptions> RowGroupOrderOptions::Deserialize(Deserializer 
 	auto column_type = deserializer.ReadProperty<OrderByColumnType>(104, "column_type");
 	auto row_limit = deserializer.ReadProperty<optional_idx>(105, "row_limit");
 	auto row_group_offset = deserializer.ReadPropertyWithDefault<idx_t>(106, "row_group_offset");
-	auto result = duckdb::unique_ptr<RowGroupOrderOptions>(new RowGroupOrderOptions(column_idx, order_by, order_type, null_order, column_type, row_limit, row_group_offset));
+	auto leading_null_group_offset = deserializer.ReadPropertyWithDefault<idx_t>(107, "leading_null_group_offset");
+	auto result = duckdb::unique_ptr<RowGroupOrderOptions>(new RowGroupOrderOptions(column_idx, order_by, order_type, null_order, column_type, row_limit, row_group_offset, leading_null_group_offset));
 	return result;
 }
 
