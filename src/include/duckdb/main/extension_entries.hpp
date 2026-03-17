@@ -1116,6 +1116,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"s3_version_id_pinning", "httpfs"},
     {"sqlite_all_varchar", "sqlite_scanner"},
     {"sqlite_debug_show_queries", "sqlite_scanner"},
+    {"sqlite_disable_multithreaded_scans", "sqlite_scanner"},
     {"timezone", "icu"},
     {"ui_local_port", "ui"},
     {"ui_polling_interval", "ui"},
