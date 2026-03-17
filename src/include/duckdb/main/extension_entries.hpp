@@ -1066,6 +1066,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"enable_global_s3_configuration", "httpfs"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
+    {"force_download_threshold", "httpfs"},
     {"geometry_always_xy", "spatial"},
     {"hf_max_per_page", "httpfs"},
     {"hnsw_ef_search", "vss"},
