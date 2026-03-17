@@ -4,6 +4,6 @@ if (NOT WIN32 AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             GIT_TAG dae36cd56988da2b47f06a1f63df0cfb47a97a50
             SUBMODULES vortex
             APPLY_PATCHES
-            DONT_LINK
+            LOAD_TESTS
     )
 endif()
