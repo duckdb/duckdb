@@ -98,3 +98,531 @@ index 2cd7f06..4602928 100644
  		Simplify(setop);
  		break;
  	}
+diff --git a/src/third_party/sqlsmith/duckdb.cc b/src/third_party/sqlsmith/duckdb.cc
+index 03687d9..87e04d5 100644
+--- a/src/third_party/sqlsmith/duckdb.cc
++++ b/src/third_party/sqlsmith/duckdb.cc
+@@ -10,10 +10,9 @@
+ #include <regex>
+ 
+ using namespace duckdb;
+-using namespace std;
+ 
+-static regex e_syntax(".*syntax error at or near .*");
+-static regex e_internal(".*INTERNAL.*");
++static std::regex e_syntax(".*syntax error at or near .*");
++static std::regex e_internal(".*INTERNAL.*");
+ 
+ sqlsmith_duckdb_connection::sqlsmith_duckdb_connection(duckdb::DatabaseInstance &database) {
+ 	// in-memory database
+@@ -31,7 +30,7 @@ schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog
+     : sqlsmith_duckdb_connection(database) {
+ 	// generate empty TPC-H schema
+ 	if (verbose_output)
+-		cerr << "Loading tables...";
++		std::cerr << "Loading tables...";
+ 	auto result = connection->Query("SELECT * FROM sqlite_master WHERE type IN ('table', 'view')");
+ 	if (result->HasError()) {
+ 		result->ThrowError();
+@@ -44,13 +43,13 @@ schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog
+ 		tables.push_back(tab);
+ 	}
+ 	if (verbose_output)
+-		cerr << "done." << endl;
++		std::cerr << "done." << std::endl;
+ 
+ 	if (tables.size() == 0) {
+ 		throw std::runtime_error("No tables available in catalog!");
+ 	}
+ 	if (verbose_output)
+-		cerr << "Loading columns and constraints...";
++		std::cerr << "Loading columns and constraints...";
+ 
+ 	for (auto t = tables.begin(); t != tables.end(); ++t) {
+ 		result = connection->Query("PRAGMA table_info('" + t->name + "')");
+@@ -66,7 +65,7 @@ schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog
+ 	}
+ 
+ 	if (verbose_output)
+-		cerr << "done." << endl;
++		std::cerr << "done." << std::endl;
+ 
+ 	Connection con(database);
+ 	auto query_result = con.Query(R"(
+@@ -155,7 +154,7 @@ void sleep_thread(Connection *connection) {
+ 
+ void dut_duckdb::test(const std::string &stmt) {
+ 	is_active = true;
+-	thread interrupt_thread(sleep_thread, connection.get());
++	std::thread interrupt_thread(sleep_thread, connection.get());
+ 	auto result = connection->Query(stmt);
+ 	is_active = false;
+ 	interrupt_thread.join();
+diff --git a/src/third_party/sqlsmith/dump.cc b/src/third_party/sqlsmith/dump.cc
+index 0c43bd1..66a8f66 100644
+--- a/src/third_party/sqlsmith/dump.cc
++++ b/src/third_party/sqlsmith/dump.cc
+@@ -4,32 +4,30 @@
+ #include "dump.hh"
+ #include "util.hh"
+ 
+-using namespace std;
+-
+ std::string graphml_dumper::id(struct prod *p) {
+-	ostringstream os;
++	std::ostringstream os;
+ 	os << pretty_type(p) << "_" << p;
+ 	return os.str();
+ }
+ 
+-graphml_dumper::graphml_dumper(ostream &out) : o(out) {
+-	o << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" << endl
++graphml_dumper::graphml_dumper(std::ostream &out) : o(out) {
++	o << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" << std::endl
+ 	  << "<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\" "
+ 	  << "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
+ 	  << "xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns "
+-	  << "http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\">" << endl;
++	  << "http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\">" << std::endl;
+ 
+ 	o << "<key id=\"retries\" for=\"node\" "
+ 	     "attr.name=\"retries\" attr.type=\"double\" />"
+-	  << endl;
++	  << std::endl;
+ 	o << "<key id=\"label\" for=\"node\" "
+ 	     "attr.name=\"label\" attr.type=\"string\" />"
+-	  << endl;
++	  << std::endl;
+ 	o << "<key id=\"scope\" for=\"node\" "
+ 	     "attr.name=\"scope\" attr.type=\"string\" />"
+-	  << endl;
++	  << std::endl;
+ 
+-	o << "<graph id=\"ast\" edgedefault=\"directed\">" << endl;
++	o << "<graph id=\"ast\" edgedefault=\"directed\">" << std::endl;
+ }
+ 
+ void graphml_dumper::visit(struct prod *p) {
+@@ -37,23 +35,23 @@ void graphml_dumper::visit(struct prod *p) {
+ 	o << "<data key=\"retries\">" << p->retries << "</data>";
+ 	o << "<data key=\"label\">" << pretty_type(p) << "</data>";
+ 	o << "<data key=\"scope\">" << p->scope << "</data>";
+-	o << "</node>" << endl;
++	o << "</node>" << std::endl;
+ 	if (p->pprod) {
+ 		o << "<edge source=\"" << id(p) << "\" target=\"" << id(p->pprod) << "\"/>";
+ 	}
+-	o << endl;
++	o << std::endl;
+ }
+ 
+ graphml_dumper::~graphml_dumper() {
+-	o << "</graph></graphml>" << endl;
++	o << "</graph></graphml>" << std::endl;
+ }
+ 
+ void ast_logger::generated(prod &query) {
+-	string filename("");
++	std::string filename("");
+ 	filename += "sqlsmith-";
+-	filename += to_string(queries);
++	filename += std::to_string(queries);
+ 	filename += ".xml";
+-	ofstream os(filename);
++	std::ofstream os(filename);
+ 	graphml_dumper visitor(os);
+ 	query.accept(&visitor);
+ 	queries++;
+diff --git a/src/third_party/sqlsmith/expr.cc b/src/third_party/sqlsmith/expr.cc
+index dc181ee..85f6209 100644
+--- a/src/third_party/sqlsmith/expr.cc
++++ b/src/third_party/sqlsmith/expr.cc
+@@ -11,7 +11,6 @@
+ #include "impedance.hh"
+ #include "expr.hh"
+ 
+-using namespace std;
+ using impedance::matched;
+ 
+ shared_ptr<value_expr> value_expr::factory(prod *p, sqltype *type_constraint) {
+@@ -32,7 +31,7 @@ shared_ptr<value_expr> value_expr::factory(prod *p, sqltype *type_constraint) {
+ 			return std::make_shared<column_reference>(p, type_constraint);
+ 		else
+ 			return std::make_shared<const_expr>(p, type_constraint);
+-	} catch (runtime_error &e) {
++	} catch (std::runtime_error &e) {
+ 	}
+ 	p->retry();
+ 	return factory(p, type_constraint);
+@@ -101,7 +100,7 @@ shared_ptr<bool_expr> bool_expr::factory(prod *p) {
+ 		else
+ 			return std::make_shared<exists_predicate>(p);
+ 		//     return std::make_shared<distinct_pred>(q);
+-	} catch (runtime_error &e) {
++	} catch (std::runtime_error &e) {
+ 	}
+ 	p->retry();
+ 	return factory(p);
+@@ -178,7 +177,7 @@ const_expr::const_expr(prod *p, sqltype *type_constraint) : value_expr(p), expr(
+ 	type = type_constraint ? type_constraint : scope->schema->inttype;
+ 
+ 	if (type == scope->schema->inttype)
+-		expr = to_string(d100());
++		expr = std::to_string(d100());
+ 	else if (type == scope->schema->booltype)
+ 		expr += (d6() > 3) ? scope->schema->true_literal : scope->schema->false_literal;
+ 	else if (dynamic_cast<insert_stmt *>(p) && (d6() > 3))
+diff --git a/src/third_party/sqlsmith/grammar.cc b/src/third_party/sqlsmith/grammar.cc
+index 61f0ade..d055c6c 100644
+--- a/src/third_party/sqlsmith/grammar.cc
++++ b/src/third_party/sqlsmith/grammar.cc
+@@ -10,8 +10,6 @@
+ #include "schema.hh"
+ #include "impedance.hh"
+ 
+-using namespace std;
+-
+ shared_ptr<table_ref> table_ref::factory(prod *p) {
+ 	try {
+ 		if (p->level < 3 + d6()) {
+@@ -24,7 +22,7 @@ shared_ptr<table_ref> table_ref::factory(prod *p) {
+ 			return std::make_shared<table_or_query_name>(p);
+ 		else
+ 			return std::make_shared<table_sample>(p);
+-	} catch (runtime_error &e) {
++	} catch (std::runtime_error &e) {
+ 		p->retry();
+ 	}
+ 	return factory(p);
+@@ -92,7 +90,7 @@ shared_ptr<join_cond> join_cond::factory(prod *p, table_ref &lhs, table_ref &rhs
+ 			return std::make_shared<expr_join_cond>(p, lhs, rhs);
+ 		else
+ 			return std::make_shared<simple_join_cond>(p, lhs, rhs);
+-	} catch (runtime_error &e) {
++	} catch (std::runtime_error &e) {
+ 		p->retry();
+ 	}
+ 	return factory(p, lhs, rhs);
+@@ -206,7 +204,7 @@ select_list::select_list(prod *p) : prod(p) {
+ 	do {
+ 		shared_ptr<value_expr> e = value_expr::factory(this);
+ 		value_exprs.push_back(e);
+-		ostringstream name;
++		std::ostringstream name;
+ 		name << "c" << columns++;
+ 		sqltype *t = e->type;
+ 		assert(t);
+@@ -310,7 +308,7 @@ query_spec::query_spec(prod *p, struct scope *s, bool lateral) : prod(p), myscop
+ 	search = bool_expr::factory(this);
+ 
+ 	if (d6() > 2) {
+-		ostringstream cons;
++		std::ostringstream cons;
+ 		cons << "limit " << d100() + d100();
+ 		limit_clause = cons.str();
+ 	}
+@@ -441,7 +439,7 @@ shared_ptr<prod> statement_factory(struct scope *s) {
+ 		else if (d6() > 5)
+ 			return std::make_shared<common_table_expression>((struct prod *)0, s);
+ 		return std::make_shared<query_spec>((struct prod *)0, s);
+-	} catch (runtime_error &e) {
++	} catch (std::runtime_error &e) {
+ 		return statement_factory(s);
+ 	}
+ }
+@@ -473,7 +471,7 @@ retry:
+ 	} while (d6() > 3);
+ 	try {
+ 		query = std::make_shared<query_spec>(this, scope);
+-	} catch (runtime_error &e) {
++	} catch (std::runtime_error &e) {
+ 		retry();
+ 		goto retry;
+ 	}
+@@ -611,7 +609,7 @@ shared_ptr<when_clause> when_clause::factory(struct merge_stmt *p) {
+ 		default:
+ 			return std::make_shared<when_clause>(p);
+ 		}
+-	} catch (runtime_error &e) {
++	} catch (std::runtime_error &e) {
+ 		p->retry();
+ 	}
+ 	return factory(p);
+diff --git a/src/third_party/sqlsmith/impedance.cc b/src/third_party/sqlsmith/impedance.cc
+index d8f121a..da96f7e 100644
+--- a/src/third_party/sqlsmith/impedance.cc
++++ b/src/third_party/sqlsmith/impedance.cc
+@@ -2,15 +2,13 @@
+ #include "log.hh"
+ #include <iostream>
+ 
+-using namespace std;
++static std::map<const char *, long> occurances_in_failed_query;
++static std::map<const char *, long> occurances_in_ok_query;
++static std::map<const char *, long> retries;
++static std::map<const char *, long> limited;
++static std::map<const char *, long> failed;
+ 
+-static map<const char *, long> occurances_in_failed_query;
+-static map<const char *, long> occurances_in_ok_query;
+-static map<const char *, long> retries;
+-static map<const char *, long> limited;
+-static map<const char *, long> failed;
+-
+-impedance_visitor::impedance_visitor(map<const char *, long> &occured) : _occured(occured) {
++impedance_visitor::impedance_visitor(std::map<const char *, long> &occured) : _occured(occured) {
+ }
+ 
+ void impedance_visitor::visit(struct prod *p) {
+@@ -46,18 +44,18 @@ bool matched(const char *name) {
+ }
+ 
+ void report() {
+-	cerr << "impedance report: " << endl;
++	std::cerr << "impedance report: " << std::endl;
+ 	for (auto pair : occurances_in_failed_query) {
+-		cerr << "  " << pretty_type(pair.first) << ": " << pair.second << "/" << occurances_in_ok_query[pair.first]
++		std::cerr << "  " << pretty_type(pair.first) << ": " << pair.second << "/" << occurances_in_ok_query[pair.first]
+ 		     << " (bad/ok)";
+ 		if (!matched(pair.first))
+-			cerr << " -> BLACKLISTED";
+-		cerr << endl;
++			std::cerr << " -> BLACKLISTED";
++		std::cerr << std::endl;
+ 	}
+ }
+ 
+ void report(std::ostream &out) {
+-	out << "{\"impedance\": [ " << endl;
++	out << "{\"impedance\": [ " << std::endl;
+ 
+ 	for (auto pair = occurances_in_failed_query.begin(); pair != occurances_in_failed_query.end(); ++pair) {
+ 		out << "{\"prod\": \"" << pretty_type(pair->first) << "\","
+@@ -68,9 +66,9 @@ void report(std::ostream &out) {
+ 		    << "\"retries\": " << retries[pair->first] << "} ";
+ 
+ 		if (next(pair) != occurances_in_failed_query.end())
+-			out << "," << endl;
++			out << "," << std::endl;
+ 	}
+-	out << "]}" << endl;
++	out << "]}" << std::endl;
+ }
+ 
+ void retry(const char *p) {
+diff --git a/src/third_party/sqlsmith/include/util.hh b/src/third_party/sqlsmith/include/util.hh
+index c237e9d..ab7ca8c 100644
+--- a/src/third_party/sqlsmith/include/util.hh
++++ b/src/third_party/sqlsmith/include/util.hh
+@@ -4,15 +4,13 @@
+ #include <string>
+ #include <typeinfo>
+ 
+-using namespace std;
+-
+ /* TODO: The strings are implementation-defined.  How do they look in
+    clang? */
+ 
+ inline std::string pretty_type(const char *raw) {
+-	ostringstream os;
++	std::ostringstream os;
+ 	os << raw;
+-	string s = os.str();
++	std::string s = os.str();
+ 	while (s[0] <= '9')
+ 		s.erase(s.begin());
+ 	return s;
+diff --git a/src/third_party/sqlsmith/log.cc b/src/third_party/sqlsmith/log.cc
+index 287e9d3..a7b58fb 100644
+--- a/src/third_party/sqlsmith/log.cc
++++ b/src/third_party/sqlsmith/log.cc
+@@ -12,8 +12,6 @@
+ 
+ #include "duckdb/common/vector.hpp"
+ 
+-using namespace std;
+-
+ struct stats_visitor : prod_visitor {
+ 	int nodes = 0;
+ 	int maxlevel = 0;
+@@ -27,7 +25,7 @@ struct stats_visitor : prod_visitor {
+ 		retries += p->retries;
+ 	}
+ 	void report() {
+-		cerr << "production statistics" << endl;
++		std::cerr << "production statistics" << std::endl;
+ 		duckdb::vector<pair<const char *, long>> report;
+ 		for (auto p : production_stats)
+ 			report.push_back(p);
+@@ -35,7 +33,7 @@ struct stats_visitor : prod_visitor {
+ 		    report.begin(), report.end(),
+ 		    [](const pair<std::string, long> &a, const pair<std::string, long> &b) { return a.second > b.second; });
+ 		for (auto p : report) {
+-			cerr << p.second << "\t" << p.first << endl;
++			std::cerr << p.second << "\t" << p.first << std::endl;
+ 		}
+ 	}
+ };
+@@ -52,10 +50,10 @@ void stats_collecting_logger::generated(prod &query) {
+ }
+ 
+ void cerr_logger::report() {
+-	cerr << endl << "queries: " << queries << endl;
++	std::cerr << std::endl << "queries: " << queries << std::endl;
+ 	// 	 << " (" << 1000.0*query_count/gen_time.count() << " gen/s, "
+ 	// 	 << 1000.0*query_count/query_time.count() << " exec/s)" << endl;
+-	cerr << "AST stats (avg): height = " << sum_height / queries << " nodes = " << sum_nodes / queries << endl;
++	std::cerr << "AST stats (avg): height = " << sum_height / queries << " nodes = " << sum_nodes / queries << std::endl;
+ 
+ 	duckdb::vector<pair<std::string, long>> report;
+ 	for (auto e : errors) {
+@@ -66,9 +64,9 @@ void cerr_logger::report() {
+ 	long err_count = 0;
+ 	for (auto e : report) {
+ 		err_count += e.second;
+-		cerr << e.second << "\t" << e.first.substr(0, 80) << endl;
++		std::cerr << e.second << "\t" << e.first.substr(0, 80) << std::endl;
+ 	}
+-	cerr << "error rate: " << (float)err_count / (queries) << endl;
++	std::cerr << "error rate: " << (float)err_count / (queries) << std::endl;
+ 	impedance::report();
+ }
+ 
+@@ -81,27 +79,27 @@ void cerr_logger::generated(prod &p) {
+ void cerr_logger::executed(prod &query) {
+ 	(void)query;
+ 	if (columns - 1 == (queries % columns)) {
+-		cerr << endl;
++		std::cerr << std::endl;
+ 	}
+-	cerr << ".";
++	std::cerr << ".";
+ }
+ 
+ void cerr_logger::error(prod &query, const dut::failure &e) {
+ 	(void)query;
+-	istringstream err(e.what());
++	std::istringstream err(e.what());
+ 	string line;
+ 
+ 	if (columns - 1 == (queries % columns)) {
+-		cerr << endl;
++		std::cerr << std::endl;
+ 	}
+ 	getline(err, line);
+ 	errors[line]++;
+ 	if (dynamic_cast<const dut::timeout *>(&e))
+-		cerr << "t";
++		std::cerr << "t";
+ 	else if (dynamic_cast<const dut::syntax *>(&e))
+-		cerr << "S";
++		std::cerr << "S";
+ 	else if (dynamic_cast<const dut::broken *>(&e))
+-		cerr << "C";
++		std::cerr << "C";
+ 	else
+-		cerr << "e";
++		std::cerr << "e";
+ }
+diff --git a/src/third_party/sqlsmith/schema.cc b/src/third_party/sqlsmith/schema.cc
+index 3164bb2..72b1656 100644
+--- a/src/third_party/sqlsmith/schema.cc
++++ b/src/third_party/sqlsmith/schema.cc
+@@ -2,12 +2,10 @@
+ #include "relmodel.hh"
+ #include <typeinfo>
+ 
+-using namespace std;
+-
+ void schema::generate_indexes(bool verbose_output) {
+ 
+ 	if (verbose_output)
+-		cerr << "Generating indexes...";
++		std::cerr << "Generating indexes...";
+ 
+ 	for (auto &type : types) {
+ 		assert(type);
+@@ -50,7 +48,7 @@ void schema::generate_indexes(bool verbose_output) {
+ 	}
+ 
+ 	if (verbose_output)
+-		cerr << "done." << endl;
++		std::cerr << "done." << std::endl;
+ 
+ 	assert(booltype);
+ 	assert(inttype);
+diff --git a/src/third_party/sqlsmith/sqlsmith.cc b/src/third_party/sqlsmith/sqlsmith.cc
+index 90483ae..776dd5f 100644
+--- a/src/third_party/sqlsmith/sqlsmith.cc
++++ b/src/third_party/sqlsmith/sqlsmith.cc
+@@ -24,8 +24,6 @@
+ 
+ #include "duckdb/common/vector.hpp"
+ 
+-using namespace std;
+-
+ using namespace std::chrono;
+ 
+ extern "C" {
+@@ -131,11 +129,11 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
+ 		dut = std::make_shared<dut_duckdb>(database);
+ 
+ 		if (opt.verbose_output)
+-			cerr << "Running queries..." << endl;
++			std::cerr << "Running queries..." << std::endl;
+ 
+ 		bool has_complete_log = !opt.complete_log.empty();
+ 		bool has_log = !opt.log.empty();
+-		ofstream complete_log;
++		std::ofstream complete_log;
+ 		if (has_complete_log) {
+ 			complete_log.open(opt.complete_log);
+ 		}
+@@ -156,21 +154,21 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
+ 					l->generated(*gen);
+ 
+ 				/* Generate SQL from AST */
+-				ostringstream s;
++				std::ostringstream s;
+ 				gen->out(s);
+ 
+ 				// write the query to the complete log that has all the
+ 				// queries
+ 				if (has_complete_log) {
+-					complete_log << s.str() << ";" << endl;
++					complete_log << s.str() << ";" << std::endl;
+ 					complete_log.flush();
+ 				}
+ 
+ 				// write the last-executed query to a separate log file
+ 				if (has_log) {
+-					ofstream out_file;
++					std::ofstream out_file;
+ 					out_file.open(opt.log);
+-					out_file << s.str() << ";" << endl;
++					out_file << s.str() << ";" << std::endl;
+ 					out_file.close();
+ 				}
+ 
+@@ -183,8 +181,8 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
+ 					for (auto l : loggers)
+ 						try {
+ 							l->error(*gen, e);
+-						} catch (runtime_error &e) {
+-							cerr << endl << "log failed: " << typeid(*l).name() << ": " << e.what() << endl;
++						} catch (std::runtime_error &e) {
++							std::cerr << std::endl << "log failed: " << typeid(*l).name() << ": " << e.what() << std::endl;
+ 						}
+ 					if ((dynamic_cast<const dut::broken *>(&e))) {
+ 						/* re-throw to outer loop */
+@@ -193,8 +191,8 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
+ 				}
+ 			}
+ 		}
+-	} catch (const exception &e) {
+-		cerr << e.what() << endl;
++	} catch (const std::exception &e) {
++		std::cerr << e.what() << std::endl;
+ 		exit(1);
+ 	}
+ }
