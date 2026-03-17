@@ -121,6 +121,18 @@ INSERT INTO db.scattered_nulls_${type} SELECT NULL::${type} AS v FROM range(2048
 statement ok
 INSERT INTO db.scattered_nulls_${type} SELECT CAST('2' AS ${type}) AS v FROM range(2048)
 
+statement ok
+CREATE TABLE db.all_null_offset_${type} AS
+SELECT i FROM repeat(NULL::${type}, 2048) t(i);
+
+statement ok
+INSERT INTO db.all_null_offset_${type}
+SELECT i FROM repeat(NULL::${type}, 2048) t(i);
+
+statement ok
+INSERT INTO db.all_null_offset_${type}
+SELECT i FROM repeat(NULL::${type}, 2048) t(i);
+
 endloop
 
 restart
@@ -313,3 +325,72 @@ query T
 SELECT v FROM db.scattered_nulls_VARCHAR ORDER BY v NULLS FIRST LIMIT 1 OFFSET 4096
 ----
 NULL
+
+query II
+EXPLAIN ANALYZE
+SELECT i
+FROM db.all_null_offset_BIGINT
+ORDER BY i NULLS FIRST
+LIMIT 1 OFFSET 4096;
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query I
+SELECT i
+FROM db.all_null_offset_BIGINT
+ORDER BY i NULLS FIRST
+LIMIT 1 OFFSET 4096;
+----
+NULL
+
+query II
+EXPLAIN ANALYZE
+SELECT i
+FROM db.all_null_offset_BIGINT
+ORDER BY i NULLS FIRST
+LIMIT 1 OFFSET 4095;
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query I
+SELECT i
+FROM db.all_null_offset_BIGINT
+ORDER BY i NULLS FIRST
+LIMIT 1 OFFSET 4095;
+----
+NULL
+
+query II
+EXPLAIN ANALYZE
+SELECT i
+FROM db.all_null_offset_VARCHAR
+ORDER BY i NULLS FIRST
+LIMIT 1 OFFSET 4096;
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query I
+SELECT i
+FROM db.all_null_offset_VARCHAR
+ORDER BY i NULLS FIRST
+LIMIT 1 OFFSET 4096;
+----
+NULL
+
+query II
+EXPLAIN ANALYZE
+SELECT i
+FROM db.all_null_offset_VARCHAR
+ORDER BY i NULLS FIRST
+LIMIT 1 OFFSET 4095;
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*4,096 rows.*
+
+query I
+SELECT i
+FROM db.all_null_offset_VARCHAR
+ORDER BY i NULLS FIRST
+LIMIT 1 OFFSET 4095;
+----
+NULL
+
