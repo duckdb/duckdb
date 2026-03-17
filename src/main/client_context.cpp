@@ -938,8 +938,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 						    statement->Cast<UpdateStatement>().prioritize_table_when_binding;
 					} else if (statement->type == StatementType::TRANSACTION_STATEMENT) {
 						// re-apply invalidation policy
-						parser.statements[0]->Cast<TransactionStatement>().info->invalidation_policy =
-						    statement->Cast<TransactionStatement>().info->invalidation_policy;
+						auto &reparsed_transaction_stmt = parser.statements[0]->Cast<TransactionStatement>();
+						auto &previous_transaction_stmt = statement->Cast<TransactionStatement>();
+						reparsed_transaction_stmt.info->invalidation_policy =
+						    previous_transaction_stmt.info->invalidation_policy;
 						// re-apply auto rollback
 						parser.statements[0]->Cast<TransactionStatement>().info->auto_rollback =
 						    statement->Cast<TransactionStatement>().info->auto_rollback;

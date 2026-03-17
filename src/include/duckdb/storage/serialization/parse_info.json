@@ -696,7 +696,8 @@
       {
         "id": 202,
         "name": "invalidation_policy",
-        "type": "TransactionInvalidationPolicy"
+        "type": "TransactionInvalidationPolicy",
+        "default" : "TransactionInvalidationPolicy::STANDARD_POLICY"
       },
       {
         "id": 203,

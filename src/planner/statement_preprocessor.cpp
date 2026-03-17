@@ -54,13 +54,14 @@ void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_tra
 		D_ASSERT(sub_statement->type != StatementType::TRANSACTION_STATEMENT);
 	}
 #endif
-	bool is_pivot_statement = false;
+	bool has_select = false;
 	for (auto &stmt : multi_statement.statements) {
 		if (stmt->type == StatementType::SELECT_STATEMENT) {
-			is_pivot_statement = true;
+			// Pivot statements have select, and we don't want to wrap those in transactions.
+			has_select = true;
 		}
 	}
-	AddStatements(multi_statement.statements, !is_pivot_statement && !is_in_active_transaction, new_statements,
+	AddStatements(multi_statement.statements, !has_select && !is_in_active_transaction, new_statements,
 	              is_in_active_transaction);
 }
 
@@ -108,7 +109,7 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 		auto query = statements[i]->query;
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
-			vector<unique_ptr<SQLStatement>> reparsed_statements = TryReparsePragma(std::move(statements[i]));
+			auto reparsed_statements = TryReparsePragma(std::move(statements[i]));
 
 			AddStatements(reparsed_statements,
 			              !(transaction_context || chained_transaction) && reparsed_statements.size() != 1,
