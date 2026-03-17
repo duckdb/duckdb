@@ -1388,7 +1388,7 @@ index e812cef5..6140d444 100644
  		table_size.table_uuid = row.GetValue<string>(3);
  		if (!row.IsNull(4)) {
 diff --git a/src/storage/ducklake_multi_file_list.cpp b/src/storage/ducklake_multi_file_list.cpp
-index e3ddf53b..dd132f35 100644
+index e3ddf53b..26c14fe6 100644
 --- a/src/storage/ducklake_multi_file_list.cpp
 +++ b/src/storage/ducklake_multi_file_list.cpp
 @@ -51,17 +51,17 @@ unique_ptr<MultiFileList>
@@ -1396,7 +1396,7 @@ index e3ddf53b..dd132f35 100644
                                               const vector<string> &names, const vector<LogicalType> &types,
                                               const vector<column_t> &column_ids, TableFilterSet &filters) const {
 -	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || filters.filters.empty()) {
-+	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || filters.HasFilters()) {
++	if (read_info.scan_type != DuckLakeScanType::SCAN_TABLE || !filters.HasFilters()) {
  		// filter pushdown is only supported when scanning full tables
  		return nullptr;
  	}
