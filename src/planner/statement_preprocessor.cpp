@@ -19,13 +19,23 @@
 
 namespace duckdb {
 
-void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements, bool should_wrap_in_transaction,
-                   vector<unique_ptr<SQLStatement>> &result_statements, bool is_in_active_transaction) {
-	if (should_wrap_in_transaction) {
+enum class PreprocessingTransactionHandling : uint8_t {
+	// Not in a transaction and should wrap in an implicit BEGIN/COMMIT
+	WRAP_IN_TRANSACTION,
+	// Already in an active transaction — set invalidation policy for multi-statement bodies
+	SET_INVALIDATION_POLICY,
+	// No transaction handling needed (single statement, or no transaction context applies)
+	NONE
+};
+
+void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements,
+                   PreprocessingTransactionHandling transaction_handling,
+                   vector<unique_ptr<SQLStatement>> &result_statements) {
+	if (transaction_handling == PreprocessingTransactionHandling::WRAP_IN_TRANSACTION) {
 		auto begin_info = make_uniq<TransactionInfo>(
 		    TransactionType::BEGIN_TRANSACTION, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
 		result_statements.push_back(make_uniq<TransactionStatement>(std::move(begin_info)));
-	} else if (is_in_active_transaction && body_statements.size() > 1) {
+	} else if (transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
 		result_statements.push_back(make_uniq<SetVariableStatement>(
 		    "current_transaction_invalidation_policy",
 		    make_uniq<ConstantExpression>(Value("ALL_ERRORS_INVALIDATE_TRANSACTION")), SetScope::GLOBAL));
@@ -33,11 +43,11 @@ void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements, bool shoul
 	// insert body_statements into result_statements
 	result_statements.insert(result_statements.end(), std::make_move_iterator(body_statements.begin()),
 	                         std::make_move_iterator(body_statements.end()));
-	if (should_wrap_in_transaction) {
+	if (transaction_handling == PreprocessingTransactionHandling::WRAP_IN_TRANSACTION) {
 		auto commit_info = make_uniq<TransactionInfo>(
 		    TransactionType::COMMIT, TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION, true);
 		result_statements.push_back(make_uniq<TransactionStatement>(std::move(commit_info)));
-	} else if (is_in_active_transaction && body_statements.size() > 1) {
+	} else if (transaction_handling == PreprocessingTransactionHandling::SET_INVALIDATION_POLICY) {
 		result_statements.push_back(
 		    make_uniq<SetVariableStatement>("current_transaction_invalidation_policy",
 		                                    make_uniq<ConstantExpression>(Value("STANDARD_POLICY")), SetScope::GLOBAL));
@@ -45,6 +55,20 @@ void AddStatements(vector<unique_ptr<SQLStatement>> &body_statements, bool shoul
 }
 
 StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(context) {
+}
+
+PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLStatement>> &body_statements,
+                                                        bool is_in_active_transaction, bool can_wrap = true) {
+	if (body_statements.size() <= 1) {
+		return PreprocessingTransactionHandling::NONE;
+	}
+	if (!is_in_active_transaction && can_wrap) {
+		return PreprocessingTransactionHandling::WRAP_IN_TRANSACTION;
+	}
+	if (is_in_active_transaction) {
+		return PreprocessingTransactionHandling::SET_INVALIDATION_POLICY;
+	}
+	return PreprocessingTransactionHandling::NONE;
 }
 
 void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_transaction,
@@ -61,8 +85,8 @@ void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_tra
 			has_select = true;
 		}
 	}
-	AddStatements(multi_statement.statements, !is_in_active_transaction && !has_select, new_statements,
-	              is_in_active_transaction);
+	auto handling = GetTransactionHandling(multi_statement.statements, is_in_active_transaction, !has_select);
+	AddStatements(multi_statement.statements, handling, new_statements);
 }
 
 vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_ptr<SQLStatement> statement) const {
@@ -111,9 +135,8 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 		case StatementType::PRAGMA_STATEMENT: {
 			auto reparsed_statements = TryReparsePragma(std::move(statements[i]));
 			const bool is_in_active_transaction = transaction_context || chained_transaction;
-
-			AddStatements(reparsed_statements, !is_in_active_transaction && reparsed_statements.size() != 1,
-			              new_statements, is_in_active_transaction);
+			auto handling = GetTransactionHandling(reparsed_statements, is_in_active_transaction);
+			AddStatements(reparsed_statements, handling, new_statements);
 			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
