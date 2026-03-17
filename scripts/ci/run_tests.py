@@ -247,12 +247,13 @@ def generate_test_list(test_file, unittest_bin: str, test_flags: str, patterns: 
 def open_test_list(test_list: Path | None, unittest_bin: str, test_flags: str, patterns: list[str]):
     if test_list is not None:
         with test_list.open("r", encoding="utf8") as test_file:
-            yield Path(test_file.name)
+            result = Path(test_file.name)
+        yield result
         return
 
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=True) as test_file:
         generate_test_list(test_file, unittest_bin, test_flags, patterns)
-        yield Path(test_file.name)
+    yield Path(test_file.name)
 
 
 def format_batch_failure(
