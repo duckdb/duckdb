@@ -200,8 +200,7 @@ struct WindowFunctionExtractor {
 	}
 
 	static Value GetFunctionType() {
-		//! FIXME: should be 'window' but requires adapting generation scripts
-		return Value("aggregate");
+		return Value("window");
 	}
 
 	static Value GetReturnType(WindowFunctionCatalogEntry &entry, idx_t offset) {

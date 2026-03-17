@@ -13,8 +13,6 @@ WindowFunctionCatalogEntry::WindowFunctionCatalogEntry(Catalog &catalog, SchemaC
 		function.catalog_name = catalog.GetAttached().GetName();
 		function.schema_name = schema.name;
 	}
-	//	FIXME: Temporary hack until we have a real way to identify window functions in duckdb_functions()
-	oid = 0;
 }
 
 vector<unique_ptr<WindowFunctionCatalogEntry>> WindowFunctionCatalogEntry::GetEntries(ClientContext &context) {
