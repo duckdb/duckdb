@@ -34,6 +34,15 @@ SELECT COUNT(*) FROM audit WHERE msg = 'inserted';
 ----
 2
 
+# Default (no FOR EACH clause) fires once per statement, not per row
+statement ok
+INSERT INTO target VALUES (10), (11), (12);
+
+query I
+SELECT COUNT(*) FROM audit WHERE msg = 'inserted';
+----
+3
+
 # Multiple triggers on same table: all fire
 statement ok
 CREATE TABLE audit2 (msg VARCHAR);
@@ -47,7 +56,7 @@ INSERT INTO target VALUES (3);
 query I
 SELECT COUNT(*) FROM audit WHERE msg = 'inserted';
 ----
-3
+4
 
 query I
 SELECT COUNT(*) FROM audit2 WHERE msg = 'second_trigger';
@@ -84,7 +93,7 @@ statement ok
 CREATE TABLE multi_audit (msg VARCHAR);
 
 statement ok
-CREATE TRIGGER trg_multi AFTER INSERT ON multi_target INSERT INTO multi_audit VALUES ('row');
+CREATE TRIGGER trg_multi AFTER INSERT ON multi_target FOR EACH ROW INSERT INTO multi_audit VALUES ('row');
 
 statement ok
 INSERT INTO multi_target VALUES (1), (2), (3);
@@ -93,6 +102,62 @@ query I
 SELECT COUNT(*) FROM multi_audit;
 ----
 3
+
+# FOR EACH STATEMENT fires once regardless of row count
+statement ok
+CREATE TABLE stmt_target (id INTEGER);
+
+statement ok
+CREATE TABLE stmt_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_stmt AFTER INSERT ON stmt_target FOR EACH STATEMENT INSERT INTO stmt_audit VALUES ('statement');
+
+statement ok
+INSERT INTO stmt_target VALUES (1), (2), (3);
+
+query I
+SELECT COUNT(*) FROM stmt_audit;
+----
+1
+
+# A second INSERT also fires exactly once
+statement ok
+INSERT INTO stmt_target VALUES (4);
+
+query I
+SELECT COUNT(*) FROM stmt_audit;
+----
+2
+
+# Mix: one FOR EACH ROW and one FOR EACH STATEMENT trigger on the same table
+statement ok
+CREATE TABLE mix_target (id INTEGER);
+
+statement ok
+CREATE TABLE mix_row_audit (msg VARCHAR);
+
+statement ok
+CREATE TABLE mix_stmt_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_mix_row AFTER INSERT ON mix_target FOR EACH ROW INSERT INTO mix_row_audit VALUES ('row');
+
+statement ok
+CREATE TRIGGER trg_mix_stmt AFTER INSERT ON mix_target FOR EACH STATEMENT INSERT INTO mix_stmt_audit VALUES ('statement');
+
+statement ok
+INSERT INTO mix_target VALUES (1), (2), (3), (4), (5);
+
+query I
+SELECT COUNT(*) FROM mix_row_audit;
+----
+5
+
+query I
+SELECT COUNT(*) FROM mix_stmt_audit;
+----
+1
 
 # Recursive trigger guard: depth limit error
 statement ok
