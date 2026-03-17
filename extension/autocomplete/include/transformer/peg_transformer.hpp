@@ -158,11 +158,17 @@ private:
 	void SetResultLocation(T &, optional_idx) {
 	}
 	void SetResultLocation(unique_ptr<ParsedExpression> &expr, optional_idx offset) {
+		if (!expr) {
+			return;
+		}
 		if (offset.IsValid() && !expr->GetQueryLocation().IsValid()) {
 			SetQueryLocation(*expr, offset);
 		}
 	}
 	void SetResultLocation(unique_ptr<TableRef> &ref, optional_idx offset) {
+		if (!ref) {
+			return;
+		}
 		if (offset.IsValid() && !ref->query_location.IsValid()) {
 			SetQueryLocation(*ref, offset.GetIndex());
 		}
