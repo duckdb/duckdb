@@ -107,11 +107,11 @@ public:
      * the same ID, raw GMT offset, and DST rules.
      *
      * @param that  The SimpleTimeZone object to be compared with.
-     * @return      true if the given time zone is equal to this time zone; false
+     * @return      True if the given time zone is equal to this time zone; false
      *              otherwise.
      * @stable ICU 2.0
      */
-    virtual bool operator==(const TimeZone& that) const override;
+    virtual bool operator==(const TimeZone& that) const;
 
     /**
      * Constructs a SimpleTimeZone with the given raw GMT offset and time zone ID,
@@ -134,7 +134,7 @@ public:
      * TimeZone.createInstance() to create a TimeZone instead of creating a
      * SimpleTimeZone directly with this constructor.
      * <P>
-     * Various types of daylight-savings time rules can be specified by using different
+     * Various types of daylight-savings time rules can be specfied by using different
      * values for startDay and startDayOfWeek and endDay and endDayOfWeek.  For a
      * complete explanation of how these parameters work, see the documentation for
      * setStartRule().
@@ -175,7 +175,7 @@ public:
      * TimeZone.createInstance() to create a TimeZone instead of creating a
      * SimpleTimeZone directly with this constructor.
      * <P>
-     * Various types of daylight-savings time rules can be specified by using different
+     * Various types of daylight-savings time rules can be specfied by using different
      * values for startDay and startDayOfWeek and endDay and endDayOfWeek.  For a
      * complete explanation of how these parameters work, see the documentation for
      * setStartRule().
@@ -219,7 +219,7 @@ public:
      * TimeZone.createInstance() to create a TimeZone instead of creating a
      * SimpleTimeZone directly with this constructor.
      * <P>
-     * Various types of daylight-savings time rules can be specified by using different
+     * Various types of daylight-savings time rules can be specfied by using different
      * values for startDay and startDayOfWeek and endDay and endDayOfWeek.  For a
      * complete explanation of how these parameters work, see the documentation for
      * setStartRule().
@@ -293,7 +293,7 @@ public:
      *       month, regardless of what day of the week it is (e.g., (-2, 0) is the
      *       next-to-last day of the month).</li>
      *   <li>If dayOfWeek is negative and dayOfWeekInMonth is positive, they specify the
-     *       first specified day of the week on or after the specified day of the month.
+     *       first specified day of the week on or after the specfied day of the month.
      *       (e.g., (15, -SUNDAY) is the first Sunday after the 15th of the month
      *       [or the 15th itself if the 15th is a Sunday].)</li>
      *   <li>If dayOfWeek and DayOfWeekInMonth are both negative, they specify the
@@ -337,7 +337,7 @@ public:
      *       month, regardless of what day of the week it is (e.g., (-2, 0) is the
      *       next-to-last day of the month).</li>
      *   <li>If dayOfWeek is negative and dayOfWeekInMonth is positive, they specify the
-     *       first specified day of the week on or after the specified day of the month.
+     *       first specified day of the week on or after the specfied day of the month.
      *       (e.g., (15, -SUNDAY) is the first Sunday after the 15th of the month
      *       [or the 15th itself if the 15th is a Sunday].)</li>
      *   <li>If dayOfWeek and DayOfWeekInMonth are both negative, they specify the
@@ -571,7 +571,7 @@ public:
      * @stable ICU 2.0
      */
     virtual int32_t getOffset(uint8_t era, int32_t year, int32_t month, int32_t day,
-                              uint8_t dayOfWeek, int32_t millis, UErrorCode& status) const override;
+                              uint8_t dayOfWeek, int32_t millis, UErrorCode& status) const;
 
     /**
      * Gets the time zone offset, for current date, modified in case of
@@ -590,7 +590,7 @@ public:
      */
     virtual int32_t getOffset(uint8_t era, int32_t year, int32_t month, int32_t day,
                            uint8_t dayOfWeek, int32_t milliseconds,
-                           int32_t monthLength, UErrorCode& status) const override;
+                           int32_t monthLength, UErrorCode& status) const;
     /**
      * Gets the time zone offset, for current date, modified in case of
      * daylight savings. This is the offset to add *to* UTC to get local time.
@@ -618,16 +618,14 @@ public:
      * @stable ICU 2.8
      */
     virtual void getOffset(UDate date, UBool local, int32_t& rawOffset,
-                           int32_t& dstOffset, UErrorCode& ec) const override;
+                           int32_t& dstOffset, UErrorCode& ec) const;
 
     /**
      * Get time zone offsets from local wall time.
-     * @stable ICU 69
+     * @internal
      */
-    virtual void getOffsetFromLocal(
-        UDate date, UTimeZoneLocalOption nonExistingTimeOpt,
-        UTimeZoneLocalOption duplicatedTimeOpt,
-        int32_t& rawOffset, int32_t& dstOffset, UErrorCode& status) const override;
+    virtual void getOffsetFromLocal(UDate date, int32_t nonExistingTimeOpt, int32_t duplicatedTimeOpt,
+        int32_t& rawOffset, int32_t& dstOffset, UErrorCode& status) const;
 
     /**
      * Returns the TimeZone's raw GMT offset (i.e., the number of milliseconds to add
@@ -636,7 +634,7 @@ public:
      * @return   The TimeZone's raw GMT offset.
      * @stable ICU 2.0
      */
-    virtual int32_t getRawOffset(void) const override;
+    virtual int32_t getRawOffset(void) const;
 
     /**
      * Sets the TimeZone's raw GMT offset (i.e., the number of milliseconds to add
@@ -645,7 +643,7 @@ public:
      * @param offsetMillis  The new raw GMT offset for this time zone.
      * @stable ICU 2.0
      */
-    virtual void setRawOffset(int32_t offsetMillis) override;
+    virtual void setRawOffset(int32_t offsetMillis);
 
     /**
      * Sets the amount of time in ms that the clock is advanced during DST.
@@ -666,7 +664,7 @@ public:
      * but not 0.
      * @stable ICU 2.0
      */
-    virtual int32_t getDSTSavings(void) const override;
+    virtual int32_t getDSTSavings(void) const;
 
     /**
      * Queries if this TimeZone uses Daylight Savings Time.
@@ -674,7 +672,7 @@ public:
      * @return   True if this TimeZone uses Daylight Savings Time; false otherwise.
      * @stable ICU 2.0
      */
-    virtual UBool useDaylightTime(void) const override;
+    virtual UBool useDaylightTime(void) const;
 
 #ifndef U_FORCE_HIDE_DEPRECATED_API
     /**
@@ -691,7 +689,7 @@ public:
      * false otherwise.
      * @deprecated ICU 2.4. Use Calendar::inDaylightTime() instead.
      */
-    virtual UBool inDaylightTime(UDate date, UErrorCode& status) const override;
+    virtual UBool inDaylightTime(UDate date, UErrorCode& status) const;
 #endif  // U_FORCE_HIDE_DEPRECATED_API
 
     /**
@@ -700,7 +698,7 @@ public:
      * @return true if the given zone has the same rules and offset as this one
      * @stable ICU 2.0
      */
-    UBool hasSameRules(const TimeZone& other) const override;
+    UBool hasSameRules(const TimeZone& other) const;
 
     /**
      * Clones TimeZone objects polymorphically. Clients are responsible for deleting
@@ -709,27 +707,27 @@ public:
      * @return   A new copy of this TimeZone object.
      * @stable ICU 2.0
      */
-    virtual SimpleTimeZone* clone() const override;
+    virtual SimpleTimeZone* clone() const;
 
     /**
      * Gets the first time zone transition after the base time.
      * @param base      The base time.
      * @param inclusive Whether the base time is inclusive or not.
      * @param result    Receives the first transition after the base time.
-     * @return  true if the transition is found.
+     * @return  TRUE if the transition is found.
      * @stable ICU 3.8
      */
-    virtual UBool getNextTransition(UDate base, UBool inclusive, TimeZoneTransition& result) const override;
+    virtual UBool getNextTransition(UDate base, UBool inclusive, TimeZoneTransition& result) const;
 
     /**
      * Gets the most recent time zone transition before the base time.
      * @param base      The base time.
      * @param inclusive Whether the base time is inclusive or not.
      * @param result    Receives the most recent transition before the base time.
-     * @return  true if the transition is found.
+     * @return  TRUE if the transition is found.
      * @stable ICU 3.8
      */
-    virtual UBool getPreviousTransition(UDate base, UBool inclusive, TimeZoneTransition& result) const override;
+    virtual UBool getPreviousTransition(UDate base, UBool inclusive, TimeZoneTransition& result) const;
 
     /**
      * Returns the number of <code>TimeZoneRule</code>s which represents time transitions,
@@ -739,12 +737,12 @@ public:
      * @return The number of <code>TimeZoneRule</code>s representing time transitions.
      * @stable ICU 3.8
      */
-    virtual int32_t countTransitionRules(UErrorCode& status) const override;
+    virtual int32_t countTransitionRules(UErrorCode& status) const;
 
     /**
      * Gets the <code>InitialTimeZoneRule</code> and the set of <code>TimeZoneRule</code>
      * which represent time transitions for this time zone.  On successful return,
-     * the argument initial points to non-nullptr <code>InitialTimeZoneRule</code> and
+     * the argument initial points to non-NULL <code>InitialTimeZoneRule</code> and
      * the array trsrules is filled with 0 or multiple <code>TimeZoneRule</code>
      * instances up to the size specified by trscount.  The results are referencing the
      * rule instance held by this time zone instance.  Therefore, after this time zone
@@ -758,7 +756,7 @@ public:
      * @stable ICU 3.8
      */
     virtual void getTimeZoneRules(const InitialTimeZoneRule*& initial,
-        const TimeZoneRule* trsrules[], int32_t& trscount, UErrorCode& status) const override;
+        const TimeZoneRule* trsrules[], int32_t& trscount, UErrorCode& status) const;
 
 
 public:
@@ -773,7 +771,7 @@ public:
      *           same class ID. Objects of other classes have different class IDs.
      * @stable ICU 2.0
      */
-    virtual UClassID getDynamicClassID(void) const override;
+    virtual UClassID getDynamicClassID(void) const;
 
     /**
      * Return the class ID for this class. This is useful only for comparing to a return
@@ -800,7 +798,7 @@ private:
         DOW_LE_DOM_MODE
     };
 
-    SimpleTimeZone() = delete; // default constructor not implemented
+    SimpleTimeZone(); // default constructor not implemented
 
     /**
      * Internal construction method.

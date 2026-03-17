@@ -47,7 +47,7 @@ noopMove(UCharIterator * /*iter*/, int32_t /*delta*/, UCharIteratorOrigin /*orig
 
 static UBool U_CALLCONV
 noopHasNext(UCharIterator * /*iter*/) {
-    return false;
+    return FALSE;
 }
 
 static UChar32 U_CALLCONV
@@ -74,7 +74,7 @@ static const UCharIterator noopIterator={
     noopCurrent,
     noopCurrent,
     noopCurrent,
-    nullptr,
+    NULL,
     noopGetState,
     noopSetState
 };
@@ -82,14 +82,14 @@ static const UCharIterator noopIterator={
 /* UCharIterator implementation for simple strings -------------------------- */
 
 /*
- * This is an implementation of a code unit (char16_t) iterator
- * for char16_t * strings.
+ * This is an implementation of a code unit (UChar) iterator
+ * for UChar * strings.
  *
  * The UCharIterator.context field holds a pointer to the string.
  */
 
 static int32_t U_CALLCONV
-stringIteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) UPRV_NO_SANITIZE_UNDEFINED {
+stringIteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) {
     switch(origin) {
     case UITER_ZERO:
         return 0;
@@ -109,7 +109,7 @@ stringIteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) UPRV_NO_
 }
 
 static int32_t U_CALLCONV
-stringIteratorMove(UCharIterator *iter, int32_t delta, UCharIteratorOrigin origin) UPRV_NO_SANITIZE_UNDEFINED {
+stringIteratorMove(UCharIterator *iter, int32_t delta, UCharIteratorOrigin origin) {
     int32_t pos;
 
     switch(origin) {
@@ -154,7 +154,7 @@ stringIteratorHasPrevious(UCharIterator *iter) {
 static UChar32 U_CALLCONV
 stringIteratorCurrent(UCharIterator *iter) {
     if(iter->index<iter->limit) {
-        return ((const char16_t *)(iter->context))[iter->index];
+        return ((const UChar *)(iter->context))[iter->index];
     } else {
         return U_SENTINEL;
     }
@@ -163,7 +163,7 @@ stringIteratorCurrent(UCharIterator *iter) {
 static UChar32 U_CALLCONV
 stringIteratorNext(UCharIterator *iter) {
     if(iter->index<iter->limit) {
-        return ((const char16_t *)(iter->context))[iter->index++];
+        return ((const UChar *)(iter->context))[iter->index++];
     } else {
         return U_SENTINEL;
     }
@@ -172,7 +172,7 @@ stringIteratorNext(UCharIterator *iter) {
 static UChar32 U_CALLCONV
 stringIteratorPrevious(UCharIterator *iter) {
     if(iter->index>iter->start) {
-        return ((const char16_t *)(iter->context))[--iter->index];
+        return ((const UChar *)(iter->context))[--iter->index];
     } else {
         return U_SENTINEL;
     }
@@ -185,9 +185,9 @@ stringIteratorGetState(const UCharIterator *iter) {
 
 static void U_CALLCONV
 stringIteratorSetState(UCharIterator *iter, uint32_t state, UErrorCode *pErrorCode) {
-    if(pErrorCode==nullptr || U_FAILURE(*pErrorCode)) {
+    if(pErrorCode==NULL || U_FAILURE(*pErrorCode)) {
         /* do nothing */
-    } else if(iter==nullptr) {
+    } else if(iter==NULL) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
     } else if((int32_t)state<iter->start || iter->limit<(int32_t)state) {
         *pErrorCode=U_INDEX_OUTOFBOUNDS_ERROR;
@@ -205,13 +205,13 @@ static const UCharIterator stringIterator={
     stringIteratorCurrent,
     stringIteratorNext,
     stringIteratorPrevious,
-    nullptr,
+    NULL,
     stringIteratorGetState,
     stringIteratorSetState
 };
 
 U_CAPI void U_EXPORT2
-uiter_setString(UCharIterator *iter, const char16_t *s, int32_t length) {
+uiter_setString(UCharIterator *iter, const UChar *s, int32_t length) {
     if(iter!=0) {
         if(s!=0 && length>=-1) {
             *iter=stringIterator;
@@ -231,12 +231,12 @@ uiter_setString(UCharIterator *iter, const char16_t *s, int32_t length) {
 /* UCharIterator implementation for UTF-16BE strings ------------------------ */
 
 /*
- * This is an implementation of a code unit (char16_t) iterator
+ * This is an implementation of a code unit (UChar) iterator
  * for UTF-16BE strings, i.e., strings in byte-vectors where
- * each char16_t is stored as a big-endian pair of bytes.
+ * each UChar is stored as a big-endian pair of bytes.
  *
  * The UCharIterator.context field holds a pointer to the string.
- * Everything works just like with a normal char16_t iterator (uiter_setString),
+ * Everything works just like with a normal UChar iterator (uiter_setString),
  * except that UChars are assembled from byte pairs.
  */
 
@@ -244,7 +244,7 @@ uiter_setString(UCharIterator *iter, const char16_t *s, int32_t length) {
 static inline UChar32
 utf16BEIteratorGet(UCharIterator *iter, int32_t index) {
     const uint8_t *p=(const uint8_t *)iter->context;
-    return ((char16_t)p[2*index]<<8)|(char16_t)p[2*index+1];
+    return ((UChar)p[2*index]<<8)|(UChar)p[2*index+1];
 }
 
 static UChar32 U_CALLCONV
@@ -291,13 +291,13 @@ static const UCharIterator utf16BEIterator={
     utf16BEIteratorCurrent,
     utf16BEIteratorNext,
     utf16BEIteratorPrevious,
-    nullptr,
+    NULL,
     stringIteratorGetState,
     stringIteratorSetState
 };
 
 /*
- * Count the number of UChars in a UTF-16BE string before a terminating char16_t NUL,
+ * Count the number of UChars in a UTF-16BE string before a terminating UChar NUL,
  * i.e., before a pair of 0 bytes where the first 0 byte is at an even
  * offset from s.
  */
@@ -306,10 +306,10 @@ utf16BE_strlen(const char *s) {
     if(IS_POINTER_EVEN(s)) {
         /*
          * even-aligned, call u_strlen(s)
-         * we are probably on a little-endian machine, but searching for char16_t NUL
+         * we are probably on a little-endian machine, but searching for UChar NUL
          * does not care about endianness
          */
-        return u_strlen((const char16_t *)s);
+        return u_strlen((const UChar *)s);
     } else {
         /* odd-aligned, search for pair of 0 bytes */
         const char *p=s;
@@ -323,15 +323,15 @@ utf16BE_strlen(const char *s) {
 
 U_CAPI void U_EXPORT2
 uiter_setUTF16BE(UCharIterator *iter, const char *s, int32_t length) {
-    if(iter!=nullptr) {
+    if(iter!=NULL) {
         /* allow only even-length strings (the input length counts bytes) */
-        if(s!=nullptr && (length==-1 || (length>=0 && IS_EVEN(length)))) {
+        if(s!=NULL && (length==-1 || (length>=0 && IS_EVEN(length)))) {
             /* length/=2, except that >>=1 also works for -1 (-1/2==0, -1>>1==-1) */
             length>>=1;
 
             if(U_IS_BIG_ENDIAN && IS_POINTER_EVEN(s)) {
-                /* big-endian machine and 2-aligned UTF-16BE string: use normal char16_t iterator */
-                uiter_setString(iter, (const char16_t *)s, length);
+                /* big-endian machine and 2-aligned UTF-16BE string: use normal UChar iterator */
+                uiter_setString(iter, (const UChar *)s, length);
                 return;
             }
 
@@ -359,7 +359,7 @@ uiter_setUTF16BE(UCharIterator *iter, const char *s, int32_t length) {
  */
 
 static int32_t U_CALLCONV
-characterIteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) UPRV_NO_SANITIZE_UNDEFINED {
+characterIteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) {
     switch(origin) {
     case UITER_ZERO:
         return 0;
@@ -379,7 +379,7 @@ characterIteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) UPRV_
 }
 
 static int32_t U_CALLCONV
-characterIteratorMove(UCharIterator *iter, int32_t delta, UCharIteratorOrigin origin) UPRV_NO_SANITIZE_UNDEFINED {
+characterIteratorMove(UCharIterator *iter, int32_t delta, UCharIteratorOrigin origin) {
     switch(origin) {
     case UITER_ZERO:
         ((CharacterIterator *)(iter->context))->setIndex(delta);
@@ -445,9 +445,9 @@ characterIteratorGetState(const UCharIterator *iter) {
 
 static void U_CALLCONV
 characterIteratorSetState(UCharIterator *iter, uint32_t state, UErrorCode *pErrorCode) {
-    if(pErrorCode==nullptr || U_FAILURE(*pErrorCode)) {
+    if(pErrorCode==NULL || U_FAILURE(*pErrorCode)) {
         /* do nothing */
-    } else if(iter==nullptr || iter->context==nullptr) {
+    } else if(iter==NULL || iter->context==NULL) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
     } else if((int32_t)state<((CharacterIterator *)(iter->context))->startIndex() || ((CharacterIterator *)(iter->context))->endIndex()<(int32_t)state) {
         *pErrorCode=U_INDEX_OUTOFBOUNDS_ERROR;
@@ -465,7 +465,7 @@ static const UCharIterator characterIteratorWrapper={
     characterIteratorCurrent,
     characterIteratorNext,
     characterIteratorPrevious,
-    nullptr,
+    NULL,
     characterIteratorGetState,
     characterIteratorSetState
 };
@@ -485,7 +485,7 @@ uiter_setCharacterIterator(UCharIterator *iter, CharacterIterator *charIter) {
 /* UCharIterator wrapper around Replaceable --------------------------------- */
 
 /*
- * This is an implementation of a code unit (char16_t) iterator
+ * This is an implementation of a code unit (UChar) iterator
  * based on a Replaceable object.
  *
  * The UCharIterator.context field holds a pointer to the Replaceable.
@@ -529,7 +529,7 @@ static const UCharIterator replaceableIterator={
     replaceableIteratorCurrent,
     replaceableIteratorNext,
     replaceableIteratorPrevious,
-    nullptr,
+    NULL,
     stringIteratorGetState,
     stringIteratorSetState
 };
@@ -561,7 +561,7 @@ uiter_setReplaceable(UCharIterator *iter, const Replaceable *rep) {
 
 /*
  * Minimal implementation:
- * Maintain a single-char16_t buffer for an additional surrogate.
+ * Maintain a single-UChar buffer for an additional surrogate.
  * The caller must not modify start and limit because they are used internally.
  *
  * Use UCharIterator fields as follows:
@@ -586,7 +586,7 @@ uiter_setReplaceable(UCharIterator *iter, const Replaceable *rep) {
  */
 
 static int32_t U_CALLCONV
-utf8IteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) UPRV_NO_SANITIZE_UNDEFINED {
+utf8IteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) {
     switch(origin) {
     case UITER_ZERO:
     case UITER_START:
@@ -666,7 +666,7 @@ utf8IteratorGetIndex(UCharIterator *iter, UCharIteratorOrigin origin) UPRV_NO_SA
 }
 
 static int32_t U_CALLCONV
-utf8IteratorMove(UCharIterator *iter, int32_t delta, UCharIteratorOrigin origin) UPRV_NO_SANITIZE_UNDEFINED {
+utf8IteratorMove(UCharIterator *iter, int32_t delta, UCharIteratorOrigin origin) {
     const uint8_t *s;
     UChar32 c;
     int32_t pos; /* requested UTF-16 index */
@@ -678,24 +678,24 @@ utf8IteratorMove(UCharIterator *iter, int32_t delta, UCharIteratorOrigin origin)
     case UITER_ZERO:
     case UITER_START:
         pos=delta;
-        havePos=true;
+        havePos=TRUE;
         /* iter->index<0 (unknown) is possible */
         break;
     case UITER_CURRENT:
         if(iter->index>=0) {
             pos=iter->index+delta;
-            havePos=true;
+            havePos=TRUE;
         } else {
             /* the current UTF-16 index is unknown after setState(), use only delta */
             pos=0;
-            havePos=false;
+            havePos=FALSE;
         }
         break;
     case UITER_LIMIT:
     case UITER_LENGTH:
         if(iter->length>=0) {
             pos=iter->length+delta;
-            havePos=true;
+            havePos=TRUE;
         } else {
             /* pin to the end, avoid counting the length */
             iter->index=-1;
@@ -706,7 +706,7 @@ utf8IteratorMove(UCharIterator *iter, int32_t delta, UCharIteratorOrigin origin)
             } else {
                 /* the current UTF-16 index is unknown, use only delta */
                 pos=0;
-                havePos=false;
+                havePos=FALSE;
             }
         }
         break;
@@ -873,7 +873,7 @@ utf8IteratorNext(UCharIterator *iter) {
     int32_t index;
 
     if(iter->reservedField!=0) {
-        char16_t trail=U16_TRAIL(iter->reservedField);
+        UChar trail=U16_TRAIL(iter->reservedField);
         iter->reservedField=0;
         if((index=iter->index)>=0) {
             iter->index=index+1;
@@ -908,7 +908,7 @@ utf8IteratorPrevious(UCharIterator *iter) {
     int32_t index;
 
     if(iter->reservedField!=0) {
-        char16_t lead=U16_LEAD(iter->reservedField);
+        UChar lead=U16_LEAD(iter->reservedField);
         iter->reservedField=0;
         iter->start-=4; /* we stayed behind the supplementary code point; go before it now */
         if((index=iter->index)>0) {
@@ -951,9 +951,9 @@ utf8IteratorSetState(UCharIterator *iter,
                      uint32_t state,
                      UErrorCode *pErrorCode)
 {
-    if(pErrorCode==nullptr || U_FAILURE(*pErrorCode)) {
+    if(pErrorCode==NULL || U_FAILURE(*pErrorCode)) {
         /* do nothing */
-    } else if(iter==nullptr) {
+    } else if(iter==NULL) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
     } else if(state==utf8IteratorGetState(iter)) {
         /* setting to the current state: no-op */
@@ -995,7 +995,7 @@ static const UCharIterator utf8Iterator={
     utf8IteratorCurrent,
     utf8IteratorNext,
     utf8IteratorPrevious,
-    nullptr,
+    NULL,
     utf8IteratorGetState,
     utf8IteratorSetState
 };
@@ -1085,7 +1085,7 @@ uiter_previous32(UCharIterator *iter) {
 
 U_CAPI uint32_t U_EXPORT2
 uiter_getState(const UCharIterator *iter) {
-    if(iter==nullptr || iter->getState==nullptr) {
+    if(iter==NULL || iter->getState==NULL) {
         return UITER_NO_STATE;
     } else {
         return iter->getState(iter);
@@ -1094,11 +1094,11 @@ uiter_getState(const UCharIterator *iter) {
 
 U_CAPI void U_EXPORT2
 uiter_setState(UCharIterator *iter, uint32_t state, UErrorCode *pErrorCode) {
-    if(pErrorCode==nullptr || U_FAILURE(*pErrorCode)) {
+    if(pErrorCode==NULL || U_FAILURE(*pErrorCode)) {
         /* do nothing */
-    } else if(iter==nullptr) {
+    } else if(iter==NULL) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
-    } else if(iter->setState==nullptr) {
+    } else if(iter->setState==NULL) {
         *pErrorCode=U_UNSUPPORTED_ERROR;
     } else {
         iter->setState(iter, state, pErrorCode);

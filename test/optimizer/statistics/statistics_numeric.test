@@ -18,10 +18,10 @@ SELECT ABS(i) FROM integers ORDER BY i
 1
 10
 
-query II
-SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
 ----
-1	10
+<REGEX>:.*1.*10.*
 
 # verify that the call to abs gets removed by the optimizer out
 query II
@@ -34,10 +34,10 @@ logical_opt	<!REGEX>:.*abs.*
 statement ok
 INSERT INTO integers VALUES (-5)
 
-query II
-SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
 ----
-0	10
+<REGEX>:.*0.*10.*
 
 query I
 SELECT ABS(i) FROM integers ORDER BY i
@@ -56,10 +56,10 @@ logical_opt	<REGEX>:.*abs.*
 statement ok
 INSERT INTO integers VALUES (-15)
 
-query II
-SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
 ----
-0	15
+<REGEX>:.*0.*15.*
 
 query I
 SELECT ABS(i) FROM integers ORDER BY i
@@ -72,10 +72,10 @@ SELECT ABS(i) FROM integers ORDER BY i
 statement ok
 INSERT INTO integers VALUES (0)
 
-query II
-SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
 ----
-0	15
+<REGEX>:.*0.*15.*
 
 query I
 SELECT ABS(i) FROM integers ORDER BY i
@@ -96,7 +96,7 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers VALUES (-1), (-10);
 
-query II
-SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
+query I
+SELECT STATS(ABS(i)) FROM integers LIMIT 1
 ----
-1	10
+<REGEX>:.*1.*10.*

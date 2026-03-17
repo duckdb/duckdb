@@ -29,7 +29,7 @@
 
 /* ANSI string.h - style functions ------------------------------------------ */
 
-/* U+ffff is the highest BMP code point, the highest one that fits into a 16-bit char16_t */
+/* U+ffff is the highest BMP code point, the highest one that fits into a 16-bit UChar */
 #define U_BMP_MAX 0xffff
 
 /* Forward binary string search functions ----------------------------------- */
@@ -37,32 +37,32 @@
 /*
  * Test if a substring match inside a string is at code point boundaries.
  * All pointers refer to the same buffer.
- * The limit pointer may be nullptr, all others must be real pointers.
+ * The limit pointer may be NULL, all others must be real pointers.
  */
 static inline UBool
-isMatchAtCPBoundary(const char16_t *start, const char16_t *match, const char16_t *matchLimit, const char16_t *limit) {
+isMatchAtCPBoundary(const UChar *start, const UChar *match, const UChar *matchLimit, const UChar *limit) {
     if(U16_IS_TRAIL(*match) && start!=match && U16_IS_LEAD(*(match-1))) {
         /* the leading edge of the match is in the middle of a surrogate pair */
-        return false;
+        return FALSE;
     }
-    if(U16_IS_LEAD(*(matchLimit-1)) && matchLimit!=limit && U16_IS_TRAIL(*matchLimit)) {
+    if(U16_IS_LEAD(*(matchLimit-1)) && match!=limit && U16_IS_TRAIL(*matchLimit)) {
         /* the trailing edge of the match is in the middle of a surrogate pair */
-        return false;
+        return FALSE;
     }
-    return true;
+    return TRUE;
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_strFindFirst(const char16_t *s, int32_t length,
-               const char16_t *sub, int32_t subLength) {
-    const char16_t *start, *p, *q, *subLimit;
-    char16_t c, cs, cq;
+U_CAPI UChar * U_EXPORT2
+u_strFindFirst(const UChar *s, int32_t length,
+               const UChar *sub, int32_t subLength) {
+    const UChar *start, *p, *q, *subLimit;
+    UChar c, cs, cq;
 
-    if(sub==nullptr || subLength<-1) {
-        return (char16_t *)s;
+    if(sub==NULL || subLength<-1) {
+        return (UChar *)s;
     }
-    if(s==nullptr || length<-1) {
-        return nullptr;
+    if(s==NULL || length<-1) {
+        return NULL;
     }
 
     start=s;
@@ -70,7 +70,7 @@ u_strFindFirst(const char16_t *s, int32_t length,
     if(length<0 && subLength<0) {
         /* both strings are NUL-terminated */
         if((cs=*sub++)==0) {
-            return (char16_t *)s;
+            return (UChar *)s;
         }
         if(*sub==0 && !U16_IS_SURROGATE(cs)) {
             /* the substring consists of a single, non-surrogate BMP code point */
@@ -79,19 +79,19 @@ u_strFindFirst(const char16_t *s, int32_t length,
 
         while((c=*s++)!=0) {
             if(c==cs) {
-                /* found first substring char16_t, compare rest */
+                /* found first substring UChar, compare rest */
                 p=s;
                 q=sub;
                 for(;;) {
                     if((cq=*q)==0) {
-                        if(isMatchAtCPBoundary(start, s-1, p, nullptr)) {
-                            return (char16_t *)(s-1); /* well-formed match */
+                        if(isMatchAtCPBoundary(start, s-1, p, NULL)) {
+                            return (UChar *)(s-1); /* well-formed match */
                         } else {
                             break; /* no match because surrogate pair is split */
                         }
                     }
                     if((c=*p)==0) {
-                        return nullptr; /* no match, and none possible after s */
+                        return NULL; /* no match, and none possible after s */
                     }
                     if(c!=cq) {
                         break; /* no match */
@@ -103,14 +103,14 @@ u_strFindFirst(const char16_t *s, int32_t length,
         }
 
         /* not found */
-        return nullptr;
+        return NULL;
     }
 
     if(subLength<0) {
         subLength=u_strlen(sub);
     }
     if(subLength==0) {
-        return (char16_t *)s;
+        return (UChar *)s;
     }
 
     /* get sub[0] to search for it fast */
@@ -127,19 +127,19 @@ u_strFindFirst(const char16_t *s, int32_t length,
         /* s is NUL-terminated */
         while((c=*s++)!=0) {
             if(c==cs) {
-                /* found first substring char16_t, compare rest */
+                /* found first substring UChar, compare rest */
                 p=s;
                 q=sub;
                 for(;;) {
                     if(q==subLimit) {
-                        if(isMatchAtCPBoundary(start, s-1, p, nullptr)) {
-                            return (char16_t *)(s-1); /* well-formed match */
+                        if(isMatchAtCPBoundary(start, s-1, p, NULL)) {
+                            return (UChar *)(s-1); /* well-formed match */
                         } else {
                             break; /* no match because surrogate pair is split */
                         }
                     }
                     if((c=*p)==0) {
-                        return nullptr; /* no match, and none possible after s */
+                        return NULL; /* no match, and none possible after s */
                     }
                     if(c!=*q) {
                         break; /* no match */
@@ -150,11 +150,11 @@ u_strFindFirst(const char16_t *s, int32_t length,
             }
         }
     } else {
-        const char16_t *limit, *preLimit;
+        const UChar *limit, *preLimit;
 
         /* subLength was decremented above */
         if(length<=subLength) {
-            return nullptr; /* s is shorter than sub */
+            return NULL; /* s is shorter than sub */
         }
 
         limit=s+length;
@@ -165,13 +165,13 @@ u_strFindFirst(const char16_t *s, int32_t length,
         while(s!=preLimit) {
             c=*s++;
             if(c==cs) {
-                /* found first substring char16_t, compare rest */
+                /* found first substring UChar, compare rest */
                 p=s;
                 q=sub;
                 for(;;) {
                     if(q==subLimit) {
                         if(isMatchAtCPBoundary(start, s-1, p, limit)) {
-                            return (char16_t *)(s-1); /* well-formed match */
+                            return (UChar *)(s-1); /* well-formed match */
                         } else {
                             break; /* no match because surrogate pair is split */
                         }
@@ -187,113 +187,113 @@ u_strFindFirst(const char16_t *s, int32_t length,
     }
 
     /* not found */
-    return nullptr;
+    return NULL;
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_strstr(const char16_t *s, const char16_t *substring) {
+U_CAPI UChar * U_EXPORT2
+u_strstr(const UChar *s, const UChar *substring) {
     return u_strFindFirst(s, -1, substring, -1);
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_strchr(const char16_t *s, char16_t c) {
+U_CAPI UChar * U_EXPORT2
+u_strchr(const UChar *s, UChar c) {
     if(U16_IS_SURROGATE(c)) {
         /* make sure to not find half of a surrogate pair */
         return u_strFindFirst(s, -1, &c, 1);
     } else {
-        char16_t cs;
+        UChar cs;
 
         /* trivial search for a BMP code point */
         for(;;) {
             if((cs=*s)==c) {
-                return (char16_t *)s;
+                return (UChar *)s;
             }
             if(cs==0) {
-                return nullptr;
+                return NULL;
             }
             ++s;
         }
     }
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_strchr32(const char16_t *s, UChar32 c) {
+U_CAPI UChar * U_EXPORT2
+u_strchr32(const UChar *s, UChar32 c) {
     if((uint32_t)c<=U_BMP_MAX) {
         /* find BMP code point */
-        return u_strchr(s, (char16_t)c);
+        return u_strchr(s, (UChar)c);
     } else if((uint32_t)c<=UCHAR_MAX_VALUE) {
         /* find supplementary code point as surrogate pair */
-        char16_t cs, lead=U16_LEAD(c), trail=U16_TRAIL(c);
+        UChar cs, lead=U16_LEAD(c), trail=U16_TRAIL(c);
 
         while((cs=*s++)!=0) {
             if(cs==lead && *s==trail) {
-                return (char16_t *)(s-1);
+                return (UChar *)(s-1);
             }
         }
-        return nullptr;
+        return NULL;
     } else {
         /* not a Unicode code point, not findable */
-        return nullptr;
+        return NULL;
     }
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_memchr(const char16_t *s, char16_t c, int32_t count) {
+U_CAPI UChar * U_EXPORT2
+u_memchr(const UChar *s, UChar c, int32_t count) {
     if(count<=0) {
-        return nullptr; /* no string */
+        return NULL; /* no string */
     } else if(U16_IS_SURROGATE(c)) {
         /* make sure to not find half of a surrogate pair */
         return u_strFindFirst(s, count, &c, 1);
     } else {
         /* trivial search for a BMP code point */
-        const char16_t *limit=s+count;
+        const UChar *limit=s+count;
         do {
             if(*s==c) {
-                return (char16_t *)s;
+                return (UChar *)s;
             }
         } while(++s!=limit);
-        return nullptr;
+        return NULL;
     }
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_memchr32(const char16_t *s, UChar32 c, int32_t count) {
+U_CAPI UChar * U_EXPORT2
+u_memchr32(const UChar *s, UChar32 c, int32_t count) {
     if((uint32_t)c<=U_BMP_MAX) {
         /* find BMP code point */
-        return u_memchr(s, (char16_t)c, count);
+        return u_memchr(s, (UChar)c, count);
     } else if(count<2) {
         /* too short for a surrogate pair */
-        return nullptr;
+        return NULL;
     } else if((uint32_t)c<=UCHAR_MAX_VALUE) {
         /* find supplementary code point as surrogate pair */
-        const char16_t *limit=s+count-1; /* -1 so that we do not need a separate check for the trail unit */
-        char16_t lead=U16_LEAD(c), trail=U16_TRAIL(c);
+        const UChar *limit=s+count-1; /* -1 so that we do not need a separate check for the trail unit */
+        UChar lead=U16_LEAD(c), trail=U16_TRAIL(c);
 
         do {
             if(*s==lead && *(s+1)==trail) {
-                return (char16_t *)s;
+                return (UChar *)s;
             }
         } while(++s!=limit);
-        return nullptr;
+        return NULL;
     } else {
         /* not a Unicode code point, not findable */
-        return nullptr;
+        return NULL;
     }
 }
 
 /* Backward binary string search functions ---------------------------------- */
 
-U_CAPI char16_t * U_EXPORT2
-u_strFindLast(const char16_t *s, int32_t length,
-              const char16_t *sub, int32_t subLength) {
-    const char16_t *start, *limit, *p, *q, *subLimit;
-    char16_t c, cs;
+U_CAPI UChar * U_EXPORT2
+u_strFindLast(const UChar *s, int32_t length,
+              const UChar *sub, int32_t subLength) {
+    const UChar *start, *limit, *p, *q, *subLimit;
+    UChar c, cs;
 
-    if(sub==nullptr || subLength<-1) {
-        return (char16_t *)s;
+    if(sub==NULL || subLength<-1) {
+        return (UChar *)s;
     }
-    if(s==nullptr || length<-1) {
-        return nullptr;
+    if(s==NULL || length<-1) {
+        return NULL;
     }
 
     /*
@@ -310,7 +310,7 @@ u_strFindLast(const char16_t *s, int32_t length,
         subLength=u_strlen(sub);
     }
     if(subLength==0) {
-        return (char16_t *)s;
+        return (UChar *)s;
     }
 
     /* get sub[subLength-1] to search for it fast */
@@ -329,7 +329,7 @@ u_strFindLast(const char16_t *s, int32_t length,
 
     /* subLength was decremented above */
     if(length<=subLength) {
-        return nullptr; /* s is shorter than sub */
+        return NULL; /* s is shorter than sub */
     }
 
     start=s;
@@ -341,13 +341,13 @@ u_strFindLast(const char16_t *s, int32_t length,
     while(s!=limit) {
         c=*(--limit);
         if(c==cs) {
-            /* found last substring char16_t, compare rest */
+            /* found last substring UChar, compare rest */
             p=limit;
             q=subLimit;
             for(;;) {
                 if(q==sub) {
                     if(isMatchAtCPBoundary(start, p, limit+1, start+length)) {
-                        return (char16_t *)p; /* well-formed match */
+                        return (UChar *)p; /* well-formed match */
                     } else {
                         break; /* no match because surrogate pair is split */
                     }
@@ -360,22 +360,22 @@ u_strFindLast(const char16_t *s, int32_t length,
     }
 
     /* not found */
-    return nullptr;
+    return NULL;
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_strrstr(const char16_t *s, const char16_t *substring) {
+U_CAPI UChar * U_EXPORT2
+u_strrstr(const UChar *s, const UChar *substring) {
     return u_strFindLast(s, -1, substring, -1);
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_strrchr(const char16_t *s, char16_t c) {
+U_CAPI UChar * U_EXPORT2
+u_strrchr(const UChar *s, UChar c) {
     if(U16_IS_SURROGATE(c)) {
         /* make sure to not find half of a surrogate pair */
         return u_strFindLast(s, -1, &c, 1);
     } else {
-        const char16_t *result=nullptr;
-        char16_t cs;
+        const UChar *result=NULL;
+        UChar cs;
 
         /* trivial search for a BMP code point */
         for(;;) {
@@ -383,76 +383,76 @@ u_strrchr(const char16_t *s, char16_t c) {
                 result=s;
             }
             if(cs==0) {
-                return (char16_t *)result;
+                return (UChar *)result;
             }
             ++s;
         }
     }
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_strrchr32(const char16_t *s, UChar32 c) {
+U_CAPI UChar * U_EXPORT2
+u_strrchr32(const UChar *s, UChar32 c) {
     if((uint32_t)c<=U_BMP_MAX) {
         /* find BMP code point */
-        return u_strrchr(s, (char16_t)c);
+        return u_strrchr(s, (UChar)c);
     } else if((uint32_t)c<=UCHAR_MAX_VALUE) {
         /* find supplementary code point as surrogate pair */
-        const char16_t *result=nullptr;
-        char16_t cs, lead=U16_LEAD(c), trail=U16_TRAIL(c);
+        const UChar *result=NULL;
+        UChar cs, lead=U16_LEAD(c), trail=U16_TRAIL(c);
 
         while((cs=*s++)!=0) {
             if(cs==lead && *s==trail) {
                 result=s-1;
             }
         }
-        return (char16_t *)result;
+        return (UChar *)result;
     } else {
         /* not a Unicode code point, not findable */
-        return nullptr;
+        return NULL;
     }
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_memrchr(const char16_t *s, char16_t c, int32_t count) {
+U_CAPI UChar * U_EXPORT2
+u_memrchr(const UChar *s, UChar c, int32_t count) {
     if(count<=0) {
-        return nullptr; /* no string */
+        return NULL; /* no string */
     } else if(U16_IS_SURROGATE(c)) {
         /* make sure to not find half of a surrogate pair */
         return u_strFindLast(s, count, &c, 1);
     } else {
         /* trivial search for a BMP code point */
-        const char16_t *limit=s+count;
+        const UChar *limit=s+count;
         do {
             if(*(--limit)==c) {
-                return (char16_t *)limit;
+                return (UChar *)limit;
             }
         } while(s!=limit);
-        return nullptr;
+        return NULL;
     }
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_memrchr32(const char16_t *s, UChar32 c, int32_t count) {
+U_CAPI UChar * U_EXPORT2
+u_memrchr32(const UChar *s, UChar32 c, int32_t count) {
     if((uint32_t)c<=U_BMP_MAX) {
         /* find BMP code point */
-        return u_memrchr(s, (char16_t)c, count);
+        return u_memrchr(s, (UChar)c, count);
     } else if(count<2) {
         /* too short for a surrogate pair */
-        return nullptr;
+        return NULL;
     } else if((uint32_t)c<=UCHAR_MAX_VALUE) {
         /* find supplementary code point as surrogate pair */
-        const char16_t *limit=s+count-1;
-        char16_t lead=U16_LEAD(c), trail=U16_TRAIL(c);
+        const UChar *limit=s+count-1;
+        UChar lead=U16_LEAD(c), trail=U16_TRAIL(c);
 
         do {
             if(*limit==trail && *(limit-1)==lead) {
-                return (char16_t *)(limit-1);
+                return (UChar *)(limit-1);
             }
         } while(s!=--limit);
-        return nullptr;
+        return NULL;
     } else {
         /* not a Unicode code point, not findable */
-        return nullptr;
+        return NULL;
     }
 }
 
@@ -461,14 +461,14 @@ u_memrchr32(const char16_t *s, UChar32 c, int32_t count) {
 /*
  * Match each code point in a string against each code point in the matchSet.
  * Return the index of the first string code point that
- * is (polarity==true) or is not (false) contained in the matchSet.
+ * is (polarity==TRUE) or is not (FALSE) contained in the matchSet.
  * Return -(string length)-1 if there is no such code point.
  */
 static int32_t
-_matchFromSet(const char16_t *string, const char16_t *matchSet, UBool polarity) {
+_matchFromSet(const UChar *string, const UChar *matchSet, UBool polarity) {
     int32_t matchLen, matchBMPLen, strItr, matchItr;
     UChar32 stringCh, matchCh;
-    char16_t c, c2;
+    UChar c, c2;
 
     /* first part of matchSet contains only BMP code points */
     matchBMPLen = 0;
@@ -537,22 +537,22 @@ endloop:
 }
 
 /* Search for a codepoint in a string that matches one of the matchSet codepoints. */
-U_CAPI char16_t * U_EXPORT2
-u_strpbrk(const char16_t *string, const char16_t *matchSet)
+U_CAPI UChar * U_EXPORT2
+u_strpbrk(const UChar *string, const UChar *matchSet)
 {
-    int32_t idx = _matchFromSet(string, matchSet, true);
+    int32_t idx = _matchFromSet(string, matchSet, TRUE);
     if(idx >= 0) {
-        return (char16_t *)string + idx;
+        return (UChar *)string + idx;
     } else {
-        return nullptr;
+        return NULL;
     }
 }
 
 /* Search for a codepoint in a string that matches one of the matchSet codepoints. */
 U_CAPI int32_t U_EXPORT2
-u_strcspn(const char16_t *string, const char16_t *matchSet)
+u_strcspn(const UChar *string, const UChar *matchSet)
 {
-    int32_t idx = _matchFromSet(string, matchSet, true);
+    int32_t idx = _matchFromSet(string, matchSet, TRUE);
     if(idx >= 0) {
         return idx;
     } else {
@@ -562,9 +562,9 @@ u_strcspn(const char16_t *string, const char16_t *matchSet)
 
 /* Search for a codepoint in a string that does not match one of the matchSet codepoints. */
 U_CAPI int32_t U_EXPORT2
-u_strspn(const char16_t *string, const char16_t *matchSet)
+u_strspn(const UChar *string, const UChar *matchSet)
 {
-    int32_t idx = _matchFromSet(string, matchSet, false);
+    int32_t idx = _matchFromSet(string, matchSet, FALSE);
     if(idx >= 0) {
         return idx;
     } else {
@@ -574,17 +574,17 @@ u_strspn(const char16_t *string, const char16_t *matchSet)
 
 /* ----- Text manipulation functions --- */
 
-U_CAPI char16_t* U_EXPORT2
-u_strtok_r(char16_t *src,
-     const char16_t *delim,
-           char16_t   **saveState)
+U_CAPI UChar* U_EXPORT2
+u_strtok_r(UChar    *src,
+     const UChar    *delim,
+           UChar   **saveState)
 {
-    char16_t *tokSource;
-    char16_t *nextToken;
+    UChar *tokSource;
+    UChar *nextToken;
     uint32_t nonDelimIdx;
 
-    /* If saveState is nullptr, the user messed up. */
-    if (src != nullptr) {
+    /* If saveState is NULL, the user messed up. */
+    if (src != NULL) {
         tokSource = src;
         *saveState = src; /* Set to "src" in case there are no delimiters */
     }
@@ -592,9 +592,9 @@ u_strtok_r(char16_t *src,
         tokSource = *saveState;
     }
     else {
-        /* src == nullptr && *saveState == nullptr */
+        /* src == NULL && *saveState == NULL */
         /* This shouldn't happen. We already finished tokenizing. */
-        return nullptr;
+        return NULL;
     }
 
     /* Skip initial delimiters */
@@ -603,7 +603,7 @@ u_strtok_r(char16_t *src,
 
     if (*tokSource) {
         nextToken = u_strpbrk(tokSource, delim);
-        if (nextToken != nullptr) {
+        if (nextToken != NULL) {
             /* Create a token */
             *(nextToken++) = 0;
             *saveState = nextToken;
@@ -611,24 +611,24 @@ u_strtok_r(char16_t *src,
         }
         else if (*saveState) {
             /* Return the last token */
-            *saveState = nullptr;
+            *saveState = NULL;
             return tokSource;
         }
     }
     else {
         /* No tokens were found. Only delimiters were left. */
-        *saveState = nullptr;
+        *saveState = NULL;
     }
-    return nullptr;
+    return NULL;
 }
 
 /* Miscellaneous functions -------------------------------------------------- */
 
-U_CAPI char16_t* U_EXPORT2
-u_strcat(char16_t  *dst,
-    const char16_t  *src)
+U_CAPI UChar* U_EXPORT2
+u_strcat(UChar     *dst,
+    const UChar     *src)
 {
-    char16_t *anchor = dst;            /* save a pointer to start of dst */
+    UChar *anchor = dst;            /* save a pointer to start of dst */
 
     while(*dst != 0) {              /* To end of first string          */
         ++dst;
@@ -639,13 +639,13 @@ u_strcat(char16_t  *dst,
     return anchor;
 }
 
-U_CAPI char16_t*  U_EXPORT2
-u_strncat(char16_t  *dst,
-     const char16_t  *src,
-     int32_t     n ) 
+U_CAPI UChar*  U_EXPORT2
+u_strncat(UChar     *dst,
+     const UChar     *src,
+     int32_t     n )
 {
     if(n > 0) {
-        char16_t *anchor = dst;            /* save a pointer to start of dst */
+        UChar *anchor = dst;            /* save a pointer to start of dst */
 
         while(*dst != 0) {              /* To end of first string          */
             ++dst;
@@ -668,10 +668,10 @@ u_strncat(char16_t  *dst,
 /* ----- Text property functions --- */
 
 U_CAPI int32_t   U_EXPORT2
-u_strcmp(const char16_t *s1,
-    const char16_t *s2)
+u_strcmp(const UChar *s1,
+    const UChar *s2)
 {
-    char16_t  c1, c2;
+    UChar  c1, c2;
 
     for(;;) {
         c1=*s1++;
@@ -684,11 +684,11 @@ u_strcmp(const char16_t *s1,
 }
 
 U_CFUNC int32_t U_EXPORT2
-uprv_strCompare(const char16_t *s1, int32_t length1,
-                const char16_t *s2, int32_t length2,
+uprv_strCompare(const UChar *s1, int32_t length1,
+                const UChar *s2, int32_t length2,
                 UBool strncmpStyle, UBool codePointOrder) {
-    const char16_t *start1, *start2, *limit1, *limit2;
-    char16_t c1, c2;
+    const UChar *start1, *start2, *limit1, *limit2;
+    UChar c1, c2;
 
     /* setup for fix-up */
     start1=s1;
@@ -715,7 +715,7 @@ uprv_strCompare(const char16_t *s1, int32_t length1,
         }
 
         /* setup for fix-up */
-        limit1=limit2=nullptr;
+        limit1=limit2=NULL;
     } else if(strncmpStyle) {
         /* special handling for strncmp, assume length1==length2>=0 but also check for NUL */
         if(s1==s2) {
@@ -830,7 +830,7 @@ u_strCompareIter(UCharIterator *iter1, UCharIterator *iter2, UBool codePointOrde
     UChar32 c1, c2;
 
     /* argument checking */
-    if(iter1==nullptr || iter2==nullptr) {
+    if(iter1==NULL || iter2==NULL) {
         return 0; /* bad arguments */
     }
     if(iter1==iter2) {
@@ -922,26 +922,26 @@ void fragment {
 #endif
 
 U_CAPI int32_t U_EXPORT2
-u_strCompare(const char16_t *s1, int32_t length1,
-             const char16_t *s2, int32_t length2,
+u_strCompare(const UChar *s1, int32_t length1,
+             const UChar *s2, int32_t length2,
              UBool codePointOrder) {
     /* argument checking */
-    if(s1==nullptr || length1<-1 || s2==nullptr || length2<-1) {
+    if(s1==NULL || length1<-1 || s2==NULL || length2<-1) {
         return 0;
     }
-    return uprv_strCompare(s1, length1, s2, length2, false, codePointOrder);
+    return uprv_strCompare(s1, length1, s2, length2, FALSE, codePointOrder);
 }
 
 /* String compare in code point order - u_strcmp() compares in code unit order. */
 U_CAPI int32_t U_EXPORT2
-u_strcmpCodePointOrder(const char16_t *s1, const char16_t *s2) {
-    return uprv_strCompare(s1, -1, s2, -1, false, true);
+u_strcmpCodePointOrder(const UChar *s1, const UChar *s2) {
+    return uprv_strCompare(s1, -1, s2, -1, FALSE, TRUE);
 }
 
 U_CAPI int32_t   U_EXPORT2
-u_strncmp(const char16_t  *s1,
-     const char16_t  *s2,
-     int32_t     n) 
+u_strncmp(const UChar     *s1,
+     const UChar     *s2,
+     int32_t     n)
 {
     if(n > 0) {
         int32_t rc;
@@ -959,15 +959,15 @@ u_strncmp(const char16_t  *s1,
 }
 
 U_CAPI int32_t U_EXPORT2
-u_strncmpCodePointOrder(const char16_t *s1, const char16_t *s2, int32_t n) {
-    return uprv_strCompare(s1, n, s2, n, true, true);
+u_strncmpCodePointOrder(const UChar *s1, const UChar *s2, int32_t n) {
+    return uprv_strCompare(s1, n, s2, n, TRUE, TRUE);
 }
 
-U_CAPI char16_t* U_EXPORT2
-u_strcpy(char16_t  *dst,
-    const char16_t  *src)
+U_CAPI UChar* U_EXPORT2
+u_strcpy(UChar     *dst,
+    const UChar     *src)
 {
-    char16_t *anchor = dst;            /* save a pointer to start of dst */
+    UChar *anchor = dst;            /* save a pointer to start of dst */
 
     while((*(dst++) = *(src++)) != 0) {     /* copy string 2 over              */
     }
@@ -975,12 +975,12 @@ u_strcpy(char16_t  *dst,
     return anchor;
 }
 
-U_CAPI char16_t*  U_EXPORT2
-u_strncpy(char16_t  *dst,
-     const char16_t  *src,
-     int32_t     n) 
+U_CAPI UChar*  U_EXPORT2
+u_strncpy(UChar     *dst,
+     const UChar     *src,
+     int32_t     n)
 {
-    char16_t *anchor = dst;            /* save a pointer to start of dst */
+    UChar *anchor = dst;            /* save a pointer to start of dst */
 
     /* copy string 2 over */
     while(n > 0 && (*(dst++) = *(src++)) != 0) {
@@ -991,24 +991,24 @@ u_strncpy(char16_t  *dst,
 }
 
 U_CAPI int32_t   U_EXPORT2
-u_strlen(const char16_t *s)
+u_strlen(const UChar *s)
 {
-#if U_SIZEOF_WCHAR_T == U_SIZEOF_UCHAR
-    return (int32_t)uprv_wcslen((const wchar_t *)s);
-#else
-    const char16_t *t = s;
+// #if U_SIZEOF_WCHAR_T == U_SIZEOF_UCHAR
+//     return (int32_t)uprv_wcslen((const wchar_t *)s);
+// #else
+    const UChar *t = s;
     while(*t != 0) {
       ++t;
     }
     return t - s;
-#endif
+// #endif
 }
 
 U_CAPI int32_t U_EXPORT2
-u_countChar32(const char16_t *s, int32_t length) {
+u_countChar32(const UChar *s, int32_t length) {
     int32_t count;
 
-    if(s==nullptr || length<-1) {
+    if(s==NULL || length<-1) {
         return 0;
     }
 
@@ -1025,7 +1025,7 @@ u_countChar32(const char16_t *s, int32_t length) {
             }
         }
     } else /* length==-1 */ {
-        char16_t c;
+        UChar c;
 
         for(;;) {
             if((c=*s++)==0) {
@@ -1046,26 +1046,26 @@ u_countChar32(const char16_t *s, int32_t length) {
 }
 
 U_CAPI UBool U_EXPORT2
-u_strHasMoreChar32Than(const char16_t *s, int32_t length, int32_t number) {
+u_strHasMoreChar32Than(const UChar *s, int32_t length, int32_t number) {
 
     if(number<0) {
-        return true;
+        return TRUE;
     }
-    if(s==nullptr || length<-1) {
-        return false;
+    if(s==NULL || length<-1) {
+        return FALSE;
     }
 
     if(length==-1) {
         /* s is NUL-terminated */
-        char16_t c;
+        UChar c;
 
         /* count code points until they exceed */
         for(;;) {
             if((c=*s++)==0) {
-                return false;
+                return FALSE;
             }
             if(number==0) {
-                return true;
+                return TRUE;
             }
             if(U16_IS_LEAD(c) && U16_IS_TRAIL(*s)) {
                 ++s;
@@ -1074,38 +1074,38 @@ u_strHasMoreChar32Than(const char16_t *s, int32_t length, int32_t number) {
         }
     } else {
         /* length>=0 known */
-        const char16_t *limit;
+        const UChar *limit;
         int32_t maxSupplementary;
 
         /* s contains at least (length+1)/2 code points: <=2 UChars per cp */
         if(((length+1)/2)>number) {
-            return true;
+            return TRUE;
         }
 
         /* check if s does not even contain enough UChars */
         maxSupplementary=length-number;
         if(maxSupplementary<=0) {
-            return false;
+            return FALSE;
         }
         /* there are maxSupplementary=length-number more UChars than asked-for code points */
 
         /*
          * count code points until they exceed and also check that there are
-         * no more than maxSupplementary supplementary code points (char16_t pairs)
+         * no more than maxSupplementary supplementary code points (UChar pairs)
          */
         limit=s+length;
         for(;;) {
             if(s==limit) {
-                return false;
+                return FALSE;
             }
             if(number==0) {
-                return true;
+                return TRUE;
             }
             if(U16_IS_LEAD(*s++) && s!=limit && U16_IS_TRAIL(*s)) {
                 ++s;
                 if(--maxSupplementary<=0) {
                     /* too many pairs - too few code points */
-                    return false;
+                    return FALSE;
                 }
             }
             --number;
@@ -1113,27 +1113,27 @@ u_strHasMoreChar32Than(const char16_t *s, int32_t length, int32_t number) {
     }
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_memcpy(char16_t *dest, const char16_t *src, int32_t count) {
+U_CAPI UChar * U_EXPORT2
+u_memcpy(UChar *dest, const UChar *src, int32_t count) {
     if(count > 0) {
         uprv_memcpy(dest, src, (size_t)count*U_SIZEOF_UCHAR);
     }
     return dest;
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_memmove(char16_t *dest, const char16_t *src, int32_t count) {
+U_CAPI UChar * U_EXPORT2
+u_memmove(UChar *dest, const UChar *src, int32_t count) {
     if(count > 0) {
         uprv_memmove(dest, src, (size_t)count*U_SIZEOF_UCHAR);
     }
     return dest;
 }
 
-U_CAPI char16_t * U_EXPORT2
-u_memset(char16_t *dest, char16_t c, int32_t count) {
+U_CAPI UChar * U_EXPORT2
+u_memset(UChar *dest, UChar c, int32_t count) {
     if(count > 0) {
-        char16_t *ptr = dest;
-        char16_t *limit = dest + count;
+        UChar *ptr = dest;
+        UChar *limit = dest + count;
 
         while (ptr < limit) {
             *(ptr++) = c;
@@ -1143,9 +1143,9 @@ u_memset(char16_t *dest, char16_t c, int32_t count) {
 }
 
 U_CAPI int32_t U_EXPORT2
-u_memcmp(const char16_t *buf1, const char16_t *buf2, int32_t count) {
+u_memcmp(const UChar *buf1, const UChar *buf2, int32_t count) {
     if(count > 0) {
-        const char16_t *limit = buf1 + count;
+        const UChar *limit = buf1 + count;
         int32_t result;
 
         while (buf1 < limit) {
@@ -1161,14 +1161,14 @@ u_memcmp(const char16_t *buf1, const char16_t *buf2, int32_t count) {
 }
 
 U_CAPI int32_t U_EXPORT2
-u_memcmpCodePointOrder(const char16_t *s1, const char16_t *s2, int32_t count) {
-    return uprv_strCompare(s1, count, s2, count, false, true);
+u_memcmpCodePointOrder(const UChar *s1, const UChar *s2, int32_t count) {
+    return uprv_strCompare(s1, count, s2, count, FALSE, TRUE);
 }
 
 /* u_unescape & support fns ------------------------------------------------- */
 
 /* This map must be in ASCENDING ORDER OF THE ESCAPE CODE */
-static const char16_t UNESCAPE_MAP[] = {
+static const UChar UNESCAPE_MAP[] = {
     /*"   0x22, 0x22 */
     /*'   0x27, 0x27 */
     /*?   0x3F, 0x3F */
@@ -1185,23 +1185,23 @@ static const char16_t UNESCAPE_MAP[] = {
 enum { UNESCAPE_MAP_LENGTH = UPRV_LENGTHOF(UNESCAPE_MAP) };
 
 /* Convert one octal digit to a numeric value 0..7, or -1 on failure */
-static int32_t _digit8(char16_t c) {
-    if (c >= u'0' && c <= u'7') {
-        return c - u'0';
+static int8_t _digit8(UChar c) {
+    if (c >= 0x0030 && c <= 0x0037) {
+        return (int8_t)(c - 0x0030);
     }
     return -1;
 }
 
 /* Convert one hex digit to a numeric value 0..F, or -1 on failure */
-static int32_t _digit16(char16_t c) {
-    if (c >= u'0' && c <= u'9') {
-        return c - u'0';
+static int8_t _digit16(UChar c) {
+    if (c >= 0x0030 && c <= 0x0039) {
+        return (int8_t)(c - 0x0030);
     }
-    if (c >= u'A' && c <= u'F') {
-        return c - (u'A' - 10);
+    if (c >= 0x0041 && c <= 0x0046) {
+        return (int8_t)(c - (0x0041 - 10));
     }
-    if (c >= u'a' && c <= u'f') {
-        return c - (u'a' - 10);
+    if (c >= 0x0061 && c <= 0x0066) {
+        return (int8_t)(c - (0x0061 - 10));
     }
     return -1;
 }
@@ -1216,36 +1216,37 @@ u_unescapeAt(UNESCAPE_CHAR_AT charAt,
              void *context) {
 
     int32_t start = *offset;
-    UChar32 c;
+    UChar c;
     UChar32 result = 0;
     int8_t n = 0;
     int8_t minDig = 0;
     int8_t maxDig = 0;
-    int8_t bitsPerDigit = 4; 
-    int32_t dig;
-    UBool braces = false;
+    int8_t bitsPerDigit = 4;
+    int8_t dig;
+    int32_t i;
+    UBool braces = FALSE;
 
     /* Check that offset is in range */
     if (*offset < 0 || *offset >= length) {
         goto err;
     }
 
-    /* Fetch first char16_t after '\\' */
+    /* Fetch first UChar after '\\' */
     c = charAt((*offset)++, context);
 
     /* Convert hexadecimal and octal escapes */
     switch (c) {
-    case u'u':
+    case 0x0075 /*'u'*/:
         minDig = maxDig = 4;
         break;
-    case u'U':
+    case 0x0055 /*'U'*/:
         minDig = maxDig = 8;
         break;
-    case u'x':
+    case 0x0078 /*'x'*/:
         minDig = 1;
-        if (*offset < length && charAt(*offset, context) == u'{') {
+        if (*offset < length && charAt(*offset, context) == 0x7B /*{*/) {
             ++(*offset);
-            braces = true;
+            braces = TRUE;
             maxDig = 8;
         } else {
             maxDig = 2;
@@ -1265,7 +1266,7 @@ u_unescapeAt(UNESCAPE_CHAR_AT charAt,
     if (minDig != 0) {
         while (*offset < length && n < maxDig) {
             c = charAt(*offset, context);
-            dig = (bitsPerDigit == 3) ? _digit8(c) : _digit16(c);
+            dig = (int8_t)((bitsPerDigit == 3) ? _digit8(c) : _digit16(c));
             if (dig < 0) {
                 break;
             }
@@ -1277,7 +1278,7 @@ u_unescapeAt(UNESCAPE_CHAR_AT charAt,
             goto err;
         }
         if (braces) {
-            if (c != u'}') {
+            if (c != 0x7D /*}*/) {
                 goto err;
             }
             ++(*offset);
@@ -1292,15 +1293,8 @@ u_unescapeAt(UNESCAPE_CHAR_AT charAt,
         if (*offset < length && U16_IS_LEAD(result)) {
             int32_t ahead = *offset + 1;
             c = charAt(*offset, context);
-            if (c == u'\\' && ahead < length) {
-                // Calling ourselves recursively may cause a stack overflow if
-                // we have repeated escaped lead surrogates.
-                // Limit the length to 11 ("x{0000DFFF}") after ahead.
-                int32_t tailLimit = ahead + 11;
-                if (tailLimit > length) {
-                    tailLimit = length;
-                }
-                c = u_unescapeAt(charAt, &ahead, tailLimit, context);
+            if (c == 0x5C /*'\\'*/ && ahead < length) {
+                c = (UChar) u_unescapeAt(charAt, &ahead, length, context);
             }
             if (U16_IS_TRAIL(c)) {
                 *offset = ahead;
@@ -1311,7 +1305,7 @@ u_unescapeAt(UNESCAPE_CHAR_AT charAt,
     }
 
     /* Convert C-style escapes in table */
-    for (int32_t i=0; i<UNESCAPE_MAP_LENGTH; i+=2) {
+    for (i=0; i<UNESCAPE_MAP_LENGTH; i+=2) {
         if (c == UNESCAPE_MAP[i]) {
             return UNESCAPE_MAP[i+1];
         } else if (c < UNESCAPE_MAP[i]) {
@@ -1320,13 +1314,13 @@ u_unescapeAt(UNESCAPE_CHAR_AT charAt,
     }
 
     /* Map \cX to control-X: X & 0x1F */
-    if (c == u'c' && *offset < length) {
+    if (c == 0x0063 /*'c'*/ && *offset < length) {
         c = charAt((*offset)++, context);
         if (U16_IS_LEAD(c) && *offset < length) {
-            char16_t c2 = charAt(*offset, context);
+            UChar c2 = charAt(*offset, context);
             if (U16_IS_TRAIL(c2)) {
                 ++(*offset);
-                c = U16_GET_SUPPLEMENTARY(c, c2);
+                c = (UChar) U16_GET_SUPPLEMENTARY(c, c2); /* [sic] */
             }
         }
         return 0x1F & c;
@@ -1336,7 +1330,7 @@ u_unescapeAt(UNESCAPE_CHAR_AT charAt,
      * the backslash to generically escape the next character.
      * Deal with surrogate pairs. */
     if (U16_IS_LEAD(c) && *offset < length) {
-        char16_t c2 = charAt(*offset, context);
+        UChar c2 = charAt(*offset, context);
         if (U16_IS_TRAIL(c2)) {
             ++(*offset);
             return U16_GET_SUPPLEMENTARY(c, c2);
@@ -1350,10 +1344,10 @@ u_unescapeAt(UNESCAPE_CHAR_AT charAt,
     return (UChar32)0xFFFFFFFF;
 }
 
-/* u_unescapeAt() callback to return a char16_t from a char* */
-static char16_t U_CALLCONV
+/* u_unescapeAt() callback to return a UChar from a char* */
+static UChar U_CALLCONV
 _charPtr_charAt(int32_t offset, void *context) {
-    char16_t c16;
+    UChar c16;
     /* It would be more efficient to access the invariant tables
      * directly but there is no API for that. */
     u_charsToUChars(((char*) context) + offset, &c16, 1);
@@ -1361,7 +1355,7 @@ _charPtr_charAt(int32_t offset, void *context) {
 }
 
 /* Append an escape-free segment of the text; used by u_unescape() */
-static void _appendUChars(char16_t *dest, int32_t destCapacity,
+static void _appendUChars(UChar *dest, int32_t destCapacity,
                           const char *src, int32_t srcLen) {
     if (destCapacity < 0) {
         destCapacity = 0;
@@ -1372,9 +1366,9 @@ static void _appendUChars(char16_t *dest, int32_t destCapacity,
     u_charsToUChars(src, dest, srcLen);
 }
 
-/* Do an invariant conversion of char* -> char16_t*, with escape parsing */
+/* Do an invariant conversion of char* -> UChar*, with escape parsing */
 U_CAPI int32_t U_EXPORT2
-u_unescape(const char *src, char16_t *dest, int32_t destCapacity) {
+u_unescape(const char *src, UChar *dest, int32_t destCapacity) {
     const char *segment = src;
     int32_t i = 0;
     char c;
@@ -1387,7 +1381,7 @@ u_unescape(const char *src, char16_t *dest, int32_t destCapacity) {
             int32_t lenParsed = 0;
             UChar32 c32;
             if (src != segment) {
-                if (dest != nullptr) {
+                if (dest != NULL) {
                     _appendUChars(dest + i, destCapacity - i,
                                   segment, (int32_t)(src - segment));
                 }
@@ -1399,7 +1393,7 @@ u_unescape(const char *src, char16_t *dest, int32_t destCapacity) {
                 goto err;
             }
             src += lenParsed; /* advance past escape seq. */
-            if (dest != nullptr && U16_LENGTH(c32) <= (destCapacity - i)) {
+            if (dest != NULL && U16_LENGTH(c32) <= (destCapacity - i)) {
                 U16_APPEND_UNSAFE(dest, i, c32);
             } else {
                 i += U16_LENGTH(c32);
@@ -1410,19 +1404,19 @@ u_unescape(const char *src, char16_t *dest, int32_t destCapacity) {
         }
     }
     if (src != segment) {
-        if (dest != nullptr) {
+        if (dest != NULL) {
             _appendUChars(dest + i, destCapacity - i,
                           segment, (int32_t)(src - segment));
         }
         i += (int32_t)(src - segment);
     }
-    if (dest != nullptr && i < destCapacity) {
+    if (dest != NULL && i < destCapacity) {
         dest[i] = 0;
     }
     return i;
 
  err:
-    if (dest != nullptr && destCapacity > 0) {
+    if (dest != NULL && destCapacity > 0) {
         *dest = 0;
     }
     return 0;
@@ -1435,7 +1429,7 @@ u_unescape(const char *src, char16_t *dest, int32_t destCapacity) {
  * Set warning and error codes accordingly.
  */
 #define __TERMINATE_STRING(dest, destCapacity, length, pErrorCode) UPRV_BLOCK_MACRO_BEGIN { \
-    if(pErrorCode!=nullptr && U_SUCCESS(*pErrorCode)) {                    \
+    if(pErrorCode!=NULL && U_SUCCESS(*pErrorCode)) {                    \
         /* not a public function, so no complete argument checking */   \
                                                                         \
         if(length<0) {                                                  \
@@ -1457,16 +1451,8 @@ u_unescape(const char *src, char16_t *dest, int32_t destCapacity) {
     } \
 } UPRV_BLOCK_MACRO_END
 
-U_CAPI char16_t U_EXPORT2
-u_asciiToUpper(char16_t c) {
-    if (u'a' <= c && c <= u'z') {
-        c = c + u'A' - u'a';
-    }
-    return c;
-}
-
 U_CAPI int32_t U_EXPORT2
-u_terminateUChars(char16_t *dest, int32_t destCapacity, int32_t length, UErrorCode *pErrorCode) {
+u_terminateUChars(UChar *dest, int32_t destCapacity, int32_t length, UErrorCode *pErrorCode) {
     __TERMINATE_STRING(dest, destCapacity, length, pErrorCode);
     return length;
 }
@@ -1506,7 +1492,7 @@ u_terminateWChars(wchar_t *dest, int32_t destCapacity, int32_t length, UErrorCod
 #define STRING_HASH(TYPE, STR, STRLEN, DEREF) UPRV_BLOCK_MACRO_BEGIN { \
     uint32_t hash = 0;                        \
     const TYPE *p = (const TYPE*) STR;        \
-    if (p != nullptr) {                          \
+    if (p != NULL) {                          \
         int32_t len = (int32_t)(STRLEN);      \
         int32_t inc = ((len - 32) / 32) + 1;  \
         const TYPE *limit = p + len;          \
@@ -1520,8 +1506,8 @@ u_terminateWChars(wchar_t *dest, int32_t destCapacity, int32_t length, UErrorCod
 
 /* Used by UnicodeString to compute its hashcode - Not public API. */
 U_CAPI int32_t U_EXPORT2
-ustr_hashUCharsN(const char16_t *str, int32_t length) {
-    STRING_HASH(char16_t, str, length, *p);
+ustr_hashUCharsN(const UChar *str, int32_t length) {
+    STRING_HASH(UChar, str, length, *p);
 }
 
 U_CAPI int32_t U_EXPORT2

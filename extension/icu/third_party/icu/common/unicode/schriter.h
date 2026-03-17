@@ -124,7 +124,7 @@ public:
    * same string and are pointing at the same character.
    * @stable ICU 2.0
    */
-  virtual bool           operator==(const ForwardCharacterIterator& that) const override;
+  virtual bool          operator==(const ForwardCharacterIterator& that) const;
 
   /**
    * Returns a new StringCharacterIterator referring to the same
@@ -133,7 +133,7 @@ public:
    * @return the newly cloned object.
    * @stable ICU 2.0
    */
-  virtual StringCharacterIterator* clone() const override;
+  virtual StringCharacterIterator* clone() const;
 
   /**
    * Sets the iterator to iterate over the provided string.
@@ -149,14 +149,14 @@ public:
    * @param result Receives a copy of the text under iteration.
    * @stable ICU 2.0
    */
-  virtual void            getText(UnicodeString& result) override;
+  virtual void            getText(UnicodeString& result);
 
   /**
    * Return a class ID for this object (not really public)
    * @return a class ID for this object.
    * @stable ICU 2.0
    */
-  virtual UClassID         getDynamicClassID(void) const override;
+  virtual UClassID         getDynamicClassID(void) const;
 
   /**
    * Return a class ID for this class (not really public)
@@ -171,6 +171,14 @@ protected:
    * @stable ICU 2.0
    */
   StringCharacterIterator();
+
+  /**
+   * Sets the iterator to iterate over the provided string.
+   * @param newText The string to be iterated over
+   * @param newTextLength The length of the String
+   * @stable ICU 2.0
+   */
+  void setText(const char16_t* newText, int32_t newTextLength);
 
   /**
    * Copy of the iterated string object.

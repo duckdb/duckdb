@@ -394,8 +394,6 @@ void PEGTransformerFactory::RegisterExport() {
 
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
-	REGISTER_TRANSFORM(TransformExpressionStatement);
-	REGISTER_TRANSFORM(TransformExpressionAlias);
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformExpression);
 	REGISTER_TRANSFORM(TransformLambdaArrowExpression);

@@ -4,13 +4,13 @@
 
 namespace duckdb {
 
-LogicalSetOperation::LogicalSetOperation(TableIndex table_index, idx_t column_count, LogicalOperatorType type,
+LogicalSetOperation::LogicalSetOperation(idx_t table_index, idx_t column_count, LogicalOperatorType type,
                                          bool setop_all, bool allow_out_of_order)
     : LogicalOperator(type), table_index(table_index), column_count(column_count), setop_all(setop_all),
       allow_out_of_order(allow_out_of_order) {
 }
 
-LogicalSetOperation::LogicalSetOperation(TableIndex table_index, idx_t column_count,
+LogicalSetOperation::LogicalSetOperation(idx_t table_index, idx_t column_count,
                                          vector<unique_ptr<LogicalOperator>> children_p, LogicalOperatorType type,
                                          bool setop_all, bool allow_out_of_order)
     : LogicalOperator(type), table_index(table_index), column_count(column_count), setop_all(setop_all),
@@ -20,7 +20,7 @@ LogicalSetOperation::LogicalSetOperation(TableIndex table_index, idx_t column_co
 	children = std::move(children_p);
 }
 
-LogicalSetOperation::LogicalSetOperation(TableIndex table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
+LogicalSetOperation::LogicalSetOperation(idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
                                          unique_ptr<LogicalOperator> bottom, LogicalOperatorType type, bool setop_all,
                                          bool allow_out_of_order)
     : LogicalOperator(type), table_index(table_index), column_count(column_count), setop_all(setop_all),
@@ -31,14 +31,14 @@ LogicalSetOperation::LogicalSetOperation(TableIndex table_index, idx_t column_co
 	children.push_back(std::move(bottom));
 }
 
-vector<TableIndex> LogicalSetOperation::GetTableIndex() const {
-	return vector<TableIndex> {table_index};
+vector<idx_t> LogicalSetOperation::GetTableIndex() const {
+	return vector<idx_t> {table_index};
 }
 
 string LogicalSetOperation::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index.index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
 	}
 #endif
 	return LogicalOperator::GetName();

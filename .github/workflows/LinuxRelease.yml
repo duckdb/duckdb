@@ -19,6 +19,30 @@ on:
       skip_tests:
         description: 'Pass "true" to skip tests'
         type: string
+  push:
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
+    paths-ignore:
+      - '**.md'
+      - 'test/configs/**'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/LinuxRelease.yml'
+  merge_group:
+  pull_request:
+    types: [opened, reopened, ready_for_review, converted_to_draft]
+    paths-ignore:
+      - '**.md'
+      - 'test/configs/**'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/LinuxRelease.yml'
 
 
 concurrency:
@@ -30,20 +54,31 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
+ check-draft:
+    # We run all other jobs on PRs only if they are not draft PR
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Preliminary checks on CI
+        run: echo "Event name is ${{ github.event_name }}"
+
  linux-release-cli:
+    needs:
+      - check-draft
+
     strategy:
       fail-fast: false
       matrix:
-        config: ${{ fromJson(github.event_name == 'pull_request' && '[{"runner":"ubuntu-latest","arch":"amd64","image":"x86_64"}]' || '[{"runner":"ubuntu-latest","arch":"amd64","image":"x86_64"},{"runner":"ubuntu-24.04-arm","arch":"arm64","image":"aarch64"}]') }}
+        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}]
 
     name: Linux CLI (${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.runner }}
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Install tools
-      run: make toolsci
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -51,9 +86,8 @@ jobs:
       run: |
         python3 -m pip install pytest
 
-    - uses: ./.github/actions/ccache-action
-
     - name: Build
+      shell: bash
       run: |
         export PWD=`pwd`
         docker run                                                             \
@@ -81,9 +115,11 @@ jobs:
         "
 
     - name: Print platform
+      shell: bash
       run: ./build/release/duckdb -c "PRAGMA platform;"
 
     - name: Deploy
+      shell: bash
       env:
         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
@@ -104,38 +140,46 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Test
+      shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
-      run: make allunit
+      run: |
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
 
     - name: Release specific tests
-      run: make unittest_release_tag
+      shell: bash
+      run: |
+        ./build/release/test/unittest --select-tag release
 
     - name: Tools Tests
-      run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+      shell: bash
+      run: |
+        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
+      shell: bash
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  linux-musl-release-cli:
+    needs:
+      - check-draft
+
     strategy:
       fail-fast: false
       matrix:
-        config: ${{ fromJson(github.event_name == 'pull_request' && '[{"runner":"ubuntu-24.04-arm","arch":"arm64"}]' || '[{"runner":"ubuntu-latest","arch":"amd64"},{"runner":"ubuntu-24.04-arm","arch":"arm64"}]') }}
+        config: [ { runner: ubuntu-latest, arch: amd64}, {runner: ubuntu-24.04-arm, arch: arm64}]
 
     name: Linux CLI (${{ matrix.config.arch }}-musl)
     runs-on: ${{ matrix.config.runner }}
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Install tools
-      run: make toolsci
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
 
     - uses: ./.github/actions/cleanup_runner
-
-    - uses: ./.github/actions/ccache-action
 
     - name: Build
       shell: bash
@@ -196,85 +240,24 @@ jobs:
         export PWD=`pwd`
         docker run   \
         -v$PWD:$PWD  \
-        -e CI=1      \
         alpine:3.22                                                         \
         sh -c "
           set -e
           cat /etc/os-release
           apk add      \
-            make       \
             python3    \
             py3-pytest
           cd $PWD
           echo Tests
-          make allunit
+          python3 scripts/run_tests_one_by_one.py build/release/test/unittest \"*\" --time_execution
           echo Release specific tests
-          make unittest_release_tag
+          ./build/release/test/unittest --select-tag release
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
           build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
           build/release/duckdb -c \"COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)\" | cat
         "
-
- main_julia:
-    name: Julia ${{ matrix.version }}
-    needs: linux-release-cli
-    if: ${{ github.ref_name == 'main' }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - '1.10'
-          - '1'
-        arch:
-          - x64
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.git_ref }}
-
-    - uses: julia-actions/setup-julia@v2
-      with:
-        version: ${{ matrix.version }}
-        arch: ${{ matrix.arch }}
-
-    - uses: actions/download-artifact@v4
-      with:
-        name: duckdb-binaries-linux-amd64
-        path: linux-release-artifacts
-
-    - name: Extract DuckDB Linux release artifacts
-      shell: bash
-      run: |
-        mkdir -p build/release/src
-        unzip -j linux-release-artifacts/duckdb_cli-linux-amd64.zip "duckdb" -d build/release
-        chmod +x build/release/duckdb
-        unzip -j linux-release-artifacts/libduckdb-linux-amd64.zip "libduckdb.so*" -d build/release/src
-        ls -lah build/release/duckdb
-        ls -lah build/release/src/libduckdb.so*
-
-    - name: Run Tests
-      shell: bash
-      run: |
-        JULIA_DUCKDB_LIBRARY="$(pwd)/build/release/src/libduckdb.so"
-        export JULIA_DUCKDB_LIBRARY
-        export JULIA_NUM_THREADS=2
-        export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
-        ls "$JULIA_DUCKDB_LIBRARY"
-        cd tools/juliapkg
-        julia --project -e "import Pkg; Pkg.test()"
-
-    - name: Format Check
-      if: ${{ always() && matrix.version == '1.10' }}
-      shell: bash
-      run: |
-        cd tools/juliapkg
-        julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
-        ./format_check.sh
 
  upload-libduckdb-src:
     name: Upload libduckdb-src.zip
@@ -297,3 +280,39 @@ jobs:
         python3 scripts/amalgamation.py
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
+
+ symbol-leakage:
+    name: Symbol Leakage
+    runs-on: ubuntu-22.04
+    needs: linux-release-cli
+    if: ${{ inputs.skip_tests != 'true' }}
+    env:
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - uses: ./.github/actions/ccache-action
+
+    - name: Build
+      shell: bash
+      run: make
+
+    - name: Symbol Leakage Test
+      shell: bash
+      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+    - name: Banned Symbol Check
+      shell: bash
+      run: python3 scripts/banned_symbols_check.py --directory build/release/src

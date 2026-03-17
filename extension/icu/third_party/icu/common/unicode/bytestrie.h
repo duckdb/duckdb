@@ -30,8 +30,6 @@
 #include "unicode/uobject.h"
 #include "unicode/ustringtrie.h"
 
-class BytesTrieTest;
-
 U_NAMESPACE_BEGIN
 
 class ByteSink;
@@ -69,7 +67,7 @@ public:
      * @stable ICU 4.8
      */
     BytesTrie(const void *trieBytes)
-            : ownedArray_(nullptr), bytes_(static_cast<const uint8_t *>(trieBytes)),
+            : ownedArray_(NULL), bytes_(static_cast<const uint8_t *>(trieBytes)),
               pos_(bytes_), remainingMatchLength_(-1) {}
 
     /**
@@ -85,7 +83,7 @@ public:
      * @stable ICU 4.8
      */
     BytesTrie(const BytesTrie &other)
-            : ownedArray_(nullptr), bytes_(other.bytes_),
+            : ownedArray_(NULL), bytes_(other.bytes_),
               pos_(other.pos_), remainingMatchLength_(other.remainingMatchLength_) {}
 
     /**
@@ -99,13 +97,14 @@ public:
         return *this;
     }
 
+#ifndef U_HIDE_DRAFT_API
     /**
      * Returns the state of this trie as a 64-bit integer.
      * The state value is never 0.
      *
      * @return opaque state value
      * @see resetToState64
-     * @stable ICU 65
+     * @draft ICU 65
      */
     uint64_t getState64() const {
         return (static_cast<uint64_t>(remainingMatchLength_ + 2) << kState64RemainingShift) |
@@ -124,13 +123,14 @@ public:
      * @see getState64
      * @see resetToState
      * @see reset
-     * @stable ICU 65
+     * @draft ICU 65
      */
     BytesTrie &resetToState64(uint64_t state) {
         remainingMatchLength_ = static_cast<int32_t>(state >> kState64RemainingShift) - 2;
         pos_ = bytes_ + (state & kState64PosMask);
         return *this;
     }
+#endif  /* U_HIDE_DRAFT_API */
 
     /**
      * BytesTrie state object, for saving a trie's current state
@@ -143,7 +143,7 @@ public:
          * Constructs an empty State.
          * @stable ICU 4.8
          */
-        State() { bytes=nullptr; }
+        State() { bytes=NULL; }
     private:
         friend class BytesTrie;
 
@@ -177,7 +177,7 @@ public:
      * @stable ICU 4.8
      */
     BytesTrie &resetToState(const State &state) {
-        if(bytes_==state.bytes && bytes_!=nullptr) {
+        if(bytes_==state.bytes && bytes_!=NULL) {
             pos_=state.pos;
             remainingMatchLength_=state.remainingMatchLength;
         }
@@ -227,7 +227,7 @@ public:
      *   result=next(c);
      * return result;
      * \endcode
-     * @param s A string or byte sequence. Can be nullptr if length is 0.
+     * @param s A string or byte sequence. Can be NULL if length is 0.
      * @param length The length of the byte sequence. Can be -1 if NUL-terminated.
      * @return The match/value Result.
      * @stable ICU 4.8
@@ -253,16 +253,16 @@ public:
     /**
      * Determines whether all byte sequences reachable from the current state
      * map to the same value.
-     * @param uniqueValue Receives the unique value, if this function returns true.
+     * @param uniqueValue Receives the unique value, if this function returns TRUE.
      *                    (output-only)
-     * @return true if all byte sequences reachable from the current state
+     * @return TRUE if all byte sequences reachable from the current state
      *         map to the same value.
      * @stable ICU 4.8
      */
     inline UBool hasUniqueValue(int32_t &uniqueValue) const {
         const uint8_t *pos=pos_;
         // Skip the rest of a pending linear-match node.
-        return pos!=nullptr && findUniqueValue(pos+remainingMatchLength_+1, false, uniqueValue);
+        return pos!=NULL && findUniqueValue(pos+remainingMatchLength_+1, FALSE, uniqueValue);
     }
 
     /**
@@ -321,7 +321,7 @@ public:
         Iterator &reset();
 
         /**
-         * @return true if there are more elements.
+         * @return TRUE if there are more elements.
          * @stable ICU 4.8
          */
         UBool hasNext() const;
@@ -337,7 +337,7 @@ public:
          *                  pass the U_SUCCESS() test, or else the function returns
          *                  immediately. Check for U_FAILURE() on output or use with
          *                  function chaining. (See User Guide for details.)
-         * @return true if there is another element.
+         * @return TRUE if there is another element.
          * @stable ICU 4.8
          */
         UBool next(UErrorCode &errorCode);
@@ -380,7 +380,6 @@ public:
 
 private:
     friend class BytesTrieBuilder;
-    friend class ::BytesTrieTest;
 
     /**
      * Constructs a BytesTrie reader instance.
@@ -394,10 +393,10 @@ private:
               pos_(bytes_), remainingMatchLength_(-1) {}
 
     // No assignment operator.
-    BytesTrie &operator=(const BytesTrie &other) = delete;
+    BytesTrie &operator=(const BytesTrie &other);
 
     inline void stop() {
-        pos_=nullptr;
+        pos_=NULL;
     }
 
     // Reads a compact 32-bit integer.
@@ -555,7 +554,7 @@ private:
 
     // Iterator variables.
 
-    // Pointer to next trie byte to read. nullptr if no more matches.
+    // Pointer to next trie byte to read. NULL if no more matches.
     const uint8_t *pos_;
     // Remaining length of a linear-match node, minus 1. Negative if not in such a node.
     int32_t remainingMatchLength_;

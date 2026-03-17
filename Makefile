@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite smoke runnertests
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite
 
 all: release
 opt: release
@@ -23,21 +23,6 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
-SMOKE_UNITTEST ?= build/relassert/test/unittest
-UNITTEST_SLOW_FLAGS ?= --batch-timeout=1800 --track-runtime=300
-UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
-
-# Allow setting extra unit test parameters using `make smoke T=...`.
-T ?=
-
-ifeq ($(CI),1)
-CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
-CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
-ifndef CMAKE_BUILD_PARALLEL_LEVEL
-CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
-endif
-export CMAKE_BUILD_PARALLEL_LEVEL
-endif
 
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
@@ -112,8 +97,11 @@ endif
 ifeq (${DISABLE_MAIN_DUCKDB_LIBRARY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_MAIN_DUCKDB_LIBRARY=0
 endif
-ifneq (${EXTENSION_STATIC_BUILD}, )
-	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
+ifeq (${EXTENSION_STATIC_BUILD}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
+endif
+ifeq (${EXTENSION_STATIC_BUILD}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=1
 endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
@@ -283,8 +271,8 @@ endif
 ifeq (${OSX_BUILD_UNIVERSAL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_UNIVERSAL=1
 endif
-ifneq ("${DUCKDB_LINKER}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_LINKER=${DUCKDB_LINKER}
+ifneq ("${CUSTOM_LINKER}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DCUSTOM_LINKER=${CUSTOM_LINKER}
 endif
 ifdef SKIP_PLATFORM_UTIL
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_PLATFORM_UTIL=1
@@ -403,40 +391,20 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
-	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest $(T)
-
-unittest_reldebug:
-	$(PYTHON) scripts/ci/run_tests.py build/reldebug/test/unittest $(T)
+	build/debug/test/unittest
 
 unittest_release: release
-	$(PYTHON) scripts/ci/run_tests.py build/release/test/unittest $(T)
+	build/release/test/unittest
 
-unittest_release_tag:
-	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/test/unittest $(T)
-
-unittest_relassert:
-	$(PYTHON) scripts/ci/run_tests.py build/relassert/test/unittest $(T)
-
-smoke:
-	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
-
-runnertests:
-	python3 -m unittest scripts.ci.test_run_tests
+unittestci:
+	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 
 unittestarrow:
-	$(PYTHON) scripts/ci/run_tests.py build/debug/test/unittest "[arrow]"
+	build/debug/test/unittest "[arrow]"
 
-allunit:
-	$(PYTHON) scripts/ci/run_tests.py --workers=50% build/release/test/unittest '*' $(T)
-ifndef CI
-allunit: release
-endif
 
-unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
-unittest_threadsan: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/test/unittest "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/test/unittest "[interquery]" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/test/unittest "[interquery]" $(T)
+allunit: release # uses release build because otherwise allunit takes forever
+	build/release/test/unittest "*"
 
 docs:
 	mkdir -p ./build/docs && \
@@ -456,43 +424,6 @@ relassert: ${EXTENSION_CONFIG_STEP}
 	cd build/relassert && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
-
-.PHONY: relassert-artifact
-
-relassert-artifact:
-	bash scripts/prepare_build_artifact.sh relassert
-
-.PHONY: release-artifact
-
-release-artifact:
-	bash scripts/prepare_build_artifact.sh release
-
-define ensure_apt_commands
-	missing=0; \
-	for cmd in $(1); do \
-		command -v $$cmd >/dev/null 2>&1 || missing=1; \
-	done; \
-	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(2); \
-	fi
-endef
-
-.PHONY: toolsci format_tools
-
-toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config,ninja-build mold ccache pkg-config)
-	pkg-config --exists libcurl || { \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq libcurl4-openssl-dev; \
-	}
-	ls -lh /usr/bin/gcc* /usr/bin/g++*
-	gcc --version
-	g++ --version
-
-format_tools:
-	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
-	sudo pip3 install cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
 
 benchmark:
 	mkdir -p ./build/release && \
@@ -560,7 +491,7 @@ third_party/sqllogictest:
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
-	$(PYTHON) scripts/ci/run_tests.py ./build/release/test/unittest "[sqlitelogic]"
+	./build/release/test/unittest "[sqlitelogic]"
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
@@ -577,8 +508,9 @@ bloaty: reldebug bloaty/bloaty
 	./bloaty/bloaty  build/reldebug/duckdb -d symbols -n 20 --debug-file=build/reldebug/duckdb.dSYM/Contents/Resources/DWARF/duckdb
 	# ./bloaty/bloaty  build/reldebug/extension/parquet/parquet.duckdb_extension -d symbols -n 20 # to execute on extension
 
+# Generate compile commands without actually building
 clangd:
-	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B build/clangd .
+	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B .cache/clangd/debug .
 
 coverage-check:
 	./scripts/coverage_check.sh
@@ -607,12 +539,6 @@ bundle-setup:
 	cp extension/*/lib*_extension.a bundle/. && \
 	mkdir -p vcpkg_installed && \
 	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
-	mkdir -p _deps && \
-	if [ -f linked_libs.txt ]; then \
-		while IFS= read -r libline || [ -n "$$libline" ]; do \
-			find _deps -path "*/$$libline" -exec cp {} bundle/. \; 2>/dev/null || true; \
-		done < linked_libs.txt; \
-	fi && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
 	find . -name '*.a' -execdir ${AR} -x {} \;

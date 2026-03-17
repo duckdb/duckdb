@@ -47,13 +47,13 @@ struct UBiDiProps {
 /* set of property starts for UnicodeSet ------------------------------------ */
 
 static UBool U_CALLCONV
-_enumPropertyStartsRange(const void *context, UChar32 start, UChar32 end, uint32_t value) {
+ubidi_props_enumPropertyStartsRange(const void *context, UChar32 start, UChar32 end, uint32_t value) {
     (void)end;
     (void)value;
     /* add the start code point to the USet */
     const USetAdder *sa=(const USetAdder *)context;
     sa->add(sa->set, start);
-    return true;
+    return TRUE;
 }
 
 U_CFUNC void
@@ -69,7 +69,7 @@ ubidi_addPropertyStarts(const USetAdder *sa, UErrorCode *pErrorCode) {
     }
 
     /* add the start code point of each same-value range of the trie */
-    utrie2_enum(&ubidi_props_singleton.trie, nullptr, _enumPropertyStartsRange, sa);
+    utrie2_enum(&ubidi_props_singleton.trie, NULL, ubidi_props_enumPropertyStartsRange, sa);
 
     /* add the code points from the bidi mirroring table */
     length=ubidi_props_singleton.indexes[UBIDI_IX_MIRROR_LENGTH];
@@ -248,7 +248,7 @@ u_charMirror(UChar32 c) {
     return ubidi_getMirror(c);
 }
 
-U_CAPI UChar32 U_EXPORT2
+U_STABLE UChar32 U_EXPORT2
 u_getBidiPairedBracket(UChar32 c) {
     return ubidi_getPairedBracket(c);
 }

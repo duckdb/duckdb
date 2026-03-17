@@ -84,7 +84,6 @@ end
         (; col_name = :largeval, duck_type = "INTEGER", append_value = Int32(2^16)),
         (; col_name = :uuid, duck_type = "UUID", append_value = uuid),
         (; col_name = :varchar, duck_type = "VARCHAR", append_value = "Foo"),
-        (; col_name = :blob, duck_type = "BLOB", append_value = UInt8[0x00, 0x01, 0xff, 0x00]),
         # lists
         (; col_name = :list_bool, duck_type = "BOOLEAN[]", append_value = Vector{Bool}([true, false, true])),
         (; col_name = :list_int8, duck_type = "TINYINT[]", append_value = Vector{Int8}([1, -2, 3])),
@@ -154,6 +153,6 @@ end
         @test isequal(df[!, row.col_name], [ref_value])
     end
 
-    # close the database
+    # close the database 
     DBInterface.close!(db)
 end

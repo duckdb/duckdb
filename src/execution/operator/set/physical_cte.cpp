@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-PhysicalCTE::PhysicalCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index, vector<LogicalType> types,
+PhysicalCTE::PhysicalCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index, vector<LogicalType> types,
                          PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::CTE, std::move(types), estimated_cardinality),
       table_index(table_index), ctename(std::move(ctename)) {
@@ -105,7 +105,7 @@ vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
 InsertionOrderPreservingMap<string> PhysicalCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
-	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
+	result["Table Index"] = StringUtil::Format("%llu", table_index);
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

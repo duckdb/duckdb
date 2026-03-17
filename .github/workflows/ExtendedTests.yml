@@ -44,7 +44,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 
@@ -59,7 +59,7 @@ jobs:
     - name: Run Tests
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/${{ matrix.config }}.json ./build/reldebug/test/unittest "*"
+        ./build/reldebug/test/unittest --test-config test/configs/${{ matrix.config }}.json "*"
 
   regression-lto-benchmark-runner:
      name: Benchmark runner lto vs non-lto (OSX)
@@ -234,7 +234,7 @@ jobs:
 
        - name: Install
          shell: bash
-         run: make toolsci && sudo apt-get install -y -qq llvm && pip install requests
+         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm && pip install requests
 
        - uses: ./.github/actions/ccache-action
 
@@ -315,7 +315,7 @@ jobs:
 
        - name: Install
          shell: bash
-         run: make toolsci && pip install requests
+         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
 
        - uses: ./.github/actions/ccache-action
 

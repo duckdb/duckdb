@@ -17,7 +17,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 	default:
 		throw InternalException("Unsupported join type for cross product push down");
 	}
-	unordered_set<TableIndex> left_bindings, right_bindings;
+	unordered_set<idx_t> left_bindings, right_bindings;
 	if (!filters.empty()) {
 		// check to see into which side we should push the filters
 		// first get the LHS and RHS bindings
@@ -46,13 +46,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		// join conditions found: turn into inner join
 		// extract join conditions
 		vector<JoinCondition> conditions;
+		vector<unique_ptr<Expression>> arbitrary_expressions;
 		const auto join_type = JoinType::INNER;
 		LogicalComparisonJoin::ExtractJoinConditions(GetContext(), join_type, join_ref_type, op->children[0],
 		                                             op->children[1], left_bindings, right_bindings, join_expressions,
-		                                             conditions);
+		                                             conditions, arbitrary_expressions);
 		// create the join from the join conditions
 		auto new_op = LogicalComparisonJoin::CreateJoin(join_type, join_ref_type, std::move(op->children[0]),
-		                                                std::move(op->children[1]), std::move(conditions));
+		                                                std::move(op->children[1]), std::move(conditions),
+		                                                std::move(arbitrary_expressions));
 
 		// possible cases are: AnyJoin, ComparisonJoin, or Filter + ComparisonJoin
 		if (op->has_estimated_cardinality) {

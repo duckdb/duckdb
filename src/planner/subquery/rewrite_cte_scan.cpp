@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-static bool ContainsCTERef(LogicalOperator &op, TableIndex table_index) {
+static bool ContainsCTERef(LogicalOperator &op, idx_t table_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cteref = op.Cast<LogicalCTERef>();
 		if (cteref.cte_index == table_index) {
@@ -30,8 +30,7 @@ static bool ContainsCTERef(LogicalOperator &op, TableIndex table_index) {
 	return false;
 }
 
-RewriteCTEScan::RewriteCTEScan(TableIndex table_index, const CorrelatedColumns &correlated_columns,
-                               CTEScanRewriteMode mode)
+RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns, CTEScanRewriteMode mode)
     : table_index(table_index), correlated_columns(correlated_columns), mode(mode) {
 }
 

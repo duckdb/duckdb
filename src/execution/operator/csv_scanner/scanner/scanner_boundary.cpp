@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
-#include "duckdb/common/printer.hpp"
+
 namespace duckdb {
 
 CSVPosition::CSVPosition(idx_t buffer_idx_p, idx_t buffer_pos_p) : buffer_idx(buffer_idx_p), buffer_pos(buffer_pos_p) {
@@ -18,18 +18,18 @@ CSVIterator::CSVIterator() : buffer_size(0), is_set(false) {
 
 void CSVBoundary::Print() const {
 #ifndef DUCKDB_DISABLE_PRINT
-	Printer::PrintF("---Boundary: %d\n", boundary_idx);
-	Printer::PrintF("Buffer Index: %d\n", buffer_idx);
-	Printer::PrintF("Buffer Pos: %d\n", buffer_pos);
-	Printer::PrintF("End Pos: %d\n", end_pos);
-	Printer::PrintF("------------\n", end_pos);
+	std::cout << "---Boundary: " << boundary_idx << " ---" << '\n';
+	std::cout << "Buffer Index: " << buffer_idx << '\n';
+	std::cout << "Buffer Pos: " << buffer_pos << '\n';
+	std::cout << "End Pos: " << end_pos << '\n';
+	std::cout << "------------" << end_pos << '\n';
 #endif
 }
 
 void CSVIterator::Print() const {
 #ifndef DUCKDB_DISABLE_PRINT
 	boundary.Print();
-	Printer::PrintF("Is set: %s\n", is_set ? "true" : "false");
+	std::cout << "Is set: " << is_set << '\n';
 #endif
 }
 

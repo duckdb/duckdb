@@ -39,7 +39,7 @@ protected:
     uint32_t fCapacity;
 public:
     NFRuleList(uint32_t capacity = 10) 
-        : fStuff(capacity ? (NFRule**)uprv_malloc(capacity * sizeof(NFRule*)) : nullptr)
+        : fStuff(capacity ? (NFRule**)uprv_malloc(capacity * sizeof(NFRule*)) : NULL)
         , fCount(0)
         , fCapacity(capacity) {}
     ~NFRuleList() {
@@ -50,10 +50,10 @@ public:
             uprv_free(fStuff);
         }
     }
-    NFRule* operator[](uint32_t index) const { return fStuff != nullptr ? fStuff[index] : nullptr; }
+    NFRule* operator[](uint32_t index) const { return fStuff != NULL ? fStuff[index] : NULL; }
     NFRule* remove(uint32_t index) {
-    	if (fStuff == nullptr) {
-    		return nullptr;
+    	if (fStuff == NULL) {
+    		return NULL;
     	}
         NFRule* result = fStuff[index];
         fCount -= 1;
@@ -67,7 +67,7 @@ public:
             fCapacity += 10;
             fStuff = (NFRule**)uprv_realloc(fStuff, fCapacity * sizeof(NFRule*)); // assume success
         }
-        if (fStuff != nullptr) {
+        if (fStuff != NULL) {
         	fStuff[fCount++] = thing;
         } else {
         	fCapacity = 0;
@@ -75,17 +75,17 @@ public:
         }
     }
     uint32_t size() const { return fCount; }
-    NFRule* last() const { return (fCount > 0 && fStuff != nullptr) ? fStuff[fCount-1] : nullptr; }
+    NFRule* last() const { return (fCount > 0 && fStuff != NULL) ? fStuff[fCount-1] : NULL; }
     NFRule** release() {
-        add(nullptr); // ensure null termination
+        add(NULL); // ensure null termination
         NFRule** result = fStuff;
-        fStuff = nullptr;
+        fStuff = NULL;
         fCount = 0;
         fCapacity = 0;
         return result;
     }
     void deleteAll() {
-        NFRule** tmp = nullptr;
+        NFRule** tmp = NULL;
         int32_t size = fCount;
         if (size > 0) {
             tmp = release();

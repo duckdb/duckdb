@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/window_self_join.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
@@ -40,7 +41,7 @@ public:
 	explicit WindowSelfJoinTableRebinder(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 
-	unordered_map<TableIndex, TableIndex> table_map;
+	unordered_map<idx_t, idx_t> table_map;
 	Optimizer &optimizer;
 
 	void VisitOperator(LogicalOperator &op) override {
@@ -97,16 +98,6 @@ public:
 		VisitExpressionChildren(**expression);
 	}
 
-	void TranslateOrders(BoundAggregateExpression &result, const vector<BoundOrderByNode> &orders_bys) {
-		result.order_bys = make_uniq<BoundOrderModifier>();
-		auto &orders = result.order_bys->orders;
-		for (auto &order : orders_bys) {
-			auto order_copy = order.Copy();
-			VisitExpression(&order_copy.expression); // Update bindings
-			orders.emplace_back(std::move(order_copy));
-		}
-	}
-
 	unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_expr) {
 		auto agg_func = *w_expr.aggregate;
 		unique_ptr<FunctionData> bind_info;
@@ -135,10 +126,13 @@ public:
 		                                                  std::move(bind_info), aggr_type);
 
 		if (!w_expr.arg_orders.empty()) {
-			TranslateOrders(*result, w_expr.arg_orders);
-		} else if (!w_expr.orders.empty()) {
-			//	If the frame was ordered, copy the frame ordering to the aggregate function
-			TranslateOrders(*result, w_expr.orders);
+			result->order_bys = make_uniq<BoundOrderModifier>();
+			auto &orders = result->order_bys->orders;
+			for (auto &order : w_expr.arg_orders) {
+				auto order_copy = order.Copy();
+				VisitExpression(&order_copy.expression); // Update bindings
+				orders.emplace_back(std::move(order_copy));
+			}
 		}
 
 		return std::move(result);
@@ -162,29 +156,7 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	if (w_expr.type != ExpressionType::WINDOW_AGGREGATE) {
 		return false;
 	}
-	//	We can only accept ORDER BY clauses if the frame is the entire partition
-	//	In that case, we will have to move the ordering clauses into the aggregate.
-	switch (w_expr.start) {
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		break;
-	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (!w_expr.orders.empty()) {
-			return false;
-		}
-		break;
-	default:
-		return false;
-	}
-
-	switch (w_expr.end) {
-	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		break;
-	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (!w_expr.orders.empty()) {
-			return false;
-		}
-		break;
-	default:
+	if (!w_expr.orders.empty()) {
 		return false;
 	}
 	if (w_expr.partitions.empty()) {
@@ -195,6 +167,18 @@ bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
 	}
 	if (!w_expr.PartitionsAreEquivalent(w_expr0)) {
 		return false;
+	}
+	return true;
+}
+
+static bool PlanSupportsSerialization(const LogicalOperator &op) {
+	if (!op.SupportSerialization()) {
+		return false;
+	}
+	for (const auto &child : op.children) {
+		if (!PlanSupportsSerialization(*child)) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -221,67 +205,80 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		auto &partitions = w_expr0.partitions;
 
 		// --- Transformation ---
+		// Skip if the plan contains non-serializable operators (e.g. PandasScan); we need to copy the plan.
+		if (!PlanSupportsSerialization(*window.children[0])) {
+			return op;
+		}
 
 		auto original_child = std::move(window.children[0]);
-		auto copy_child = original_child->Copy(optimizer.context);
+		try {
+			auto copy_child = original_child->Copy(optimizer.context);
 
-		// Rebind copy_child to avoid duplicate table indices
-		WindowSelfJoinTableRebinder rebinder(optimizer);
-		rebinder.VisitOperator(*copy_child);
+			// Rebind copy_child to avoid duplicate table indices
+			WindowSelfJoinTableRebinder rebinder(optimizer);
+			rebinder.VisitOperator(*copy_child);
 
-		auto aggregate_index = optimizer.binder.GenerateTableIndex();
-		auto group_index = optimizer.binder.GenerateTableIndex();
+			auto aggregate_index = optimizer.binder.GenerateTableIndex();
+			auto group_index = optimizer.binder.GenerateTableIndex();
 
-		vector<unique_ptr<Expression>> groups;
-		vector<unique_ptr<Expression>> aggregates;
+			vector<unique_ptr<Expression>> groups;
+			vector<unique_ptr<Expression>> aggregates;
 
-		// Create Aggregate Operator
-		for (auto &part : partitions) {
-			auto part_copy = part->Copy();
-			rebinder.VisitExpression(&part_copy); // Update bindings
-			groups.push_back(std::move(part_copy));
+			// Create Aggregate Operator
+			for (auto &part : partitions) {
+				auto part_copy = part->Copy();
+				rebinder.VisitExpression(&part_copy); // Update bindings
+				groups.push_back(std::move(part_copy));
+			}
+
+			for (auto &expr : window.expressions) {
+				auto &w_expr = expr->Cast<BoundWindowExpression>();
+				aggregates.emplace_back(rebinder.TranslateAggregate(w_expr));
+			}
+
+			// args: group_index, aggregate_index, ...
+			auto agg_op = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
+
+			agg_op->groups = std::move(groups);
+			agg_op->children.push_back(std::move(copy_child));
+			agg_op->ResolveOperatorTypes();
+
+			if (agg_op->types.size() <= agg_op->groups.size()) {
+				throw InternalException("LogicalAggregate types size mismatch");
+			}
+
+			// Inner Join on the partition keys
+			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+
+			for (size_t i = 0; i < partitions.size(); ++i) {
+				JoinCondition cond;
+				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+				cond.left = partitions[i]->Copy();
+				cond.right =
+				    make_uniq<BoundColumnRefExpression>(partitions[i]->return_type, ColumnBinding(group_index, i));
+				join->conditions.push_back(std::move(cond));
+			}
+
+			join->children.push_back(std::move(original_child));
+			join->children.push_back(std::move(agg_op));
+			join->ResolveOperatorTypes();
+
+			// Replace aggregate bindings
+			// Old window column: (window.window_index, x)
+			// New constant column: (aggregate_index, x)
+			for (idx_t column_index = 0; column_index < window.expressions.size(); ++column_index) {
+				ColumnBinding old_binding(window.window_index, column_index);
+				ColumnBinding new_binding(aggregate_index, column_index);
+				replacer.replacement_bindings.emplace_back(old_binding, new_binding);
+			}
+
+			return std::move(join);
+		} catch (...) {
+			// Safety net: e.g. Python client may not set verify_serialization on table functions,
+			// so Copy() can throw even when SupportSerialization() was true. Restore plan and skip optimization.
+			window.children[0] = std::move(original_child);
+			return op;
 		}
-
-		for (auto &expr : window.expressions) {
-			auto &w_expr = expr->Cast<BoundWindowExpression>();
-			aggregates.emplace_back(rebinder.TranslateAggregate(w_expr));
-		}
-
-		// args: group_index, aggregate_index, ...
-		auto agg_op = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(aggregates));
-
-		agg_op->groups = std::move(groups);
-		agg_op->children.push_back(std::move(copy_child));
-		agg_op->ResolveOperatorTypes();
-
-		if (agg_op->types.size() <= agg_op->groups.size()) {
-			throw InternalException("LogicalAggregate types size mismatch");
-		}
-
-		// Inner Join on the partition keys
-		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-		for (size_t i = 0; i < partitions.size(); ++i) {
-			auto left_expr = partitions[i]->Copy();
-			auto right_expr = make_uniq<BoundColumnRefExpression>(partitions[i]->return_type,
-			                                                      ColumnBinding(group_index, ProjectionIndex(i)));
-			join->conditions.push_back(
-			    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_NOT_DISTINCT_FROM));
-		}
-
-		join->children.push_back(std::move(original_child));
-		join->children.push_back(std::move(agg_op));
-		join->ResolveOperatorTypes();
-
-		// Replace aggregate bindings
-		// Old window column: (window.window_index, x)
-		// New constant column: (aggregate_index, x)
-		for (idx_t column_index = 0; column_index < window.expressions.size(); ++column_index) {
-			ColumnBinding old_binding(window.window_index, ProjectionIndex(column_index));
-			ColumnBinding new_binding(aggregate_index, ProjectionIndex(column_index));
-			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
-		}
-
-		return std::move(join);
 	} else if (!op->children.empty()) {
 		for (auto &child : op->children) {
 			child = OptimizeInternal(std::move(child), replacer);

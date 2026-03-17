@@ -137,14 +137,14 @@ UnicodeString &
 FilteredNormalizer2::normalizeSecondAndAppend(UnicodeString &first,
                                               const UnicodeString &second,
                                               UErrorCode &errorCode) const {
-    return normalizeSecondAndAppend(first, second, true, errorCode);
+    return normalizeSecondAndAppend(first, second, TRUE, errorCode);
 }
 
 UnicodeString &
 FilteredNormalizer2::append(UnicodeString &first,
                             const UnicodeString &second,
                             UErrorCode &errorCode) const {
-    return normalizeSecondAndAppend(first, second, false, errorCode);
+    return normalizeSecondAndAppend(first, second, FALSE, errorCode);
 }
 
 UnicodeString &
@@ -224,7 +224,7 @@ UBool
 FilteredNormalizer2::isNormalized(const UnicodeString &s, UErrorCode &errorCode) const {
     uprv_checkCanGetBuffer(s, errorCode);
     if(U_FAILURE(errorCode)) {
-        return false;
+        return FALSE;
     }
     USetSpanCondition spanCondition=USET_SPAN_SIMPLE;
     for(int32_t prevSpanLimit=0; prevSpanLimit<s.length();) {
@@ -235,19 +235,19 @@ FilteredNormalizer2::isNormalized(const UnicodeString &s, UErrorCode &errorCode)
             if( !norm2.isNormalized(s.tempSubStringBetween(prevSpanLimit, spanLimit), errorCode) ||
                 U_FAILURE(errorCode)
             ) {
-                return false;
+                return FALSE;
             }
             spanCondition=USET_SPAN_NOT_CONTAINED;
         }
         prevSpanLimit=spanLimit;
     }
-    return true;
+    return TRUE;
 }
 
 UBool
 FilteredNormalizer2::isNormalizedUTF8(StringPiece sp, UErrorCode &errorCode) const {
     if(U_FAILURE(errorCode)) {
-        return false;
+        return FALSE;
     }
     const char *s = sp.data();
     int32_t length = sp.length();
@@ -259,14 +259,14 @@ FilteredNormalizer2::isNormalizedUTF8(StringPiece sp, UErrorCode &errorCode) con
         } else {
             if (!norm2.isNormalizedUTF8(StringPiece(s, spanLength), errorCode) ||
                     U_FAILURE(errorCode)) {
-                return false;
+                return FALSE;
             }
             spanCondition = USET_SPAN_NOT_CONTAINED;
         }
         s += spanLength;
         length -= spanLength;
     }
-    return true;
+    return TRUE;
 }
 
 UNormalizationCheckResult
@@ -346,15 +346,15 @@ U_NAMESPACE_USE
 U_CAPI UNormalizer2 * U_EXPORT2
 unorm2_openFiltered(const UNormalizer2 *norm2, const USet *filterSet, UErrorCode *pErrorCode) {
     if(U_FAILURE(*pErrorCode)) {
-        return nullptr;
+        return NULL;
     }
-    if(filterSet==nullptr) {
+    if(filterSet==NULL) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
-        return nullptr;
+        return NULL;
     }
     Normalizer2 *fn2=new FilteredNormalizer2(*(Normalizer2 *)norm2,
                                              *UnicodeSet::fromUSet(filterSet));
-    if(fn2==nullptr) {
+    if(fn2==NULL) {
         *pErrorCode=U_MEMORY_ALLOCATION_ERROR;
     }
     return (UNormalizer2 *)fn2;

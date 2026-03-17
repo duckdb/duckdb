@@ -37,7 +37,7 @@ protected:
 		types = prepared->types;
 	}
 	vector<ColumnBinding> GetColumnBindings() override {
-		return GenerateColumnBindings(TableIndex(0), types.size());
+		return GenerateColumnBindings(0, types.size());
 	}
 };
 } // namespace duckdb

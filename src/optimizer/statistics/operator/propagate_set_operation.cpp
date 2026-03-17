@@ -61,7 +61,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateUnion(LogicalSetOperat
 			continue;
 		}
 		// propagate the stats for this column
-		ColumnBinding binding(setop.table_index, ProjectionIndex(i));
+		ColumnBinding binding(setop.table_index, i);
 		statistics_map[binding] = std::move(new_stats);
 	}
 	// merge all cardinalities of the child stats together
@@ -113,7 +113,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetO
 		default:
 			throw InternalException("Unsupported setop type");
 		}
-		ColumnBinding binding(setop.table_index, ProjectionIndex(i));
+		ColumnBinding binding(setop.table_index, i);
 		statistics_map[binding] = std::move(new_stats);
 	}
 	if (!left_stats || !right_stats) {

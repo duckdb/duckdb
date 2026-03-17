@@ -50,7 +50,7 @@ void CurrencyFormat::parseObject(const UnicodeString& source,
                                  ParsePosition& pos) const
 {
     CurrencyAmount* currAmt = getCurrencyFormatInternal().parseCurrency(source, pos);
-    if (currAmt != nullptr) {
+    if (currAmt != NULL) {
         result.adoptObject(currAmt);
     }
 }

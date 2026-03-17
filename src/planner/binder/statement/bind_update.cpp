@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
+void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, UpdateSetInfo &set_info,
                            TableCatalogEntry &table, vector<PhysicalIndex> &columns,
                            vector<unique_ptr<Expression>> &update_expressions,
                            vector<unique_ptr<Expression>> &projection_expressions, bool prioritize_table_when_binding) {
@@ -60,11 +60,9 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(bound_expr, root);
 
-			auto bound_type = bound_expr->return_type;
-			auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_expr));
-
-			update_expressions.push_back(
-			    make_uniq<BoundColumnRefExpression>(bound_type, ColumnBinding(proj_index, expr_index)));
+			update_expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
+			projection_expressions.push_back(std::move(bound_expr));
 		}
 	}
 }
@@ -106,8 +104,8 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 				break;
 			}
 		}
-		auto row_id_expr = make_uniq<BoundColumnRefExpression>(
-		    row_id_entry->second.type, ColumnBinding(get.table_index, ProjectionIndex(column_idx)));
+		auto row_id_expr =
+		    make_uniq<BoundColumnRefExpression>(row_id_entry->second.type, ColumnBinding(get.table_index, column_idx));
 		row_id_expr->alias = row_id_entry->second.name;
 		expressions.push_back(std::move(row_id_expr));
 		if (column_idx == column_ids.size()) {

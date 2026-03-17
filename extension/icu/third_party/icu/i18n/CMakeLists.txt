@@ -1,4 +1,4 @@
-add_library(
+add_library_unity(
   duckdb_icu_i18n
   OBJECT
   alphaindex.cpp
@@ -44,7 +44,6 @@ add_library(
   decContext.cpp
   decNumber.cpp
   decimfmt.cpp
-  displayoptions.cpp
   double-conversion-bignum-dtoa.cpp
   double-conversion-bignum.cpp
   double-conversion-cached-powers.cpp
@@ -60,6 +59,7 @@ add_library(
   erarules.cpp
   ethpccal.cpp
   fmtable.cpp
+  fmtable_cnv.cpp
   format.cpp
   formatted_string_builder.cpp
   formattedval_iterimpl.cpp
@@ -73,16 +73,15 @@ add_library(
   hebrwcal.cpp
   indiancal.cpp
   islamcal.cpp
-  iso8601cal.cpp
   listformatter.cpp
   measfmt.cpp
   measunit.cpp
-  measunit_extra.cpp
   measure.cpp
   msgfmt.cpp
   nfrs.cpp
   nfrule.cpp
   nfsubs.cpp
+  nounit.cpp
   number_affixutils.cpp
   number_asformat.cpp
   number_capi.cpp
@@ -105,10 +104,7 @@ add_library(
   number_patternstring.cpp
   number_rounding.cpp
   number_scientific.cpp
-  number_simple.cpp
   number_skeletons.cpp
-  number_symbolswrapper.cpp
-  number_usageprefs.cpp
   number_utils.cpp
   numfmt.cpp
   numparse_affixes.cpp
@@ -120,22 +116,22 @@ add_library(
   numparse_scientific.cpp
   numparse_symbols.cpp
   numparse_validators.cpp
-  numrange_capi.cpp
   numrange_fluent.cpp
   numrange_impl.cpp
   numsys.cpp
   olsontz.cpp
   persncal.cpp
-  pluralranges.cpp
   plurfmt.cpp
   plurrule.cpp
   quantityformatter.cpp
   rbnf.cpp
   rbtz.cpp
   region.cpp
+  reldatefmt.cpp
   reldtfmt.cpp
   rulebasedcollator.cpp
   scientificnumberformatter.cpp
+  search.cpp
   selfmt.cpp
   simpletz.cpp
   smpdtfmt.cpp
@@ -143,11 +139,13 @@ add_library(
   sortkey.cpp
   standardplural.cpp
   string_segment.cpp
+  stsearch.cpp
   taiwncal.cpp
   timezone.cpp
   tmunit.cpp
   tmutamt.cpp
   tmutfmt.cpp
+  translit.cpp
   tzfmt.cpp
   tzgnames.cpp
   tznames.cpp
@@ -168,14 +166,11 @@ add_library(
   ulistformatter.cpp
   ulocdata.cpp
   umsg.cpp
-  units_complexconverter.cpp
-  units_converter.cpp
-  units_data.cpp
-  units_router.cpp
   unum.cpp
   unumsys.cpp
   upluralrules.cpp
   uregion.cpp
+  usearch.cpp
   utf16collationiterator.cpp
   utf8collationiterator.cpp
   utmscale.cpp

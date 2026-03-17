@@ -20,7 +20,7 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(UnicodeSetIterator)
  * @param set set to iterate over
  */
 UnicodeSetIterator::UnicodeSetIterator(const UnicodeSet& uSet) {
-    cpString  = nullptr;
+    cpString  = NULL;
     reset(uSet);
 }
 
@@ -28,8 +28,8 @@ UnicodeSetIterator::UnicodeSetIterator(const UnicodeSet& uSet) {
  * Create an iterator. Convenience for when the contents are to be set later.
  */
 UnicodeSetIterator::UnicodeSetIterator() {
-    this->set = nullptr;
-    cpString  = nullptr;
+    this->set = NULL;
+    cpString  = NULL;
     reset();
 }
 
@@ -49,20 +49,20 @@ UnicodeSetIterator::~UnicodeSetIterator() {
 UBool UnicodeSetIterator::next() {
     if (nextElement <= endElement) {
         codepoint = codepointEnd = nextElement++;
-        string = nullptr;
-        return true;
+        string = NULL;
+        return TRUE;
     }
     if (range < endRange) {
         loadRange(++range);
         codepoint = codepointEnd = nextElement++;
-        string = nullptr;
-        return true;
+        string = NULL;
+        return TRUE;
     }
 
-    if (nextString >= stringCount) return false;
+    if (nextString >= stringCount) return FALSE;
     codepoint = (UChar32)IS_STRING; // signal that value is actually a string
     string = (const UnicodeString*) set->strings->elementAt(nextString++);
-    return true;
+    return TRUE;
 }
 
 /**
@@ -77,25 +77,25 @@ UBool UnicodeSetIterator::next() {
  * <br>Note also that the codepointEnd is undefined after calling this method.
  */
 UBool UnicodeSetIterator::nextRange() {
-    string = nullptr;
+    string = NULL;
     if (nextElement <= endElement) {
         codepointEnd = endElement;
         codepoint = nextElement;
         nextElement = endElement+1;
-        return true;
+        return TRUE;
     }
     if (range < endRange) {
         loadRange(++range);
         codepointEnd = endElement;
         codepoint = nextElement;
         nextElement = endElement+1;
-        return true;
+        return TRUE;
     }
 
-    if (nextString >= stringCount) return false;
+    if (nextString >= stringCount) return FALSE;
     codepoint = (UChar32)IS_STRING; // signal that value is actually a string
     string = (const UnicodeString*) set->strings->elementAt(nextString++);
-    return true;
+    return TRUE;
 }
 
 /**
@@ -110,7 +110,7 @@ void UnicodeSetIterator::reset(const UnicodeSet& uSet) {
  * Resets to the start, to allow the iteration to start over again.
  */
 void UnicodeSetIterator::reset() {
-    if (set == nullptr) {
+    if (set == NULL) {
         // Set up indices to empty iteration
         endRange = -1;
         stringCount = 0;
@@ -125,7 +125,7 @@ void UnicodeSetIterator::reset() {
         loadRange(range);
     }
     nextString = 0;
-    string = nullptr;
+    string = NULL;
 }
 
 void UnicodeSetIterator::loadRange(int32_t iRange) {
@@ -135,11 +135,11 @@ void UnicodeSetIterator::loadRange(int32_t iRange) {
 
 
 const UnicodeString& UnicodeSetIterator::getString()  {
-    if (string==nullptr && codepoint!=(UChar32)IS_STRING) {
-       if (cpString == nullptr) {
+    if (string==NULL && codepoint!=(UChar32)IS_STRING) {
+       if (cpString == NULL) {
           cpString = new UnicodeString();
        }
-       if (cpString != nullptr) {
+       if (cpString != NULL) {
           cpString->setTo((UChar32)codepoint);
        }
        string = cpString;

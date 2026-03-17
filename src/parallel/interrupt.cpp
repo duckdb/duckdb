@@ -40,14 +40,14 @@ void InterruptState::Callback() const {
 
 void InterruptDoneSignalState::Signal() {
 	{
-		annotated_lock_guard<annotated_mutex> lck(lock);
+		unique_lock<mutex> lck {lock};
 		done = true;
 	}
 	cv.notify_all();
 }
 
 void InterruptDoneSignalState::Await() {
-	annotated_unique_lock<annotated_mutex> lck(lock);
+	std::unique_lock<std::mutex> lck(lock);
 	cv.wait(lck, [&]() { return done; });
 
 	// Reset after signal received

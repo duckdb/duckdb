@@ -159,14 +159,14 @@ public:
 
     class U_I18N_API SuperscriptStyle : public Style {
     public:
-        virtual SuperscriptStyle *clone() const override;
+        virtual SuperscriptStyle *clone() const;
     protected:
         virtual UnicodeString &format(
                 const UnicodeString &original,
                 FieldPositionIterator &fpi,
                 const UnicodeString &preExponent,
                 UnicodeString &appendTo,
-                UErrorCode &status) const override;
+                UErrorCode &status) const;
     };
 
     class U_I18N_API MarkupStyle : public Style {
@@ -177,14 +177,14 @@ public:
                 : Style(),
                   fBeginMarkup(beginMarkup),
                   fEndMarkup(endMarkup) { }
-        virtual MarkupStyle *clone() const override;
+        virtual MarkupStyle *clone() const;
     protected:
         virtual UnicodeString &format(
                 const UnicodeString &original,
                 FieldPositionIterator &fpi,
                 const UnicodeString &preExponent,
                 UnicodeString &appendTo,
-                UErrorCode &status) const override;
+                UErrorCode &status) const;
     private:
         UnicodeString fBeginMarkup;
         UnicodeString fEndMarkup;
@@ -196,7 +196,7 @@ public:
             UErrorCode &status);
 
     ScientificNumberFormatter(const ScientificNumberFormatter &other);
-    ScientificNumberFormatter &operator=(const ScientificNumberFormatter &) = delete;
+    ScientificNumberFormatter &operator=(const ScientificNumberFormatter &);
 
     static void getPreExponent(
             const DecimalFormatSymbols &dfs, UnicodeString &preExponent);

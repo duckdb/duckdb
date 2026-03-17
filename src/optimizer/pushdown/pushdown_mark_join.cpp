@@ -7,8 +7,8 @@ namespace duckdb {
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
-                                                             unordered_set<TableIndex> &left_bindings,
-                                                             unordered_set<TableIndex> &right_bindings) {
+                                                             unordered_set<idx_t> &left_bindings,
+                                                             unordered_set<idx_t> &right_bindings) {
 	auto op_bindings = op->GetColumnBindings();
 	auto &join = op->Cast<LogicalJoin>();
 	auto &comp_join = op->Cast<LogicalComparisonJoin>();
@@ -57,11 +57,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;
 					for (auto &cond : comp_join.conditions) {
-						if (!cond.IsComparison()) {
-							continue;
-						}
-						if (cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM &&
-						    cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						if (cond.comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
+						    cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 							all_null_values_are_equal = false;
 							break;
 						}

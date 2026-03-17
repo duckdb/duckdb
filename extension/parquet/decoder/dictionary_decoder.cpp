@@ -4,7 +4,6 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 

@@ -6,7 +6,7 @@ statement ok
 set extension_directory='__TEST_DIR__/extension_dir'
 
 statement ok
-SET allowed_directories=['__TEST_DIR__', 'http://foo.com/bar', 'https://foo.com/baz'];
+SET allowed_directories=['__TEST_DIR__', 'http://', 'https://'];
 
 statement ok
 SET enable_external_access=false;

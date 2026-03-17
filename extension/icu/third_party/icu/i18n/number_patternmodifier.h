@@ -42,19 +42,17 @@ class MutablePatternModifier;
 // Exported as U_I18N_API because it is needed for the unit test PatternModifierTest
 class U_I18N_API ImmutablePatternModifier : public MicroPropsGenerator, public UMemory {
   public:
-    ~ImmutablePatternModifier() override = default;
+    ~ImmutablePatternModifier() U_OVERRIDE = default;
 
-    void processQuantity(DecimalQuantity&, MicroProps& micros, UErrorCode& status) const override;
+    void processQuantity(DecimalQuantity&, MicroProps& micros, UErrorCode& status) const U_OVERRIDE;
 
     void applyToMicros(MicroProps& micros, const DecimalQuantity& quantity, UErrorCode& status) const;
 
     const Modifier* getModifier(Signum signum, StandardPlural::Form plural) const;
 
-    // Non-const method:
-    void addToChain(const MicroPropsGenerator* parent);
-
   private:
-    ImmutablePatternModifier(AdoptingModifierStore* pm, const PluralRules* rules);
+    ImmutablePatternModifier(AdoptingModifierStore* pm, const PluralRules* rules,
+                             const MicroPropsGenerator* parent);
 
     const LocalPointer<AdoptingModifierStore> pm;
     const PluralRules* rules;
@@ -89,7 +87,7 @@ class U_I18N_API MutablePatternModifier
           public UMemory {
   public:
 
-    ~MutablePatternModifier() override = default;
+    ~MutablePatternModifier() U_OVERRIDE = default;
 
     /**
      * @param isStrong
@@ -116,28 +114,24 @@ class U_I18N_API MutablePatternModifier
      *            Whether to force a plus sign on positive numbers.
      * @param perMille
      *            Whether to substitute the percent sign in the pattern with a permille sign.
-     * @param approximately
-     *            Whether to prepend approximately to the sign
      */
-    void setPatternAttributes(UNumberSignDisplay signDisplay, bool perMille, bool approximately);
+    void setPatternAttributes(UNumberSignDisplay signDisplay, bool perMille);
 
     /**
      * Sets locale-specific details that affect the symbols substituted into the pattern string affixes.
      *
      * @param symbols
      *            The desired instance of DecimalFormatSymbols.
-     * @param currency
-     *            The currency to be used when substituting currency values into the affixes.
+     * @param currencySymbols
+     *            The currency symbols to be used when substituting currency values into the affixes.
      * @param unitWidth
      *            The width used to render currencies.
      * @param rules
      *            Required if the triple currency sign, "¤¤¤", appears in the pattern, which can be determined from the
      *            convenience method {@link #needsPlurals()}.
-     * @param status
-     *            Set if an error occurs while loading currency data.
      */
-    void setSymbols(const DecimalFormatSymbols* symbols, const CurrencyUnit& currency,
-                    UNumberUnitWidth unitWidth, const PluralRules* rules, UErrorCode& status);
+    void setSymbols(const DecimalFormatSymbols* symbols, const CurrencySymbols* currencySymbols,
+                    UNumberUnitWidth unitWidth, const PluralRules* rules);
 
     /**
      * Sets attributes of the current number being processed.
@@ -156,9 +150,6 @@ class U_I18N_API MutablePatternModifier
      */
     bool needsPlurals() const;
 
-    /** Creates a quantity-dependent Modifier for the specified plural form. */
-    AdoptingSignumModifierStore createImmutableForPlural(StandardPlural::Form plural, UErrorCode& status);
-
     /**
      * Creates a new quantity-dependent Modifier that behaves the same as the current instance, but which is immutable
      * and can be saved for future use. The number properties in the current instance are mutated; all other properties
@@ -174,34 +165,44 @@ class U_I18N_API MutablePatternModifier
      */
     ImmutablePatternModifier *createImmutable(UErrorCode &status);
 
+    /**
+     * Creates a new quantity-dependent Modifier that behaves the same as the current instance, but which is immutable
+     * and can be saved for future use. The number properties in the current instance are mutated; all other properties
+     * are left untouched.
+     *
+     * <p>
+     * CREATES A NEW HEAP OBJECT; THE CALLER GETS OWNERSHIP.
+     *
+     * @param parent
+     *            The QuantityChain to which to chain this immutable.
+     * @return An immutable that supports both positive and negative numbers.
+     */
+    ImmutablePatternModifier *
+    createImmutableAndChain(const MicroPropsGenerator *parent, UErrorCode &status);
+
     MicroPropsGenerator &addToChain(const MicroPropsGenerator *parent);
 
-    void processQuantity(DecimalQuantity &, MicroProps &micros, UErrorCode &status) const override;
+    void processQuantity(DecimalQuantity &, MicroProps &micros, UErrorCode &status) const U_OVERRIDE;
 
     int32_t apply(FormattedStringBuilder &output, int32_t leftIndex, int32_t rightIndex,
-                  UErrorCode &status) const override;
+                  UErrorCode &status) const U_OVERRIDE;
 
-    int32_t getPrefixLength() const override;
+    int32_t getPrefixLength() const U_OVERRIDE;
 
-    int32_t getCodePointCount() const override;
+    int32_t getCodePointCount() const U_OVERRIDE;
 
-    bool isStrong() const override;
+    bool isStrong() const U_OVERRIDE;
 
-    bool containsField(Field field) const override;
+    bool containsField(UNumberFormatFields field) const U_OVERRIDE;
 
-    void getParameters(Parameters& output) const override;
+    void getParameters(Parameters& output) const U_OVERRIDE;
 
-    bool semanticallyEquivalent(const Modifier& other) const override;
+    bool semanticallyEquivalent(const Modifier& other) const U_OVERRIDE;
 
     /**
      * Returns the string that substitutes a given symbol type in a pattern.
      */
-    UnicodeString getSymbol(AffixPatternType type) const override;
-
-    /**
-     * Returns the currency symbol for the unit width specified in setSymbols()
-     */
-    UnicodeString getCurrencySymbolForUnitWidth(UErrorCode& status) const;
+    UnicodeString getSymbol(AffixPatternType type) const U_OVERRIDE;
 
     UnicodeString toUnicodeString() const;
 
@@ -214,12 +215,11 @@ class U_I18N_API MutablePatternModifier
     Field fField;
     UNumberSignDisplay fSignDisplay;
     bool fPerMilleReplacesPercent;
-    bool fApproximately;
 
     // Symbol details (initialized in setSymbols)
     const DecimalFormatSymbols *fSymbols;
     UNumberUnitWidth fUnitWidth;
-    CurrencySymbols fCurrencySymbols;
+    const CurrencySymbols *fCurrencySymbols;
     const PluralRules *fRules;
 
     // Number details (initialized in setNumberProperties)

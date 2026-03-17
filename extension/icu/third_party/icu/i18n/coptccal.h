@@ -145,28 +145,14 @@ public:
      * @return    return a polymorphic copy of this calendar.
      * @internal
      */
-    virtual CopticCalendar* clone() const override;
+    virtual CopticCalendar* clone() const;
 
     /**
      * return the calendar type, "coptic"
      * @return calendar type
      * @internal
      */
-    const char * getType() const override;
-
-    /**
-     * @return      The related Gregorian year; will be obtained by modifying the value
-     *              obtained by get from UCAL_EXTENDED_YEAR field
-     * @internal
-     */
-    virtual int32_t getRelatedYear(UErrorCode &status) const override;
-
-    /**
-     * @param year  The related Gregorian year to set; will be modified as necessary then
-     *              set in UCAL_EXTENDED_YEAR field
-     * @internal
-     */
-    virtual void setRelatedYear(int32_t year) override;
+    const char * getType() const;
 
 protected:
     //-------------------------------------------------------------------------
@@ -177,32 +163,32 @@ protected:
      * Return the extended year defined by the current fields.
      * @internal
      */
-    virtual int32_t handleGetExtendedYear() override;
+    virtual int32_t handleGetExtendedYear();
 
     /**
      * Compute fields from the JD
      * @internal
      */
-    virtual void handleComputeFields(int32_t julianDay, UErrorCode &status) override;
+    virtual void handleComputeFields(int32_t julianDay, UErrorCode &status);
 
     /**
      * Returns the date of the start of the default century
      * @return start of century - in milliseconds since epoch, 1970
      * @internal
      */
-    virtual UDate defaultCenturyStart() const override;
+    virtual UDate defaultCenturyStart() const;
 
     /**
      * Returns the year in which the default century begins
      * @internal
      */
-    virtual int32_t defaultCenturyStartYear() const override;
+    virtual int32_t defaultCenturyStartYear() const;
 
     /**
      * Return the date offset from Julian
      * @internal
      */
-    virtual int32_t getJDEpochOffset() const override;
+    virtual int32_t getJDEpochOffset() const;
 
 
 public:
@@ -216,7 +202,7 @@ public:
      *           same class ID. Objects of other classes have different class IDs.
      * @internal
      */
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID(void) const;
 
     /**
      * Return the class ID for this class. This is useful only for comparing to a return
@@ -229,7 +215,7 @@ public:
      * @return   The class ID for all objects of this class.
      * @internal
      */
-    U_I18N_API static UClassID U_EXPORT2 getStaticClassID();  
+    U_I18N_API static UClassID U_EXPORT2 getStaticClassID(void);  
 
 #if 0
     // We do not want to introduce this API in ICU4C.

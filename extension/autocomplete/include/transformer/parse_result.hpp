@@ -8,7 +8,6 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "parser/special_string_utils.hpp"
-#include "duckdb/common/windows_undefs.hpp"
 
 namespace duckdb {
 

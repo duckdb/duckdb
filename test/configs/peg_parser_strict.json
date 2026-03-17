@@ -18,12 +18,6 @@
       ]
     },
     {
-      "reason": "Fix CI issue on main",
-      "paths": [
-        "test/sql/cast/struct_to_map.test"
-      ]
-    },
-    {
       "reason": "Parser error",
       "paths": [
         "test/sql/json/scalar/test_json_extract.test"
@@ -36,19 +30,17 @@
       ]
     },
     {
-        "reason": "Setting option to 'strict' changes behavior of first tests",
+      "reason": "Setting option to 'strict' changes behavior of first tests",
       "paths": [
         "test/extension/loadable_parser_override.test",
         "test/sql/peg_parser/transformer/peg_transformer.test",
         "test/sql/collate/test_unsupported_collations.test",
-        "test/extension/consistent_semicolon_extension_parse.test",
         "test/extension/test_custom_type_modifier_cast.test",
         "test/extension/test_alias_point.test",
         "test/extension/concurrent_load_extension.test",
         "test/extension/test_tags.test",
         "test/extension/load_test_alias.test",
-        "test/extension/load_extension.test",
-        "test/extension/test_extensible_filter.test"
+        "test/extension/load_extension.test"
       ]
     },
     {
@@ -56,16 +48,6 @@
       "paths": [
         "test/sql/function/string/test_string_slice.test",
         "test/sql/function/string/test_subscript.test",
-        "test/sql/catalog/table/create_table_parameters.test",
-        "test/sql/binder/test_string_alias.test",
-        "test/optimizer/joins/lateral_cross_join.test",
-        "test/sql/cte/recursive_cte_key_aggregation.test",
-        "test/sql/window/test_ignore_nulls.test",
-        "test/sql/function/tokenize/simple_tokenize.test",
-        "test/sql/join/iejoin/test_iejoin_predicate.test",
-        "test/sql/join/test_merge_join_predicate.test",
-        "test/sql/cte/recursive_cte_key_hll_aggregation.test",
-        "test/sql/subquery/scalar/test_scalar_subquery_cte.test",
         "test/sql/prepared/parameter_variants.test",
         "test/sql/parser/digit_separators.test"
       ]

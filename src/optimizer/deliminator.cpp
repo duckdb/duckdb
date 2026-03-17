@@ -36,10 +36,7 @@ public:
 };
 
 static bool IsEqualityJoinCondition(const JoinCondition &cond) {
-	if (!cond.IsComparison()) {
-		return false;
-	}
-	switch (cond.GetComparisonType()) {
+	switch (cond.comparison) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		return true;
@@ -117,8 +114,8 @@ bool Deliminator::HasSelection(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		for (const auto &entry : get.table_filters) {
-			if (entry.Filter().filter_type != TableFilterType::IS_NOT_NULL) {
+		for (const auto &filter : get.table_filters.filters) {
+			if (filter.second->filter_type != TableFilterType::IS_NOT_NULL) {
 				return true;
 			}
 		}
@@ -206,12 +203,9 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 	ColumnBindingReplacer replacer;
 	auto &replacement_bindings = replacer.replacement_bindings;
 	for (auto &cond : comparison_join.conditions) {
-		if (!cond.IsComparison()) {
-			return false;
-		}
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
-		auto &delim_side = delim_idx == 0 ? cond.GetLHS() : cond.GetRHS();
-		auto &other_side = delim_idx == 0 ? cond.GetRHS() : cond.GetLHS();
+		auto &delim_side = delim_idx == 0 ? *cond.left : *cond.right;
+		auto &other_side = delim_idx == 0 ? *cond.right : *cond.left;
 		if (delim_side.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF ||
 		    other_side.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false;
@@ -222,8 +216,8 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 
 		// Only add IS NOT NULL filter for regular equality/inequality comparisons
 		// Do NOT add for DISTINCT FROM variants, as they handle NULL correctly
-		if (cond.GetComparisonType() != ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
-		    cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM) {
+		if (cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM &&
+		    cond.comparison != ExpressionType::COMPARE_DISTINCT_FROM) {
 			auto is_not_null_expr =
 			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 			is_not_null_expr->children.push_back(other_side.Copy());
@@ -303,10 +297,10 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	// We only support colref's
 	vector<ColumnBinding> traced_bindings;
 	for (const auto &cond : delim_conditions) {
-		if (!cond.IsComparison() || cond.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false;
 		}
-		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
+		auto &colref = cond.right->Cast<BoundColumnRefExpression>();
 		traced_bindings.emplace_back(colref.binding);
 	}
 
@@ -335,23 +329,17 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 	bool found_all = true;
 	for (idx_t cond_idx = 0; cond_idx < delim_conditions.size(); cond_idx++) {
 		auto &delim_condition = delim_conditions[cond_idx];
-		if (!delim_condition.IsComparison()) {
-			continue;
-		}
 		const auto &traced_binding = traced_bindings[cond_idx];
 
 		bool found = false;
 		for (auto &join_condition : join_conditions) {
-			auto &delim_side = delim_idx == 0 ? join_condition.GetLHS() : join_condition.GetRHS();
+			auto &delim_side = delim_idx == 0 ? *join_condition.left : *join_condition.right;
 			auto &colref = delim_side.Cast<BoundColumnRefExpression>();
 			if (colref.binding == traced_binding) {
-				if (!join_condition.IsComparison()) {
-					continue;
-				}
-				auto join_comparison = join_condition.GetComparisonType();
-				auto original_join_comparison = join_condition.GetComparisonType(); // Save original for later check
-				if (delim_condition.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
-				    delim_condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				auto join_comparison = join_condition.comparison;
+				auto original_join_comparison = join_condition.comparison; // Save original for later check
+				if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM ||
+				    delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					// We need to compare NULL values
 					if (join_comparison == ExpressionType::COMPARE_EQUAL) {
 						join_comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
@@ -364,11 +352,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 						break;
 					}
 				}
-				auto left_copy = delim_condition.LeftReference()->Copy();
-				auto right_copy = delim_condition.RightReference()->Copy();
-
-				delim_conditions[cond_idx] = JoinCondition(std::move(left_copy), std::move(right_copy),
-				                                           FlipComparisonExpression(join_comparison));
+				delim_condition.comparison = FlipComparisonExpression(join_comparison);
 				// join condition was a not equal and filtered out all NULLS.
 				// DELIM JOIN need to do that for not DELIM_GET side. Easiest way is to change the
 				// comparison expression type. See duckdb/duckdb#16803
@@ -376,15 +360,12 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_
 				if (delim_join.join_type != JoinType::MARK &&
 				    original_join_comparison != ExpressionType::COMPARE_DISTINCT_FROM &&
 				    original_join_comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-					auto final_comparison = delim_conditions[cond_idx].GetComparisonType();
-					if (final_comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
-						final_comparison = ExpressionType::COMPARE_NOTEQUAL;
-					} else if (final_comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-						final_comparison = ExpressionType::COMPARE_EQUAL;
+					if (delim_condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_NOTEQUAL;
 					}
-					delim_conditions[cond_idx] =
-					    JoinCondition(delim_conditions[cond_idx].LeftReference()->Copy(),
-					                  delim_conditions[cond_idx].RightReference()->Copy(), final_comparison);
+					if (delim_condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+						delim_condition.comparison = ExpressionType::COMPARE_EQUAL;
+					}
 				}
 				found = true;
 				break;
@@ -405,10 +386,10 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 		if (!IsEqualityJoinCondition(cond)) {
 			return;
 		}
-		if (!cond.IsComparison() || cond.GetRHS().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.right->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return;
 		}
-		auto &colref = cond.GetRHS().Cast<BoundColumnRefExpression>();
+		auto &colref = cond.right->Cast<BoundColumnRefExpression>();
 		join_bindings.emplace_back(colref.binding);
 	}
 
@@ -438,8 +419,8 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 	}
 
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
-		if (std::find(join_bindings.begin(), join_bindings.end(),
-		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
+		if (std::find(join_bindings.begin(), join_bindings.end(), ColumnBinding(aggr.group_index, group_idx)) ==
+		    join_bindings.end()) {
 			return;
 		}
 	}

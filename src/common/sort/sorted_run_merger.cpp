@@ -1,8 +1,6 @@
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
 
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/sorting/sort.hpp"
-#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
@@ -45,7 +43,12 @@ public:
 	}
 
 public:
-	unsafe_vector<SortedRunPartitionBoundary> &GetRunBoundaries() DUCKDB_REQUIRES(lock) {
+	unique_lock<mutex> Lock() {
+		return unique_lock<mutex>(lock);
+	}
+
+	unsafe_vector<SortedRunPartitionBoundary> &GetRunBoundaries(const unique_lock<mutex> &guard) {
+		VerifyLock(guard);
 		return run_boundaries;
 	}
 
@@ -57,11 +60,16 @@ public:
 		begin_computed = true;
 	}
 
-public:
-	annotated_mutex lock;
+private:
+	void VerifyLock(const unique_lock<mutex> &guard) const {
+#ifdef D_ASSERT_IS_ENABLED
+		D_ASSERT(guard.mutex() && RefersToSameObject(*guard.mutex(), lock));
+#endif
+	}
 
 private:
-	unsafe_vector<SortedRunPartitionBoundary> run_boundaries DUCKDB_GUARDED_BY(lock);
+	mutex lock;
+	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
 	atomic<bool> begin_computed;
 
 public:
@@ -179,7 +187,7 @@ public:
 	bool AssignTask(SortedRunMergerLocalState &lstate) {
 		D_ASSERT(!lstate.partition_idx.IsValid());
 		D_ASSERT(lstate.task == SortedRunMergerTask::FINISHED);
-		annotated_lock_guard<annotated_mutex> guard(lock);
+		auto guard = Lock();
 		if (next_partition_idx == num_partitions) {
 			return false; // Nothing left to do
 		}
@@ -240,15 +248,15 @@ public:
 			idx_t begin_idx = 0;
 			if (destroy_partition_idx != 0) {
 				auto &begin_partition = *partitions[destroy_partition_idx];
-				const annotated_lock_guard<annotated_mutex> partition_guard(begin_partition.lock);
-				begin_idx = begin_partition.GetRunBoundaries()[run_idx].end;
+				auto partition_guard = begin_partition.Lock();
+				begin_idx = begin_partition.GetRunBoundaries(partition_guard)[run_idx].end;
 			}
 
 			idx_t end_idx = merger.sorted_runs[run_idx]->Count();
 			if (end_partition_idx != num_partitions) {
 				auto &end_partition = *partitions[end_partition_idx];
-				const annotated_lock_guard<annotated_mutex> partition_guard(end_partition.lock);
-				end_idx = end_partition.GetRunBoundaries()[run_idx].end;
+				auto partition_guard = end_partition.Lock();
+				end_idx = end_partition.GetRunBoundaries(partition_guard)[run_idx].end;
 			}
 
 			merger.sorted_runs[run_idx]->DestroyData(begin_idx, end_idx);
@@ -380,12 +388,10 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 
 	// Copy over the run boundaries from the assigned partition (under lock)
 	auto &current_partition = *gstate.partitions[p_idx.GetIndex()];
-	bool begin_computed;
-	{
-		const annotated_lock_guard<annotated_mutex> current_partition_guard(current_partition.lock);
-		begin_computed = current_partition.GetBeginComputed();
-		run_boundaries = current_partition.GetRunBoundaries();
-	}
+	auto current_partition_guard = current_partition.Lock();
+	const auto begin_computed = current_partition.GetBeginComputed();
+	run_boundaries = current_partition.GetRunBoundaries(current_partition_guard);
+	current_partition_guard.unlock();
 
 	if (!begin_computed) {
 		// We can use information from previous partitions to speed up computing this partition
@@ -394,8 +400,8 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 			if (!prev_partition.GetBeginComputed()) {
 				continue;
 			}
-			const annotated_lock_guard<annotated_mutex> prev_partition_guard(prev_partition.lock);
-			const auto &prev_partition_run_boundaries = prev_partition.GetRunBoundaries();
+			auto prev_partition_guard = prev_partition.Lock();
+			const auto &prev_partition_run_boundaries = prev_partition.GetRunBoundaries(prev_partition_guard);
 			for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 				run_boundaries[run_idx].begin = prev_partition_run_boundaries[run_idx].begin;
 			}
@@ -423,9 +429,9 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	if (p_idx.GetIndex() != gstate.num_partitions - 1) {
 		auto &next_partition = *gstate.partitions[p_idx.GetIndex() + 1];
 		if (!next_partition.GetBeginComputed()) {
-			annotated_lock_guard<annotated_mutex> next_partition_guard(next_partition.lock);
+			auto next_partition_guard = next_partition.Lock();
 			if (!next_partition.GetBeginComputed()) {
-				auto &next_partition_run_boundaries = next_partition.GetRunBoundaries();
+				auto &next_partition_run_boundaries = next_partition.GetRunBoundaries(next_partition_guard);
 				for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 					const auto &computed_boundary = run_boundaries[run_idx];
 					D_ASSERT(computed_boundary.begin == computed_boundary.end);
@@ -437,14 +443,12 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	}
 
 	// Set the computed end partition boundaries of the current partition
-	{
-		annotated_lock_guard<annotated_mutex> current_partition_guard(current_partition.lock);
-		auto &current_partition_run_boundaries = current_partition.GetRunBoundaries();
-		for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
-			const auto &computed_boundary = run_boundaries[run_idx];
-			D_ASSERT(computed_boundary.begin == computed_boundary.end);
-			current_partition_run_boundaries[run_idx].end = computed_boundary.end;
-		}
+	current_partition_guard.lock();
+	auto &current_partition_run_boundaries = current_partition.GetRunBoundaries(current_partition_guard);
+	for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
+		const auto &computed_boundary = run_boundaries[run_idx];
+		D_ASSERT(computed_boundary.begin == computed_boundary.end);
+		current_partition_run_boundaries[run_idx].end = computed_boundary.end;
 	}
 }
 
@@ -553,9 +557,7 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 
 		// Erase from active if begin is equal to end
 		if (min_run_boundary.begin == min_run_boundary.end) {
-			auto it = std::find(active_run_idxs.begin(), active_run_idxs.end(), min_idx);
-			D_ASSERT(it != active_run_idxs.end());
-			active_run_idxs.erase(it);
+			active_run_idxs.erase(std::find(active_run_idxs.begin(), active_run_idxs.end(), min_idx));
 		}
 
 		// Update total remaining accordingly
@@ -575,8 +577,8 @@ void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	auto &current_partition = *gstate.partitions[partition_idx.GetIndex()];
 	if (current_partition.GetBeginComputed()) {
 		// Begin has been computed, boundaries are ready to use. Copy to local
-		annotated_lock_guard<annotated_mutex> guard(current_partition.lock);
-		run_boundaries = current_partition.GetRunBoundaries();
+		auto guard = current_partition.Lock();
+		run_boundaries = current_partition.GetRunBoundaries(guard);
 		return;
 	}
 
@@ -586,9 +588,9 @@ void SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 	task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
 
 	// Copy to local
-	annotated_lock_guard<annotated_mutex> guard(current_partition.lock);
+	auto guard = current_partition.Lock();
 	D_ASSERT(current_partition.GetBeginComputed());
-	run_boundaries = current_partition.GetRunBoundaries();
+	run_boundaries = current_partition.GetRunBoundaries(guard);
 }
 
 void SortedRunMergerLocalState::MergePartition(SortedRunMergerGlobalState &gstate) {
@@ -843,7 +845,7 @@ SortedRunMerger::~SortedRunMerger() {
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
                                                                   GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
-	annotated_lock_guard<annotated_mutex> guard(gstate.lock);
+	auto guard = gstate.Lock();
 	return make_uniq<SortedRunMergerLocalState>(gstate);
 }
 

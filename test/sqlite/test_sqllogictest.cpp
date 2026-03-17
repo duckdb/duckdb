@@ -34,14 +34,6 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
-static void register_sqllogic_test_case(void (*test_fun)(), const string &path, const string &tags) {
-	auto normalized_path = StringUtil::Replace(path, "\\", "/");
-	if (TestConfiguration::Get().ShouldSkipTest(normalized_path)) {
-		return;
-	}
-	REGISTER_TEST_CASE(test_fun, normalized_path, tags);
-}
-
 template <bool AUTO_SWITCH_TEST_DIR = false>
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
@@ -211,13 +203,13 @@ void RegisterSqllogictests() {
 					return;
 				}
 			}
-			register_sqllogic_test_case(testRunner<>, path, "[sqlitelogic][.]");
+			REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
 		}
 	});
 	listFiles(*fs, "test", [&](const string &path) {
 		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 			// parse the name / group from the test
-			register_sqllogic_test_case(testRunner<false>, path, ParseGroupFromPath(path));
+			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 		}
 	});
 
@@ -225,7 +217,7 @@ void RegisterSqllogictests() {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				auto fun = testRunner<true>;
-				register_sqllogic_test_case(fun, path, ParseGroupFromPath(path));
+				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 			}
 		});
 	}

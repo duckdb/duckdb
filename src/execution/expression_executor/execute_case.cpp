@@ -189,10 +189,6 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 		StringVector::AddHeapReference(result, vector);
 		break;
 	case PhysicalType::STRUCT: {
-		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			// below code needs constant or flat structs
-			vector.Flatten(count);
-		}
 		auto &vector_entries = StructVector::GetEntries(vector);
 		auto &result_entries = StructVector::GetEntries(result);
 		ValidityFillLoop(vector, result, sel, count);

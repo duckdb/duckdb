@@ -49,8 +49,6 @@ public:
 	bool IsSink() const override {
 		return true;
 	}
-
-	InsertionOrderPreservingMap<string> ParamsToString() const override;
 };
 
 } // namespace duckdb

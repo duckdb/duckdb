@@ -47,28 +47,28 @@ public:
      * @param status the error code.
      * @return number of elements in the iterator.
      */
-    virtual int32_t count(UErrorCode& status) const override;
+    virtual int32_t count(UErrorCode& status) const;
 
-    virtual const char* next(int32_t *resultLength, UErrorCode& status) override;
+    virtual const char* next(int32_t *resultLength, UErrorCode& status);
 
     /**
      * Returns the next element a UnicodeString*.  If there are no
-     * more elements, returns nullptr.
+     * more elements, returns NULL.
      * @param status the error code.
-     * @return a pointer to the string, or nullptr.
+     * @return a pointer to the string, or NULL.
      */
-    virtual const UnicodeString* snext(UErrorCode& status) override;
+    virtual const UnicodeString* snext(UErrorCode& status);
 
     /**
      * Resets the iterator.
      * @param status the error code.
      */
-    virtual void reset(UErrorCode& status) override;
+    virtual void reset(UErrorCode& status);
 
     /**
      * ICU4C "poor man's RTTI", returns a UClassID for the actual ICU class.
      */
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID() const;
 
     /**
      * ICU4C "poor man's RTTI", returns a UClassID for this ICU class.

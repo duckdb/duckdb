@@ -13,7 +13,6 @@
 
 #include "unicode/utypes.h"
 #include "sharedobject.h"
-#include "unifiedcache.h"
 
 U_NAMESPACE_BEGIN
 
@@ -27,13 +26,9 @@ public:
     const PluralRules &operator*() const { return *ptr; }
 private:
     PluralRules *ptr;
-    SharedPluralRules(const SharedPluralRules &) = delete;
-    SharedPluralRules &operator=(const SharedPluralRules &) =delete;
+    SharedPluralRules(const SharedPluralRules &);
+    SharedPluralRules &operator=(const SharedPluralRules &);
 };
-
-template<> U_I18N_API
-const SharedPluralRules *LocaleCacheKey<SharedPluralRules>::createObject(
-        const void * /*unused*/, UErrorCode &status) const;
 
 U_NAMESPACE_END
 

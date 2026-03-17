@@ -55,30 +55,24 @@ ulocdata_open(const char *localeID, UErrorCode *status)
    ULocaleData *uld;
 
    if (U_FAILURE(*status)) {
-       return nullptr;
+       return NULL;
    }
 
    uld = (ULocaleData *)uprv_malloc(sizeof(ULocaleData));
-   if (uld == nullptr) {
+   if (uld == NULL) {
       *status = U_MEMORY_ALLOCATION_ERROR;
-      return(nullptr);
+      return(NULL);
    }
 
-   uld->langBundle = nullptr;
+   uld->langBundle = NULL;
 
-   uld->noSubstitute = false;
-   uld->bundle = ures_open(nullptr, localeID, status);
+   uld->noSubstitute = FALSE;
+   uld->bundle = ures_open(NULL, localeID, status);
+   uld->langBundle = ures_open(U_ICUDATA_LANG, localeID, status);
 
    if (U_FAILURE(*status)) {
       uprv_free(uld);
-      return nullptr;
-   }
-
-   // ICU-22149: not all functions require lang data, so fail gracefully if it is not present
-   UErrorCode oldStatus = *status;
-   uld->langBundle = ures_open(U_ICUDATA_LANG, localeID, status);
-   if (*status == U_MISSING_RESOURCE_ERROR) {
-      *status = oldStatus;
+      return NULL;
    }
 
    return uld;
@@ -87,7 +81,7 @@ ulocdata_open(const char *localeID, UErrorCode *status)
 U_CAPI void U_EXPORT2
 ulocdata_close(ULocaleData *uld)
 {
-    if ( uld != nullptr ) {
+    if ( uld != NULL ) {
        ures_close(uld->langBundle);
        ures_close(uld->bundle);
        uprv_free(uld);
@@ -114,12 +108,12 @@ ulocdata_getExemplarSet(ULocaleData *uld, USet *fillIn,
                                                     "AuxExemplarCharacters", 
                                                     "ExemplarCharactersIndex",
                                                     "ExemplarCharactersPunctuation"};
-    const char16_t *exemplarChars = nullptr;
+    const UChar *exemplarChars = NULL;
     int32_t len = 0;
     UErrorCode localStatus = U_ZERO_ERROR;
 
     if (U_FAILURE(*status))
-        return nullptr;
+        return NULL;
 
     exemplarChars = ures_getStringByKey(uld->bundle, exemplarSetTypes[extype], &len, &localStatus);
     if ( (localStatus == U_USING_DEFAULT_WARNING) && uld->noSubstitute ) {
@@ -131,9 +125,9 @@ ulocdata_getExemplarSet(ULocaleData *uld, USet *fillIn,
     }
 
     if (U_FAILURE(*status))
-        return nullptr;
+        return NULL;
 
-    if(fillIn != nullptr)
+    if(fillIn != NULL)
         uset_applyPattern(fillIn, exemplarChars, len,
                           USET_IGNORE_SPACE | options, status);
     else
@@ -146,7 +140,7 @@ ulocdata_getExemplarSet(ULocaleData *uld, USet *fillIn,
 
 U_CAPI int32_t U_EXPORT2
 ulocdata_getDelimiter(ULocaleData *uld, ULocaleDataDelimiterType type,
-                      char16_t *result, int32_t resultLength, UErrorCode *status){
+                      UChar *result, int32_t resultLength, UErrorCode *status){
 
     static const char* const delimiterKeys[] =  {
         "quotationStart",
@@ -157,13 +151,13 @@ ulocdata_getDelimiter(ULocaleData *uld, ULocaleDataDelimiterType type,
 
     UResourceBundle *delimiterBundle;
     int32_t len = 0;
-    const char16_t *delimiter = nullptr;
+    const UChar *delimiter = NULL;
     UErrorCode localStatus = U_ZERO_ERROR;
 
     if (U_FAILURE(*status))
         return 0;
 
-    delimiterBundle = ures_getByKey(uld->bundle, "delimiters", nullptr, &localStatus);
+    delimiterBundle = ures_getByKey(uld->bundle, "delimiters", NULL, &localStatus);
 
     if ( (localStatus == U_USING_DEFAULT_WARNING) && uld->noSubstitute ) {
         localStatus = U_MISSING_RESOURCE_ERROR;
@@ -178,7 +172,7 @@ ulocdata_getDelimiter(ULocaleData *uld, ULocaleDataDelimiterType type,
         return 0;
     }
 
-    delimiter = ures_getStringByKeyWithFallback(delimiterBundle, delimiterKeys[type], &len, &localStatus);
+    delimiter = ures_getStringByKey(delimiterBundle, delimiterKeys[type], &len, &localStatus);
     ures_close(delimiterBundle);
 
     if ( (localStatus == U_USING_DEFAULT_WARNING) && uld->noSubstitute ) {
@@ -200,24 +194,24 @@ ulocdata_getDelimiter(ULocaleData *uld, ULocaleDataDelimiterType type,
 static UResourceBundle * measurementTypeBundleForLocale(const char *localeID, const char *measurementType, UErrorCode *status){
     char region[ULOC_COUNTRY_CAPACITY];
     UResourceBundle *rb;
-    UResourceBundle *measTypeBundle = nullptr;
+    UResourceBundle *measTypeBundle = NULL;
     
-    ulocimp_getRegionForSupplementalData(localeID, true, region, ULOC_COUNTRY_CAPACITY, status);
+    ulocimp_getRegionForSupplementalData(localeID, TRUE, region, ULOC_COUNTRY_CAPACITY, status);
     
-    rb = ures_openDirect(nullptr, "supplementalData", status);
+    rb = ures_openDirect(NULL, "supplementalData", status);
     ures_getByKey(rb, "measurementData", rb, status);
-    if (rb != nullptr) {
-        UResourceBundle *measDataBundle = ures_getByKey(rb, region, nullptr, status);
+    if (rb != NULL) {
+        UResourceBundle *measDataBundle = ures_getByKey(rb, region, NULL, status);
         if (U_SUCCESS(*status)) {
-        	measTypeBundle = ures_getByKey(measDataBundle, measurementType, nullptr, status);
+        	measTypeBundle = ures_getByKey(measDataBundle, measurementType, NULL, status);
         }
         if (*status == U_MISSING_RESOURCE_ERROR) {
             *status = U_ZERO_ERROR;
-            if (measDataBundle != nullptr) {
+            if (measDataBundle != NULL) {
                 ures_close(measDataBundle);
             }
-            measDataBundle = ures_getByKey(rb, "001", nullptr, status);
-            measTypeBundle = ures_getByKey(measDataBundle, measurementType, nullptr, status);
+            measDataBundle = ures_getByKey(rb, "001", NULL, status);
+            measTypeBundle = ures_getByKey(measDataBundle, measurementType, NULL, status);
         }
         ures_close(measDataBundle);
     }
@@ -228,18 +222,15 @@ static UResourceBundle * measurementTypeBundleForLocale(const char *localeID, co
 U_CAPI UMeasurementSystem U_EXPORT2
 ulocdata_getMeasurementSystem(const char *localeID, UErrorCode *status){
 
-    UResourceBundle* measurement=nullptr;
+    UResourceBundle* measurement=NULL;
     UMeasurementSystem system = UMS_LIMIT;
 
-    if(status == nullptr || U_FAILURE(*status)){
+    if(status == NULL || U_FAILURE(*status)){
         return system;
     }
 
     measurement = measurementTypeBundleForLocale(localeID, MEASUREMENT_SYSTEM, status);
-    int32_t result = ures_getInt(measurement, status);
-    if (U_SUCCESS(*status)) {
-         system = static_cast<UMeasurementSystem>(result);
-    }
+    system = (UMeasurementSystem) ures_getInt(measurement, status);
 
     ures_close(measurement);
 
@@ -249,11 +240,11 @@ ulocdata_getMeasurementSystem(const char *localeID, UErrorCode *status){
 
 U_CAPI void U_EXPORT2
 ulocdata_getPaperSize(const char* localeID, int32_t *height, int32_t *width, UErrorCode *status){
-    UResourceBundle* paperSizeBundle = nullptr;
-    const int32_t* paperSize=nullptr;
+    UResourceBundle* paperSizeBundle = NULL;
+    const int32_t* paperSize=NULL;
     int32_t len = 0;
 
-    if(status == nullptr || U_FAILURE(*status)){
+    if(status == NULL || U_FAILURE(*status)){
         return;
     }
 
@@ -275,31 +266,26 @@ ulocdata_getPaperSize(const char* localeID, int32_t *height, int32_t *width, UEr
 
 U_CAPI void U_EXPORT2
 ulocdata_getCLDRVersion(UVersionInfo versionArray, UErrorCode *status) {
-    UResourceBundle *rb = nullptr;
-    rb = ures_openDirect(nullptr, "supplementalData", status);
+    UResourceBundle *rb = NULL;
+    rb = ures_openDirect(NULL, "supplementalData", status);
     ures_getVersionByKey(rb, "cldrVersion", versionArray, status);
     ures_close(rb);
 }
 
 U_CAPI int32_t U_EXPORT2
 ulocdata_getLocaleDisplayPattern(ULocaleData *uld,
-                                 char16_t *result,
+                                 UChar *result,
                                  int32_t resultCapacity,
                                  UErrorCode *status) {
     UResourceBundle *patternBundle;
     int32_t len = 0;
-    const char16_t *pattern = nullptr;
+    const UChar *pattern = NULL;
     UErrorCode localStatus = U_ZERO_ERROR;
 
     if (U_FAILURE(*status))
         return 0;
 
-    if (uld->langBundle == nullptr) {
-        *status = U_MISSING_RESOURCE_ERROR;
-        return 0;
-    }
-
-    patternBundle = ures_getByKey(uld->langBundle, "localeDisplayPattern", nullptr, &localStatus);
+    patternBundle = ures_getByKey(uld->langBundle, "localeDisplayPattern", NULL, &localStatus);
 
     if ( (localStatus == U_USING_DEFAULT_WARNING) && uld->noSubstitute ) {
         localStatus = U_MISSING_RESOURCE_ERROR;
@@ -336,27 +322,22 @@ ulocdata_getLocaleDisplayPattern(ULocaleData *uld,
 
 U_CAPI int32_t U_EXPORT2
 ulocdata_getLocaleSeparator(ULocaleData *uld,
-                            char16_t *result,
+                            UChar *result,
                             int32_t resultCapacity,
                             UErrorCode *status)  {
     UResourceBundle *separatorBundle;
     int32_t len = 0;
-    const char16_t *separator = nullptr;
+    const UChar *separator = NULL;
     UErrorCode localStatus = U_ZERO_ERROR;
-    char16_t *p0, *p1;
-    static const char16_t sub0[4] = { 0x007b, 0x0030, 0x007d , 0x0000 }; /* {0} */
-    static const char16_t sub1[4] = { 0x007b, 0x0031, 0x007d , 0x0000 }; /* {1} */
+    UChar *p0, *p1;
+    static const UChar sub0[4] = { 0x007b, 0x0030, 0x007d , 0x0000 }; /* {0} */
+    static const UChar sub1[4] = { 0x007b, 0x0031, 0x007d , 0x0000 }; /* {1} */
     static const int32_t subLen = 3;
 
     if (U_FAILURE(*status))
         return 0;
 
-    if (uld->langBundle == nullptr) {
-        *status = U_MISSING_RESOURCE_ERROR;
-        return 0;
-    }
-
-    separatorBundle = ures_getByKey(uld->langBundle, "localeDisplayPattern", nullptr, &localStatus);
+    separatorBundle = ures_getByKey(uld->langBundle, "localeDisplayPattern", NULL, &localStatus);
 
     if ( (localStatus == U_USING_DEFAULT_WARNING) && uld->noSubstitute ) {
         localStatus = U_MISSING_RESOURCE_ERROR;
@@ -389,8 +370,8 @@ ulocdata_getLocaleSeparator(ULocaleData *uld,
     /* For backwards compatibility, if we have a pattern, return the portion between {0} and {1} */
     p0=u_strstr(separator, sub0);
     p1=u_strstr(separator, sub1);
-    if (p0!=nullptr && p1!=nullptr && p0<=p1) {
-        separator = (const char16_t *)p0 + subLen;
+    if (p0!=NULL && p1!=NULL && p0<=p1) {
+        separator = (const UChar *)p0 + subLen;
         len = static_cast<int32_t>(p1 - separator);
         /* Desired separator is no longer zero-terminated; handle that if necessary */
         if (len < resultCapacity) {

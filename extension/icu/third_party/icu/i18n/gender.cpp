@@ -19,30 +19,25 @@
 
 #if !UCONFIG_NO_FORMATTING
 
-#include <utility>
-
 #include "unicode/gender.h"
 #include "unicode/ugender.h"
 #include "unicode/ures.h"
 
-#include "bytesinkutil.h"
-#include "charstr.h"
 #include "cmemory.h"
 #include "cstring.h"
 #include "mutex.h"
 #include "uassert.h"
 #include "ucln_in.h"
-#include "ulocimp.h"
 #include "umutex.h"
 #include "uhash.h"
 
-static UHashtable* gGenderInfoCache = nullptr;
+static UHashtable* gGenderInfoCache = NULL;
 
 static const char* gNeutralStr = "neutral";
 static const char* gMailTaintsStr = "maleTaints";
 static const char* gMixedNeutralStr = "mixedNeutral";
-static icu::GenderInfo* gObjs = nullptr;
-static icu::UInitOnce gGenderInitOnce {};
+static icu::GenderInfo* gObjs = NULL;
+static icu::UInitOnce gGenderInitOnce = U_INITONCE_INITIALIZER;
 
 enum GenderStyle {
   NEUTRAL,
@@ -53,14 +48,14 @@ enum GenderStyle {
 
 U_CDECL_BEGIN
 
-static UBool U_CALLCONV gender_cleanup() {
-  if (gGenderInfoCache != nullptr) {
+static UBool U_CALLCONV gender_cleanup(void) {
+  if (gGenderInfoCache != NULL) {
     uhash_close(gGenderInfoCache);
-    gGenderInfoCache = nullptr;
+    gGenderInfoCache = NULL;
     delete [] gObjs;
   }
   gGenderInitOnce.reset();
-  return true;
+  return TRUE;
 }
 
 U_CDECL_END
@@ -69,19 +64,19 @@ U_NAMESPACE_BEGIN
 
 void U_CALLCONV GenderInfo_initCache(UErrorCode &status) {
   ucln_i18n_registerCleanup(UCLN_I18N_GENDERINFO, gender_cleanup);
-  U_ASSERT(gGenderInfoCache == nullptr);
+  U_ASSERT(gGenderInfoCache == NULL);
   if (U_FAILURE(status)) {
       return;
   }
   gObjs = new GenderInfo[GENDER_STYLE_LENGTH];
-  if (gObjs == nullptr) {
+  if (gObjs == NULL) {
     status = U_MEMORY_ALLOCATION_ERROR;
     return;
   }
   for (int i = 0; i < GENDER_STYLE_LENGTH; i++) {
     gObjs[i]._style = i;
   }
-  gGenderInfoCache = uhash_open(uhash_hashChars, uhash_compareChars, nullptr, &status);
+  gGenderInfoCache = uhash_open(uhash_hashChars, uhash_compareChars, NULL, &status);
   if (U_FAILURE(status)) {
     delete [] gObjs;
     return;
@@ -100,11 +95,11 @@ const GenderInfo* GenderInfo::getInstance(const Locale& locale, UErrorCode& stat
   // Make sure our cache exists.
   umtx_initOnce(gGenderInitOnce, &GenderInfo_initCache, status);
   if (U_FAILURE(status)) {
-    return nullptr;
+    return NULL;
   }
 
   static UMutex gGenderMetaLock;
-  const GenderInfo* result = nullptr;
+  const GenderInfo* result = NULL;
   const char* key = locale.getName();
   {
     Mutex lock(&gGenderMetaLock);
@@ -117,7 +112,7 @@ const GenderInfo* GenderInfo::getInstance(const Locale& locale, UErrorCode& stat
   // On cache miss, try to create GenderInfo from CLDR data
   result = loadInstance(locale, status);
   if (U_FAILURE(status)) {
-    return nullptr;
+    return NULL;
   }
 
   // Try to put our GenderInfo object in cache. If there is a race condition,
@@ -130,7 +125,7 @@ const GenderInfo* GenderInfo::getInstance(const Locale& locale, UErrorCode& stat
     } else {
       uhash_put(gGenderInfoCache, uprv_strdup(key), (void*) result, &status);
       if (U_FAILURE(status)) {
-        return nullptr;
+        return NULL;
       }
     }
   }
@@ -139,39 +134,33 @@ const GenderInfo* GenderInfo::getInstance(const Locale& locale, UErrorCode& stat
 
 const GenderInfo* GenderInfo::loadInstance(const Locale& locale, UErrorCode& status) {
   LocalUResourceBundlePointer rb(
-      ures_openDirect(nullptr, "genderList", &status));
+      ures_openDirect(NULL, "genderList", &status));
   if (U_FAILURE(status)) {
-    return nullptr;
+    return NULL;
   }
-  LocalUResourceBundlePointer locRes(ures_getByKey(rb.getAlias(), "genderList", nullptr, &status));
+  LocalUResourceBundlePointer locRes(ures_getByKey(rb.getAlias(), "genderList", NULL, &status));
   if (U_FAILURE(status)) {
-    return nullptr;
+    return NULL;
   }
   int32_t resLen = 0;
   const char* curLocaleName = locale.getName();
   UErrorCode key_status = U_ZERO_ERROR;
-  const char16_t* s = ures_getStringByKey(locRes.getAlias(), curLocaleName, &resLen, &key_status);
-  if (s == nullptr) {
+  const UChar* s = ures_getStringByKey(locRes.getAlias(), curLocaleName, &resLen, &key_status);
+  if (s == NULL) {
     key_status = U_ZERO_ERROR;
-    CharString parentLocaleName(curLocaleName, key_status);
-    while (s == nullptr) {
-      {
-        CharString tmp;
-        CharStringByteSink sink(&tmp);
-        ulocimp_getParent(parentLocaleName.data(), sink, &status);
-        if (tmp.isEmpty()) break;
-        parentLocaleName = std::move(tmp);
-      }
+    char parentLocaleName[ULOC_FULLNAME_CAPACITY];
+    uprv_strcpy(parentLocaleName, curLocaleName);
+    while (s == NULL && uloc_getParent(parentLocaleName, parentLocaleName, ULOC_FULLNAME_CAPACITY, &key_status) > 0) {
       key_status = U_ZERO_ERROR;
       resLen = 0;
-      s = ures_getStringByKey(locRes.getAlias(), parentLocaleName.data(), &resLen, &key_status);
+      s = ures_getStringByKey(locRes.getAlias(), parentLocaleName, &resLen, &key_status);
       key_status = U_ZERO_ERROR;
     }
   }
-  if (s == nullptr) {
+  if (s == NULL) {
     return &gObjs[NEUTRAL];
   }
-  char type_str[256] = "";
+  char type_str[256];
   u_UCharsToChars(s, type_str, resLen + 1);
   if (uprv_strcmp(type_str, gNeutralStr) == 0) {
     return &gObjs[NEUTRAL];
@@ -195,8 +184,8 @@ UGender GenderInfo::getListGender(const UGender* genders, int32_t length, UError
   if (length == 1) {
     return genders[0];
   }
-  UBool has_female = false;
-  UBool has_male = false;
+  UBool has_female = FALSE;
+  UBool has_male = FALSE;
   switch (_style) {
     case NEUTRAL:
       return UGENDER_OTHER;
@@ -210,13 +199,13 @@ UGender GenderInfo::getListGender(const UGender* genders, int32_t length, UError
             if (has_male) {
               return UGENDER_OTHER;
             }
-            has_female = true;
+            has_female = TRUE;
             break;
           case UGENDER_MALE:
             if (has_female) {
               return UGENDER_OTHER;
             }
-            has_male = true;
+            has_male = TRUE;
             break;
           default:
             break;

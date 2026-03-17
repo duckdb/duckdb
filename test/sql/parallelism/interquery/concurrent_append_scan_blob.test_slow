@@ -28,7 +28,7 @@ COMMIT
 
 endloop
 
-loop i 0 10000
+loop i 0 100000
 
 onlyif threadid=1
 statement ok

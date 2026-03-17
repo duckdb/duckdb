@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/random_engine.hpp"

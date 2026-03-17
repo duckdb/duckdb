@@ -224,12 +224,6 @@ public:
 	bool operator<(const string_t &r) const {
 		return r > *this;
 	}
-	bool operator<=(const string_t &r) const {
-		return !(r < *this);
-	}
-	bool operator>=(const string_t &r) const {
-		return !(*this < r);
-	}
 
 private:
 	union {

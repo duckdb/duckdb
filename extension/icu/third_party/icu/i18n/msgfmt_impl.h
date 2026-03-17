@@ -26,16 +26,16 @@ U_NAMESPACE_BEGIN
 
 class FormatNameEnumeration : public StringEnumeration {
 public:
-    FormatNameEnumeration(LocalPointer<UVector> fFormatNames, UErrorCode& status);
+    FormatNameEnumeration(UVector *fFormatNames, UErrorCode& status);
     virtual ~FormatNameEnumeration();
-    static UClassID U_EXPORT2 getStaticClassID();
-    virtual UClassID getDynamicClassID() const override;
-    virtual const UnicodeString* snext(UErrorCode& status) override;
-    virtual void reset(UErrorCode& status) override;
-    virtual int32_t count(UErrorCode& status) const override;
+    static UClassID U_EXPORT2 getStaticClassID(void);
+    virtual UClassID getDynamicClassID(void) const;
+    virtual const UnicodeString* snext(UErrorCode& status);
+    virtual void reset(UErrorCode& status);
+    virtual int32_t count(UErrorCode& status) const;
 private:
     int32_t pos;
-    LocalPointer<UVector> fFormatNames;
+    UVector *fFormatNames;
 };
 
 U_NAMESPACE_END

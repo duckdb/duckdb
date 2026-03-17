@@ -33,9 +33,6 @@ public:
 	static void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
 	                                    bool has_null);
 
-	static vector<idx_t> FillProjectionMap(const PhysicalOperator &child,
-	                                       const vector<ProjectionIndex> &projection_map);
-
 public:
 	static void BuildJoinPipelines(Pipeline &current, MetaPipeline &meta_pipeline, PhysicalOperator &op,
 	                               bool build_rhs = true);

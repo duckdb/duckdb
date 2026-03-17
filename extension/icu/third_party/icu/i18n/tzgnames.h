@@ -11,7 +11,7 @@
 
 /**
  * \file 
- * \brief C API: Time zone generic names classes
+ * \brief C API: Time zone generic names classe
  */
 
 #include "unicode/utypes.h"

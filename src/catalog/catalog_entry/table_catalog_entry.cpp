@@ -284,11 +284,10 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.GetColumns().GetColumn(physical_id);
-			auto proj_ref = make_uniq<BoundColumnRefExpression>(
-			    column.Type(), ColumnBinding(get.table_index, ProjectionIndex(get.GetColumnIds().size())));
-			auto proj_index = ColumnBinding::PushExpression(proj.expressions, std::move(proj_ref));
-			update.expressions.push_back(
-			    make_uniq<BoundColumnRefExpression>(column.Type(), ColumnBinding(proj.table_index, proj_index)));
+			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
+			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			    column.Type(), ColumnBinding(get.table_index, get.GetColumnIds().size())));
 			get.AddColumnId(column.Logical().index);
 			update.columns.push_back(physical_id);
 		}

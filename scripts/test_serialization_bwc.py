@@ -111,10 +111,7 @@ def run_test(filename, old_source, new_source, no_exit):
     # generate the serialization
     my_env = os.environ.copy()
     my_env['GEN_PLAN_STORAGE'] = '1'
-    res = subprocess.run(
-        ['python3', 'scripts/ci/run_tests.py', 'build/debug/test/unittest', 'Generate serialized plans file'],
-        env=my_env,
-    ).returncode
+    res = subprocess.run(['build/debug/test/unittest', 'Generate serialized plans file'], env=my_env).returncode
     if res != 0:
         print(f"SKIPPING TEST {filename}")
         return True
@@ -128,9 +125,7 @@ def run_test(filename, old_source, new_source, no_exit):
     # run the verification
     os.chdir(new_source)
 
-    res = subprocess.run(
-        ['python3', 'scripts/ci/run_tests.py', 'build/debug/test/unittest', "Test deserialized plans from file"]
-    ).returncode
+    res = subprocess.run(['build/debug/test/unittest', "Test deserialized plans from file"]).returncode
     if res != 0:
         if no_exit:
             print("BROKEN TEST")

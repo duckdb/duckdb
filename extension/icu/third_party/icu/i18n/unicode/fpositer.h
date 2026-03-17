@@ -96,7 +96,7 @@ public:
 
     /**
      * If the current position is valid, updates the FieldPosition values, advances the iterator,
-     * and returns true, otherwise returns false.
+     * and returns TRUE, otherwise returns FALSE.
      * @stable ICU 4.4
      */
     UBool next(FieldPosition& fp);

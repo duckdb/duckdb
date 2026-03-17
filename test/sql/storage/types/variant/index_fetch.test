@@ -1,9 +1,6 @@
 # name: test/sql/storage/types/variant/index_fetch.test
 # group: [variant]
 
-# TODO: "Force storage" will use default storage version, but variant requires v1.5.0, so skip for now
-require no_force_storage
-
 statement ok
 CREATE TABLE tbl(i INT PRIMARY KEY, v VARIANT);
 

@@ -3,17 +3,16 @@
 # group: [pragma]
 
 # Almost pragma but not quite
-# Result depends on either PostgreSQL parser or PEG Parser used. 
 statement error
 PRAG
 ----
-<REGEX>:(.*Parser Error.*syntax error at or near "PRAG".*|.*Catalog Error: Table with name PRAG does not exist!.*)
+Parser Error: syntax error at or near "PRAG"
 
 # Pragma without a keyword
 statement error
 PRAGMA 
 ----
-<REGEX>:(.*Parser Error.*syntax error at end of input.*|.*Catalog Error: Table with name PRAGMA does not exist!.*)
+<REGEX>:.*Parser Error.*syntax error at end of input.*
 
 # Unknown pragma error
 statement error
@@ -35,3 +34,4 @@ PRAGMA table_info('integers');
 # Parsing also works with extra spaces
 statement ok
   PRAGMA    table_info  ('integers');
+

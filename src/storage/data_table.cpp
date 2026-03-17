@@ -1,5 +1,4 @@
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
@@ -30,7 +29,6 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -881,7 +879,7 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 		                           "a different transaction",
 		                           GetTableName(), TableModification());
 	}
-	chunk.Verify(context.db);
+	chunk.Verify();
 
 	// Insert any row ids into the DELETE ART and verify constraints afterward.
 	// This happens only for the global indexes.
@@ -896,10 +894,10 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 }
 
 void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                            const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool unsafe) {
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	LocalAppendState append_state;
 	InitializeLocalAppend(append_state, table, context, bound_constraints);
-	LocalAppend(append_state, context, chunk, unsafe);
+	LocalAppend(append_state, context, chunk, false);
 	FinalizeLocalAppend(append_state);
 }
 
@@ -1118,7 +1116,7 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 			}
 			SelectionVector sel(start_in_chunk, chunk_count);
 			chunk.Slice(sel, chunk_count);
-			chunk.Verify(GetAttached().GetDatabase());
+			chunk.Verify();
 		}
 		function(chunk);
 		chunk.Reset();
@@ -1129,20 +1127,6 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 void DataTable::MergeStorage(RowGroupCollection &data, optional_ptr<StorageCommitState> commit_state) {
 	row_groups->MergeStorage(data, this, commit_state);
 	row_groups->Verify();
-}
-
-static void GatherBlockIds(WriteAheadLog &log, const PersistentColumnData &column_data,
-                           unordered_set<block_id_t> &block_ids) {
-	for (const auto &pointer : column_data.pointers) {
-		const auto block_id = pointer.block_pointer.block_id;
-		if (block_id != INVALID_BLOCK && log.NewBlockInUse(block_id)) {
-			block_ids.insert(block_id);
-		}
-	}
-	// Recurse into the children.
-	for (const auto &child_column_data : column_data.child_columns) {
-		GatherBlockIds(log, child_column_data, block_ids);
-	}
 }
 
 void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx_t row_start, idx_t count,
@@ -1167,13 +1151,6 @@ void DataTable::WriteToLog(DuckTransaction &transaction, WriteAheadLog &log, idx
 		throw InternalException(
 		    "Optimistically written count cannot exceed actual count (got %llu, but expected count is %llu)",
 		    optimistic_count, count);
-	}
-
-	// Get all the blocks that need to be kept alive as long as the WAL is alive.
-	for (const auto &row_group_data : entry->row_group_data) {
-		for (const auto &column_data : row_group_data.column_data) {
-			GatherBlockIds(log, column_data, commit_state->GetBlockIdsInUse());
-		}
 	}
 
 	// Write any remaining (non-optimistically written) rows to the WAL.
@@ -1601,7 +1578,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
                        const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(column_ids.size() == updates.ColumnCount());
-	updates.Verify(context.db);
+	updates.Verify();
 
 	auto count = updates.size();
 	if (count == 0) {
@@ -1655,7 +1632,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
                              const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(updates.ColumnCount() == 1);
-	updates.Verify(context.db);
+	updates.Verify();
 	if (updates.size() == 0) {
 		return;
 	}
@@ -1767,7 +1744,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	vector<unique_ptr<Expression>> expressions;
 
 	for (const auto column_index : column_indexes) {
-		auto binding = ColumnBinding(TableIndex(0), ProjectionIndex(physical_ids.size()));
+		auto binding = ColumnBinding(0, physical_ids.size());
 		auto &col = columns.GetColumn(column_index);
 		auto ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 		expressions.push_back(std::move(ref));

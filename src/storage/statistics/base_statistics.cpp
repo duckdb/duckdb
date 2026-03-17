@@ -436,43 +436,38 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &deserializer) {
 	return stats;
 }
 
-Value BaseStatistics::ToStruct() const {
-	child_list_t<Value> children;
+string BaseStatistics::ToString() const {
+	auto has_n = has_null ? "true" : "false";
+	auto has_n_n = has_no_null ? "true" : "false";
+	string result =
+	    StringUtil::Format("%s%s", StringUtil::Format("[Has Null: %s, Has No Null: %s]", has_n, has_n_n),
+	                       distinct_count > 0 ? StringUtil::Format("[Approx Unique: %lld]", distinct_count) : "");
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
-		children = NumericStats::ToStruct(*this);
+		result = NumericStats::ToString(*this) + result;
 		break;
 	case StatisticsType::STRING_STATS:
-		children = StringStats::ToStruct(*this);
+		result = StringStats::ToString(*this) + result;
 		break;
 	case StatisticsType::LIST_STATS:
-		children = ListStats::ToStruct(*this);
+		result = ListStats::ToString(*this) + result;
 		break;
 	case StatisticsType::STRUCT_STATS:
-		children = StructStats::ToStruct(*this);
+		result = StructStats::ToString(*this) + result;
 		break;
 	case StatisticsType::ARRAY_STATS:
-		children = ArrayStats::ToStruct(*this);
+		result = ArrayStats::ToString(*this) + result;
 		break;
 	case StatisticsType::GEOMETRY_STATS:
-		children = GeometryStats::ToStruct(*this);
+		result = GeometryStats::ToString(*this) + result;
 		break;
 	case StatisticsType::VARIANT_STATS:
-		children = VariantStats::ToStruct(*this);
+		result = VariantStats::ToString(*this) + result;
 		break;
 	default:
 		break;
 	}
-	children.emplace_back("has_null", Value::BOOLEAN(has_null));
-	children.emplace_back("has_no_null", Value::BOOLEAN(has_no_null));
-	if (distinct_count > 0) {
-		children.emplace_back("approx_unique", Value::UBIGINT(distinct_count));
-	}
-	return Value::STRUCT(std::move(children));
-}
-
-string BaseStatistics::ToString() const {
-	return ToStruct().ToString();
+	return result;
 }
 
 void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count, const bool ignore_has_null) const {

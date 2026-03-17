@@ -14,7 +14,6 @@
 namespace duckdb {
 
 class BlockAllocator;
-class BlockManager;
 class Serializer;
 class Deserializer;
 

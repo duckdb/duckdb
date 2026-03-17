@@ -91,14 +91,4 @@ struct MaxFun {
 	static AggregateFunctionSet GetFunctions();
 };
 
-struct CombineAggrFun {
-	static constexpr const char *Name = "combine_aggr";
-	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Combines exported aggregate states";
-	static constexpr const char *Example = "combine_aggr(state_column)";
-	static constexpr const char *Categories = "";
-
-	static AggregateFunction GetFunction();
-};
-
 } // namespace duckdb

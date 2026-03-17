@@ -1,5 +1,5 @@
 // © 2018 and later: Unicode, Inc. and others.
-// License & terms of use: http://www.unicode.org/copyright.html
+// License & terms of use: http://www.unicode.org/copyright.html#License
 #ifndef __LOCALEBUILDER_H__
 #define __LOCALEBUILDER_H__
 
@@ -12,6 +12,7 @@
 #include "unicode/stringpiece.h"
 #include "unicode/uobject.h"
 
+#ifndef U_HIDE_DRAFT_API
 /**
  * \file
  * \brief C++ API: Builder API for Locale
@@ -56,7 +57,7 @@ class CharString;
  * UErrorCode, then track the error of the validation of the input parameter
  * into the internal UErrorCode.
  *
- * @stable ICU 64
+ * @draft ICU 64
  */
 class U_COMMON_API LocaleBuilder : public UObject {
 public:
@@ -65,13 +66,13 @@ public:
      * fields, extensions, and private use information is the
      * empty string.
      *
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder();
 
     /**
      * Destructor
-     * @stable ICU 64
+     * @draft ICU 64
      */
     virtual ~LocaleBuilder();
 
@@ -85,24 +86,25 @@ public:
      * @param locale the locale
      * @return This builder.
      *
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& setLocale(const Locale& locale);
 
     /**
-     * Resets the LocaleBuilder to match the provided IETF BCP 47 language tag.
-     * Discards the existing state.
-     * The empty string causes the builder to be reset, like {@link #clear}.
-     * Legacy language tags (marked as “Type: grandfathered” in BCP 47)
-     * are converted to their canonical form before being processed.
-     * Otherwise, the <code>language tag</code> must be well-formed,
-     * or else the build() method will later report an U_ILLEGAL_ARGUMENT_ERROR.
+     * Resets the LocaleBuilder to match the provided
+     * [Unicode Locale Identifier](http://www.unicode.org/reports/tr35/tr35.html#unicode_locale_id) .
+     * Discards the existing state. the empty string cause the builder to be
+     * reset, like {@link #clear}.  Grandfathered tags are converted to their
+     * canonical form before being processed.  Otherwise, the <code>language
+     * tag</code> must be well-formed, or else the build() method will later
+     * report an U_ILLEGAL_ARGUMENT_ERROR.
      *
      * <p>This method clears the internal UErrorCode.
      *
-     * @param tag the language tag, defined as IETF BCP 47 language tag.
+     * @param tag the language tag, defined as
+     *   [unicode_locale_id](http://www.unicode.org/reports/tr35/tr35.html#unicode_locale_id).
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& setLanguageTag(StringPiece tag);
 
@@ -117,7 +119,7 @@ public:
      *
      * @param language the language
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& setLanguage(StringPiece language);
 
@@ -133,7 +135,7 @@ public:
      *
      * @param script the script
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& setScript(StringPiece script);
 
@@ -152,7 +154,7 @@ public:
      *
      * @param region the region
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& setRegion(StringPiece region);
 
@@ -173,7 +175,7 @@ public:
      *
      * @param variant the variant
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& setVariant(StringPiece variant);
 
@@ -194,7 +196,7 @@ public:
      * @param key the extension key
      * @param value the extension value
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& setExtension(char key, StringPiece value);
 
@@ -214,7 +216,7 @@ public:
      * @param key the Unicode locale key
      * @param type the Unicode locale type
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& setUnicodeLocaleKeyword(
         StringPiece key, StringPiece type);
@@ -227,7 +229,7 @@ public:
      *
      * @param attribute the attribute
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& addUnicodeLocaleAttribute(StringPiece attribute);
 
@@ -240,7 +242,7 @@ public:
      *
      * @param attribute the attribute
      * @return This builder.
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& removeUnicodeLocaleAttribute(StringPiece attribute);
 
@@ -249,7 +251,7 @@ public:
      * <p>This method clears the internal UErrorCode.
      *
      * @return this builder
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& clear();
 
@@ -258,7 +260,7 @@ public:
      * Language, script, region and variant are unchanged.
      *
      * @return this builder
-     * @stable ICU 64
+     * @draft ICU 64
      */
     LocaleBuilder& clearExtensions();
 
@@ -273,20 +275,22 @@ public:
      * the same builder to build more locales.
      *
      * @return a new Locale
-     * @stable ICU 64
+     * @draft ICU 64
      */
     Locale build(UErrorCode& status);
 
+#ifndef U_HIDE_DRAFT_API
     /**
      * Sets the UErrorCode if an error occurred while recording sets.
      * Preserves older error codes in the outErrorCode.
      * @param outErrorCode Set to an error code that occurred while setting subtags.
      *                  Unchanged if there is no such error or if outErrorCode
      *                  already contained an error.
-     * @return true if U_FAILURE(outErrorCode)
-     * @stable ICU 65
+     * @return TRUE if U_FAILURE(outErrorCode)
+     * @draft ICU 65
      */
     UBool copyErrorTo(UErrorCode &outErrorCode) const;
+#endif  /* U_HIDE_DRAFT_API */
 
 private:
     friend class LocaleMatcher::Result;
@@ -303,6 +307,8 @@ private:
 };
 
 U_NAMESPACE_END
+
+#endif  // U_HIDE_DRAFT_API
 
 #endif /* U_SHOW_CPLUSPLUS_API */
 

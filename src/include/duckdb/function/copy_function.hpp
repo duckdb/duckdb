@@ -218,9 +218,6 @@ public:
 
 	//! Additional function info, passed to the bind
 	shared_ptr<CopyFunctionInfo> function_info;
-
-	//! Whether this copy function supports writing SQLNULL (e.g. Parquet UNKNOWN/NullType)
-	bool supports_sql_null = false;
 };
 
 } // namespace duckdb

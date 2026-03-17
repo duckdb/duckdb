@@ -204,21 +204,21 @@ int32_t PropNameData::findPropertyValueNameGroup(int32_t valueMapIndex, int32_t 
 const char *PropNameData::getName(const char *nameGroup, int32_t nameIndex) {
     int32_t numNames=*nameGroup++;
     if(nameIndex<0 || numNames<=nameIndex) {
-        return nullptr;
+        return NULL;
     }
     // Skip nameIndex names.
     for(; nameIndex>0; --nameIndex) {
         nameGroup=uprv_strchr(nameGroup, 0)+1;
     }
     if(*nameGroup==0) {
-        return nullptr;  // no name (Property[Value]Aliases.txt has "n/a")
+        return NULL;  // no name (Property[Value]Aliases.txt has "n/a")
     }
     return nameGroup;
 }
 
 UBool PropNameData::containsName(BytesTrie &trie, const char *name) {
-    if(name==nullptr) {
-        return false;
+    if(name==NULL) {
+        return FALSE;
     }
     UStringTrieResult result=USTRINGTRIE_NO_VALUE;
     char c;
@@ -229,7 +229,7 @@ UBool PropNameData::containsName(BytesTrie &trie, const char *name) {
             continue;
         }
         if(!USTRINGTRIE_HAS_NEXT(result)) {
-            return false;
+            return FALSE;
         }
         result=trie.next((uint8_t)c);
     }
@@ -239,7 +239,7 @@ UBool PropNameData::containsName(BytesTrie &trie, const char *name) {
 const char *PropNameData::getPropertyName(int32_t property, int32_t nameChoice) {
     int32_t valueMapIndex=findProperty(property);
     if(valueMapIndex==0) {
-        return nullptr;  // Not a known property.
+        return NULL;  // Not a known property.
     }
     return getName(nameGroups+valueMaps[valueMapIndex], nameChoice);
 }
@@ -247,11 +247,11 @@ const char *PropNameData::getPropertyName(int32_t property, int32_t nameChoice) 
 const char *PropNameData::getPropertyValueName(int32_t property, int32_t value, int32_t nameChoice) {
     int32_t valueMapIndex=findProperty(property);
     if(valueMapIndex==0) {
-        return nullptr;  // Not a known property.
+        return NULL;  // Not a known property.
     }
     int32_t nameGroupOffset=findPropertyValueNameGroup(valueMaps[valueMapIndex+1], value);
     if(nameGroupOffset==0) {
-        return nullptr;
+        return NULL;
     }
     return getName(nameGroups+nameGroupOffset, nameChoice);
 }
@@ -289,10 +289,7 @@ U_NAMESPACE_END
 
 U_CAPI const char* U_EXPORT2
 u_getPropertyName(UProperty property,
-                  UPropertyNameChoice nameChoice) UPRV_NO_SANITIZE_UNDEFINED {
-    // The nameChoice is really an integer with a couple of named constants.
-    // Unicode allows for names other than short and long ones.
-    // If present, these will be returned for U_LONG_PROPERTY_NAME + i, where i=1, 2,...
+                  UPropertyNameChoice nameChoice) {
     U_NAMESPACE_USE
     return PropNameData::getPropertyName(property, nameChoice);
 }
@@ -306,10 +303,7 @@ u_getPropertyEnum(const char* alias) {
 U_CAPI const char* U_EXPORT2
 u_getPropertyValueName(UProperty property,
                        int32_t value,
-                       UPropertyNameChoice nameChoice) UPRV_NO_SANITIZE_UNDEFINED {
-    // The nameChoice is really an integer with a couple of named constants.
-    // Unicode allows for names other than short and long ones.
-    // If present, these will be returned for U_LONG_PROPERTY_NAME + i, where i=1, 2,...
+                       UPropertyNameChoice nameChoice) {
     U_NAMESPACE_USE
     return PropNameData::getPropertyValueName(property, value, nameChoice);
 }

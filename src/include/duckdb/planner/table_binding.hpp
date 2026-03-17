@@ -34,8 +34,7 @@ enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY, CTE };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names,
-	        TableIndex index);
+	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index);
 	virtual ~Binding() = default;
 
 public:
@@ -49,7 +48,7 @@ public:
 
 	BindingType GetBindingType();
 	const BindingAlias &GetBindingAlias();
-	TableIndex GetIndex();
+	idx_t GetIndex();
 	const vector<LogicalType> &GetColumnTypes();
 	const vector<string> &GetColumnNames();
 	idx_t GetColumnCount();
@@ -84,7 +83,7 @@ protected:
 	//! The alias of the binding
 	BindingAlias alias;
 	//! The table index of the binding
-	TableIndex index;
+	idx_t index;
 	//! The types of the bound columns
 	vector<LogicalType> types;
 	//! Column names of the subquery
@@ -98,7 +97,7 @@ public:
 	static constexpr const BindingType TYPE = BindingType::CATALOG_ENTRY;
 
 public:
-	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, TableIndex index,
+	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index,
 	             StandardEntry &entry);
 	StandardEntry &entry;
 
@@ -114,7 +113,7 @@ public:
 
 public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
-	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, TableIndex index,
+	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
 	             virtual_column_map_t virtual_columns);
 
 	//! A reference to the set of bound column ids
@@ -188,8 +187,8 @@ public:
 	static constexpr const BindingType TYPE = BindingType::CTE;
 
 public:
-	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, TableIndex index, CTEType type);
-	CTEBinding(BindingAlias alias, shared_ptr<CTEBindState> bind_state, TableIndex index);
+	CTEBinding(BindingAlias alias, vector<LogicalType> types, vector<string> names, idx_t index, CTEType type);
+	CTEBinding(BindingAlias alias, shared_ptr<CTEBindState> bind_state, idx_t index);
 
 public:
 	bool CanBeReferenced() const;

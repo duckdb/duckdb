@@ -10,6 +10,7 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -259,10 +260,10 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
 }
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &client,
-                                                        WindowSharedExpressions &shared) {
+                                                        WindowSharedExpressions &shared, WindowAggregationMode mode) {
 	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_AGGREGATE:
-		return make_uniq<WindowAggregateExecutor>(wexpr, client, shared);
+		return make_uniq<WindowAggregateExecutor>(wexpr, client, shared, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		return make_uniq<WindowRowNumberExecutor>(wexpr, shared);
 	case ExpressionType::WINDOW_RANK_DENSE:
@@ -297,10 +298,11 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 	D_ASSERT(op.select_list[op.order_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 	auto &wexpr = op.select_list[op.order_idx]->Cast<BoundWindowExpression>();
 
+	const auto mode = Settings::Get<DebugWindowModeSetting>(client);
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
-		auto wexec = WindowExecutorFactory(wexpr, client, shared);
+		auto wexec = WindowExecutorFactory(wexpr, client, shared, mode);
 		executors.emplace_back(std::move(wexec));
 	}
 
@@ -881,7 +883,7 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 }
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
-	annotated_lock_guard<annotated_mutex> guard(lock);
+	auto guard = Lock();
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -893,7 +895,7 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	for (const auto &group_idx : active_groups) {
 		auto &window_hash_group = window_hash_groups[group_idx];
 		if (window_hash_group->TryPrepareNextStage()) {
-			UnblockTasks();
+			UnblockTasks(guard);
 		}
 		if (window_hash_group->TryNextTask(task_local)) {
 			task = task_local;
@@ -909,7 +911,7 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 
 		auto &window_hash_group = window_hash_groups[group_idx];
 		if (window_hash_group->TryPrepareNextStage()) {
-			UnblockTasks();
+			UnblockTasks(guard);
 		}
 		if (!window_hash_group->TryNextTask(task_local)) {
 			//	Group has no tasks (empty?)
@@ -1024,7 +1026,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 		executor.Evaluate(context, position, eval_chunk, result, sink);
 	}
 	output_chunk.SetCardinality(input_chunk);
-	output_chunk.Verify(context.client.db);
+	output_chunk.Verify();
 
 	idx_t out_idx = 0;
 	result.SetCardinality(input_chunk);
@@ -1038,7 +1040,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	// Move to the next chunk
 	++task->begin_idx;
 
-	result.Verify(context.client.db);
+	result.Verify();
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
@@ -1120,15 +1122,15 @@ SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, Data
 				throw;
 			}
 		} else {
-			annotated_lock_guard<annotated_mutex> guard(gsource.lock);
+			auto guard = gsource.Lock();
 			if (!gsource.HasMoreTasks()) {
 				// no more tasks - exit
-				gsource.UnblockTasks();
+				gsource.UnblockTasks(guard);
 				break;
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source
-				return gsource.BlockSource(source.interrupt_state);
+				return gsource.BlockSource(guard, source.interrupt_state);
 			}
 		}
 	}

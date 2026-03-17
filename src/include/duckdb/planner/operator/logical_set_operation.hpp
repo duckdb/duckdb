@@ -13,20 +13,20 @@
 namespace duckdb {
 
 class LogicalSetOperation : public LogicalOperator {
-	LogicalSetOperation(TableIndex table_index, idx_t column_count, LogicalOperatorType type, bool setop_all,
+	LogicalSetOperation(idx_t table_index, idx_t column_count, LogicalOperatorType type, bool setop_all,
 	                    bool allow_out_of_order);
 
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INVALID;
 
 public:
-	LogicalSetOperation(TableIndex table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
+	LogicalSetOperation(idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type, bool setop_all,
 	                    bool allow_out_of_order = true);
-	LogicalSetOperation(TableIndex table_index, idx_t column_count, vector<unique_ptr<LogicalOperator>> children,
+	LogicalSetOperation(idx_t table_index, idx_t column_count, vector<unique_ptr<LogicalOperator>> children,
 	                    LogicalOperatorType type, bool setop_all, bool allow_out_of_order = true);
 
-	TableIndex table_index;
+	idx_t table_index;
 	idx_t column_count;
 	bool setop_all;
 	//! Whether or not UNION statements can be executed out of order
@@ -40,7 +40,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	vector<TableIndex> GetTableIndex() const override;
+	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

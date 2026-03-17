@@ -4,8 +4,7 @@
 // bytesinkutil.h
 // created: 2017sep14 Markus W. Scherer
 
-#ifndef BYTESINKUTIL_H
-#define BYTESINKUTIL_H
+#pragma once
 
 #include "unicode/utypes.h"
 #include "unicode/bytestream.h"
@@ -48,9 +47,9 @@ public:
     static UBool appendUnchanged(const uint8_t *s, int32_t length,
                                  ByteSink &sink, uint32_t options, Edits *edits,
                                  UErrorCode &errorCode) {
-        if (U_FAILURE(errorCode)) { return false; }
+        if (U_FAILURE(errorCode)) { return FALSE; }
         if (length > 0) { appendNonEmptyUnchanged(s, length, sink, options, edits); }
-        return true;
+        return TRUE;
     }
 
     static UBool appendUnchanged(const uint8_t *s, const uint8_t *limit,
@@ -84,5 +83,3 @@ private:
 };
 
 U_NAMESPACE_END
-
-#endif //BYTESINKUTIL_H

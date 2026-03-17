@@ -3,7 +3,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/index_map.hpp"
-#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/database.hpp"
@@ -24,8 +23,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
-#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 

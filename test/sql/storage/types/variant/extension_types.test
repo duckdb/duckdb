@@ -14,7 +14,7 @@ INSERT into tbl select '127.0.0.1'::INET
 query I
 select * from tbl
 ----
-{'address': 2130706433, 'ip_type': 1, 'mask': 32}
+{'ip_type': 1, 'address': 2130706433, 'mask': 32}
 
 query I
 select COLUMNS(*)::INET from tbl

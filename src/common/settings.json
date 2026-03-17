@@ -201,23 +201,19 @@
         ]
     },
     {
-        "name": "configure_profiling",
-        "description": "Accepts a JSON enabling custom metrics",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true,
-        "aliases": [
-            "custom_profiling_settings",
-            "configure_metrics"
-        ]
-    },
-    {
         "name": "custom_extension_repository",
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "VARCHAR",
         "internal_setting": "custom_extension_repo",
         "scope": "global",
         "default_value": ""
+    },
+    {
+        "name": "custom_profiling_settings",
+        "description": "Accepts a JSON enabling custom metrics",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "custom_user_agent",
@@ -768,13 +764,6 @@
         "custom_implementation": true
     },
     {
-        "name": "max_execution_time",
-        "description": "The maximum execution time per query in milliseconds (0 = no limit)",
-        "type": "BIGINT",
-        "scope": "local",
-        "default_value": "0"
-    },
-    {
         "name": "max_expression_depth",
         "description": "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep \"\n\t    \"expressions might lead to stack overflow errors.",
         "type": "UBIGINT",
@@ -825,13 +814,6 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
-    },
-    {
-        "name": "operator_memory_limit",
-        "description": "The maximum memory for query intermediates (sorts, hash tables) per connection (e.g. 256MB)",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
     },
     {
         "name": "order_by_non_integer_literal",

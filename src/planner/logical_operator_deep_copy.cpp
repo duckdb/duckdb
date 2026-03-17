@@ -22,42 +22,42 @@ unique_ptr<LogicalOperator> LogicalOperatorDeepCopy::DeepCopy(unique_ptr<duckdb:
 // reduces the amount of code significantly.
 template <typename T>
 struct TableIndexAccessor {
-	static TableIndex &Get(T &plan) {
+	static idx_t &Get(T &plan) {
 		return plan.table_index; // default
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalAggregate> {
-	static vector<reference<TableIndex>> Get(LogicalAggregate &plan) {
+	static vector<reference<idx_t>> Get(LogicalAggregate &plan) {
 		return {std::ref(plan.group_index), std::ref(plan.aggregate_index), std::ref(plan.groupings_index)};
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalWindow> {
-	static TableIndex &Get(LogicalWindow &plan) {
+	static idx_t &Get(LogicalWindow &plan) {
 		return plan.window_index;
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalUnnest> {
-	static TableIndex &Get(LogicalUnnest &plan) {
+	static idx_t &Get(LogicalUnnest &plan) {
 		return plan.unnest_index;
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalPivot> {
-	static TableIndex &Get(LogicalPivot &plan) {
+	static idx_t &Get(LogicalPivot &plan) {
 		return plan.pivot_index;
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalJoin> {
-	static TableIndex &Get(LogicalJoin &plan) {
+	static idx_t &Get(LogicalJoin &plan) {
 		return plan.mark_index;
 	}
 };
@@ -66,8 +66,8 @@ struct TableIndexAccessor<LogicalJoin> {
 template <typename T>
 void LogicalOperatorDeepCopy::ReplaceTableIndex(LogicalOperator &op) {
 	auto &plan = op.Cast<T>();
-	auto &field = TableIndexAccessor<T>::Get(plan);
-	auto new_idx = binder.GenerateTableIndex();
+	idx_t &field = TableIndexAccessor<T>::Get(plan);
+	idx_t new_idx = binder.GenerateTableIndex();
 	table_idx_replacements[field] = new_idx;
 	field = new_idx;
 }
@@ -77,8 +77,8 @@ template <typename T>
 void LogicalOperatorDeepCopy::ReplaceTableIndexMulti(LogicalOperator &op) {
 	auto &plan = op.Cast<T>();
 	for (auto &field_ref : TableIndexAccessor<T>::Get(plan)) {
-		auto &field = field_ref.get();
-		auto new_idx = binder.GenerateTableIndex();
+		idx_t &field = field_ref.get();
+		idx_t new_idx = binder.GenerateTableIndex();
 		table_idx_replacements[field] = new_idx;
 		field = new_idx;
 	}
@@ -187,7 +187,7 @@ void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
 	}
 }
 
-TableBindingReplacer::TableBindingReplacer(unordered_map<TableIndex, TableIndex> &table_idx_replacements,
+TableBindingReplacer::TableBindingReplacer(std::unordered_map<idx_t, idx_t> &table_idx_replacements,
                                            optional_ptr<bound_parameter_map_t> parameter_data)
     : table_idx_replacements(table_idx_replacements), parameter_data(parameter_data) {
 }

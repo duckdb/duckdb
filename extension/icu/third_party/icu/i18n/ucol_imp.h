@@ -41,10 +41,10 @@
  *  rules must be equivalent.
  *  @param source first collator
  *  @param target second collator
- *  @return true or false
+ *  @return TRUE or FALSE
  *  @internal ICU 3.0
  */
-U_CAPI UBool U_EXPORT2
+U_INTERNAL UBool U_EXPORT2
 ucol_equals(const UCollator *source, const UCollator *target);
 
 /**

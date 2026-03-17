@@ -27,7 +27,7 @@
 #include "ustr_cnv.h"
 
 U_CAPI UResourceBundle * U_EXPORT2
-ures_openU(const char16_t *myPath,
+ures_openU(const UChar *myPath, 
            const char *localeID, 
            UErrorCode *status)
 {
@@ -35,17 +35,17 @@ ures_openU(const char16_t *myPath,
     int32_t length;
     char *path = pathBuffer;
 
-    if(status==nullptr || U_FAILURE(*status)) {
-        return nullptr;
+    if(status==NULL || U_FAILURE(*status)) {
+        return NULL;
     }
-    if(myPath==nullptr) {
-        path = nullptr;
+    if(myPath==NULL) {
+        path = NULL;
     }
     else {
         length=u_strlen(myPath);
         if(length>=(int32_t)sizeof(pathBuffer)) {
             *status=U_ILLEGAL_ARGUMENT_ERROR;
-            return nullptr;
+            return NULL;
         } else if(uprv_isInvariantUString(myPath, length)) {
             /*
              * the invariant converter is sufficient for package and tree names
@@ -59,17 +59,17 @@ ures_openU(const char16_t *myPath,
             length=ucnv_fromUChars(cnv, path, (int32_t)sizeof(pathBuffer), myPath, length, status);
             u_releaseDefaultConverter(cnv);
             if(U_FAILURE(*status)) {
-                return nullptr;
+                return NULL;
             }
             if(length>=(int32_t)sizeof(pathBuffer)) {
                 /* not NUL-terminated - path too long */
                 *status=U_ILLEGAL_ARGUMENT_ERROR;
-                return nullptr;
+                return NULL;
             }
 #else
             /* the default converter is not available */
             *status=U_UNSUPPORTED_ERROR;
-            return nullptr;
+            return NULL;
 #endif
         }
     }

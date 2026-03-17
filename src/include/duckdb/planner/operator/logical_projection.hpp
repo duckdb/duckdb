@@ -18,20 +18,17 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PROJECTION;
 
 public:
-	LogicalProjection(TableIndex table_index, vector<unique_ptr<Expression>> select_list);
+	LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list);
 
-	TableIndex table_index;
+	idx_t table_index;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	vector<TableIndex> GetTableIndex() const override;
+	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
-
-	const Expression &GetExpression(ColumnBinding binding) const;
-	const Expression &GetExpression(ProjectionIndex proj_index) const;
 
 protected:
 	void ResolveTypes() override;

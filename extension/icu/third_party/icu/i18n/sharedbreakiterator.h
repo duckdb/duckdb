@@ -38,8 +38,8 @@ public:
     BreakIterator &operator*() const { return *ptr; }
 private:
     BreakIterator *ptr;
-    SharedBreakIterator(const SharedBreakIterator &) = delete;
-    SharedBreakIterator &operator=(const SharedBreakIterator &) = delete;
+    SharedBreakIterator(const SharedBreakIterator &);
+    SharedBreakIterator &operator=(const SharedBreakIterator &);
 };
 
 U_NAMESPACE_END

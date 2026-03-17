@@ -1,9 +1,7 @@
 [
   {
     "class": "LogicalTypeModifier",
-    "includes": [
-      "duckdb/common/extension_type_info.hpp"
-    ],
+    "includes": [ "duckdb/common/extension_type_info.hpp" ],
     "members": [
       {
         "id": 100,
@@ -17,15 +15,11 @@
       }
     ],
     "pointer_type": "none",
-    "constructor": [
-      "value"
-    ]
+    "constructor": ["value"]
   },
   {
     "class": "ExtensionTypeInfo",
-    "includes": [
-      "duckdb/common/extension_type_info.hpp"
-    ],
+    "includes": [ "duckdb/common/extension_type_info.hpp" ],
     "members": [
       {
         "id": 100,
@@ -125,9 +119,9 @@
     ]
   },
   {
-    "class": "LegacyAggregateStateTypeInfo",
+    "class": "AggregateStateTypeInfo",
     "base": "ExtraTypeInfo",
-    "enum": "LEGACY_AGGREGATE_STATE_TYPE_INFO",
+    "enum": "AGGREGATE_STATE_TYPE_INFO",
     "members": [
       {
         "id": 200,
@@ -150,42 +144,6 @@
     ]
   },
   {
-    "class": "AggregateStateTypeInfo",
-    "base": "ExtraTypeInfo",
-    "enum": "AGGREGATE_STATE_TYPE_INFO",
-    "ignore_clang_tidy_rules": [
-      {
-        "name": "bugprone-parent-virtual-call",
-        "reason": "Multi-level inheritance is not supported in the generation tool"
-      }
-    ],
-    "members": [
-      {
-        "id": 300,
-        "name": "function_name",
-        "type": "string",
-        "property": "state_type.function_name"
-      },
-      {
-        "id": 301,
-        "name": "return_type",
-        "type": "LogicalType",
-        "property": "state_type.return_type"
-      },
-      {
-        "id": 302,
-        "name": "bound_argument_types",
-        "type": "vector<LogicalType>",
-        "property": "state_type.bound_argument_types"
-      },
-      {
-        "id": 303,
-        "name": "child_types",
-        "type": "child_list_t<LogicalType>"
-      }
-    ]
-  },
-  {
     "class": "ArrayTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "ARRAY_TYPE_INFO",
@@ -201,10 +159,7 @@
         "type": "uint32_t"
       }
     ],
-    "constructor": [
-      "child_type",
-      "size"
-    ]
+    "constructor": ["child_type", "size"]
   },
   {
     "class": "EnumTypeInfo",

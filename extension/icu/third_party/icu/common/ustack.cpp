@@ -35,16 +35,17 @@ UStack::UStack(UObjectDeleter *d, UElementsAreEqual *c, int32_t initialCapacity,
 
 UStack::~UStack() {}
 
-void* UStack::pop() {
+void* UStack::pop(void) {
     int32_t n = size() - 1;
-    void* result = nullptr;
+    void* result = 0;
     if (n >= 0) {
-        result = orphanElementAt(n);
+        result = elementAt(n);
+        removeElementAt(n);
     }
     return result;
 }
 
-int32_t UStack::popi() {
+int32_t UStack::popi(void) {
     int32_t n = size() - 1;
     int32_t result = 0;
     if (n >= 0) {

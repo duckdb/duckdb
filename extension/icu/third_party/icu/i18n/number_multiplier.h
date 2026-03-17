@@ -25,7 +25,7 @@ class U_I18N_API MultiplierFormatHandler : public MicroPropsGenerator, public UM
     void setAndChain(const Scale& multiplier, const MicroPropsGenerator* parent);
 
     void processQuantity(DecimalQuantity& quantity, MicroProps& micros,
-                         UErrorCode& status) const override;
+                         UErrorCode& status) const U_OVERRIDE;
 
   private:
     Scale fMultiplier;

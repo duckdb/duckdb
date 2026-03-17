@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
@@ -94,7 +95,8 @@ static bool ExprIsFunctionOnlyOf(const Expression &expr, const expression_set_t 
 //! the left and right table respectively, then pushdown `P(l)` to the left
 //! table, `P(r)` to the right table, and remove the original filter.
 static bool
-PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters, vector<JoinCondition> &join_conditions,
+PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters,
+                                        const vector<JoinCondition> &join_conditions,
                                         const std::function<void(unique_ptr<Expression> filter)> &pushdown_left,
                                         const std::function<void(unique_ptr<Expression> filter)> &pushdown_right) {
 	// Generate set of all possible coalesced join keys expressions to later
@@ -103,13 +105,11 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters, vec
 	    join_cond_by_coalesced_join_keys;
 
 	for (auto &cond : join_conditions) {
-		if (cond.IsComparison() && cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL) {
-			auto &left = cond.GetLHS();
-			auto &right = cond.GetRHS();
-			auto coalesce_left_right = FlattenedCoalesce::Of({std::ref(left), std::ref(right)});
-			auto coalesce_right_left = FlattenedCoalesce::Of({std::ref(right), std::ref(left)});
-			join_cond_by_coalesced_join_keys.emplace(coalesce_left_right, std::ref(cond));
-			join_cond_by_coalesced_join_keys.emplace(coalesce_right_left, std::ref(cond));
+		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
+			auto left = std::ref(*cond.left);
+			auto right = std::ref(*cond.right);
+			auto coalesce_left_right = FlattenedCoalesce::Of({left, right});
+			auto coalesce_right_left = FlattenedCoalesce::Of({right, left});
 			join_cond_by_coalesced_join_keys.emplace(coalesce_left_right, std::ref(cond));
 			join_cond_by_coalesced_join_keys.emplace(coalesce_right_left, std::ref(cond));
 		}
@@ -159,8 +159,8 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters, vec
 			continue;
 		}
 
-		auto left_filter = ReplaceIn(filter->Copy(), coalesce_exprs_to_replace, join_cond_ptr->GetLHS());
-		auto right_filter = ReplaceIn(filter->Copy(), coalesce_exprs_to_replace, join_cond_ptr->GetRHS());
+		auto left_filter = ReplaceIn(filter->Copy(), coalesce_exprs_to_replace, *join_cond_ptr->left);
+		auto right_filter = ReplaceIn(filter->Copy(), coalesce_exprs_to_replace, *join_cond_ptr->right);
 		pushdown_left(std::move(left_filter));
 		pushdown_right(std::move(right_filter));
 		filters.erase_at(i);
@@ -172,8 +172,8 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters, vec
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<LogicalOperator> op,
-                                                              unordered_set<TableIndex> &left_bindings,
-                                                              unordered_set<TableIndex> &right_bindings) {
+                                                              unordered_set<idx_t> &left_bindings,
+                                                              unordered_set<idx_t> &right_bindings) {
 	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return FinishPushdown(std::move(op));
 	}

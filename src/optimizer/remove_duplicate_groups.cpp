@@ -32,10 +32,10 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 
 	auto &groups = aggr.groups;
 
-	column_binding_map_t<ProjectionIndex> duplicate_map;
-	vector<pair<ProjectionIndex, ProjectionIndex>> duplicates;
-	for (auto group_idx : ProjectionIndex::GetIndexes(groups.size())) {
-		const auto &group = groups[group_idx.index];
+	column_binding_map_t<idx_t> duplicate_map;
+	vector<pair<idx_t, idx_t>> duplicates;
+	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
+		const auto &group = groups[group_idx];
 		if (group->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue;
 		}
@@ -55,16 +55,14 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 
 	// Sort duplicates by max duplicate group idx, because we want to remove groups from the back
 	sort(duplicates.begin(), duplicates.end(),
-	     [](const pair<ProjectionIndex, ProjectionIndex> &lhs, const pair<ProjectionIndex, ProjectionIndex> &rhs) {
-		     return lhs.second > rhs.second;
-	     });
+	     [](const pair<idx_t, idx_t> &lhs, const pair<idx_t, idx_t> &rhs) { return lhs.second > rhs.second; });
 
 	// Now we want to remove the duplicates, but this alters the column bindings coming out of the aggregate,
 	// so we keep track of how they shift and do another round of column binding replacements
 	column_binding_map_t<ColumnBinding> group_binding_map;
-	for (auto group_idx : ProjectionIndex::GetIndexes(groups.size())) {
-		ColumnBinding group_binding(aggr.group_index, group_idx);
-		group_binding_map.emplace(group_binding, group_binding);
+	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
+		group_binding_map.emplace(ColumnBinding(aggr.group_index, group_idx),
+		                          ColumnBinding(aggr.group_index, group_idx));
 	}
 
 	for (idx_t duplicate_idx = 0; duplicate_idx < duplicates.size(); duplicate_idx++) {
@@ -73,8 +71,8 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		const auto &removed_idx = duplicate.second;
 
 		// Store expression and remove it from groups
-		stored_expressions.emplace_back(std::move(groups[removed_idx.index]));
-		groups.erase_at(removed_idx.index);
+		stored_expressions.emplace_back(std::move(groups[removed_idx]));
+		groups.erase_at(removed_idx);
 
 		// This optimizer should run before statistics propagation, so this should be empty
 		// If it runs after, then group_stats should be updated too
@@ -88,7 +86,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 			}
 
 			// Indices shifted: Reinsert groups in the set with group_idx - 1
-			vector<ProjectionIndex> group_indices_to_reinsert;
+			vector<idx_t> group_indices_to_reinsert;
 			for (auto &entry : grouping_set) {
 				if (entry > removed_idx) {
 					group_indices_to_reinsert.emplace_back(entry);
@@ -98,7 +96,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 				grouping_set.erase(group_idx);
 			}
 			for (const auto group_idx : group_indices_to_reinsert) {
-				grouping_set.insert(ProjectionIndex(group_idx.index - 1));
+				grouping_set.insert(group_idx - 1);
 			}
 		}
 
@@ -110,7 +108,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		for (auto &map_entry : group_binding_map) {
 			auto &new_binding = map_entry.second;
 			if (new_binding.column_index > removed_idx) {
-				new_binding.column_index.index--;
+				new_binding.column_index--;
 			}
 		}
 	}

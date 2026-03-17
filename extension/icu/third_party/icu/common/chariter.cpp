@@ -85,14 +85,14 @@ CharacterIterator::operator=(const CharacterIterator &that) {
 
 // implementing first[32]PostInc() directly in a subclass should be faster
 // but these implementations make subclassing a little easier
-char16_t
-CharacterIterator::firstPostInc() {
+UChar
+CharacterIterator::firstPostInc(void) {
     setToStart();
     return nextPostInc();
 }
 
 UChar32
-CharacterIterator::first32PostInc() {
+CharacterIterator::first32PostInc(void) {
     setToStart();
     return next32PostInc();
 }

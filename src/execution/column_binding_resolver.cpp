@@ -19,48 +19,39 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		// special case: comparison join
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
-
+		// first get the bindings of the LHS and resolve the LHS expressions
 		VisitOperator(*comp_join.children[0]);
-		auto left_bindings = bindings;
-		auto left_types = types;
 		for (auto &cond : comp_join.conditions) {
-			if (cond.IsComparison()) {
-				VisitExpression(&cond.LeftReference());
-			}
+			VisitExpression(&cond.left);
 		}
-
+		// visit the duplicate eliminated columns on the LHS, if any
 		for (auto &expr : comp_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
 		}
-
+		// then get the bindings of the RHS and resolve the RHS expressions
 		VisitOperator(*comp_join.children[1]);
-		auto right_bindings = bindings;
-		auto right_types = types;
 		for (auto &cond : comp_join.conditions) {
-			if (cond.IsComparison()) {
-				VisitExpression(&cond.RightReference());
-			}
+			VisitExpression(&cond.right);
 		}
-
-		// combine bindings to resolve predicate
-		auto combined_bindings = left_bindings;
-		combined_bindings.insert(combined_bindings.end(), right_bindings.begin(), right_bindings.end());
-		auto combined_types = left_types;
-		combined_types.insert(combined_types.end(), right_types.begin(), right_types.end());
-
-		bindings = combined_bindings;
-		types = combined_types;
-		for (auto &cond : comp_join.conditions) {
-			if (!cond.IsComparison()) {
-				VisitExpression(&cond.JoinExpressionReference());
-			}
-		}
-
-		// update to join output bindings
+		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
 		types = op.types;
-
+		// resolve any mixed predicates
+		// for now, only ASOF supports this.
+		if (comp_join.predicate) {
+			D_ASSERT(op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+			//	If this is a SEMI or ANTI join and we have an arbitrary predicate,
+			//	we need to include the bindings of the RHS
+			if (comp_join.join_type == JoinType::SEMI || comp_join.join_type == JoinType::ANTI) {
+				auto right_bindings = op.children[1]->GetColumnBindings();
+				bindings.insert(bindings.end(), right_bindings.begin(), right_bindings.end());
+				auto &right_types = op.children[1]->types;
+				types.insert(types.end(), right_types.begin(), right_types.end());
+			}
+			VisitExpression(&comp_join.predicate);
+		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
@@ -69,7 +60,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &delim_side = comp_join.delim_flipped ? *comp_join.children[1] : *comp_join.children[0];
 		VisitOperator(delim_side);
 		for (auto &cond : comp_join.conditions) {
-			auto &expr = comp_join.delim_flipped ? cond.RightReference() : cond.LeftReference();
+			auto &expr = comp_join.delim_flipped ? cond.right : cond.left;
 			VisitExpression(&expr);
 		}
 		// visit the duplicate eliminated columns
@@ -80,7 +71,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &other_side = comp_join.delim_flipped ? *comp_join.children[0] : *comp_join.children[1];
 		VisitOperator(other_side);
 		for (auto &cond : comp_join.conditions) {
-			auto &expr = comp_join.delim_flipped ? cond.LeftReference() : cond.RightReference();
+			auto &expr = comp_join.delim_flipped ? cond.left : cond.right;
 			VisitExpression(&expr);
 		}
 		// finally update the bindings with the result bindings of the join
@@ -112,8 +103,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		// CREATE INDEX statement, add the columns of the table with table index 0 to the binding set
 		// afterwards bind the expressions of the CREATE INDEX statement
 		auto &create_index = op.Cast<LogicalCreateIndex>();
-		bindings = LogicalOperator::GenerateColumnBindings(TableIndex(0),
-		                                                   create_index.table.GetColumns().LogicalColumnCount());
+		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.GetColumns().LogicalColumnCount());
 		// TODO: fill types in too (clearing skips type checks)
 		types.clear();
 		VisitOperatorExpressions(op);
@@ -164,12 +154,13 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
 		VisitOperatorChildren(op);
 		bindings = op.GetColumnBindings();
-
-		types.clear();
-		VisitOperatorExpressions(op);
 		types = op.types;
+		for (auto &expr : rec.key_targets) {
+			VisitExpression(&expr);
+		}
 		return;
 	}
 	default:
@@ -196,14 +187,13 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 				if (bindings.size() != types.size()) {
 					throw InternalException(
 					    "Failed to bind column reference \"%s\" [%d.%d]: inequal num bindings/types (%llu != %llu)",
-					    expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index.index,
-					    bindings.size(), types.size());
+					    expr.GetAlias(), expr.binding.table_index, expr.binding.column_index, bindings.size(),
+					    types.size());
 				}
 				if (expr.return_type != types[i]) {
 					throw InternalException("Failed to bind column reference \"%s\" [%d.%d]: inequal types (%s != %s)",
-					                        expr.GetAlias(), expr.binding.table_index.index,
-					                        expr.binding.column_index.index, expr.return_type.ToString(),
-					                        types[i].ToString());
+					                        expr.GetAlias(), expr.binding.table_index, expr.binding.column_index,
+					                        expr.return_type.ToString(), types[i].ToString());
 				}
 			}
 			if (verify_only) {
@@ -217,28 +207,28 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.GetAlias(),
-	                        expr.binding.table_index.index, expr.binding.column_index.index,
+	                        expr.binding.table_index, expr.binding.column_index,
 	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP
 }
 
-unordered_set<TableIndex> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
-	unordered_set<TableIndex> result;
+unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
+	unordered_set<idx_t> result;
 	for (auto &child : op.children) {
 		auto child_indexes = VerifyInternal(*child);
 		for (auto index : child_indexes) {
-			D_ASSERT(index.IsValid());
+			D_ASSERT(index != DConstants::INVALID_INDEX);
 			if (result.find(index) != result.end()) {
-				throw InternalException("Duplicate table index \"%lld\" found", index.index);
+				throw InternalException("Duplicate table index \"%lld\" found", index);
 			}
 			result.insert(index);
 		}
 	}
 	auto indexes = op.GetTableIndex();
 	for (auto index : indexes) {
-		D_ASSERT(index.IsValid());
+		D_ASSERT(index != DConstants::INVALID_INDEX);
 		if (result.find(index) != result.end()) {
-			throw InternalException("Duplicate table index \"%lld\" found", index.index);
+			throw InternalException("Duplicate table index \"%lld\" found", index);
 		}
 		result.insert(index);
 	}

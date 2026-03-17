@@ -17,7 +17,7 @@
 U_NAMESPACE_BEGIN namespace number {
 namespace impl {
 
-static const int32_t COMPACT_MAX_DIGITS = 20;
+static const int32_t COMPACT_MAX_DIGITS = 15;
 
 class CompactData : public MultiplierProducer {
   public:
@@ -26,17 +26,14 @@ class CompactData : public MultiplierProducer {
     void populate(const Locale &locale, const char *nsName, CompactStyle compactStyle,
                   CompactType compactType, UErrorCode &status);
 
-    int32_t getMultiplier(int32_t magnitude) const override;
+    int32_t getMultiplier(int32_t magnitude) const U_OVERRIDE;
 
-    const char16_t *getPattern(
-        int32_t magnitude,
-        const PluralRules *rules,
-        const DecimalQuantity &dq) const;
+    const UChar *getPattern(int32_t magnitude, StandardPlural::Form plural) const;
 
     void getUniquePatterns(UVector &output, UErrorCode &status) const;
 
   private:
-    const char16_t *patterns[(COMPACT_MAX_DIGITS + 1) * StandardPlural::COUNT];
+    const UChar *patterns[(COMPACT_MAX_DIGITS + 1) * StandardPlural::COUNT];
     int8_t multipliers[COMPACT_MAX_DIGITS + 1];
     int8_t largestMagnitude;
     UBool isEmpty;
@@ -45,7 +42,7 @@ class CompactData : public MultiplierProducer {
       public:
         explicit CompactDataSink(CompactData &data) : data(data) {}
 
-        void put(const char *key, ResourceValue &value, UBool /*noFallback*/, UErrorCode &status) override;
+        void put(const char *key, ResourceValue &value, UBool /*noFallback*/, UErrorCode &status) U_OVERRIDE;
 
       private:
         CompactData &data;
@@ -54,26 +51,20 @@ class CompactData : public MultiplierProducer {
 
 struct CompactModInfo {
     const ImmutablePatternModifier *mod;
-    const char16_t* patternString;
+    const UChar* patternString;
 };
 
 class CompactHandler : public MicroPropsGenerator, public UMemory {
   public:
-    CompactHandler(
-            CompactStyle compactStyle,
-            const Locale &locale,
-            const char *nsName,
-            CompactType compactType,
-            const PluralRules *rules,
-            MutablePatternModifier *buildReference,
-            bool safe,
-            const MicroPropsGenerator *parent,
-            UErrorCode &status);
+    CompactHandler(CompactStyle compactStyle, const Locale &locale, const char *nsName,
+                   CompactType compactType, const PluralRules *rules,
+                   MutablePatternModifier *buildReference, const MicroPropsGenerator *parent,
+                   UErrorCode &status);
 
-    ~CompactHandler() override;
+    ~CompactHandler() U_OVERRIDE;
 
     void
-    processQuantity(DecimalQuantity &quantity, MicroProps &micros, UErrorCode &status) const override;
+    processQuantity(DecimalQuantity &quantity, MicroProps &micros, UErrorCode &status) const U_OVERRIDE;
 
   private:
     const PluralRules *rules;
@@ -83,7 +74,6 @@ class CompactHandler : public MicroPropsGenerator, public UMemory {
     int32_t precomputedModsLength = 0;
     CompactData data;
     ParsedPatternInfo unsafePatternInfo;
-    MutablePatternModifier* unsafePatternModifier;
     UBool safe;
 
     /** Used by the safe code path */

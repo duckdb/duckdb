@@ -97,22 +97,22 @@ public:
 
     /**
      * Equality operator.
-     * @return true if the two parse positions are equal, false otherwise.
+     * @return TRUE if the two parse positions are equal, FALSE otherwise.
      * @stable ICU 2.0
      */
-    inline bool               operator==(const ParsePosition& that) const;
+    inline bool              operator==(const ParsePosition& that) const;
 
     /**
      * Equality operator.
-     * @return true if the two parse positions are not equal, false otherwise.
+     * @return TRUE if the two parse positions are not equal, FALSE otherwise.
      * @stable ICU 2.0
      */
-    inline bool               operator!=(const ParsePosition& that) const;
+    inline bool              operator!=(const ParsePosition& that) const;
 
     /**
      * Clone this object.
      * Clones can be used concurrently in multiple threads.
-     * If an error occurs, then nullptr is returned.
+     * If an error occurs, then NULL is returned.
      * The caller must delete the clone.
      *
      * @return a clone of this object
@@ -166,7 +166,7 @@ public:
      *
      * @stable ICU 2.2
      */
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID() const;
 
 private:
     /**
@@ -196,9 +196,9 @@ inline bool
 ParsePosition::operator==(const ParsePosition& copy) const
 {
   if(index != copy.index || errorIndex != copy.errorIndex)
-  return false;
+  return FALSE;
   else
-  return true;
+  return TRUE;
 }
 
 inline bool

@@ -31,7 +31,7 @@ struct BoundPivotInfo {
 
 class BoundPivotRef {
 public:
-	TableIndex bind_index;
+	idx_t bind_index;
 	//! The binder used to bind the child of the pivot
 	shared_ptr<Binder> child_binder;
 	//! The child node of the pivot

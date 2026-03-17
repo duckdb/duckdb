@@ -52,7 +52,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.metrics.IsNull()) {
-		ConfigureProfilingSetting::SetLocal(context, bind_data.metrics);
+		CustomProfilingSettingsSetting::SetLocal(context, bind_data.metrics);
 	}
 }
 

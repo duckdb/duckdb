@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/database_size.hpp"
@@ -19,7 +20,6 @@ namespace duckdb {
 class BlockManager;
 class Catalog;
 class CheckpointWriter;
-class DataTable;
 class DatabaseInstance;
 class TransactionManager;
 class TableCatalogEntry;
@@ -44,7 +44,6 @@ public:
 	virtual bool HasRowGroupData() {
 		return false;
 	}
-	virtual unordered_set<block_id_t> &GetBlockIdsInUse() = 0;
 };
 
 //! StorageManager is responsible for managing the physical storage of a persistent database.

@@ -9,7 +9,6 @@ add_subdirectory(statistics)
 add_library_unity(
   duckdb_optimizer
   OBJECT
-  aggregate_function_rewriter.cpp
   build_probe_side_optimizer.cpp
   column_binding_replacer.cpp
   column_lifetime_analyzer.cpp
@@ -31,7 +30,6 @@ add_library_unity(
   late_materialization.cpp
   late_materialization_helper.cpp
   optimizer.cpp
-  outer_join_simplification.cpp
   join_elimination.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
@@ -44,7 +42,7 @@ add_library_unity(
   unnest_rewriter.cpp
   window_self_join.cpp
   sampling_pushdown.cpp
-  projection_pullup.cpp)
+  sum_rewriter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

@@ -465,7 +465,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 		return;
 	}
 
-	auto &info = entry->second;
+	auto &info = operator_infos.find(phys_op)->second;
 	info.name = phys_op.GetName();
 }
 

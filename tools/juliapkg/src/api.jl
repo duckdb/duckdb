@@ -7258,7 +7258,7 @@ function duckdb_append_blob(appender, data, length)
     return ccall(
         (:duckdb_append_blob, libduckdb),
         duckdb_state,
-        (duckdb_appender, Ptr{Cvoid}, idx_t),
+        (duckdb_appender, Ref{Cvoid}, idx_t),
         appender,
         data,
         length

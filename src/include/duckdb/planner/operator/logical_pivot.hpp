@@ -21,9 +21,9 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PIVOT;
 
 public:
-	LogicalPivot(TableIndex pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info);
+	LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info);
 
-	TableIndex pivot_index;
+	idx_t pivot_index;
 	//! The bound pivot info
 	BoundPivotInfo bound_pivot;
 
@@ -32,7 +32,7 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
-	vector<TableIndex> GetTableIndex() const override;
+	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

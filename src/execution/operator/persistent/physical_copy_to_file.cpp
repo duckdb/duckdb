@@ -273,8 +273,11 @@ CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
 	}
 }
 
-string PhysicalCopyToFile::GetTrimmedPath(ClientContext & /*unused_context*/) const {
-	return Path::Normalize(file_path);
+string PhysicalCopyToFile::GetTrimmedPath(ClientContext &context) const {
+	auto &fs = FileSystem::GetFileSystem(context);
+	string trimmed_path = file_path;
+	StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
+	return trimmed_path;
 }
 
 class CopyToFunctionLocalState : public LocalSinkState {

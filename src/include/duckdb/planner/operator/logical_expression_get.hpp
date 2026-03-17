@@ -18,14 +18,14 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXPRESSION_GET;
 
 public:
-	LogicalExpressionGet(TableIndex table_index, vector<LogicalType> types,
+	LogicalExpressionGet(idx_t table_index, vector<LogicalType> types,
 	                     vector<vector<unique_ptr<Expression>>> expressions)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPRESSION_GET), table_index(table_index),
 	      expr_types(std::move(types)), expressions(std::move(expressions)) {
 	}
 
 	//! The table index in the current bind context
-	TableIndex table_index;
+	idx_t table_index;
 	//! The types of the expressions
 	vector<LogicalType> expr_types;
 	//! The set of expressions
@@ -41,7 +41,7 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override {
 		return expressions.size();
 	}
-	vector<TableIndex> GetTableIndex() const override;
+	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

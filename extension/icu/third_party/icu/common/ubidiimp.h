@@ -26,14 +26,6 @@
 
 /* miscellaneous definitions ---------------------------------------------- */
 
-// ICU-20853=ICU-20935 Solaris #defines CS and ES in sys/regset.h
-#ifdef CS
-#   undef CS
-#endif
-#ifdef ES
-#   undef ES
-#endif
-
 typedef uint8_t DirProp;
 typedef uint32_t Flags;
 
@@ -136,8 +128,8 @@ ubidi_getParaLevelAtIndex(const UBiDi *pBiDi, int32_t index);
 /* number of isolate run entries for paired brackets allocated initially without malloc */
 #define SIMPLE_OPENINGS_COUNT   20
 
-#define CR  0x000D
-#define LF  0x000A
+#define UBIDIIMP_CR  0x000D
+#define UBIDIIMP_LF  0x000A
 
 /* Run structure for reordering --------------------------------------------- */
 enum {
@@ -459,26 +451,26 @@ ubidi_getMemory(BidiMemoryForAllocation *pMemory, int32_t *pSize, UBool mayAlloc
 /* additional macros used by ubidi_open() - always allow allocation */
 #define getInitialDirPropsMemory(pBiDi, length) \
         ubidi_getMemory((BidiMemoryForAllocation *)&(pBiDi)->dirPropsMemory, &(pBiDi)->dirPropsSize, \
-                        true, (length))
+                        TRUE, (length))
 
 #define getInitialLevelsMemory(pBiDi, length) \
         ubidi_getMemory((BidiMemoryForAllocation *)&(pBiDi)->levelsMemory, &(pBiDi)->levelsSize, \
-                        true, (length))
+                        TRUE, (length))
 
 #define getInitialOpeningsMemory(pBiDi, length) \
         ubidi_getMemory((BidiMemoryForAllocation *)&(pBiDi)->openingsMemory, &(pBiDi)->openingsSize, \
-                        true, (length)*sizeof(Opening))
+                        TRUE, (length)*sizeof(Opening))
 
 #define getInitialParasMemory(pBiDi, length) \
         ubidi_getMemory((BidiMemoryForAllocation *)&(pBiDi)->parasMemory, &(pBiDi)->parasSize, \
-                        true, (length)*sizeof(Para))
+                        TRUE, (length)*sizeof(Para))
 
 #define getInitialRunsMemory(pBiDi, length) \
         ubidi_getMemory((BidiMemoryForAllocation *)&(pBiDi)->runsMemory, &(pBiDi)->runsSize, \
-                        true, (length)*sizeof(Run))
+                        TRUE, (length)*sizeof(Run))
 
 #define getInitialIsolatesMemory(pBiDi, length) \
         ubidi_getMemory((BidiMemoryForAllocation *)&(pBiDi)->isolatesMemory, &(pBiDi)->isolatesSize, \
-                        true, (length)*sizeof(Isolate))
+                        TRUE, (length)*sizeof(Isolate))
 
 #endif

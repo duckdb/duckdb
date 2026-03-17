@@ -9,7 +9,7 @@
 #include "keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "include/parser/tokenizer/base_tokenizer.hpp"
+#include "tokenizer.hpp"
 #include "parser/peg_parser.hpp"
 #include "transformer/parse_result.hpp"
 #ifdef PEG_PARSER_SOURCE_FILE
@@ -118,19 +118,9 @@ public:
 
 	MatchResultType Match(MatchState &state) const override {
 		MatchState list_state(state);
-		// when suppress_suggestions is set, we discard any suggestions added by child matchers
-		auto saved_suggestion_size = suppress_suggestions ? list_state.suggestions.size() : 0;
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();
 			if (list_state.token_index >= list_state.tokens.size()) {
-				if (suppress_suggestions) {
-					// this rule should not contribute autocomplete suggestions
-					// discard any suggestions added by earlier children
-					list_state.suggestions.erase(list_state.suggestions.begin() +
-					                                 NumericCast<int64_t>(saved_suggestion_size),
-					                             list_state.suggestions.end());
-					return MatchResultType::FAIL;
-				}
 				// we exhausted the tokens - push suggestions for the child matcher
 				for (; child_idx < matchers.size(); child_idx++) {
 					auto suggestion_type = matchers[child_idx].get().AddSuggestion(list_state);
@@ -149,21 +139,12 @@ public:
 			}
 			auto match_result = child_matcher.Match(list_state);
 			if (match_result != MatchResultType::SUCCESS) {
-				if (suppress_suggestions) {
-					list_state.suggestions.erase(list_state.suggestions.begin() +
-					                                 NumericCast<int64_t>(saved_suggestion_size),
-					                             list_state.suggestions.end());
-				}
+				// we did not succeed in matching a child - skip
 				return match_result;
 			}
 		}
 		// we matched all child matchers - propagate token index upward
 		state.token_index = list_state.token_index;
-		if (suppress_suggestions) {
-			// discard suggestions from child matchers that were added during matching
-			state.suggestions.erase(state.suggestions.begin() + NumericCast<int64_t>(saved_suggestion_size),
-			                        state.suggestions.end());
-		}
 		return MatchResultType::SUCCESS;
 	}
 
@@ -188,9 +169,6 @@ public:
 	}
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
-		if (suppress_suggestions) {
-			return SuggestionType::OPTIONAL;
-		}
 		for (auto &matcher : matchers) {
 			auto suggestion_result = matcher.get().AddSuggestion(state);
 			if (suggestion_result == SuggestionType::MANDATORY) {
@@ -215,8 +193,6 @@ public:
 
 public:
 	vector<reference<Matcher>> matchers;
-	//! If true, this matcher will not contribute autocomplete suggestions (used for rules like ExpressionStatement)
-	bool suppress_suggestions = false;
 };
 
 class OptionalMatcher : public Matcher {
@@ -955,7 +931,6 @@ private:
 
 	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
-	void SuppressSuggestions(const char *name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name, vector<reference<Matcher>> &parameters);
 
@@ -963,7 +938,6 @@ private:
 	MatcherAllocator &allocator;
 	string_map_t<reference<Matcher>> matchers;
 	case_insensitive_map_t<reference<Matcher>> keyword_overrides;
-	string_set_t no_suggestion_rules;
 };
 
 Matcher &MatcherFactory::Keyword(const string &keyword) const {
@@ -1319,9 +1293,6 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 		throw InternalException("PEG matcher create error - unclosed bracket found");
 	}
 	matcher.SetName(rule_name.GetString());
-	if (no_suggestion_rules.count(rule_name.GetString())) {
-		matcher.Cast<ListMatcher>().suppress_suggestions = true;
-	}
 	return matcher;
 }
 
@@ -1332,10 +1303,6 @@ void MatcherFactory::AddKeywordOverride(const char *name, uint32_t score, char e
 
 void MatcherFactory::AddRuleOverride(const char *name, Matcher &matcher) {
 	matchers.insert(make_pair(name, reference<Matcher>(matcher)));
-}
-
-void MatcherFactory::SuppressSuggestions(const char *name) {
-	no_suggestion_rules.insert(name);
 }
 
 Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rule) {
@@ -1373,9 +1340,6 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("NumberLiteral", NumberLiteral());
 	AddRuleOverride("StringLiteral", StringLiteral());
 	AddRuleOverride("OperatorLiteral", Operator());
-
-	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
-	SuppressSuggestions("ExpressionStatement");
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);

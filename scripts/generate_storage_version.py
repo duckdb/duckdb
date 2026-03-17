@@ -3,13 +3,9 @@
 
 import os
 import subprocess
-import sys
 from python_helpers import open_utf8
 
-if len(sys.argv) > 1:
-    shell_proc = sys.argv[1]
-else:
-    shell_proc = os.path.join('build', 'release', 'duckdb')
+shell_proc = os.path.join('build', 'release', 'duckdb')
 
 gen_storage_script = os.path.join('test', 'sql', 'storage_version', 'generate_storage_version.sql')
 gen_storage_target = os.path.join('test', 'sql', 'storage_version', 'storage_version.db')
@@ -29,7 +25,7 @@ try_remove_file(gen_storage_target + '.wal')
 def run_command_in_shell(cmd):
     print(cmd)
     res = subprocess.run(
-        [shell_proc, '--batch', '-init', '/dev/null', gen_storage_target],
+        [shell_proc, '--batch', '-no-init', gen_storage_target],
         capture_output=True,
         input=bytearray(cmd, 'utf8'),
     )

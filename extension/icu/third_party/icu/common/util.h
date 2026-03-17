@@ -13,10 +13,10 @@
 #ifndef ICU_UTIL_H
 #define ICU_UTIL_H
 
-#include "charstr.h"
-#include "unicode/unistr.h"
-#include "unicode/uobject.h"
 #include "unicode/utypes.h"
+#include "unicode/uobject.h"
+#include "unicode/unistr.h"
+
 //--------------------------------------------------------------------
 // class ICU_Utility
 // i18n utility functions, scoped into the class ICU_Utility.
@@ -55,29 +55,19 @@ class U_COMMON_API ICU_Utility /* not : public UObject because all methods are s
 
     /**
      * Return true if the character is NOT printable ASCII.
-     * The tab, newline and linefeed characters are considered unprintable.
+     *
+     * This method should really be in UnicodeString (or similar).  For
+     * now, we implement it here and share it with friend classes.
      */
     static UBool isUnprintable(UChar32 c);
 
     /**
-     * @return true for control codes and for surrogate and noncharacter code points
-     */
-    static UBool shouldAlwaysBeEscaped(UChar32 c);
-
-    /**
-     * Escapes one unprintable code point using \uxxxx notation for U+0000 to
+     * Escape unprintable characters using \uxxxx notation for U+0000 to
      * U+FFFF and \Uxxxxxxxx for U+10000 and above.  If the character is
-     * printable ASCII, then do nothing and return false.  Otherwise,
-     * append the escaped notation and return true.
+     * printable ASCII, then do nothing and return FALSE.  Otherwise,
+     * append the escaped notation and return TRUE.
      */
     static UBool escapeUnprintable(UnicodeString& result, UChar32 c);
-
-    /**
-     * Escapes one code point using \uxxxx notation
-     * for U+0000 to U+FFFF and \Uxxxxxxxx for U+10000 and above.
-     * @return result
-     */
-    static UnicodeString &escape(UnicodeString& result, UChar32 c);
 
     /**
      * Returns the index of a character, ignoring quoted text.
@@ -94,7 +84,7 @@ class U_COMMON_API ICU_Utility /* not : public UObject because all methods are s
 //?FOR FUTURE USE.  DISABLE FOR NOW for coverage reasons.
 //    static int32_t quotedIndexOf(const UnicodeString& text,
 //                                 int32_t start, int32_t limit,
-//                                 char16_t c);
+//                                 UChar c);
 
     /**
      * Skip over a sequence of zero or more white space characters at pos.
@@ -105,7 +95,7 @@ class U_COMMON_API ICU_Utility /* not : public UObject because all methods are s
      * after pos, or str.length(), if there is none.
      */
     static int32_t skipWhitespace(const UnicodeString& str, int32_t& pos,
-                                  UBool advance = false);
+                                  UBool advance = FALSE);
 
     /**
      * Skip over Pattern_White_Space in a Replaceable.
@@ -140,7 +130,7 @@ class U_COMMON_API ICU_Utility /* not : public UObject because all methods are s
      * @return true if 'ch' is seen preceded by zero or more
      * whitespace characters.
      */
-    static UBool parseChar(const UnicodeString& id, int32_t& pos, char16_t ch);
+    static UBool parseChar(const UnicodeString& id, int32_t& pos, UChar ch);
 
     /**
      * Parse a pattern string starting at offset pos.  Keywords are
@@ -209,7 +199,7 @@ class U_COMMON_API ICU_Utility /* not : public UObject because all methods are s
      * position.  Return the identifier, or an empty string if there
      * is no identifier.
      * @param str the string to parse
-     * @param pos INPUT-OUTPUT parameter.  On INPUT, pos is the
+     * @param pos INPUT-OUPUT parameter.  On INPUT, pos is the
      * first character to examine.  It must be less than str.length(),
      * and it must not point to a whitespace character.  That is, must
      * have pos < str.length() and
@@ -258,7 +248,7 @@ class U_COMMON_API ICU_Utility /* not : public UObject because all methods are s
 
 private:
     // do not instantiate
-    ICU_Utility() = delete;
+    ICU_Utility();
 };
 
 U_NAMESPACE_END

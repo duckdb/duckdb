@@ -70,7 +70,7 @@ public:
      * @param id compound ID
      * @param dir either UTRANS_FORWARD or UTRANS_REVERSE
      * @param adoptedFilter a global filter for this compound transliterator
-     * or nullptr
+     * or NULL
      */
     CompoundTransliterator(const UnicodeString& id,
                            UTransDirection dir,
@@ -80,7 +80,7 @@ public:
 
     /**
      * Constructs a new compound transliterator in the FORWARD
-     * direction with a nullptr filter.
+     * direction with a NULL filter.
      */
     CompoundTransliterator(const UnicodeString& id,
                            UParseError& parseError,
@@ -98,13 +98,13 @@ public:
     /**
      * Transliterator API.
      */
-    virtual CompoundTransliterator* clone() const override;
+    virtual CompoundTransliterator* clone() const;
 
     /**
      * Returns the number of transliterators in this chain.
      * @return number of transliterators in this chain.
      */
-    virtual int32_t getCount() const;
+    virtual int32_t getCount(void) const;
 
     /**
      * Returns the transliterator at the given index in this chain.
@@ -131,39 +131,39 @@ public:
      * to recreate this transliterator.
      * @param result the string to receive the rules.  Previous
      * contents will be deleted.
-     * @param escapeUnprintable if true then convert unprintable
+     * @param escapeUnprintable if TRUE then convert unprintable
      * character to their hex escape representations, \uxxxx or
      * \Uxxxxxxxx.  Unprintable characters are those other than
      * U+000A, U+0020..U+007E.
      */
     virtual UnicodeString& toRules(UnicodeString& result,
-                                   UBool escapeUnprintable) const override;
+                                   UBool escapeUnprintable) const;
 
  protected:
     /**
      * Implement Transliterator framework
      */
-    virtual void handleGetSourceSet(UnicodeSet& result) const override;
+    virtual void handleGetSourceSet(UnicodeSet& result) const;
 
  public:
     /**
      * Override Transliterator framework
      */
-    virtual UnicodeSet& getTargetSet(UnicodeSet& result) const override;
+    virtual UnicodeSet& getTargetSet(UnicodeSet& result) const;
 
 protected:
     /**
      * Implements {@link Transliterator#handleTransliterate}.
      */
     virtual void handleTransliterate(Replaceable& text, UTransPosition& idx,
-                                     UBool incremental) const override;
+                                     UBool incremental) const;
 
 public:
 
     /**
      * ICU "poor man's RTTI", returns a UClassID for the actual class.
      */
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID() const;
 
     /**
      * ICU "poor man's RTTI", returns a UClassID for this class.
@@ -171,7 +171,7 @@ public:
     static UClassID U_EXPORT2 getStaticClassID();
 
     /* @internal */
-    static const char16_t PASS_STRING[];
+    static const UChar PASS_STRING[];
 
 private:
 
@@ -220,9 +220,9 @@ private:
     UnicodeString joinIDs(Transliterator* const transliterators[],
                           int32_t transCount);
 
-    void freeTransliterators();
+    void freeTransliterators(void);
 
-    void computeMaximumContextLength();
+    void computeMaximumContextLength(void);
 };
 
 U_NAMESPACE_END

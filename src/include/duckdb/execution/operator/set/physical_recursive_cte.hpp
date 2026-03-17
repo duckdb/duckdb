@@ -21,12 +21,12 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
 
 public:
-	PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index, vector<LogicalType> types,
+	PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index, vector<LogicalType> types,
 	                     bool union_all, PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality);
 	~PhysicalRecursiveCTE() override;
 
 	string ctename;
-	TableIndex table_index;
+	idx_t table_index;
 	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
 	bool ref_recurring;
 	bool union_all;
@@ -40,11 +40,11 @@ public:
 	// Contains the result of the key variant
 	shared_ptr<ColumnDataCollection> recurring_table;
 	// Contains the types of the payload and key columns.
-	vector<LogicalType> payload_types, distinct_types, internal_types;
+	vector<LogicalType> payload_types, distinct_types;
 	// Contains the payload and key indices
 	vector<idx_t> payload_idx, distinct_idx;
 	// Contains the aggregates for the payload
-	vector<unique_ptr<Expression>> payload_aggregates;
+	vector<unique_ptr<BoundAggregateExpression>> payload_aggregates;
 
 public:
 	// Source interface

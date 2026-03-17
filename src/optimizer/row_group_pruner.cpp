@@ -69,7 +69,7 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 		return false;
 	}
 
-	if (logical_get->table_filters.HasFilters()) {
+	if (!logical_get->table_filters.filters.empty()) {
 		// If there are filters, we only order the row groups but do not prune
 		row_limit.SetInvalid();
 		row_offset.SetInvalid();
@@ -155,8 +155,8 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 		return nullptr;
 	}
 
-	auto &binding = pushdown_targets[0].columns[0].probe_column_index;
-	column_index = logical_get.GetColumnIndex(binding);
+	auto col_idx = pushdown_targets[0].columns[0].probe_column_index.column_index;
+	column_index = logical_get.GetColumnIds()[col_idx];
 
 	return logical_get;
 }

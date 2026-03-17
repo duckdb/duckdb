@@ -46,11 +46,6 @@
 // First, the platform type. Need this for U_PLATFORM.
 #include "unicode/platform.h"
 
-#if U_PLATFORM == U_PF_MINGW && defined __STRICT_ANSI__
-/* tzset isn't defined in strict ANSI on MinGW. */
-#undef __STRICT_ANSI__
-#endif
-
 /*
  * Cygwin with GCC requires inclusion of time.h after the above disabling strict asci mode statement.
  */
@@ -81,7 +76,7 @@
 #include <float.h>
 
 #ifndef U_COMMON_IMPLEMENTATION
-#error U_COMMON_IMPLEMENTATION not set - must be set for all ICU source files in common/ - see https://unicode-org.github.io/icu/userguide/howtouseicu
+#error U_COMMON_IMPLEMENTATION not set - must be set for all ICU source files in common/ - see http://userguide.icu-project.org/howtouseicu
 #endif
 
 
@@ -118,14 +113,10 @@
 #       ifndef _XPG4_2
 #           define _XPG4_2
 #       endif
-#   elif U_PLATFORM == U_PF_ANDROID
-#       include <sys/system_properties.h>
-#       include <dlfcn.h>
 #   endif
 #elif U_PLATFORM == U_PF_QNX
 #   include <sys/neutrino.h>
 #endif
-
 
 /*
  * Only include langinfo.h if we have a way to get the codeset. If we later
@@ -168,7 +159,7 @@ U_NAMESPACE_USE
 #define DATA_TYPE "dat"
 
 /* Leave this copyright notice here! */
-static const char copyright[] = U_COPYRIGHT_STRING;
+// static const char copyright[] = U_COPYRIGHT_STRING;
 
 /* floating point implementations ------------------------------------------- */
 
@@ -244,11 +235,11 @@ u_signBit(double d) {
  */
 UDate fakeClock_t0 = 0; /** Time to start the clock from **/
 UDate fakeClock_dt = 0; /** Offset (fake time - real time) **/
-UBool fakeClock_set = false; /** True if fake clock has spun up **/
+UBool fakeClock_set = FALSE; /** True if fake clock has spun up **/
 
 static UDate getUTCtime_real() {
     struct timeval posixTime;
-    gettimeofday(&posixTime, nullptr);
+    gettimeofday(&posixTime, NULL);
     return (UDate)(((int64_t)posixTime.tv_sec * U_MILLIS_PER_SECOND) + (posixTime.tv_usec/1000));
 }
 
@@ -258,7 +249,7 @@ static UDate getUTCtime_fake() {
     if(!fakeClock_set) {
         UDate real = getUTCtime_real();
         const char *fake_start = getenv("U_FAKETIME_START");
-        if((fake_start!=nullptr) && (fake_start[0]!=0)) {
+        if((fake_start!=NULL) && (fake_start[0]!=0)) {
             sscanf(fake_start,"%lf",&fakeClock_t0);
             fakeClock_dt = fakeClock_t0 - real;
             fprintf(stderr,"U_DEBUG_FAKETIME was set at compile time, so the ICU clock will start at a preset value\n"
@@ -269,7 +260,7 @@ static UDate getUTCtime_fake() {
             fprintf(stderr,"U_DEBUG_FAKETIME was set at compile time, but U_FAKETIME_START was not set.\n"
                     "Set U_FAKETIME_START to the number of milliseconds since 1/1/1970 to set the ICU clock.\n");
         }
-        fakeClock_set = true;
+        fakeClock_set = TRUE;
     }
     umtx_unlock(&fakeClockMutex);
 
@@ -319,7 +310,7 @@ uprv_getRawUTCtime()
 
 #if HAVE_GETTIMEOFDAY
     struct timeval posixTime;
-    gettimeofday(&posixTime, nullptr);
+    gettimeofday(&posixTime, NULL);
     return (UDate)(((int64_t)posixTime.tv_sec * U_MILLIS_PER_SECOND) + (posixTime.tv_usec/1000));
 #else
     time_t epochtime;
@@ -580,7 +571,7 @@ uprv_trunc(double d)
  * type of arbitrary bit length.
  */
 U_CAPI double U_EXPORT2
-uprv_maxMantissa()
+uprv_maxMantissa(void)
 {
     return pow(2.0, DBL_MANT_DIG + 1.0) - 1.0;
 }
@@ -612,11 +603,11 @@ uprv_maximumPtr(void * base)
      * Unlike other operating systems, the pointer model isn't determined at
      * compile time on i5/OS.
      */
-    if ((base != nullptr) && (_TESTPTR(base, _C_TERASPACE_CHECK))) {
+    if ((base != NULL) && (_TESTPTR(base, _C_TERASPACE_CHECK))) {
         /* if it is a TERASPACE pointer the max is 2GB - 4k */
         return ((void *)(((char *)base)-((uint32_t)(base))+((uint32_t)0x7fffefff)));
     }
-    /* otherwise 16MB since nullptr ptr is not checkable or the ptr is not TERASPACE */
+    /* otherwise 16MB since NULL ptr is not checkable or the ptr is not TERASPACE */
     return ((void *)(((char *)base)-((uint32_t)(base))+((uint32_t)0xffefff)));
 
 #else
@@ -717,31 +708,22 @@ extern U_IMPORT char *U_TZNAME[];
 /* Some Linux distributions have 'localtime' in /usr/share/zoneinfo
    symlinked to /etc/localtime, which makes searchForTZFile return
    'localtime' when it's the first match. */
-#define TZFILE_SKIP2    "localtime"
+#define TZFILE_putil_SKIP2    "localtime"
 #define SEARCH_TZFILE
 #include <dirent.h>  /* Needed to search through system timezone files */
 #endif
 static char gTimeZoneBuffer[PATH_MAX];
-static const char *gTimeZoneBufferPtr = nullptr;
+static char *gTimeZoneBufferPtr = NULL;
 #endif
 
 #if !U_PLATFORM_USES_ONLY_WIN32_API
 #define isNonDigit(ch) (ch < '0' || '9' < ch)
-#define isDigit(ch) ('0' <= ch && ch <= '9')
 static UBool isValidOlsonID(const char *id) {
     int32_t idx = 0;
-    int32_t idxMax = 0;
 
     /* Determine if this is something like Iceland (Olson ID)
     or AST4ADT (non-Olson ID) */
     while (id[idx] && isNonDigit(id[idx]) && id[idx] != ',') {
-        idx++;
-    }
-
-    /* Allow at maximum 2 numbers at the end of the id to support zone id's
-    like GMT+11. */
-    idxMax = idx + 2;
-    while (id[idx] && isDigit(id[idx]) && idx < idxMax) {
         idx++;
     }
 
@@ -879,7 +861,7 @@ static const char* remapShortTimeZone(const char *stdID, const char *dstID, int3
             return OFFSET_ZONE_MAPPINGS[idx].olsonID;
         }
     }
-    return nullptr;
+    return NULL;
 }
 #endif
 
@@ -905,16 +887,16 @@ static UBool compareBinaryFiles(const char* defaultTZFileName, const char* TZFil
     int32_t sizeFileRead;
     int32_t sizeFileToRead;
     char bufferFile[MAX_READ_SIZE];
-    UBool result = true;
+    UBool result = TRUE;
 
-    if (tzInfo->defaultTZFilePtr == nullptr) {
+    if (tzInfo->defaultTZFilePtr == NULL) {
         tzInfo->defaultTZFilePtr = fopen(defaultTZFileName, "r");
     }
     file = fopen(TZFileName, "r");
 
     tzInfo->defaultTZPosition = 0; /* reset position to begin search */
 
-    if (file != nullptr && tzInfo->defaultTZFilePtr != nullptr) {
+    if (file != NULL && tzInfo->defaultTZFilePtr != NULL) {
         /* First check that the file size are equal. */
         if (tzInfo->defaultTZFileSize == 0) {
             fseek(tzInfo->defaultTZFilePtr, 0, SEEK_END);
@@ -925,12 +907,12 @@ static UBool compareBinaryFiles(const char* defaultTZFileName, const char* TZFil
         sizeFileLeft = sizeFile;
 
         if (sizeFile != tzInfo->defaultTZFileSize) {
-            result = false;
+            result = FALSE;
         } else {
-            /* Store the data from the files in separate buffers and
+            /* Store the data from the files in seperate buffers and
              * compare each byte to determine equality.
              */
-            if (tzInfo->defaultTZBuffer == nullptr) {
+            if (tzInfo->defaultTZBuffer == NULL) {
                 rewind(tzInfo->defaultTZFilePtr);
                 tzInfo->defaultTZBuffer = (char*)uprv_malloc(sizeof(char) * tzInfo->defaultTZFileSize);
                 sizeFileRead = fread(tzInfo->defaultTZBuffer, 1, tzInfo->defaultTZFileSize, tzInfo->defaultTZFilePtr);
@@ -942,7 +924,7 @@ static UBool compareBinaryFiles(const char* defaultTZFileName, const char* TZFil
 
                 sizeFileRead = fread(bufferFile, 1, sizeFileToRead, file);
                 if (memcmp(tzInfo->defaultTZBuffer + tzInfo->defaultTZPosition, bufferFile, sizeFileRead) != 0) {
-                    result = false;
+                    result = FALSE;
                     break;
                 }
                 sizeFileLeft -= sizeFileRead;
@@ -950,10 +932,10 @@ static UBool compareBinaryFiles(const char* defaultTZFileName, const char* TZFil
             }
         }
     } else {
-        result = false;
+        result = FALSE;
     }
 
-    if (file != nullptr) {
+    if (file != NULL) {
         fclose(file);
     }
 
@@ -962,19 +944,19 @@ static UBool compareBinaryFiles(const char* defaultTZFileName, const char* TZFil
 
 
 /* dirent also lists two entries: "." and ".." that we can safely ignore. */
-#define SKIP1 "."
-#define SKIP2 ".."
-static UBool U_CALLCONV putil_cleanup();
-static CharString *gSearchTZFileResult = nullptr;
+#define putil_SKIP1 "."
+#define putil_SKIP2 ".."
+static UBool U_CALLCONV putil_cleanup(void);
+static CharString *gSearchTZFileResult = NULL;
 
 /*
  * This method recursively traverses the directory given for a matching TZ file and returns the first match.
  * This function is not thread safe - it uses a global, gSearchTZFileResult, to hold its results.
  */
 static char* searchForTZFile(const char* path, DefaultTZInfo* tzInfo) {
-    DIR* dirp = nullptr;
-    struct dirent* dirEntry = nullptr;
-    char* result = nullptr;
+    DIR* dirp = NULL;
+    struct dirent* dirEntry = NULL;
+    char* result = NULL;
     UErrorCode status = U_ZERO_ERROR;
 
     /* Save the current path */
@@ -984,23 +966,23 @@ static char* searchForTZFile(const char* path, DefaultTZInfo* tzInfo) {
     }
 
     dirp = opendir(path);
-    if (dirp == nullptr) {
+    if (dirp == NULL) {
         goto cleanupAndReturn;
     }
 
-    if (gSearchTZFileResult == nullptr) {
+    if (gSearchTZFileResult == NULL) {
         gSearchTZFileResult = new CharString;
-        if (gSearchTZFileResult == nullptr) {
+        if (gSearchTZFileResult == NULL) {
             goto cleanupAndReturn;
         }
         ucln_common_registerCleanup(UCLN_COMMON_PUTIL, putil_cleanup);
     }
 
     /* Check each entry in the directory. */
-    while((dirEntry = readdir(dirp)) != nullptr) {
+    while((dirEntry = readdir(dirp)) != NULL) {
         const char* dirName = dirEntry->d_name;
-        if (uprv_strcmp(dirName, SKIP1) != 0 && uprv_strcmp(dirName, SKIP2) != 0
-            && uprv_strcmp(TZFILE_SKIP, dirName) != 0 && uprv_strcmp(TZFILE_SKIP2, dirName) != 0) {
+        if (uprv_strcmp(dirName, putil_SKIP1) != 0 && uprv_strcmp(dirName, putil_SKIP2) != 0
+            && uprv_strcmp(TZFILE_SKIP, dirName) != 0 && uprv_strcmp(TZFILE_putil_SKIP2, dirName) != 0) {
             /* Create a newpath with the new entry to test each entry in the directory. */
             CharString newpath(curpath, status);
             newpath.append(dirName, -1, status);
@@ -1008,8 +990,8 @@ static char* searchForTZFile(const char* path, DefaultTZInfo* tzInfo) {
                 break;
             }
 
-            DIR* subDirp = nullptr;
-            if ((subDirp = opendir(newpath.data())) != nullptr) {
+            DIR* subDirp = NULL;
+            if ((subDirp = opendir(newpath.data())) != NULL) {
                 /* If this new path is a directory, make a recursive call with the newpath. */
                 closedir(subDirp);
                 newpath.append('/', status);
@@ -1021,11 +1003,11 @@ static char* searchForTZFile(const char* path, DefaultTZInfo* tzInfo) {
                  Have to get out here. Otherwise, we'd keep looking
                  and return the first match in the top-level directory
                  if there's a match in the top-level. If not, this function
-                 would return nullptr and set gTimeZoneBufferPtr to nullptr in initDefault().
+                 would return NULL and set gTimeZoneBufferPtr to NULL in initDefault().
                  It worked without this in most cases because we have a fallback of calling
                  localtime_r to figure out the default timezone.
                 */
-                if (result != nullptr)
+                if (result != NULL)
                     break;
             } else {
                 if(compareBinaryFiles(TZDEFAULT, newpath.data(), tzInfo)) {
@@ -1056,55 +1038,11 @@ static char* searchForTZFile(const char* path, DefaultTZInfo* tzInfo) {
 }
 #endif
 
-#if U_PLATFORM == U_PF_ANDROID
-typedef int(system_property_read_callback)(const prop_info* info,
-                                           void (*callback)(void* cookie,
-                                                            const char* name,
-                                                            const char* value,
-                                                            uint32_t serial),
-                                           void* cookie);
-typedef int(system_property_get)(const char*, char*);
-
-static char gAndroidTimeZone[PROP_VALUE_MAX] = { '\0' };
-
-static void u_property_read(void* cookie, const char* name, const char* value,
-                            uint32_t serial) {
-    uprv_strcpy((char* )cookie, value);
-}
-#endif
-
 U_CAPI void U_EXPORT2
 uprv_tzname_clear_cache()
 {
-#if U_PLATFORM == U_PF_ANDROID
-    /* Android's timezone is stored in system property. */
-    gAndroidTimeZone[0] = '\0';
-    void* libc = dlopen("libc.so", RTLD_NOLOAD);
-    if (libc) {
-        /* Android API 26+ has new API to get system property and old API
-         * (__system_property_get) is deprecated */
-        system_property_read_callback* property_read_callback =
-            (system_property_read_callback*)dlsym(
-                libc, "__system_property_read_callback");
-        if (property_read_callback) {
-            const prop_info* info =
-                __system_property_find("persist.sys.timezone");
-            if (info) {
-                property_read_callback(info, &u_property_read, gAndroidTimeZone);
-            }
-        } else {
-            system_property_get* property_get =
-                (system_property_get*)dlsym(libc, "__system_property_get");
-            if (property_get) {
-                property_get("persist.sys.timezone", gAndroidTimeZone);
-            }
-        }
-        dlclose(libc);
-    }
-#endif
-
 #if defined(CHECK_LOCALTIME_LINK) && !defined(DEBUG_SKIP_LOCALTIME_LINK)
-    gTimeZoneBufferPtr = nullptr;
+    gTimeZoneBufferPtr = NULL;
 #endif
 }
 
@@ -1112,11 +1050,11 @@ U_CAPI const char* U_EXPORT2
 uprv_tzname(int n)
 {
     (void)n; // Avoid unreferenced parameter warning.
-    const char *tzid = nullptr;
+    const char *tzid = NULL;
 #if U_PLATFORM_USES_ONLY_WIN32_API
     tzid = uprv_detectWindowsTimeZone();
 
-    if (tzid != nullptr) {
+    if (tzid != NULL) {
         return tzid;
     }
 
@@ -1134,21 +1072,17 @@ uprv_tzname(int n)
     int ret;
 
     tzid = getenv("TZFILE");
-    if (tzid != nullptr) {
+    if (tzid != NULL) {
         return tzid;
     }
 #endif*/
 
 /* This code can be temporarily disabled to test tzname resolution later on. */
 #ifndef DEBUG_TZNAME
-#if U_PLATFORM == U_PF_ANDROID
-    tzid = gAndroidTimeZone;
-#else
     tzid = getenv("TZ");
-#endif
-    if (tzid != nullptr && isValidOlsonID(tzid)
+    if (tzid != NULL && isValidOlsonID(tzid)
 #if U_PLATFORM == U_PF_SOLARIS
-    /* Don't misinterpret TZ "localtime" on Solaris as a time zone name. */
+    /* When TZ equals localtime on Solaris, check the /etc/localtime file. */
         && uprv_strcmp(tzid, TZ_ENV_CHECK) != 0
 #endif
     ) {
@@ -1156,70 +1090,61 @@ uprv_tzname(int n)
         if (tzid[0] == ':') {
             tzid++;
         }
-        /* This might be a good Olson ID. */
-        skipZoneIDPrefix(&tzid);
-        return tzid;
+#if defined(TZDEFAULT)
+        if (uprv_strcmp(tzid, TZDEFAULT) != 0) {
+#endif
+        	/* This might be a good Olson ID. */
+			skipZoneIDPrefix(&tzid);
+			return tzid;
+#if defined(TZDEFAULT)
+		}
+#endif
     }
     /* else U_TZNAME will give a better result. */
 #endif
 
 #if defined(CHECK_LOCALTIME_LINK) && !defined(DEBUG_SKIP_LOCALTIME_LINK)
     /* Caller must handle threading issues */
-    if (gTimeZoneBufferPtr == nullptr) {
+    if (gTimeZoneBufferPtr == NULL) {
         /*
         This is a trick to look at the name of the link to get the Olson ID
         because the tzfile contents is underspecified.
         This isn't guaranteed to work because it may not be a symlink.
         */
-        char *ret = realpath(TZDEFAULT, gTimeZoneBuffer);
-        if (ret != nullptr && uprv_strcmp(TZDEFAULT, gTimeZoneBuffer) != 0) {
+        int32_t ret = (int32_t)readlink(TZDEFAULT, gTimeZoneBuffer, sizeof(gTimeZoneBuffer)-1);
+        if (0 < ret) {
             int32_t tzZoneInfoTailLen = uprv_strlen(TZZONEINFOTAIL);
-            const char *tzZoneInfoTailPtr = uprv_strstr(gTimeZoneBuffer, TZZONEINFOTAIL);
-            // MacOS14 has the realpath as something like
-            // /usr/share/zoneinfo.default/Australia/Melbourne
-            // which will not have "/zoneinfo/" in the path.
-            // Therefore if we fail, we fall back to read the link which is
-            // /var/db/timezone/zoneinfo/Australia/Melbourne
-            // We also fall back to reading the link if the realpath leads to something like
-            // /usr/share/zoneinfo/posixrules
-            if (tzZoneInfoTailPtr == nullptr ||
-                    uprv_strcmp(tzZoneInfoTailPtr + tzZoneInfoTailLen, "posixrules") == 0) {
-                ssize_t size = readlink(TZDEFAULT, gTimeZoneBuffer, sizeof(gTimeZoneBuffer)-1);
-                if (size > 0) {
-                    gTimeZoneBuffer[size] = 0;
-                    tzZoneInfoTailPtr = uprv_strstr(gTimeZoneBuffer, TZZONEINFOTAIL);
-                }
-            }
-            if (tzZoneInfoTailPtr != nullptr) {
-                tzZoneInfoTailPtr += tzZoneInfoTailLen;
-                skipZoneIDPrefix(&tzZoneInfoTailPtr);
-                if (isValidOlsonID(tzZoneInfoTailPtr)) {
-                    return (gTimeZoneBufferPtr = tzZoneInfoTailPtr);
-                }
+            gTimeZoneBuffer[ret] = 0;
+            char *  tzZoneInfoTailPtr = uprv_strstr(gTimeZoneBuffer, TZZONEINFOTAIL);
+
+            if (tzZoneInfoTailPtr != NULL
+                && isValidOlsonID(tzZoneInfoTailPtr + tzZoneInfoTailLen))
+            {
+                return (gTimeZoneBufferPtr = tzZoneInfoTailPtr + tzZoneInfoTailLen);
             }
         } else {
 #if defined(SEARCH_TZFILE)
             DefaultTZInfo* tzInfo = (DefaultTZInfo*)uprv_malloc(sizeof(DefaultTZInfo));
-            if (tzInfo != nullptr) {
-                tzInfo->defaultTZBuffer = nullptr;
+            if (tzInfo != NULL) {
+                tzInfo->defaultTZBuffer = NULL;
                 tzInfo->defaultTZFileSize = 0;
-                tzInfo->defaultTZFilePtr = nullptr;
-                tzInfo->defaultTZstatus = false;
+                tzInfo->defaultTZFilePtr = NULL;
+                tzInfo->defaultTZstatus = FALSE;
                 tzInfo->defaultTZPosition = 0;
 
                 gTimeZoneBufferPtr = searchForTZFile(TZZONEINFO, tzInfo);
 
                 /* Free previously allocated memory */
-                if (tzInfo->defaultTZBuffer != nullptr) {
+                if (tzInfo->defaultTZBuffer != NULL) {
                     uprv_free(tzInfo->defaultTZBuffer);
                 }
-                if (tzInfo->defaultTZFilePtr != nullptr) {
+                if (tzInfo->defaultTZFilePtr != NULL) {
                     fclose(tzInfo->defaultTZFilePtr);
                 }
                 uprv_free(tzInfo);
             }
 
-            if (gTimeZoneBufferPtr != nullptr && isValidOlsonID(gTimeZoneBufferPtr)) {
+            if (gTimeZoneBufferPtr != NULL && isValidOlsonID(gTimeZoneBufferPtr)) {
                 return gTimeZoneBufferPtr;
             }
 #endif
@@ -1262,7 +1187,7 @@ uprv_tzname(int n)
           daylightType = U_DAYLIGHT_NONE;
         }
         tzid = remapShortTimeZone(U_TZNAME[0], U_TZNAME[1], daylightType, uprv_timezone());
-        if (tzid != nullptr) {
+        if (tzid != NULL) {
             return tzid;
         }
     }
@@ -1275,42 +1200,42 @@ uprv_tzname(int n)
 
 /* Get and set the ICU data directory --------------------------------------- */
 
-static icu::UInitOnce gDataDirInitOnce {};
-static char *gDataDirectory = nullptr;
+static icu::UInitOnce gDataDirInitOnce = U_INITONCE_INITIALIZER;
+static char *gDataDirectory = NULL;
 
-UInitOnce gTimeZoneFilesInitOnce {};
-static CharString *gTimeZoneFilesDirectory = nullptr;
+UInitOnce gTimeZoneFilesInitOnce = U_INITONCE_INITIALIZER;
+static CharString *gTimeZoneFilesDirectory = NULL;
 
 #if U_POSIX_LOCALE || U_PLATFORM_USES_ONLY_WIN32_API
- static const char *gCorrectedPOSIXLocale = nullptr; /* Sometimes heap allocated */
+ static const char *gCorrectedPOSIXLocale = NULL; /* Sometimes heap allocated */
  static bool gCorrectedPOSIXLocaleHeapAllocated = false;
 #endif
 
-static UBool U_CALLCONV putil_cleanup()
+static UBool U_CALLCONV putil_cleanup(void)
 {
     if (gDataDirectory && *gDataDirectory) {
         uprv_free(gDataDirectory);
     }
-    gDataDirectory = nullptr;
+    gDataDirectory = NULL;
     gDataDirInitOnce.reset();
 
     delete gTimeZoneFilesDirectory;
-    gTimeZoneFilesDirectory = nullptr;
+    gTimeZoneFilesDirectory = NULL;
     gTimeZoneFilesInitOnce.reset();
 
 #ifdef SEARCH_TZFILE
     delete gSearchTZFileResult;
-    gSearchTZFileResult = nullptr;
+    gSearchTZFileResult = NULL;
 #endif
 
 #if U_POSIX_LOCALE || U_PLATFORM_USES_ONLY_WIN32_API
     if (gCorrectedPOSIXLocale && gCorrectedPOSIXLocaleHeapAllocated) {
         uprv_free(const_cast<char *>(gCorrectedPOSIXLocale));
-        gCorrectedPOSIXLocale = nullptr;
+        gCorrectedPOSIXLocale = NULL;
         gCorrectedPOSIXLocaleHeapAllocated = false;
     }
 #endif
-    return true;
+    return TRUE;
 }
 
 /*
@@ -1322,9 +1247,9 @@ u_setDataDirectory(const char *directory) {
     char *newDataDir;
     int32_t length;
 
-    if(directory==nullptr || *directory==0) {
+    if(directory==NULL || *directory==0) {
         /* A small optimization to prevent the malloc and copy when the
-        shared library is used, and this is a way to make sure that nullptr
+        shared library is used, and this is a way to make sure that NULL
         is never returned.
         */
         newDataDir = (char *)"";
@@ -1333,7 +1258,7 @@ u_setDataDirectory(const char *directory) {
         length=(int32_t)uprv_strlen(directory);
         newDataDir = (char *)uprv_malloc(length + 2);
         /* Exit out if newDataDir could not be created. */
-        if (newDataDir == nullptr) {
+        if (newDataDir == NULL) {
             return;
         }
         uprv_strcpy(newDataDir, directory);
@@ -1341,7 +1266,7 @@ u_setDataDirectory(const char *directory) {
 #if (U_FILE_SEP_CHAR != U_FILE_ALT_SEP_CHAR)
         {
             char *p;
-            while((p = uprv_strchr(newDataDir, U_FILE_ALT_SEP_CHAR)) != nullptr) {
+            while((p = uprv_strchr(newDataDir, U_FILE_ALT_SEP_CHAR)) != NULL) {
                 *p = U_FILE_SEP_CHAR;
             }
         }
@@ -1359,16 +1284,16 @@ U_CAPI UBool U_EXPORT2
 uprv_pathIsAbsolute(const char *path)
 {
   if(!path || !*path) {
-    return false;
+    return FALSE;
   }
 
   if(*path == U_FILE_SEP_CHAR) {
-    return true;
+    return TRUE;
   }
 
 #if (U_FILE_SEP_CHAR != U_FILE_ALT_SEP_CHAR)
   if(*path == U_FILE_ALT_SEP_CHAR) {
-    return true;
+    return TRUE;
   }
 #endif
 
@@ -1376,16 +1301,16 @@ uprv_pathIsAbsolute(const char *path)
   if( (((path[0] >= 'A') && (path[0] <= 'Z')) ||
        ((path[0] >= 'a') && (path[0] <= 'z'))) &&
       path[1] == ':' ) {
-    return true;
+    return TRUE;
   }
 #endif
 
-  return false;
+  return FALSE;
 }
 
 /* Backup setting of ICU_DATA_DIR_PREFIX_ENV_VAR
    (needed for some Darwin ICU build environments) */
-#if U_PLATFORM_IS_DARWIN_BASED && defined(TARGET_OS_SIMULATOR) && TARGET_OS_SIMULATOR
+#if U_PLATFORM_IS_DARWIN_BASED && TARGET_OS_SIMULATOR
 # if !defined(ICU_DATA_DIR_PREFIX_ENV_VAR)
 #  define ICU_DATA_DIR_PREFIX_ENV_VAR "IPHONE_SIMULATOR_ROOT"
 # endif
@@ -1404,7 +1329,7 @@ static BOOL U_CALLCONV getIcuDataDirectoryUnderWindowsDirectory(char* directoryB
         UErrorCode status = U_ZERO_ERROR;
         int32_t windowsPathUtf8Len = 0;
         u_strToUTF8(windowsPathUtf8, static_cast<int32_t>(UPRV_LENGTHOF(windowsPathUtf8)),
-            &windowsPathUtf8Len, reinterpret_cast<const char16_t*>(windowsPath), -1, &status);
+            &windowsPathUtf8Len, reinterpret_cast<const UChar*>(windowsPath), -1, &status);
 
         if (U_SUCCESS(status) && (status != U_STRING_NOT_TERMINATED_WARNING) &&
             (windowsPathUtf8Len < (UPRV_LENGTHOF(windowsPathUtf8) - 1))) {
@@ -1417,12 +1342,12 @@ static BOOL U_CALLCONV getIcuDataDirectoryUnderWindowsDirectory(char* directoryB
             if ((windowsPathUtf8Len + UPRV_LENGTHOF(ICU_DATA_DIR_WINDOWS)) < bufferLength) {
                 uprv_strcpy(directoryBuffer, windowsPathUtf8);
                 uprv_strcat(directoryBuffer, ICU_DATA_DIR_WINDOWS);
-                return true;
+                return TRUE;
             }
         }
     }
 
-    return false;
+    return FALSE;
 }
 #endif
 
@@ -1434,7 +1359,7 @@ static void U_CALLCONV dataDirectoryInitFn() {
         return;
     }
 
-    const char *path = nullptr;
+    const char *path = NULL;
 #if defined(ICU_DATA_DIR_PREFIX_ENV_VAR)
     char datadir_path_buffer[PATH_MAX];
 #endif
@@ -1467,7 +1392,7 @@ static void U_CALLCONV dataDirectoryInitFn() {
      * set their own path.
      */
 #if defined(ICU_DATA_DIR) || defined(U_ICU_DATA_DEFAULT_DIR)
-    if(path==nullptr || *path==0) {
+    if(path==NULL || *path==0) {
 # if defined(ICU_DATA_DIR_PREFIX_ENV_VAR)
         const char *prefix = getenv(ICU_DATA_DIR_PREFIX_ENV_VAR);
 # endif
@@ -1477,8 +1402,8 @@ static void U_CALLCONV dataDirectoryInitFn() {
         path=U_ICU_DATA_DEFAULT_DIR;
 # endif
 # if defined(ICU_DATA_DIR_PREFIX_ENV_VAR)
-        if (prefix != nullptr) {
-            snprintf(datadir_path_buffer, sizeof(datadir_path_buffer), "%s%s", prefix, path);
+        if (prefix != NULL) {
+            snprintf(datadir_path_buffer, PATH_MAX, "%s%s", prefix, path);
             path=datadir_path_buffer;
         }
 # endif
@@ -1492,7 +1417,7 @@ static void U_CALLCONV dataDirectoryInitFn() {
     }
 #endif
 
-    if(path==nullptr) {
+    if(path==NULL) {
         /* It looks really bad, set it to something. */
         path = "";
     }
@@ -1502,7 +1427,7 @@ static void U_CALLCONV dataDirectoryInitFn() {
 }
 
 U_CAPI const char * U_EXPORT2
-u_getDataDirectory() {
+u_getDataDirectory(void) {
     umtx_initOnce(gDataDirInitOnce, &dataDirectoryInitFn);
     return gDataDirectory;
 }
@@ -1515,30 +1440,25 @@ static void setTimeZoneFilesDir(const char *path, UErrorCode &status) {
     gTimeZoneFilesDirectory->append(path, status);
 #if (U_FILE_SEP_CHAR != U_FILE_ALT_SEP_CHAR)
     char *p = gTimeZoneFilesDirectory->data();
-    while ((p = uprv_strchr(p, U_FILE_ALT_SEP_CHAR)) != nullptr) {
+    while ((p = uprv_strchr(p, U_FILE_ALT_SEP_CHAR)) != NULL) {
         *p = U_FILE_SEP_CHAR;
     }
 #endif
 }
 
-#define TO_STRING(x) TO_STRING_2(x)
-#define TO_STRING_2(x) #x
+#define PUTIL_TO_STRING(x) PUTIL_TO_STRING_2(x)
+#define PUTIL_TO_STRING_2(x) #x
 
 static void U_CALLCONV TimeZoneDataDirInitFn(UErrorCode &status) {
-    U_ASSERT(gTimeZoneFilesDirectory == nullptr);
+    U_ASSERT(gTimeZoneFilesDirectory == NULL);
     ucln_common_registerCleanup(UCLN_COMMON_PUTIL, putil_cleanup);
     gTimeZoneFilesDirectory = new CharString();
-    if (gTimeZoneFilesDirectory == nullptr) {
+    if (gTimeZoneFilesDirectory == NULL) {
         status = U_MEMORY_ALLOCATION_ERROR;
         return;
     }
 
     const char *dir = "";
-
-#if defined(ICU_TIMEZONE_FILES_DIR_PREFIX_ENV_VAR)
-    char timezonefilesdir_path_buffer[PATH_MAX];
-    const char *prefix = getenv(ICU_TIMEZONE_FILES_DIR_PREFIX_ENV_VAR);
-#endif
 
 #if U_PLATFORM_HAS_WINUWP_API == 1
 // The UWP version does not support the environment variable setting.
@@ -1556,22 +1476,15 @@ static void U_CALLCONV TimeZoneDataDirInitFn(UErrorCode &status) {
 #endif // U_PLATFORM_HAS_WINUWP_API
 
 #if defined(U_TIMEZONE_FILES_DIR)
-    if (dir == nullptr) {
+    if (dir == NULL) {
         // Build time configuration setting.
-        dir = TO_STRING(U_TIMEZONE_FILES_DIR);
+        dir = PUTIL_TO_STRING(U_TIMEZONE_FILES_DIR);
     }
 #endif
 
-    if (dir == nullptr) {
+    if (dir == NULL) {
         dir = "";
     }
-
-#if defined(ICU_TIMEZONE_FILES_DIR_PREFIX_ENV_VAR)
-    if (prefix != nullptr) {
-        snprintf(timezonefilesdir_path_buffer, sizeof(timezonefilesdir_path_buffer), "%s%s", prefix, dir);
-        dir = timezonefilesdir_path_buffer;
-    }
-#endif
 
     setTimeZoneFilesDir(dir, status);
 }
@@ -1601,7 +1514,7 @@ u_setTimeZoneFilesDirectory(const char *path, UErrorCode *status) {
  */
 static const char *uprv_getPOSIXIDForCategory(int category)
 {
-    const char* posixID = nullptr;
+    const char* posixID = NULL;
     if (category == LC_MESSAGES || category == LC_CTYPE) {
         /*
         * On Solaris two different calls to setlocale can result in
@@ -1611,7 +1524,7 @@ static const char *uprv_getPOSIXIDForCategory(int category)
         *
         * LC_ALL can't be used because it's platform dependent. The LANG
         * environment variable seems to affect LC_CTYPE variable by default.
-        * Here is what setlocale(LC_ALL, nullptr) can return.
+        * Here is what setlocale(LC_ALL, NULL) can return.
         * HPUX can return 'C C C C C C C'
         * Solaris can return /en_US/C/C/C/C/C on the second try.
         * Linux can return LC_CTYPE=C;LC_NUMERIC=C;...
@@ -1619,9 +1532,9 @@ static const char *uprv_getPOSIXIDForCategory(int category)
         * The default codepage detection also needs to use LC_CTYPE.
         *
         * Do not call setlocale(LC_*, "")! Using an empty string instead
-        * of nullptr, will modify the libc behavior.
+        * of NULL, will modify the libc behavior.
         */
-        posixID = setlocale(category, nullptr);
+        posixID = setlocale(category, NULL);
         if ((posixID == 0)
             || (uprv_strcmp("C", posixID) == 0)
             || (uprv_strcmp("POSIX", posixID) == 0))
@@ -1662,9 +1575,9 @@ static const char *uprv_getPOSIXIDForCategory(int category)
 /* Return just the POSIX id for the default locale, whatever happens to be in
  * it. It gets the value from LC_MESSAGES and indirectly from LC_ALL and LANG.
  */
-static const char *uprv_getPOSIXIDForDefaultLocale()
+static const char *uprv_getPOSIXIDForDefaultLocale(void)
 {
-    static const char* posixID = nullptr;
+    static const char* posixID = NULL;
     if (posixID == 0) {
         posixID = uprv_getPOSIXIDForCategory(LC_MESSAGES);
     }
@@ -1675,9 +1588,9 @@ static const char *uprv_getPOSIXIDForDefaultLocale()
 /* Return just the POSIX id for the default codepage, whatever happens to be in
  * it. It gets the value from LC_CTYPE and indirectly from LC_ALL and LANG.
  */
-static const char *uprv_getPOSIXIDForDefaultCodepage()
+static const char *uprv_getPOSIXIDForDefaultCodepage(void)
 {
-    static const char* posixID = nullptr;
+    static const char* posixID = NULL;
     if (posixID == 0) {
         posixID = uprv_getPOSIXIDForCategory(LC_CTYPE);
     }
@@ -1876,16 +1789,16 @@ The leftmost codepage (.xxx) wins.
     const  char *localeID = getenv("LC_ALL");
            char *p;
 
-    if (localeID == nullptr)
+    if (localeID == NULL)
         localeID = getenv("LANG");
-    if (localeID == nullptr)
-        localeID = setlocale(LC_ALL, nullptr);
+    if (localeID == NULL)
+        localeID = setlocale(LC_ALL, NULL);
     /* Make sure we have something... */
-    if (localeID == nullptr)
+    if (localeID == NULL)
         return "en_US_POSIX";
 
     /* Extract the locale name from the path. */
-    if((p = uprv_strrchr(localeID, '/')) != nullptr)
+    if((p = uprv_strrchr(localeID, '/')) != NULL)
     {
         /* Increment p to start of locale name. */
         p++;
@@ -1896,7 +1809,7 @@ The leftmost codepage (.xxx) wins.
     uprv_strcpy(correctedLocale, localeID);
 
     /* Strip off the '.locale' extension. */
-    if((p = uprv_strchr(correctedLocale, '.')) != nullptr) {
+    if((p = uprv_strchr(correctedLocale, '.')) != NULL) {
         *p = 0;
     }
 
@@ -1976,12 +1889,12 @@ names to the ICU alias table in the data directory.
 */
 static const char*
 remapPlatformDependentCodepage(const char *locale, const char *name) {
-    if (locale != nullptr && *locale == 0) {
+    if (locale != NULL && *locale == 0) {
         /* Make sure that an empty locale is handled the same way. */
-        locale = nullptr;
+        locale = NULL;
     }
-    if (name == nullptr) {
-        return nullptr;
+    if (name == NULL) {
+        return NULL;
     }
 #if U_PLATFORM == U_PF_AIX
     if (uprv_strcmp(name, "IBM-943") == 0) {
@@ -1993,7 +1906,7 @@ remapPlatformDependentCodepage(const char *locale, const char *name) {
         name = "IBM-5348";
     }
 #elif U_PLATFORM == U_PF_SOLARIS
-    if (locale != nullptr && uprv_strcmp(name, "EUC") == 0) {
+    if (locale != NULL && uprv_strcmp(name, "EUC") == 0) {
         /* Solaris underspecifies the "EUC" name. */
         if (uprv_strcmp(locale, "zh_CN") == 0) {
             name = "EUC-CN";
@@ -2020,7 +1933,7 @@ remapPlatformDependentCodepage(const char *locale, const char *name) {
         name = "ISO-8859-1";
     }
 #elif U_PLATFORM_IS_DARWIN_BASED
-    if (locale == nullptr && *name == 0) {
+    if (locale == NULL && *name == 0) {
         /*
         No locale was specified, and an empty name was passed in.
         This usually indicates that nl_langinfo didn't return valid information.
@@ -2032,7 +1945,7 @@ remapPlatformDependentCodepage(const char *locale, const char *name) {
         /* Remap CP949 to a similar codepage to avoid issues with backslash and won symbol. */
         name = "EUC-KR";
     }
-    else if (locale != nullptr && uprv_strcmp(locale, "en_US_POSIX") != 0 && uprv_strcmp(name, "US-ASCII") == 0) {
+    else if (locale != NULL && uprv_strcmp(locale, "en_US_POSIX") != 0 && uprv_strcmp(name, "US-ASCII") == 0) {
         /*
          * For non C/POSIX locale, default the code page to UTF-8 instead of US-ASCII.
          */
@@ -2044,7 +1957,7 @@ remapPlatformDependentCodepage(const char *locale, const char *name) {
         name = "EUC-KR";
     }
 #elif U_PLATFORM == U_PF_HPUX
-    if (locale != nullptr && uprv_strcmp(locale, "zh_HK") == 0 && uprv_strcmp(name, "big5") == 0) {
+    if (locale != NULL && uprv_strcmp(locale, "zh_HK") == 0 && uprv_strcmp(name, "big5") == 0) {
         /* HP decided to extend big5 as hkbig5 even though it's not compatible :-( */
         /* zh_TW.big5 is not the same charset as zh_HK.big5! */
         name = "hkbig5";
@@ -2058,7 +1971,7 @@ remapPlatformDependentCodepage(const char *locale, const char *name) {
         name = "eucjis";
     }
 #elif U_PLATFORM == U_PF_LINUX
-    if (locale != nullptr && uprv_strcmp(name, "euc") == 0) {
+    if (locale != NULL && uprv_strcmp(name, "euc") == 0) {
         /* Linux underspecifies the "EUC" name. */
         if (uprv_strcmp(locale, "korean") == 0) {
             name = "EUC-KR";
@@ -2076,7 +1989,7 @@ remapPlatformDependentCodepage(const char *locale, const char *name) {
         */
         name = "eucjis";
     }
-    else if (locale != nullptr && uprv_strcmp(locale, "en_US_POSIX") != 0 &&
+    else if (locale != NULL && uprv_strcmp(locale, "en_US_POSIX") != 0 &&
             (uprv_strcmp(name, "ANSI_X3.4-1968") == 0 || uprv_strcmp(name, "US-ASCII") == 0)) {
         /*
          * For non C/POSIX locale, default the code page to UTF-8 instead of US-ASCII.
@@ -2085,13 +1998,13 @@ remapPlatformDependentCodepage(const char *locale, const char *name) {
     }
     /*
      * Linux returns ANSI_X3.4-1968 for C/POSIX, but the call site takes care of
-     * it by falling back to 'US-ASCII' when nullptr is returned from this
+     * it by falling back to 'US-ASCII' when NULL is returned from this
      * function. So, we don't have to worry about it here.
      */
 #endif
-    /* return nullptr when "" is passed in */
+    /* return NULL when "" is passed in */
     if (*name == 0) {
-        name = nullptr;
+        name = NULL;
     }
     return name;
 }
@@ -2100,16 +2013,16 @@ static const char*
 getCodepageFromPOSIXID(const char *localeName, char * buffer, int32_t buffCapacity)
 {
     char localeBuf[100];
-    const char *name = nullptr;
-    char *variant = nullptr;
+    const char *name = NULL;
+    char *variant = NULL;
 
-    if (localeName != nullptr && (name = (uprv_strchr(localeName, '.'))) != nullptr) {
+    if (localeName != NULL && (name = (uprv_strchr(localeName, '.'))) != NULL) {
         size_t localeCapacity = uprv_min(sizeof(localeBuf), (name-localeName)+1);
         uprv_strncpy(localeBuf, localeName, localeCapacity);
-        localeBuf[localeCapacity-1] = 0; /* ensure NUL termination */
+        localeBuf[localeCapacity-1] = 0; /* ensure NULL termination */
         name = uprv_strncpy(buffer, name+1, buffCapacity);
-        buffer[buffCapacity-1] = 0; /* ensure NUL termination */
-        if ((variant = const_cast<char *>(uprv_strchr(name, '@'))) != nullptr) {
+        buffer[buffCapacity-1] = 0; /* ensure NULL termination */
+        if ((variant = const_cast<char *>(uprv_strchr(name, '@'))) != NULL) {
             *variant = 0;
         }
         name = remapPlatformDependentCodepage(localeBuf, name);
@@ -2139,7 +2052,7 @@ int_getDefaultCodepage()
         }
         /* else use the default */
     }
-    snprintf(codepage, sizeof(codepage), "ibm-%d", ccsid);
+    sprintf(codepage,"ibm-%d", ccsid);
     return codepage;
 
 #elif U_PLATFORM == U_PF_OS390
@@ -2147,7 +2060,7 @@ int_getDefaultCodepage()
 
     strncpy(codepage, nl_langinfo(CODESET),63-strlen(UCNV_SWAP_LFNL_OPTION_STRING));
     strcat(codepage,UCNV_SWAP_LFNL_OPTION_STRING);
-    codepage[63] = 0; /* NUL terminate */
+    codepage[63] = 0; /* NULL terminate */
 
     return codepage;
 
@@ -2176,7 +2089,7 @@ int_getDefaultCodepage()
     // are between 3 and 19999
     if (codepageNumber > 0 && codepageNumber < 20000)
     {
-        snprintf(codepage, sizeof(codepage), "windows-%ld", codepageNumber);
+        sprintf(codepage, "windows-%ld", codepageNumber);
         return codepage;
     }
     // If the codepage number call failed then return UTF-8
@@ -2184,8 +2097,8 @@ int_getDefaultCodepage()
 
 #elif U_POSIX_LOCALE
     static char codesetName[100];
-    const char *localeName = nullptr;
-    const char *name = nullptr;
+    const char *localeName = NULL;
+    const char *name = NULL;
 
     localeName = uprv_getPOSIXIDForDefaultCodepage();
     uprv_memset(codesetName, 0, sizeof(codesetName));
@@ -2208,10 +2121,10 @@ int_getDefaultCodepage()
         } else
 #endif
         {
-            codeset = remapPlatformDependentCodepage(nullptr, codeset);
+            codeset = remapPlatformDependentCodepage(NULL, codeset);
         }
 
-        if (codeset != nullptr) {
+        if (codeset != NULL) {
             uprv_strncpy(codesetName, codeset, sizeof(codesetName));
             codesetName[sizeof(codesetName)-1] = 0;
             return codesetName;
@@ -2244,12 +2157,12 @@ int_getDefaultCodepage()
 U_CAPI const char*  U_EXPORT2
 uprv_getDefaultCodepage()
 {
-    static char const  *name = nullptr;
-    umtx_lock(nullptr);
-    if (name == nullptr) {
+    static char const  *name = NULL;
+    umtx_lock(NULL);
+    if (name == NULL) {
         name = int_getDefaultCodepage();
     }
-    umtx_unlock(nullptr);
+    umtx_unlock(NULL);
     return name;
 }
 #endif  /* !U_CHARSET_IS_UTF8 */
@@ -2264,11 +2177,11 @@ u_versionFromString(UVersionInfo versionArray, const char *versionString) {
     char *end;
     uint16_t part=0;
 
-    if(versionArray==nullptr) {
+    if(versionArray==NULL) {
         return;
     }
 
-    if(versionString!=nullptr) {
+    if(versionString!=NULL) {
         for(;;) {
             versionArray[part]=(uint8_t)uprv_strtoul(versionString, &end, 10);
             if(end==versionString || ++part==U_MAX_VERSION_LENGTH || *end!=U_VERSION_DELIMITER) {
@@ -2284,8 +2197,8 @@ u_versionFromString(UVersionInfo versionArray, const char *versionString) {
 }
 
 U_CAPI void U_EXPORT2
-u_versionFromUString(UVersionInfo versionArray, const char16_t *versionString) {
-    if(versionArray!=nullptr && versionString!=nullptr) {
+u_versionFromUString(UVersionInfo versionArray, const UChar *versionString) {
+    if(versionArray!=NULL && versionString!=NULL) {
         char versionChars[U_MAX_VERSION_STRING_LENGTH+1];
         int32_t len = u_strlen(versionString);
         if(len>U_MAX_VERSION_STRING_LENGTH) {
@@ -2302,11 +2215,11 @@ u_versionToString(const UVersionInfo versionArray, char *versionString) {
     uint16_t count, part;
     uint8_t field;
 
-    if(versionString==nullptr) {
+    if(versionString==NULL) {
         return;
     }
 
-    if(versionArray==nullptr) {
+    if(versionArray==NULL) {
         versionString[0]=0;
         return;
     }
@@ -2356,145 +2269,9 @@ u_versionToString(const UVersionInfo versionArray, char *versionString) {
 
 U_CAPI void U_EXPORT2
 u_getVersion(UVersionInfo versionArray) {
-    (void)copyright;   // Suppress unused variable warning from clang.
+    // (void)copyright;   // Suppress unused variable warning from clang.
     u_versionFromString(versionArray, U_ICU_VERSION);
 }
-
-/**
- * icucfg.h dependent code
- */
-
-#if U_ENABLE_DYLOAD && HAVE_DLOPEN && !U_PLATFORM_USES_ONLY_WIN32_API
-
-#if HAVE_DLFCN_H
-#ifdef __MVS__
-#ifndef __SUSV3
-#define __SUSV3 1
-#endif
-#endif
-#include <dlfcn.h>
-#endif /* HAVE_DLFCN_H */
-
-U_CAPI void * U_EXPORT2
-uprv_dl_open(const char *libName, UErrorCode *status) {
-  void *ret = nullptr;
-  if(U_FAILURE(*status)) return ret;
-  ret =  dlopen(libName, RTLD_NOW|RTLD_GLOBAL);
-  if(ret==nullptr) {
-#ifdef U_TRACE_DYLOAD
-    printf("dlerror on dlopen(%s): %s\n", libName, dlerror());
-#endif
-    *status = U_MISSING_RESOURCE_ERROR;
-  }
-  return ret;
-}
-
-U_CAPI void U_EXPORT2
-uprv_dl_close(void *lib, UErrorCode *status) {
-  if(U_FAILURE(*status)) return;
-  dlclose(lib);
-}
-
-U_CAPI UVoidFunction* U_EXPORT2
-uprv_dlsym_func(void *lib, const char* sym, UErrorCode *status) {
-  union {
-      UVoidFunction *fp;
-      void *vp;
-  } uret;
-  uret.fp = nullptr;
-  if(U_FAILURE(*status)) return uret.fp;
-  uret.vp = dlsym(lib, sym);
-  if(uret.vp == nullptr) {
-#ifdef U_TRACE_DYLOAD
-    printf("dlerror on dlsym(%p,%s): %s\n", lib,sym, dlerror());
-#endif
-    *status = U_MISSING_RESOURCE_ERROR;
-  }
-  return uret.fp;
-}
-
-#elif U_ENABLE_DYLOAD && U_PLATFORM_USES_ONLY_WIN32_API && !U_PLATFORM_HAS_WINUWP_API
-
-/* Windows API implementation. */
-// Note: UWP does not expose/allow these APIs, so the UWP version gets the null implementation. */
-
-U_CAPI void * U_EXPORT2
-uprv_dl_open(const char *libName, UErrorCode *status) {
-  HMODULE lib = nullptr;
-
-  if(U_FAILURE(*status)) return nullptr;
-
-  lib = LoadLibraryA(libName);
-
-  if(lib==nullptr) {
-    *status = U_MISSING_RESOURCE_ERROR;
-  }
-
-  return (void*)lib;
-}
-
-U_CAPI void U_EXPORT2
-uprv_dl_close(void *lib, UErrorCode *status) {
-  HMODULE handle = (HMODULE)lib;
-  if(U_FAILURE(*status)) return;
-
-  FreeLibrary(handle);
-
-  return;
-}
-
-U_CAPI UVoidFunction* U_EXPORT2
-uprv_dlsym_func(void *lib, const char* sym, UErrorCode *status) {
-  HMODULE handle = (HMODULE)lib;
-  UVoidFunction* addr = nullptr;
-
-  if(U_FAILURE(*status) || lib==nullptr) return nullptr;
-
-  addr = (UVoidFunction*)GetProcAddress(handle, sym);
-
-  if(addr==nullptr) {
-    DWORD lastError = GetLastError();
-    if(lastError == ERROR_PROC_NOT_FOUND) {
-      *status = U_MISSING_RESOURCE_ERROR;
-    } else {
-      *status = U_UNSUPPORTED_ERROR; /* other unknown error. */
-    }
-  }
-
-  return addr;
-}
-
-#else
-
-/* No dynamic loading, null (nonexistent) implementation. */
-
-U_CAPI void * U_EXPORT2
-uprv_dl_open(const char *libName, UErrorCode *status) {
-    (void)libName;
-    if(U_FAILURE(*status)) return nullptr;
-    *status = U_UNSUPPORTED_ERROR;
-    return nullptr;
-}
-
-U_CAPI void U_EXPORT2
-uprv_dl_close(void *lib, UErrorCode *status) {
-    (void)lib;
-    if(U_FAILURE(*status)) return;
-    *status = U_UNSUPPORTED_ERROR;
-    return;
-}
-
-U_CAPI UVoidFunction* U_EXPORT2
-uprv_dlsym_func(void *lib, const char* sym, UErrorCode *status) {
-  (void)lib;
-  (void)sym;
-  if(U_SUCCESS(*status)) {
-    *status = U_UNSUPPORTED_ERROR;
-  }
-  return (UVoidFunction*)nullptr;
-}
-
-#endif
 
 /*
  * Hey, Emacs, please set the following:

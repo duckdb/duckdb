@@ -4,7 +4,6 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/planner/table_filter_set.hpp"
 
 namespace duckdb {
 
@@ -26,10 +25,10 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters)
     : observe_interval(10), execute_interval(20), warmup(true) {
 	permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
-	for (idx_t idx = 1; idx < table_filters.FilterCount(); idx++) {
+	for (idx_t idx = 1; idx < table_filters.filters.size(); idx++) {
 		swap_likeliness.push_back(100);
 	}
-	right_random_border = 100 * (table_filters.FilterCount() - 1);
+	right_random_border = 100 * (table_filters.filters.size() - 1);
 }
 
 AdaptiveFilterState AdaptiveFilter::BeginFilter() const {

@@ -23,7 +23,7 @@ U_NAMESPACE_BEGIN
 
 UOBJECT_DEFINE_RTTI_IMPLEMENTATION(Measure)
 
-Measure::Measure() : unit(nullptr) {}
+Measure::Measure() {}
 
 Measure::Measure(const Formattable& _number, MeasureUnit* adoptedUnit,
                  UErrorCode& ec) :
@@ -35,7 +35,7 @@ Measure::Measure(const Formattable& _number, MeasureUnit* adoptedUnit,
 }
 
 Measure::Measure(const Measure& other) :
-    UObject(other), unit(nullptr) {
+    UObject(other), unit(0) {
     *this = other;
 }
 
@@ -43,11 +43,7 @@ Measure& Measure::operator=(const Measure& other) {
     if (this != &other) {
         delete unit;
         number = other.number;
-        if (other.unit != nullptr) {
-            unit = other.unit->clone();
-        } else {
-            unit = nullptr;
-        }
+        unit = other.unit->clone();
     }
     return *this;
 }
@@ -62,15 +58,15 @@ Measure::~Measure() {
 
 bool Measure::operator==(const UObject& other) const {
     if (this == &other) {  // Same object, equal
-        return true;
+        return TRUE;
     }
     if (typeid(*this) != typeid(other)) { // Different types, not equal
-        return false;
+        return FALSE;
     }
     const Measure &m = static_cast<const Measure&>(other);
     return number == m.number &&
-        ((unit == nullptr) == (m.unit == nullptr)) &&
-        (unit == nullptr || *unit == *m.unit);
+        ((unit == NULL) == (m.unit == NULL)) &&
+        (unit == NULL || *unit == *m.unit);
 }
 
 U_NAMESPACE_END

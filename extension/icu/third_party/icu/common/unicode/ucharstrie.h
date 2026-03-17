@@ -67,7 +67,7 @@ public:
      * @stable ICU 4.8
      */
     UCharsTrie(ConstChar16Ptr trieUChars)
-            : ownedArray_(nullptr), uchars_(trieUChars),
+            : ownedArray_(NULL), uchars_(trieUChars),
               pos_(uchars_), remainingMatchLength_(-1) {}
 
     /**
@@ -83,7 +83,7 @@ public:
      * @stable ICU 4.8
      */
     UCharsTrie(const UCharsTrie &other)
-            : ownedArray_(nullptr), uchars_(other.uchars_),
+            : ownedArray_(NULL), uchars_(other.uchars_),
               pos_(other.pos_), remainingMatchLength_(other.remainingMatchLength_) {}
 
     /**
@@ -97,13 +97,14 @@ public:
         return *this;
     }
 
+#ifndef U_HIDE_DRAFT_API
     /**
      * Returns the state of this trie as a 64-bit integer.
      * The state value is never 0.
      *
      * @return opaque state value
      * @see resetToState64
-     * @stable ICU 65
+     * @draft ICU 65
      */
     uint64_t getState64() const {
         return (static_cast<uint64_t>(remainingMatchLength_ + 2) << kState64RemainingShift) |
@@ -122,13 +123,14 @@ public:
      * @see getState64
      * @see resetToState
      * @see reset
-     * @stable ICU 65
+     * @draft ICU 65
      */
     UCharsTrie &resetToState64(uint64_t state) {
         remainingMatchLength_ = static_cast<int32_t>(state >> kState64RemainingShift) - 2;
         pos_ = uchars_ + (state & kState64PosMask);
         return *this;
     }
+#endif  /* U_HIDE_DRAFT_API */
 
     /**
      * UCharsTrie state object, for saving a trie's current state
@@ -141,7 +143,7 @@ public:
          * Constructs an empty State.
          * @stable ICU 4.8
          */
-        State() { uchars=nullptr; }
+        State() { uchars=NULL; }
     private:
         friend class UCharsTrie;
 
@@ -175,7 +177,7 @@ public:
      * @stable ICU 4.8
      */
     UCharsTrie &resetToState(const State &state) {
-        if(uchars_==state.uchars && uchars_!=nullptr) {
+        if(uchars_==state.uchars && uchars_!=NULL) {
             pos_=state.pos;
             remainingMatchLength_=state.remainingMatchLength;
         }
@@ -239,7 +241,7 @@ public:
      *   result=next(c);
      * return result;
      * \endcode
-     * @param s A string. Can be nullptr if length is 0.
+     * @param s A string. Can be NULL if length is 0.
      * @param length The length of the string. Can be -1 if NUL-terminated.
      * @return The match/value Result.
      * @stable ICU 4.8
@@ -266,16 +268,16 @@ public:
     /**
      * Determines whether all strings reachable from the current state
      * map to the same value.
-     * @param uniqueValue Receives the unique value, if this function returns true.
+     * @param uniqueValue Receives the unique value, if this function returns TRUE.
      *                    (output-only)
-     * @return true if all strings reachable from the current state
+     * @return TRUE if all strings reachable from the current state
      *         map to the same value.
      * @stable ICU 4.8
      */
     inline UBool hasUniqueValue(int32_t &uniqueValue) const {
         const char16_t *pos=pos_;
         // Skip the rest of a pending linear-match node.
-        return pos!=nullptr && findUniqueValue(pos+remainingMatchLength_+1, false, uniqueValue);
+        return pos!=NULL && findUniqueValue(pos+remainingMatchLength_+1, FALSE, uniqueValue);
     }
 
     /**
@@ -333,7 +335,7 @@ public:
         Iterator &reset();
 
         /**
-         * @return true if there are more elements.
+         * @return TRUE if there are more elements.
          * @stable ICU 4.8
          */
         UBool hasNext() const;
@@ -349,7 +351,7 @@ public:
          *                  pass the U_SUCCESS() test, or else the function returns
          *                  immediately. Check for U_FAILURE() on output or use with
          *                  function chaining. (See User Guide for details.)
-         * @return true if there is another element.
+         * @return TRUE if there is another element.
          * @stable ICU 4.8
          */
         UBool next(UErrorCode &errorCode);
@@ -367,9 +369,9 @@ public:
 
     private:
         UBool truncateAndStop() {
-            pos_=nullptr;
+            pos_=NULL;
             value_=-1;  // no real value for str
-            return true;
+            return TRUE;
         }
 
         const char16_t *branchNext(const char16_t *pos, int32_t length, UErrorCode &errorCode);
@@ -409,10 +411,10 @@ private:
               pos_(uchars_), remainingMatchLength_(-1) {}
 
     // No assignment operator.
-    UCharsTrie &operator=(const UCharsTrie &other) = delete;
+    UCharsTrie &operator=(const UCharsTrie &other);
 
     inline void stop() {
-        pos_=nullptr;
+        pos_=NULL;
     }
 
     // Reads a compact 32-bit integer.
@@ -610,7 +612,7 @@ private:
 
     // Iterator variables.
 
-    // Pointer to next trie unit to read. nullptr if no more matches.
+    // Pointer to next trie unit to read. NULL if no more matches.
     const char16_t *pos_;
     // Remaining length of a linear-match node, minus 1. Negative if not in such a node.
     int32_t remainingMatchLength_;

@@ -43,9 +43,9 @@ struct CollationData;
 class TailoredSet : public UMemory {
 public:
     TailoredSet(UnicodeSet *t)
-            : data(nullptr), baseData(nullptr),
+            : data(NULL), baseData(NULL),
               tailored(t),
-              suffix(nullptr),
+              suffix(NULL),
               errorCode(U_ZERO_ERROR) {}
 
     void forData(const CollationData *d, UErrorCode &errorCode);
@@ -58,12 +58,12 @@ public:
 
 private:
     void compare(UChar32 c, uint32_t ce32, uint32_t baseCE32);
-    void comparePrefixes(UChar32 c, const char16_t *p, const char16_t *q);
-    void compareContractions(UChar32 c, const char16_t *p, const char16_t *q);
+    void comparePrefixes(UChar32 c, const UChar *p, const UChar *q);
+    void compareContractions(UChar32 c, const UChar *p, const UChar *q);
 
-    void addPrefixes(const CollationData *d, UChar32 c, const char16_t *p);
+    void addPrefixes(const CollationData *d, UChar32 c, const UChar *p);
     void addPrefix(const CollationData *d, const UnicodeString &pfx, UChar32 c, uint32_t ce32);
-    void addContractions(UChar32 c, const char16_t *p);
+    void addContractions(UChar32 c, const UChar *p);
     void addSuffix(UChar32 c, const UnicodeString &sfx);
     void add(UChar32 c);
 
@@ -94,12 +94,12 @@ public:
     };
 
     ContractionsAndExpansions(UnicodeSet *con, UnicodeSet *exp, CESink *s, UBool prefixes)
-            : data(nullptr),
+            : data(NULL),
               contractions(con), expansions(exp),
               sink(s),
               addPrefixes(prefixes),
               checkTailored(0),
-              suffix(nullptr),
+              suffix(NULL),
               errorCode(U_ZERO_ERROR) {}
 
     void forData(const CollationData *d, UErrorCode &errorCode);

@@ -68,7 +68,7 @@ Cannot perform list_reduce on an empty input list
 statement error
 SELECT list_reduce([1, 2, 3], (x, y) -> (x * y)::VARCHAR || 'please work');
 ----
-Binder Error: No common super type between list element type INTEGER and lambda return type VARCHAR
+Could not convert
 
 statement error
 SELECT list_reduce([1, 2], (x) -> x);

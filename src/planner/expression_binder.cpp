@@ -93,7 +93,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	}
 	case ExpressionClass::LAMBDA: {
 		const vector<LogicalType> function_child_types;
-		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, function_child_types, nullptr, nullptr);
+		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, function_child_types, nullptr);
 	}
 	case ExpressionClass::OPERATOR:
 		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);

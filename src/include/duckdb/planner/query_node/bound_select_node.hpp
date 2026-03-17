@@ -14,7 +14,6 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
-#include "duckdb/common/index_vector.hpp"
 
 namespace duckdb {
 
@@ -28,7 +27,7 @@ public:
 
 struct BoundUnnestNode {
 	//! The index of the UNNEST node
-	TableIndex index;
+	idx_t index;
 	//! The set of expressions
 	vector<unique_ptr<Expression>> expressions;
 };
@@ -59,27 +58,27 @@ public:
 	idx_t bound_column_count = 0;
 
 	//! Index used by the LogicalProjection
-	TableIndex projection_index;
+	idx_t projection_index;
 
 	//! Group index used by the LogicalAggregate (only used if HasAggregation is true)
-	TableIndex group_index;
+	idx_t group_index;
 	//! Table index for the projection child of the group op
-	TableIndex group_projection_index;
+	idx_t group_projection_index;
 	//! Aggregate index used by the LogicalAggregate (only used if HasAggregation is true)
-	TableIndex aggregate_index;
+	idx_t aggregate_index;
 	//! Index used for GROUPINGS column references
-	TableIndex groupings_index;
+	idx_t groupings_index;
 	//! Aggregate functions to compute (only used if HasAggregation is true)
 	vector<unique_ptr<Expression>> aggregates;
 
 	//! GROUPING function calls
-	vector<unsafe_vector<ProjectionIndex>> grouping_functions;
+	vector<unsafe_vector<idx_t>> grouping_functions;
 
 	//! Map from aggregate function to aggregate index (used to eliminate duplicate aggregates)
-	expression_map_t<ProjectionIndex> aggregate_map;
+	expression_map_t<idx_t> aggregate_map;
 
 	//! Window index used by the LogicalWindow (only used if HasWindow is true)
-	TableIndex window_index;
+	idx_t window_index;
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
 
@@ -87,11 +86,11 @@ public:
 	unordered_map<idx_t, BoundUnnestNode> unnests;
 
 	//! Index of pruned node
-	TableIndex prune_index;
+	idx_t prune_index;
 	bool need_prune = false;
 
 public:
-	TableIndex GetRootIndex() override {
+	idx_t GetRootIndex() override {
 		return need_prune ? prune_index : projection_index;
 	}
 };

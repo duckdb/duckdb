@@ -11,7 +11,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/common/index_vector.hpp"
-#include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
@@ -47,7 +46,7 @@ public:
 	//! The base table to merge into
 	TableCatalogEntry &table;
 	//! projection index
-	TableIndex table_index;
+	idx_t table_index;
 	vector<unique_ptr<Expression>> bound_defaults;
 	idx_t row_id_start;
 	optional_idx source_marker;
@@ -55,9 +54,6 @@ public:
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! Whether or not to return the input data
 	bool return_chunk = false;
-	//! For DELETE with RETURNING: maps storage_idx -> input chunk position
-	//! Used to pass columns through instead of fetching by row ID
-	vector<idx_t> delete_return_columns;
 
 	map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>> actions;
 
@@ -66,7 +62,7 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	idx_t EstimateCardinality(ClientContext &context) override;
-	vector<TableIndex> GetTableIndex() const override;
+	vector<idx_t> GetTableIndex() const override;
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;

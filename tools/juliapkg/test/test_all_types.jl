@@ -9,7 +9,9 @@
     df = DataFrame(
         DBInterface.execute(
             con,
-            """SELECT * EXCLUDE(time, time_tz, time_ns, bignum)
+            """SELECT * EXCLUDE(time, time_ns, time_tz, fixed_int_array, fixed_varchar_array, fixed_nested_int_array,
+            		fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, fixed_array_of_int_list,
+            		list_of_fixed_int_array, bignum)
                 , CASE WHEN time = '24:00:00'::TIME THEN '23:59:59.999999'::TIME ELSE time END AS time
                 , CASE WHEN time_tz = '24:00:00-15:59:59'::TIMETZ THEN '23:59:59.999999-15:59:59'::TIMETZ ELSE time_tz END AS time_tz
             FROM test_all_types()
@@ -185,42 +187,4 @@
     )
     @test isequal(df.array_of_structs, [[], [(a = missing, b = missing), (a = 42, b = "🦆🦆🦆🦆🦆🦆"), missing], missing])
     @test isequal(df.map, [Dict(), Dict("key1" => "🦆🦆🦆🦆🦆🦆", "key2" => "goose"), missing])
-    @test isequal(df.fixed_int_array, [[missing, 2, 3], [4, 5, 6], missing])
-    @test isequal(df.fixed_varchar_array, [["a", missing, "c"], ["d", "e", "f"], missing])
-    @test isequal(
-        df.fixed_nested_int_array,
-        [[[missing, 2, 3], missing, [missing, 2, 3]], [[4, 5, 6], [missing, 2, 3], [4, 5, 6]], missing]
-    )
-    @test isequal(
-        df.fixed_nested_varchar_array,
-        [
-            [["a", missing, "c"], missing, ["a", missing, "c"]],
-            [["d", "e", "f"], ["a", missing, "c"], ["d", "e", "f"]],
-            missing
-        ]
-    )
-    @test isequal(
-        df.fixed_struct_array,
-        [
-            [(a = missing, b = missing), (a = 42, b = "🦆🦆🦆🦆🦆🦆"), (a = missing, b = missing)],
-            [(a = 42, b = "🦆🦆🦆🦆🦆🦆"), (a = missing, b = missing), (a = 42, b = "🦆🦆🦆🦆🦆🦆")],
-            missing
-        ]
-    )
-    @test isequal(
-        df.struct_of_fixed_array,
-        [(a = [missing, 2, 3], b = ["a", missing, "c"]), (a = [4, 5, 6], b = ["d", "e", "f"]), missing]
-    )
-    @test isequal(
-        df.fixed_array_of_int_list,
-        [
-            [[], [42, 999, missing, missing, -42], []],
-            [[42, 999, missing, missing, -42], [], [42, 999, missing, missing, -42]],
-            missing
-        ]
-    )
-    @test isequal(
-        df.list_of_fixed_int_array,
-        [[[missing, 2, 3], [4, 5, 6], [missing, 2, 3]], [[4, 5, 6], [missing, 2, 3], [4, 5, 6]], missing]
-    )
 end

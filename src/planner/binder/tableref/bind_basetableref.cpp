@@ -170,7 +170,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			auto table_index = GenerateTableIndex();
 			auto ref_alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			vector<LogicalType> types {LogicalType::INTEGER};
-			vector<string> names {"__dummy_col" + to_string(table_index.index)};
+			vector<string> names {"__dummy_col" + to_string(table_index)};
 			bind_context.AddGenericBinding(table_index, ref_alias, names, types);
 
 			BoundStatement result;

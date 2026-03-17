@@ -16,7 +16,6 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
-#include "duckdb/storage/buffer/temporary_file_information.hpp"
 
 namespace duckdb {
 
@@ -64,11 +63,9 @@ public:
 
 	idx_t GetMaxMemory() const;
 
-	virtual idx_t GetOperatorMemoryLimit() const;
+	virtual idx_t GetQueryMaxMemory() const;
 
 	TemporaryMemoryManager &GetTemporaryMemoryManager();
-
-	vector<EvictionQueueInformation> GetEvictionQueueInfo() const;
 
 	//! Take per-database ObjectCache under buffer pool's memory management.
 	//! Notice, object cache should be registered for at most once, otherwise InvalidInput exception is thrown.

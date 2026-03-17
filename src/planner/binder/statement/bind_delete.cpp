@@ -7,7 +7,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -64,21 +63,6 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	// create the delete node
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->bound_constraints = BindConstraints(table);
-
-	// Add columns to the scan to avoid fetching by row ID in PhysicalDelete:
-	// - If RETURNING: add all physical columns (for RETURNING projection)
-	// - Else if unique indexes exist: add only indexed columns (for delete index tracking)
-	if (!stmt.returning_list.empty()) {
-		// Add all physical columns for RETURNING
-		BindDeleteReturningColumns(table, get, del->return_columns);
-	} else if (table.IsDuckTable()) {
-		// Only optimize for DuckDB tables (not attached external tables like SQLite)
-		auto &storage = table.GetStorage();
-		if (storage.HasUniqueIndexes()) {
-			BindDeleteIndexColumns(table, get, del->return_columns);
-		}
-	}
-
 	del->AddChild(std::move(root));
 
 	// bind the row id columns and add them to the projection list
@@ -91,10 +75,8 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		del->table_index = update_table_index;
 
 		unique_ptr<LogicalOperator> del_as_logicaloperator = std::move(del);
-		// Include virtual columns (like rowid) so they can be referenced in RETURNING
-		auto virtual_columns = table.GetVirtualColumns();
 		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
-		                     std::move(del_as_logicaloperator), std::move(virtual_columns));
+		                     std::move(del_as_logicaloperator));
 	}
 	BoundStatement result;
 	result.plan = std::move(del);

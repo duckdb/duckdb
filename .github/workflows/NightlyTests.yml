@@ -25,6 +25,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   DUCKDB_WASM_VERSION: "cf2048bd6d669ffa05c56d7d453e09e99de8b87e"
+  BRANCHES_TO_BE_CACHED: ${{ github.repository == 'duckdb/duckdb' && '["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]' || ''}}
   REDUCE_SYMBOLS: 1
   PYTHONUNBUFFERED: 1
 
@@ -55,7 +56,7 @@ jobs:
 
      - name: Install Ninja
        shell: bash
-       run: make toolsci
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
 
@@ -91,7 +92,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 
@@ -171,7 +172,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: make toolsci
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - uses: ./.github/actions/ccache-action
 
@@ -190,7 +191,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          make allunit
+          build/release/test/unittest "*"
 
   release-assert-clang:
     name: Release Assertions with Clang
@@ -215,7 +216,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: make toolsci && sudo apt-get install -y -qq llvm libcurl4-openssl-dev
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm libcurl4-openssl-dev
 
     - uses: ./.github/actions/ccache-action
 
@@ -250,15 +251,15 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: ./.github/actions/ccache-action
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@v1.2.11 # Note: pinned due to GLIBC incompatibility in later releases
+       with:
+         key: ${{ github.job }}
+         save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
      - uses: ./.github/actions/cleanup_runner
 
      - uses: ./.github/actions/swap_space
-
-     - name: Install tools
-       shell: bash
-       run: make toolsci
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
@@ -287,7 +288,7 @@ jobs:
 
      - name: Install
        shell: bash
-       run: make toolsci
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
 
@@ -326,7 +327,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: actions/setup-python@v4
         with:
@@ -395,7 +396,7 @@ jobs:
      - name: Install
        shell: bash
        run: |
-        make toolsci && sudo apt-get install -y -qq libcurl4-openssl-dev && pip install requests
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev && pip install requests
 
      - uses: ./.github/actions/ccache-action
 
@@ -460,7 +461,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: ./.github/actions/ccache-action
 
@@ -480,11 +481,11 @@ jobs:
 
       - name: All tests with 512 vector size and default block size
         shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/vector_size_512.json ./build/relassert/test/unittest "*"
+        run: ./build/relassert/test/unittest "*" --test-config test/configs/vector_size_512.json
 
       - name: All tests with 512 vector size and 16kB block size
         shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/relassert/test/unittest "*"
+        run: ./build/relassert/test/unittest "*" --test-config test/configs/block_size_16kB.json
 
   linux-debug-configs:
     name: Tests different configurations with a debug build
@@ -502,7 +503,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
       - uses: ./.github/actions/ccache-action
 
@@ -521,7 +522,7 @@ jobs:
       - name: test/configs/enable_verification_for_debug.json
         if: (success() || failure()) && steps.build.conclusion == 'success'
         shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/enable_verification_for_debug.json ./build/debug/test/unittest
+        run: ./build/debug/test/unittest --test-config test/configs/enable_verification_for_debug.json
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
@@ -539,9 +540,13 @@ jobs:
 
       - name: Install
         shell: bash
-        run: make toolsci
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-      - uses: ./.github/actions/ccache-action
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.BRANCHES_TO_BE_CACHED == '' || contains(env.BRANCHES_TO_BE_CACHED, github.ref) }}
 
       - uses: ./.github/actions/cleanup_runner
 
@@ -586,10 +591,6 @@ jobs:
       with:
         fetch-depth: 0
         path: duckdb-wasm/submodules/duckdb
-
-    - name: Install tools
-      shell: bash
-      run: make -C duckdb-wasm/submodules/duckdb toolsci
 
     - name: Setup
       shell: bash
@@ -656,7 +657,7 @@ jobs:
 
      - name: Install
        shell: bash
-       run: make toolsci
+       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
      - uses: ./.github/actions/ccache-action
 

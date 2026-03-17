@@ -106,7 +106,7 @@ class U_COMMON_API LocaleKey : public ICUServiceKey {
     /**
      * Append the prefix associated with the kind, or nothing if the kind is KIND_ANY.
      */
-    virtual UnicodeString& prefix(UnicodeString& result) const override;
+    virtual UnicodeString& prefix(UnicodeString& result) const;
 
     /**
      * Return the kind code associated with this key.
@@ -116,17 +116,17 @@ class U_COMMON_API LocaleKey : public ICUServiceKey {
     /**
      * Return the canonicalID.
      */
-    virtual UnicodeString& canonicalID(UnicodeString& result) const override;
+    virtual UnicodeString& canonicalID(UnicodeString& result) const;
 
     /**
      * Return the currentID.
      */
-    virtual UnicodeString& currentID(UnicodeString& result) const override;
+    virtual UnicodeString& currentID(UnicodeString& result) const;
 
     /**
      * Return the (canonical) current descriptor, or null if no current id.
      */
-    virtual UnicodeString& currentDescriptor(UnicodeString& result) const override;
+    virtual UnicodeString& currentDescriptor(UnicodeString& result) const;
 
     /**
      * Convenience method to return the locale corresponding to the (canonical) original ID.
@@ -147,13 +147,13 @@ class U_COMMON_API LocaleKey : public ICUServiceKey {
      * unless the primary id was the empty string, in which case
      * there is no fallback.  
      */
-    virtual UBool fallback() override;
+    virtual UBool fallback();
 
     /**
      * Return true if a key created from id matches, or would eventually
      * fallback to match, the canonical ID of this key.  
      */
-    virtual UBool isFallbackOf(const UnicodeString& id) const override;
+    virtual UBool isFallbackOf(const UnicodeString& id) const;
     
  public:
     /**
@@ -161,7 +161,7 @@ class U_COMMON_API LocaleKey : public ICUServiceKey {
      */
     static UClassID U_EXPORT2 getStaticClassID();
 
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID() const;
 
     /**
      * Destructor.
@@ -238,7 +238,7 @@ protected:
      * kind off to handleCreate (which subclasses must implement).
      */
 public:
-    virtual UObject* create(const ICUServiceKey& key, const ICUService* service, UErrorCode& status) const override;
+    virtual UObject* create(const ICUServiceKey& key, const ICUService* service, UErrorCode& status) const;
 
 protected:
     virtual UBool handlesKey(const ICUServiceKey& key, UErrorCode& status) const;
@@ -248,17 +248,17 @@ public:
      * Override of superclass method.  This adjusts the result based
      * on the coverage rule for this factory.
      */
-    virtual void updateVisibleIDs(Hashtable& result, UErrorCode& status) const override;
+    virtual void updateVisibleIDs(Hashtable& result, UErrorCode& status) const;
 
     /**
      * Return a localized name for the locale represented by id.
      */
-    virtual UnicodeString& getDisplayName(const UnicodeString& id, const Locale& locale, UnicodeString& result) const override;
+    virtual UnicodeString& getDisplayName(const UnicodeString& id, const Locale& locale, UnicodeString& result) const;
 
 protected:
     /**
      * Utility method used by create(ICUServiceKey, ICUService).  Subclasses can implement
-     * this instead of create.  The default returns nullptr.
+     * this instead of create.  The default returns NULL.
      */
     virtual UObject* handleCreate(const Locale& loc, int32_t kind, const ICUService* service, UErrorCode& status) const;
 
@@ -281,7 +281,7 @@ public:
      */
     static UClassID U_EXPORT2 getStaticClassID();
 
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID() const;
 
 #ifdef SERVICE_DEBUG
  public:
@@ -324,13 +324,13 @@ class U_COMMON_API SimpleLocaleKeyFactory : public LocaleKeyFactory {
     /**
      * Override of superclass method.  Returns the service object if kind/locale match.  Service is not used.
      */
-    virtual UObject* create(const ICUServiceKey& key, const ICUService* service, UErrorCode& status) const override;
+    virtual UObject* create(const ICUServiceKey& key, const ICUService* service, UErrorCode& status) const;
 
     /**
      * Override of superclass method.  This adjusts the result based
      * on the coverage rule for this factory.
      */
-    virtual void updateVisibleIDs(Hashtable& result, UErrorCode& status) const override;
+    virtual void updateVisibleIDs(Hashtable& result, UErrorCode& status) const;
 
  protected:
     /**
@@ -345,7 +345,7 @@ public:
      */
     static UClassID U_EXPORT2 getStaticClassID();
 
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID() const;
 
 #ifdef SERVICE_DEBUG
  public:
@@ -394,20 +394,20 @@ protected:
     /**
      * Return the supported IDs.  This is the set of all locale names in ICULocaleData.
      */
-    virtual const Hashtable* getSupportedIDs(UErrorCode& status) const override;
+    virtual const Hashtable* getSupportedIDs(UErrorCode& status) const;
 
     /**
      * Create the service.  The default implementation returns the resource bundle
      * for the locale, ignoring kind, and service.
      */
-    virtual UObject* handleCreate(const Locale& loc, int32_t kind, const ICUService* service, UErrorCode& status) const override;
+    virtual UObject* handleCreate(const Locale& loc, int32_t kind, const ICUService* service, UErrorCode& status) const;
 
 public:
     /**
      * UObject boilerplate.
      */
     static UClassID U_EXPORT2 getStaticClassID();
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID() const;
 
 
 #ifdef SERVICE_DEBUG
@@ -512,13 +512,13 @@ class U_COMMON_API ICULocaleService : public ICUService
    * We really need a flag that is understood by all compilers that will suppress the warning about
    * hidden overrides.
    */
-  virtual URegistryKey registerInstance(UObject* objToAdopt, const UnicodeString& locale, UBool visible, UErrorCode& status) override;
+  virtual URegistryKey registerInstance(UObject* objToAdopt, const UnicodeString& locale, UBool visible, UErrorCode& status);
 
   /**
    * Convenience method for callers using locales.  This returns the standard
    * service ID enumeration.
    */
-  virtual StringEnumeration* getAvailableLocales() const;
+  virtual StringEnumeration* getAvailableLocales(void) const;
 
  protected:
 
@@ -531,7 +531,7 @@ class U_COMMON_API ICULocaleService : public ICUService
   /**
    * Override superclass createKey method.
    */
-  virtual ICUServiceKey* createKey(const UnicodeString* id, UErrorCode& status) const override;
+  virtual ICUServiceKey* createKey(const UnicodeString* id, UErrorCode& status) const;
 
   /**
    * Additional createKey that takes a kind.

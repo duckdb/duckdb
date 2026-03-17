@@ -28,10 +28,10 @@ LogicalOperator::~LogicalOperator() {
 }
 
 vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
-	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
+	return {ColumnBinding(0, 0)};
 }
 
-TableIndex LogicalOperator::GetRootIndex() {
+idx_t LogicalOperator::GetRootIndex() {
 	auto bindings = GetColumnBindings();
 	if (bindings.empty()) {
 		throw InternalException("Empty bindings in GetRootIndex");
@@ -101,38 +101,38 @@ void LogicalOperator::ResolveOperatorTypes() {
 	D_ASSERT(types.size() == GetColumnBindings().size());
 }
 
-vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(TableIndex table_idx, idx_t column_count) {
+vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
 	vector<ColumnBinding> result;
 	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
-		result.emplace_back(table_idx, ProjectionIndex(i));
+		result.emplace_back(table_idx, i);
 	}
 	return result;
 }
 
-vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types,
-                                              const vector<ProjectionIndex> &projection_map) {
+vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map) {
 	if (projection_map.empty()) {
 		return types;
 	} else {
 		vector<LogicalType> result_types;
 		result_types.reserve(projection_map.size());
 		for (auto index : projection_map) {
-			result_types.push_back(types[index.index]);
+			result_types.push_back(types[index]);
 		}
 		return result_types;
 	}
 }
 
 vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &bindings,
-                                                   const vector<ProjectionIndex> &projection_map) {
+                                                   const vector<idx_t> &projection_map) {
 	if (projection_map.empty()) {
 		return bindings;
 	} else {
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
-			result_bindings.push_back(bindings[index.index]);
+			D_ASSERT(index < bindings.size());
+			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;
 	}
@@ -178,15 +178,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		MemoryStream stream(Allocator::Get(context));
 		// We are serializing a query plan
 		try {
-			auto &config = DBConfig::GetConfig(context);
-			SerializationOptions options;
-			if (config.options.serialization_compatibility.manually_set) {
-				options.serialization_compatibility = config.options.serialization_compatibility;
-			} else {
-				options.serialization_compatibility = SerializationCompatibility::Latest();
-			}
-
-			BinarySerializer::Serialize(*expressions[expr_idx], stream, options);
+			BinarySerializer::Serialize(*expressions[expr_idx], stream);
 		} catch (NotImplementedException &ex) {
 			// ignore for now (FIXME)
 			continue;
@@ -232,8 +224,8 @@ void LogicalOperator::Print() {
 	Printer::Print(ToString());
 }
 
-vector<TableIndex> LogicalOperator::GetTableIndex() const {
-	return vector<TableIndex> {};
+vector<idx_t> LogicalOperator::GetTableIndex() const {
+	return vector<idx_t> {};
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {

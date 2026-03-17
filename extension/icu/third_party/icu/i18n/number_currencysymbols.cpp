@@ -7,7 +7,10 @@
 
 // Allow implicit conversion from char16_t* to UnicodeString for this file:
 // Helpful in toString methods and elsewhere.
+#ifndef UNISTR_FROM_STRING_EXPLICIT
 #define UNISTR_FROM_STRING_EXPLICIT
+#endif
+
 
 #include "numparse_types.h"
 #include "number_currencysymbols.h"
@@ -44,16 +47,6 @@ UnicodeString CurrencySymbols::getNarrowCurrencySymbol(UErrorCode& status) const
     return loadSymbol(UCURR_NARROW_SYMBOL_NAME, status);
 }
 
-UnicodeString CurrencySymbols::getFormalCurrencySymbol(UErrorCode& status) const {
-    // Note: currently no override is available for formal currency symbol
-    return loadSymbol(UCURR_FORMAL_SYMBOL_NAME, status);
-}
-
-UnicodeString CurrencySymbols::getVariantCurrencySymbol(UErrorCode& status) const {
-    // Note: currently no override is available for variant currency symbol
-    return loadSymbol(UCURR_VARIANT_SYMBOL_NAME, status);
-}
-
 UnicodeString CurrencySymbols::getCurrencySymbol(UErrorCode& status) const {
     if (!fCurrencySymbol.isBogus()) {
         return fCurrencySymbol;
@@ -76,7 +69,7 @@ UnicodeString CurrencySymbols::loadSymbol(UCurrNameStyle selector, UErrorCode& s
     if (symbol == isoCode) {
         return UnicodeString(isoCode, 3);
     } else {
-        return UnicodeString(true, symbol, symbolLen);
+        return UnicodeString(TRUE, symbol, symbolLen);
     }
 }
 
@@ -104,12 +97,8 @@ UnicodeString CurrencySymbols::getPluralName(StandardPlural::Form plural, UError
     if (symbol == isoCode) {
         return UnicodeString(isoCode, 3);
     } else {
-        return UnicodeString(true, symbol, symbolLen);
+        return UnicodeString(TRUE, symbol, symbolLen);
     }
-}
-
-bool CurrencySymbols::hasEmptyCurrencySymbol() const {
-    return !fCurrencySymbol.isBogus() && fCurrencySymbol.isEmpty();
 }
 
 

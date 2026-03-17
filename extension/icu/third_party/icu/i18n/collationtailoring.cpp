@@ -33,20 +33,20 @@
 U_NAMESPACE_BEGIN
 
 CollationTailoring::CollationTailoring(const CollationSettings *baseSettings)
-        : data(nullptr), settings(baseSettings),
+        : data(NULL), settings(baseSettings),
           actualLocale(""),
-          ownedData(nullptr),
-          builder(nullptr), memory(nullptr), bundle(nullptr),
-          trie(nullptr), unsafeBackwardSet(nullptr),
-          maxExpansions(nullptr) {
-    if(baseSettings != nullptr) {
+          ownedData(NULL),
+          builder(NULL), memory(NULL), bundle(NULL),
+          trie(NULL), unsafeBackwardSet(NULL),
+          maxExpansions(NULL) {
+    if(baseSettings != NULL) {
         U_ASSERT(baseSettings->reorderCodesLength == 0);
-        U_ASSERT(baseSettings->reorderTable == nullptr);
+        U_ASSERT(baseSettings->reorderTable == NULL);
         U_ASSERT(baseSettings->minHighNoReorder == 0);
     } else {
         settings = new CollationSettings();
     }
-    if(settings != nullptr) {
+    if(settings != NULL) {
         settings->addRef();
     }
     rules.getTerminatedBuffer();  // ensure NUL-termination
@@ -68,18 +68,18 @@ CollationTailoring::~CollationTailoring() {
 
 UBool
 CollationTailoring::ensureOwnedData(UErrorCode &errorCode) {
-    if(U_FAILURE(errorCode)) { return false; }
-    if(ownedData == nullptr) {
+    if(U_FAILURE(errorCode)) { return FALSE; }
+    if(ownedData == NULL) {
         const Normalizer2Impl *nfcImpl = Normalizer2Factory::getNFCImpl(errorCode);
-        if(U_FAILURE(errorCode)) { return false; }
+        if(U_FAILURE(errorCode)) { return FALSE; }
         ownedData = new CollationData(*nfcImpl);
-        if(ownedData == nullptr) {
+        if(ownedData == NULL) {
             errorCode = U_MEMORY_ALLOCATION_ERROR;
-            return false;
+            return FALSE;
         }
     }
     data = ownedData;
-    return true;
+    return TRUE;
 }
 
 void

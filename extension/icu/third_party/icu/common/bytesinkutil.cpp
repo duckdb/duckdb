@@ -20,7 +20,7 @@ U_NAMESPACE_BEGIN
 UBool
 ByteSinkUtil::appendChange(int32_t length, const char16_t *s16, int32_t s16Length,
                            ByteSink &sink, Edits *edits, UErrorCode &errorCode) {
-    if (U_FAILURE(errorCode)) { return false; }
+    if (U_FAILURE(errorCode)) { return FALSE; }
     char scratch[200];
     int32_t s8Length = 0;
     for (int32_t i = 0; i < s16Length;) {
@@ -44,7 +44,7 @@ ByteSinkUtil::appendChange(int32_t length, const char16_t *s16, int32_t s16Lengt
         }
         if (j > (INT32_MAX - s8Length)) {
             errorCode = U_INDEX_OUTOFBOUNDS_ERROR;
-            return false;
+            return FALSE;
         }
         sink.Append(buffer, j);
         s8Length += j;
@@ -52,17 +52,17 @@ ByteSinkUtil::appendChange(int32_t length, const char16_t *s16, int32_t s16Lengt
     if (edits != nullptr) {
         edits->addReplace(length, s8Length);
     }
-    return true;
+    return TRUE;
 }
 
 UBool
 ByteSinkUtil::appendChange(const uint8_t *s, const uint8_t *limit,
                            const char16_t *s16, int32_t s16Length,
                            ByteSink &sink, Edits *edits, UErrorCode &errorCode) {
-    if (U_FAILURE(errorCode)) { return false; }
+    if (U_FAILURE(errorCode)) { return FALSE; }
     if ((limit - s) > INT32_MAX) {
         errorCode = U_INDEX_OUTOFBOUNDS_ERROR;
-        return false;
+        return FALSE;
     }
     return appendChange((int32_t)(limit - s), s16, s16Length, sink, edits, errorCode);
 }
@@ -78,18 +78,14 @@ ByteSinkUtil::appendCodePoint(int32_t length, UChar32 c, ByteSink &sink, Edits *
     sink.Append(s8, s8Length);
 }
 
-namespace {
-
 // See unicode/utf8.h U8_APPEND_UNSAFE().
-inline uint8_t getTwoByteLead(UChar32 c) { return (uint8_t)((c >> 6) | 0xc0); }
-inline uint8_t getTwoByteTrail(UChar32 c) { return (uint8_t)((c & 0x3f) | 0x80); }
-
-}  // namespace
+inline uint8_t bytesinkutil_getTwoByteLead(UChar32 c) { return (uint8_t)((c >> 6) | 0xc0); }
+inline uint8_t bytesinkutil_getTwoByteTrail(UChar32 c) { return (uint8_t)((c & 0x3f) | 0x80); }
 
 void
 ByteSinkUtil::appendTwoBytes(UChar32 c, ByteSink &sink) {
     U_ASSERT(0x80 <= c && c <= 0x7ff);  // 2-byte UTF-8
-    char s8[2] = { (char)getTwoByteLead(c), (char)getTwoByteTrail(c) };
+    char s8[2] = { (char)bytesinkutil_getTwoByteLead(c), (char)bytesinkutil_getTwoByteTrail(c) };
     sink.Append(s8, 2);
 }
 
@@ -109,16 +105,16 @@ UBool
 ByteSinkUtil::appendUnchanged(const uint8_t *s, const uint8_t *limit,
                               ByteSink &sink, uint32_t options, Edits *edits,
                               UErrorCode &errorCode) {
-    if (U_FAILURE(errorCode)) { return false; }
+    if (U_FAILURE(errorCode)) { return FALSE; }
     if ((limit - s) > INT32_MAX) {
         errorCode = U_INDEX_OUTOFBOUNDS_ERROR;
-        return false;
+        return FALSE;
     }
     int32_t length = (int32_t)(limit - s);
     if (length > 0) {
         appendNonEmptyUnchanged(s, length, sink, options, edits);
     }
-    return true;
+    return TRUE;
 }
 
 CharStringByteSink::CharStringByteSink(CharString* dest) : dest_(*dest) {

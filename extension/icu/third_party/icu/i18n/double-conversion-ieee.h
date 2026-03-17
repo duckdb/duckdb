@@ -59,7 +59,6 @@ class Double {
   static const uint64_t kExponentMask = DOUBLE_CONVERSION_UINT64_2PART_C(0x7FF00000, 00000000);
   static const uint64_t kSignificandMask = DOUBLE_CONVERSION_UINT64_2PART_C(0x000FFFFF, FFFFFFFF);
   static const uint64_t kHiddenBit = DOUBLE_CONVERSION_UINT64_2PART_C(0x00100000, 00000000);
-  static const uint64_t kQuietNanBit = DOUBLE_CONVERSION_UINT64_2PART_C(0x00080000, 00000000);
   static const int kPhysicalSignificandSize = 52;  // Excludes the hidden bit.
   static const int kSignificandSize = 53;
   static const int kExponentBias = 0x3FF + kPhysicalSignificandSize;
@@ -163,23 +162,6 @@ class Double {
         ((d64 & kSignificandMask) != 0);
   }
 
-  bool IsQuietNan() const {
-#if (defined(__mips__) && !defined(__mips_nan2008)) || defined(__hppa__)
-    return IsNan() && ((AsUint64() & kQuietNanBit) == 0);
-#else
-    return IsNan() && ((AsUint64() & kQuietNanBit) != 0);
-#endif
-  }
-
-  bool IsSignalingNan() const {
-#if (defined(__mips__) && !defined(__mips_nan2008)) || defined(__hppa__)
-    return IsNan() && ((AsUint64() & kQuietNanBit) != 0);
-#else
-    return IsNan() && ((AsUint64() & kQuietNanBit) == 0);
-#endif
-  }
-
-
   bool IsInfinite() const {
     uint64_t d64 = AsUint64();
     return ((d64 & kExponentMask) == kExponentMask) &&
@@ -258,12 +240,7 @@ class Double {
  private:
   static const int kDenormalExponent = -kExponentBias + 1;
   static const uint64_t kInfinity = DOUBLE_CONVERSION_UINT64_2PART_C(0x7FF00000, 00000000);
-#if (defined(__mips__) && !defined(__mips_nan2008)) || defined(__hppa__)
-  static const uint64_t kNaN = DOUBLE_CONVERSION_UINT64_2PART_C(0x7FF7FFFF, FFFFFFFF);
-#else
   static const uint64_t kNaN = DOUBLE_CONVERSION_UINT64_2PART_C(0x7FF80000, 00000000);
-#endif
-
 
   const uint64_t d64_;
 
@@ -303,7 +280,6 @@ class Single {
   static const uint32_t kExponentMask = 0x7F800000;
   static const uint32_t kSignificandMask = 0x007FFFFF;
   static const uint32_t kHiddenBit = 0x00800000;
-  static const uint32_t kQuietNanBit = 0x00400000;
   static const int kPhysicalSignificandSize = 23;  // Excludes the hidden bit.
   static const int kSignificandSize = 24;
 
@@ -361,23 +337,6 @@ class Single {
     return ((d32 & kExponentMask) == kExponentMask) &&
         ((d32 & kSignificandMask) != 0);
   }
-
-  bool IsQuietNan() const {
-#if (defined(__mips__) && !defined(__mips_nan2008)) || defined(__hppa__)
-    return IsNan() && ((AsUint32() & kQuietNanBit) == 0);
-#else
-    return IsNan() && ((AsUint32() & kQuietNanBit) != 0);
-#endif
-  }
-
-  bool IsSignalingNan() const {
-#if (defined(__mips__) && !defined(__mips_nan2008)) || defined(__hppa__)
-    return IsNan() && ((AsUint32() & kQuietNanBit) != 0);
-#else
-    return IsNan() && ((AsUint32() & kQuietNanBit) == 0);
-#endif
-  }
-
 
   bool IsInfinite() const {
     uint32_t d32 = AsUint32();
@@ -445,11 +404,7 @@ class Single {
   static const int kDenormalExponent = -kExponentBias + 1;
   static const int kMaxExponent = 0xFF - kExponentBias;
   static const uint32_t kInfinity = 0x7F800000;
-#if (defined(__mips__) && !defined(__mips_nan2008)) || defined(__hppa__)
-  static const uint32_t kNaN = 0x7FBFFFFF;
-#else
   static const uint32_t kNaN = 0x7FC00000;
-#endif
 
   const uint32_t d32_;
 

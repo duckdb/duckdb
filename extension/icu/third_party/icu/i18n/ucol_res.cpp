@@ -59,10 +59,10 @@ U_NAMESPACE_BEGIN
 
 namespace {
 
-static const char16_t *rootRules = nullptr;
-static int32_t rootRulesLength = 0;
-static UResourceBundle *rootBundle = nullptr;
-static UInitOnce gInitOnceUcolRes {};
+static const UChar *ucol_res_rootRules = NULL;
+static int32_t ucol_res_rootRulesLength = 0;
+static UResourceBundle *ucol_res_rootBundle = NULL;
+static UInitOnce gInitOnceUcolRes = U_INITONCE_INITIALIZER;
 
 }  // namespace
 
@@ -70,23 +70,23 @@ U_CDECL_BEGIN
 
 static UBool U_CALLCONV
 ucol_res_cleanup() {
-    rootRules = nullptr;
-    rootRulesLength = 0;
-    ures_close(rootBundle);
-    rootBundle = nullptr;
+    ucol_res_rootRules = NULL;
+    ucol_res_rootRulesLength = 0;
+    ures_close(ucol_res_rootBundle);
+    ucol_res_rootBundle = NULL;
     gInitOnceUcolRes.reset();
-    return true;
+    return TRUE;
 }
 
 void U_CALLCONV
 CollationLoader::loadRootRules(UErrorCode &errorCode) {
     if(U_FAILURE(errorCode)) { return; }
-    rootBundle = ures_open(U_ICUDATA_COLL, kRootLocaleName, &errorCode);
+    ucol_res_rootBundle = ures_open(U_ICUDATA_COLL, kRootLocaleName, &errorCode);
     if(U_FAILURE(errorCode)) { return; }
-    rootRules = ures_getStringByKey(rootBundle, "UCARules", &rootRulesLength, &errorCode);
+    ucol_res_rootRules = ures_getStringByKey(ucol_res_rootBundle, "UCARules", &ucol_res_rootRulesLength, &errorCode);
     if(U_FAILURE(errorCode)) {
-        ures_close(rootBundle);
-        rootBundle = nullptr;
+        ures_close(ucol_res_rootBundle);
+        ucol_res_rootBundle = NULL;
         return;
     }
     ucln_i18n_registerCleanup(UCLN_I18N_UCOL_RES, ucol_res_cleanup);
@@ -99,7 +99,7 @@ CollationLoader::appendRootRules(UnicodeString &s) {
     UErrorCode errorCode = U_ZERO_ERROR;
     umtx_initOnce(gInitOnceUcolRes, CollationLoader::loadRootRules, errorCode);
     if(U_SUCCESS(errorCode)) {
-        s.append(rootRules, rootRulesLength);
+        s.append(ucol_res_rootRules, ucol_res_rootRulesLength);
     }
 }
 
@@ -107,7 +107,7 @@ void
 CollationLoader::loadRules(const char *localeID, const char *collationType,
                            UnicodeString &rules, UErrorCode &errorCode) {
     if(U_FAILURE(errorCode)) { return; }
-    U_ASSERT(collationType != nullptr && *collationType != 0);
+    U_ASSERT(collationType != NULL && *collationType != 0);
     // Copy the type for lowercasing.
     char type[16];
     int32_t typeLength = static_cast<int32_t>(uprv_strlen(collationType));
@@ -120,11 +120,11 @@ CollationLoader::loadRules(const char *localeID, const char *collationType,
 
     LocalUResourceBundlePointer bundle(ures_open(U_ICUDATA_COLL, localeID, &errorCode));
     LocalUResourceBundlePointer collations(
-            ures_getByKey(bundle.getAlias(), "collations", nullptr, &errorCode));
+            ures_getByKey(bundle.getAlias(), "collations", NULL, &errorCode));
     LocalUResourceBundlePointer data(
-            ures_getByKeyWithFallback(collations.getAlias(), type, nullptr, &errorCode));
+            ures_getByKeyWithFallback(collations.getAlias(), type, NULL, &errorCode));
     int32_t length;
-    const char16_t *s =  ures_getStringByKey(data.getAlias(), "Sequence", &length, &errorCode);
+    const UChar *s =  ures_getStringByKey(data.getAlias(), "Sequence", &length, &errorCode);
     if(U_FAILURE(errorCode)) { return; }
 
     // No string pointer aliasing so that we need not hold onto the resource bundle.
@@ -147,7 +147,7 @@ LocaleCacheKey<CollationCacheEntry>::createObject(const void *creationContext,
 const CollationCacheEntry *
 CollationLoader::loadTailoring(const Locale &locale, UErrorCode &errorCode) {
     const CollationCacheEntry *rootEntry = CollationRoot::getRootCacheEntry(errorCode);
-    if(U_FAILURE(errorCode)) { return nullptr; }
+    if(U_FAILURE(errorCode)) { return NULL; }
     const char *name = locale.getName();
     if(*name == 0 || uprv_strcmp(name, "root") == 0) {
 
@@ -168,26 +168,16 @@ CollationLoader::CollationLoader(const CollationCacheEntry *re, const Locale &re
                                  UErrorCode &errorCode)
         : cache(UnifiedCache::getInstance(errorCode)), rootEntry(re),
           validLocale(re->validLocale), locale(requested),
-          typesTried(0), typeFallback(false),
-          bundle(nullptr), collations(nullptr), data(nullptr) {
+          typesTried(0), typeFallback(FALSE),
+          bundle(NULL), collations(NULL), data(NULL) {
     type[0] = 0;
     defaultType[0] = 0;
     if(U_FAILURE(errorCode)) { return; }
 
-    if (locale.isBogus()) {
-        errorCode = U_ILLEGAL_ARGUMENT_ERROR;
-        return;
-    }
     // Canonicalize the locale ID: Ignore all irrelevant keywords.
     const char *baseName = locale.getBaseName();
     if(uprv_strcmp(locale.getName(), baseName) != 0) {
         locale = Locale(baseName);
-        // Due to ICU-22416, we may have bogus locale constructed from
-        // a string of getBaseName().
-        if (locale.isBogus()) {
-            errorCode = U_ILLEGAL_ARGUMENT_ERROR;
-            return;
-        }
 
         // Fetch the collation type from the locale ID.
         int32_t typeLength = requested.getKeywordValue("collation",
@@ -223,11 +213,11 @@ CollationLoader::createCacheEntry(UErrorCode &errorCode) {
     // In a cache miss, cache.get() calls CacheKey::createObject(),
     // which means that we progress via recursion.
     // loadFromCollations() will recurse to itself as well for collation type fallback.
-    if(bundle == nullptr) {
+    if(bundle == NULL) {
         return loadFromLocale(errorCode);
-    } else if(collations == nullptr) {
+    } else if(collations == NULL) {
         return loadFromBundle(errorCode);
-    } else if(data == nullptr) {
+    } else if(data == NULL) {
         return loadFromCollations(errorCode);
     } else {
         return loadFromData(errorCode);
@@ -236,8 +226,8 @@ CollationLoader::createCacheEntry(UErrorCode &errorCode) {
 
 const CollationCacheEntry *
 CollationLoader::loadFromLocale(UErrorCode &errorCode) {
-    if(U_FAILURE(errorCode)) { return nullptr; }
-    U_ASSERT(bundle == nullptr);
+    if(U_FAILURE(errorCode)) { return NULL; }
+    U_ASSERT(bundle == NULL);
     bundle = ures_openNoDefault(U_ICUDATA_COLL, locale.getBaseName(), &errorCode);
     if(errorCode == U_MISSING_RESOURCE_ERROR) {
         errorCode = U_USING_DEFAULT_WARNING;
@@ -248,7 +238,7 @@ CollationLoader::loadFromLocale(UErrorCode &errorCode) {
     }
     Locale requestedLocale(locale);
     const char *vLocale = ures_getLocaleByType(bundle, ULOC_ACTUAL_LOCALE, &errorCode);
-    if(U_FAILURE(errorCode)) { return nullptr; }
+    if(U_FAILURE(errorCode)) { return NULL; }
     locale = validLocale = Locale(vLocale);  // no type until loadFromCollations()
     if(type[0] != 0) {
         locale.setKeywordValue("collation", type, errorCode);
@@ -262,24 +252,24 @@ CollationLoader::loadFromLocale(UErrorCode &errorCode) {
 
 const CollationCacheEntry *
 CollationLoader::loadFromBundle(UErrorCode &errorCode) {
-    if(U_FAILURE(errorCode)) { return nullptr; }
-    U_ASSERT(collations == nullptr);
+    if(U_FAILURE(errorCode)) { return NULL; }
+    U_ASSERT(collations == NULL);
     // There are zero or more tailorings in the collations table.
-    collations = ures_getByKey(bundle, "collations", nullptr, &errorCode);
+    collations = ures_getByKey(bundle, "collations", NULL, &errorCode);
     if(errorCode == U_MISSING_RESOURCE_ERROR) {
         errorCode = U_USING_DEFAULT_WARNING;
         // Return the root tailoring with the validLocale, without collation type.
         return makeCacheEntryFromRoot(validLocale, errorCode);
     }
-    if(U_FAILURE(errorCode)) { return nullptr; }
+    if(U_FAILURE(errorCode)) { return NULL; }
 
     // Fetch the default type from the data.
     {
         UErrorCode internalErrorCode = U_ZERO_ERROR;
         LocalUResourceBundlePointer def(
-                ures_getByKeyWithFallback(collations, "default", nullptr, &internalErrorCode));
+                ures_getByKeyWithFallback(collations, "default", NULL, &internalErrorCode));
         int32_t length;
-        const char16_t *s = ures_getString(def.getAlias(), &length, &internalErrorCode);
+        const UChar *s = ures_getString(def.getAlias(), &length, &internalErrorCode);
         if(U_SUCCESS(internalErrorCode) && 0 < length && length < UPRV_LENGTHOF(defaultType)) {
             u_UCharsToChars(s, defaultType, length + 1);
         } else {
@@ -323,15 +313,15 @@ CollationLoader::loadFromBundle(UErrorCode &errorCode) {
 
 const CollationCacheEntry *
 CollationLoader::loadFromCollations(UErrorCode &errorCode) {
-    if(U_FAILURE(errorCode)) { return nullptr; }
-    U_ASSERT(data == nullptr);
+    if(U_FAILURE(errorCode)) { return NULL; }
+    U_ASSERT(data == NULL);
     // Load the collations/type tailoring, with type fallback.
     LocalUResourceBundlePointer localData(
-            ures_getByKeyWithFallback(collations, type, nullptr, &errorCode));
+            ures_getByKeyWithFallback(collations, type, NULL, &errorCode));
     int32_t typeLength = static_cast<int32_t>(uprv_strlen(type));
     if(errorCode == U_MISSING_RESOURCE_ERROR) {
         errorCode = U_USING_DEFAULT_WARNING;
-        typeFallback = true;
+        typeFallback = TRUE;
         if((typesTried & TRIED_SEARCH) == 0 &&
                 typeLength > 6 && uprv_strncmp(type, "search", 6) == 0) {
             // fall back from something like "searchjl" to "search"
@@ -352,11 +342,11 @@ CollationLoader::loadFromCollations(UErrorCode &errorCode) {
         locale.setKeywordValue("collation", type, errorCode);
         return getCacheEntry(errorCode);
     }
-    if(U_FAILURE(errorCode)) { return nullptr; }
+    if(U_FAILURE(errorCode)) { return NULL; }
 
     data = localData.orphan();
     const char *actualLocale = ures_getLocaleByType(data, ULOC_ACTUAL_LOCALE, &errorCode);
-    if(U_FAILURE(errorCode)) { return nullptr; }
+    if(U_FAILURE(errorCode)) { return NULL; }
     const char *vLocale = validLocale.getBaseName();
     UBool actualAndValidLocalesAreDifferent = Locale(actualLocale) != Locale(vLocale);
 
@@ -365,7 +355,7 @@ CollationLoader::loadFromCollations(UErrorCode &errorCode) {
     // For the valid locale, suppress the default type.
     if(uprv_strcmp(type, defaultType) != 0) {
         validLocale.setKeywordValue("collation", type, errorCode);
-        if(U_FAILURE(errorCode)) { return nullptr; }
+        if(U_FAILURE(errorCode)) { return NULL; }
     }
 
     // Is this the same as the root collator? If so, then use that instead.
@@ -389,32 +379,32 @@ CollationLoader::loadFromCollations(UErrorCode &errorCode) {
 
 const CollationCacheEntry *
 CollationLoader::loadFromData(UErrorCode &errorCode) {
-    if(U_FAILURE(errorCode)) { return nullptr; }
+    if(U_FAILURE(errorCode)) { return NULL; }
     LocalPointer<CollationTailoring> t(new CollationTailoring(rootEntry->tailoring->settings));
     if(t.isNull() || t->isBogus()) {
         errorCode = U_MEMORY_ALLOCATION_ERROR;
-        return nullptr;
+        return NULL;
     }
 
     // deserialize
-    LocalUResourceBundlePointer binary(ures_getByKey(data, "%%CollationBin", nullptr, &errorCode));
+    LocalUResourceBundlePointer binary(ures_getByKey(data, "%%CollationBin", NULL, &errorCode));
     // Note: U_MISSING_RESOURCE_ERROR --> The old code built from rules if available
     // but that created undesirable dependencies.
-    int32_t length = 0;
+    int32_t length;
     const uint8_t *inBytes = ures_getBinary(binary.getAlias(), &length, &errorCode);
     CollationDataReader::read(rootEntry->tailoring, inBytes, length, *t, errorCode);
     // Note: U_COLLATOR_VERSION_MISMATCH --> The old code built from rules if available
     // but that created undesirable dependencies.
-    if(U_FAILURE(errorCode)) { return nullptr; }
+    if(U_FAILURE(errorCode)) { return NULL; }
 
     // Try to fetch the optional rules string.
     {
         UErrorCode internalErrorCode = U_ZERO_ERROR;
         int32_t len;
-        const char16_t *s = ures_getStringByKey(data, "Sequence", &len,
+        const UChar *s = ures_getStringByKey(data, "Sequence", &len,
                                              &internalErrorCode);
         if(U_SUCCESS(internalErrorCode)) {
-            t->rules.setTo(true, s, len);
+            t->rules.setTo(TRUE, s, len);
         }
     }
 
@@ -431,13 +421,13 @@ CollationLoader::loadFromData(UErrorCode &errorCode) {
         // Opening a bundle for the actual locale should always succeed.
         LocalUResourceBundlePointer actualBundle(
                 ures_open(U_ICUDATA_COLL, actualLocale, &errorCode));
-        if(U_FAILURE(errorCode)) { return nullptr; }
+        if(U_FAILURE(errorCode)) { return NULL; }
         UErrorCode internalErrorCode = U_ZERO_ERROR;
         LocalUResourceBundlePointer def(
-                ures_getByKeyWithFallback(actualBundle.getAlias(), "collations/default", nullptr,
+                ures_getByKeyWithFallback(actualBundle.getAlias(), "collations/default", NULL,
                                           &internalErrorCode));
         int32_t len;
-        const char16_t *s = ures_getString(def.getAlias(), &len, &internalErrorCode);
+        const UChar *s = ures_getString(def.getAlias(), &len, &internalErrorCode);
         if(U_SUCCESS(internalErrorCode) && len < UPRV_LENGTHOF(defaultType)) {
             u_UCharsToChars(s, defaultType, len + 1);
         } else {
@@ -449,17 +439,17 @@ CollationLoader::loadFromData(UErrorCode &errorCode) {
         t->actualLocale.setKeywordValue("collation", type, errorCode);
     } else if(uprv_strcmp(locale.getName(), locale.getBaseName()) != 0) {
         // Remove the collation keyword if it was set.
-        t->actualLocale.setKeywordValue("collation", nullptr, errorCode);
+        t->actualLocale.setKeywordValue("collation", NULL, errorCode);
     }
-    if(U_FAILURE(errorCode)) { return nullptr; }
+    if(U_FAILURE(errorCode)) { return NULL; }
 
     if(typeFallback) {
         errorCode = U_USING_DEFAULT_WARNING;
     }
     t->bundle = bundle;
-    bundle = nullptr;
+    bundle = NULL;
     const CollationCacheEntry *entry = new CollationCacheEntry(validLocale, t.getAlias());
-    if(entry == nullptr) {
+    if(entry == NULL) {
         errorCode = U_MEMORY_ALLOCATION_ERROR;
         return nullptr;
     } else {
@@ -473,7 +463,7 @@ CollationLoader::loadFromData(UErrorCode &errorCode) {
 const CollationCacheEntry *
 CollationLoader::getCacheEntry(UErrorCode &errorCode) {
     LocaleCacheKey<CollationCacheEntry> key(locale);
-    const CollationCacheEntry *entry = nullptr;
+    const CollationCacheEntry *entry = NULL;
     cache->get(key, this, entry, errorCode);
     return entry;
 }
@@ -483,7 +473,7 @@ CollationLoader::makeCacheEntryFromRoot(
         const Locale &/*loc*/,
         UErrorCode &errorCode) const {
     if (U_FAILURE(errorCode)) {
-        return nullptr;
+        return NULL;
     }
     rootEntry->addRef();
     return makeCacheEntry(validLocale, rootEntry, errorCode);
@@ -498,10 +488,10 @@ CollationLoader::makeCacheEntry(
         return entryFromCache;
     }
     CollationCacheEntry *entry = new CollationCacheEntry(loc, entryFromCache->tailoring);
-    if(entry == nullptr) {
+    if(entry == NULL) {
         errorCode = U_MEMORY_ALLOCATION_ERROR;
         entryFromCache->removeRef();
-        return nullptr;
+        return NULL;
     }
     entry->addRef();
     entryFromCache->removeRef();
@@ -518,7 +508,7 @@ ucol_open(const char *loc,
 {
     UTRACE_ENTRY_OC(UTRACE_UCOL_OPEN);
     UTRACE_DATA1(UTRACE_INFO, "locale = \"%s\"", loc);
-    UCollator *result = nullptr;
+    UCollator *result = NULL;
 
     Collator *coll = Collator::createInstance(loc, *status);
     if(U_SUCCESS(*status)) {
@@ -532,14 +522,14 @@ ucol_open(const char *loc,
 U_CAPI int32_t U_EXPORT2
 ucol_getDisplayName(    const    char        *objLoc,
                     const    char        *dispLoc,
-                    char16_t          *result,
+                    UChar             *result,
                     int32_t         resultLength,
                     UErrorCode        *status)
 {
     if(U_FAILURE(*status)) return -1;
     UnicodeString dst;
-    if(!(result==nullptr && resultLength==0)) {
-        // nullptr destination for pure preflighting: empty dummy string
+    if(!(result==NULL && resultLength==0)) {
+        // NULL destination for pure preflighting: empty dummy string
         // otherwise, alias the destination buffer
         dst.setTo(result, 0, resultLength);
     }
@@ -552,10 +542,10 @@ ucol_getAvailable(int32_t index)
 {
     int32_t count = 0;
     const Locale *loc = Collator::getAvailableLocales(count);
-    if (loc != nullptr && index < count) {
+    if (loc != NULL && index < count) {
         return loc[index].getName();
     }
-    return nullptr;
+    return NULL;
 }
 
 U_CAPI int32_t U_EXPORT2
@@ -571,12 +561,12 @@ U_CAPI UEnumeration* U_EXPORT2
 ucol_openAvailableLocales(UErrorCode *status) {
     // This is a wrapper over Collator::getAvailableLocales()
     if (U_FAILURE(*status)) {
-        return nullptr;
+        return NULL;
     }
     StringEnumeration *s = icu::Collator::getAvailableLocales();
-    if (s == nullptr) {
+    if (s == NULL) {
         *status = U_MEMORY_ALLOCATION_ERROR;
-        return nullptr;
+        return NULL;
     }
     return uenum_openFromStringEnumeration(s, status);
 }
@@ -592,7 +582,7 @@ static const char* const KEYWORDS[] = { "collation" };
 
 U_CAPI UEnumeration* U_EXPORT2
 ucol_getKeywords(UErrorCode *status) {
-    UEnumeration *result = nullptr;
+    UEnumeration *result = NULL;
     if (U_SUCCESS(*status)) {
         return uenum_openCharStringsEnumeration(KEYWORDS, KEYWORD_COUNT, status);
     }
@@ -602,21 +592,21 @@ ucol_getKeywords(UErrorCode *status) {
 U_CAPI UEnumeration* U_EXPORT2
 ucol_getKeywordValues(const char *keyword, UErrorCode *status) {
     if (U_FAILURE(*status)) {
-        return nullptr;
+        return NULL;
     }
     // hard-coded to accept exactly one collation keyword
     // modify if additional collation keyword is added later
-    if (keyword==nullptr || uprv_strcmp(keyword, KEYWORDS[0])!=0)
+    if (keyword==NULL || uprv_strcmp(keyword, KEYWORDS[0])!=0)
     {
         *status = U_ILLEGAL_ARGUMENT_ERROR;
-        return nullptr;
+        return NULL;
     }
     return ures_getKeywordValues(U_ICUDATA_COLL, RESOURCE_NAME, status);
 }
 
-static const UEnumeration defaultKeywordValues = {
-    nullptr,
-    nullptr,
+static const UEnumeration ucol_res_defaultKeywordValues = {
+    NULL,
+    NULL,
     ulist_close_keyword_values_iterator,
     ulist_count_keyword_values,
     uenum_unextDefault,
@@ -629,11 +619,11 @@ namespace {
 struct KeywordsSink : public ResourceSink {
 public:
     KeywordsSink(UErrorCode &errorCode) :
-            values(ulist_createEmptyList(&errorCode)), hasDefault(false) {}
+            values(ulist_createEmptyList(&errorCode)), hasDefault(FALSE) {}
     virtual ~KeywordsSink();
 
     virtual void put(const char *key, ResourceValue &value, UBool /*noFallback*/,
-                     UErrorCode &errorCode) override {
+                     UErrorCode &errorCode) {
         if (U_FAILURE(errorCode)) { return; }
         ResourceTable collations = value.getTable(errorCode);
         for (int32_t i = 0; collations.getKeyAndValue(i, key, value); ++i) {
@@ -644,18 +634,18 @@ public:
                     defcoll.appendInvariantChars(value.getUnicodeString(errorCode), errorCode);
                     if (U_SUCCESS(errorCode) && !defcoll.isEmpty()) {
                         char *ownedDefault = uprv_strdup(defcoll.data());
-                        if (ownedDefault == nullptr) {
+                        if (ownedDefault == NULL) {
                             errorCode = U_MEMORY_ALLOCATION_ERROR;
                             return;
                         }
                         ulist_removeString(values, defcoll.data());
-                        ulist_addItemBeginList(values, ownedDefault, true, &errorCode);
-                        hasDefault = true;
+                        ulist_addItemBeginList(values, ownedDefault, TRUE, &errorCode);
+                        hasDefault = TRUE;
                     }
                 }
             } else if (type == URES_TABLE && uprv_strncmp(key, "private-", 8) != 0) {
                 if (!ulist_containsString(values, key, (int32_t)uprv_strlen(key))) {
-                    ulist_addItemEndList(values, key, false, &errorCode);
+                    ulist_addItemEndList(values, key, FALSE, &errorCode);
                 }
             }
             if (U_FAILURE(errorCode)) { return; }
@@ -683,17 +673,17 @@ ucol_getKeywordValuesForLocale(const char* /*key*/, const char* locale,
     LocalUResourceBundlePointer bundle(ures_open(U_ICUDATA_COLL, locale, status));
     KeywordsSink sink(*status);
     ures_getAllItemsWithFallback(bundle.getAlias(), RESOURCE_NAME, sink, *status);
-    if (U_FAILURE(*status)) { return nullptr; }
+    if (U_FAILURE(*status)) { return NULL; }
 
     UEnumeration *en = (UEnumeration *)uprv_malloc(sizeof(UEnumeration));
-    if (en == nullptr) {
+    if (en == NULL) {
         *status = U_MEMORY_ALLOCATION_ERROR;
-        return nullptr;
+        return NULL;
     }
-    memcpy(en, &defaultKeywordValues, sizeof(UEnumeration));
+    memcpy(en, &ucol_res_defaultKeywordValues, sizeof(UEnumeration));
     ulist_resetList(sink.values);  // Initialize the iterator.
     en->context = sink.values;
-    sink.values = nullptr;  // Avoid deletion in the sink destructor.
+    sink.values = NULL;  // Avoid deletion in the sink destructor.
     return en;
 }
 
@@ -705,7 +695,7 @@ ucol_getFunctionalEquivalent(char* result, int32_t resultCapacity,
     // N.B.: Resource name is "collations" but keyword is "collation"
     return ures_getFunctionalEquivalent(result, resultCapacity, U_ICUDATA_COLL,
         "collations", keyword, locale,
-        isAvailable, true, status);
+        isAvailable, TRUE, status);
 }
 
 #endif /* #if !UCONFIG_NO_COLLATION */

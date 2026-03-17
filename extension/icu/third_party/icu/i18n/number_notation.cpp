@@ -37,7 +37,7 @@ ScientificNotation Notation::engineering() {
 }
 
 ScientificNotation::ScientificNotation(int8_t fEngineeringInterval, bool fRequireMinInt,
-                                       impl::digits_t fMinExponentDigits,
+                                       number::impl::digits_t fMinExponentDigits,
                                        UNumberSignDisplay fExponentSignDisplay) {
     ScientificSettings settings;
     settings.fEngineeringInterval = fEngineeringInterval;

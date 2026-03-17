@@ -13,7 +13,6 @@
 
 #include "unicode/utypes.h"
 #include "sharedobject.h"
-#include "unifiedcache.h"
 
 U_NAMESPACE_BEGIN
 
@@ -28,14 +27,9 @@ public:
     const Calendar &operator*() const { return *ptr; }
 private:
     Calendar *ptr;
-    SharedCalendar(const SharedCalendar &) = delete;
-    SharedCalendar &operator=(const SharedCalendar &) = delete;
+    SharedCalendar(const SharedCalendar &);
+    SharedCalendar &operator=(const SharedCalendar &);
 };
-
-template<> U_I18N_API
-const SharedCalendar *LocaleCacheKey<SharedCalendar>::createObject(
-        const void * /*unusedCreationContext*/, UErrorCode &status) const;
-
 
 U_NAMESPACE_END
 

@@ -18,17 +18,17 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_UNNEST;
 
 public:
-	explicit LogicalUnnest(TableIndex unnest_index)
+	explicit LogicalUnnest(idx_t unnest_index)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_UNNEST), unnest_index(unnest_index) {
 	}
 
-	TableIndex unnest_index;
+	idx_t unnest_index;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
-	vector<TableIndex> GetTableIndex() const override;
+	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

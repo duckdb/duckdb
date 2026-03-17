@@ -15,8 +15,8 @@
 ********************************************************************************
 */
 
-#ifndef _GENDER
-#define _GENDER
+#ifndef _GENDER_H
+#define _GENDER_H
 
 /**
  * \file
@@ -67,7 +67,7 @@ public:
     /**
      * Determines the gender of a list as a whole given the gender of each
      * of the elements.
-     * 
+     *
      * @param genders the gender of each element in the list.
      * @param length the length of gender array.
      * @param status  Output param set to success/failure code on exit, which
@@ -91,12 +91,12 @@ private:
      * Copy constructor. One object per locale invariant. Clients
      * must never copy GenderInfo objects.
      */
-    GenderInfo(const GenderInfo& other) = delete;
+    GenderInfo(const GenderInfo& other);
 
     /**
       * Assignment operator. Not applicable to immutable objects.
       */
-    GenderInfo& operator=(const GenderInfo&) = delete;
+    GenderInfo& operator=(const GenderInfo&);
 
     GenderInfo();
 

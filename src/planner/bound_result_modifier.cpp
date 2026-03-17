@@ -107,11 +107,11 @@ bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector
 	// expressions that are in the groups do not need to be ORDERED BY
 	// `ORDER BY` on a group has no effect, because for each aggregate, the group is unique
 	// similarly, we only need to ORDER BY each aggregate once
-	expression_map_t<ProjectionIndex> group_expressions;
+	expression_map_t<idx_t> group_expressions;
 	expression_set_t seen_expressions;
-	ProjectionIndex group_idx(0);
+	idx_t i = 0;
 	for (auto &target : groups) {
-		group_expressions.insert({*target, group_idx++});
+		group_expressions.insert({*target, i++});
 	}
 	vector<BoundOrderByNode> new_order_nodes;
 	for (auto &order_node : orders) {
@@ -122,7 +122,7 @@ bool BoundOrderModifier::Simplify(vector<BoundOrderByNode> &orders, const vector
 		auto it = group_expressions.find(*order_node.expression);
 		bool add_to_new_order = it == group_expressions.end();
 		if (!add_to_new_order && grouping_sets) {
-			auto group_idx = it->second;
+			idx_t group_idx = it->second;
 			for (auto &grouping_set : *grouping_sets) {
 				if (grouping_set.find(group_idx) == grouping_set.end()) {
 					add_to_new_order = true;

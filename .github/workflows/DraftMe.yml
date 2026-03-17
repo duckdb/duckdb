@@ -11,7 +11,7 @@ concurrency:
 jobs:
   mark-as-draft:
     name: Mark as draft
-    if: github.event.pull_request.draft == false && github.event.pull_request.user.login != 'smvv'
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - name: Save PR number

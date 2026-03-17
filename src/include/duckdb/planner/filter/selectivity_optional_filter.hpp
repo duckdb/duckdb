@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/filter/selectivity_optional_filter.hpp
+// duckdb/planner/filter/selectivity_optional_filter
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,29 +13,26 @@
 namespace duckdb {
 
 struct SelectivityOptionalFilterState final : public TableFilterState {
-	enum class FilterStatus { ACTIVE, PAUSED_DUE_TO_HIGH_SELECTIVITY };
+	enum class FilterStatus {
+		ACTIVE,
+		PAUSED_DUE_TO_ZONE_MAP_STATS, // todo: use this to disable the filter for one zone map based on CheckStatistics
+		PAUSED_DUE_TO_HIGH_SELECTIVITY
+	};
 
 	struct SelectivityStats {
-		SelectivityStats(idx_t n_vectors_to_check, float selectivity_threshold);
-
-		void Update(idx_t accepted, idx_t processed);
-		bool IsActive() const;
-		double GetSelectivity() const;
-
-		//! Configuration
-		const idx_t n_vectors_to_check;
-		const float selectivity_threshold;
-
-		//! For computing selectivity stats
 		idx_t tuples_accepted;
 		idx_t tuples_processed;
 		idx_t vectors_processed;
 
-		//! Whether currently paused
+		idx_t n_vectors_to_check;
+		float selectivity_threshold;
+
 		FilterStatus status;
 
-		//! For increasing pause if filter is not selective enough
-		idx_t pause_multiplier;
+		SelectivityStats(idx_t n_vectors_to_check, float selectivity_threshold);
+		void Update(idx_t accepted, idx_t processed);
+		bool IsActive() const;
+		double GetSelectivity() const;
 	};
 
 	unique_ptr<TableFilterState> child_state;
@@ -47,14 +44,17 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 	}
 };
 
-enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ };
-
 class SelectivityOptionalFilter final : public OptionalFilter {
 public:
+	static constexpr auto MIN_MAX_THRESHOLD = 0.75f;
+	static constexpr idx_t MIN_MAX_CHECK_N = 30;
+
+	static constexpr float BF_THRESHOLD = 0.25f;
+	static constexpr idx_t BF_CHECK_N = 75;
+
 	float selectivity_threshold;
 	idx_t n_vectors_to_check;
 
-	SelectivityOptionalFilter(unique_ptr<TableFilter> filter, SelectivityOptionalFilterType type);
 	SelectivityOptionalFilter(unique_ptr<TableFilter> filter, float selectivity_threshold, idx_t n_vectors_to_check);
 
 public:

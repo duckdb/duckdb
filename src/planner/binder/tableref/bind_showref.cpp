@@ -34,7 +34,7 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 		if (!get.projection_ids.empty()) {
 			throw InternalException("Projection ids should not exist here");
 		}
-		auto base_column_id = get.GetColumnIndex(binding.column_index);
+		auto base_column_id = get.GetColumnIds()[binding.column_index];
 		if (base_column_id.IsVirtualColumn()) {
 			//! Virtual column (like ROW_ID) does not have a ColumnDefinition entry in the TableCatalogEntry
 			return result;
@@ -48,10 +48,10 @@ BaseTableColumnInfo FindBaseTableColumn(LogicalOperator &op, ColumnBinding bindi
 		if (binding.table_index != projection.table_index) {
 			break;
 		}
-		auto &expr = projection.GetExpression(binding);
-		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+		auto &expr = projection.expressions[binding.column_index];
+		if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			// if the projection at this index only has a column reference we can directly trace it to the base table
-			auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
+			auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 			return FindBaseTableColumn(*projection.children[0], bound_colref.binding);
 		}
 		break;

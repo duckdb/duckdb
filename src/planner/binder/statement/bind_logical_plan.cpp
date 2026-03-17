@@ -4,15 +4,15 @@
 
 namespace duckdb {
 
-TableIndex GetMaxTableIndex(LogicalOperator &op) {
-	TableIndex result(0);
+idx_t GetMaxTableIndex(LogicalOperator &op) {
+	idx_t result = 0;
 	for (auto &child : op.children) {
 		auto max_child_index = GetMaxTableIndex(*child);
-		result = MaxValue<TableIndex>(result, max_child_index);
+		result = MaxValue<idx_t>(result, max_child_index);
 	}
 	auto indexes = op.GetTableIndex();
 	for (auto &index : indexes) {
-		result = MaxValue<TableIndex>(result, index);
+		result = MaxValue<idx_t>(result, index);
 	}
 	return result;
 }
@@ -32,7 +32,7 @@ BoundStatement Binder::Bind(LogicalPlanStatement &stmt) {
 	if (parent) {
 		throw InternalException("LogicalPlanStatement should be bound in root binder");
 	}
-	global_binder_state->bound_tables = GetMaxTableIndex(*result.plan).index + 1;
+	global_binder_state->bound_tables = GetMaxTableIndex(*result.plan) + 1;
 	return result;
 }
 

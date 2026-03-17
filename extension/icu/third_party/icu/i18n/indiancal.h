@@ -25,7 +25,7 @@ U_NAMESPACE_BEGIN
  * Concrete class which provides the Indian calendar.
  * <P>
  * <code>IndianCalendar</code> is a subclass of <code>Calendar</code>
- * that numbers years since the beginning of SAKA ERA.  This is the civil calendar
+ * that numbers years since the begining of SAKA ERA.  This is the civil calendar
  * which is accepted by government of India as Indian National Calendar.
  * The two calendars most widely used in India today are the Vikrama calendar
  * followed in North India and the Shalivahana or Saka calendar which is followed
@@ -147,7 +147,7 @@ public:
    * @param aLocale  The given locale.
    * @param success  Indicates the status of IndianCalendar object construction.
    *                 Returns U_ZERO_ERROR if constructed successfully.
-   * @param beCivil  Whether the calendar should be civil (default-true) or religious (false)
+   * @param beCivil  Whether the calendar should be civil (default-TRUE) or religious (FALSE)
    * @internal
    */
   IndianCalendar(const Locale& aLocale, UErrorCode &success);
@@ -186,7 +186,7 @@ public:
   // TODO: copy c'tor, etc
 
   // clone
-  virtual IndianCalendar* clone() const override;
+  virtual IndianCalendar* clone() const;
 
  private:
   /**
@@ -200,7 +200,7 @@ public:
   /**
    * @internal
    */
-  virtual int32_t handleGetLimit(UCalendarDateFields field, ELimitType limitType) const override;
+  virtual int32_t handleGetLimit(UCalendarDateFields field, ELimitType limitType) const;
   
   /**
    * Return the length (in days) of the given month.
@@ -209,13 +209,13 @@ public:
    * @param year  The month(0-based) in Indian year
    * @internal
    */
-  virtual int32_t handleGetMonthLength(int32_t extendedYear, int32_t month) const override;
+  virtual int32_t handleGetMonthLength(int32_t extendedYear, int32_t month) const;
   
   /**
    * Return the number of days in the given Indian year
    * @internal
    */
-  virtual int32_t handleGetYearLength(int32_t extendedYear) const override;
+  virtual int32_t handleGetYearLength(int32_t extendedYear) const;
 
   //-------------------------------------------------------------------------
   // Functions for converting from field values to milliseconds....
@@ -225,7 +225,7 @@ public:
   /**
    * @internal
    */
-  virtual int32_t handleComputeMonthStart(int32_t eyear, int32_t month, UBool useMonth) const override;
+  virtual int32_t handleComputeMonthStart(int32_t eyear, int32_t month, UBool useMonth) const;
 
   //-------------------------------------------------------------------------
   // Functions for converting from milliseconds to field values
@@ -234,7 +234,7 @@ public:
   /**
    * @internal
    */
-  virtual int32_t handleGetExtendedYear() override;
+  virtual int32_t handleGetExtendedYear();
 
   /**
    * Override Calendar to compute several fields specific to the Indian
@@ -252,7 +252,7 @@ public:
    * calendar equivalents for the given Julian day.
    * @internal
    */
-  virtual void handleComputeFields(int32_t julianDay, UErrorCode &status) override;
+  virtual void handleComputeFields(int32_t julianDay, UErrorCode &status);
 
   // UObject stuff
  public: 
@@ -261,7 +261,7 @@ public:
    *           same class ID. Objects of other classes have different class IDs.
    * @internal
    */
-  virtual UClassID getDynamicClassID() const override;
+  virtual UClassID getDynamicClassID(void) const;
 
   /**
    * Return the class ID for this class. This is useful only for comparing to a return
@@ -274,7 +274,7 @@ public:
    * @return   The class ID for all objects of this class.
    * @internal
    */
-  static UClassID U_EXPORT2 getStaticClassID();
+  static UClassID U_EXPORT2 getStaticClassID(void);
 
   /**
    * return the calendar type, "indian".
@@ -282,46 +282,44 @@ public:
    * @return calendar type
    * @internal
    */
-  virtual const char * getType() const override;
-
-  /**
-   * @return      The related Gregorian year; will be obtained by modifying the value
-   *              obtained by get from UCAL_EXTENDED_YEAR field
-   * @internal
-   */
-  virtual int32_t getRelatedYear(UErrorCode &status) const override;
-
-  /**
-   * @param year  The related Gregorian year to set; will be modified as necessary then
-   *              set in UCAL_EXTENDED_YEAR field
-   * @internal
-   */
-  virtual void setRelatedYear(int32_t year) override;
-
+  virtual const char * getType() const;
 
 private:
-  IndianCalendar() = delete; // default constructor not implemented
+  IndianCalendar(); // default constructor not implemented
 
   // Default century.
 protected:
+
   /**
-   * Returns true because the Indian Calendar does have a default century
+   * (Overrides Calendar) Return true if the current date for this Calendar is in
+   * Daylight Savings Time. Recognizes DST_OFFSET, if it is set.
+   *
+   * @param status Fill-in parameter which receives the status of this operation.
+   * @return   True if the current date for this Calendar is in Daylight Savings Time,
+   *           false, otherwise.
    * @internal
    */
-  virtual UBool haveDefaultCentury() const override;
+  virtual UBool inDaylightTime(UErrorCode& status) const;
+
+
+  /**
+   * Returns TRUE because the Indian Calendar does have a default century
+   * @internal
+   */
+  virtual UBool haveDefaultCentury() const;
 
   /**
    * Returns the date of the start of the default century
    * @return start of century - in milliseconds since epoch, 1970
    * @internal
    */
-  virtual UDate defaultCenturyStart() const override;
+  virtual UDate defaultCenturyStart() const;
 
   /**
    * Returns the year in which the default century begins
    * @internal
    */
-  virtual int32_t defaultCenturyStartYear() const override;
+  virtual int32_t defaultCenturyStartYear() const;
 };
 
 U_NAMESPACE_END

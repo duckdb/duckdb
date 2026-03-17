@@ -76,9 +76,9 @@ private:
             // (Rather than buffer.getCapacity().)
             if(length < INITIAL_CAPACITY || ensureAppendCapacity(1, errorCode)) {
                 ++length;
-                return true;
+                return TRUE;
             } else {
-                return false;
+                return FALSE;
             }
         }
 
@@ -92,8 +92,8 @@ private:
         int32_t length;
 
     private:
-        CEBuffer(const CEBuffer &) = delete;
-        void operator=(const CEBuffer &) = delete;
+        CEBuffer(const CEBuffer &);
+        void operator=(const CEBuffer &);
 
         MaybeStackArray<int64_t, INITIAL_CAPACITY> buffer;
     };
@@ -103,7 +103,7 @@ public:
             : trie(d->trie),
               data(d),
               cesIndex(0),
-              skipped(nullptr),
+              skipped(NULL),
               numCpFwd(-1),
               isNumeric(numeric) {}
 
@@ -242,7 +242,7 @@ protected:
      * if a trail surrogate follows the lead surrogate.
      * Otherwise returns any other code unit and does not advance.
      */
-    virtual char16_t handleGetTrailSurrogate();
+    virtual UChar handleGetTrailSurrogate();
 
     /**
      * Called when handleNextCE32() returns with c==0, to see whether it is a NUL terminator.
@@ -251,9 +251,9 @@ protected:
     virtual UBool foundNULTerminator();
 
     /**
-     * @return false if surrogate code points U+D800..U+DFFF
+     * @return FALSE if surrogate code points U+D800..U+DFFF
      *         map to their own implicit primary weights (for UTF-16),
-     *         or true if they map to CE(U+FFFD) (for UTF-8)
+     *         or TRUE if they map to CE(U+FFFD) (for UTF-8)
      */
     virtual UBool forbidSurrogateCodePoints() const;
 
@@ -290,7 +290,7 @@ private:
 
     uint32_t nextCE32FromContraction(
             const CollationData *d, uint32_t contractionCE32,
-            const char16_t *p, uint32_t ce32, UChar32 c,
+            const UChar *p, uint32_t ce32, UChar32 c,
             UErrorCode &errorCode);
 
     uint32_t nextCE32FromDiscontiguousContraction(

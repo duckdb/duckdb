@@ -13,6 +13,7 @@
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
+
 static void RewriteJoinCondition(unique_ptr<Expression> &root_expr, idx_t offset) {
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
 	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index += offset; });
@@ -39,8 +40,6 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 	switch (op.join_type) {
 	case JoinType::SEMI:
-		can_merge = can_merge && op.conditions.size() == 1;
-		break;
 	case JoinType::ANTI:
 	case JoinType::RIGHT_ANTI:
 	case JoinType::RIGHT_SEMI:
@@ -51,15 +50,15 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	default:
 		break;
 	}
-
 	//	TODO: Extend PWMJ to handle all comparisons and projection maps
 	bool prefer_range_joins = Settings::Get<PreferRangeJoinsSetting>(context);
 	prefer_range_joins = prefer_range_joins && can_iejoin;
 	if (has_equality && !prefer_range_joins) {
-		// pass separately to PhysicalHashJoin
+		// Equality join with small number of keys : possible perfect join optimization
 		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
 		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
+		join.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
 		return join;
 	}
 
@@ -94,9 +93,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	}
 
 	for (auto &cond : op.conditions) {
-		if (cond.IsComparison()) {
-			RewriteJoinCondition(cond.RightReference(), left.types.size());
-		}
+		RewriteJoinCondition(cond.right, left.types.size());
 	}
 	auto condition = JoinCondition::CreateExpression(std::move(op.conditions));
 	return Make<PhysicalBlockwiseNLJoin>(op, left, right, std::move(condition), op.join_type, op.estimated_cardinality);

@@ -30,10 +30,7 @@
 #include "unicode/timezone.h"
 #include "unicode/utmscale.h"
 
-#include "bytesinkutil.h"
-#include "charstr.h"
 #include "cmemory.h"
-#include "ulocimp.h"
 #include "uresimp.h"
 #include "windtfmt.h"
 #include "wintzimpl.h"
@@ -55,17 +52,17 @@ UOBJECT_DEFINE_RTTI_IMPLEMENTATION(Win32DateFormat)
 #define NEW_ARRAY(type,count) (type *) uprv_malloc((count) * sizeof(type))
 #define DELETE_ARRAY(array) uprv_free((void *) (array))
 
-#define STACK_BUFFER_SIZE 64
+#define windtfmt_STACK_BUFFER_SIZE 64
 
 UnicodeString* Win32DateFormat::getTimeDateFormat(const Calendar *cal, const Locale *locale, UErrorCode &status) const
 {
-    UnicodeString *result = nullptr;
+    UnicodeString *result = NULL;
     const char *type = cal->getType();
     const char *base = locale->getBaseName();
     UResourceBundle *topBundle = ures_open((char *) 0, base, &status);
-    UResourceBundle *calBundle = ures_getByKey(topBundle, "calendar", nullptr, &status);
-    UResourceBundle *typBundle = ures_getByKeyWithFallback(calBundle, type, nullptr, &status);
-    UResourceBundle *patBundle = ures_getByKeyWithFallback(typBundle, "DateTimePatterns", nullptr, &status);
+    UResourceBundle *calBundle = ures_getByKey(topBundle, "calendar", NULL, &status);
+    UResourceBundle *typBundle = ures_getByKeyWithFallback(calBundle, type, NULL, &status);
+    UResourceBundle *patBundle = ures_getByKeyWithFallback(typBundle, "DateTimePatterns", NULL, &status);
 
     if (status == U_MISSING_RESOURCE_ERROR) {
         status = U_ZERO_ERROR;
@@ -74,7 +71,7 @@ UnicodeString* Win32DateFormat::getTimeDateFormat(const Calendar *cal, const Loc
     }
 
     if (U_FAILURE(status)) {
-        static const char16_t defaultPattern[] = {0x007B, 0x0031, 0x007D, 0x0020, 0x007B, 0x0030, 0x007D, 0x0000}; // "{1} {0}"
+        static const UChar defaultPattern[] = {0x007B, 0x0031, 0x007D, 0x0020, 0x007B, 0x0030, 0x007D, 0x0000}; // "{1} {0}"
         return new UnicodeString(defaultPattern, UPRV_LENGTHOF(defaultPattern));
     }
 
@@ -85,9 +82,9 @@ UnicodeString* Win32DateFormat::getTimeDateFormat(const Calendar *cal, const Loc
         // Get proper date time format
         glueIndex = (int32_t)(DateFormat::kDateTimeOffset + (fDateStyle - DateFormat::kDateOffset));
     }
-    const char16_t *resStr = ures_getStringByIndex(patBundle, glueIndex, &resStrLen, &status);
+    const UChar *resStr = ures_getStringByIndex(patBundle, glueIndex, &resStrLen, &status);
 
-    result = new UnicodeString(true, resStr, resStrLen);
+    result = new UnicodeString(TRUE, resStr, resStrLen);
 
     ures_close(patBundle);
     ures_close(typBundle);
@@ -99,16 +96,13 @@ UnicodeString* Win32DateFormat::getTimeDateFormat(const Calendar *cal, const Loc
 
 // TODO: This is copied in both winnmfmt.cpp and windtfmt.cpp, but really should
 // be factored out into a common helper for both.
-static UErrorCode GetEquivalentWindowsLocaleName(const Locale& locale, UnicodeString** buffer)
+static UErrorCode windtfmt_GetEquivalentWindowsLocaleName(const Locale& locale, UnicodeString** buffer)
 {
     UErrorCode status = U_ZERO_ERROR;
+    char asciiBCP47Tag[LOCALE_NAME_MAX_LENGTH] = {};
 
     // Convert from names like "en_CA" and "de_DE@collation=phonebook" to "en-CA" and "de-DE-u-co-phonebk".
-    CharString asciiBCP47Tag;
-    {
-        CharStringByteSink sink(&asciiBCP47Tag);
-        ulocimp_toLanguageTag(locale.getName(), sink, false, &status);
-    }
+    (void)uloc_toLanguageTag(locale.getName(), asciiBCP47Tag, UPRV_LENGTHOF(asciiBCP47Tag), FALSE, &status);
 
     if (U_SUCCESS(status))
     {
@@ -147,7 +141,7 @@ static UErrorCode GetEquivalentWindowsLocaleName(const Locale& locale, UnicodeSt
         // This means that it will fail for locales where ICU has a completely different
         // name (like ku vs ckb), and it will also not work for alternate sort locale
         // names like "de-DE-u-co-phonebk".
-        
+
         // TODO: We could add some sort of exception table for cases like ku vs ckb.
 
         int length = ResolveLocaleName(bcp47Tag, windowsLocaleName, UPRV_LENGTHOF(windowsLocaleName));
@@ -166,14 +160,14 @@ static UErrorCode GetEquivalentWindowsLocaleName(const Locale& locale, UnicodeSt
 
 // TODO: Range-check timeStyle, dateStyle
 Win32DateFormat::Win32DateFormat(DateFormat::EStyle timeStyle, DateFormat::EStyle dateStyle, const Locale &locale, UErrorCode &status)
-  : DateFormat(), fDateTimeMsg(nullptr), fTimeStyle(timeStyle), fDateStyle(dateStyle), fLocale(locale), fZoneID(), fWindowsLocaleName(nullptr)
+  : DateFormat(), fDateTimeMsg(NULL), fTimeStyle(timeStyle), fDateStyle(dateStyle), fLocale(locale), fZoneID(), fWindowsLocaleName(nullptr)
 {
     if (U_SUCCESS(status)) {
-        GetEquivalentWindowsLocaleName(locale, &fWindowsLocaleName);
+        windtfmt_GetEquivalentWindowsLocaleName(locale, &fWindowsLocaleName);
         // Note: In the previous code, it would look up the LCID for the locale, and if
         // the locale was not recognized then it would get an LCID of 0, which is a
         // synonym for LOCALE_USER_DEFAULT on Windows.
-        // If the above method fails, then fWindowsLocaleName will remain as nullptr, and 
+        // If the above method fails, then fWindowsLocaleName will remain as nullptr, and
         // then we will pass nullptr to API GetLocaleInfoEx, which is the same as passing
         // LOCALE_USER_DEFAULT.
 
@@ -199,13 +193,12 @@ Win32DateFormat::~Win32DateFormat()
 
 Win32DateFormat &Win32DateFormat::operator=(const Win32DateFormat &other)
 {
-    if (this == &other) { return *this; }  // self-assignment: no-op
     // The following handles fCalendar
     DateFormat::operator=(other);
 
 //    delete fCalendar;
 
-    this->fDateTimeMsg = other.fDateTimeMsg == nullptr ? nullptr : new UnicodeString(*other.fDateTimeMsg);
+    this->fDateTimeMsg = other.fDateTimeMsg == NULL ? NULL : new UnicodeString(*other.fDateTimeMsg);
     this->fTimeStyle   = other.fTimeStyle;
     this->fDateStyle   = other.fDateStyle;
     this->fLocale      = other.fLocale;
@@ -215,7 +208,7 @@ Win32DateFormat &Win32DateFormat::operator=(const Win32DateFormat &other)
     this->fTZI = NEW_ARRAY(TIME_ZONE_INFORMATION, 1);
     *this->fTZI = *other.fTZI;
 
-    this->fWindowsLocaleName = other.fWindowsLocaleName == nullptr ? nullptr : new UnicodeString(*other.fWindowsLocaleName);
+    this->fWindowsLocaleName = other.fWindowsLocaleName == NULL ? NULL : new UnicodeString(*other.fWindowsLocaleName);
 
     return *this;
 }
@@ -277,7 +270,7 @@ void Win32DateFormat::parse(const UnicodeString& /* text */, Calendar& /* cal */
 
 void Win32DateFormat::adoptCalendar(Calendar *newCalendar)
 {
-    if (fCalendar == nullptr || strcmp(fCalendar->getType(), newCalendar->getType()) != 0) {
+    if (fCalendar == NULL || strcmp(fCalendar->getType(), newCalendar->getType()) != 0) {
         UErrorCode status = U_ZERO_ERROR;
 
         if (fDateStyle != DateFormat::kNone && fTimeStyle != DateFormat::kNone) {
@@ -314,7 +307,7 @@ static const DWORD dfFlags[] = {DATE_LONGDATE, DATE_LONGDATE, DATE_SHORTDATE, DA
 void Win32DateFormat::formatDate(const SYSTEMTIME *st, UnicodeString &appendTo) const
 {
     int result=0;
-    wchar_t stackBuffer[STACK_BUFFER_SIZE];
+    wchar_t stackBuffer[windtfmt_STACK_BUFFER_SIZE];
     wchar_t *buffer = stackBuffer;
     const wchar_t *localeName = nullptr;
 
@@ -323,19 +316,19 @@ void Win32DateFormat::formatDate(const SYSTEMTIME *st, UnicodeString &appendTo) 
         localeName = reinterpret_cast<const wchar_t*>(toOldUCharPtr(fWindowsLocaleName->getTerminatedBuffer()));
     }
 
-    result = GetDateFormatEx(localeName, dfFlags[fDateStyle - kDateOffset], st, nullptr, buffer, STACK_BUFFER_SIZE, nullptr);
+    result = GetDateFormatEx(localeName, dfFlags[fDateStyle - kDateOffset], st, NULL, buffer, windtfmt_STACK_BUFFER_SIZE, NULL);
 
     if (result == 0) {
         if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
-            int newLength = GetDateFormatEx(localeName, dfFlags[fDateStyle - kDateOffset], st, nullptr, nullptr, 0, nullptr);
+            int newLength = GetDateFormatEx(localeName, dfFlags[fDateStyle - kDateOffset], st, NULL, NULL, 0, NULL);
 
             buffer = NEW_ARRAY(wchar_t, newLength);
 
-            GetDateFormatEx(localeName, dfFlags[fDateStyle - kDateOffset], st, nullptr, buffer, newLength, nullptr);
+            GetDateFormatEx(localeName, dfFlags[fDateStyle - kDateOffset], st, NULL, buffer, newLength, NULL);
         }
     }
 
-    appendTo.append((const char16_t *)buffer, (int32_t) wcslen(buffer));
+    appendTo.append((const UChar *)buffer, (int32_t) wcslen(buffer));
 
     if (buffer != stackBuffer) {
         DELETE_ARRAY(buffer);
@@ -347,7 +340,7 @@ static const DWORD tfFlags[] = {0, 0, 0, TIME_NOSECONDS};
 void Win32DateFormat::formatTime(const SYSTEMTIME *st, UnicodeString &appendTo) const
 {
     int result;
-    wchar_t stackBuffer[STACK_BUFFER_SIZE];
+    wchar_t stackBuffer[windtfmt_STACK_BUFFER_SIZE];
     wchar_t *buffer = stackBuffer;
     const wchar_t *localeName = nullptr;
 
@@ -356,19 +349,19 @@ void Win32DateFormat::formatTime(const SYSTEMTIME *st, UnicodeString &appendTo) 
         localeName = reinterpret_cast<const wchar_t*>(toOldUCharPtr(fWindowsLocaleName->getTerminatedBuffer()));
     }
 
-    result = GetTimeFormatEx(localeName, tfFlags[fTimeStyle], st, nullptr, buffer, STACK_BUFFER_SIZE);
+    result = GetTimeFormatEx(localeName, tfFlags[fTimeStyle], st, NULL, buffer, windtfmt_STACK_BUFFER_SIZE);
 
     if (result == 0) {
         if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
-            int newLength = GetTimeFormatEx(localeName, tfFlags[fTimeStyle], st, nullptr, nullptr, 0);
+            int newLength = GetTimeFormatEx(localeName, tfFlags[fTimeStyle], st, NULL, NULL, 0);
 
             buffer = NEW_ARRAY(wchar_t, newLength);
 
-            GetTimeFormatEx(localeName, tfFlags[fTimeStyle], st, nullptr, buffer, newLength);
+            GetTimeFormatEx(localeName, tfFlags[fTimeStyle], st, NULL, buffer, newLength);
         }
     }
 
-    appendTo.append((const char16_t *)buffer, (int32_t) wcslen(buffer));
+    appendTo.append((const UChar *)buffer, (int32_t) wcslen(buffer));
 
     if (buffer != stackBuffer) {
         DELETE_ARRAY(buffer);
@@ -386,7 +379,7 @@ UnicodeString Win32DateFormat::setTimeZoneInfo(TIME_ZONE_INFORMATION *tzi, const
 
         zone.getID(icuid);
         if (! uprv_getWindowsTimeZoneInfo(tzi, icuid.getBuffer(), icuid.length())) {
-            UBool found = false;
+            UBool found = FALSE;
             int32_t ec = TimeZone::countEquivalentIDs(icuid);
 
             for (int z = 0; z < ec; z += 1) {

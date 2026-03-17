@@ -150,7 +150,7 @@ void Bignum::AssignHexString(Vector<const char> value) {
   DOUBLE_CONVERSION_ASSERT(sizeof(uint64_t) * 8 >= kBigitSize + 4);  // TODO: static_assert
   // Accumulates converted hex digits until at least kBigitSize bits.
   // Works with non-factor-of-four kBigitSizes.
-  uint64_t tmp = 0;
+  uint64_t tmp = 0;  // Accumulates converted hex digits until at least
   for (int cnt = 0; !value.is_empty(); value.pop_back()) {
     tmp |= (HexCharValue(value.last()) << cnt);
     if ((cnt += 4) >= kBigitSize) {
@@ -160,8 +160,7 @@ void Bignum::AssignHexString(Vector<const char> value) {
     }
   }
   if (tmp > 0) {
-    DOUBLE_CONVERSION_ASSERT(tmp <= kBigitMask);
-    RawBigit(used_bigits_++) = static_cast<Bignum::Chunk>(tmp & kBigitMask);
+    RawBigit(used_bigits_++) = tmp;
   }
   Clamp();
 }
@@ -218,7 +217,7 @@ void Bignum::AddBignum(const Bignum& other) {
     carry = sum >> kBigitSize;
     ++bigit_pos;
   }
-  used_bigits_ = static_cast<int16_t>(std::max(bigit_pos, static_cast<int>(used_bigits_)));
+  used_bigits_ = (std::max)(bigit_pos, static_cast<int>(used_bigits_));
   DOUBLE_CONVERSION_ASSERT(IsClamped());
 }
 
@@ -254,7 +253,7 @@ void Bignum::ShiftLeft(const int shift_amount) {
   if (used_bigits_ == 0) {
     return;
   }
-  exponent_ += static_cast<int16_t>(shift_amount / kBigitSize);
+  exponent_ += (shift_amount / kBigitSize);
   const int local_shift = shift_amount % kBigitSize;
   EnsureCapacity(used_bigits_ + 1);
   BigitsShiftLeft(local_shift);
@@ -432,7 +431,7 @@ void Bignum::Square() {
   DOUBLE_CONVERSION_ASSERT(accumulator == 0);
 
   // Don't forget to update the used_digits and the exponent.
-  used_bigits_ = static_cast<int16_t>(product_length);
+  used_bigits_ = product_length;
   exponent_ *= 2;
   Clamp();
 }
@@ -753,8 +752,8 @@ void Bignum::Align(const Bignum& other) {
     for (int i = 0; i < zero_bigits; ++i) {
       RawBigit(i) = 0;
     }
-    used_bigits_ += static_cast<int16_t>(zero_bigits);
-    exponent_ -= static_cast<int16_t>(zero_bigits);
+    used_bigits_ += zero_bigits;
+    exponent_ -= zero_bigits;
 
     DOUBLE_CONVERSION_ASSERT(used_bigits_ >= 0);
     DOUBLE_CONVERSION_ASSERT(exponent_ >= 0);

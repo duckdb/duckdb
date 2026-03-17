@@ -10,7 +10,7 @@ namespace duckdb {
 struct BoundCTEData {
 	string ctename;
 	CTEMaterialize materialized;
-	TableIndex setop_index;
+	idx_t setop_index;
 	shared_ptr<Binder> child_binder;
 	shared_ptr<CTEBindState> cte_bind_state;
 };

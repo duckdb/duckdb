@@ -51,15 +51,13 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 }
 
 bool PhysicalStreamingSample::ParallelOperator() const {
-	return !sample_options->repeatable;
+	return !(sample_options->repeatable || sample_options->seed.IsValid());
 }
 
 unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ExecutionContext &context) const {
 	if (!ParallelOperator()) {
-		// Repeatable single thread: use the specified seed for deterministic results
 		return make_uniq<StreamingSampleOperatorState>(static_cast<int64_t>(sample_options->seed.GetIndex()));
 	}
-	// Non-repeatable parallel: each thread gets a distinct random seed (duckdb#16223)
 	RandomEngine random;
 	return make_uniq<StreamingSampleOperatorState>(static_cast<int64_t>(random.NextRandomInteger64()));
 }

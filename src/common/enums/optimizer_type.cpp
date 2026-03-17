@@ -40,14 +40,12 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"join_filter_pushdown", OptimizerType::JOIN_FILTER_PUSHDOWN},
     {"extension", OptimizerType::EXTENSION},
     {"materialized_cte", OptimizerType::MATERIALIZED_CTE},
-    {"aggregate_function_rewriter", OptimizerType::AGGREGATE_FUNCTION_REWRITER},
+    {"sum_rewriter", OptimizerType::SUM_REWRITER},
     {"late_materialization", OptimizerType::LATE_MATERIALIZATION},
     {"cte_inlining", OptimizerType::CTE_INLINING},
     {"common_subplan", OptimizerType::COMMON_SUBPLAN},
     {"join_elimination", OptimizerType::JOIN_ELIMINATION},
     {"window_self_join", OptimizerType::WINDOW_SELF_JOIN},
-    {"projection_pullup", OptimizerType::PROJECTION_PULLUP},
-    {"outer_join_simplification", OptimizerType::OUTER_JOIN_SIMPLIFICATION},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {

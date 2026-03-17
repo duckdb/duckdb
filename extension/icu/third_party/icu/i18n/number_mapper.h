@@ -20,10 +20,6 @@ namespace number {
 namespace impl {
 
 
-class AutoAffixPatternProvider;
-class CurrencyPluralInfoAffixProvider;
-
-
 class PropertiesAffixPatternProvider : public AffixPatternProvider, public UMemory {
   public:
     bool isBogus() const {
@@ -36,27 +32,31 @@ class PropertiesAffixPatternProvider : public AffixPatternProvider, public UMemo
 
     void setTo(const DecimalFormatProperties& properties, UErrorCode& status);
 
+    PropertiesAffixPatternProvider() = default; // puts instance in valid but undefined state
+
+    PropertiesAffixPatternProvider(const DecimalFormatProperties& properties, UErrorCode& status) {
+        setTo(properties, status);
+    }
+
     // AffixPatternProvider Methods:
 
-    char16_t charAt(int32_t flags, int32_t i) const override;
+    char16_t charAt(int32_t flags, int32_t i) const U_OVERRIDE;
 
-    int32_t length(int32_t flags) const override;
+    int32_t length(int32_t flags) const U_OVERRIDE;
 
-    UnicodeString getString(int32_t flags) const override;
+    UnicodeString getString(int32_t flags) const U_OVERRIDE;
 
-    bool hasCurrencySign() const override;
+    bool hasCurrencySign() const U_OVERRIDE;
 
-    bool positiveHasPlusSign() const override;
+    bool positiveHasPlusSign() const U_OVERRIDE;
 
-    bool hasNegativeSubpattern() const override;
+    bool hasNegativeSubpattern() const U_OVERRIDE;
 
-    bool negativeHasMinusSign() const override;
+    bool negativeHasMinusSign() const U_OVERRIDE;
 
-    bool containsSymbolType(AffixPatternType, UErrorCode&) const override;
+    bool containsSymbolType(AffixPatternType, UErrorCode&) const U_OVERRIDE;
 
-    bool hasBody() const override;
-
-    bool currencyAsDecimal() const override;
+    bool hasBody() const U_OVERRIDE;
 
   private:
     UnicodeString posPrefix;
@@ -64,16 +64,10 @@ class PropertiesAffixPatternProvider : public AffixPatternProvider, public UMemo
     UnicodeString negPrefix;
     UnicodeString negSuffix;
     bool isCurrencyPattern;
-    bool fCurrencyAsDecimal;
-
-    PropertiesAffixPatternProvider() = default; // puts instance in valid but undefined state
 
     const UnicodeString& getStringInternal(int32_t flags) const;
 
     bool fBogus{true};
-
-    friend class AutoAffixPatternProvider;
-    friend class CurrencyPluralInfoAffixProvider;
 };
 
 
@@ -92,85 +86,38 @@ class CurrencyPluralInfoAffixProvider : public AffixPatternProvider, public UMem
 
     // AffixPatternProvider Methods:
 
-    char16_t charAt(int32_t flags, int32_t i) const override;
+    char16_t charAt(int32_t flags, int32_t i) const U_OVERRIDE;
 
-    int32_t length(int32_t flags) const override;
+    int32_t length(int32_t flags) const U_OVERRIDE;
 
-    UnicodeString getString(int32_t flags) const override;
+    UnicodeString getString(int32_t flags) const U_OVERRIDE;
 
-    bool hasCurrencySign() const override;
+    bool hasCurrencySign() const U_OVERRIDE;
 
-    bool positiveHasPlusSign() const override;
+    bool positiveHasPlusSign() const U_OVERRIDE;
 
-    bool hasNegativeSubpattern() const override;
+    bool hasNegativeSubpattern() const U_OVERRIDE;
 
-    bool negativeHasMinusSign() const override;
+    bool negativeHasMinusSign() const U_OVERRIDE;
 
-    bool containsSymbolType(AffixPatternType, UErrorCode&) const override;
+    bool containsSymbolType(AffixPatternType, UErrorCode&) const U_OVERRIDE;
 
-    bool hasBody() const override;
-
-    bool currencyAsDecimal() const override;
+    bool hasBody() const U_OVERRIDE;
 
   private:
     PropertiesAffixPatternProvider affixesByPlural[StandardPlural::COUNT];
 
-    CurrencyPluralInfoAffixProvider() = default;
-
     bool fBogus{true};
-
-    friend class AutoAffixPatternProvider;
-};
-
-
-class AutoAffixPatternProvider {
-  public:
-    inline AutoAffixPatternProvider() = default;
-
-    inline AutoAffixPatternProvider(const DecimalFormatProperties& properties, UErrorCode& status) {
-        setTo(properties, status);
-    }
-
-    inline void setTo(const DecimalFormatProperties& properties, UErrorCode& status) {
-        if (properties.currencyPluralInfo.fPtr.isNull()) {
-            propertiesAPP.setTo(properties, status);
-            currencyPluralInfoAPP.setToBogus();
-        } else {
-            propertiesAPP.setToBogus();
-            currencyPluralInfoAPP.setTo(*properties.currencyPluralInfo.fPtr, properties, status);
-        }
-    }
-
-    inline void setTo(const AffixPatternProvider* provider, UErrorCode& status) {
-        if (auto ptr = dynamic_cast<const PropertiesAffixPatternProvider*>(provider)) {
-            propertiesAPP = *ptr;
-        } else if (auto ptr = dynamic_cast<const CurrencyPluralInfoAffixProvider*>(provider)) {
-            currencyPluralInfoAPP = *ptr;
-        } else {
-            status = U_INTERNAL_PROGRAM_ERROR;
-        }
-    }
-
-    inline const AffixPatternProvider& get() const {
-      if (!currencyPluralInfoAPP.isBogus()) {
-        return currencyPluralInfoAPP;
-      } else {
-        return propertiesAPP;
-      }
-    }
-
-  private:
-    PropertiesAffixPatternProvider propertiesAPP;
-    CurrencyPluralInfoAffixProvider currencyPluralInfoAPP;
 };
 
 
 /**
  * A struct for ownership of a few objects needed for formatting.
  */
-struct DecimalFormatWarehouse : public UMemory {
-    AutoAffixPatternProvider affixProvider;
-    LocalPointer<PluralRules> rules;
+struct DecimalFormatWarehouse {
+    PropertiesAffixPatternProvider propertiesAPP;
+    CurrencyPluralInfoAffixProvider currencyPluralInfoAPP;
+    CurrencySymbols currencySymbols;
 };
 
 

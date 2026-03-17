@@ -52,11 +52,10 @@ quACk QUaCk
 QUACK
 QUACK
 
-# Result depends on either PostgreSQL parser or PEG Parser used. 
 statement error
 QUAC
 ----
-<REGEX>:(.*Parser Error: Did you mean.*|.*Catalog Error: Table with name.*)
+<REGEX>:Parser Error: Did you mean.*
 
 statement error
 QUACK NOT QUACK

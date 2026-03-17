@@ -7,7 +7,10 @@
 
 // Allow implicit conversion from char16_t* to UnicodeString for this file:
 // Helpful in toString methods and elsewhere.
+#ifndef UNISTR_FROM_STRING_EXPLICIT
 #define UNISTR_FROM_STRING_EXPLICIT
+#endif
+
 
 #include "number_decnum.h"
 #include "number_types.h"
@@ -46,7 +49,6 @@ Scale::Scale(const Scale& other)
 }
 
 Scale& Scale::operator=(const Scale& other) {
-    if (this == &other) { return *this; }  // self-assignment: no-op
     fMagnitude = other.fMagnitude;
     if (other.fArbitrary != nullptr) {
         UErrorCode localStatus = U_ZERO_ERROR;
@@ -58,13 +60,13 @@ Scale& Scale::operator=(const Scale& other) {
     return *this;
 }
 
-Scale::Scale(Scale&& src) noexcept
+Scale::Scale(Scale&& src) U_NOEXCEPT
         : fMagnitude(src.fMagnitude), fArbitrary(src.fArbitrary), fError(src.fError) {
     // Take ownership away from src if necessary
     src.fArbitrary = nullptr;
 }
 
-Scale& Scale::operator=(Scale&& src) noexcept {
+Scale& Scale::operator=(Scale&& src) U_NOEXCEPT {
     fMagnitude = src.fMagnitude;
     if (fArbitrary != nullptr) {
         delete fArbitrary;
@@ -128,7 +130,7 @@ Scale Scale::byDoubleAndPowerOfTen(double multiplicand, int32_t power) {
     return {power, decnum.orphan()};
 }
 
-void Scale::applyTo(impl::DecimalQuantity& quantity) const {
+void Scale::applyTo(number::impl::DecimalQuantity& quantity) const {
     quantity.adjustMagnitude(fMagnitude);
     if (fArbitrary != nullptr) {
         UErrorCode localStatus = U_ZERO_ERROR;
@@ -136,7 +138,7 @@ void Scale::applyTo(impl::DecimalQuantity& quantity) const {
     }
 }
 
-void Scale::applyReciprocalTo(impl::DecimalQuantity& quantity) const {
+void Scale::applyReciprocalTo(number::impl::DecimalQuantity& quantity) const {
     quantity.adjustMagnitude(-fMagnitude);
     if (fArbitrary != nullptr) {
         UErrorCode localStatus = U_ZERO_ERROR;

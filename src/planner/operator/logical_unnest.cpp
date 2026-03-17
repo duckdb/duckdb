@@ -6,8 +6,8 @@ namespace duckdb {
 
 vector<ColumnBinding> LogicalUnnest::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();
-	for (auto unnest_col_idx : ProjectionIndex::GetIndexes(expressions.size())) {
-		child_bindings.emplace_back(unnest_index, unnest_col_idx);
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		child_bindings.emplace_back(unnest_index, i);
 	}
 	return child_bindings;
 }
@@ -19,14 +19,14 @@ void LogicalUnnest::ResolveTypes() {
 	}
 }
 
-vector<TableIndex> LogicalUnnest::GetTableIndex() const {
-	return vector<TableIndex> {unnest_index};
+vector<idx_t> LogicalUnnest::GetTableIndex() const {
+	return vector<idx_t> {unnest_index};
 }
 
 string LogicalUnnest::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", unnest_index.index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", unnest_index);
 	}
 #endif
 	return LogicalOperator::GetName();

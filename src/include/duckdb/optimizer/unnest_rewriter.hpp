@@ -46,7 +46,7 @@ public:
 	//! Contains all bindings that need to be updated
 	vector<ReplaceBinding> replace_bindings;
 	//! Stores the table index of the former child of the LOGICAL_UNNEST
-	TableIndex overwritten_tbl_idx;
+	idx_t overwritten_tbl_idx;
 };
 
 //! The UnnestRewriter optimizer traverses the logical operator tree and rewrites duplicate
@@ -81,7 +81,7 @@ private:
 	//! Store the column bindings of the LHS child of the LOGICAL_DELIM_JOIN
 	vector<LHSBinding> lhs_bindings;
 	//! Stores the table index of the former child of the LOGICAL_UNNEST
-	TableIndex overwritten_tbl_idx;
+	idx_t overwritten_tbl_idx;
 	//! The number of distinct columns to unnest
 	idx_t distinct_unnest_count;
 };

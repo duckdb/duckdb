@@ -176,4 +176,4 @@ export REMOTE_EXTENSION_REPO_DIRECT_PATH=http://duckdb-minio.com:9000/test-bucke
 ################
 ### Run test
 ################
-RUN_EXTENSION_UPDATE_TEST=1 python3 scripts/ci/run_tests.py $DUCKDB_BUILD_DIR/test/unittest test/extension/update_extensions_ci.test
+RUN_EXTENSION_UPDATE_TEST=1 $DUCKDB_BUILD_DIR/test/unittest test/extension/update_extensions_ci.test

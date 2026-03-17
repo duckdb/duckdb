@@ -12,21 +12,20 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/open_file_info.hpp"
-#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 
 namespace duckdb {
 
-class BufferHandle;
 class ClientContext;
-class DatabaseInstance;
+class QueryContext;
+class BufferHandle;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
-class StorageLockKey;
-class QueryContext;
 class CachingFileSystem;
 
 struct CachingFileHandle {

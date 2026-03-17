@@ -17,7 +17,6 @@
 
 #include "sharedobject.h"
 #include "unicode/dtfmtsym.h"
-#include "unifiedcache.h"
 
 U_NAMESPACE_BEGIN
 
@@ -31,14 +30,9 @@ public:
     const DateFormatSymbols &get() const { return dfs; }
 private:
     DateFormatSymbols dfs;
-    SharedDateFormatSymbols(const SharedDateFormatSymbols &) = delete;
-    SharedDateFormatSymbols &operator=(const SharedDateFormatSymbols &) = delete;
+    SharedDateFormatSymbols(const SharedDateFormatSymbols &);
+    SharedDateFormatSymbols &operator=(const SharedDateFormatSymbols &);
 };
-
-template<> U_I18N_API
-const SharedDateFormatSymbols *
-        LocaleCacheKey<SharedDateFormatSymbols>::createObject(
-            const void * /*unusedContext*/, UErrorCode &status) const;
 
 U_NAMESPACE_END
 

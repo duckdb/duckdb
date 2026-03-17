@@ -1,5 +1,5 @@
 // © 2019 and later: Unicode, Inc. and others.
-// License & terms of use: http://www.unicode.org/copyright.html
+// License & terms of use: http://www.unicode.org/copyright.html#License
 
 // localeprioritylist.h
 // created: 2019jul11 Markus W. Scherer

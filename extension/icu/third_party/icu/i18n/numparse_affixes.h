@@ -28,7 +28,7 @@ using ::icu::number::impl::TokenConsumer;
 using ::icu::number::impl::CurrencySymbols;
 
 
-class U_I18N_API CodePointMatcher : public NumberParseMatcher, public UMemory {
+class CodePointMatcher : public NumberParseMatcher, public UMemory {
   public:
     CodePointMatcher() = default;  // WARNING: Leaves the object in an unusable state
 
@@ -53,7 +53,7 @@ class U_I18N_API CodePointMatcher : public NumberParseMatcher, public UMemory {
 // Note: These need to be outside of the numparse::impl namespace, or Clang will generate a compile error.
 #if U_PF_WINDOWS <= U_PLATFORM && U_PLATFORM <= U_PF_CYGWIN
 template class U_I18N_API MaybeStackArray<numparse::impl::CodePointMatcher*, 8>; 
-template class U_I18N_API MaybeStackArray<char16_t, 4>;
+template class U_I18N_API MaybeStackArray<UChar, 4>;
 template class U_I18N_API MemoryPool<numparse::impl::CodePointMatcher, 8>;
 template class U_I18N_API numparse::impl::CompactUnicodeString<4>;
 #endif
@@ -101,8 +101,6 @@ class U_I18N_API AffixTokenMatcherWarehouse : public UMemory {
 
     NumberParseMatcher* nextCodePointMatcher(UChar32 cp, UErrorCode& status);
 
-    bool hasEmptyCurrencySymbol() const;
-
   private:
     // NOTE: The following field may be unsafe to access after construction is done!
     const AffixTokenMatcherSetupData* fSetupData;
@@ -130,7 +128,7 @@ class AffixPatternMatcherBuilder : public TokenConsumer, public MutableMatcherCo
     void consumeToken(::icu::number::impl::AffixPatternType type, UChar32 cp, UErrorCode& status) override;
 
     /** NOTE: You can build only once! */
-    AffixPatternMatcher build(UErrorCode& status);
+    AffixPatternMatcher build();
 
   private:
     ArraySeriesMatcher::MatcherArray fMatchers;
@@ -162,8 +160,7 @@ class U_I18N_API AffixPatternMatcher : public ArraySeriesMatcher {
   private:
     CompactUnicodeString<4> fPattern;
 
-    AffixPatternMatcher(MatcherArray& matchers, int32_t matchersLen, const UnicodeString& pattern,
-                        UErrorCode& status);
+    AffixPatternMatcher(MatcherArray& matchers, int32_t matchersLen, const UnicodeString& pattern);
 
     friend class AffixPatternMatcherBuilder;
 };
@@ -206,12 +203,10 @@ class AffixMatcherWarehouse {
                              UErrorCode& status);
 
   private:
-    // 18 is the limit: positive, zero, and negative, each with prefix, suffix, and prefix+suffix,
-    // and doubled since there may be an empty currency symbol
-    AffixMatcher fAffixMatchers[18];
-    // 6 is the limit: positive, zero, and negative, a prefix and a suffix for each,
-    // and doubled since there may be an empty currency symbol
-    AffixPatternMatcher fAffixPatternMatchers[12];
+    // 9 is the limit: positive, zero, and negative, each with prefix, suffix, and prefix+suffix
+    AffixMatcher fAffixMatchers[9];
+    // 6 is the limit: positive, zero, and negative, a prefix and a suffix for each
+    AffixPatternMatcher fAffixPatternMatchers[6];
     // Reference to the warehouse for tokens used by the AffixPatternMatchers
     AffixTokenMatcherWarehouse* fTokenWarehouse;
 

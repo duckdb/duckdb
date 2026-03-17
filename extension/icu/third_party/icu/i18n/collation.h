@@ -221,8 +221,7 @@ public:
         /**
          * Points to contraction data.
          * Bits 31..13: Index into prefix/contraction data.
-         * Bit      12: Unused, 0.
-         * Bit      11: CONTRACT_HAS_STARTER flag. (Used by ICU4X only.)
+         * Bits 12..11: Unused, 0.
          * Bit      10: CONTRACT_TRAILING_CCC flag.
          * Bit       9: CONTRACT_NEXT_CCC flag.
          * Bit       8: CONTRACT_SINGLE_CP_NO_MATCH flag.
@@ -251,7 +250,7 @@ public:
          * Tag for a lead surrogate code unit.
          * Optional optimization for UTF-16 string processing.
          * Bits 31..10: Unused, 0.
-         *       9.. 8: =0: All associated supplementary code points are unassigned-implicit.
+         *       9.. 8: =0: All associated supplementary code points are unassigned-implict.
          *              =1: All associated supplementary code points fall back to the base data.
          *              else: (Normally 2) Look up the data for the supplementary code point.
          */
@@ -299,8 +298,6 @@ public:
     static const uint32_t CONTRACT_NEXT_CCC = 0x200;
     /** Set if any contraction suffix ends with lccc!=0. */
     static const uint32_t CONTRACT_TRAILING_CCC = 0x400;
-    /** Set if any contraction suffix contains a starter. (Used by ICU4X only.) */
-    static const uint32_t CONTRACT_HAS_STARTER = 0x800;
 
     /** For HANGUL_TAG: None of its Jamo CE32s isSpecialCE32(). */
     static const uint32_t HANGUL_NO_SPECIAL_JAMO = 0x100;
@@ -359,7 +356,7 @@ public:
     }
 
     /**
-     * @return true if the ce32 yields one or more CEs without further data lookups
+     * @return TRUE if the ce32 yields one or more CEs without further data lookups
      */
     static UBool isSelfContainedCE32(uint32_t ce32) {
         return !isSpecialCE32(ce32) ||
@@ -494,7 +491,7 @@ public:
     }
 
 private:
-    Collation() = delete;  // No instantiation.
+    Collation();  // No instantiation.
 };
 
 U_NAMESPACE_END

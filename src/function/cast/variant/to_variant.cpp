@@ -95,131 +95,8 @@ static bool WriteVariantResultData(ToVariantSourceData &source, ToVariantGlobalR
 	return ConvertToVariant<true>(source, result, count, nullptr, nullptr, true);
 }
 
-struct VariantCastData : BoundCastData {
-	explicit VariantCastData(const LogicalType &source_type_p)
-	    : shredded_type(VariantUtils::ShreddedType(source_type_p)) {
-	}
-
-	LogicalType shredded_type;
-
-	unique_ptr<BoundCastData> Copy() const override {
-		return make_uniq<VariantCastData>(shredded_type);
-	}
-};
-
-struct VariantLocalData : FunctionLocalState {
-	explicit VariantLocalData(const LogicalType &shredded_type) {
-		Initialize(shredded_type, STANDARD_VECTOR_SIZE);
-	}
-
-	void Initialize(const LogicalType &shredded_type, idx_t new_capacity) {
-		capacity = new_capacity;
-		shredded_vector = make_uniq<Vector>(shredded_type, capacity);
-		auto &top_shredded = StructVector::GetEntries(*shredded_vector);
-		// NULL out everything in the unshredded part
-		auto &unshredded_child = *top_shredded[0];
-		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			unshredded_entry->SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(*unshredded_entry, true);
-		}
-		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(unshredded_child, true);
-	}
-
-	Vector &GetShreddedVector(idx_t req_capacity) {
-		if (req_capacity <= capacity) {
-			return *shredded_vector;
-		}
-		Initialize(shredded_vector->GetType(), req_capacity);
-		return *shredded_vector;
-	}
-
-private:
-	idx_t capacity;
-	unique_ptr<Vector> shredded_vector;
-};
-
-unique_ptr<FunctionLocalState> CastToVariantLocalState(CastLocalStateParameters &parameters) {
-	auto &cast_data = parameters.cast_data->Cast<VariantCastData>();
-	return make_uniq<VariantLocalData>(cast_data.shredded_type);
-}
-
-static bool SupportsShreddedCast(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::STRUCT) {
-		// for struct types recurse into the child types
-		auto &child_types = StructType::GetChildTypes(type);
-		for (auto &entry : child_types) {
-			if (!SupportsShreddedCast(entry.second)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	if (!VariantUtils::VariantSupportsType(type)) {
-		// type is not natively supported in variant so it cannot be emitted as a shredded type without conversion
-		return false;
-	}
-	return true;
-}
-
-static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count) {
-	if (source.GetType().id() == LogicalTypeId::STRUCT) {
-		// source is "{<children>}", target is "{typed value STRUCT(<children>)}"
-		// go into the "typed_value"
-		auto &typed_value = *StructVector::GetEntries(result)[0];
-		// copy over the validity
-		// we need to flatten in order to reference the validity
-		if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
-			source.Flatten(count);
-		}
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-		FlatVector::Validity(typed_value) = FlatVector::Validity(source);
-		// now recurse into the children of both
-		auto &source_entries = StructVector::GetEntries(source);
-		auto &target_entries = StructVector::GetEntries(typed_value);
-		for (idx_t child_idx = 0; child_idx < source_entries.size(); child_idx++) {
-			ShreddedVectorReference(*source_entries[child_idx], *target_entries[child_idx], count);
-		}
-		return;
-	}
-	// for primitive types we can directly reference the input
-	result.Reference(source);
-}
-
-static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	if (!SupportsShreddedCast(source.GetType())) {
-		return false;
-	}
-	auto &local_data = parameters.local_state->Cast<VariantLocalData>();
-	auto &shredded_vector = local_data.GetShreddedVector(count);
-	// emit a shredded vector that references the source directly
-	auto &top_shredded = StructVector::GetEntries(shredded_vector);
-	auto &shredded_child = *top_shredded[1];
-	ShreddedVectorReference(source, shredded_child, count);
-	result.Shred(shredded_vector);
-	return true;
-}
-
-static void SetVectorConstant(Vector &vector) {
-	if (vector.GetType().InternalType() == PhysicalType::STRUCT) {
-		auto &entries = StructVector::GetEntries(vector);
-		for (auto &entry : entries) {
-			SetVectorConstant(*entry);
-		}
-	}
-	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-}
-
 static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	if (!count) {
-		return true;
-	}
-	bool is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	if (TryToShreddedCast(source, result, count, parameters)) {
-		if (is_constant) {
-			result.Flatten(1);
-			SetVectorConstant(result);
-		}
 		return true;
 	}
 	DataChunk offsets;
@@ -279,8 +156,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 
 BoundCastInfo DefaultCasts::ImplicitToVariantCast(BindCastInput &input, const LogicalType &source,
                                                   const LogicalType &target) {
-	return BoundCastInfo(variant::CastToVARIANT, make_uniq<variant::VariantCastData>(source),
-	                     variant::CastToVariantLocalState);
+	return BoundCastInfo(variant::CastToVARIANT);
 }
 
 } // namespace duckdb

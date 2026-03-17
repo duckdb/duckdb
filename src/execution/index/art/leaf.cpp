@@ -163,8 +163,7 @@ bool Leaf::DeprecatedGetRowIds(ART &art, const Node &node, set<row_t> &row_ids, 
 
 	reference<const Node> ref(node);
 	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
 		if (row_ids.size() + leaf.count > max_count) {
 			return false;
 		}
@@ -193,10 +192,14 @@ void Leaf::DeprecatedVacuum(ART &art, Node &node) {
 }
 
 string Leaf::DeprecatedToString(ART &art, const Node &node, const ToStringOptions &options) {
+	auto indent = [](string &str, const idx_t n) {
+		str.append(n, ' ');
+	};
 	string str = "";
 
 	if (!options.print_deprecated_leaves) {
-		str = options.tree_prefix + "[deprecated leaves]\n";
+		indent(str, options.indent_level);
+		str += "[deprecated leaves]\n";
 		return str;
 	}
 
@@ -204,7 +207,8 @@ string Leaf::DeprecatedToString(ART &art, const Node &node, const ToStringOption
 
 	while (ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
-		str += options.tree_prefix + "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
+		indent(str, options.indent_level);
+		str += "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			str += to_string(leaf.row_ids[i]) + "-";
 		}
@@ -221,8 +225,7 @@ void Leaf::DeprecatedVerify(ART &art, const Node &node) {
 	reference<const Node> ref(node);
 
 	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
 		D_ASSERT(leaf.count <= LEAF_SIZE);
 		ref = leaf.ptr;
 	}
@@ -234,8 +237,7 @@ void Leaf::DeprecatedVerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &
 
 	reference<const Node> ref(ptr);
 	while (ref.get().HasMetadata()) {
-		ConstNodeHandle<Leaf> handle(art, ref);
-		auto &leaf = handle.Get();
+		auto &leaf = Node::Ref<const Leaf>(art, ref, LEAF);
 		node_counts[idx]++;
 		ref = leaf.ptr;
 	}

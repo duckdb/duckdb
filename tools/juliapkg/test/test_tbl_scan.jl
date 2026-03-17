@@ -152,19 +152,17 @@ end
         df = columntable(results)
         @test isequal(df, my_df)
 
-        # date/time/timestamp/blob
+        # date/time/timestamp
         my_df = (
             date = [Date(1992, 9, 20), missing, Date(1950, 2, 3)],
             time = [Time(23, 3, 1), Time(11, 49, 33), missing],
-            timestamp = [DateTime(1992, 9, 20, 23, 3, 1), DateTime(1950, 2, 3, 11, 49, 3), missing],
-            blob = Union{Vector{UInt8}, Missing}[UInt8[0x00, 0x01, 0xff], missing, UInt8[0xde, 0xad]]
+            timestamp = [DateTime(1992, 9, 20, 23, 3, 1), DateTime(1950, 2, 3, 11, 49, 3), missing]
         )
 
         DuckDB.register_table(con, tblf(my_df), "my_df")
 
         results = DBInterface.execute(con, "SELECT * FROM my_df")
         df = columntable(results)
-        @test typeof(df) == typeof(my_df)
         @test isequal(df, my_df)
 
         DBInterface.close!(con)

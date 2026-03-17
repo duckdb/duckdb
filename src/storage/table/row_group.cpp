@@ -22,7 +22,6 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/planner/expression/bound_cast_expression.hpp"

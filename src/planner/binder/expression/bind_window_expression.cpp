@@ -44,6 +44,11 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 		throw BinderException("%s needs %d parameter%s, got %d", ExpressionTypeToString(window_type), param_count,
 		                      param_count == 1 ? "" : "s", child_types.size());
 	}
+	for (const auto &type : child_types) {
+		if (type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
+	}
 	switch (window_type) {
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_CUME_DIST:
@@ -418,11 +423,11 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->end = window.end;
 	result->exclude_clause = window.exclude_clause;
 
+	// create a BoundColumnRef that references this entry
+	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), result->return_type,
+	                                                  ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
-	auto &window_type = result->return_type;
-	auto window_idx = ColumnBinding::PushExpression(node.windows, std::move(result));
-	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), window_type,
-	                                                  ColumnBinding(node.window_index, window_idx), depth);
+	node.windows.push_back(std::move(result));
 	return BindResult(std::move(colref));
 }
 

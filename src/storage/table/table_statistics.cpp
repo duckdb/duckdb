@@ -4,7 +4,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/parser/column_list.hpp"
 
 namespace duckdb {
 

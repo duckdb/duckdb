@@ -386,9 +386,9 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 			error.Throw();
 		}
 
-		auto bind_index = query.plan->GetRootIndex();
+		idx_t bind_index = query.plan->GetRootIndex();
 		// string alias;
-		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index.index) : ref.alias);
+		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index) : ref.alias);
 
 		// remember ref here is TableFunctionRef and NOT base class
 		bind_context.AddSubquery(bind_index, alias, ref, query);
@@ -463,10 +463,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		                                std::move(input_table_types), std::move(input_table_names));
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
-		// if the error does not already contain a query location, add one
-		if (error.ExtraInfo().count("position") == 0) {
-			error.AddQueryLocation(ref);
-		}
+		error.AddQueryLocation(ref);
 		error.Throw();
 	}
 

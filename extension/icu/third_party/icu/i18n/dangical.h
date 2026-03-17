@@ -27,7 +27,7 @@ U_NAMESPACE_BEGIN
  * <p><code>DangiCalendar</code> is a concrete subclass of {@link Calendar}
  * that implements a traditional Korean lunisolar calendar.</p>
  *
- * <p>DangiCalendar usually should be instantiated using 
+ * <p>DangiCalendar usually should be instantiated using
  * {@link com.ibm.icu.util.Calendar#getInstance(ULocale)} passing in a <code>ULocale</code>
  * with the tag <code>"@calendar=dangi"</code>.</p>
  *
@@ -66,38 +66,24 @@ class DangiCalendar : public ChineseCalendar {
    * Clone.
    * @internal
    */
-  virtual DangiCalendar* clone() const override;
+  virtual DangiCalendar* clone() const;
 
   //----------------------------------------------------------------------
   // Internal methods & astronomical calculations
   //----------------------------------------------------------------------
 
-  /**
-   * @return      The related Gregorian year; will be obtained by modifying the value
-   *              obtained by get from UCAL_EXTENDED_YEAR field
-   * @internal
-   */
-  virtual int32_t getRelatedYear(UErrorCode &status) const override;
-
-  /**
-   * @param year  The related Gregorian year to set; will be modified as necessary then
-   *              set in UCAL_EXTENDED_YEAR field
-   * @internal
-   */
-  virtual void setRelatedYear(int32_t year) override;
-
  private:
 
-  const TimeZone* getDangiCalZoneAstroCalc(UErrorCode &status) const;
+  static TimeZone* getDangiCalZoneAstroCalc(void);
 
   // UObject stuff
- public: 
+ public:
   /**
    * @return   The class ID for this object. All objects of a given class have the
    *           same class ID. Objects of other classes have different class IDs.
    * @internal
    */
-  virtual UClassID getDynamicClassID() const override;
+  virtual UClassID getDynamicClassID(void) const;
 
   /**
    * Return the class ID for this class. This is useful only for comparing to a return
@@ -110,7 +96,7 @@ class DangiCalendar : public ChineseCalendar {
    * @return   The class ID for all objects of this class.
    * @internal
    */
-  U_I18N_API static UClassID U_EXPORT2 getStaticClassID();
+  U_I18N_API static UClassID U_EXPORT2 getStaticClassID(void);
 
   /**
    * return the calendar type, "dangi".
@@ -118,11 +104,11 @@ class DangiCalendar : public ChineseCalendar {
    * @return calendar type
    * @internal
    */
-  const char * getType() const override;
+  const char * getType() const;
 
 
  private:
- 
+
   DangiCalendar(); // default constructor not implemented
 };
 

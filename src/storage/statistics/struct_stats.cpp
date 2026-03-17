@@ -5,7 +5,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/storage_index.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 
 namespace duckdb {
 
@@ -117,14 +116,17 @@ void StructStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	});
 }
 
-child_list_t<Value> StructStats::ToStruct(const BaseStatistics &stats) {
-	child_list_t<Value> result;
-	child_list_t<Value> child_info;
+string StructStats::ToString(const BaseStatistics &stats) {
+	string result;
+	result += " {";
 	auto &child_types = StructType::GetChildTypes(stats.GetType());
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		child_info.emplace_back(child_types[i].first, stats.child_stats[i].ToStruct());
+		if (i > 0) {
+			result += ", ";
+		}
+		result += child_types[i].first + ": " + stats.child_stats[i].ToString();
 	}
-	result.emplace_back("child_stats", Value::STRUCT(std::move(child_info)));
+	result += "}";
 	return result;
 }
 

@@ -8,33 +8,10 @@
 
 namespace duckdb {
 
-JoinCondition JoinCondition::Copy() const {
-	if (IsComparison()) {
-		JoinCondition copy(left->Copy(), right->Copy(), comparison);
-		if (left_stats) {
-			copy.SetLeftStats(left_stats->ToUnique());
-		}
-		if (right_stats) {
-			copy.SetRightStats(right_stats->ToUnique());
-		}
-		return copy;
-	}
-
-	JoinCondition copy(left->Copy());
-	const auto &expr_stats = GetExpressionStats();
-	if (expr_stats) {
-		copy.SetExpressionStats(expr_stats->ToUnique());
-	}
-	return copy;
-}
-
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
-	if (cond.IsComparison()) {
-		auto bound_comparison = make_uniq<BoundComparisonExpression>(
-		    cond.GetComparisonType(), std::move(cond.LeftReference()), std::move(cond.RightReference()));
-		return std::move(bound_comparison);
-	}
-	return std::move(cond.JoinExpressionReference());
+	auto bound_comparison =
+	    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+	return std::move(bound_comparison);
 }
 
 unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> conditions) {
@@ -65,8 +42,8 @@ JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {
 	return left;
 }
 
-JoinSide JoinSide::GetJoinSide(TableIndex table_binding, const unordered_set<TableIndex> &left_bindings,
-                               const unordered_set<TableIndex> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(idx_t table_binding, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	if (left_bindings.find(table_binding) != left_bindings.end()) {
 		// column references table on left side
 		D_ASSERT(right_bindings.find(table_binding) == right_bindings.end());
@@ -78,8 +55,8 @@ JoinSide JoinSide::GetJoinSide(TableIndex table_binding, const unordered_set<Tab
 	}
 }
 
-JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<TableIndex> &left_bindings,
-                               const unordered_set<TableIndex> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.depth > 0) {
@@ -116,9 +93,8 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<Table
 	return join_side;
 }
 
-JoinSide JoinSide::GetJoinSide(const unordered_set<TableIndex> &bindings,
-                               const unordered_set<TableIndex> &left_bindings,
-                               const unordered_set<TableIndex> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(const unordered_set<idx_t> &bindings, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {
 		side = CombineJoinSide(side, GetJoinSide(binding, left_bindings, right_bindings));

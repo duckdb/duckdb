@@ -257,7 +257,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		return;
 	}
 
-	if (GetVectorType() == VectorType::FSST_VECTOR || GetVectorType() == VectorType::SHREDDED_VECTOR) {
+	if (GetVectorType() == VectorType::FSST_VECTOR) {
 		Flatten(sel, count);
 		return;
 	}
@@ -599,30 +599,6 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			index = sel_vector.get_index(index);
 			break;
 		}
-		case VectorType::SHREDDED_VECTOR: {
-			// FIXME: this is extremely inefficient
-			Vector copy(LogicalType::VARIANT());
-			SelectionVector sel(1);
-			sel.set_index(0, index);
-			auto &shredded = ShreddedVector::GetShreddedVector(v_p);
-			auto &unshredded = ShreddedVector::GetUnshreddedVector(v_p);
-
-			Vector sliced_shredded(shredded, sel, 1);
-			Vector sliced_unshredded(unshredded, sel, 1);
-			sliced_shredded.Flatten(1);
-			sliced_unshredded.Flatten(1);
-
-			child_list_t<LogicalType> shredded_subtypes;
-			shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
-			shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
-			Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
-			StructVector::GetEntries(new_shredded)[0]->Reference(sliced_unshredded);
-			StructVector::GetEntries(new_shredded)[1]->Reference(sliced_shredded);
-
-			copy.Shred(new_shredded);
-			copy.Flatten(1);
-			return copy.GetValue(0);
-		}
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
 			SequenceVector::GetSequence(*vector, start, increment);
@@ -759,9 +735,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		}
 		return Value::GEOMETRY(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
-	case LogicalTypeId::LEGACY_AGGREGATE_STATE: {
+	case LogicalTypeId::AGGREGATE_STATE: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
-		return Value::LEGACY_AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
+		return Value::AGGREGATE_STATE(vector->GetType(), const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::BIT: {
 		auto str = reinterpret_cast<string_t *>(data)[index];
@@ -799,7 +775,6 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		children.emplace_back(VariantVector::GetData(*vector).GetValue(index_p));
 		return Value::VARIANT(children);
 	}
-	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
 		auto &child_entries = StructVector::GetEntries(*vector);
@@ -807,12 +782,6 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 			auto &struct_child = child_entries[child_idx];
 			children.push_back(struct_child->GetValue(index_p));
-		}
-
-		if (type.id() == LogicalTypeId::AGGREGATE_STATE) {
-			// We could also just call `Value::STRUCT` as it has the same implementation, but this is implementation
-			// details, so for consistency and bullet-proof implementation we keep those constructors separate.
-			return Value::AGGREGATE_STATE(type, std::move(children));
 		}
 		return Value::STRUCT(type, std::move(children));
 	}
@@ -850,8 +819,7 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	if (v_p.GetType().HasAlias()) {
 		value.GetTypeMutable().CopyAuxInfo(v_p.GetType());
 	}
-	if (v_p.GetType().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE &&
-	    value.type().id() != LogicalTypeId::LEGACY_AGGREGATE_STATE) {
+	if (v_p.GetType().id() != LogicalTypeId::AGGREGATE_STATE && value.type().id() != LogicalTypeId::AGGREGATE_STATE) {
 		D_ASSERT(v_p.GetType() == value.type());
 	}
 	return value;
@@ -874,8 +842,6 @@ string VectorTypeToString(VectorType type) {
 		return "DICTIONARY";
 	case VectorType::CONSTANT_VECTOR:
 		return "CONSTANT";
-	case VectorType::SHREDDED_VECTOR:
-		return "SHREDDED";
 	default:
 		return "UNKNOWN";
 	}
@@ -904,13 +870,6 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
-	case VectorType::SHREDDED_VECTOR: {
-		auto &shredded_vector = ShreddedVector::GetShreddedVector(*this);
-		auto &unshredded_vector = ShreddedVector::GetUnshreddedVector(*this);
-		retval += "Shredded: " + shredded_vector.ToString(count);
-		retval += ", Unshredded: " + unshredded_vector.ToString(count);
-		break;
-	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
@@ -958,14 +917,9 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 	}
 	case PhysicalType::STRUCT: {
 		idx_t total_size = 0;
-		if (vector_type == VectorType::SHREDDED_VECTOR) {
-			total_size += ShreddedVector::GetShreddedVector(*this).GetAllocationSize(cardinality);
-			total_size += ShreddedVector::GetUnshreddedVector(*this).GetAllocationSize(cardinality);
-		} else {
-			auto &children = StructVector::GetEntries(*this);
-			for (auto &child : children) {
-				total_size += child->GetAllocationSize(cardinality);
-			}
+		auto &children = StructVector::GetEntries(*this);
+		for (auto &child : children) {
+			total_size += child->GetAllocationSize(cardinality);
 		}
 		return total_size;
 	}
@@ -1008,150 +962,6 @@ static void TemplatedFlattenConstantVector(data_ptr_t data, data_ptr_t old_data,
 	}
 }
 
-void Vector::FlattenConstant(idx_t count) {
-	bool is_null = ConstantVector::IsNull(*this);
-	// allocate a new buffer for the vector
-	auto old_buffer = std::move(buffer);
-	auto old_data = data;
-	buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
-	if (old_buffer) {
-		D_ASSERT(buffer->GetAuxiliaryData() == nullptr);
-		// The old buffer might be relying on the auxiliary data, keep it alive
-		buffer->MoveAuxiliaryData(*old_buffer);
-	}
-	data = buffer->GetData();
-	vector_type = VectorType::FLAT_VECTOR;
-	if (is_null && GetType().InternalType() != PhysicalType::ARRAY) {
-		// constant NULL, set nullmask
-		validity.EnsureWritable();
-		validity.SetAllInvalid(count);
-		if (GetType().InternalType() != PhysicalType::STRUCT) {
-			// for structs we still need to flatten the child vectors as well
-			return;
-		}
-	}
-	// non-null constant: have to repeat the constant
-	switch (GetType().InternalType()) {
-	case PhysicalType::BOOL:
-		TemplatedFlattenConstantVector<bool>(data, old_data, count);
-		break;
-	case PhysicalType::INT8:
-		TemplatedFlattenConstantVector<int8_t>(data, old_data, count);
-		break;
-	case PhysicalType::INT16:
-		TemplatedFlattenConstantVector<int16_t>(data, old_data, count);
-		break;
-	case PhysicalType::INT32:
-		TemplatedFlattenConstantVector<int32_t>(data, old_data, count);
-		break;
-	case PhysicalType::INT64:
-		TemplatedFlattenConstantVector<int64_t>(data, old_data, count);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedFlattenConstantVector<uint8_t>(data, old_data, count);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedFlattenConstantVector<uint16_t>(data, old_data, count);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedFlattenConstantVector<uint32_t>(data, old_data, count);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedFlattenConstantVector<uint64_t>(data, old_data, count);
-		break;
-	case PhysicalType::INT128:
-		TemplatedFlattenConstantVector<hugeint_t>(data, old_data, count);
-		break;
-	case PhysicalType::UINT128:
-		TemplatedFlattenConstantVector<uhugeint_t>(data, old_data, count);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedFlattenConstantVector<float>(data, old_data, count);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedFlattenConstantVector<double>(data, old_data, count);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedFlattenConstantVector<interval_t>(data, old_data, count);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedFlattenConstantVector<string_t>(data, old_data, count);
-		break;
-	case PhysicalType::LIST: {
-		TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
-		break;
-	}
-	case PhysicalType::ARRAY: {
-		auto &original_child = ArrayVector::GetEntry(*this);
-		auto array_size = ArrayType::GetSize(GetType());
-		auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
-		auto &new_child = flattened_buffer->GetChild();
-
-		// Fast path: The array is a constant null
-		if (is_null) {
-			// Invalidate the parent array
-			validity.SetAllInvalid(count);
-			// Also invalidate the new child array
-			new_child.validity.SetAllInvalid(count * array_size);
-			// Recurse
-			new_child.Flatten(count * array_size);
-			// TODO: the fast path should exit here, but the part below it is somehow required for correctness
-			// Attach the flattened buffer and return
-			// auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
-			// return;
-		}
-
-		// Now we need to "unpack" the child vector.
-		// Basically, do this:
-		//
-		// | a1 | | 1 |      | a1 | | 1 |
-		//        | 2 |      | a2 | | 2 |
-		//	             =>    ..   | 1 |
-		//                          | 2 |
-		// 							 ...
-
-		auto child_vec = make_uniq<Vector>(original_child);
-		child_vec->Flatten(count * array_size);
-
-		// Create a selection vector
-		SelectionVector sel(count * array_size);
-		for (idx_t array_idx = 0; array_idx < count; array_idx++) {
-			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
-				auto position = array_idx * array_size + elem_idx;
-				// Broadcast the validity
-				if (FlatVector::IsNull(*child_vec, elem_idx)) {
-					FlatVector::SetNull(new_child, position, true);
-				}
-				sel.set_index(position, elem_idx);
-			}
-		}
-
-		// Copy over the data to the new buffer
-		VectorOperations::Copy(*child_vec, new_child, sel, count * array_size, 0, 0);
-		auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
-
-		break;
-	}
-	case PhysicalType::STRUCT: {
-		auto normalified_buffer = make_uniq<VectorStructBuffer>();
-
-		auto &new_children = normalified_buffer->GetChildren();
-
-		auto &child_entries = StructVector::GetEntries(*this);
-		for (auto &child : child_entries) {
-			D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
-			auto vector = make_uniq<Vector>(*child);
-			vector->Flatten(count);
-			new_children.push_back(std::move(vector));
-		}
-		auxiliary = shared_ptr<VectorBuffer>(normalified_buffer.release());
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented type for VectorOperations::Flatten");
-	}
-}
-
 void Vector::Flatten(idx_t count) {
 	switch (GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
@@ -1178,12 +988,6 @@ void Vector::Flatten(idx_t count) {
 			break;
 		}
 		break;
-	case VectorType::SHREDDED_VECTOR: {
-		// unshred the vector
-		ShreddedVector::Unshred(*this, count);
-		Flatten(count);
-		break;
-	}
 	case VectorType::FSST_VECTOR: {
 		// Even though count may only be a part of the vector, we need to flatten the whole thing due to the way
 		// ToUnifiedFormat uses flatten
@@ -1206,7 +1010,147 @@ void Vector::Flatten(idx_t count) {
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR: {
-		FlattenConstant(count);
+		bool is_null = ConstantVector::IsNull(*this);
+		// allocate a new buffer for the vector
+		auto old_buffer = std::move(buffer);
+		auto old_data = data;
+		buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
+		if (old_buffer) {
+			D_ASSERT(buffer->GetAuxiliaryData() == nullptr);
+			// The old buffer might be relying on the auxiliary data, keep it alive
+			buffer->MoveAuxiliaryData(*old_buffer);
+		}
+		data = buffer->GetData();
+		vector_type = VectorType::FLAT_VECTOR;
+		if (is_null && GetType().InternalType() != PhysicalType::ARRAY) {
+			// constant NULL, set nullmask
+			validity.EnsureWritable();
+			validity.SetAllInvalid(count);
+			if (GetType().InternalType() != PhysicalType::STRUCT) {
+				// for structs we still need to flatten the child vectors as well
+				return;
+			}
+		}
+		// non-null constant: have to repeat the constant
+		switch (GetType().InternalType()) {
+		case PhysicalType::BOOL:
+			TemplatedFlattenConstantVector<bool>(data, old_data, count);
+			break;
+		case PhysicalType::INT8:
+			TemplatedFlattenConstantVector<int8_t>(data, old_data, count);
+			break;
+		case PhysicalType::INT16:
+			TemplatedFlattenConstantVector<int16_t>(data, old_data, count);
+			break;
+		case PhysicalType::INT32:
+			TemplatedFlattenConstantVector<int32_t>(data, old_data, count);
+			break;
+		case PhysicalType::INT64:
+			TemplatedFlattenConstantVector<int64_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT8:
+			TemplatedFlattenConstantVector<uint8_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT16:
+			TemplatedFlattenConstantVector<uint16_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT32:
+			TemplatedFlattenConstantVector<uint32_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT64:
+			TemplatedFlattenConstantVector<uint64_t>(data, old_data, count);
+			break;
+		case PhysicalType::INT128:
+			TemplatedFlattenConstantVector<hugeint_t>(data, old_data, count);
+			break;
+		case PhysicalType::UINT128:
+			TemplatedFlattenConstantVector<uhugeint_t>(data, old_data, count);
+			break;
+		case PhysicalType::FLOAT:
+			TemplatedFlattenConstantVector<float>(data, old_data, count);
+			break;
+		case PhysicalType::DOUBLE:
+			TemplatedFlattenConstantVector<double>(data, old_data, count);
+			break;
+		case PhysicalType::INTERVAL:
+			TemplatedFlattenConstantVector<interval_t>(data, old_data, count);
+			break;
+		case PhysicalType::VARCHAR:
+			TemplatedFlattenConstantVector<string_t>(data, old_data, count);
+			break;
+		case PhysicalType::LIST: {
+			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			auto &original_child = ArrayVector::GetEntry(*this);
+			auto array_size = ArrayType::GetSize(GetType());
+			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
+			auto &new_child = flattened_buffer->GetChild();
+
+			// Fast path: The array is a constant null
+			if (is_null) {
+				// Invalidate the parent array
+				validity.SetAllInvalid(count);
+				// Also invalidate the new child array
+				new_child.validity.SetAllInvalid(count * array_size);
+				// Recurse
+				new_child.Flatten(count * array_size);
+				// TODO: the fast path should exit here, but the part below it is somehow required for correctness
+				// Attach the flattened buffer and return
+				// auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+				// return;
+			}
+
+			// Now we need to "unpack" the child vector.
+			// Basically, do this:
+			//
+			// | a1 | | 1 |      | a1 | | 1 |
+			//        | 2 |      | a2 | | 2 |
+			//	             =>    ..   | 1 |
+			//                          | 2 |
+			// 							 ...
+
+			auto child_vec = make_uniq<Vector>(original_child);
+			child_vec->Flatten(count * array_size);
+
+			// Create a selection vector
+			SelectionVector sel(count * array_size);
+			for (idx_t array_idx = 0; array_idx < count; array_idx++) {
+				for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+					auto position = array_idx * array_size + elem_idx;
+					// Broadcast the validity
+					if (FlatVector::IsNull(*child_vec, elem_idx)) {
+						FlatVector::SetNull(new_child, position, true);
+					}
+					sel.set_index(position, elem_idx);
+				}
+			}
+
+			// Copy over the data to the new buffer
+			VectorOperations::Copy(*child_vec, new_child, sel, count * array_size, 0, 0);
+			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			auto normalified_buffer = make_uniq<VectorStructBuffer>();
+
+			auto &new_children = normalified_buffer->GetChildren();
+
+			auto &child_entries = StructVector::GetEntries(*this);
+			for (auto &child : child_entries) {
+				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
+				auto vector = make_uniq<Vector>(*child);
+				vector->Flatten(count);
+				new_children.push_back(std::move(vector));
+			}
+			auxiliary = shared_ptr<VectorBuffer>(normalified_buffer.release());
+			break;
+		}
+		default:
+			throw InternalException("Unimplemented type for VectorOperations::Flatten");
+		}
 		break;
 	}
 	case VectorType::SEQUENCE_VECTOR: {
@@ -1220,7 +1164,7 @@ void Vector::Flatten(idx_t count) {
 		break;
 	}
 	default:
-		throw InternalException("Unimplemented type for flatten");
+		throw InternalException("Unimplemented type for normalify");
 	}
 }
 
@@ -1238,20 +1182,6 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		this->Reference(other);
 		break;
 	}
-	case VectorType::CONSTANT_VECTOR: {
-		idx_t max_entry = 0;
-		for (idx_t i = 0; i < count; i++) {
-			max_entry = MaxValue<idx_t>(sel.get_index(i), max_entry);
-		}
-		FlattenConstant(max_entry + 1);
-		break;
-	}
-	case VectorType::SHREDDED_VECTOR: {
-		// unshred the shredded vector
-		ShreddedVector::Unshred(*this, sel, count);
-		Flatten(sel, count);
-		break;
-	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
@@ -1262,7 +1192,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 		break;
 	}
 	default:
-		throw InternalException("Unimplemented type for flatten with selection vector");
+		throw InternalException("Unimplemented type for normalify with selection vector");
 	}
 }
 
@@ -1294,11 +1224,6 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
 		format.data = ConstantVector::GetData(*this);
 		format.validity = ConstantVector::Validity(*this);
-		break;
-	case VectorType::SHREDDED_VECTOR:
-		// unshred and call ToUnifiedFormat recursively
-		ShreddedVector::Unshred(*this, count);
-		ToUnifiedFormat(count, format);
 		break;
 	default:
 		Flatten(count);
@@ -1344,20 +1269,6 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	data[0] = start;
 	data[1] = increment;
 	data[2] = int64_t(count);
-	validity.Reset();
-	auxiliary.reset();
-}
-
-void Vector::Shred(Vector &shredded_data) {
-	if (GetType().id() != LogicalTypeId::VARIANT) {
-		throw InternalException("Vector::Shred can only be used on variant vectors");
-	}
-	auto &shredded_type = shredded_data.GetType();
-	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
-		throw InternalException("Vector::Shred parameter must be a struct with two children");
-	}
-	this->vector_type = VectorType::SHREDDED_VECTOR;
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
 	validity.Reset();
 	auxiliary.reset();
 }
@@ -1415,7 +1326,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			serializer.WriteProperty(92, "seq_increment", data[1]);
 			return; // for sequence vectors we do not serialize anything else
 		} else {
-			// TODO: other compressed vector types (SHREDDED, FSST)
+			// TODO: other compressed vector types (FSST)
 		}
 	}
 	ToUnifiedFormat(count, vdata);
@@ -1470,44 +1381,13 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
-			// new way to serialize strings, two blobs, first lengths, then string bytes
-			if (serializer.ShouldSerialize(8)) {
-				// we write all the lengths whether the string is null or not. lets not pull a parquet.
-				auto length_data_length = sizeof(uint32_t) * count;
-				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
-				idx_t byte_data_length = 0;
 
-				// write all the lengths
-				auto lenghs_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
-				for (idx_t i = 0; i < count; i++) {
-					auto idx = vdata.sel->get_index(i);
-					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
-					lenghs_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
-					byte_data_length += this_length;
-				}
-
-				// write the bytes
-				auto byte_data = make_unsafe_uniq_array_uninitialized<data_t>(byte_data_length);
-				// write the non-null strings
-				auto string_write_ptr = byte_data.get();
-				for (idx_t i = 0; i < count; i++) {
-					auto idx = vdata.sel->get_index(i);
-					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
-					memcpy(string_write_ptr, strings[idx].GetData(), this_length);
-					string_write_ptr += this_length;
-				}
-				serializer.WriteProperty(107, "byte_data_length", optional_idx(byte_data_length));
-				// we do not encode length_data_length because its not required
-				serializer.WriteProperty(108, "length_data", length_data.get(), length_data_length);
-				serializer.WriteProperty(109, "byte_data", byte_data.get(), byte_data_length);
-			} else { // old and slow way: list
-				serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
-					auto idx = vdata.sel->get_index(i);
-					auto str = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
-					list.WriteElement(str);
-				});
-			}
-
+			// Serialize data as a list
+			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
+				auto idx = vdata.sel->get_index(i);
+				auto str = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
+				list.WriteElement(str);
+			});
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -1568,14 +1448,6 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		}
 	}
 }
-
-class StringDeserializeBuffer : public VectorBuffer {
-public:
-	explicit StringDeserializeBuffer(idx_t size) : VectorBuffer(VectorBufferType::OPAQUE_BUFFER) {
-		data = unique_ptr<data_t[]>(new data_t[size]);
-	}
-	unique_ptr<data_t[]> data;
-};
 
 void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
@@ -1652,35 +1524,12 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
-			auto byte_data_length =
-			    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(107, "byte_data_length", optional_idx());
-			if (byte_data_length.IsValid()) { // new serialization
-				auto length_data_length = count * sizeof(uint32_t);
-				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
-				deserializer.ReadProperty(108, "length_data", length_data.get(), length_data_length);
-
-				auto byte_data_buffer = make_buffer<StringDeserializeBuffer>(byte_data_length.GetIndex());
-				// directly read into a string buffer we can glue to the vector
-				deserializer.ReadProperty(109, "byte_data", byte_data_buffer->data.get(), byte_data_length.GetIndex());
-				auto lengths_read_ptr = reinterpret_cast<uint32_t *>(length_data.get());
-				auto byte_read_ptr = reinterpret_cast<const char *>(byte_data_buffer->data.get());
-				StringVector::AddBuffer(*this, byte_data_buffer);
-
-				for (idx_t i = 0; i < count; ++i) {
-					if (!validity.RowIsValid(i)) {
-						continue;
-					}
-					strings[i] = string_t(byte_read_ptr, lengths_read_ptr[i]);
-					byte_read_ptr += lengths_read_ptr[i];
+			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
+				auto str = list.ReadElement<string>();
+				if (validity.RowIsValid(i)) {
+					strings[i] = StringVector::AddStringOrBlob(*this, str);
 				}
-			} else { // this is ye olde way of string serialization
-				deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
-					auto str = list.ReadElement<string>();
-					if (validity.RowIsValid(i)) {
-						strings[i] = StringVector::AddStringOrBlob(*this, str);
-					}
-				});
-			}
+			});
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -1818,13 +1667,6 @@ void Vector::VerifyVariant(Vector &vector_p, const SelectionVector &sel_p, idx_t
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
-		return;
-	}
-	if (vector_p.GetVectorType() == VectorType::SHREDDED_VECTOR) {
-		auto &shredded = ShreddedVector::GetShreddedVector(vector_p);
-		auto &unshredded = ShreddedVector::GetShreddedVector(vector_p);
-		Verify(shredded, sel_p, count);
-		Verify(unshredded, sel_p, count);
 		return;
 	}
 	Vector *vector = &vector_p;
@@ -2637,8 +2479,7 @@ void MapVector::EvalMapInvalidReason(MapInvalidReason reason) {
 //===--------------------------------------------------------------------===//
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION ||
-	         vector.GetType().id() == LogicalTypeId::VARIANT ||
-	         vector.GetType().id() == LogicalTypeId::AGGREGATE_STATE);
+	         vector.GetType().id() == LogicalTypeId::VARIANT);
 
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
@@ -2760,22 +2601,6 @@ idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t of
 		result.Flatten(info.child_list_info.length);
 	}
 	return info.child_list_info.length;
-}
-
-idx_t ListVector::GetTotalEntryCount(Vector &list, idx_t count) {
-	UnifiedVectorFormat unified_list_data;
-	list.ToUnifiedFormat(count, unified_list_data);
-
-	idx_t total_count = 0;
-	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
-	for (idx_t r = 0; r < count; r++) {
-		auto idx = unified_list_data.sel->get_index(r);
-		if (!unified_list_data.validity.RowIsValid(idx)) {
-			continue;
-		}
-		total_count += list_data[idx].length;
-	}
-	return total_count;
 }
 
 ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count) {
@@ -3180,52 +3005,6 @@ const UnifiedVectorFormat &UnifiedVariantVector::GetValuesByteOffset(const Recur
 
 const UnifiedVectorFormat &UnifiedVariantVector::GetData(const RecursiveUnifiedVectorFormat &vec) {
 	return vec.children[3].unified;
-}
-
-const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
-	VerifyShreddedVector(vec);
-	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];
-}
-
-Vector &ShreddedVector::GetUnshreddedVector(Vector &vec) {
-	VerifyShreddedVector(vec);
-	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[0];
-}
-
-const Vector &ShreddedVector::GetShreddedVector(const Vector &vec) {
-	VerifyShreddedVector(vec);
-	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
-}
-
-Vector &ShreddedVector::GetShreddedVector(Vector &vec) {
-	VerifyShreddedVector(vec);
-	return *StructVector::GetEntries(vec.buffer->Cast<ShreddedVectorBuffer>().GetChild())[1];
-}
-
-void ShreddedVector::Unshred(Vector &vec, idx_t count) {
-	Vector unshredded_vector(LogicalType::VARIANT(), MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
-	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
-	VariantUtils::UnshredVariantData(shredded_buffer.GetChild(), unshredded_vector, count);
-	vec.Reference(unshredded_vector);
-}
-
-void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t count) {
-	VerifyShreddedVector(vec);
-	// slice the underlying shredded buffer
-	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
-	Vector sliced_shredded_buffer(shredded_buffer.GetChild(), sel, count);
-	// unshred the vector
-	Vector unshredded_vector(LogicalType::VARIANT());
-	VariantUtils::UnshredVariantData(sliced_shredded_buffer, unshredded_vector, count);
-	vec.Reference(unshredded_vector);
-}
-
-bool ShreddedVector::IsFullyShredded(Vector &vec) {
-	auto &unshredded_vector = GetUnshreddedVector(vec);
-	if (unshredded_vector.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(unshredded_vector)) {
-		return true;
-	}
-	return false;
 }
 
 } // namespace duckdb

@@ -12,7 +12,6 @@
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 struct MultiFileReaderInterface;

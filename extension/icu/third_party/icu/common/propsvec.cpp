@@ -47,21 +47,21 @@ upvec_open(int32_t columns, UErrorCode *pErrorCode) {
     uint32_t cp;
 
     if(U_FAILURE(*pErrorCode)) {
-        return nullptr;
+        return NULL;
     }
     if(columns<1) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
-        return nullptr;
+        return NULL;
     }
     columns+=2; /* count range start and limit columns */
 
     pv=(UPropsVectors *)uprv_malloc(sizeof(UPropsVectors));
     v=(uint32_t *)uprv_malloc(UPVEC_INITIAL_ROWS*columns*4);
-    if(pv==nullptr || v==nullptr) {
+    if(pv==NULL || v==NULL) {
         uprv_free(pv);
         uprv_free(v);
         *pErrorCode=U_MEMORY_ALLOCATION_ERROR;
-        return nullptr;
+        return NULL;
     }
     uprv_memset(pv, 0, sizeof(UPropsVectors));
     pv->v=v;
@@ -85,7 +85,7 @@ upvec_open(int32_t columns, UErrorCode *pErrorCode) {
 
 U_CAPI void U_EXPORT2
 upvec_close(UPropsVectors *pv) {
-    if(pv!=nullptr) {
+    if(pv!=NULL) {
         uprv_free(pv->v);
         uprv_free(pv);
     }
@@ -165,7 +165,7 @@ upvec_setValue(UPropsVectors *pv,
     if(U_FAILURE(*pErrorCode)) {
         return;
     }
-    if( pv==nullptr ||
+    if( pv==NULL ||
         start<0 || start>end || end>UPVEC_MAX_CP ||
         column<0 || column>=(pv->columns-2)
     ) {
@@ -216,7 +216,7 @@ upvec_setValue(UPropsVectors *pv,
                 return;
             }
             newVectors=(uint32_t *)uprv_malloc(newMaxRows*columns*4);
-            if(newVectors==nullptr) {
+            if(newVectors==NULL) {
                 *pErrorCode=U_MEMORY_ALLOCATION_ERROR;
                 return;
             }
@@ -296,15 +296,15 @@ upvec_getRow(const UPropsVectors *pv, int32_t rowIndex,
     int32_t columns;
 
     if(pv->isCompacted || rowIndex<0 || rowIndex>=pv->rows) {
-        return nullptr;
+        return NULL;
     }
 
     columns=pv->columns;
     row=pv->v+rowIndex*columns;
-    if(pRangeStart!=nullptr) {
+    if(pRangeStart!=NULL) {
         *pRangeStart=(UChar32)row[0];
     }
-    if(pRangeEnd!=nullptr) {
+    if(pRangeEnd!=NULL) {
         *pRangeEnd=(UChar32)row[1]-1;
     }
     return row+2;
@@ -342,7 +342,7 @@ upvec_compact(UPropsVectors *pv, UPVecCompactHandler *handler, void *context, UE
     if(U_FAILURE(*pErrorCode)) {
         return;
     }
-    if(handler==nullptr) {
+    if(handler==NULL) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
         return;
     }
@@ -351,7 +351,7 @@ upvec_compact(UPropsVectors *pv, UPVecCompactHandler *handler, void *context, UE
     }
 
     /* Set the flag now: Sorting and compacting destroys the builder data structure. */
-    pv->isCompacted=true;
+    pv->isCompacted=TRUE;
 
     rows=pv->rows;
     columns=pv->columns;
@@ -360,7 +360,7 @@ upvec_compact(UPropsVectors *pv, UPVecCompactHandler *handler, void *context, UE
 
     /* sort the properties vectors to find unique vector values */
     uprv_sortArray(pv->v, rows, columns*4,
-                   upvec_compareRows, pv, false, pErrorCode);
+                   upvec_compareRows, pv, FALSE, pErrorCode);
     if(U_FAILURE(*pErrorCode)) {
         return;
     }
@@ -437,12 +437,12 @@ upvec_compact(UPropsVectors *pv, UPVecCompactHandler *handler, void *context, UE
 U_CAPI const uint32_t * U_EXPORT2
 upvec_getArray(const UPropsVectors *pv, int32_t *pRows, int32_t *pColumns) {
     if(!pv->isCompacted) {
-        return nullptr;
+        return NULL;
     }
-    if(pRows!=nullptr) {
+    if(pRows!=NULL) {
         *pRows=pv->rows;
     }
-    if(pColumns!=nullptr) {
+    if(pColumns!=NULL) {
         *pColumns=pv->columns-2;
     }
     return pv->v;
@@ -455,23 +455,23 @@ upvec_cloneArray(const UPropsVectors *pv,
     int32_t byteLength;
 
     if(U_FAILURE(*pErrorCode)) {
-        return nullptr;
+        return NULL;
     }
     if(!pv->isCompacted) {
         *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
-        return nullptr;
+        return NULL;
     }
     byteLength=pv->rows*(pv->columns-2)*4;
     clonedArray=(uint32_t *)uprv_malloc(byteLength);
-    if(clonedArray==nullptr) {
+    if(clonedArray==NULL) {
         *pErrorCode=U_MEMORY_ALLOCATION_ERROR;
-        return nullptr;
+        return NULL;
     }
     uprv_memcpy(clonedArray, pv->v, byteLength);
-    if(pRows!=nullptr) {
+    if(pRows!=NULL) {
         *pRows=pv->rows;
     }
-    if(pColumns!=nullptr) {
+    if(pColumns!=NULL) {
         *pColumns=pv->columns-2;
     }
     return clonedArray;
@@ -479,12 +479,12 @@ upvec_cloneArray(const UPropsVectors *pv,
 
 U_CAPI UTrie2 * U_EXPORT2
 upvec_compactToUTrie2WithRowIndexes(UPropsVectors *pv, UErrorCode *pErrorCode) {
-    UPVecToUTrie2Context toUTrie2={ nullptr, 0, 0, 0 };
+    UPVecToUTrie2Context toUTrie2={ NULL, 0, 0, 0 };
     upvec_compact(pv, upvec_compactToUTrie2Handler, &toUTrie2, pErrorCode);
     utrie2_freeze(toUTrie2.trie, UTRIE2_16_VALUE_BITS, pErrorCode);
     if(U_FAILURE(*pErrorCode)) {
         utrie2_close(toUTrie2.trie);
-        toUTrie2.trie=nullptr;
+        toUTrie2.trie=NULL;
     }
     return toUTrie2.trie;
 }
@@ -503,7 +503,7 @@ upvec_compactToUTrie2Handler(void *context,
     (void)columns;
     UPVecToUTrie2Context *toUTrie2=(UPVecToUTrie2Context *)context;
     if(start<UPVEC_FIRST_SPECIAL_CP) {
-        utrie2_setRange32(toUTrie2->trie, start, end, (uint32_t)rowIndex, true, pErrorCode);
+        utrie2_setRange32(toUTrie2->trie, start, end, (uint32_t)rowIndex, TRUE, pErrorCode);
     } else {
         switch(start) {
         case UPVEC_INITIAL_VALUE_CP:

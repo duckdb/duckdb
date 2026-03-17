@@ -37,11 +37,11 @@ static cleanupFunc *gLibCleanupFunctions[UCLN_COMMON];
  Please be sure that you have read ucln.h
  ************************************************/
 U_CAPI void U_EXPORT2
-u_cleanup()
+u_cleanup(void)
 {
     UTRACE_ENTRY_OC(UTRACE_U_CLEANUP);
-    icu::umtx_lock(nullptr);     /* Force a memory barrier, so that we are sure to see   */
-    icu::umtx_unlock(nullptr);   /*   all state left around by any other threads.        */
+    icu::umtx_lock(NULL);     /* Force a memory barrier, so that we are sure to see   */
+    icu::umtx_unlock(NULL);   /*   all state left around by any other threads.        */
 
     ucln_lib_cleanup();
 
@@ -52,12 +52,12 @@ u_cleanup()
 /*#endif*/
 }
 
-U_CAPI void U_EXPORT2 ucln_cleanupOne(ECleanupLibraryType libType) 
+U_CAPI void U_EXPORT2 ucln_cleanupOne(ECleanupLibraryType libType)
 {
     if (gLibCleanupFunctions[libType])
     {
         gLibCleanupFunctions[libType]();
-        gLibCleanupFunctions[libType] = nullptr;
+        gLibCleanupFunctions[libType] = NULL;
     }
 }
 
@@ -102,7 +102,7 @@ ucln_registerCleanup(ECleanupLibraryType type,
     }
 }
 
-U_CFUNC UBool ucln_lib_cleanup() {
+U_CFUNC UBool ucln_lib_cleanup(void) {
     int32_t libType = UCLN_START;
     int32_t commonFunc = UCLN_COMMON_START;
 
@@ -114,11 +114,11 @@ U_CFUNC UBool ucln_lib_cleanup() {
         if (gCommonCleanupFunctions[commonFunc])
         {
             gCommonCleanupFunctions[commonFunc]();
-            gCommonCleanupFunctions[commonFunc] = nullptr;
+            gCommonCleanupFunctions[commonFunc] = NULL;
         }
     }
 #if !UCLN_NO_AUTO_CLEANUP && (defined(UCLN_AUTO_ATEXIT) || defined(UCLN_AUTO_LOCAL))
     ucln_unRegisterAutomaticCleanup();
 #endif
-    return true;
+    return TRUE;
 }

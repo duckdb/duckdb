@@ -1,10 +1,6 @@
 #include "duckdb/storage/table/column_data.hpp"
-
 #include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -12,14 +8,16 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/array_column_data.hpp"
-#include "duckdb/storage/table/geo_column_data.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/storage/table/geo_column_data.hpp"
 
 namespace duckdb {
 
@@ -1001,6 +999,32 @@ bool PersistentCollectionData::HasUpdates() const {
 	return false;
 }
 
+static void TraverseBlocksRecursive(const PersistentColumnData &col_data, vector<block_id_t> &result) {
+	for (auto &pointer : col_data.pointers) {
+		auto block_id = pointer.block_pointer.block_id;
+		if (block_id != INVALID_BLOCK) {
+			result.push_back(block_id);
+		}
+		if (pointer.segment_state) {
+			for (auto &block : pointer.segment_state->blocks) {
+				result.push_back(block);
+			}
+		}
+	}
+	for (auto &child_column : col_data.child_columns) {
+		TraverseBlocksRecursive(child_column, result);
+	}
+}
+vector<block_id_t> PersistentCollectionData::GetBlockIds() const {
+	vector<block_id_t> result;
+	for (auto &group : row_group_data) {
+		for (auto &col_data : group.column_data) {
+			TraverseBlocksRecursive(col_data, result);
+		}
+	}
+	return result;
+}
+
 void ExtraPersistentColumnData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(100, "type", type, ExtraPersistentColumnDataType::INVALID);
 	switch (GetType()) {
@@ -1109,7 +1133,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 		column_info.compression_type = CompressionTypeToString(segment.GetCompressionFunction().type);
 		{
 			lock_guard<mutex> l(stats_lock);
-			column_info.segment_stats = segment.stats.statistics.ToStruct();
+			column_info.segment_stats = segment.stats.statistics.ToString();
 		}
 		column_info.has_updates = ColumnData::HasUpdates();
 		// persistent

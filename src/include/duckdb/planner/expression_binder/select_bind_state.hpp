@@ -35,7 +35,7 @@ public:
 
 	void AddExpandedColumn(idx_t expand_count);
 	void AddRegularColumn();
-	ProjectionIndex GetFinalIndex(idx_t index) const;
+	idx_t GetFinalIndex(idx_t index) const;
 
 private:
 	//! The set of referenced aliases
@@ -45,7 +45,7 @@ private:
 	//! The set of expressions that contains a subquery
 	unordered_set<idx_t> subquery_expressions;
 	//! Column indices after expansion of Expanded expressions (e.g. UNNEST(STRUCT) clauses)
-	vector<ProjectionIndex> expanded_column_indices;
+	vector<idx_t> expanded_column_indices;
 };
 
 } // namespace duckdb

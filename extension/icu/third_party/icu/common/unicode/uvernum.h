@@ -31,12 +31,19 @@
   *                    renaming macro, and copyright
   *
   * The following files need to be updated as well, which can be done
-  *  by running the UNIX makefile target 'update-windows-makefiles' in icu4c/source.
+  *  by running the UNIX makefile target 'update-windows-makefiles' in icu/source.
   *
-  * source/allinone/Build.Windows.IcuVersion.props - Update the IcuMajorVersion
+  *
+  * source/common/common_uwp.vcxproj
+  * source/common/common.vcxproj - update 'Output file name' on the link tab so
+  *                   that it contains the new major/minor combination
+  * source/i18n/i18n.vcxproj - same as for the common.vcxproj
+  * source/i18n/i18n_uwp.vcxproj - same as for the common_uwp.vcxproj
+  * source/layoutex/layoutex.vcproj - same
+  * source/stubdata/stubdata.vcproj - same as for the common.vcxproj
+  * source/io/io.vcproj - same as for the common.vcxproj
   * source/data/makedata.mak - change U_ICUDATA_NAME so that it contains
-  *                            the new major/minor combination, and UNICODE_VERSION
-  *                            for the Unicode version.
+  *                            the new major/minor combination and the Unicode version.
   */
 
 #ifndef UVERNUM_H
@@ -53,13 +60,13 @@
  *  This value will change in the subsequent releases of ICU
  *  @stable ICU 2.4
  */
-#define U_ICU_VERSION_MAJOR_NUM 74
+#define U_ICU_VERSION_MAJOR_NUM 66
 
 /** The current ICU minor version as an integer.
  *  This value will change in the subsequent releases of ICU
  *  @stable ICU 2.6
  */
-#define U_ICU_VERSION_MINOR_NUM 2
+#define U_ICU_VERSION_MINOR_NUM 1
 
 /** The current ICU patchlevel version as an integer.
  *  This value will change in the subsequent releases of ICU
@@ -79,7 +86,7 @@
  *  This value will change in the subsequent releases of ICU
  *  @stable ICU 2.6
  */
-#define U_ICU_VERSION_SUFFIX _74
+#define U_ICU_VERSION_SUFFIX _66
 
 /**
  * \def U_DEF2_ICU_ENTRY_POINT_RENAME
@@ -132,7 +139,7 @@
  *  This value will change in the subsequent releases of ICU
  *  @stable ICU 2.4
  */
-#define U_ICU_VERSION "74.2"
+#define U_ICU_VERSION "66.1"
 
 /**
  * The current ICU library major version number as a string, for library name suffixes.
@@ -141,17 +148,17 @@
  * Until ICU 4.8, this was the combination of the single-digit major and minor ICU version numbers
  * into one string without dots ("48").
  * Since ICU 49, it is the double-digit major ICU version number.
- * See https://unicode-org.github.io/icu/userguide/design#version-numbers-in-icu
+ * See http://userguide.icu-project.org/design#TOC-Version-Numbers-in-ICU
  *
  * @stable ICU 2.6
  */
-#define U_ICU_VERSION_SHORT "74"
+#define U_ICU_VERSION_SHORT "66"
 
 #ifndef U_HIDE_INTERNAL_API
 /** Data version in ICU4C.
  * @internal ICU 4.4 Internal Use Only
  **/
-#define U_ICU_DATA_VERSION "74.2"
+#define U_ICU_DATA_VERSION "66.1"
 #endif  /* U_HIDE_INTERNAL_API */
 
 /*===========================================================================

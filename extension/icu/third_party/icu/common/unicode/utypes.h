@@ -40,9 +40,7 @@
 #include "unicode/uconfig.h"
 #include <float.h>
 
-#if !U_NO_DEFAULT_INCLUDE_UTF_HEADERS
-#   include "unicode/utf.h"
-#endif
+#include "unicode/utf.h"
 
 /*!
  * \file
@@ -211,16 +209,16 @@ typedef double UDate;
 /** The number of milliseconds per day @stable ICU 2.0 */
 #define U_MILLIS_PER_DAY       (86400000)
 
-/** 
- * Maximum UDate value 
- * @stable ICU 4.8 
- */ 
+/**
+ * Maximum UDate value
+ * @stable ICU 4.8
+ */
 #define U_DATE_MAX DBL_MAX
 
 /**
- * Minimum UDate value 
- * @stable ICU 4.8 
- */ 
+ * Minimum UDate value
+ * @stable ICU 4.8
+ */
 #define U_DATE_MIN -U_DATE_MAX
 
 /*===========================================================================*/
@@ -400,7 +398,7 @@ typedef double UDate;
  * suitable subclass.
  *
  * For more information, see:
- * https://unicode-org.github.io/icu/userguide/dev/codingguidelines#details-about-icu-error-codes
+ * http://icu-project.org/userguide/conventions
  *
  * Note: By convention, ICU functions that take a reference (C++) or a pointer
  * (C) to a UErrorCode first test:
@@ -435,7 +433,7 @@ typedef enum UErrorCode {
     U_AMBIGUOUS_ALIAS_WARNING = -122,   /**< This converter alias can go to different converter implementations */
 
     U_DIFFERENT_UCA_VERSION = -121,     /**< ucol_open encountered a mismatch between UCA version and collator image version, so the collator was constructed from rules. No impact to further function */
-    
+
     U_PLUGIN_CHANGED_LEVEL_WARNING = -120, /**< A plugin caused a level change. May not be an error, but later plugins may not load. */
 
 #ifndef U_HIDE_DEPRECATED_API
@@ -479,21 +477,13 @@ typedef enum UErrorCode {
     U_COLLATOR_VERSION_MISMATCH = 28,   /**< Collator version is not compatible with the base version */
     U_USELESS_COLLATOR_ERROR  = 29,     /**< Collator is options only and no base is specified */
     U_NO_WRITE_PERMISSION     = 30,     /**< Attempt to modify read-only or constant data. */
-    /**
-     * The input is impractically long for an operation.
-     * It is rejected because it may lead to problems such as excessive
-     * processing time, stack depth, or heap memory requirements.
-     *
-     * @stable ICU 68
-     */
-    U_INPUT_TOO_LONG_ERROR = 31,
 
 #ifndef U_HIDE_DEPRECATED_API
     /**
      * One more than the highest standard error code.
      * @deprecated ICU 58 The numeric value may change over time, see ICU ticket #12420.
      */
-    U_STANDARD_ERROR_LIMIT = 32,
+    U_STANDARD_ERROR_LIMIT,
 #endif  // U_HIDE_DEPRECATED_API
 
     /*
@@ -664,7 +654,7 @@ typedef enum UErrorCode {
     U_STRINGPREP_PROHIBITED_ERROR = U_IDNA_PROHIBITED_ERROR,
     U_STRINGPREP_UNASSIGNED_ERROR = U_IDNA_UNASSIGNED_ERROR,
     U_STRINGPREP_CHECK_BIDI_ERROR = U_IDNA_CHECK_BIDI_ERROR,
-    
+
     /*
      * Error codes in the range 0x10500-0x105ff are reserved for Plugin related error codes.
      */
@@ -723,7 +713,7 @@ typedef enum UErrorCode {
  * in the UErrorCode enum above.
  * @stable ICU 2.0
  */
-U_CAPI const char * U_EXPORT2
+U_STABLE const char * U_EXPORT2
 u_errorName(UErrorCode code);
 
 

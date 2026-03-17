@@ -115,7 +115,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	for (auto &target : pushdown_targets) {
 		auto &get = target.get;
 		D_ASSERT(target.columns.size() == 1);
-		auto col_binding = target.columns[0].probe_column_index;
+		auto col_idx = target.columns[0].probe_column_index.column_index;
 
 		// create the actual dynamic filter
 		auto dynamic_filter = make_uniq<DynamicFilter>(filter_data);
@@ -129,7 +129,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		auto optional_filter = make_uniq<OptionalFilter>(std::move(pushed_filter));
 
 		// push the filter into the table scan
-		auto &column_index = get.GetColumnIndex(col_binding);
+		auto &column_index = get.GetColumnIds()[col_idx];
 		get.table_filters.PushFilter(column_index, std::move(optional_filter));
 	}
 }

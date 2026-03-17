@@ -27,7 +27,7 @@ BytesTrie::Iterator::Iterator(const void *trieBytes, int32_t maxStringLength,
         : bytes_(static_cast<const uint8_t *>(trieBytes)),
           pos_(bytes_), initialPos_(bytes_),
           remainingMatchLength_(-1), initialRemainingMatchLength_(-1),
-          str_(nullptr), maxLength_(maxStringLength), value_(0), stack_(nullptr) {
+          str_(NULL), maxLength_(maxStringLength), value_(0), stack_(NULL) {
     if(U_FAILURE(errorCode)) {
         return;
     }
@@ -39,7 +39,7 @@ BytesTrie::Iterator::Iterator(const void *trieBytes, int32_t maxStringLength,
     // cost is minimal.
     str_=new CharString();
     stack_=new UVector32(errorCode);
-    if(U_SUCCESS(errorCode) && (str_==nullptr || stack_==nullptr)) {
+    if(U_SUCCESS(errorCode) && (str_==NULL || stack_==NULL)) {
         errorCode=U_MEMORY_ALLOCATION_ERROR;
     }
 }
@@ -49,7 +49,7 @@ BytesTrie::Iterator::Iterator(const BytesTrie &trie, int32_t maxStringLength,
         : bytes_(trie.bytes_), pos_(trie.pos_), initialPos_(trie.pos_),
           remainingMatchLength_(trie.remainingMatchLength_),
           initialRemainingMatchLength_(trie.remainingMatchLength_),
-          str_(nullptr), maxLength_(maxStringLength), value_(0), stack_(nullptr) {
+          str_(NULL), maxLength_(maxStringLength), value_(0), stack_(NULL) {
     if(U_FAILURE(errorCode)) {
         return;
     }
@@ -58,7 +58,7 @@ BytesTrie::Iterator::Iterator(const BytesTrie &trie, int32_t maxStringLength,
     if(U_FAILURE(errorCode)) {
         return;
     }
-    if(str_==nullptr || stack_==nullptr) {
+    if(str_==NULL || stack_==NULL) {
         errorCode=U_MEMORY_ALLOCATION_ERROR;
         return;
     }
@@ -96,17 +96,17 @@ BytesTrie::Iterator::reset() {
 }
 
 UBool
-BytesTrie::Iterator::hasNext() const { return pos_!=nullptr || !stack_->isEmpty(); }
+BytesTrie::Iterator::hasNext() const { return pos_!=NULL || !stack_->isEmpty(); }
 
 UBool
 BytesTrie::Iterator::next(UErrorCode &errorCode) {
     if(U_FAILURE(errorCode)) {
-        return false;
+        return FALSE;
     }
     const uint8_t *pos=pos_;
-    if(pos==nullptr) {
+    if(pos==NULL) {
         if(stack_->isEmpty()) {
-            return false;
+            return FALSE;
         }
         // Pop the state off the stack and continue with the next outbound edge of
         // the branch node.
@@ -118,8 +118,8 @@ BytesTrie::Iterator::next(UErrorCode &errorCode) {
         length=(int32_t)((uint32_t)length>>16);
         if(length>1) {
             pos=branchNext(pos, length, errorCode);
-            if(pos==nullptr) {
-                return true;  // Reached a final value.
+            if(pos==NULL) {
+                return TRUE;  // Reached a final value.
             }
         } else {
             str_->append((char)*pos++, errorCode);
@@ -137,11 +137,11 @@ BytesTrie::Iterator::next(UErrorCode &errorCode) {
             UBool isFinal=(UBool)(node&kValueIsFinal);
             value_=readValue(pos, node>>1);
             if(isFinal || (maxLength_>0 && str_->length()==maxLength_)) {
-                pos_=nullptr;
+                pos_=NULL;
             } else {
                 pos_=skipValue(pos, node);
             }
-            return true;
+            return TRUE;
         }
         if(maxLength_>0 && str_->length()==maxLength_) {
             return truncateAndStop();
@@ -151,8 +151,8 @@ BytesTrie::Iterator::next(UErrorCode &errorCode) {
                 node=*pos++;
             }
             pos=branchNext(pos, node+1, errorCode);
-            if(pos==nullptr) {
-                return true;  // Reached a final value.
+            if(pos==NULL) {
+                return TRUE;  // Reached a final value.
             }
         } else {
             // Linear-match node, append length bytes to str_.
@@ -170,14 +170,14 @@ BytesTrie::Iterator::next(UErrorCode &errorCode) {
 
 StringPiece
 BytesTrie::Iterator::getString() const {
-    return str_ == nullptr ? StringPiece() : str_->toStringPiece();
+    return str_ == NULL ? StringPiece() : str_->toStringPiece();
 }
 
 UBool
 BytesTrie::Iterator::truncateAndStop() {
-    pos_=nullptr;
+    pos_=NULL;
     value_=-1;  // no real value for str
-    return true;
+    return TRUE;
 }
 
 // Branch node, needs to take the first outbound edge and push state for the rest.
@@ -203,9 +203,9 @@ BytesTrie::Iterator::branchNext(const uint8_t *pos, int32_t length, UErrorCode &
     stack_->addElement(((length-1)<<16)|str_->length(), errorCode);
     str_->append((char)trieByte, errorCode);
     if(isFinal) {
-        pos_=nullptr;
+        pos_=NULL;
         value_=value;
-        return nullptr;
+        return NULL;
     } else {
         return pos+value;
     }

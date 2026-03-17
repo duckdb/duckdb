@@ -16,7 +16,6 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 
@@ -50,36 +49,11 @@ struct ScalarFunctionInfo {
 	}
 };
 
-//! Optional context passed to lambda bind callbacks
-struct BindLambdaContext {
-	virtual ~BindLambdaContext() = default;
-
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
 class Binder;
 class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
 
 struct StatementProperties;
-
-struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, BaseStatistics &stats_p)
-	    : bind_data(bind_data_p), stats(stats_p) {
-	}
-
-	optional_ptr<FunctionData> bind_data;
-	BaseStatistics &stats;
-};
 
 struct FunctionStatisticsInput {
 	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
@@ -134,10 +108,9 @@ typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &st
                                                              FunctionData *bind_data);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
-
 //! The type to bind lambda-specific parameter types
 typedef LogicalType (*bind_lambda_function_t)(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                              idx_t parameter_idx, optional_ptr<BindLambdaContext> bind_lambda_context);
+                                              idx_t parameter_idx);
 
 //! The type to bind lambda-specific parameter types
 typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifiedDatabasesInput &input);
@@ -145,9 +118,6 @@ typedef void (*get_modified_databases_t)(ClientContext &context, FunctionModifie
 typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                      const ScalarFunction &function);
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
-
-//! The type to prune row groups based on statistics
-typedef FilterPropagateResult (*propagate_filter_t)(const FunctionStatisticsPruneInput &input);
 
 //! The type to bind lambda-specific parameter types
 typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
@@ -211,10 +181,6 @@ public:
 	void SetDeserializeCallback(function_deserialize_t callback) { deserialize = callback; }
 	function_serialize_t GetSerializeCallback() const { return serialize; }
 	function_deserialize_t GetDeserializeCallback() const { return deserialize; }
-
-	bool HasFilterPruneCallback() const {return filter_prune != nullptr; }
-	void SetFilterPruneCallback(propagate_filter_t callback) { filter_prune = callback; }
-	propagate_filter_t GetFilterPruneCallback() const { return filter_prune; }
 	// clang-format on
 
 	bool HasExtraFunctionInfo() const {
@@ -252,9 +218,6 @@ public:
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
-
-	//! The filter prune function (if any)
-	propagate_filter_t filter_prune = nullptr;
 	//! Additional function info, passed to the bind
 	shared_ptr<ScalarFunctionInfo> function_info;
 

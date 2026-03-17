@@ -126,13 +126,22 @@ public:
      * @return    A copy of the object.
      * @deprecated ICU 53
      */
-    virtual TimeUnitFormat* clone() const override;
+    virtual TimeUnitFormat* clone() const;
 
     /**
      * Assignment operator
      * @deprecated ICU 53
      */
     TimeUnitFormat& operator=(const TimeUnitFormat& other);
+
+    /**
+     * Return true if the given Format objects are not semantically equal.
+     * Objects of different subclasses are considered unequal.
+     * @param other the object to be compared with.
+     * @return      true if the given Format objects are not semantically equal.
+     * @deprecated ICU 53
+     */
+    bool operator!=(const Format& other) const;
 
     /**
      * Set the locale used for formatting or parsing.
@@ -158,7 +167,7 @@ public:
      */
     virtual void parseObject(const UnicodeString& source,
                              Formattable& result,
-                             ParsePosition& pos) const override;
+                             ParsePosition& pos) const;
 
     /**
      * Return the class ID for this class. This is useful only for comparing to
@@ -184,7 +193,7 @@ public:
      *                  other classes have different class IDs.
      * @deprecated ICU 53
      */
-    virtual UClassID getDynamicClassID(void) const override;
+    virtual UClassID getDynamicClassID(void) const;
 
 private:
     Hashtable*    fTimeUnitToCountToPatterns[TimeUnit::UTIMEUNIT_FIELD_COUNT];
@@ -226,6 +235,11 @@ private:
 
     friend struct TimeUnitFormatReadSink;
 };
+
+inline bool
+TimeUnitFormat::operator!=(const Format& other) const  {
+    return !operator==(other);
+}
 
 U_NAMESPACE_END
 

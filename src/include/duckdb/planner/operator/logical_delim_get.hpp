@@ -18,14 +18,14 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DELIM_GET;
 
 public:
-	LogicalDelimGet(TableIndex table_index, vector<LogicalType> types)
+	LogicalDelimGet(idx_t table_index, vector<LogicalType> types)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_DELIM_GET), table_index(table_index) {
 		D_ASSERT(!types.empty());
 		chunk_types = std::move(types);
 	}
 
 	//! The table index in the current bind context
-	TableIndex table_index;
+	idx_t table_index;
 	//! The types of the chunk
 	vector<LogicalType> chunk_types;
 
@@ -36,7 +36,7 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
-	vector<TableIndex> GetTableIndex() const override;
+	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:

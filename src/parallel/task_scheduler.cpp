@@ -504,37 +504,15 @@ void TaskScheduler::RelaunchThreads() {
 }
 
 #ifndef DUCKDB_NO_THREADS
-static vector<int> GetProcessCPUMask() {
+static void SetThreadAffinity(thread &thread, const int &cpu_id) {
 #if defined(__GLIBC__)
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
-	if (sched_getaffinity(0, sizeof(cpu_set_t), &cpuset) != 0) {
-		return {};
-	}
-	vector<int> available_cpus;
-	for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
-		if (CPU_ISSET(cpu, &cpuset)) {
-			available_cpus.push_back(cpu);
-		}
-	}
-	return available_cpus;
-#else
-	return {};
-#endif
-}
+	CPU_SET(cpu_id, &cpuset);
 
-static void SetThreadAffinity(thread &thread, const vector<int> &available_cpus, idx_t thread_idx) {
-#if defined(__GLIBC__)
-	if (thread_idx < available_cpus.size()) {
-		const auto cpu_id = available_cpus[thread_idx];
-		cpu_set_t cpuset;
-		CPU_ZERO(&cpuset);
-		CPU_SET(cpu_id, &cpuset);
-
-		// note that we don't care about the return value here
-		// if we did not manage to set affinity, the thread just does not have affinity, which is OK
-		pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t), &cpuset);
-	}
+	// note that we don't care about the return value here
+	// if we did not manage to set affinity, the thread just does not have affinity, which is OK
+	pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t), &cpuset);
 #endif
 }
 #endif
@@ -556,10 +534,8 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n, bool destroy) {
 		current_thread_count = NumericCast<int32_t>(threads.size() + external_threads);
 		return;
 	}
-	if (threads.size() != new_thread_count) {
-		// we are changing the number of threads: clear all threads first
-		// we do this even when increasing the number of threads to make sure that all threads follow the current
-		// affinity mask
+	if (threads.size() > new_thread_count) {
+		// we are reducing the number of threads: clear all threads first
 		for (idx_t i = 0; i < threads.size(); i++) {
 			*markers[i] = false;
 		}
@@ -581,17 +557,14 @@ void TaskScheduler::RelaunchThreadsInternal(int32_t n, bool destroy) {
 		const auto pin_threads =
 		    pin_thread_mode == ThreadPinMode::ON ||
 		    (pin_thread_mode == ThreadPinMode::AUTO && std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD);
-		const auto available_cpus = pin_threads ? GetProcessCPUMask() : vector<int>();
-		// If we have fewer available cores than threads, do not pin and let OS scheduler handle it
-		const auto can_pin = pin_threads && new_thread_count <= available_cpus.size();
 		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<atomic<bool>>(new atomic<bool>(true));
 			unique_ptr<thread> worker_thread;
 			try {
 				worker_thread = make_uniq<thread>(ThreadExecuteTasks, this, marker.get());
-				if (can_pin) {
-					SetThreadAffinity(*worker_thread, available_cpus, threads.size());
+				if (pin_threads) {
+					SetThreadAffinity(*worker_thread, NumericCast<int>(threads.size()));
 				}
 			} catch (std::exception &ex) {
 				// thread constructor failed - this can happen when the system has too many threads allocated

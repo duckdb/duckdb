@@ -20,7 +20,7 @@
 
 U_NAMESPACE_BEGIN
 
-static const char16_t kSuperscriptDigits[] = {
+static const UChar kSuperscriptDigits[] = {
         0x2070,
         0xB9,
         0xB2,
@@ -32,8 +32,8 @@ static const char16_t kSuperscriptDigits[] = {
         0x2078,
         0x2079};
 
-static const char16_t kSuperscriptPlusSign = 0x207A;
-static const char16_t kSuperscriptMinusSign = 0x207B;
+static const UChar kSuperscriptPlusSign = 0x207A;
+static const UChar kSuperscriptMinusSign = 0x207B;
 
 static UBool copyAsSuperscript(
         const UnicodeString &s,
@@ -42,19 +42,19 @@ static UBool copyAsSuperscript(
         UnicodeString &result,
         UErrorCode &status) {
     if (U_FAILURE(status)) {
-        return false;
+        return FALSE;
     }
     for (int32_t i = beginIndex; i < endIndex;) {
         UChar32 c = s.char32At(i);
         int32_t digit = u_charDigitValue(c);
         if (digit < 0) {
             status = U_INVALID_CHAR_FOUND;
-            return false;
+            return FALSE;
         }
         result.append(kSuperscriptDigits[digit]);
         i += U16_LENGTH(c);
     }
-    return true;
+    return TRUE;
 }
 
 ScientificNumberFormatter *ScientificNumberFormatter::createSuperscriptInstance(
@@ -101,22 +101,22 @@ ScientificNumberFormatter *ScientificNumberFormatter::createInstance(
     LocalPointer<DecimalFormat> fmt(fmtToAdopt);
     LocalPointer<Style> style(styleToAdopt);
     if (U_FAILURE(status)) {
-        return nullptr;
+        return NULL;
     }
     ScientificNumberFormatter *result =
             new ScientificNumberFormatter(
                     fmt.getAlias(),
                     style.getAlias(),
                     status);
-    if (result == nullptr) {
+    if (result == NULL) {
         status = U_MEMORY_ALLOCATION_ERROR;
-        return nullptr;
+        return NULL;
     }
     fmt.orphan();
     style.orphan();
     if (U_FAILURE(status)) {
         delete result;
-        return nullptr;
+        return NULL;
     }
     return result;
 }
@@ -152,13 +152,13 @@ UnicodeString &ScientificNumberFormatter::SuperscriptStyle::format(
                 int32_t beginIndex = fp.getBeginIndex();
                 int32_t endIndex = fp.getEndIndex();
                 UChar32 aChar = original.char32At(beginIndex);
-                if (unisets::get(unisets::MINUS_SIGN)->contains(aChar)) {
+                if (unisets::get(unisets::UNISET_KEY_MINUS_SIGN)->contains(aChar)) {
                     appendTo.append(
                             original,
                             copyFromOffset,
                             beginIndex - copyFromOffset);
                     appendTo.append(kSuperscriptMinusSign);
-                } else if (unisets::get(unisets::PLUS_SIGN)->contains(aChar)) {
+                } else if (unisets::get(unisets::UNISET_KEY_PLUS_SIGN)->contains(aChar)) {
                     appendTo.append(
                            original,
                            copyFromOffset,
@@ -246,12 +246,12 @@ ScientificNumberFormatter::ScientificNumberFormatter(
     if (U_FAILURE(status)) {
         return;
     }
-    if (fDecimalFormat == nullptr || fStyle == nullptr) {
+    if (fDecimalFormat == NULL || fStyle == NULL) {
         status = U_ILLEGAL_ARGUMENT_ERROR;
         return;
     }
     const DecimalFormatSymbols *sym = fDecimalFormat->getDecimalFormatSymbols();
-    if (sym == nullptr) {
+    if (sym == NULL) {
         status = U_ILLEGAL_ARGUMENT_ERROR;
         return;
     }
@@ -262,8 +262,8 @@ ScientificNumberFormatter::ScientificNumberFormatter(
         const ScientificNumberFormatter &other)
         : UObject(other),
           fPreExponent(other.fPreExponent),
-          fDecimalFormat(nullptr),
-          fStyle(nullptr) {
+          fDecimalFormat(NULL),
+          fStyle(NULL) {
     fDecimalFormat = static_cast<DecimalFormat *>(
             other.fDecimalFormat->clone());
     fStyle = other.fStyle->clone();

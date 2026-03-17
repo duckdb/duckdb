@@ -18,7 +18,6 @@
 #include "unicode/timezone.h"
 #include "unicode/locid.h"
 #include "unicode/unistr.h"
-#include "unicode/udisplaycontext.h"
 #include "formattedval_impl.h"
 
 U_NAMESPACE_USE
@@ -36,32 +35,32 @@ UPRV_FORMATTED_VALUE_CAPI_AUTO_IMPL(
 
 U_CAPI UDateIntervalFormat* U_EXPORT2
 udtitvfmt_open(const char*  locale,
-               const char16_t* skeleton,
+               const UChar* skeleton,
                int32_t      skeletonLength,
-               const char16_t* tzID,
+               const UChar* tzID,
                int32_t      tzIDLength,
                UErrorCode*  status)
 {
     if (U_FAILURE(*status)) {
-        return nullptr;
+        return NULL;
     }
-    if ((skeleton == nullptr ? skeletonLength != 0 : skeletonLength < -1) ||
-        (tzID == nullptr ? tzIDLength != 0 : tzIDLength < -1)
+    if ((skeleton == NULL ? skeletonLength != 0 : skeletonLength < -1) ||
+        (tzID == NULL ? tzIDLength != 0 : tzIDLength < -1)
     ) {
         *status = U_ILLEGAL_ARGUMENT_ERROR;
-        return nullptr;
+        return NULL;
     }
     UnicodeString skel((UBool)(skeletonLength == -1), skeleton, skeletonLength);
     LocalPointer<DateIntervalFormat> formatter(
             DateIntervalFormat::createInstance(skel, Locale(locale), *status));
     if (U_FAILURE(*status)) {
-        return nullptr;
+        return NULL;
     }
     if(tzID != 0) {
         TimeZone *zone = TimeZone::createTimeZone(UnicodeString((UBool)(tzIDLength == -1), tzID, tzIDLength));
-        if(zone == nullptr) {
+        if(zone == NULL) {
             *status = U_MEMORY_ALLOCATION_ERROR;
-            return nullptr;
+            return NULL;
         }
         formatter->adoptTimeZone(zone);
     }
@@ -80,7 +79,7 @@ U_CAPI int32_t U_EXPORT2
 udtitvfmt_format(const UDateIntervalFormat* formatter,
                  UDate           fromDate,
                  UDate           toDate,
-                 char16_t*          result,
+                 UChar*          result,
                  int32_t         resultCapacity,
                  UFieldPosition* position,
                  UErrorCode*     status)
@@ -88,13 +87,13 @@ udtitvfmt_format(const UDateIntervalFormat* formatter,
     if (U_FAILURE(*status)) {
         return -1;
     }
-    if (result == nullptr ? resultCapacity != 0 : resultCapacity < 0) {
+    if (result == NULL ? resultCapacity != 0 : resultCapacity < 0) {
         *status = U_ILLEGAL_ARGUMENT_ERROR;
         return 0;
     }
     UnicodeString res;
-    if (result != nullptr) {
-        // nullptr destination for pure preflighting: empty dummy string
+    if (result != NULL) {
+        // NULL destination for pure preflighting: empty dummy string
         // otherwise, alias the destination buffer (copied from udat_format)
         res.setTo(result, 0, resultCapacity);
     }
@@ -117,59 +116,20 @@ udtitvfmt_format(const UDateIntervalFormat* formatter,
 }
 
 
-U_CAPI void U_EXPORT2
+U_DRAFT void U_EXPORT2
 udtitvfmt_formatToResult(
                 const UDateIntervalFormat* formatter,
+                UFormattedDateInterval* result,
                 UDate           fromDate,
                 UDate           toDate,
-                UFormattedDateInterval* result,
                 UErrorCode*     status) {
     if (U_FAILURE(*status)) {
         return;
     }
     auto* resultImpl = UFormattedDateIntervalApiHelper::validate(result, *status);
     DateInterval interval = DateInterval(fromDate,toDate);
-    if (resultImpl != nullptr) {
-        resultImpl->fImpl = reinterpret_cast<const DateIntervalFormat*>(formatter)
-            ->formatToValue(interval, *status);
-    }
-}
-
-U_CAPI void U_EXPORT2
-udtitvfmt_formatCalendarToResult(
-                const UDateIntervalFormat* formatter,
-                UCalendar*      fromCalendar,
-                UCalendar*      toCalendar,
-                UFormattedDateInterval* result,
-                UErrorCode*     status) {
-    if (U_FAILURE(*status)) {
-        return;
-    }
-    auto* resultImpl = UFormattedDateIntervalApiHelper::validate(result, *status);
-    if (resultImpl != nullptr) {
-        resultImpl->fImpl = reinterpret_cast<const DateIntervalFormat*>(formatter)
-            ->formatToValue(*(Calendar *)fromCalendar, *(Calendar *)toCalendar, *status);
-    }
-}
-
-U_CAPI void U_EXPORT2
-udtitvfmt_setContext(UDateIntervalFormat* formatter,
-                     UDisplayContext value,
-                     UErrorCode* status) {
-    if (U_FAILURE(*status)) {
-        return;
-    }
-    reinterpret_cast<DateIntervalFormat*>(formatter)->setContext( value, *status );
-}
-
-U_CAPI UDisplayContext U_EXPORT2
-udtitvfmt_getContext(const UDateIntervalFormat* formatter,
-                     UDisplayContextType type,
-                     UErrorCode* status) {
-    if (U_FAILURE(*status)) {
-        return (UDisplayContext)0;
-    }
-    return reinterpret_cast<const DateIntervalFormat*>(formatter)->getContext( type, *status );
+    resultImpl->fImpl = reinterpret_cast<const DateIntervalFormat*>(formatter)
+        ->formatToValue(interval, *status);
 }
 
 

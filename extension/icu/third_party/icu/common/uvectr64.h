@@ -106,7 +106,7 @@ public:
 
     //UBool equals(const UVector64 &other) const;
 
-    inline int64_t lastElementi() const;
+    inline int64_t lastElementi(void) const;
 
     //int32_t indexOf(int64_t elem, int32_t startIndex = 0) const;
 
@@ -122,9 +122,9 @@ public:
 
     void removeAllElements();
 
-    inline int32_t size() const;
+    inline int32_t size(void) const;
 
-    inline UBool isEmpty() const { return count == 0; }
+    inline UBool isEmpty(void) const { return count == 0; }
 
     // Inline.  Use this one for speedy size check.
     inline UBool ensureCapacity(int32_t minimumCapacity, UErrorCode &status);
@@ -170,27 +170,27 @@ public:
     /**
      * ICU "poor man's RTTI", returns a UClassID for the actual class.
      */
-    virtual UClassID getDynamicClassID() const override;
+    virtual UClassID getDynamicClassID() const;
 
 private:
     void _init(int32_t initialCapacity, UErrorCode &status);
 
     // Disallow
-    UVector64(const UVector64&) = delete;
+    UVector64(const UVector64&);
 
     // Disallow
-    UVector64& operator=(const UVector64&) = delete;
+    UVector64& operator=(const UVector64&);
 
 
     //  API Functions for Stack operations.
     //  In the original UVector, these were in a separate derived class, UStack.
     //  Here in UVector64, they are all together.
 public:
-    //UBool empty() const;   // TODO:  redundant, same as empty().  Remove it?
+    //UBool empty(void) const;   // TODO:  redundant, same as empty().  Remove it?
 
-    //int64_t peeki() const;
+    //int64_t peeki(void) const;
     
-    inline int64_t popi();
+    inline int64_t popi(void);
     
     inline int64_t push(int64_t i, UErrorCode &status);
 
@@ -203,7 +203,7 @@ public:
 
 inline UBool UVector64::ensureCapacity(int32_t minimumCapacity, UErrorCode &status) {
     if ((minimumCapacity >= 0) && (capacity >= minimumCapacity)) {
-        return true;
+        return TRUE;
     } else {
         return expandCapacity(minimumCapacity, status);
     }
@@ -222,8 +222,8 @@ inline void UVector64::addElement(int64_t elem, UErrorCode &status) {
 }
 
 inline int64_t *UVector64::reserveBlock(int32_t size, UErrorCode &status) {
-    if (ensureCapacity(count+size, status) == false) {
-        return nullptr;
+    if (ensureCapacity(count+size, status) == FALSE) {
+        return NULL;
     }
     int64_t  *rp = elements+count;
     count += size;
@@ -241,11 +241,11 @@ inline int64_t *UVector64::popFrame(int32_t size) {
 
 
 
-inline int32_t UVector64::size() const {
+inline int32_t UVector64::size(void) const {
     return count;
 }
 
-inline int64_t UVector64::lastElementi() const {
+inline int64_t UVector64::lastElementi(void) const {
     return elementAti(count-1);
 }
 
@@ -265,7 +265,7 @@ inline int64_t UVector64::push(int64_t i, UErrorCode &status) {
     return i;
 }
 
-inline int64_t UVector64::popi() {
+inline int64_t UVector64::popi(void) {
     int64_t result = 0;
     if (count > 0) {
         count--;

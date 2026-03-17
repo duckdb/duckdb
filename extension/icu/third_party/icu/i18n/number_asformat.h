@@ -25,6 +25,7 @@ namespace impl {
  * A wrapper around LocalizedNumberFormatter implementing the Format interface, enabling improved
  * compatibility with other APIs.
  *
+ * @draft ICU 62
  * @see NumberFormatter
  */
 class U_I18N_API LocalizedNumberFormatterAsFormat : public Format {
@@ -34,37 +35,37 @@ class U_I18N_API LocalizedNumberFormatterAsFormat : public Format {
     /**
      * Destructor.
      */
-    ~LocalizedNumberFormatterAsFormat() override;
+    ~LocalizedNumberFormatterAsFormat() U_OVERRIDE;
 
     /**
      * Equals operator.
      */
-    bool operator==(const Format& other) const override;
+    bool operator==(const Format& other) const U_OVERRIDE;
 
     /**
      * Creates a copy of this object.
      */
-    LocalizedNumberFormatterAsFormat* clone() const override;
+    LocalizedNumberFormatterAsFormat* clone() const U_OVERRIDE;
 
     /**
      * Formats a Number using the wrapped LocalizedNumberFormatter. The provided formattable must be a
      * number type.
      */
     UnicodeString& format(const Formattable& obj, UnicodeString& appendTo, FieldPosition& pos,
-                          UErrorCode& status) const override;
+                          UErrorCode& status) const U_OVERRIDE;
 
     /**
      * Formats a Number using the wrapped LocalizedNumberFormatter. The provided formattable must be a
      * number type.
      */
     UnicodeString& format(const Formattable& obj, UnicodeString& appendTo, FieldPositionIterator* posIter,
-                          UErrorCode& status) const override;
+                          UErrorCode& status) const U_OVERRIDE;
 
     /**
      * Not supported: sets an error index and returns.
      */
     void parseObject(const UnicodeString& source, Formattable& result,
-                     ParsePosition& parse_pos) const override;
+                     ParsePosition& parse_pos) const U_OVERRIDE;
 
     /**
      * Gets the LocalizedNumberFormatter that this wrapper class uses to format numbers.
@@ -86,7 +87,7 @@ class U_I18N_API LocalizedNumberFormatterAsFormat : public Format {
      */
     const LocalizedNumberFormatter& getNumberFormatter() const;
 
-    UClassID getDynamicClassID() const override;
+    UClassID getDynamicClassID() const U_OVERRIDE;
     static UClassID U_EXPORT2 getStaticClassID();
 
   private:

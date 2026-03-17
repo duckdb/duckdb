@@ -120,7 +120,6 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 	for (auto &entry : equivalence_map) {
 		auto equivalence_set = entry.first;
 		auto &entries = entry.second;
-		D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 		auto &constant_list = constant_values.find(equivalence_set)->second;
 		// for each entry generate an equality expression comparing to each other
 		for (idx_t i = 0; i < entries.size(); i++) {
@@ -196,7 +195,7 @@ static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const 
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::BOUND_COLUMN_REF: {
 		auto &ref = expr.Cast<BoundColumnRefExpression>();
-		result = column_ids[ref.binding.column_index.index];
+		result = column_ids[ref.binding.column_index];
 		return true;
 	}
 	case ExpressionType::BOUND_FUNCTION: {
@@ -342,7 +341,6 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	}
 	//! Here we check if these filters are column references
 	auto filter_exp = equivalence_map.find(expr_id);
-	D_ASSERT(filter_exp != equivalence_map.end());
 	if (filter_exp->second.size() != 1) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
@@ -361,7 +359,6 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
-	D_ASSERT(constant_values.find(equiv_set) != constant_values.end());
 	auto &constant_list = constant_values.find(equiv_set)->second;
 	for (auto &constant_cmp : constant_list) {
 		auto constant_filter = make_uniq<ConstantFilter>(constant_cmp.comparison_type, constant_cmp.constant);
@@ -404,8 +401,9 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	ReplaceWithBoundReference(filter_expr);
 
 	// push the expression filter
+	auto &column_ids = get.GetColumnIds();
 	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
-	auto &column_index = get.GetColumnIndex(bindings[0]);
+	auto &column_index = column_ids[bindings[0].column_index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filters on a pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -435,7 +433,7 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		// empty prefix - skip
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto &column_index = column_ids[column_ref.binding.column_index.index];
+	auto &column_index = column_ids[column_ref.binding.column_index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -470,7 +468,7 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	//! This is a like function.
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
-	auto &column_index = column_ids[column_ref.binding.column_index.index];
+	auto &column_index = column_ids[column_ref.binding.column_index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -526,7 +524,7 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
-	auto &column_index = column_ids[column_ref.binding.column_index.index];
+	auto &column_index = column_ids[column_ref.binding.column_index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -625,13 +623,13 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 
 		if (i == 0) {
-			auto &col_id = column_ids[column_ref->binding.column_index.index];
+			auto &col_id = column_ids[column_ref->binding.column_index];
 			column_id = col_id.GetPrimaryIndex();
 			if (col_id.IsPushdownExtract()) {
 				//! FIXME: can't support filter pushdown on pushed down extract currently
 				return FilterPushdownResult::NO_PUSHDOWN;
 			}
-		} else if (column_id != column_ids[column_ref->binding.column_index.index].GetPrimaryIndex()) {
+		} else if (column_id != column_ids[column_ref->binding.column_index].GetPrimaryIndex()) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 
@@ -979,8 +977,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		// this equality filter already exists, prune it
 		return FilterResult::SUCCESS;
 	}
-	D_ASSERT(constant_values.find(left_equivalence_set) != constant_values.end());
-	D_ASSERT(constant_values.find(right_equivalence_set) != constant_values.end());
+
 	vector<ExpressionValueInformation> &left_constants = constant_values.find(left_equivalence_set)->second;
 	vector<ExpressionValueInformation> &right_constants = constant_values.find(right_equivalence_set)->second;
 	bool is_successful = false;

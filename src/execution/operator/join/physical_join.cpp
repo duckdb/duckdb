@@ -94,26 +94,4 @@ vector<const_reference<PhysicalOperator>> PhysicalJoin::GetSources() const {
 	return result;
 }
 
-vector<idx_t> PhysicalJoin::FillProjectionMap(const PhysicalOperator &child,
-                                              const vector<ProjectionIndex> &projection_map) {
-	const auto child_count = child.GetTypes().size();
-
-	vector<idx_t> result;
-	if (projection_map.empty()) {
-		// no projections - fill with all children
-		result.reserve(child_count);
-		for (idx_t i = 0; i < child_count; ++i) {
-			result.emplace_back(i);
-		}
-	} else {
-		for (auto &entry : projection_map) {
-			if (entry.index >= child_count) {
-				throw InternalException("Projection map entry %d out of range", entry.index);
-			}
-			result.emplace_back(entry.index);
-		}
-	}
-	return result;
-}
-
 } // namespace duckdb

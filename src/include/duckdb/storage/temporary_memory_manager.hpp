@@ -11,7 +11,6 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
@@ -97,29 +96,31 @@ public:
 	//! Get the TemporaryMemoryManager
 	static TemporaryMemoryManager &Get(ClientContext &context);
 	//! Register a TemporaryMemoryState
-	unique_ptr<TemporaryMemoryState> Register(ClientContext &context) DUCKDB_EXCLUDES(lock);
+	unique_ptr<TemporaryMemoryState> Register(ClientContext &context);
 
 private:
+	//! Locks the TemporaryMemoryManager
+	unique_lock<mutex> Lock();
 	//! Get the default minimum reservation
 	idx_t DefaultMinimumReservation() const;
 	//! Unregister a TemporaryMemoryState (called by the destructor of TemporaryMemoryState)
-	void Unregister(TemporaryMemoryState &temporary_memory_state) DUCKDB_EXCLUDES(lock);
+	void Unregister(TemporaryMemoryState &temporary_memory_state);
 	//! Update memory_limit, has_temporary_directory, and num_threads (must hold the lock)
-	void UpdateConfiguration(ClientContext &context) DUCKDB_REQUIRES(lock);
+	void UpdateConfiguration(ClientContext &context);
 	//! Update the TemporaryMemoryState to the new remaining size, and updates the reservation (must hold the lock)
-	void UpdateState(ClientContext &context, TemporaryMemoryState &temporary_memory_state) DUCKDB_REQUIRES(lock);
+	void UpdateState(ClientContext &context, TemporaryMemoryState &temporary_memory_state);
 	//! Set the remaining size of a TemporaryMemoryState (must hold the lock)
-	void SetRemainingSize(TemporaryMemoryState &temporary_memory_state, idx_t new_remaining_size) DUCKDB_REQUIRES(lock);
+	void SetRemainingSize(TemporaryMemoryState &temporary_memory_state, idx_t new_remaining_size);
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
-	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation) DUCKDB_REQUIRES(lock);
+	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation);
 	//! Computes optimal reservation of a TemporaryMemoryState based on a cost function
-	idx_t ComputeReservation(const TemporaryMemoryState &temporary_memory_state) const DUCKDB_REQUIRES(lock);
+	idx_t ComputeReservation(const TemporaryMemoryState &temporary_memory_state) const;
 	//! Verify internal counts (must hold the lock)
-	void Verify() const DUCKDB_REQUIRES(lock);
+	void Verify() const;
 
 private:
 	//! Lock because TemporaryMemoryManager is used concurrently
-	annotated_mutex lock;
+	mutex lock;
 
 	//! Memory limit of the buffer pool
 	idx_t memory_limit = DConstants::INVALID_INDEX;

@@ -5,7 +5,6 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 

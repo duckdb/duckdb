@@ -39,14 +39,14 @@ U_NAMESPACE_USE
 
 static UBool getSystemTimeInformation(TimeZone *tz, SYSTEMTIME &daylightDate, SYSTEMTIME &standardDate, int32_t &bias, int32_t &daylightBias, int32_t &standardBias) {
     UErrorCode status = U_ZERO_ERROR;
-    UBool result = true;
+    UBool result = TRUE;
     BasicTimeZone *btz = (BasicTimeZone*)tz; // we should check type
-    InitialTimeZoneRule *initial = nullptr;
-    AnnualTimeZoneRule *std = nullptr, *dst = nullptr;
+    InitialTimeZoneRule *initial = NULL;
+    AnnualTimeZoneRule *std = NULL, *dst = NULL;
 
     btz->getSimpleRulesNear(uprv_getUTCtime(), initial, std, dst, status);
     if (U_SUCCESS(status)) {
-        if (std == nullptr || dst == nullptr) {
+        if (std == NULL || dst == NULL) {
             bias = -1 * (initial->getRawOffset()/60000);
             standardBias = 0;
             daylightBias = 0;
@@ -107,7 +107,7 @@ static UBool getSystemTimeInformation(TimeZone *tz, SYSTEMTIME &daylightDate, SY
             daylightDate.wMilliseconds = static_cast<WORD>(mil);
         }
     } else {
-        result = false;
+        result = FALSE;
     }
 
     delete initial;
@@ -117,12 +117,12 @@ static UBool getSystemTimeInformation(TimeZone *tz, SYSTEMTIME &daylightDate, SY
     return result;
 }
 
-static UBool getWindowsTimeZoneInfo(TIME_ZONE_INFORMATION *zoneInfo, const char16_t *icuid, int32_t length) {
-    UBool result = false;
+static UBool getWindowsTimeZoneInfo(TIME_ZONE_INFORMATION *zoneInfo, const UChar *icuid, int32_t length) {
+    UBool result = FALSE;
     UnicodeString id = UnicodeString(icuid, length);
     TimeZone *tz = TimeZone::createTimeZone(id);
     
-    if (tz != nullptr) {
+    if (tz != NULL) {
         int32_t bias;
         int32_t daylightBias;
         int32_t standardBias;
@@ -137,7 +137,7 @@ static UBool getWindowsTimeZoneInfo(TIME_ZONE_INFORMATION *zoneInfo, const char1
             zoneInfo->DaylightDate  = daylightDate;
             zoneInfo->StandardDate  = standardDate;
 
-            result = true;
+            result = TRUE;
         }
     }
 
@@ -145,16 +145,16 @@ static UBool getWindowsTimeZoneInfo(TIME_ZONE_INFORMATION *zoneInfo, const char1
 }
 
 /*
- * Given the timezone icuid, fill in zoneInfo by calling auxiliary functions that creates a timezone and extract the 
+ * Given the timezone icuid, fill in zoneInfo by calling auxillary functions that creates a timezone and extract the 
  * information to put into zoneInfo. This includes bias and standard time date and daylight saving date.
  */
 U_CAPI UBool U_EXPORT2
-uprv_getWindowsTimeZoneInfo(TIME_ZONE_INFORMATION *zoneInfo, const char16_t *icuid, int32_t length)
+uprv_getWindowsTimeZoneInfo(TIME_ZONE_INFORMATION *zoneInfo, const UChar *icuid, int32_t length)
 {
     if (getWindowsTimeZoneInfo(zoneInfo, icuid, length)) {
-        return true;
+        return TRUE;
     } else {
-        return false;
+        return FALSE;
     }
 }
 

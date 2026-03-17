@@ -1,6 +1,5 @@
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
-#include <stdlib.h>
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -52,19 +51,6 @@ int main(int argc_in, char *argv[]) {
 		fprintf(stderr, "Failed to create testing directory \"%s\": %s\n", dir.c_str(), ex.what());
 		return 1;
 	}
-
-	// Override the home dir so the .duckdb dir is isolated per test process.
-#ifdef DUCKDB_WINDOWS
-	if (_putenv_s("USERPROFILE", dir.c_str()) != 0) {
-		fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
-		return 1;
-	}
-#else
-	if (setenv("HOME", dir.c_str(), 1) != 0) {
-		fprintf(stderr, "Failed to set HOME environment variable\n");
-		return 1;
-	}
-#endif
 
 	if (test_config.GetSkipCompiledTests()) {
 		Catch::getMutableRegistryHub().clearTests();

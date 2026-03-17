@@ -37,10 +37,10 @@ SELECT * FROM test WHERE i = 1
 statement ok
 PRAGMA disable_verification
 
-query II
-SELECT s.min, s.max FROM (SELECT stats(i) s FROM test LIMIT 1)
+query I
+SELECT stats(i) FROM test LIMIT 1
 ----
-1	2
+<REGEX>:.*1.*2.*
 
 statement ok
 PRAGMA enable_verification

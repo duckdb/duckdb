@@ -7,12 +7,6 @@
   ],
   "skip_tests": [
     {
-      "reason": "Cannot install extensions without a local filesystem",
-      "paths": [
-        "test/extension/install_extension_httpfs.test"
-      ]
-    },
-    {
       "reason": "TODO",
       "paths": [
         "test/sql/attach/attach_filepath_roundtrip.test"

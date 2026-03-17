@@ -6,8 +6,8 @@ namespace duckdb {
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<LogicalOperator> op,
-                                                               unordered_set<TableIndex> &left_bindings,
-                                                               unordered_set<TableIndex> &right_bindings) {
+                                                               unordered_set<idx_t> &left_bindings,
+                                                               unordered_set<idx_t> &right_bindings) {
 	D_ASSERT(op->Cast<LogicalJoin>().join_type == JoinType::SINGLE);
 	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 	// now check the set of filters

@@ -56,7 +56,6 @@ mutable struct ListConversionData
     internal_type::Type
     target_type::Type
     child_conversion_data::Any
-    array_size::UInt64
 end
 
 mutable struct StructConversionData
@@ -66,25 +65,22 @@ end
 
 nop_convert(column_data::ColumnConversionData, val) = val
 
-function _string_data_ptr(val::Ptr{Cvoid}, idx::UInt64)
-    base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
-    len = unsafe_load(Base.unsafe_convert(Ptr{Int32}, base_ptr))
-    data_ptr = if len <= STRING_INLINE_LENGTH
-        Base.unsafe_convert(Ptr{UInt8}, base_ptr + sizeof(Int32))
-    else
-        Base.unsafe_load(Base.unsafe_convert(Ptr{Ptr{UInt8}}, base_ptr + sizeof(Int32) * 2))
-    end
-    return data_ptr, len
-end
-
 function convert_string(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)
-    data_ptr, len = _string_data_ptr(val, idx)
-    return unsafe_string(data_ptr, len)
+    base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
+    length_ptr = Base.unsafe_convert(Ptr{Int32}, base_ptr)
+    length = unsafe_load(length_ptr)
+    if length <= STRING_INLINE_LENGTH
+        prefix_ptr = Base.unsafe_convert(Ptr{UInt8}, base_ptr + sizeof(Int32))
+        return unsafe_string(prefix_ptr, length)
+    else
+        ptr_ptr = Base.unsafe_convert(Ptr{Ptr{UInt8}}, base_ptr + sizeof(Int32) * 2)
+        data_ptr = Base.unsafe_load(ptr_ptr)
+        return unsafe_string(data_ptr, length)
+    end
 end
 
-function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)::Vector{UInt8}
-    data_ptr, len = _string_data_ptr(val, idx)
-    return unsafe_wrap(Array, data_ptr, len; own = false) |> copy
+function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)::Base.CodeUnits{UInt8, String}
+    return Base.codeunits(convert_string(column_data, val, idx))
 end
 
 convert_date(column_data::ColumnConversionData, val) = convert(Date, val)
@@ -201,51 +197,6 @@ function convert_vector_list(
         if all_valid || isvalid(validity, i)
             start_offset::UInt64 = array[i].offset + 1
             end_offset::UInt64 = array[i].offset + array[i].length
-            result[position] = child_array[start_offset:end_offset]
-        end
-        position += 1
-    end
-    return size
-end
-
-function convert_vector_array(
-    column_data::ColumnConversionData,
-    vector::Vec,
-    size::UInt64,
-    convert_func::Function,
-    result,
-    position,
-    all_valid,
-    ::Type{SRC},
-    ::Type{DST}
-) where {SRC, DST}
-    child_vector = array_child(vector)
-    ldata = column_data.conversion_data
-    arr_size = ldata.array_size
-    child_total = size * arr_size
-
-    child_column_data =
-        ColumnConversionData(column_data.chunks, column_data.col_idx, ldata.child_type, ldata.child_conversion_data)
-    child_array = Array{Union{Missing, ldata.target_type}}(missing, child_total)
-    ldata.conversion_loop_func(
-        child_column_data,
-        child_vector,
-        child_total,
-        ldata.conversion_func,
-        child_array,
-        1,
-        false,
-        ldata.internal_type,
-        ldata.target_type
-    )
-
-    if !all_valid
-        validity = get_validity(vector, size)
-    end
-    for i in 1:size
-        if all_valid || isvalid(validity, i)
-            start_offset::UInt64 = (i - 1) * arr_size + 1
-            end_offset::UInt64 = i * arr_size
             result[position] = child_array[start_offset:end_offset]
         end
         position += 1
@@ -466,8 +417,7 @@ function create_child_conversion_data(child_type::LogicalType)
         child_type,
         internal_type,
         target_type,
-        child_conversion_data,
-        0
+        child_conversion_data
     )
 end
 
@@ -480,11 +430,6 @@ function init_conversion_loop(logical_type::LogicalType)
     elseif type == DUCKDB_TYPE_LIST || type == DUCKDB_TYPE_MAP
         child_type = get_list_child_type(logical_type)
         return create_child_conversion_data(child_type)
-    elseif type == DUCKDB_TYPE_ARRAY
-        child_type = get_array_child_type(logical_type)
-        array_conv_data = create_child_conversion_data(child_type)
-        array_conv_data.array_size = get_array_size(logical_type)
-        return array_conv_data
     elseif type == DUCKDB_TYPE_STRUCT || type == DUCKDB_TYPE_UNION
         child_count_fun::Function = get_struct_child_count
         child_type_fun::Function = get_struct_child_type
@@ -560,8 +505,6 @@ function get_conversion_loop_function(logical_type::LogicalType)::Function
         return convert_vector_string
     elseif type == DUCKDB_TYPE_LIST
         return convert_vector_list
-    elseif type == DUCKDB_TYPE_ARRAY
-        return convert_vector_array
     elseif type == DUCKDB_TYPE_STRUCT
         return convert_vector_struct
     elseif type == DUCKDB_TYPE_MAP

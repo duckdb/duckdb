@@ -20,19 +20,19 @@ TemporaryMemoryState::~TemporaryMemoryState() {
 }
 
 void TemporaryMemoryState::SetRemainingSize(idx_t new_remaining_size) {
-	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
+	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
 }
 
 void TemporaryMemoryState::SetRemainingSizeAndUpdateReservation(ClientContext &context, idx_t new_remaining_size) {
 	D_ASSERT(new_remaining_size != 0); // Use SetZero instead
-	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
+	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
 	temporary_memory_manager.UpdateState(context, *this);
 }
 
 void TemporaryMemoryState::SetZero() {
-	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
+	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.SetRemainingSize(*this, 0);
 	temporary_memory_manager.SetReservation(*this, 0);
 }
@@ -50,7 +50,7 @@ idx_t TemporaryMemoryState::GetMinimumReservation() const {
 }
 
 void TemporaryMemoryState::UpdateReservation(ClientContext &context) {
-	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
+	auto guard = temporary_memory_manager.Lock();
 	temporary_memory_manager.UpdateState(context, *this);
 }
 
@@ -59,7 +59,7 @@ idx_t TemporaryMemoryState::GetReservation() const {
 }
 
 void TemporaryMemoryState::SetMaterializationPenalty(idx_t new_materialization_penalty) {
-	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
+	auto guard = temporary_memory_manager.Lock();
 	materialization_penalty = new_materialization_penalty;
 }
 
@@ -70,13 +70,17 @@ idx_t TemporaryMemoryState::GetMaterializationPenalty() const {
 TemporaryMemoryManager::TemporaryMemoryManager() : reservation(0), remaining_size(0) {
 }
 
+unique_lock<mutex> TemporaryMemoryManager::Lock() {
+	return unique_lock<mutex>(lock);
+}
+
 idx_t TemporaryMemoryManager::DefaultMinimumReservation() const {
 	return MinValue(num_threads * MINIMUM_RESERVATION_PER_STATE_PER_THREAD,
 	                memory_limit / MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR);
 }
 
 void TemporaryMemoryManager::Unregister(TemporaryMemoryState &temporary_memory_state) {
-	const annotated_lock_guard<annotated_mutex> guard(lock);
+	auto guard = Lock();
 
 	SetReservation(temporary_memory_state, 0);
 	SetRemainingSize(temporary_memory_state, 0);
@@ -94,7 +98,7 @@ void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 	has_temporary_directory = buffer_manager.HasTemporaryDirectory();
 	num_threads = NumericCast<idx_t>(task_scheduler.NumberOfThreads());
 	num_connections = ConnectionManager::Get(context).GetConnectionCount();
-	query_max_memory = buffer_manager.GetOperatorMemoryLimit();
+	query_max_memory = buffer_manager.GetQueryMaxMemory();
 }
 
 TemporaryMemoryManager &TemporaryMemoryManager::Get(ClientContext &context) {
@@ -102,7 +106,7 @@ TemporaryMemoryManager &TemporaryMemoryManager::Get(ClientContext &context) {
 }
 
 unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext &context) {
-	const annotated_lock_guard<annotated_mutex> guard(lock);
+	auto guard = Lock();
 	UpdateConfiguration(context);
 
 	auto result = unique_ptr<TemporaryMemoryState>(new TemporaryMemoryState(*this, DefaultMinimumReservation()));

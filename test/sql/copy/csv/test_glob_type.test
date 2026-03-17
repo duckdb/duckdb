@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET threads=1
+
 query I
 SELECT typeof(bar) FROM '{DATA_DIR}/csv/17451/*.csv' limit 1
 ----
@@ -15,10 +18,6 @@ CREATE TABLE T AS SELECT 'bar,baz', UNION ALL SELECT ',baz' from range (0,100000
 
 statement ok
 COPY T TO '{TEMP_DIR}/t.csv' (QUOTE '', HEADER 0)
-
-# Limit threads to stabilize the CSV sniff test on high CPU core machines.
-statement ok
-set threads=4;
 
 # If we can't be absolutely sure by reading the whole file, we need to push it as a varchar still
 query I

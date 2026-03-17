@@ -14,7 +14,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA configure_profiling='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true", "LATENCY": "true"}';
+PRAGMA custom_profiling_settings='{"CPU_TIME": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true", "LATENCY": "true"}';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -26,7 +26,7 @@ PRAGMA disable_profiling;
 
 query I rowsort
 SELECT unnest(res) FROM (
-	SELECT current_setting('configure_profiling') AS raw_setting,
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
 	raw_setting.trim('{}') AS setting,
 	string_split(setting, ', ') AS res
 ) ORDER BY ALL;
@@ -50,11 +50,11 @@ SELECT extra_info, latency FROM metrics_output;
 # Re-enable the CPU TIME.
 
 statement ok
-PRAGMA configure_profiling='{"QUERY_NAME": "true", "CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}'
+PRAGMA custom_profiling_settings='{"QUERY_NAME": "true", "CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}'
 
 query I
 SELECT unnest(res) FROM (
-	SELECT current_setting('configure_profiling') AS raw_setting,
+	SELECT current_setting('custom_profiling_settings') AS raw_setting,
 	raw_setting.trim('{}') AS setting,
 	string_split(setting, ', ') AS res
 ) ORDER BY ALL
@@ -129,7 +129,7 @@ FROM metrics_output;
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
 
 statement ok
-PRAGMA configure_profiling='{"QUERY_NAME": "false"}'
+PRAGMA custom_profiling_settings='{"QUERY_NAME": "false"}'
 
 statement ok
 PRAGMA enable_profiling = 'json';

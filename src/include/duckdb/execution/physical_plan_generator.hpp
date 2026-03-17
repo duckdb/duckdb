@@ -73,11 +73,11 @@ public:
 	LogicalDependencyList dependencies;
 	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
 	//! This data structure is used to establish it.
-	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recursive_cte_tables;
+	unordered_map<idx_t, shared_ptr<ColumnDataCollection>> recursive_cte_tables;
 	//! Used to reference the recurring tables
-	unordered_map<TableIndex, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
+	unordered_map<idx_t, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
 	//! Materialized CTE ids must be collected.
-	unordered_map<TableIndex, vector<const_reference<PhysicalOperator>>> materialized_ctes;
+	unordered_map<idx_t, vector<const_reference<PhysicalOperator>>> materialized_ctes;
 	//! The index for duplicate eliminated joins.
 	idx_t delim_index = 0;
 

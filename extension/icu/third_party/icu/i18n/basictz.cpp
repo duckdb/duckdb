@@ -39,59 +39,59 @@ UBool
 BasicTimeZone::hasEquivalentTransitions(const BasicTimeZone& tz, UDate start, UDate end,
                                         UBool ignoreDstAmount, UErrorCode& status) const {
     if (U_FAILURE(status)) {
-        return false;
+        return FALSE;
     }
     if (hasSameRules(tz)) {
-        return true;
+        return TRUE;
     }
     // Check the offsets at the start time
     int32_t raw1, raw2, dst1, dst2;
-    getOffset(start, false, raw1, dst1, status);
+    getOffset(start, FALSE, raw1, dst1, status);
     if (U_FAILURE(status)) {
-        return false;
+        return FALSE;
     }
-    tz.getOffset(start, false, raw2, dst2, status);
+    tz.getOffset(start, FALSE, raw2, dst2, status);
     if (U_FAILURE(status)) {
-        return false;
+        return FALSE;
     }
     if (ignoreDstAmount) {
         if ((raw1 + dst1 != raw2 + dst2)
             || (dst1 != 0 && dst2 == 0)
             || (dst1 == 0 && dst2 != 0)) {
-            return false;
+            return FALSE;
         }
     } else {
         if (raw1 != raw2 || dst1 != dst2) {
-            return false;
-        }            
+            return FALSE;
+        }
     }
     // Check transitions in the range
     UDate time = start;
     TimeZoneTransition tr1, tr2;
-    while (true) {
-        UBool avail1 = getNextTransition(time, false, tr1);
-        UBool avail2 = tz.getNextTransition(time, false, tr2);
+    while (TRUE) {
+        UBool avail1 = getNextTransition(time, FALSE, tr1);
+        UBool avail2 = tz.getNextTransition(time, FALSE, tr2);
 
         if (ignoreDstAmount) {
             // Skip a transition which only differ the amount of DST savings
-            while (true) {
+            while (TRUE) {
                 if (avail1
                         && tr1.getTime() <= end
                         && (tr1.getFrom()->getRawOffset() + tr1.getFrom()->getDSTSavings()
                                 == tr1.getTo()->getRawOffset() + tr1.getTo()->getDSTSavings())
                         && (tr1.getFrom()->getDSTSavings() != 0 && tr1.getTo()->getDSTSavings() != 0)) {
-                    getNextTransition(tr1.getTime(), false, tr1);
+                    getNextTransition(tr1.getTime(), FALSE, tr1);
                 } else {
                     break;
                 }
             }
-            while (true) {
+            while (TRUE) {
                 if (avail2
                         && tr2.getTime() <= end
                         && (tr2.getFrom()->getRawOffset() + tr2.getFrom()->getDSTSavings()
                                 == tr2.getTo()->getRawOffset() + tr2.getTo()->getDSTSavings())
                         && (tr2.getFrom()->getDSTSavings() != 0 && tr2.getTo()->getDSTSavings() != 0)) {
-                    tz.getNextTransition(tr2.getTime(), false, tr2);
+                    tz.getNextTransition(tr2.getTime(), FALSE, tr2);
                 } else {
                     break;
                 }
@@ -105,49 +105,49 @@ BasicTimeZone::hasEquivalentTransitions(const BasicTimeZone& tz, UDate start, UD
             break;
         }
         if (!inRange1 || !inRange2) {
-            return false;
+            return FALSE;
         }
         if (tr1.getTime() != tr2.getTime()) {
-            return false;
+            return FALSE;
         }
         if (ignoreDstAmount) {
             if (tr1.getTo()->getRawOffset() + tr1.getTo()->getDSTSavings()
                         != tr2.getTo()->getRawOffset() + tr2.getTo()->getDSTSavings()
                     || (tr1.getTo()->getDSTSavings() != 0 &&  tr2.getTo()->getDSTSavings() == 0)
                     || (tr1.getTo()->getDSTSavings() == 0 &&  tr2.getTo()->getDSTSavings() != 0)) {
-                return false;
+                return FALSE;
             }
         } else {
             if (tr1.getTo()->getRawOffset() != tr2.getTo()->getRawOffset() ||
                 tr1.getTo()->getDSTSavings() != tr2.getTo()->getDSTSavings()) {
-                return false;
+                return FALSE;
             }
         }
         time = tr1.getTime();
     }
-    return true;
+    return TRUE;
 }
 
 void
 BasicTimeZone::getSimpleRulesNear(UDate date, InitialTimeZoneRule*& initial,
         AnnualTimeZoneRule*& std, AnnualTimeZoneRule*& dst, UErrorCode& status) const {
-    initial = nullptr;
-    std = nullptr;
-    dst = nullptr;
+    initial = NULL;
+    std = NULL;
+    dst = NULL;
     if (U_FAILURE(status)) {
         return;
     }
     int32_t initialRaw, initialDst;
     UnicodeString initialName;
 
-    AnnualTimeZoneRule *ar1 = nullptr;
-    AnnualTimeZoneRule *ar2 = nullptr;
+    AnnualTimeZoneRule *ar1 = NULL;
+    AnnualTimeZoneRule *ar2 = NULL;
     UnicodeString name;
 
     UBool avail;
     TimeZoneTransition tr;
     // Get the next transition
-    avail = getNextTransition(date, false, tr);
+    avail = getNextTransition(date, FALSE, tr);
     if (avail) {
         tr.getFrom()->getName(initialName);
         initialRaw = tr.getFrom()->getRawOffset();
@@ -159,7 +159,7 @@ BasicTimeZone::getSimpleRulesNear(UDate date, InitialTimeZoneRule*& initial,
         if (((tr.getFrom()->getDSTSavings() == 0 && tr.getTo()->getDSTSavings() != 0)
               || (tr.getFrom()->getDSTSavings() != 0 && tr.getTo()->getDSTSavings() == 0))
             && (date + MILLIS_PER_YEAR > nextTransitionTime)) {
- 
+
             int32_t year, month, dom, dow, doy, mid;
             UDate d;
 
@@ -182,7 +182,7 @@ BasicTimeZone::getSimpleRulesNear(UDate date, InitialTimeZoneRule*& initial,
 
             if (tr.getTo()->getRawOffset() == initialRaw) {
                 // Get the next next transition
-                avail = getNextTransition(nextTransitionTime, false, tr);
+                avail = getNextTransition(nextTransitionTime, FALSE, tr);
                 if (avail) {
                     // Check if the next next transition is either DST->STD or STD->DST
                     // and within roughly 1 year from the next transition
@@ -201,20 +201,20 @@ BasicTimeZone::getSimpleRulesNear(UDate date, InitialTimeZoneRule*& initial,
                             dtr, year - 1, AnnualTimeZoneRule::MAX_YEAR);
 
                         // Make sure this rule can be applied to the specified date
-                        avail = ar2->getPreviousStart(date, tr.getFrom()->getRawOffset(), tr.getFrom()->getDSTSavings(), true, d);
+                        avail = ar2->getPreviousStart(date, tr.getFrom()->getRawOffset(), tr.getFrom()->getDSTSavings(), TRUE, d);
                         if (!avail || d > date
                                 || initialRaw != tr.getTo()->getRawOffset()
                                 || initialDst != tr.getTo()->getDSTSavings()) {
                             // We cannot use this rule as the second transition rule
                             delete ar2;
-                            ar2 = nullptr;
+                            ar2 = NULL;
                         }
                     }
                 }
             }
-            if (ar2 == nullptr) {
+            if (ar2 == NULL) {
                 // Try previous transition
-                avail = getPreviousTransition(date, true, tr);
+                avail = getPreviousTransition(date, TRUE, tr);
                 if (avail) {
                     // Check if the previous transition is either DST->STD or STD->DST.
                     // The actual transition time does not matter here.
@@ -234,19 +234,19 @@ BasicTimeZone::getSimpleRulesNear(UDate date, InitialTimeZoneRule*& initial,
                             dtr, ar1->getStartYear() - 1, AnnualTimeZoneRule::MAX_YEAR);
 
                         // Check if this rule start after the first rule after the specified date
-                        avail = ar2->getNextStart(date, tr.getFrom()->getRawOffset(), tr.getFrom()->getDSTSavings(), false, d);
+                        avail = ar2->getNextStart(date, tr.getFrom()->getRawOffset(), tr.getFrom()->getDSTSavings(), FALSE, d);
                         if (!avail || d <= nextTransitionTime) {
                             // We cannot use this rule as the second transition rule
                             delete ar2;
-                            ar2 = nullptr;
+                            ar2 = NULL;
                         }
                     }
                 }
             }
-            if (ar2 == nullptr) {
+            if (ar2 == NULL) {
                 // Cannot find a good pair of AnnualTimeZoneRule
                 delete ar1;
-                ar1 = nullptr;
+                ar1 = NULL;
             } else {
                 // The initial rule should represent the rule before the previous transition
                 ar1->getName(initialName);
@@ -257,14 +257,14 @@ BasicTimeZone::getSimpleRulesNear(UDate date, InitialTimeZoneRule*& initial,
     }
     else {
         // Try the previous one
-        avail = getPreviousTransition(date, true, tr);
+        avail = getPreviousTransition(date, TRUE, tr);
         if (avail) {
             tr.getTo()->getName(initialName);
             initialRaw = tr.getTo()->getRawOffset();
             initialDst = tr.getTo()->getDSTSavings();
         } else {
             // No transitions in the past.  Just use the current offsets
-            getOffset(date, false, initialRaw, initialDst, status);
+            getOffset(date, FALSE, initialRaw, initialDst, status);
             if (U_FAILURE(status)) {
                 return;
             }
@@ -274,7 +274,7 @@ BasicTimeZone::getSimpleRulesNear(UDate date, InitialTimeZoneRule*& initial,
     initial = new InitialTimeZoneRule(initialName, initialRaw, initialDst);
 
     // Set the standard and daylight saving rules
-    if (ar1 != nullptr && ar2 != nullptr) {
+    if (ar1 != NULL && ar2 != NULL) {
         if (ar1->getDSTSavings() != 0) {
             dst = ar1;
             std = ar2;
@@ -293,101 +293,95 @@ BasicTimeZone::getTimeZoneRulesAfter(UDate start, InitialTimeZoneRule*& initial,
     }
 
     const InitialTimeZoneRule *orgini;
+    const TimeZoneRule **orgtrs = NULL;
     TimeZoneTransition tzt;
-    bool avail;
+    UBool avail;
+    UVector *orgRules = NULL;
     int32_t ruleCount;
-    TimeZoneRule *r = nullptr;
+    TimeZoneRule *r = NULL;
+    UBool *done = NULL;
+    InitialTimeZoneRule *res_initial = NULL;
+    UVector *filteredRules = NULL;
     UnicodeString name;
     int32_t i;
     UDate time, t;
+    UDate *newTimes = NULL;
     UDate firstStart;
-    UBool bFinalStd = false, bFinalDst = false;
-
-    initial = nullptr;
-    transitionRules = nullptr;
+    UBool bFinalStd = FALSE, bFinalDst = FALSE;
 
     // Original transition rules
     ruleCount = countTransitionRules(status);
     if (U_FAILURE(status)) {
         return;
     }
-    LocalPointer<UVector> orgRules(
-        new UVector(uprv_deleteUObject, nullptr, ruleCount, status), status);
+    orgRules = new UVector(ruleCount, status);
     if (U_FAILURE(status)) {
         return;
     }
-    LocalMemory<const TimeZoneRule *> orgtrs(
-        static_cast<const TimeZoneRule **>(uprv_malloc(sizeof(TimeZoneRule*)*ruleCount)));
-    if (orgtrs.isNull()) {
+    orgtrs = (const TimeZoneRule**)uprv_malloc(sizeof(TimeZoneRule*)*ruleCount);
+    if (orgtrs == NULL) {
         status = U_MEMORY_ALLOCATION_ERROR;
-        return;
+        goto error;
     }
-    getTimeZoneRules(orgini, &orgtrs[0], ruleCount, status);
+    getTimeZoneRules(orgini, orgtrs, ruleCount, status);
     if (U_FAILURE(status)) {
-        return;
+        goto error;
     }
     for (i = 0; i < ruleCount; i++) {
-        LocalPointer<TimeZoneRule> lpRule(orgtrs[i]->clone(), status);
-        orgRules->adoptElement(lpRule.orphan(), status);
+        orgRules->addElement(orgtrs[i]->clone(), status);
         if (U_FAILURE(status)) {
-            return;
+            goto error;
         }
     }
+    uprv_free(orgtrs);
+    orgtrs = NULL;
 
-    avail = getPreviousTransition(start, true, tzt);
+    avail = getPreviousTransition(start, TRUE, tzt);
     if (!avail) {
         // No need to filter out rules only applicable to time before the start
         initial = orgini->clone();
-        if (initial == nullptr) {
-            status = U_MEMORY_ALLOCATION_ERROR;
-            return;
-        }
-        transitionRules = orgRules.orphan();
+        transitionRules = orgRules;
         return;
     }
 
-    LocalMemory<bool> done(static_cast<bool *>(uprv_malloc(sizeof(bool)*ruleCount)));
-    if (done.isNull()) {
+    done = (UBool*)uprv_malloc(sizeof(UBool)*ruleCount);
+    if (done == NULL) {
         status = U_MEMORY_ALLOCATION_ERROR;
-        return;
+        goto error;
     }
-    LocalPointer<UVector> filteredRules(
-        new UVector(uprv_deleteUObject, nullptr, status), status);
+    filteredRules = new UVector(status);
     if (U_FAILURE(status)) {
-        return;
+        goto error;
     }
 
     // Create initial rule
     tzt.getTo()->getName(name);
-    LocalPointer<InitialTimeZoneRule> res_initial(
-        new InitialTimeZoneRule(name, tzt.getTo()->getRawOffset(), tzt.getTo()->getDSTSavings()), status);
-    if (U_FAILURE(status)) {
-        return;
-    }
+    res_initial = new InitialTimeZoneRule(name, tzt.getTo()->getRawOffset(),
+        tzt.getTo()->getDSTSavings());
 
     // Mark rules which does not need to be processed
     for (i = 0; i < ruleCount; i++) {
         r = (TimeZoneRule*)orgRules->elementAt(i);
-        avail = r->getNextStart(start, res_initial->getRawOffset(), res_initial->getDSTSavings(), false, time);
+        avail = r->getNextStart(start, res_initial->getRawOffset(), res_initial->getDSTSavings(), FALSE, time);
         done[i] = !avail;
     }
 
     time = start;
     while (!bFinalStd || !bFinalDst) {
-        avail = getNextTransition(time, false, tzt);
+        avail = getNextTransition(time, FALSE, tzt);
         if (!avail) {
             break;
         }
         UDate updatedTime = tzt.getTime();
         if (updatedTime == time) {
             // Can get here if rules for start & end of daylight time have exactly
-            // the same time.  
+            // the same time.
             // TODO:  fix getNextTransition() to prevent it?
             status = U_INVALID_STATE_ERROR;
-            return;
+            goto error;
         }
         time = updatedTime;
- 
+
         const TimeZoneRule *toRule = tzt.getTo();
         for (i = 0; i < ruleCount; i++) {
             r = (TimeZoneRule*)orgRules->elementAt(i);
@@ -398,23 +392,23 @@ BasicTimeZone::getTimeZoneRulesAfter(UDate start, InitialTimeZoneRule*& initial,
         if (i >= ruleCount) {
             // This case should never happen
             status = U_INVALID_STATE_ERROR;
-            return;
+            goto error;
         }
         if (done[i]) {
             continue;
         }
         const TimeArrayTimeZoneRule *tar = dynamic_cast<const TimeArrayTimeZoneRule *>(toRule);
         const AnnualTimeZoneRule *ar;
-        if (tar != nullptr) {
+        if (tar != NULL) {
             // Get the previous raw offset and DST savings before the very first start time
             TimeZoneTransition tzt0;
             t = start;
-            while (true) {
-                avail = getNextTransition(t, false, tzt0);
+            while (TRUE) {
+                avail = getNextTransition(t, FALSE, tzt0);
                 if (!avail) {
                     break;
                 }
-                if (*(tzt0.getTo()) == *tar) {
+                if (*tar == *(tzt0.getTo())) {
                     break;
                 }
                 t = tzt0.getTime();
@@ -424,13 +418,12 @@ BasicTimeZone::getTimeZoneRulesAfter(UDate start, InitialTimeZoneRule*& initial,
                 tar->getFirstStart(tzt.getFrom()->getRawOffset(), tzt.getFrom()->getDSTSavings(), firstStart);
                 if (firstStart > start) {
                     // Just add the rule as is
-                    LocalPointer<TimeArrayTimeZoneRule> lpTar(tar->clone(), status);
-                    filteredRules->adoptElement(lpTar.orphan(), status);
+                    filteredRules->addElement(tar->clone(), status);
                     if (U_FAILURE(status)) {
-                        return;
+                        goto error;
                     }
                 } else {
-                    // Collect transitions after the start time
+                    // Colllect transitions after the start time
                     int32_t startTimes;
                     DateTimeRule::TimeRuleType timeType;
                     int32_t idx;
@@ -449,37 +442,39 @@ BasicTimeZone::getTimeZoneRulesAfter(UDate start, InitialTimeZoneRule*& initial,
                             break;
                         }
                     }
-                    if (U_FAILURE(status)) {
-                        return;
-                    }
                     int32_t asize = startTimes - idx;
                     if (asize > 0) {
-                        LocalMemory<UDate> newTimes(static_cast<UDate *>(uprv_malloc(sizeof(UDate) * asize)));
-                        if (newTimes.isNull()) {
+                        newTimes = (UDate*)uprv_malloc(sizeof(UDate) * asize);
+                        if (newTimes == NULL) {
                             status = U_MEMORY_ALLOCATION_ERROR;
-                            return;
+                            goto error;
                         }
                         for (int32_t newidx = 0; newidx < asize; newidx++) {
                             tar->getStartTimeAt(idx + newidx, newTimes[newidx]);
+                            if (U_FAILURE(status)) {
+                                uprv_free(newTimes);
+                                newTimes = NULL;
+                                goto error;
+                            }
                         }
                         tar->getName(name);
-                        LocalPointer<TimeArrayTimeZoneRule> newTar(new TimeArrayTimeZoneRule(
-                                name, tar->getRawOffset(), tar->getDSTSavings(), &newTimes[0], asize, timeType), status);
-                        filteredRules->adoptElement(newTar.orphan(), status);
+                        TimeArrayTimeZoneRule *newTar = new TimeArrayTimeZoneRule(name,
+                            tar->getRawOffset(), tar->getDSTSavings(), newTimes, asize, timeType);
+                        uprv_free(newTimes);
+                        filteredRules->addElement(newTar, status);
                         if (U_FAILURE(status)) {
-                            return;
+                            goto error;
                         }
                     }
                 }
             }
-        } else if ((ar = dynamic_cast<const AnnualTimeZoneRule *>(toRule)) != nullptr) {
+        } else if ((ar = dynamic_cast<const AnnualTimeZoneRule *>(toRule)) != NULL) {
             ar->getFirstStart(tzt.getFrom()->getRawOffset(), tzt.getFrom()->getDSTSavings(), firstStart);
             if (firstStart == tzt.getTime()) {
                 // Just add the rule as is
-                LocalPointer<AnnualTimeZoneRule> arClone(ar->clone(), status);
-                filteredRules->adoptElement(arClone.orphan(), status);
+                filteredRules->addElement(ar->clone(), status);
                 if (U_FAILURE(status)) {
-                    return;
+                    goto error;
                 }
             } else {
                 // Calculate the transition year
@@ -487,11 +482,11 @@ BasicTimeZone::getTimeZoneRulesAfter(UDate start, InitialTimeZoneRule*& initial,
                 Grego::timeToFields(tzt.getTime(), year, month, dom, dow, doy, mid);
                 // Re-create the rule
                 ar->getName(name);
-                LocalPointer<AnnualTimeZoneRule> newAr(new AnnualTimeZoneRule(name, ar->getRawOffset(), ar->getDSTSavings(),
-                    *(ar->getRule()), year, ar->getEndYear()), status);
-                filteredRules->adoptElement(newAr.orphan(), status);
+                AnnualTimeZoneRule *newAr = new AnnualTimeZoneRule(name, ar->getRawOffset(), ar->getDSTSavings(),
+                    *(ar->getRule()), year, ar->getEndYear());
+                filteredRules->addElement(newAr, status);
                 if (U_FAILURE(status)) {
-                    return;
+                    goto error;
                 }
             }
             // check if this is a final rule
@@ -499,37 +494,65 @@ BasicTimeZone::getTimeZoneRulesAfter(UDate start, InitialTimeZoneRule*& initial,
                 // After bot final standard and dst rules are processed,
                 // exit this while loop.
                 if (ar->getDSTSavings() == 0) {
-                    bFinalStd = true;
+                    bFinalStd = TRUE;
                 } else {
-                    bFinalDst = true;
+                    bFinalDst = TRUE;
                 }
             }
         }
-        done[i] = true;
+        done[i] = TRUE;
     }
 
     // Set the results
-    initial = res_initial.orphan();
-    transitionRules = filteredRules.orphan();
+    if (orgRules != NULL) {
+        while (!orgRules->isEmpty()) {
+            r = (TimeZoneRule*)orgRules->orphanElementAt(0);
+            delete r;
+        }
+        delete orgRules;
+    }
+    if (done != NULL) {
+        uprv_free(done);
+    }
+
+    initial = res_initial;
+    transitionRules = filteredRules;
     return;
+
+error:
+    if (orgtrs != NULL) {
+        uprv_free(orgtrs);
+    }
+    if (orgRules != NULL) {
+        while (!orgRules->isEmpty()) {
+            r = (TimeZoneRule*)orgRules->orphanElementAt(0);
+            delete r;
+        }
+        delete orgRules;
+    }
+    if (done != NULL) {
+        if (filteredRules != NULL) {
+            while (!filteredRules->isEmpty()) {
+                r = (TimeZoneRule*)filteredRules->orphanElementAt(0);
+                delete r;
+            }
+            delete filteredRules;
+        }
+        delete res_initial;
+        uprv_free(done);
+    }
+
+    initial = NULL;
+    transitionRules = NULL;
 }
 
 void
-BasicTimeZone::getOffsetFromLocal(UDate /*date*/, UTimeZoneLocalOption /*nonExistingTimeOpt*/,
-                                  UTimeZoneLocalOption /*duplicatedTimeOpt*/,
-                                  int32_t& /*rawOffset*/, int32_t& /*dstOffset*/,
-                                  UErrorCode& status) const {
+BasicTimeZone::getOffsetFromLocal(UDate /*date*/, int32_t /*nonExistingTimeOpt*/, int32_t /*duplicatedTimeOpt*/,
+                            int32_t& /*rawOffset*/, int32_t& /*dstOffset*/, UErrorCode& status) const {
     if (U_FAILURE(status)) {
         return;
     }
     status = U_UNSUPPORTED_ERROR;
-}
-
-void BasicTimeZone::getOffsetFromLocal(UDate date, int32_t nonExistingTimeOpt, int32_t duplicatedTimeOpt,
-                                       int32_t& rawOffset, int32_t& dstOffset,
-                                       UErrorCode& status) const {
-    getOffsetFromLocal(date, (UTimeZoneLocalOption)nonExistingTimeOpt,
-                       (UTimeZoneLocalOption)duplicatedTimeOpt, rawOffset, dstOffset, status);
 }
 
 U_NAMESPACE_END

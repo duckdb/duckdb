@@ -62,29 +62,26 @@ enum AffixPatternType {
     // Represents a plus sign symbol '+'.
             TYPE_PLUS_SIGN = -2,
 
-    // Represents an approximately sign symbol '~'.
-            TYPE_APPROXIMATELY_SIGN = -3,
-
     // Represents a percent sign symbol '%'.
-            TYPE_PERCENT = -4,
+            TYPE_PERCENT = -3,
 
     // Represents a permille sign symbol '‰'.
-            TYPE_PERMILLE = -5,
+            TYPE_PERMILLE = -4,
 
     // Represents a single currency symbol '¤'.
-            TYPE_CURRENCY_SINGLE = -6,
+            TYPE_CURRENCY_SINGLE = -5,
 
     // Represents a double currency symbol '¤¤'.
-            TYPE_CURRENCY_DOUBLE = -7,
+            TYPE_CURRENCY_DOUBLE = -6,
 
     // Represents a triple currency symbol '¤¤¤'.
-            TYPE_CURRENCY_TRIPLE = -8,
+            TYPE_CURRENCY_TRIPLE = -7,
 
     // Represents a quadruple currency symbol '¤¤¤¤'.
-            TYPE_CURRENCY_QUAD = -9,
+            TYPE_CURRENCY_QUAD = -8,
 
     // Represents a quintuple currency symbol '¤¤¤¤¤'.
-            TYPE_CURRENCY_QUINT = -10,
+            TYPE_CURRENCY_QUINT = -9,
 
     // Represents a sequence of six or more currency symbols.
             TYPE_CURRENCY_OVERFLOW = -15
@@ -95,11 +92,9 @@ enum CompactType {
 };
 
 enum Signum {
-    SIGNUM_NEG = 0,
-    SIGNUM_NEG_ZERO = 1,
-    SIGNUM_POS_ZERO = 2,
-    SIGNUM_POS = 3,
-    SIGNUM_COUNT = 4,
+    SIGNUM_NEG = -1,
+    SIGNUM_ZERO = 0,
+    SIGNUM_POS = 1
 };
 
 
@@ -140,11 +135,6 @@ class U_I18N_API AffixPatternProvider {
      * number instead of rendering the number.
      */
     virtual bool hasBody() const = 0;
-
-    /**
-     * True if the currency symbol should replace the decimal separator.
-     */
-    virtual bool currencyAsDecimal() const = 0;
 };
 
 
@@ -202,7 +192,7 @@ class U_I18N_API Modifier {
     /**
      * Whether the modifier contains at least one occurrence of the given field.
      */
-    virtual bool containsField(Field field) const = 0;
+    virtual bool containsField(UNumberFormatFields field) const = 0;
 
     /**
      * A fill-in for getParameters(). obj will always be set; if non-null, the other
@@ -254,31 +244,31 @@ class U_I18N_API ModifierStore {
  * itself. The {@link #processQuantity} method performs the final step in the number processing pipeline: it uses the
  * quantity to generate a finalized {@link MicroProps}, which can be used to render the number to output.
  *
+ * <p>
  * In other words, this interface is used for the parts of number processing that are <em>quantity-dependent</em>.
  *
+ * <p>
  * In order to allow for multiple different objects to all mutate the same MicroProps, a "chain" of MicroPropsGenerators
  * are linked together, and each one is responsible for manipulating a certain quantity-dependent part of the
  * MicroProps. At the tail of the linked list is a base instance of {@link MicroProps} with properties that are not
  * quantity-dependent. Each element in the linked list calls {@link #processQuantity} on its "parent", then does its
  * work, and then returns the result.
  *
- * This chain of MicroPropsGenerators is typically constructed by NumberFormatterImpl::macrosToMicroGenerator() when
- * constructing a NumberFormatter.
- *
  * Exported as U_I18N_API because it is a base class for other exported types
  *
  */
 class U_I18N_API MicroPropsGenerator {
   public:
-    virtual ~MicroPropsGenerator() = default;
+    virtual ~MicroPropsGenerator();
 
     /**
-     * Considers the given {@link DecimalQuantity}, optionally mutates it, and
-     * populates a {@link MicroProps} instance.
+     * Considers the given {@link DecimalQuantity}, optionally mutates it, and returns a {@link MicroProps}.
      *
-     * @param quantity The quantity for consideration and optional mutation.
-     * @param micros The MicroProps instance to populate. It will be modified as
-     *   needed for the given quantity.
+     * @param quantity
+     *            The quantity for consideration and optional mutation.
+     * @param micros
+     *            The MicroProps instance to populate.
+     * @return A MicroProps instance resolved for the quantity.
      */
     virtual void processQuantity(DecimalQuantity& quantity, MicroProps& micros,
                                  UErrorCode& status) const = 0;

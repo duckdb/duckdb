@@ -6,8 +6,8 @@ namespace duckdb {
 
 vector<ColumnBinding> LogicalWindow::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();
-	for (auto window_col_idx : ProjectionIndex::GetIndexes(expressions.size())) {
-		child_bindings.emplace_back(window_index, window_col_idx);
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		child_bindings.emplace_back(window_index, i);
 	}
 	return child_bindings;
 }
@@ -19,14 +19,14 @@ void LogicalWindow::ResolveTypes() {
 	}
 }
 
-vector<TableIndex> LogicalWindow::GetTableIndex() const {
-	return vector<TableIndex> {window_index};
+vector<idx_t> LogicalWindow::GetTableIndex() const {
+	return vector<idx_t> {window_index};
 }
 
 string LogicalWindow::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", window_index.index);
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", window_index);
 	}
 #endif
 	return LogicalOperator::GetName();

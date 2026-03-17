@@ -25,11 +25,6 @@
         "id": 103,
         "name": "key_targets",
         "type": "vector<ParsedExpression*>"
-      },
-      {
-        "id": 104,
-        "name": "payload_aggregates",
-        "type": "vector<ParsedExpression*>"
       }
     ]
   },
@@ -188,11 +183,6 @@
         "name": "seed",
         "type": "int64_t",
         "serialize_property": "GetSeed()"
-      },
-      {
-        "id": 104,
-        "name": "repeatable",
-        "type": "bool"
       }
     ],
     "constructor": ["seed"]
@@ -424,12 +414,12 @@
       {
         "id": 100,
         "name": "table_index",
-        "type": "TableIndex"
+        "type": "idx_t"
       },
       {
         "id": 101,
         "name": "column_index",
-        "type": "ProjectionIndex"
+        "type": "idx_t"
       }
     ],
     "pointer_type": "none"
@@ -476,7 +466,6 @@
         "type": "ExpressionType"
       }
     ],
-    "constructor": ["left", "right", "comparison"],
     "pointer_type": "none"
   },
   {

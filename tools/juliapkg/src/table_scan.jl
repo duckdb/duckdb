@@ -80,7 +80,7 @@ end
 
 function tbl_scan_function(tbl, entry)
     result_type = table_result_type(tbl, entry)
-    if result_type <: AbstractString || result_type <: AbstractVector{UInt8}
+    if result_type <: AbstractString
         return tbl_scan_string_column
     end
     return tbl_scan_column

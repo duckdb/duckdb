@@ -24,7 +24,7 @@ class U_COMMON_API PluralMapBase : public UMemory {
 public:
     /**
      * The names of all the plural categories. NONE is not an actual plural
-     * category, but rather represents the absence of a plural category.
+     * category, but rather represents the absense of a plural category.
      */
     enum Category {
         NONE = -1,
@@ -46,14 +46,14 @@ public:
 
     /**
      * Converts a category name such as "zero", "one", "two", "few", "many"
-     * or "other" to a category enum.  Returns NONE for unrecognized
+     * or "other" to a category enum.  Returns NONE for urecongized
      * category name.
      */
     static Category toCategory(const UnicodeString &categoryName);
 
     /**
      * Converts a category to a name.
-     * Passing NONE or CATEGORY_COUNT for category returns nullptr.
+     * Passing NONE or CATEGORY_COUNT for category returns NULL.
      */
     static const char *getCategoryName(Category category);
 };
@@ -62,7 +62,7 @@ public:
  * A Map of plural categories to values. It maintains ownership of the
  * values.
  *
- * Type T is the value type. T must provide the following:
+ * Type T is the value type. T must provide the followng:
  * 1) Default constructor
  * 2) Copy constructor
  * 3) Assignment operator
@@ -89,7 +89,7 @@ public:
         fVariants[0] = &fOtherVariant;
         for (int32_t i = 1; i < UPRV_LENGTHOF(fVariants); ++i) {
             fVariants[i] = other.fVariants[i] ?
-                    new T(*other.fVariants[i]) : nullptr;
+                    new T(*other.fVariants[i]) : NULL;
         }
     }
 
@@ -98,12 +98,12 @@ public:
             return *this;
         }
         for (int32_t i = 0; i < UPRV_LENGTHOF(fVariants); ++i) {
-            if (fVariants[i] != nullptr && other.fVariants[i] != nullptr) {
+            if (fVariants[i] != NULL && other.fVariants[i] != NULL) {
                 *fVariants[i] = *other.fVariants[i];
-            } else if (fVariants[i] != nullptr) {
+            } else if (fVariants[i] != NULL) {
                 delete fVariants[i];
-                fVariants[i] = nullptr;
-            } else if (other.fVariants[i] != nullptr) {
+                fVariants[i] = NULL;
+            } else if (other.fVariants[i] != NULL) {
                 fVariants[i] = new T(*other.fVariants[i]);
             } else {
                 // do nothing
@@ -125,28 +125,28 @@ public:
         *fVariants[0] = T();
         for (int32_t i = 1; i < UPRV_LENGTHOF(fVariants); ++i) {
             delete fVariants[i];
-            fVariants[i] = nullptr;
+            fVariants[i] = NULL;
         }
     }
 
     /**
      * Iterates through the mappings in this instance, set index to NONE
      * prior to using. Call next repeatedly to get the values until it
-     * returns nullptr. Each time next returns, caller may pass index
+     * returns NULL. Each time next returns, caller may pass index
      * to getCategoryName() to get the name of the plural category.
-     * When this function returns nullptr, index is CATEGORY_COUNT
+     * When this function returns NULL, index is CATEGORY_COUNT
      */
     const T *next(Category &index) const {
         int32_t idx = index;
         ++idx;
         for (; idx < UPRV_LENGTHOF(fVariants); ++idx) {
-            if (fVariants[idx] != nullptr) {
+            if (fVariants[idx] != NULL) {
                 index = static_cast<Category>(idx);
                 return fVariants[idx];
             }
         }
         index = static_cast<Category>(idx);
-        return nullptr;
+        return NULL;
     }
 
     /**
@@ -172,7 +172,7 @@ public:
      */
     const T &get(Category v) const {
         int32_t index = v;
-        if (index < 0 || index >= UPRV_LENGTHOF(fVariants) || fVariants[index] == nullptr) {
+        if (index < 0 || index >= UPRV_LENGTHOF(fVariants) || fVariants[index] == NULL) {
             return *fVariants[0];
         }
         return *fVariants[index];
@@ -207,7 +207,7 @@ public:
     T *getMutable(
             Category category,
             UErrorCode &status) {
-        return getMutable(category, nullptr, status);
+        return getMutable(category, NULL, status);
     }
 
     /**
@@ -218,7 +218,7 @@ public:
     T *getMutable(
             const char *category,
             UErrorCode &status) {
-        return getMutable(toCategory(category), nullptr, status);
+        return getMutable(toCategory(category), NULL, status);
     }
 
     /**
@@ -234,7 +234,7 @@ public:
     }
 
     /**
-     * Returns true if this object equals rhs.
+     * Returns TRUE if this object equals rhs.
      */
     UBool equals(
             const PluralMap<T> &rhs,
@@ -243,14 +243,14 @@ public:
             if (fVariants[i] == rhs.fVariants[i]) {
                 continue;
             }
-            if (fVariants[i] == nullptr || rhs.fVariants[i] == nullptr) {
-                return false;
+            if (fVariants[i] == NULL || rhs.fVariants[i] == NULL) {
+                return FALSE;
             }
             if (!eqFunc(*fVariants[i], *rhs.fVariants[i])) {
-                return false;
+                return FALSE;
             }
         }
-        return true;
+        return TRUE;
     }
 
 private:
@@ -262,15 +262,15 @@ private:
             const T *defaultValue,
             UErrorCode &status) {
         if (U_FAILURE(status)) {
-            return nullptr;
+            return NULL;
         }
         int32_t index = category;
         if (index < 0 || index >= UPRV_LENGTHOF(fVariants)) {
             status = U_ILLEGAL_ARGUMENT_ERROR;
-            return nullptr;
+            return NULL;
         }
-        if (fVariants[index] == nullptr) {
-            fVariants[index] = defaultValue == nullptr ?
+        if (fVariants[index] == NULL) {
+            fVariants[index] = defaultValue == NULL ?
                     new T() : new T(*defaultValue);
         }
         if (!fVariants[index]) {
@@ -282,7 +282,7 @@ private:
     void initializeNew() {
         fVariants[0] = &fOtherVariant;
         for (int32_t i = 1; i < UPRV_LENGTHOF(fVariants); ++i) {
-            fVariants[i] = nullptr;
+            fVariants[i] = NULL;
         }
     }
 };

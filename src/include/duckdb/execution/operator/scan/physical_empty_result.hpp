@@ -28,9 +28,5 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
-
-	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override {
-		return true;
-	}
 };
 } // namespace duckdb

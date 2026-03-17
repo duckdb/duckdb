@@ -9,12 +9,14 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &aggr, unique_ptr<Expression> root_expr) {
+static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, unique_ptr<Expression> root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &expr) {
+		    D_ASSERT(colref.binding.table_index == proj.group_index);
+		    D_ASSERT(colref.binding.column_index < proj.groups.size());
 		    D_ASSERT(colref.depth == 0);
 		    // replace the binding with a copy to the expression at the referenced index
-		    expr = aggr.GetExpression(colref.binding).Copy();
+		    expr = proj.groups[colref.binding.column_index]->Copy();
 	    });
 	return root_expr;
 }

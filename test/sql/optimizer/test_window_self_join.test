@@ -180,3 +180,18 @@ FROM services
 2024-01-01	100	[101, 100, 100]
 2024-01-01	101	[101, 100, 100]
 2024-01-02	100	[100]
+
+# Regression test for issue #21367: min/max with PARTITION BY must not throw when the
+# window self-join optimizer runs. We skip the optimization when the plan does not support
+# serialization (e.g. PandasScan). This uses a normal table; the fix is in the optimizer.
+statement ok
+CREATE TABLE issue_21367_data (id INT, lastupdatedtime TIMESTAMP);
+
+statement ok
+INSERT INTO issue_21367_data VALUES (123, '2025-01-15 12:00:00'::TIMESTAMP), (123, '2025-01-14 10:00:00'::TIMESTAMP), (456, '2025-01-13 08:00:00'::TIMESTAMP);
+
+query II
+SELECT DISTINCT id, min(lastupdatedtime) OVER (PARTITION BY id) AS min_ts FROM issue_21367_data ORDER BY id;
+----
+123	2025-01-14 10:00:00
+456	2025-01-13 08:00:00

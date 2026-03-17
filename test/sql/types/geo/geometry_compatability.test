@@ -62,7 +62,7 @@ select * from t_all_types order by id;
 query I
 select stats(g) from t_all_types limit 1
 ----
-{'approx_unique': 28, 'extent': {'x_max': inf, 'x_min': -inf, 'y_max': inf, 'y_min': -inf}, 'has_empty_geom': true, 'has_empty_part': true, 'has_no_null': true, 'has_non_empty_geom': true, 'has_non_empty_part': true, 'has_null': false}
+[Extent: [X: [-inf, inf], Y: [-inf, inf], Z: [-inf, inf], M: [-inf, inf]], Types: [unknown, point, linestring, polygon, multipoint, multilinestring, multipolygon, geometrycollection, unknown_z, point_z, linestring_z, polygon_z, multipoint_z, multilinestring_z, multipolygon_z, geometrycollection_z, unknown_m, point_m, linestring_m, polygon_m, multipoint_m, multilinestring_m, multipolygon_m, geometrycollection_m, unknown_zm, point_zm, linestring_zm, polygon_zm, multipoint_zm, multilinestring_zm, multipolygon_zm, geometrycollection_zm], Flags: [Has Empty Geom: true, Has No Empty Geom: true, Has Empty Part: true, Has No Empty Part: true]][Has Null: false, Has No Null: true][Approx Unique: 28]
 
 # Additionally, there is an ART index on the geometry, so make sure we can use it and get the same results as a sequential scan.
 # (ART indexing geometries make little sense, but nevertheless its important that new geometries are converted to the same byte representation
@@ -119,7 +119,7 @@ v1.5.0+
 query I
 select stats(g) from t_all_types limit 1
 ----
-{'approx_unique': 29, 'extent': {'x_max': inf, 'x_min': -inf, 'y_max': inf, 'y_min': -inf}, 'has_empty_geom': true, 'has_empty_part': true, 'has_no_null': true, 'has_non_empty_geom': true, 'has_non_empty_part': true, 'has_null': false}
+[Extent: [X: [-inf, inf], Y: [-inf, inf], Z: [-inf, inf], M: [-inf, inf]], Types: [unknown, point, linestring, polygon, multipoint, multilinestring, multipolygon, geometrycollection, unknown_z, point_z, linestring_z, polygon_z, multipoint_z, multilinestring_z, multipolygon_z, geometrycollection_z, unknown_m, point_m, linestring_m, polygon_m, multipoint_m, multilinestring_m, multipolygon_m, geometrycollection_m, unknown_zm, point_zm, linestring_zm, polygon_zm, multipoint_zm, multilinestring_zm, multipolygon_zm, geometrycollection_zm], Flags: [Has Empty Geom: true, Has No Empty Geom: true, Has Empty Part: true, Has No Empty Part: true]][Has Null: false, Has No Null: true][Approx Unique: 29]
 
 # We should still ensure the index converts properly, an detects the duplicate key
 statement error
@@ -139,4 +139,4 @@ checkpoint;
 query I
 select stats(g) from t_all_types limit 1
 ----
-{'approx_unique': 30, 'extent': {'m_max': 14.0, 'm_min': 4.0, 'x_max': 11.0, 'x_min': 1.0, 'y_max': 12.0, 'y_min': 2.0, 'z_max': 13.0, 'z_min': 3.0}, 'has_empty_geom': false, 'has_empty_part': false, 'has_no_null': true, 'has_non_empty_geom': true, 'has_non_empty_part': true, 'has_null': false}
+[Extent: [X: [1.000000, 11.000000], Y: [2.000000, 12.000000], Z: [3.000000, 13.000000], M: [4.000000, 14.000000]], Types: [point, linestring, polygon, multipoint, multilinestring, multipolygon, geometrycollection, point_z, linestring_z, polygon_z, multipoint_z, multilinestring_z, multipolygon_z, geometrycollection_z, point_m, linestring_m, polygon_m, multipoint_m, multilinestring_m, multipolygon_m, geometrycollection_m, point_zm, linestring_zm, polygon_zm, multipoint_zm, multilinestring_zm, multipolygon_zm, geometrycollection_zm], Flags: [Has Empty Geom: false, Has No Empty Geom: true, Has Empty Part: false, Has No Empty Part: true]][Has Null: false, Has No Null: true][Approx Unique: 30]

@@ -7,26 +7,14 @@
 //! Output : Double
 
 #include "core_functions/aggregate/regression/regr_slope.hpp"
-#include "core_functions/aggregate/algebraic_functions.hpp"
+#include "duckdb/function/function_set.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
 
 namespace duckdb {
 
-namespace {
-
-LogicalType GetRegrSlopeStateType(const AggregateFunction &) {
-	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("cov_pop", CovarPopFun::GetFunction().GetStateType());
-	state_children.emplace_back("var_pop", VarPopFun::GetFunction().GetStateType());
-	return LogicalType::STRUCT(std::move(state_children));
-}
-
-} // namespace
-
 AggregateFunction RegrSlopeFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrSlopeState, double, double, double, RegrSlopeOperation>(
-	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
-	    .SetStructStateExport(GetRegrSlopeStateType);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 }
 
 } // namespace duckdb
