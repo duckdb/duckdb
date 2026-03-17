@@ -61,7 +61,7 @@ void UnpackMultiStatement(MultiStatement &multi_statement, bool is_in_active_tra
 			has_select = true;
 		}
 	}
-	AddStatements(multi_statement.statements, !has_select && !is_in_active_transaction, new_statements,
+	AddStatements(multi_statement.statements, !is_in_active_transaction && !has_select, new_statements,
 	              is_in_active_transaction);
 }
 
@@ -110,10 +110,10 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
 			auto reparsed_statements = TryReparsePragma(std::move(statements[i]));
+			const bool is_in_active_transaction = transaction_context || chained_transaction;
 
-			AddStatements(reparsed_statements,
-			              !(transaction_context || chained_transaction) && reparsed_statements.size() != 1,
-			              new_statements, transaction_context || chained_transaction);
+			AddStatements(reparsed_statements, !is_in_active_transaction && reparsed_statements.size() != 1,
+			              new_statements, is_in_active_transaction);
 			break;
 		}
 		case StatementType::MULTI_STATEMENT: {
