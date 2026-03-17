@@ -737,6 +737,25 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
 	}
 }
 
+unique_ptr<PrefixRangeFilter::BuildState> JoinHashTable::InitializePrefixRangeBuildState() {
+	D_ASSERT(prefix_range_filter);
+	return prefix_range_filter->InitializeBuildState(context);
+}
+
+void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count,
+                                           PrefixRangeFilter::BuildState &state) {
+	D_ASSERT(prefix_range_filter);
+	Vector build_keys(layout_ptr->GetTypes()[0], count);
+	auto &sel = *FlatVector::IncrementalSelectionVector();
+	data_collection->Gather(chunk_state.row_locations, sel, count, 0, build_keys, sel, nullptr);
+	prefix_range_filter->InsertKeys(build_keys, count, state);
+}
+
+void JoinHashTable::MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state) {
+	D_ASSERT(prefix_range_filter);
+	prefix_range_filter->MergeBuildState(state);
+}
+
 void JoinHashTable::AllocatePointerTable() {
 	capacity = PointerTableCapacity(Count());
 	D_ASSERT(IsPowerOfTwo(capacity));
@@ -780,7 +799,8 @@ void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx
 	std::fill_n(entries + entry_idx_from, entry_idx_to - entry_idx_from, ht_entry_t());
 }
 
-void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
+void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
+                             optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
@@ -800,6 +820,9 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
+		if (prefix_range_state) {
+			InsertPrefixRangeChunk(chunk_state, count, *prefix_range_state);
+		}
 	} while (iterator.Next());
 }
 

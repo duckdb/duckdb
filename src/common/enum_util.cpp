@@ -4401,19 +4401,20 @@ const StringUtil::EnumStringLiteral *GetSelectivityOptionalFilterTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SelectivityOptionalFilterType::MIN_MAX), "MIN_MAX" },
 		{ static_cast<uint32_t>(SelectivityOptionalFilterType::BF), "BF" },
-		{ static_cast<uint32_t>(SelectivityOptionalFilterType::PHJ), "PHJ" }
+		{ static_cast<uint32_t>(SelectivityOptionalFilterType::PHJ), "PHJ" },
+		{ static_cast<uint32_t>(SelectivityOptionalFilterType::PRF), "PRF" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<SelectivityOptionalFilterType>(SelectivityOptionalFilterType value) {
-	return StringUtil::EnumToString(GetSelectivityOptionalFilterTypeValues(), 3, "SelectivityOptionalFilterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetSelectivityOptionalFilterTypeValues(), 4, "SelectivityOptionalFilterType", static_cast<uint32_t>(value));
 }
 
 template<>
 SelectivityOptionalFilterType EnumUtil::FromString<SelectivityOptionalFilterType>(const char *value) {
-	return static_cast<SelectivityOptionalFilterType>(StringUtil::StringToEnum(GetSelectivityOptionalFilterTypeValues(), 3, "SelectivityOptionalFilterType", value));
+	return static_cast<SelectivityOptionalFilterType>(StringUtil::StringToEnum(GetSelectivityOptionalFilterTypeValues(), 4, "SelectivityOptionalFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSequenceInfoValues() {
@@ -4978,19 +4979,20 @@ const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 		{ static_cast<uint32_t>(TableFilterType::DYNAMIC_FILTER), "DYNAMIC_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::BLOOM_FILTER), "BLOOM_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::PERFECT_HASH_JOIN_FILTER), "PERFECT_HASH_JOIN_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::PERFECT_HASH_JOIN_FILTER), "PERFECT_HASH_JOIN_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::PREFIX_RANGE_FILTER), "PREFIX_RANGE_FILTER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
-	return StringUtil::EnumToString(GetTableFilterTypeValues(), 12, "TableFilterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableFilterTypeValues(), 13, "TableFilterType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
-	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 12, "TableFilterType", value));
+	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 13, "TableFilterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {
