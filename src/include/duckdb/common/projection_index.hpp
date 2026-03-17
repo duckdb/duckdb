@@ -22,6 +22,15 @@ struct ProjectionIndex {
 
 	idx_t index;
 
+	// operator idx_t() const { // NOLINT: allow implicit conversion
+	// 	return GetIndex();
+	// }
+	idx_t GetIndex() const {
+		if (!IsValid()) {
+			throw InternalException("ProjectionIndex::GetIndex called on invalid index");
+		}
+		return index;
+	}
 	inline bool operator==(const ProjectionIndex &rhs) const {
 		return index == rhs.index;
 	};

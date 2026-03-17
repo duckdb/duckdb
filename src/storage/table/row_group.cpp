@@ -546,7 +546,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 			// filter is always true - avoid checking
 			continue;
 		}
-		auto column_idx = entry.scan_column_index;
+		auto column_idx = entry.scan_column_index.index;
 		auto base_column_idx = entry.table_column_index;
 		auto &filter = entry.filter;
 
@@ -673,21 +673,21 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					const auto scan_idx = filter.scan_column_index;
 					const auto column_idx = filter.table_column_index;
 
-					auto &result_vector = result.data[scan_idx];
+					auto &result_vector = result.data[scan_idx.index];
 					if (approved_tuple_count == 0) {
 						auto &col_data = GetColumn(column_idx);
-						col_data.Skip(state.column_scans[scan_idx]);
+						col_data.Skip(state.column_scans[scan_idx.index]);
 						continue;
 					}
 					auto &col_data = GetColumn(column_idx);
-					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector, sel,
+					col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx.index], result_vector, sel,
 					                approved_tuple_count, filter.filter, table_filter_state);
 				}
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
 						continue;
 					}
-					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
+					result.data[table_filter.scan_column_index.index].Slice(sel, approved_tuple_count);
 				}
 			}
 			if (approved_tuple_count == 0) {

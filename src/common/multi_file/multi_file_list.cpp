@@ -60,7 +60,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &entry : filters) {
-		idx_t local_index = entry.ColumnIndex();
+		idx_t local_index = entry.ColumnIndex().index;
 		idx_t column_idx = column_ids[local_index];
 		if (IsVirtualColumn(column_idx)) {
 			continue;

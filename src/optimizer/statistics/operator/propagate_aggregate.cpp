@@ -196,7 +196,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		for (auto &entry : get.table_filters) {
 			auto col_idx = entry.ColumnIndex();
 			auto &filter = entry.Filter();
-			auto column_index = ColumnIndex(col_idx);
+			auto &column_index = get.GetColumnIndex(col_idx);
 			StorageIndex storage_index;
 			if (!get.TryGetStorageIndex(column_index, storage_index)) {
 				return;

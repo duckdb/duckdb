@@ -39,12 +39,12 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	for (auto &kv : table_filters) {
 		auto column_index = kv.ColumnIndex();
 		auto &filter = kv.Filter();
-		if (column_index < names.size()) {
+		if (column_index.index < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
 			first_item = false;
-			filters_info += filter.ToString(names[column_index]);
+			filters_info += filter.ToString(names[column_index.index]);
 		}
 	}
 	result["Filters"] = filters_info;
@@ -76,8 +76,10 @@ void LogicalGet::SetColumnIds(vector<ColumnIndex> &&column_ids) {
 	this->column_ids = std::move(column_ids);
 }
 
-void LogicalGet::AddColumnId(column_t column_id) {
+ProjectionIndex LogicalGet::AddColumnId(column_t column_id) {
+	ProjectionIndex result(column_ids.size());
 	column_ids.emplace_back(column_id);
+	return result;
 }
 
 void LogicalGet::ClearColumnIds() {
@@ -90,6 +92,15 @@ const vector<ColumnIndex> &LogicalGet::GetColumnIds() const {
 
 vector<ColumnIndex> &LogicalGet::GetMutableColumnIds() {
 	return column_ids;
+}
+
+ProjectionIndex LogicalGet::TryGetProjectionIndex(idx_t col_idx) const {
+	for (idx_t c = 0; c < column_ids.size(); c++) {
+		if (column_ids[c].GetPrimaryIndex() == col_idx) {
+			return ProjectionIndex(c);
+		}
+	}
+	return ProjectionIndex();
 }
 
 const ColumnIndex &LogicalGet::GetColumnIndex(ColumnBinding binding) const {

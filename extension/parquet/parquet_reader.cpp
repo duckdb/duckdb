@@ -1224,7 +1224,7 @@ idx_t ParquetReader::GetDataSize() const {
 	return data_size;
 }
 
-ParquetScanFilter::ParquetScanFilter(ClientContext &context, idx_t filter_idx, TableFilter &filter)
+ParquetScanFilter::ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter)
     : filter_idx(filter_idx), filter(filter) {
 	filter_state = TableFilterState::Initialize(context, filter);
 }
@@ -1482,7 +1482,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					break;
 				}
 				auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
-				auto local_idx = MultiFileLocalIndex(scan_filter.filter_idx);
+				MultiFileLocalIndex local_idx(scan_filter.filter_idx);
 				auto column_id = column_ids[local_idx];
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
@@ -1497,7 +1497,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 		// we still may have to read some cols
 		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto col_idx = MultiFileLocalIndex(i);
+			MultiFileLocalIndex col_idx(i);
 			if (!need_to_read[col_idx]) {
 				continue;
 			}

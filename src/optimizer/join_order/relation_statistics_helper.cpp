@@ -119,20 +119,20 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		unique_ptr<BaseStatistics> column_statistics;
 		bool has_non_optional_filters = false;
 		for (auto &entry : get.table_filters) {
+			auto &column_index = get.GetColumnIndex(entry.ColumnIndex());
 			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
 				if (get.function.statistics_extended) {
-					auto column_index = ColumnIndex(entry.ColumnIndex());
 					TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
 					column_statistics = get.function.statistics_extended(context, input);
 				} else {
 					D_ASSERT(get.function.statistics);
-					column_statistics = get.function.statistics(context, get.bind_data.get(), entry.ColumnIndex());
+					column_statistics = get.function.statistics(context, get.bind_data.get(), column_index.GetPrimaryIndex());
 				}
 			}
 
 			if (column_statistics) {
 				idx_t cardinality_with_filter =
-				    InspectTableFilter(base_table_cardinality, entry.ColumnIndex(), entry.Filter(), *column_statistics);
+				    InspectTableFilter(base_table_cardinality, entry.Filter(), *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
@@ -445,7 +445,7 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 	return stats;
 }
 
-idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t column_index, const TableFilter &filter,
+idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const TableFilter &filter,
                                                    BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
 	switch (filter.filter_type) {
@@ -453,7 +453,7 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, idx_t colu
 		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : and_filter.child_filters) {
 			cardinality_after_filters = MinValue(
-			    cardinality_after_filters, InspectTableFilter(cardinality, column_index, *child_filter, base_stats));
+			    cardinality_after_filters, InspectTableFilter(cardinality, *child_filter, base_stats));
 		}
 		return cardinality_after_filters;
 	}

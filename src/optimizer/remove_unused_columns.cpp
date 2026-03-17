@@ -481,17 +481,6 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 }
 
-static ProjectionIndex GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t filter_idx) {
-	// Find the index in the column_ids that contains the column referenced by the filter
-	auto it = std::find_if(column_ids.begin(), column_ids.end(), [&filter_idx](const ColumnIndex &column_index) {
-		return column_index.GetPrimaryIndex() == filter_idx;
-	});
-	if (it == column_ids.end()) {
-		throw InternalException("Could not find column index for table filter");
-	}
-	return ProjectionIndex(static_cast<idx_t>(std::distance(column_ids.begin(), it)));
-}
-
 //! returns: found_path, depth of the found path
 std::pair<column_index_set::iterator, idx_t> FindShortestMatchingPath(column_index_set &all_paths,
                                                                       const ColumnIndex &full_path) {
@@ -767,10 +756,10 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	for (auto &entry : get.table_filters) {
 		auto filter_idx = entry.ColumnIndex();
 		auto &filter = entry.Filter();
-		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter_idx);
-		auto column_type = get.GetColumnType(ColumnIndex(filter_idx));
+		auto &col_id = get.GetColumnIndex(filter_idx);
+		auto column_type = get.GetColumnType(col_id);
 
-		ColumnBinding filter_binding(get.table_index, index);
+		ColumnBinding filter_binding(get.table_index, filter_idx);
 		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 		//! Convert the filter to an expression, so we can visit it
 		auto filter_expr = filter.ToExpression(*column_ref);

@@ -602,10 +602,10 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 
 	// The indexes of the filters match input.column_indexes, which are: i -> column_index.
 	// Try to find a filter on the ART column.
-	optional_idx storage_index;
+	ProjectionIndex storage_index;
 	for (idx_t i = 0; i < input.column_indexes.size(); i++) {
 		if (input.column_indexes[i].ToLogical() == col.Logical()) {
-			storage_index = i;
+			storage_index = ProjectionIndex(i);
 			break;
 		}
 	}
@@ -616,7 +616,7 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	}
 
 	// Try to find a matching filter for the column.
-	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index.GetIndex());
+	auto filter = filter_set.TryGetFilterByColumnIndex(storage_index);
 	if (!filter) {
 		return false;
 	}

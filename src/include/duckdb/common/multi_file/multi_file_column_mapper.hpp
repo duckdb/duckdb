@@ -30,10 +30,10 @@ private:
 	ResultColumnMapping CreateColumnMapping(MultiFileColumnMappingMode mapping_mode);
 	ResultColumnMapping CreateColumnMappingByMapper(const ColumnMapper &mapper);
 
-	unique_ptr<TableFilterSet> CreateFilters(map<idx_t, reference<TableFilter>> &filters, ResultColumnMapping &mapping);
+	unique_ptr<TableFilterSet> CreateFilters(map<MultiFileGlobalIndex, reference<TableFilter>> &filters, ResultColumnMapping &mapping);
 	ReaderInitializeType EvaluateConstantFilters(ResultColumnMapping &mapping,
-	                                             map<idx_t, reference<TableFilter>> &remaining_filters);
-	Value GetConstantValue(idx_t global_index);
+	                                             map<MultiFileGlobalIndex, reference<TableFilter>> &remaining_filters);
+	Value GetConstantValue(MultiFileGlobalIndex global_index);
 	bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant);
 
 private:

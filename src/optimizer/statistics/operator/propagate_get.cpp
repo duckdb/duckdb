@@ -139,24 +139,15 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		}
 	}
 	// push table filters into the statistics
-	vector<idx_t> column_indexes;
-	column_indexes.reserve(get.table_filters.FilterCount());
+	vector<ProjectionIndex> filter_columns;
+	filter_columns.reserve(get.table_filters.FilterCount());
 	for (auto &kv : get.table_filters) {
-		column_indexes.push_back(kv.ColumnIndex());
+		filter_columns.push_back(kv.ColumnIndex());
 	}
 
-	for (auto &table_filter_column : column_indexes) {
-		idx_t column_index;
-		for (column_index = 0; column_index < column_ids.size(); column_index++) {
-			if (column_ids[column_index].GetPrimaryIndex() == table_filter_column) {
-				break;
-			}
-		}
-		D_ASSERT(column_index < column_ids.size());
-		D_ASSERT(column_ids[column_index].GetPrimaryIndex() == table_filter_column);
-
+	for (auto &table_filter_column : filter_columns) {
 		// find the stats
-		ColumnBinding stats_binding(get.table_index, ProjectionIndex(column_index));
+		ColumnBinding stats_binding(get.table_index, table_filter_column);
 		auto entry = statistics_map.find(stats_binding);
 		if (entry == statistics_map.end()) {
 			// no stats for this entry

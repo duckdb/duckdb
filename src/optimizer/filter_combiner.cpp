@@ -192,18 +192,18 @@ bool FilterCombiner::HasFilters() {
 
 // Try to extract a column index from a bound column ref expression, or a column ref recursively nested
 // inside of a struct_extract call. If the expression is not a column ref (or nested column ref), return false.
-static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const Expression &expr, ColumnIndex &result) {
+static bool TryGetProjectionIndex(const Expression &expr, ProjectionIndex &result) {
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::BOUND_COLUMN_REF: {
 		auto &ref = expr.Cast<BoundColumnRefExpression>();
-		result = column_ids[ref.binding.column_index.index];
+		result = ref.binding.column_index;
 		return true;
 	}
 	case ExpressionType::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		if (func.function.name == "struct_extract" || func.function.name == "struct_extract_at") {
 			auto &child_expr = func.children[0];
-			return TryGetBoundColumnIndex(column_ids, *child_expr, result);
+			return TryGetProjectionIndex(*child_expr, result);
 		}
 		return false;
 	}
@@ -352,10 +352,11 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 
 	// Try to get the column index, either from bound column ref, or a column ref nested inside of a
 	// struct_extract call
-	ColumnIndex column_index;
-	if (!TryGetBoundColumnIndex(column_ids, expr, column_index)) {
+	ProjectionIndex proj_index;
+	if (!TryGetProjectionIndex(expr, proj_index)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+	auto &column_index = column_ids[proj_index.index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't push down filters on a column that has a pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -365,7 +366,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	auto &constant_list = constant_values.find(equiv_set)->second;
 	for (auto &constant_cmp : constant_list) {
 		auto constant_filter = make_uniq<ConstantFilter>(constant_cmp.comparison_type, constant_cmp.constant);
-		table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, std::move(constant_filter)));
+		table_filters.PushFilter(proj_index, PushDownFilterIntoExpr(expr, std::move(constant_filter)));
 	}
 	equivalence_map.erase(filter_exp);
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
@@ -410,7 +411,7 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 		//! FIXME: can't support filters on a pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	get.table_filters.PushFilter(column_index, std::move(expr_filter));
+	get.table_filters.PushFilter(bindings[0].column_index, std::move(expr_filter));
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
@@ -440,12 +441,13 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
+	auto filter_idx = column_ref.binding.column_index;
 	//! Replace prefix with a set of comparisons
 	auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix_string));
-	table_filters.PushFilter(column_index, std::move(lower_bound));
+	table_filters.PushFilter(filter_idx, std::move(lower_bound));
 	if (FilterCombiner::FindNextLegalUTF8(prefix_string)) {
 		auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
-		table_filters.PushFilter(column_index, std::move(upper_bound));
+		table_filters.PushFilter(filter_idx, std::move(upper_bound));
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	// could not find next legal utf8 string - skip upper bound
@@ -470,7 +472,8 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	//! This is a like function.
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
-	auto &column_index = column_ids[column_ref.binding.column_index.index];
+	auto proj_index = column_ref.binding.column_index;
+	auto &column_index = column_ids[proj_index.index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -480,7 +483,7 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	// make the filter unsatisfiable and return no results.
 	if (constant_value_expr.value.IsNull()) {
 		auto is_not_null = make_uniq<IsNotNullFilter>();
-		table_filters.PushFilter(column_index, std::move(is_not_null));
+		table_filters.PushFilter(proj_index, std::move(is_not_null));
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	auto &like_string = StringValue::Get(constant_value_expr.value);
@@ -500,7 +503,7 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	if (equality) {
 		//! If the LIKE has no special characters we can turn it into an equality and push that down
 		auto equal_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, Value(prefix));
-		table_filters.PushFilter(column_index, std::move(equal_filter));
+		table_filters.PushFilter(proj_index, std::move(equal_filter));
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 
@@ -509,8 +512,8 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix));
 	prefix[prefix.size() - 1]++;
 	auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix));
-	table_filters.PushFilter(column_index, std::move(lower_bound));
-	table_filters.PushFilter(column_index, std::move(upper_bound));
+	table_filters.PushFilter(proj_index, std::move(lower_bound));
+	table_filters.PushFilter(proj_index, std::move(upper_bound));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -526,7 +529,8 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
-	auto &column_index = column_ids[column_ref.binding.column_index.index];
+	auto proj_index = column_ref.binding.column_index;
+	auto &column_index = column_ids[proj_index.index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -556,7 +560,7 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	if (func.children.size() == 2 && TypeSupportsConstantFilter(type)) {
 		// col IN (literal) is equivalent to an equality comparison - push that down
 		auto bound_eq_comparison = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
-		table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
+		table_filters.PushFilter(proj_index, std::move(bound_eq_comparison));
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 
@@ -575,15 +579,15 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(in_list.front()));
 		auto upper_bound =
 		    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(in_list.back()));
-		table_filters.PushFilter(column_index, std::move(lower_bound));
-		table_filters.PushFilter(column_index, std::move(upper_bound));
+		table_filters.PushFilter(proj_index, std::move(lower_bound));
+		table_filters.PushFilter(proj_index, std::move(upper_bound));
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	// if this is not a dense range we can push an optional filter for zone-map pruning
 	auto optional_filter = make_uniq<OptionalFilter>();
 	auto in_filter = make_uniq<InFilter>(std::move(in_list));
 	optional_filter->child_filter = std::move(in_filter);
-	table_filters.PushFilter(column_index, std::move(optional_filter));
+	table_filters.PushFilter(proj_index, std::move(optional_filter));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -600,7 +604,7 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	if (conj.children.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	idx_t column_id = 0;
+	ProjectionIndex proj_id;
 	for (idx_t i = 0; i < conj.children.size(); i++) {
 		auto &child = conj.children[i];
 		if (child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
@@ -623,15 +627,14 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			// child of OR filter is not simple so we do not push the or filter down at all
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
-
-		if (i == 0) {
-			auto &col_id = column_ids[column_ref->binding.column_index.index];
-			column_id = col_id.GetPrimaryIndex();
+		if (!proj_id.IsValid()) {
+			proj_id = column_ref->binding.column_index;
+			auto &col_id = column_ids[proj_id.index];
 			if (col_id.IsPushdownExtract()) {
 				//! FIXME: can't support filter pushdown on pushed down extract currently
 				return FilterPushdownResult::NO_PUSHDOWN;
 			}
-		} else if (column_id != column_ids[column_ref->binding.column_index.index].GetPrimaryIndex()) {
+		} else if (proj_id != column_ref->binding.column_index) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 
@@ -660,7 +663,7 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	}
 	auto optional_filter = make_uniq<OptionalFilter>();
 	optional_filter->child_filter = std::move(conj_filter);
-	table_filters.PushFilter(ColumnIndex(column_id), std::move(optional_filter));
+	table_filters.PushFilter(proj_id, std::move(optional_filter));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
