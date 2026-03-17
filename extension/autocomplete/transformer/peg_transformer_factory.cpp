@@ -1,4 +1,5 @@
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/common/enums/trigger_type.hpp"
 #include "matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
@@ -324,6 +325,19 @@ void PEGTransformerFactory::RegisterCreateType() {
 
 void PEGTransformerFactory::RegisterCreateView() {
 	REGISTER_TRANSFORM(TransformCreateViewStmt);
+}
+
+void PEGTransformerFactory::RegisterCreateTrigger() {
+	REGISTER_TRANSFORM(TransformCreateTriggerStmt);
+	REGISTER_TRANSFORM(TransformForEachClause);
+	REGISTER_TRANSFORM(TransformTriggerTiming);
+	REGISTER_TRANSFORM(TransformTriggerEvent);
+	REGISTER_TRANSFORM(TransformTriggerEventInsert);
+	REGISTER_TRANSFORM(TransformTriggerEventDelete);
+	REGISTER_TRANSFORM(TransformTriggerEventUpdate);
+	REGISTER_TRANSFORM(TransformTriggerEventUpdateOf);
+	REGISTER_TRANSFORM(TransformTriggerColumnList);
+	REGISTER_TRANSFORM(TransformTriggerBody);
 }
 
 void PEGTransformerFactory::RegisterDeallocate() {
@@ -920,6 +934,12 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<CatalogType>("CommentType", CatalogType::TYPE_ENTRY);
 	RegisterEnum<CatalogType>("CommentColumn", CatalogType::INVALID);
 
+	RegisterEnum<TriggerTiming>("TriggerBefore", TriggerTiming::BEFORE);
+	RegisterEnum<TriggerTiming>("TriggerAfter", TriggerTiming::AFTER);
+	RegisterEnum<TriggerTiming>("TriggerInsteadOf", TriggerTiming::INSTEAD_OF);
+	RegisterEnum<TriggerForEach>("ForEachRow", TriggerForEach::ROW);
+	RegisterEnum<TriggerForEach>("ForEachStatement", TriggerForEach::STATEMENT);
+
 	RegisterEnum<string>("MinValue", "minvalue");
 	RegisterEnum<string>("MaxValue", "maxvalue");
 
@@ -1018,6 +1038,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateTable();
 	RegisterCreateType();
 	RegisterCreateView();
+	RegisterCreateTrigger();
 	RegisterDeallocate();
 	RegisterDelete();
 	RegisterDetach();
