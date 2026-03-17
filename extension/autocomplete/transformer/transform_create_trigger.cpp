@@ -6,7 +6,7 @@ namespace duckdb {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PEGTransformer &transformer,
                                                                               optional_ptr<ParseResult> parse_result) {
 	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName
-	// ForEachRow? TriggerBody
+	// ForEachClause? TriggerBody
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto trigger_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
@@ -14,7 +14,11 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	auto trigger_event = transformer.Transform<TriggerEventInfo>(list_pr.Child<ListParseResult>(4));
 	// index 5 is 'ON'
 	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(6));
-	bool for_each_row = list_pr.Child<OptionalParseResult>(7).HasResult();
+	auto &for_each_opt = list_pr.Child<OptionalParseResult>(7);
+	TriggerForEach for_each = TriggerForEach::STATEMENT;
+	if (for_each_opt.HasResult()) {
+		for_each = transformer.Transform<TriggerForEach>(for_each_opt.optional_result);
+	}
 	auto sql_body = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(8));
 
 	auto result = make_uniq<CreateStatement>();
@@ -27,11 +31,18 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	info->event_type = trigger_event.event_type;
 	info->columns = std::move(trigger_event.columns);
 	info->base_table = std::move(base_table);
-	info->for_each_row = for_each_row;
+	info->for_each = for_each;
 	info->sql_body_text = sql_body->ToString();
 	info->sql_body = std::move(sql_body);
 	result->info = std::move(info);
 	return result;
+}
+
+TriggerForEach PEGTransformerFactory::TransformForEachClause(PEGTransformer &transformer,
+                                                             optional_ptr<ParseResult> parse_result) {
+	// ForEachClause <- ForEachRow / ForEachStatement
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	return transformer.TransformEnum<TriggerForEach>(list_pr.Child<ChoiceParseResult>(0).result);
 }
 
 TriggerTiming PEGTransformerFactory::TransformTriggerTiming(PEGTransformer &transformer,

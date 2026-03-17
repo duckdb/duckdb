@@ -5,7 +5,7 @@ namespace duckdb {
 
 CreateTriggerInfo::CreateTriggerInfo()
     : CreateInfo(CatalogType::TRIGGER_ENTRY, INVALID_SCHEMA), timing(TriggerTiming::AFTER),
-      event_type(TriggerEventType::INSERT_EVENT), for_each_row(false) {
+      event_type(TriggerEventType::INSERT_EVENT), for_each(TriggerForEach::STATEMENT) {
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
@@ -16,7 +16,7 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Copy() const {
 	result->timing = timing;
 	result->event_type = event_type;
 	result->columns = columns;
-	result->for_each_row = for_each_row;
+	result->for_each = for_each;
 	result->sql_body_text = sql_body_text;
 	if (sql_body) {
 		result->sql_body = sql_body->Copy();
@@ -70,8 +70,13 @@ string CreateTriggerInfo::ToString() const {
 	}
 	ss << " ON ";
 	ss << base_table->ToString();
-	if (for_each_row) {
+	switch (for_each) {
+	case TriggerForEach::ROW:
 		ss << " FOR EACH ROW";
+		break;
+	case TriggerForEach::STATEMENT:
+		ss << " FOR EACH STATEMENT";
+		break;
 	}
 	if (sql_body) {
 		ss << " " << sql_body->ToString();

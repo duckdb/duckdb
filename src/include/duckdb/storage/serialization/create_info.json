@@ -364,8 +364,8 @@
       },
       {
         "id": 207,
-        "name": "for_each_row",
-        "type": "bool"
+        "name": "for_each",
+        "type": "TriggerForEach"
       },
       {
         "id": 208,

@@ -5225,6 +5225,24 @@ TriggerEventType EnumUtil::FromString<TriggerEventType>(const char *value) {
 	return static_cast<TriggerEventType>(StringUtil::StringToEnum(GetTriggerEventTypeValues(), 3, "TriggerEventType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetTriggerForEachValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TriggerForEach::STATEMENT), "STATEMENT" },
+		{ static_cast<uint32_t>(TriggerForEach::ROW), "ROW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TriggerForEach>(TriggerForEach value) {
+	return StringUtil::EnumToString(GetTriggerForEachValues(), 2, "TriggerForEach", static_cast<uint32_t>(value));
+}
+
+template<>
+TriggerForEach EnumUtil::FromString<TriggerForEach>(const char *value) {
+	return static_cast<TriggerForEach>(StringUtil::StringToEnum(GetTriggerForEachValues(), 2, "TriggerForEach", value));
+}
+
 const StringUtil::EnumStringLiteral *GetTriggerTimingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TriggerTiming::BEFORE), "BEFORE" },

@@ -1,4 +1,4 @@
-CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachRow? TriggerBody
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
 
@@ -15,4 +15,6 @@ TriggerEventUpdateOf <- 'UPDATE' 'OF' TriggerColumnList
 
 TriggerColumnList <- List(ColId)
 
+ForEachClause <- ForEachRow / ForEachStatement
 ForEachRow <- 'FOR' 'EACH' 'ROW'
+ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'

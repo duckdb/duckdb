@@ -28,8 +28,8 @@ struct CreateTriggerInfo : public CreateInfo {
 	TriggerEventType event_type;
 	//! Columns for UPDATE OF
 	vector<string> columns;
-	//! Whether this is FOR EACH ROW
-	bool for_each_row;
+	//! Whether this fires FOR EACH ROW or FOR EACH STATEMENT
+	TriggerForEach for_each;
 	//! The SQL body text (for serialization)
 	string sql_body_text;
 	//! The parsed SQL body of the trigger (not serialized)

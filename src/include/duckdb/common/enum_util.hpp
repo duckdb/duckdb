@@ -466,6 +466,8 @@ enum class TransactionType : uint8_t;
 
 enum class TriggerEventType : uint8_t;
 
+enum class TriggerForEach : uint8_t;
+
 enum class TriggerTiming : uint8_t;
 
 enum class TupleDataNestednessType : uint8_t;
@@ -1159,6 +1161,9 @@ const char* EnumUtil::ToChars<TransactionType>(TransactionType value);
 
 template<>
 const char* EnumUtil::ToChars<TriggerEventType>(TriggerEventType value);
+
+template<>
+const char* EnumUtil::ToChars<TriggerForEach>(TriggerForEach value);
 
 template<>
 const char* EnumUtil::ToChars<TriggerTiming>(TriggerTiming value);
@@ -1874,6 +1879,9 @@ TransactionType EnumUtil::FromString<TransactionType>(const char *value);
 
 template<>
 TriggerEventType EnumUtil::FromString<TriggerEventType>(const char *value);
+
+template<>
+TriggerForEach EnumUtil::FromString<TriggerForEach>(const char *value);
 
 template<>
 TriggerTiming EnumUtil::FromString<TriggerTiming>(const char *value);

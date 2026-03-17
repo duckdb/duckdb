@@ -196,7 +196,7 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<TriggerTiming>(204, "timing", timing);
 	serializer.WriteProperty<TriggerEventType>(205, "event_type", event_type);
 	serializer.WritePropertyWithDefault<vector<string>>(206, "columns", columns);
-	serializer.WritePropertyWithDefault<bool>(207, "for_each_row", for_each_row);
+	serializer.WriteProperty<TriggerForEach>(207, "for_each", for_each);
 	serializer.WritePropertyWithDefault<string>(208, "sql_body_text", sql_body_text);
 }
 
@@ -208,7 +208,7 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadProperty<TriggerTiming>(204, "timing", result->timing);
 	deserializer.ReadProperty<TriggerEventType>(205, "event_type", result->event_type);
 	deserializer.ReadPropertyWithDefault<vector<string>>(206, "columns", result->columns);
-	deserializer.ReadPropertyWithDefault<bool>(207, "for_each_row", result->for_each_row);
+	deserializer.ReadProperty<TriggerForEach>(207, "for_each", result->for_each);
 	deserializer.ReadPropertyWithDefault<string>(208, "sql_body_text", result->sql_body_text);
 	return std::move(result);
 }

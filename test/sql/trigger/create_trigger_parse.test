@@ -45,6 +45,12 @@ CREATE TRIGGER my_trigger AFTER INSERT ON my_table FOR EACH ROW INSERT INTO log_
 ----
 CREATE TRIGGER is not yet supported
 
+# FOR EACH STATEMENT
+statement error
+CREATE TRIGGER my_trigger AFTER INSERT ON my_table FOR EACH STATEMENT INSERT INTO log_table VALUES (1);
+----
+CREATE TRIGGER is not yet supported
+
 # IF NOT EXISTS
 statement error
 CREATE TRIGGER IF NOT EXISTS my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
