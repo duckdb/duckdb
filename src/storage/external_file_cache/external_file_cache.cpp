@@ -1,11 +1,16 @@
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
+
+idx_t ExternalFileCache::GetCacheBlockSize(const string &path) {
+	return FileSystem::IsRemoteFile(path) ? REMOTE_FILE_CACHE_BLOCK_SIZE : LOCAL_FILE_CACHE_BLOCK_SIZE;
+}
 
 ExternalFileCache::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
 }
@@ -66,6 +71,7 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 			annotated_lock_guard<annotated_mutex> meta_guard(file.second->meta_lock);
 			file_size = file.second->file_size;
 		}
+		const idx_t block_size = GetCacheBlockSize(file.first);
 		annotated_lock_guard<annotated_mutex> map_guard(file.second->map_lock);
 		for (const auto &block_entry : file.second->blocks) {
 			const idx_t block_idx = block_entry.first;
@@ -75,8 +81,8 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 			if (block.state != CacheBlockState::LOADED || !block.block_handle) {
 				continue;
 			}
-			const idx_t location = block_idx * CACHE_BLOCK_SIZE;
-			const idx_t nr_bytes = MinValue(CACHE_BLOCK_SIZE, file_size - location);
+			const idx_t location = block_idx * block_size;
+			const idx_t nr_bytes = MinValue(block_size, file_size - location);
 			const bool loaded = !block.block_handle->GetMemory().IsUnloaded();
 			result.push_back({file.first, nr_bytes, location, loaded});
 		}

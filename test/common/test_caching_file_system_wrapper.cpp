@@ -667,7 +667,7 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<TrackingFileSystem>();
 
-	const idx_t BLOCK_SIZE = ExternalFileCache::CACHE_BLOCK_SIZE;
+	const idx_t BLOCK_SIZE = ExternalFileCache::LOCAL_FILE_CACHE_BLOCK_SIZE;
 	const idx_t EXTRA = 100;
 	const idx_t FILE_SIZE = BLOCK_SIZE + EXTRA;
 

@@ -44,9 +44,10 @@ class FetchBlockTask : public BaseExecutorTask {
 public:
 	FetchBlockTask(TaskExecutor &executor, FileHandle &file_handle_p, QueryContext context_p,
 	               BufferManager &buffer_manager_p, shared_ptr<CacheBlock> block_p, idx_t block_idx_p,
-	               idx_t file_size_p, BufferHandle &result_pin_p)
+	               idx_t file_size_p, idx_t block_size_p, BufferHandle &result_pin_p)
 	    : BaseExecutorTask(executor), file_handle(file_handle_p), context(context_p), buffer_manager(buffer_manager_p),
-	      block(std::move(block_p)), block_idx(block_idx_p), file_size(file_size_p), result_pin(result_pin_p) {
+	      block(std::move(block_p)), block_idx(block_idx_p), file_size(file_size_p), block_size(block_size_p),
+	      result_pin(result_pin_p) {
 	}
 
 	void ExecuteTask() override {
@@ -72,8 +73,8 @@ public:
 				lk.unlock();
 
 				try {
-					const idx_t offset = block_idx * ExternalFileCache::CACHE_BLOCK_SIZE;
-					const idx_t to_read = MinValue(ExternalFileCache::CACHE_BLOCK_SIZE, file_size - offset);
+					const idx_t offset = block_idx * block_size;
+					const idx_t to_read = MinValue(block_size, file_size - offset);
 					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
 					file_handle.Read(context, buf.Ptr(), to_read, offset);
 
@@ -115,6 +116,7 @@ private:
 	shared_ptr<CacheBlock> block;
 	idx_t block_idx;
 	idx_t file_size;
+	idx_t block_size;
 	BufferHandle &result_pin;
 };
 
@@ -221,7 +223,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	auto &fh = GetFileHandle();
 	const idx_t file_size = fh.GetFileSize();
 
-	const idx_t block_size = ExternalFileCache::CACHE_BLOCK_SIZE;
+	const idx_t block_size = ExternalFileCache::GetCacheBlockSize(cached_file.path);
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
 	const idx_t num_blocks = last_block - first_block + 1;
@@ -246,7 +248,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		executor.ScheduleTask(make_uniq<FetchBlockTask>(executor, fh, context, external_file_cache.GetBufferManager(),
-		                                                blocks[idx], first_block + idx, file_size, pins[idx]));
+		                                                blocks[idx], first_block + idx, file_size, block_size,
+		                                                pins[idx]));
 	}
 	executor.WorkOnTasks();
 
