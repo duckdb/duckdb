@@ -1181,7 +1181,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName\n"
 	"TableFunctionArguments <- Parens(List(FunctionArgument)?)\n"
 	"FunctionArgument <- NamedParameter / Expression\n"
-	"NamedParameter <- TypeName Type? NamedParameterAssignment Expression\n"
+	"NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression\n"
 	"NamedParameterAssignment <- ':=' / '=>'\n"
 	"TableAlias <- TableAliasAs / TableAliasWithoutAs\n"
 	"TableAliasAs <- 'AS' IdentifierOrStringLiteral ColumnAliases?\n"
