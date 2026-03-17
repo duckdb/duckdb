@@ -32,7 +32,8 @@
 
 namespace duckdb {
 
-static void GatherCTEScans(const idx_t cte_index, const LogicalOperator &op, unordered_set<idx_t> &expected_readers) {
+static void GatherCTEScans(const TableIndex cte_index, const LogicalOperator &op,
+                           unordered_set<TableIndex> &expected_readers) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cte_scan = op.Cast<LogicalCTERef>();
 		if (cte_scan.cte_index != cte_index) {
@@ -221,7 +222,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 				// We still need to recurse into the children to populate CTE info, etc.
 				for (auto &child : op.children) {
 					RemoveUnusedColumns remove(*this, true);
-					remove.VisitOperator(*child);
+					remove.VisitOperator(child);
 				}
 
 				return;
@@ -254,12 +255,6 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 					new_projection->children.push_back(std::move(child));
 					op.children[child_idx] = std::move(new_projection);
 				}
-				auto new_projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-				if (child->has_estimated_cardinality) {
-					new_projection->SetEstimatedCardinality(child->estimated_cardinality);
-				}
-				new_projection->children.push_back(std::move(child));
-				op.children[child_idx] = std::move(new_projection);
 
 				// now visit the child
 				remove.VisitOperator(op.children[child_idx]);
@@ -361,7 +356,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		GatherCTEScans(cte.table_index, *cte.children[1], cte_map_entry.expected_readers);
 		cte_map_entry.everything_referenced = false;
 		RemoveUnusedColumns rhs_child_optimizer(*this, true);
-		rhs_child_optimizer.VisitOperator(*cte.children[1]);
+		rhs_child_optimizer.VisitOperator(cte.children[1]);
 
 		unordered_set<ProjectionIndex> referenced_columns_in_rhs;
 		for (auto &entry : cte_map_entry.column_references) {
@@ -416,7 +411,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		everything_referenced = true;
 		// We may opt out here, but we still need to traverse the left-hand side of the CTE
 		RemoveUnusedColumns remove(*this, true);
-		remove.VisitOperator(*cte.children[0]);
+		remove.VisitOperator(cte.children[0]);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {

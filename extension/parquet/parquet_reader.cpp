@@ -1401,8 +1401,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				if (filters) {
 					// check if any filter is non-optional
 					bool has_non_optional_filter = false;
-					for (auto &entry : filters->filters) {
-						if (entry.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+					for (auto &entry : *filters) {
+						if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
 							has_non_optional_filter = true;
 						}
 					}
