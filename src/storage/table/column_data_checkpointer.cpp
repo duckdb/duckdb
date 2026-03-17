@@ -393,7 +393,7 @@ struct CheckpointBlockIdMarker : public BlockIdVisitor {
 	}
 
 	void Visit(block_id_t block_id) override {
-		manager.MarkBlockACheckpointed(block_id);
+		manager.MarkBlockAsCheckpointed(block_id);
 	}
 
 	BlockManager &manager;
