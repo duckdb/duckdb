@@ -87,7 +87,9 @@ void UnpackMultiStatement(MultiStatement &multi_statement, const ActiveTransacti
 			has_select = true;
 		}
 	}
-	auto handling = GetTransactionHandling(multi_statement.statements, active_transaction_state, !has_select);
+	bool can_wrap_in_transaction = !has_select;
+	auto handling =
+	    GetTransactionHandling(multi_statement.statements, active_transaction_state, can_wrap_in_transaction);
 	AddStatements(multi_statement.statements, handling, new_statements);
 }
 
