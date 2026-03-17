@@ -681,12 +681,24 @@ void TopNWindowElimination::UpdateTopmostBindings(const idx_t window_idx, const 
 	const idx_t group_table_idx = GetGroupIdx(op);
 	const idx_t aggregate_table_idx = GetAggregateIdx(op);
 
+	// CreateProjectionOperator only includes referenced group columns, ordered by partition index.
+	// So the projection position is determined by how many smaller partition indices are also referenced.
+	std::set<idx_t> ordered_group_vals;
+	for (const auto &g : group_idxs) {
+		ordered_group_vals.insert(g.second);
+	}
+	map<idx_t, idx_t> group_val_to_proj_pos;
+	idx_t pos = 0;
+	for (const auto &v : ordered_group_vals) {
+		group_val_to_proj_pos[v] = pos++;
+	}
+
 	// Project the group columns
 	idx_t current_column_idx = 0;
 	for (auto group_idx : group_idxs) {
 		const idx_t group_referencing_idx = group_idx.first;
 		new_bindings[group_referencing_idx].table_index = group_table_idx;
-		new_bindings[group_referencing_idx].column_index = group_idx.second;
+		new_bindings[group_referencing_idx].column_index = group_val_to_proj_pos[group_idx.second];
 		replacer.replacement_bindings.emplace_back(topmost_bindings[group_referencing_idx],
 		                                           new_bindings[group_referencing_idx]);
 		current_column_idx++;

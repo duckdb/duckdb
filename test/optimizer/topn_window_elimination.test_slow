@@ -318,3 +318,50 @@ SELECT * FROM a, LATERAL (SELECT *, a_id AS id_dup FROM b ORDER BY array_distanc
 [1.0, 2.0, 3.0]	1	[1.0, 2.0, 3.0]	a	1
 [4.0, 5.0, 6.0]	2	[4.0, 5.0, 6.0]	b	2
 
+# Test multi-column PARTITION BY with row_number() where not all partition columns are in the output
+# Regression test for https://github.com/duckdb/duckdb/issues/21387
+statement ok
+CREATE TABLE issue_21387 (a VARCHAR, ts TIMESTAMP, k VARCHAR);
+
+statement ok
+INSERT INTO issue_21387 VALUES ('x', '2024-01-01', 'abc'), ('y', '2024-02-01', 'def');
+
+query I
+SELECT k FROM issue_21387 QUALIFY row_number() OVER (PARTITION BY a, k ORDER BY ts DESC) = 1 ORDER BY k;
+----
+abc
+def
+
+# Same test with SELECT * to verify all columns bind correctly
+query III
+SELECT * FROM issue_21387 QUALIFY row_number() OVER (PARTITION BY a, k ORDER BY ts DESC) = 1 ORDER BY k;
+----
+x	2024-01-01 00:00:00	abc
+y	2024-02-01 00:00:00	def
+
+# Test with VARCHAR ORDER BY column (not just TIMESTAMP)
+statement ok
+CREATE TABLE issue_21387_str (a VARCHAR, val VARCHAR, k VARCHAR);
+
+statement ok
+INSERT INTO issue_21387_str VALUES ('x', 'zzz', 'abc'), ('y', 'aaa', 'def');
+
+query I
+SELECT k FROM issue_21387_str QUALIFY row_number() OVER (PARTITION BY a, k ORDER BY val DESC) = 1 ORDER BY k;
+----
+abc
+def
+
+# Test with three partition columns where only one is in the output
+statement ok
+CREATE TABLE issue_21387_triple (a VARCHAR, b VARCHAR, ts TIMESTAMP, k VARCHAR);
+
+statement ok
+INSERT INTO issue_21387_triple VALUES ('x', 'p', '2024-01-01', 'abc'), ('y', 'q', '2024-02-01', 'def');
+
+query I
+SELECT k FROM issue_21387_triple QUALIFY row_number() OVER (PARTITION BY a, b, k ORDER BY ts DESC) = 1 ORDER BY k;
+----
+abc
+def
+
