@@ -32,22 +32,6 @@
       ]
     },
     {
-      "reason": "FIXME: crash/error in test",
-      "paths": [
-        "test/sql/storage/compression/roaring/roaring_bool_run_simple_w_null.test",
-        "test/sql/storage/compression/roaring/roaring_bool_inverted_run_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_smaller_than_vector.test",
-        "test/sql/storage/compression/roaring/roaring_bool_array_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple_w_null.test",
-        "test/sql/storage/compression/roaring/roaring_bool_run_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_inverted_array_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_first_is_null.test",
-        "test/sql/storage/compression/roaring/roaring_bool_fetch_row.test",
-        "test/sql/storage/compression/roaring/roaring_bool_bitset_simple.test",
-        "test/sql/storage/compression/roaring/roaring_bool_array_simple_w_null.test"
-      ]
-    },
-    {
       "reason": "Expects db with name 'memory'",
       "paths": [
         "test/sql/attach/show_databases.test",
