@@ -65,36 +65,33 @@ static void ExecuteTriggerBody(ClientContext &context, const string &sql_body_te
 	}
 }
 
-void TriggerExecutor::FireAfterInsert(ClientContext &context, TableCatalogEntry &table, idx_t row_count) {
-	if (context.trigger_depth >= MAX_TRIGGER_DEPTH) {
-		throw InvalidInputException("Trigger recursion depth limit (%llu) exceeded — possible infinite trigger loop",
-		                            MAX_TRIGGER_DEPTH);
-	}
+struct TriggerInfo {
+	string body;
+	TriggerForEach for_each;
+};
 
-	// Collecting trigger body strings before executing any of them.
-	// The schema.Scan holds catalog_lock for its entire duration.
-	// ExecuteTriggerBody may call FireAfterInsert again (recursive triggers),
-	// which also tries to acquire catalog_lock => deadlock.
-	struct TriggerInfo {
-		string body;
-		TriggerForEach for_each;
-	};
+static vector<TriggerInfo> CollectTriggers(ClientContext &context, TableCatalogEntry &table, TriggerTiming timing,
+                                           TriggerEventType event_type) {
+	// Collect trigger body strings before executing any of them.
+	// schema.Scan holds catalog_lock for its entire duration.
+	// ExecuteTriggerBody may recursively call Fire, which also tries to acquire catalog_lock => deadlock.
+	// Releasing the lock by letting the scoped Scan complete before executing resolves this.
 	vector<TriggerInfo> triggers;
-	{
-		auto &schema = table.ParentSchema();
-		schema.Scan(context, CatalogType::TRIGGER_ENTRY, [&](CatalogEntry &entry) {
-			auto &trigger = entry.Cast<TriggerCatalogEntry>();
-			if (trigger.timing != TriggerTiming::AFTER || trigger.event_type != TriggerEventType::INSERT_EVENT) {
-				return;
-			}
-			if (trigger.base_table->table_name != table.name) {
-				return;
-			}
-			triggers.push_back({trigger.sql_body_text, trigger.for_each});
-		});
-	}
+	auto &schema = table.ParentSchema();
+	schema.Scan(context, CatalogType::TRIGGER_ENTRY, [&](CatalogEntry &entry) {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (trigger.timing != timing || trigger.event_type != event_type) {
+			return;
+		}
+		if (trigger.base_table->table_name != table.name) {
+			return;
+		}
+		triggers.push_back({trigger.sql_body_text, trigger.for_each});
+	});
+	return triggers;
+}
 
-	TriggerDepthGuard depth_guard(context.trigger_depth);
+static void FireTriggers(ClientContext &context, const vector<TriggerInfo> &triggers, idx_t row_count) {
 	for (auto &trigger : triggers) {
 		if (trigger.for_each == TriggerForEach::ROW) {
 			for (idx_t i = 0; i < row_count; i++) {
@@ -105,6 +102,17 @@ void TriggerExecutor::FireAfterInsert(ClientContext &context, TableCatalogEntry 
 			ExecuteTriggerBody(context, trigger.body);
 		}
 	}
+}
+
+void TriggerExecutor::Fire(ClientContext &context, TableCatalogEntry &table, idx_t row_count, TriggerTiming timing,
+                           TriggerEventType event_type) {
+	if (context.trigger_depth >= MAX_TRIGGER_DEPTH) {
+		throw InvalidInputException("Trigger recursion depth limit (%llu) exceeded — possible infinite trigger loop",
+		                            MAX_TRIGGER_DEPTH);
+	}
+	auto triggers = CollectTriggers(context, table, timing, event_type);
+	TriggerDepthGuard depth_guard(context.trigger_depth);
+	FireTriggers(context, triggers, row_count);
 }
 
 } // namespace duckdb

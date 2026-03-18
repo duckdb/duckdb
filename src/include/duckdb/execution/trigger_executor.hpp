@@ -20,6 +20,7 @@ public:
 	// call stack. Keep depth small enough that stack overflow cannot occur before the guard fires.
 	static constexpr idx_t MAX_TRIGGER_DEPTH = 8;
 
-	static void FireAfterInsert(ClientContext &context, TableCatalogEntry &table, idx_t row_count);
+	static void Fire(ClientContext &context, TableCatalogEntry &table, idx_t row_count, TriggerTiming timing,
+	                 TriggerEventType event_type);
 };
 } // namespace duckdb

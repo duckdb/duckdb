@@ -726,7 +726,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<InsertGlobalState>();
-	TriggerExecutor::FireAfterInsert(context, gstate.table, gstate.insert_count);
+	TriggerExecutor::Fire(context, gstate.table, gstate.insert_count, TriggerTiming::AFTER,
+	                      TriggerEventType::INSERT_EVENT);
 	return SinkFinalizeType::READY;
 }
 
