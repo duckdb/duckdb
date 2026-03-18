@@ -1196,6 +1196,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 
 			auto command = make_uniq<UnzipCommand>(*this, input_path, extraction_path);
+			command->query_line = parser.current_line + 1;
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TAGS) {
 			// NOTE: tags-before-test-commands is the low bar right now
