@@ -184,7 +184,7 @@ private:
 	                                     DataChunk &input) override;
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
-	void InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(NodePointer &other_tree, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);

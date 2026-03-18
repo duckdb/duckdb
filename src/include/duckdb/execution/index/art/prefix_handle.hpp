@@ -25,7 +25,8 @@ public:
 
 	//! Transform prefix chain to deprecated format.
 	//! Returns an empty NodePointer if the prefix was not loaded from storage (early out) or if the endpoint
-	//! was a gated node (handled internally). Otherwise, returns a copy of the endpoint for further traversal.
+	//! was a gated node (handled internally). Otherwise, returns a copy of the child pointer at the tail of
+	//! the prefix chain for further traversal.
 	static NodePointer TransformToDeprecated(ART &art, NodePointer &node, TransformToDeprecatedState &state);
 
 private:

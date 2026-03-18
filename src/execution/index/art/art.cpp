@@ -1214,7 +1214,7 @@ void ART::Vacuum(IndexLock &state) {
 
 	auto &art = *this;
 
-	auto node_handler = [&](NodePointer current) -> ScanNodeResult {
+	auto pre_handler = [&](NodePointer current) -> ScanNodeResult {
 		if (current.GetType() == NType::LEAF) {
 			Leaf::DeprecatedVacuum(art, indexes, current);
 			return ScanNodeResult::SKIP;
@@ -1227,7 +1227,7 @@ void ART::Vacuum(IndexLock &state) {
 		return child;
 	};
 
-	BufferManagedScan(art, tree, node_handler, child_handler);
+	BufferManagedScan(art, tree, pre_handler, child_handler);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
@@ -1244,17 +1244,17 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 	}
 }
 
-void ART::InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds) {
-	D_ASSERT(node.HasMetadata());
+void ART::InitializeMerge(NodePointer &other_tree, unsafe_vector<idx_t> &upper_bounds) {
+	D_ASSERT(other_tree.HasMetadata());
 
-	auto node_handler = [](NodePointer) -> ScanNodeResult {
+	auto pre_handler = [](NodePointer) -> ScanNodeResult {
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
 	auto child_handler = [&](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
-		// If the leaf is inlined return a no-op.
+		// no-op
 		if (type == NType::LEAF_INLINED) {
 			return NodePointer();
 		}
@@ -1285,7 +1285,7 @@ void ART::InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds)
 		}
 	};
 
-	BufferManagedScan(*this, node, node_handler, child_handler);
+	BufferManagedScan(*this, other_tree, pre_handler, child_handler);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {

@@ -26,11 +26,11 @@ NodePointer PrefixHandle::TransformToDeprecated(ART &art, NodePointer &node, Tra
 				return NodePointer();
 			}
 			NodeHandle handle(art, current);
-			auto child = reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
-			current = *child;
+			auto &child = *reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
+			current = child;
 			// Handle gated endpoints while the parent of the prefix chain is still pinned.
 			if (current.HasMetadata() && current.GetGateStatus() == GateStatus::GATE_SET) {
-				Leaf::TransformToDeprecated(art, *child);
+				Leaf::TransformToDeprecated(art, child);
 				return NodePointer();
 			}
 		}
@@ -52,29 +52,29 @@ NodePointer PrefixHandle::TransformToDeprecated(ART &art, NodePointer &node, Tra
 			// Decrease the readers on current_handle after moving all data over.
 			NodeHandle current_handle(art, current_node);
 			auto current_data = current_handle.GetPtr();
-			auto current_child = reinterpret_cast<NodePointer *>(current_data + art.PrefixCount() + 1);
+			auto &current_child = *reinterpret_cast<NodePointer *>(current_data + art.PrefixCount() + 1);
 
 			for (idx_t i = 0; i < current_data[art.PrefixCount()]; i++) {
 				new_handle =
 				    TransformToDeprecatedAppend(std::move(new_handle), art, deprecated_allocator, current_data[i]);
 			}
-			auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
-			*new_child = *current_child;
+			auto &new_child = *reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
+			new_child = current_child;
 		}
 
 		// Freeing the node here can trigger a buffer removal (last segment on the buffer).
 		// In that case, there cannot be any readers left on the buffer.
 		NodePointer::FreeNode(art, current_node);
-		auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
-		current_node = *new_child;
+		auto &new_child = *reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
+		current_node = new_child;
 	}
 
 	node = new_node;
-	auto new_child = reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
+	auto &new_child = *reinterpret_cast<NodePointer *>(new_handle.GetPtr() + DEPRECATED_COUNT + 1);
 	// Handle gated endpoints while the new prefix is still pinned.
-	NodePointer endpoint = *new_child;
+	NodePointer endpoint = new_child;
 	if (endpoint.HasMetadata() && endpoint.GetGateStatus() == GateStatus::GATE_SET) {
-		Leaf::TransformToDeprecated(art, *new_child);
+		Leaf::TransformToDeprecated(art, new_child);
 		return NodePointer();
 	}
 	return endpoint;
@@ -89,8 +89,8 @@ NodeHandle PrefixHandle::TransformToDeprecatedAppend(NodeHandle handle, ART &art
 		return handle;
 	}
 
-	auto child = reinterpret_cast<NodePointer *>(data + DEPRECATED_COUNT + 1);
-	auto new_prefix = NewDeprecated(allocator, *child);
+	auto &child = *reinterpret_cast<NodePointer *>(data + DEPRECATED_COUNT + 1);
+	auto new_prefix = NewDeprecated(allocator, child);
 	return TransformToDeprecatedAppend(std::move(new_prefix), art, allocator, byte);
 }
 

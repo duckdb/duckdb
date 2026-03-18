@@ -57,34 +57,46 @@ void NodePointer::FreeNode(ART &art, NodePointer &node) {
 }
 
 void NodePointer::FreeTree(ART &art, NodePointer &node) {
-	auto handler = [&art](NodePointer &node) {
-		const auto type = node.GetType();
+	if (!node.HasMetadata()) {
+		return;
+	}
+
+	auto pre_handler = [](NodePointer) -> ScanNodeResult {
+		return ScanNodeResult::SCAN_CHILDREN;
+	};
+
+	auto child_handler = [&](NodePointer &child) -> NodePointer {
+		D_ASSERT(child.HasMetadata());
+		auto type = child.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			node.Clear();
-			return ARTHandlingResult::NONE;
+			child.Clear();
+			return NodePointer();
 		case NType::LEAF:
-			Leaf::DeprecatedFree(art, node);
-			return ARTHandlingResult::NONE;
+			Leaf::DeprecatedFree(art, child);
+			return NodePointer();
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
+			FreeNode(art, child);
+			return NodePointer();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256:
-			break;
+			return child;
 		default:
-			throw InternalException("invalid node type for Free: %d", type);
+			throw InternalException("invalid node type for FreeTree: %d", static_cast<int>(type));
 		}
-
-		FreeNode(art, node);
-		return ARTHandlingResult::NONE;
 	};
 
-	ARTScanner<ARTScanHandling::POP, NodePointer> scanner(art, handler, node);
-	scanner.Scan(handler);
+	auto post_handler = [&](NodePointer current) {
+		FreeNode(art, current);
+	};
+
+	BufferManagedScan(art, node, pre_handler, child_handler, post_handler);
+	node.Clear();
 }
 
 //===--------------------------------------------------------------------===//
@@ -396,7 +408,7 @@ bool NodePointer::IsAnyLeaf() const {
 //===--------------------------------------------------------------------===//
 
 void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformToDeprecatedState &state) {
-	auto node_handler = [&](NodePointer current) -> ScanNodeResult {
+	auto pre_handler = [&](NodePointer current) -> ScanNodeResult {
 		auto type = current.GetType();
 		if (type == NType::NODE_4 || type == NType::NODE_16 || type == NType::NODE_48 || type == NType::NODE_256) {
 			auto &alloc = NodePointer::GetAllocator(art, type);
@@ -433,7 +445,7 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 		}
 	};
 
-	BufferManagedScan(art, node, node_handler, child_handler);
+	BufferManagedScan(art, node, pre_handler, child_handler);
 }
 
 //===--------------------------------------------------------------------===//
