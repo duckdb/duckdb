@@ -60,7 +60,7 @@ void NodePointer::FreeTree(ART &art, NodePointer &node) {
 		return;
 	}
 
-	auto child_handler = [](NodePointer &child) -> NodePointer {
+	auto filter = [](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
 		return child;
 	};
@@ -88,7 +88,7 @@ void NodePointer::FreeTree(ART &art, NodePointer &node) {
 		}
 	};
 
-	ARTScanPostOrder(art, node, child_handler, post_handler);
+	ARTScanPostOrder(art, node, filter, post_handler);
 	node.Clear();
 }
 
@@ -401,7 +401,7 @@ bool NodePointer::IsAnyLeaf() const {
 //===--------------------------------------------------------------------===//
 
 void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformToDeprecatedState &state) {
-	auto pre_handler = [&](NodePointer current) -> ScanNodeResult {
+	auto filter = [&](NodePointer current) -> ScanNodeResult {
 		auto type = current.GetType();
 		if (type == NType::NODE_4 || type == NType::NODE_16 || type == NType::NODE_48 || type == NType::NODE_256) {
 			auto &alloc = NodePointer::GetAllocator(art, type);
@@ -412,7 +412,7 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
-	auto child_handler = [&](NodePointer &child) -> NodePointer {
+	auto pre_handler = [&](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
 		if (child.GetGateStatus() == GateStatus::GATE_SET) {
 			Leaf::TransformToDeprecated(art, child);
@@ -438,7 +438,7 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 		}
 	};
 
-	ARTScanPreOrder(art, node, pre_handler, child_handler);
+	ARTScanPreOrder(art, node, filter, pre_handler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -480,11 +480,11 @@ void NodePointer::Verify(ART &art) const {
 void NodePointer::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
 	D_ASSERT(HasMetadata());
 
-	auto pre_handler = [](NodePointer) -> ScanNodeResult {
+	auto filter = [](NodePointer) -> ScanNodeResult {
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
-	auto child_handler = [&](NodePointer &child) -> NodePointer {
+	auto pre_handler = [&](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		switch (type) {
@@ -513,7 +513,7 @@ void NodePointer::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &nod
 	};
 
 	NodePointer root = *this;
-	ARTScanPreOrder(art, root, pre_handler, child_handler);
+	ARTScanPreOrder(art, root, filter, pre_handler);
 }
 
 //===--------------------------------------------------------------------===//

@@ -1214,7 +1214,7 @@ void ART::Vacuum(IndexLock &state) {
 
 	auto &art = *this;
 
-	auto pre_handler = [&](NodePointer current) -> ScanNodeResult {
+	auto filter = [&](NodePointer current) -> ScanNodeResult {
 		if (current.GetType() == NType::LEAF) {
 			Leaf::DeprecatedVacuum(art, indexes, current);
 			return ScanNodeResult::SKIP;
@@ -1222,12 +1222,12 @@ void ART::Vacuum(IndexLock &state) {
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
-	auto child_handler = [&](NodePointer &child) -> NodePointer {
+	auto pre_handler = [&](NodePointer &child) -> NodePointer {
 		VacuumPointerIfNeeded(art, indexes, child);
 		return child;
 	};
 
-	ARTScanPreOrder(art, tree, pre_handler, child_handler);
+	ARTScanPreOrder(art, tree, filter, pre_handler);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
@@ -1247,11 +1247,11 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 void ART::InitializeMerge(NodePointer &other_tree, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(other_tree.HasMetadata());
 
-	auto pre_handler = [](NodePointer) -> ScanNodeResult {
+	auto filter = [](NodePointer) -> ScanNodeResult {
 		return ScanNodeResult::SCAN_CHILDREN;
 	};
 
-	auto child_handler = [&](NodePointer &child) -> NodePointer {
+	auto pre_handler = [&](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
 		// no-op
@@ -1285,7 +1285,7 @@ void ART::InitializeMerge(NodePointer &other_tree, unsafe_vector<idx_t> &upper_b
 		}
 	};
 
-	ARTScanPreOrder(*this, other_tree, pre_handler, child_handler);
+	ARTScanPreOrder(*this, other_tree, filter, pre_handler);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
