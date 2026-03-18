@@ -77,3 +77,49 @@ query I
 SELECT typeof(d) FROM '__TEST_DIR__/timestamps.parquet' LIMIT 1
 ----
 TIMESTAMP_NS
+
+# COPY option timestamp_is_adjusted_to_utc controls isAdjustedToUTC metadata
+# AUTO follows the input type, while TRUE and FALSE override it
+
+foreach type,auto_expected TIMESTAMP,0 TIMESTAMP_S,0 TIMESTAMP_MS,0 TIMESTAMP_NS,0 TIMESTAMPTZ,1
+
+statement ok
+CREATE OR REPLACE TABLE timestamps(d ${type})
+
+statement ok
+INSERT INTO timestamps VALUES ('1992-01-01 12:03:27')
+
+statement ok
+COPY timestamps TO '__TEST_DIR__/timestamps_utc_auto_${type}.parquet'
+    (FORMAT 'parquet', timestamp_is_adjusted_to_utc AUTO);
+
+query I
+SELECT logical_type LIKE '%isAdjustedToUTC=${auto_expected}%'
+FROM parquet_schema('__TEST_DIR__/timestamps_utc_auto_${type}.parquet')
+WHERE name = 'd'
+----
+1
+
+statement ok
+COPY timestamps TO '__TEST_DIR__/timestamps_utc_true_${type}.parquet'
+    (FORMAT 'parquet', timestamp_is_adjusted_to_utc TRUE);
+
+query I
+SELECT logical_type LIKE '%isAdjustedToUTC=1%'
+FROM parquet_schema('__TEST_DIR__/timestamps_utc_true_${type}.parquet')
+WHERE name = 'd'
+----
+1
+
+statement ok
+COPY timestamps TO '__TEST_DIR__/timestamps_utc_false_${type}.parquet'
+    (FORMAT 'parquet', timestamp_is_adjusted_to_utc FALSE);
+
+query I
+SELECT logical_type LIKE '%isAdjustedToUTC=0%'
+FROM parquet_schema('__TEST_DIR__/timestamps_utc_false_${type}.parquet')
+WHERE name = 'd'
+----
+1
+
+endloop
