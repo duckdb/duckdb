@@ -5,9 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-# TODO: Remove the where clause when the window oids are stable.
 statement ok
-SELECT * FROM duckdb_functions() WHERE function_type <> 'window';
+SELECT * FROM duckdb_functions();
 
 query I
 select function_name from duckdb_functions() where not internal order by 1;
@@ -20,7 +19,7 @@ statement ok
 CREATE MACRO add_default2(a, b := 5) AS a + b
 
 statement ok
-SELECT * FROM duckdb_functions() WHERE function_type <> 'window';
+SELECT * FROM duckdb_functions();
 
 statement ok
 SELECT * FROM duckdb_functions() WHERE function_type='table';

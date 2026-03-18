@@ -3,6 +3,8 @@
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/function/window/window_functions.hpp"
+#include "duckdb/function/window_function.hpp"
 
 namespace duckdb {
 

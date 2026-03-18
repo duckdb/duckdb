@@ -20,8 +20,6 @@ public:
 	static constexpr const CatalogType Type = CatalogType::WINDOW_FUNCTION_ENTRY;
 	static constexpr const char *Name = "window function";
 
-	static vector<unique_ptr<WindowFunctionCatalogEntry>> GetEntries(ClientContext &context);
-
 public:
 	WindowFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateWindowFunctionInfo &info);
 

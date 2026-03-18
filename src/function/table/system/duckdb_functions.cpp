@@ -26,7 +26,6 @@ struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	}
 
 	vector<reference<CatalogEntry>> entries;
-	vector<unique_ptr<WindowFunctionCatalogEntry>> window_entries;
 	idx_t offset;
 	idx_t offset_in_entry;
 };
@@ -114,11 +113,6 @@ unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context,
 	for (auto &schema : schemas) {
 		ExtractFunctionsFromSchema(context, schema.get(), *result);
 	};
-
-	result->window_entries = WindowFunctionCatalogEntry::GetEntries(context);
-	for (auto &entry : result->window_entries) {
-		result->entries.push_back(*entry);
-	}
 
 	std::sort(result->entries.begin(), result->entries.end(),
 	          [&](reference<CatalogEntry> a, reference<CatalogEntry> b) {
