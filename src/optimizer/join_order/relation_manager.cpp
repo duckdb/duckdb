@@ -611,9 +611,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// that looks like ((A ⋉ C) ⨝ B)), since all columns from C will be lost after it joins with A,
 				// and the condition B.x = C.z will no longer be possible.
 				// if we make a conjunction expression and populate the left set and right set with all
-				// the relations from the conditions in the conjunction expression, we can prevent invalid
-				// reordering.
-				//
+				// the relations from the conditions in the conjunction expression, we can prevent invalid reordering.
+
 				// Non-comparison conditions (e.g. l.val > 1 stored as a residual in the ON clause)
 				// are NOT added to the conjunction to avoid contaminating the edge binding analysis.
 				// Instead they are stored as residual predicates below.
@@ -660,26 +659,24 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				}
 
 				// Store non-comparison ON-clause conditions as residual predicates.
-				{
-					unordered_set<RelationIndex> all_bindings;
+				unordered_set<RelationIndex> all_bindings;
+				for (auto &cond : join.conditions) {
+					if (!cond.IsComparison()) {
+						ExtractBindings(cond.GetJoinExpression(), all_bindings);
+					} else {
+						ExtractBindings(cond.GetLHS(), all_bindings);
+						ExtractBindings(cond.GetRHS(), all_bindings);
+					}
+				}
+				auto full_set = &set_manager.GetJoinRelation(all_bindings);
+				if (!full_set->Empty()) {
 					for (auto &cond : join.conditions) {
 						if (!cond.IsComparison()) {
-							ExtractBindings(cond.GetJoinExpression(), all_bindings);
-						} else {
-							ExtractBindings(cond.GetLHS(), all_bindings);
-							ExtractBindings(cond.GetRHS(), all_bindings);
-						}
-					}
-					auto full_set = &set_manager.GetJoinRelation(all_bindings);
-					if (!full_set->Empty()) {
-						for (auto &cond : join.conditions) {
-							if (!cond.IsComparison()) {
-								auto nc_expr = cond.GetJoinExpression().Copy();
-								auto new_filter = make_uniq<FilterInfo>(std::move(nc_expr), *full_set,
-								                                        filters_and_bindings.size(), join.join_type);
-								new_filter->from_residual_predicate = true;
-								filters_and_bindings.push_back(std::move(new_filter));
-							}
+							auto nc_expr = cond.GetJoinExpression().Copy();
+							auto new_filter = make_uniq<FilterInfo>(std::move(nc_expr), *full_set,
+							                                        filters_and_bindings.size(), join.join_type);
+							new_filter->from_residual_predicate = true;
+							filters_and_bindings.push_back(std::move(new_filter));
 						}
 					}
 				}
@@ -687,7 +684,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			}
 			case JoinType::LEFT: {
 				// For LEFT joins, create one FilterInfo per comparison condition.
-				// Each uses the FULL left/right relation sets (union of all conditions' bindings)
+				// Each uses the full left/right relation sets (union of all conditions' bindings)
 				// to preserve join-ordering constraints, but individual column bindings so that
 				// the cardinality estimator gets an accurate distinct count for each condition.
 				// With all per-condition distinct counts available, GetDenominator can multiply
@@ -726,8 +723,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					}
 
 					// Expand filters that reference only the RIGHT side of this LEFT join so that
-					// the LEFT join is always planned before those filters. This mirrors the logic
-					// in the old CreateFilterInfoFromExpression for the JoinType::LEFT case.
+					// the LEFT join is always planned before those filters.
 					for (auto &filter : filters_and_bindings) {
 						if (filter->join_type == JoinType::LEFT) {
 							continue;
