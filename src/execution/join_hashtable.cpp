@@ -969,8 +969,8 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 
 	// If there is a matcher for the probing side because of non-equality predicates, use it
 	idx_t result_count;
+	idx_t no_match_count = 0;
 	if (ht.needs_chain_matcher) {
-		idx_t no_match_count = 0;
 		auto &matcher = no_match_sel ? ht.row_matcher_probe_no_match_sel : ht.row_matcher_probe;
 		D_ASSERT(matcher);
 
@@ -984,7 +984,9 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 	}
 
 	if (ht.residual_predicate && ht.residual_info && result_count > 0) {
-		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel);
+		// Pass no_match_count as offset so residual non-matches are appended after non-equality non-matches
+		// instead of overwriting them (which would cause AdvancePointers to read stale data)
+		result_count = ApplyResidualPredicate(probe_data, match_sel, result_count, no_match_sel, no_match_count);
 	}
 
 	// Update total probe match count
@@ -994,7 +996,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, DataChunk &probe_data, S
 }
 
 idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
-                                            SelectionVector *no_match_sel) {
+                                            SelectionVector *no_match_sel, idx_t no_match_offset) {
 	D_ASSERT(residual_state);
 	D_ASSERT(residual_executor);
 
@@ -1030,10 +1032,10 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 	}
 
 	if (no_match_sel) {
-		idx_t no_match_count = match_count - new_match_count;
-		for (idx_t i = 0; i < no_match_count; i++) {
+		idx_t residual_no_match_count = match_count - new_match_count;
+		for (idx_t i = 0; i < residual_no_match_count; i++) {
 			idx_t dense_idx = remaining_sel.get_index(i);
-			no_match_sel->set_index(i, match_sel.get_index(dense_idx));
+			no_match_sel->set_index(no_match_offset + i, match_sel.get_index(dense_idx));
 		}
 	}
 

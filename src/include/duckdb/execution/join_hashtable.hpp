@@ -145,7 +145,7 @@ public:
 
 		//! Apply residual predicate filtering
 		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
-		                             SelectionVector *no_match_sel);
+		                             SelectionVector *no_match_sel, idx_t no_match_offset = 0);
 
 	private:
 		unique_ptr<ExpressionExecutor> residual_executor;
