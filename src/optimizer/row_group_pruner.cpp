@@ -155,8 +155,8 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 		return nullptr;
 	}
 
-	auto col_idx = pushdown_targets[0].columns[0].probe_column_index.column_index;
-	column_index = logical_get.GetColumnIds()[col_idx];
+	auto &binding = pushdown_targets[0].columns[0].probe_column_index;
+	column_index = logical_get.GetColumnIndex(binding);
 
 	return logical_get;
 }

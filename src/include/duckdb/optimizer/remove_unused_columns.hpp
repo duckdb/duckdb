@@ -150,21 +150,22 @@ private:
 	void CheckPushdownExtract(LogicalOperator &op);
 	void RewriteExpressions(LogicalProjection &proj, idx_t expression_count);
 	void WritePushdownExtractColumns(
-	    const ColumnBinding &binding, ReferencedColumn &col, idx_t original_idx, const LogicalType &column_type,
-	    const std::function<idx_t(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)> &callback);
+	    ReferencedColumn &col,
+	    const std::function<ProjectionIndex(const ColumnIndex &new_index, optional_ptr<const LogicalType> cast_type)>
+	        &callback);
 	unordered_map<TableIndex, MaterializedCTEInfo> &GetCTEMap();
 	optional_ptr<unordered_map<TableIndex, MaterializedCTEInfo>> TryGetCTEMap();
 };
 
 class CTERefPruner : public LogicalOperatorVisitor {
 public:
-	CTERefPruner(const TableIndex table_index, const unordered_set<idx_t> &referenced_columns);
+	CTERefPruner(const TableIndex table_index, const unordered_set<ProjectionIndex> &referenced_columns);
 
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
 	const TableIndex cte_index;
-	const unordered_set<idx_t> &referenced_columns;
+	const unordered_set<ProjectionIndex> &referenced_columns;
 
 public:
 	vector<ReplacementBinding> binding_replacements;

@@ -99,6 +99,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 	//! Whether Parquet timestamp columns should be written as INT96 for Impala / Spark compatibility
 	bool write_timestamp_as_int96 = false;
+
+	//! Whether TIMESTAMP (without timezone) should be marked as adjusted to UTC in the Parquet schema
+	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::AUTO;
 };
 
 void ParquetWriteGlobalState::LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
@@ -143,6 +146,7 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["geoparquet_version"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::WRITE_ONLY);
 	copy_options["shredding"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["write_timestamp_as_int96"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
+	copy_options["timestamp_is_adjusted_to_utc"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 }
 
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
@@ -333,6 +337,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		} else if (loption == "write_timestamp_as_int96") {
 			bind_data->write_timestamp_as_int96 =
 			    BooleanValue::Get(option.second[0].DefaultCastAs(LogicalType::BOOLEAN));
+		} else if (loption == "timestamp_is_adjusted_to_utc") {
+			bind_data->timestamp_is_adjusted_to_utc =
+			    EnumUtil::FromString<TimeStampIsAdjustedToUTC>(StringUtil::Upper(option.second[0].ToString()));
 		} else {
 			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -365,7 +372,8 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
 	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
 	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
-	    parquet_bind.geoparquet_version, parquet_bind.write_timestamp_as_int96);
+	    parquet_bind.geoparquet_version, parquet_bind.write_timestamp_as_int96,
+	    parquet_bind.timestamp_is_adjusted_to_utc);
 	return std::move(global_state);
 }
 
@@ -567,6 +575,34 @@ GeoParquetVersion EnumUtil::FromString<GeoParquetVersion>(const char *value) {
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
+template <>
+const char *EnumUtil::ToChars<TimeStampIsAdjustedToUTC>(TimeStampIsAdjustedToUTC value) {
+	switch (value) {
+	case TimeStampIsAdjustedToUTC::AUTO:
+		return "AUTO";
+	case TimeStampIsAdjustedToUTC::ALWAYS_TRUE:
+		return "TRUE";
+	case TimeStampIsAdjustedToUTC::ALWAYS_FALSE:
+		return "FALSE";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+TimeStampIsAdjustedToUTC EnumUtil::FromString<TimeStampIsAdjustedToUTC>(const char *value) {
+	if (StringUtil::Equals(value, "AUTO")) {
+		return TimeStampIsAdjustedToUTC::AUTO;
+	}
+	if (StringUtil::Equals(value, "TRUE")) {
+		return TimeStampIsAdjustedToUTC::ALWAYS_TRUE;
+	}
+	if (StringUtil::Equals(value, "FALSE")) {
+		return TimeStampIsAdjustedToUTC::ALWAYS_FALSE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
 static optional_idx SerializeCompressionLevel(const int64_t compression_level) {
 	return compression_level < 0 ? NumericLimits<idx_t>::Maximum() - NumericCast<idx_t>(AbsValue(compression_level))
 	                             : NumericCast<idx_t>(compression_level);
@@ -622,6 +658,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.geoparquet_version);
 	serializer.WritePropertyWithDefault<ShreddingType>(117, "shredding_types", bind_data.shredding_types,
 	                                                   default_value.shredding_types);
+	serializer.WritePropertyWithDefault(118, "timestamp_is_adjusted_to_utc", bind_data.timestamp_is_adjusted_to_utc,
+	                                    default_value.timestamp_is_adjusted_to_utc);
 	serializer.WritePropertyWithDefault(119, "write_timestamp_as_int96", bind_data.write_timestamp_as_int96,
 	                                    default_value.write_timestamp_as_int96);
 }
@@ -659,6 +697,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    deserializer.ReadPropertyWithExplicitDefault(116, "geoparquet_version", default_value.geoparquet_version);
 	data->shredding_types =
 	    deserializer.ReadPropertyWithExplicitDefault<ShreddingType>(117, "shredding_types", ShreddingType());
+	data->timestamp_is_adjusted_to_utc = deserializer.ReadPropertyWithExplicitDefault(
+	    118, "timestamp_is_adjusted_to_utc", default_value.timestamp_is_adjusted_to_utc);
 	data->write_timestamp_as_int96 = deserializer.ReadPropertyWithExplicitDefault(
 	    119, "write_timestamp_as_int96", default_value.write_timestamp_as_int96);
 

@@ -137,7 +137,7 @@ MapType <- 'MAP' Parens(List(Type))
 ColIdType <- ColId Type
 ArrayBounds <- SquareBracketsArray / 'ARRAY'
 ArrayKeyword <- 'ARRAY'
-SquareBracketsArray <- '[' NumberLiteral? ']'
+SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId
 TimeTypeId <- 'TIME'
@@ -1024,7 +1024,7 @@ PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
 TypeList <- Parens(List(Type))
 
 CreateStatement <- 'CREATE' OrReplace? Temporary? CreateStatementVariation
-CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt
+CreateStatementVariation <- CreateTableStmt / CreateMacroStmt / CreateSequenceStmt / CreateTypeStmt / CreateSchemaStmt / CreateViewStmt / CreateIndexStmt / CreateSecretStmt / CreateTriggerStmt
 OrReplace <- 'OR' 'REPLACE'
 Temporary <- Persistent / TempPersistent / TemporaryPersistent
 Persistent <- 'PERSISTENT'
@@ -1033,10 +1033,16 @@ TemporaryPersistent <- 'TEMPORARY'
 
 CreateTableStmt <- 'TABLE' IfNotExists? QualifiedName (CreateTableAs / CreateColumnList) CommitAction?
 
-CreateTableAs <- IdentifierList? 'AS' SelectStatementInternal WithData?
+CreateTableAs <- IdentifierList? PartitionSortedOptions? WithList? 'AS' SelectStatementInternal WithData?
+PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions
+PartitionOptSortedOptions <- PartitionOptions SortedOptions?
+SortedOptPartitionOptions <- SortedOptions PartitionOptions?
+PartitionOptions <- 'PARTITIONED' 'BY' Parens(List(Expression))
+SortedOptions <- 'SORTED' 'BY' Parens(List(Expression))
+
 WithData <- 'WITH' 'NO'? 'DATA'
 IdentifierList <- Parens(List(Identifier))
-CreateColumnList <- Parens(CreateTableColumnList)
+CreateColumnList <- Parens(CreateTableColumnList) PartitionSortedOptions? WithList?
 IfNotExists <- 'IF' 'NOT' 'EXISTS'
 QualifiedName <- CatalogReservedSchemaIdentifier / SchemaReservedIdentifierOrStringLiteral / IdentifierOrStringLiteral
 SchemaReservedIdentifierOrStringLiteral <- SchemaQualification ReservedIdentifierOrStringLiteral
@@ -1109,10 +1115,13 @@ Oids <- ('WITH' / 'WITHOUT') 'OIDS'
 IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 Unique <- 'UNIQUE'
 IndexType <- 'USING' Identifier
-RelOption <- DottedIdentifier ('=' DefArg)?
-DefArg <- ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral
+RelOption <- RelOptionName RelOptionArgumentOpt?
+RelOptionName <- DottedIdentifier / StringLiteral
+RelOptionArgumentOpt <- '=' DefArg
+DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
 ReservedKeywordValue <- ReservedKeyword
 NoneLiteral <- 'NONE'
+
 LoadStatement <- 'LOAD' ColIdOrString
 InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
 FromSource <- 'FROM' (Identifier / StringLiteral)
@@ -1463,7 +1472,8 @@ AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDataba
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName AlterTableOptions
 AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
 
-AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy
+AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability /
+        RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
 
 AddConstraint <- 'ADD' TopLevelConstraint
 AddColumn <- 'ADD' 'COLUMN'? IfNotExists? AddColumnEntry
@@ -1477,6 +1487,8 @@ SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
 SetSortedBy <- 'SET' 'SORTED' 'BY' Parens(OrderByExpressions)
 ResetSortedBy <- 'RESET' 'SORTED' 'BY'
+SetOptions <- 'SET' RelOptionList
+ResetOptions <- 'RESET' RelOptionList
 
 AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
 
@@ -1579,6 +1591,27 @@ CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
 CommentValue <- 'NULL' / StringLiteral
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? QualifiedName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
+
+TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+
+TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
+TriggerBefore <- 'BEFORE'
+TriggerAfter <- 'AFTER'
+TriggerInsteadOf <- 'INSTEAD' 'OF'
+
+TriggerEvent <- TriggerEventUpdateOf / TriggerEventInsert / TriggerEventDelete / TriggerEventUpdate
+TriggerEventInsert <- 'INSERT'
+TriggerEventDelete <- 'DELETE'
+TriggerEventUpdate <- 'UPDATE'
+TriggerEventUpdateOf <- 'UPDATE' 'OF' TriggerColumnList
+
+TriggerColumnList <- List(ColId)
+
+ForEachClause <- ForEachRow / ForEachStatement
+ForEachRow <- 'FOR' 'EACH' 'ROW'
+ForEachStatement <- 'FOR' 'EACH' 'STATEMENT'
+
 AttachStatement <- 'ATTACH' OrReplace? IfNotExists? Database? DatabasePath AttachAlias? AttachOptions?
 
 Database <- 'DATABASE'

@@ -32,7 +32,7 @@ public:
 		return GetMap<TYPE>().empty();
 	}
 
-	void Insert(const idx_t original, const idx_t canonical) {
+	void Insert(const ProjectionIndex original, const ProjectionIndex canonical) {
 		D_ASSERT(to_canonical.find(original) == to_canonical.end());
 		D_ASSERT(restore_original.find(canonical) == restore_original.end());
 		to_canonical.emplace(make_pair(original, canonical));
@@ -40,21 +40,21 @@ public:
 	}
 
 	template <ConversionType TYPE>
-	idx_t Get(const idx_t index) const {
+	ProjectionIndex Get(const ProjectionIndex index) const {
 		D_ASSERT(!Empty<TYPE>());
 		return GetMap<TYPE>().at(index);
 	}
 
 private:
 	template <ConversionType TYPE>
-	const arena_unordered_map<idx_t, idx_t> &GetMap() const {
+	const arena_unordered_map<ProjectionIndex, ProjectionIndex> &GetMap() const {
 		return TYPE == ConversionType::TO_CANONICAL ? to_canonical : restore_original;
 	}
 
 private:
 	//! Map from original column index to canonical column index (and reverse)
-	arena_unordered_map<idx_t, idx_t> to_canonical;
-	arena_unordered_map<idx_t, idx_t> restore_original;
+	arena_unordered_map<ProjectionIndex, ProjectionIndex> to_canonical;
+	arena_unordered_map<ProjectionIndex, ProjectionIndex> restore_original;
 };
 
 class PlanSignatureTableIndexMap {
@@ -268,12 +268,12 @@ private:
 				auto &column_index_map = table_index_map.at(table_indices[0]);
 				if (projection_ids.empty()) {
 					for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-						const auto primary_index = column_ids[col_idx].GetPrimaryIndex();
-						column_index_map.Insert(col_idx, primary_index);
+						ProjectionIndex primary_index(column_ids[col_idx].GetPrimaryIndex());
+						column_index_map.Insert(ProjectionIndex(col_idx), primary_index);
 					}
 				} else {
 					for (const auto &proj_id : projection_ids) {
-						const auto primary_index = column_ids[proj_id].GetPrimaryIndex();
+						ProjectionIndex primary_index(column_ids[proj_id.index].GetPrimaryIndex());
 						column_index_map.Insert(proj_id, primary_index);
 					}
 				}
@@ -380,11 +380,11 @@ private:
 	//! Temporary vector to store table indices
 	vector<TableIndex> table_indices;
 	//! Temporary vector to store projection maps
-	vector<vector<idx_t>> projection_maps;
+	vector<vector<ProjectionIndex>> projection_maps;
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
 	vector<ColumnIndex> column_ids;
-	vector<idx_t> projection_ids;
+	vector<ProjectionIndex> projection_ids;
 	vector<pair<string, optional_idx>> expression_info;
 	vector<unique_ptr<LogicalOperator>> children;
 };
@@ -823,7 +823,7 @@ public:
 						}
 						D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
 						select_list.emplace_back(make_uniq<BoundColumnRefExpression>(
-						    types[cte_col_idx], ColumnBinding(cte_ref_index, cte_col_idx)));
+						    types[cte_col_idx], ColumnBinding(cte_ref_index, ProjectionIndex(cte_col_idx))));
 					}
 
 					// Place the projection on top

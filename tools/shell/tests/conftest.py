@@ -40,6 +40,8 @@ class TestResult:
             return
         if isinstance(expected, list):
             expected = "\n".join(expected)
+        if self.status_code != 0:
+            print(self.stderr, file=sys.stderr)
         assert self.status_code == 0
         if not is_needle_in_haystack(expected, self.stdout):
             print(self.stdout, file=sys.stderr)

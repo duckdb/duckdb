@@ -27,6 +27,7 @@
 #include "parquet_geometry.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 class FileSystem;
@@ -54,6 +55,15 @@ struct ParquetBloomFilterEntry {
 enum class ParquetVersion : uint8_t {
 	V1 = 1, //! Excludes DELTA_BINARY_PACKED, DELTA_LENGTH_BYTE_ARRAY, BYTE_STREAM_SPLIT
 	V2 = 2, //! Includes the encodings above
+};
+
+enum class TimeStampIsAdjustedToUTC : uint8_t {
+	//! true if TZ, false if not
+	AUTO,
+	//! Always true
+	ALWAYS_TRUE,
+	//! Always false
+	ALWAYS_FALSE,
 };
 
 class ParquetWriteTransformData {
@@ -111,7 +121,8 @@ public:
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, optional_idx dictionary_size_limit,
 	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
 	              double bloom_filter_false_positive_ratio, int64_t compression_level, ParquetVersion parquet_version,
-	              GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96);
+	              GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96,
+	              TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc);
 	~ParquetWriter();
 
 public:
@@ -124,7 +135,8 @@ public:
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type,
 	                                                          bool write_timestamp_as_int96);
 	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
-	                                bool allow_geometry, ClientContext &context, bool write_timestamp_as_int96);
+	                                bool allow_geometry, ClientContext &context, bool write_timestamp_as_int96,
+	                                TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc);
 
 	ClientContext &GetContext() {
 		return context;
@@ -174,6 +186,9 @@ public:
 	bool WriteTimestampAsInt96() const {
 		return write_timestamp_as_int96;
 	}
+	TimeStampIsAdjustedToUTC TimestampIsAdjustedToUTC() const {
+		return timestamp_is_adjusted_to_utc;
+	}
 	const string &GetFileName() const {
 		return file_name;
 	}
@@ -216,6 +231,7 @@ private:
 	ParquetVersion parquet_version;
 	GeoParquetVersion geoparquet_version;
 	bool write_timestamp_as_int96;
+	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc;
 
 	unique_ptr<BufferedFileWriter> writer;
 	//! Atomics to reduce contention when rotating writes to multiple Parquet files

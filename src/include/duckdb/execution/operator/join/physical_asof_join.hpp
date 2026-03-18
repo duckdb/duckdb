@@ -35,7 +35,7 @@ public:
 	vector<BoundOrderByNode> rhs_orders;
 
 	// Projection mappings
-	vector<column_t> right_projection_map;
+	vector<idx_t> right_projection_map;
 
 protected:
 	// CachingOperator Interface

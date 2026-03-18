@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 
 namespace duckdb {
 

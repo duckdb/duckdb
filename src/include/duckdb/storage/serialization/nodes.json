@@ -429,7 +429,7 @@
       {
         "id": 101,
         "name": "column_index",
-        "type": "idx_t"
+        "type": "ProjectionIndex"
       }
     ],
     "pointer_type": "none"

@@ -1,4 +1,5 @@
 #include "transformer/peg_transformer.hpp"
+#include "duckdb/common/enums/trigger_type.hpp"
 #include "matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
@@ -26,7 +27,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options) {
+unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
+                                                          Matcher &root_matcher) {
 	string token_stream;
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
@@ -35,8 +37,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 	ParseResultAllocator parse_result_allocator;
 	idx_t max_token_index = 0;
 	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case);
-	MatcherAllocator allocator;
-	auto &matcher = Matcher::RootMatcher(allocator);
+	auto &matcher = root_matcher;
 	auto match_result = matcher.MatchParseResult(state);
 	if (match_result == nullptr || state.token_index < state.tokens.size()) {
 		idx_t error_token_idx = state.GetMaxTokenIndex();
@@ -110,6 +111,8 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformSequenceName);
 	REGISTER_TRANSFORM(TransformSetSortedBy);
 	REGISTER_TRANSFORM(TransformResetSortedBy);
+	REGISTER_TRANSFORM(TransformSetOptions);
+	REGISTER_TRANSFORM(TransformResetOptions);
 }
 
 void PEGTransformerFactory::RegisterAttach() {
@@ -217,6 +220,8 @@ void PEGTransformerFactory::RegisterCreateIndex() {
 	REGISTER_TRANSFORM(TransformRelOptionOrOids);
 	REGISTER_TRANSFORM(TransformRelOptionList);
 	REGISTER_TRANSFORM(TransformOids);
+	REGISTER_TRANSFORM(TransformRelOptionName);
+	REGISTER_TRANSFORM(TransformRelOptionArgumentOpt);
 	REGISTER_TRANSFORM(TransformRelOption);
 	REGISTER_TRANSFORM(TransformIndexName);
 }
@@ -265,6 +270,11 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformIdentifierList);
 	REGISTER_TRANSFORM(TransformCreateColumnList);
 	REGISTER_TRANSFORM(TransformCreateTableColumnList);
+	REGISTER_TRANSFORM(TransformPartitionSortedOptions);
+	REGISTER_TRANSFORM(TransformPartitionOptSortedOptions);
+	REGISTER_TRANSFORM(TransformSortedOptPartitionOptions);
+	REGISTER_TRANSFORM(TransformPartitionOptions);
+	REGISTER_TRANSFORM(TransformSortedOptions);
 	REGISTER_TRANSFORM(TransformIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformColIdOrString);
 	REGISTER_TRANSFORM(TransformColLabelOrString);
@@ -315,6 +325,19 @@ void PEGTransformerFactory::RegisterCreateType() {
 
 void PEGTransformerFactory::RegisterCreateView() {
 	REGISTER_TRANSFORM(TransformCreateViewStmt);
+}
+
+void PEGTransformerFactory::RegisterCreateTrigger() {
+	REGISTER_TRANSFORM(TransformCreateTriggerStmt);
+	REGISTER_TRANSFORM(TransformForEachClause);
+	REGISTER_TRANSFORM(TransformTriggerTiming);
+	REGISTER_TRANSFORM(TransformTriggerEvent);
+	REGISTER_TRANSFORM(TransformTriggerEventInsert);
+	REGISTER_TRANSFORM(TransformTriggerEventDelete);
+	REGISTER_TRANSFORM(TransformTriggerEventUpdate);
+	REGISTER_TRANSFORM(TransformTriggerEventUpdateOf);
+	REGISTER_TRANSFORM(TransformTriggerColumnList);
+	REGISTER_TRANSFORM(TransformTriggerBody);
 }
 
 void PEGTransformerFactory::RegisterDeallocate() {
@@ -911,6 +934,12 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<CatalogType>("CommentType", CatalogType::TYPE_ENTRY);
 	RegisterEnum<CatalogType>("CommentColumn", CatalogType::INVALID);
 
+	RegisterEnum<TriggerTiming>("TriggerBefore", TriggerTiming::BEFORE);
+	RegisterEnum<TriggerTiming>("TriggerAfter", TriggerTiming::AFTER);
+	RegisterEnum<TriggerTiming>("TriggerInsteadOf", TriggerTiming::INSTEAD_OF);
+	RegisterEnum<TriggerForEach>("ForEachRow", TriggerForEach::ROW);
+	RegisterEnum<TriggerForEach>("ForEachStatement", TriggerForEach::STATEMENT);
+
 	RegisterEnum<string>("MinValue", "minvalue");
 	RegisterEnum<string>("MaxValue", "maxvalue");
 
@@ -1009,6 +1038,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateTable();
 	RegisterCreateType();
 	RegisterCreateView();
+	RegisterCreateTrigger();
 	RegisterDeallocate();
 	RegisterDelete();
 	RegisterDetach();

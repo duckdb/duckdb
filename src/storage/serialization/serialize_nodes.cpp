@@ -183,13 +183,13 @@ CaseCheck CaseCheck::Deserialize(Deserializer &deserializer) {
 
 void ColumnBinding::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<TableIndex>(100, "table_index", table_index);
-	serializer.WritePropertyWithDefault<idx_t>(101, "column_index", column_index);
+	serializer.WritePropertyWithDefault<ProjectionIndex>(101, "column_index", column_index);
 }
 
 ColumnBinding ColumnBinding::Deserialize(Deserializer &deserializer) {
 	ColumnBinding result;
 	deserializer.ReadPropertyWithDefault<TableIndex>(100, "table_index", result.table_index);
-	deserializer.ReadPropertyWithDefault<idx_t>(101, "column_index", result.column_index);
+	deserializer.ReadPropertyWithDefault<ProjectionIndex>(101, "column_index", result.column_index);
 	return result;
 }
 

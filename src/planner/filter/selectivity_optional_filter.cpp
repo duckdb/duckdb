@@ -12,17 +12,9 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression/compression.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
-
-constexpr float SelectivityOptionalFilter::MIN_MAX_THRESHOLD;
-constexpr idx_t SelectivityOptionalFilter::MIN_MAX_CHECK_N;
-
-constexpr float SelectivityOptionalFilter::BF_THRESHOLD;
-constexpr idx_t SelectivityOptionalFilter::BF_CHECK_N;
-
-constexpr float SelectivityOptionalFilter::PHJ_THRESHOLD;
-constexpr idx_t SelectivityOptionalFilter::PHJ_CHECK_N;
 
 SelectivityOptionalFilterState::SelectivityStats::SelectivityStats(const idx_t n_vectors_to_check,
                                                                    const float selectivity_threshold)
@@ -63,10 +55,54 @@ double SelectivityOptionalFilterState::SelectivityStats::GetSelectivity() const 
 	return static_cast<double>(tuples_accepted) / static_cast<double>(tuples_processed);
 }
 
-SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> filter, const float selectivity_threshold,
-                                                     const idx_t n_vectors_to_check)
+static float GetSelectivityThresholdForType(SelectivityOptionalFilterType type) {
+	static constexpr float MIN_MAX_THRESHOLD = 0.9f;
+	static constexpr float BF_THRESHOLD = 0.5f;
+	static constexpr float PHJ_THRESHOLD = 0.3f;
+	static constexpr float PRF_THRESHOLD = 0.5f;
+
+	switch (type) {
+	case SelectivityOptionalFilterType::MIN_MAX:
+		return MIN_MAX_THRESHOLD;
+	case SelectivityOptionalFilterType::BF:
+		return BF_THRESHOLD;
+	case SelectivityOptionalFilterType::PHJ:
+		return PHJ_THRESHOLD;
+	case SelectivityOptionalFilterType::PRF:
+		return PRF_THRESHOLD;
+	default:
+		throw NotImplementedException("GetSelectivityThresholdForType");
+	}
+}
+
+static idx_t GetCheckNForType(SelectivityOptionalFilterType type) {
+	static constexpr idx_t MIN_MAX_CHECK_N = 6;
+	static constexpr idx_t BF_CHECK_N = 6;
+	static constexpr idx_t PHJ_CHECK_N = 6;
+	static constexpr idx_t PRF_CHECK_N = 6;
+
+	switch (type) {
+	case SelectivityOptionalFilterType::MIN_MAX:
+		return MIN_MAX_CHECK_N;
+	case SelectivityOptionalFilterType::BF:
+		return BF_CHECK_N;
+	case SelectivityOptionalFilterType::PHJ:
+		return PHJ_CHECK_N;
+	case SelectivityOptionalFilterType::PRF:
+		return PRF_CHECK_N;
+	default:
+		throw NotImplementedException("GetCheckNForType");
+	}
+}
+
+SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> filter, float selectivity_threshold,
+                                                     idx_t n_vectors_to_check)
     : OptionalFilter(std::move(filter)), selectivity_threshold(selectivity_threshold),
       n_vectors_to_check(n_vectors_to_check) {
+}
+
+SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> filter, SelectivityOptionalFilterType type)
+    : SelectivityOptionalFilter(std::move(filter), GetSelectivityThresholdForType(type), GetCheckNForType(type)) {
 }
 
 FilterPropagateResult SelectivityOptionalFilter::CheckStatistics(BaseStatistics &stats) const {

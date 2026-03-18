@@ -11,6 +11,8 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
 
 namespace duckdb {
 
@@ -883,6 +885,10 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
 		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
 		return perfect_hash_join_filter.FilterValue(constant);
+	}
+	case TableFilterType::PREFIX_RANGE_FILTER: {
+		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
+		return prefix_range_filter.FilterValue(constant);
 	}
 	default:
 		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",

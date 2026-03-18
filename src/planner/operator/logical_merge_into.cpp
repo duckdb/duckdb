@@ -30,7 +30,7 @@ vector<ColumnBinding> LogicalMergeInto::GetColumnBindings() {
 	if (return_chunk) {
 		return GenerateColumnBindings(table_index, table.GetTypes().size() + 1);
 	}
-	return {ColumnBinding(TableIndex(0), 0)};
+	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
 }
 
 void LogicalMergeInto::ResolveTypes() {

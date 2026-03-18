@@ -30,6 +30,8 @@
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -467,7 +469,8 @@ bool ExtractComparisonsAndInFilters(const TableFilter &filter, vector<const_refe
 		return true;
 	}
 	case TableFilterType::BLOOM_FILTER:
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
 		return true; // We can't use it for finding cmp/in filters, but we can just ignore it
 	}
 	case TableFilterType::CONJUNCTION_AND: {
@@ -529,7 +532,7 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
 
 vector<unique_ptr<Expression>> ExtractFilterExpressions(const ColumnDefinition &col, const TableFilter &filter,
                                                         idx_t storage_idx) {
-	ColumnBinding binding(TableIndex(0), storage_idx);
+	ColumnBinding binding(TableIndex(0), ProjectionIndex(storage_idx));
 	auto bound_ref = make_uniq<BoundColumnRefExpression>(col.Name(), col.Type(), binding);
 
 	// Extract all comparisons and IN filters from nested filters
@@ -589,8 +592,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
 
 			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
-				bound_column_ref_expr.binding.column_index = updated_index_column;
+			if (bound_column_ref_expr.binding.column_index.index == indexed_columns[0]) {
+				bound_column_ref_expr.binding.column_index.index = updated_index_column;
 			}
 		});
 	}
