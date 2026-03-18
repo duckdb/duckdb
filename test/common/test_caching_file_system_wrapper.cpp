@@ -48,6 +48,45 @@ public:
 	}
 };
 
+// A file system that blocks [Read] calls until a barrier is signaled, allowing controlled interleaving of concurrent reads.
+class BarrierFileSystem : public LocalFileSystem {
+public:
+	mutable mutex mu;
+	bool block_reads DUCKDB_GUARDED_BY(mu) = false;
+	std::condition_variable cv;
+
+	string GetName() const override {
+		return "BarrierFileSystem";
+	}
+
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		{
+			unique_lock<mutex> lock(mu);
+			cv.wait(lock, [&]() DUCKDB_REQUIRES(mu) { return !block_reads; });
+		}
+		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
+	}
+
+	void BlockReads() {
+		lock_guard<mutex> lock(mu);
+		block_reads = true;
+	}
+
+	void UnblockReads() {
+		lock_guard<mutex> lock(mu);
+		block_reads = false;
+		cv.notify_all();
+	}
+
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, TestDirectoryPath());
+	}
+
+	bool CanSeek() override {
+		return true;
+	}
+};
+
 // RAII wrapper for test file creation and cleanup
 class TestFileGuard {
 public:
@@ -724,6 +763,76 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 		REQUIRE(handles[0].start_offset == 0);
 		REQUIRE(handles[0].length == 100);
 	}
+}
+
+TEST_CASE("FetchBlockTask does not cache stale data after invalidation", "[file_system][caching]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto barrier_fs = make_uniq<BarrierFileSystem>();
+	auto *barrier_fs_ptr = barrier_fs.get();
+	auto normal_fs = make_uniq<TrackingFileSystem>();
+
+	const idx_t BLOCK_SIZE = ExternalFileCache::LOCAL_FILE_CACHE_BLOCK_SIZE;
+	const idx_t FILE_SIZE = BLOCK_SIZE;
+
+	string content_v1(FILE_SIZE, 'A');
+	TestFileGuard test_file("test_invalidation_race.bin", content_v1);
+
+	// Thread A uses barrier_fs, which will be blocked during read.
+	CachingFileSystem cfs_slow(*barrier_fs, db_instance);
+	// Thread B uses normal_fs, which read immediately.
+	CachingFileSystem cfs_fast(*normal_fs, db_instance);
+
+	auto make_file_info = [&](bool validate) {
+		OpenFileInfo info(test_file.GetPath());
+		info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(validate);
+		return info;
+	};
+
+	// Step 1: Thread A opens file at v1 and starts reading
+	barrier_fs_ptr->BlockReads();
+	auto file_info_a = make_file_info(true);
+	auto handle_a = cfs_slow.OpenFile(file_info_a, FileFlags::FILE_FLAGS_READ);
+
+	std::thread thread_a([&]() {
+		// This will block in the barrier FS until unblocked
+		handle_a->Read(FILE_SIZE, 0);
+	});
+
+	// Step 2: Overwrite file with v2 content (all 'B's) and wait for mtime to change
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	{
+		auto local_fs = FileSystem::CreateLocal();
+		auto write_handle =
+		    local_fs->OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+		string content_v2(FILE_SIZE, 'B');
+		write_handle->Write(QueryContext(), const_cast<char *>(content_v2.data()), content_v2.size(), 0);
+		write_handle->Sync();
+	}
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	// Step 3: Thread B opens the same file (with validation), triggering invalidation and caching v2
+	auto file_info_b = make_file_info(true);
+	auto handle_b = cfs_fast.OpenFile(file_info_b, FileFlags::FILE_FLAGS_READ);
+	auto group_b = handle_b->Read(FILE_SIZE, 0);
+
+	// Verify Thread B got v2 data
+	string result_b(FILE_SIZE, '\0');
+	group_b.CopyTo(reinterpret_cast<data_ptr_t>(&result_b[0]), FILE_SIZE);
+	REQUIRE(result_b == string(FILE_SIZE, 'B'));
+
+	// Step 4: Unblock Thread A — its FetchBlockTask should detect the version mismatch
+	barrier_fs_ptr->UnblockReads();
+	thread_a.join();
+
+	// Step 5: Verify the cache still contains v2 data
+	auto file_info_check = make_file_info(true);
+	auto handle_check = cfs_fast.OpenFile(file_info_check, FileFlags::FILE_FLAGS_READ);
+	auto group_check = handle_check->Read(FILE_SIZE, 0);
+	string result_check(FILE_SIZE, '\0');
+	group_check.CopyTo(reinterpret_cast<data_ptr_t>(&result_check[0]), FILE_SIZE);
+	REQUIRE(result_check == string(FILE_SIZE, 'B'));
 }
 
 } // namespace duckdb
