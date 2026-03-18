@@ -9,6 +9,7 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include <new>
 
 namespace duckdb {
 
@@ -238,15 +239,25 @@ private:
 	void Grow(ArenaAllocator &allocator) {
 		D_ASSERT(allocated_capacity < capacity);
 		const auto old_capacity = allocated_capacity;
-		allocated_capacity = MaxValue<idx_t>(1, allocated_capacity * 2);
-		allocated_capacity = MinValue(allocated_capacity, capacity);
+		if (allocated_capacity == 0) {
+			allocated_capacity = 1;
+		} else if (allocated_capacity > capacity / 2) {
+			allocated_capacity = capacity;
+		} else {
+			allocated_capacity *= 2;
+		}
 
-		const auto old_size = old_capacity * sizeof(STORAGE_TYPE);
 		const auto new_size = allocated_capacity * sizeof(STORAGE_TYPE);
-		auto ptr = heap ? allocator.ReallocateAligned(reinterpret_cast<data_ptr_t>(heap), old_size, new_size)
-		                : allocator.AllocateAligned(new_size);
-		memset(ptr + old_size, 0, new_size - old_size);
-		heap = reinterpret_cast<STORAGE_TYPE *>(ptr);
+		auto new_ptr = allocator.AllocateAligned(new_size);
+		auto new_heap = reinterpret_cast<STORAGE_TYPE *>(new_ptr);
+
+		for (idx_t i = 0; i < size; i++) {
+			new (&new_heap[i]) STORAGE_TYPE(std::move(heap[i]));
+		}
+		for (idx_t i = size; i < allocated_capacity; i++) {
+			new (&new_heap[i]) STORAGE_TYPE();
+		}
+		heap = new_heap;
 	}
 
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
