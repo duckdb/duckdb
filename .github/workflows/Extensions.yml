@@ -118,8 +118,10 @@ jobs:
       main_extensions_opt_in_archs: ${{ steps.set-main-extensions.outputs.opt_in_archs }}
       rust_based_extensions_config: ${{ steps.set-rust-based-extensions.outputs.extension_config }}
       rust_based_extensions_exclude_archs: ${{ steps.set-rust-based-extensions.outputs.exclude_archs }}
-      external_extensions_config: ${{ steps.set-external-extensions.outputs.extension_config }}
-      external_extensions_exclude_archs: ${{ steps.set-external-extensions.outputs.exclude_archs }}
+      external_extensions_config: ${{ steps.set-external-extensions1.outputs.extension_config }}
+      external_extensions2_config: ${{ steps.set-external-extensions2.outputs.extension_config }}
+      external_extensions_exclude_archs: ${{ steps.set-external-extensions1.outputs.exclude_archs }}
+      external_extensions2_exclude_archs: ${{ steps.set-external-extensions2.outputs.exclude_archs }}
 
     env:
       # NOTE: on PRs we exclude some archs to speed things up
@@ -164,14 +166,27 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           cat $GITHUB_OUTPUT
 
-      - id: set-external-extensions
-        name: Configure External extensions
+      - id: set-external-extensions1
+        name: Configure External extensions (batch 1)
         env:
           CONFIG_FILE: .github/config/external_extensions.cmake
           DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
         run: |
           echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> $GITHUB_OUTPUT
           external_extensions="`cat .github/config/external_extensions.cmake`"
+          echo "extension_config<<EOF" >> $GITHUB_OUTPUT
+          echo "$external_extensions" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
+
+      - id: set-external-extensions2
+        name: Configure External extensions (batch 2)
+        env:
+          CONFIG_FILE: .github/config/external_extensions2.cmake
+          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
+        run: |
+          echo exclude_archs="$DEFAULT_EXCLUDE_ARCHS;$BASE_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS;osx_amd64" >> $GITHUB_OUTPUT
+          external_extensions="`cat .github/config/external_extensions2.cmake`"
           echo "extension_config<<EOF" >> $GITHUB_OUTPUT
           echo "$external_extensions" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -212,7 +227,7 @@ jobs:
       save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
 
   # Build the extensions from .github/config/external_extensions.cmake
-  external-extensions:
+  external-extensions1:
     name: External Extensions
     needs:
       - load-extension-configs
@@ -220,8 +235,25 @@ jobs:
     uses: ./.github/workflows/_extension_distribution.yml
     with:
       exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions_exclude_archs }}
-      artifact_prefix: external-extensions
+      artifact_prefix: external-extensions1
       extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
+      extra_toolchains: 'rust'
+      override_tag: ${{ inputs.override_git_describe }}
+      override_duckdb_version: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests == 'true' && true || false }}
+      save_cache: ${{ needs.vars.outputs.BRANCHES_TO_BE_CACHED == '' || contains(needs.vars.outputs.BRANCHES_TO_BE_CACHED, github.ref) }}
+
+  # Build the extensions from .github/config/external_extensions2.cmake
+  external-extensions2:
+    name: External Extensions (2nd batch)
+    needs:
+      - load-extension-configs
+      - vars
+    uses: ./.github/workflows/_extension_distribution.yml
+    with:
+      exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions2_exclude_archs }}
+      artifact_prefix: external-extensions2
+      extension_config: ${{ needs.load-extension-configs.outputs.external_extensions2_config }}
       extra_toolchains: 'rust'
       override_tag: ${{ inputs.override_git_describe }}
       override_duckdb_version: ${{ inputs.git_ref }}
@@ -235,7 +267,8 @@ jobs:
     needs:
       - main-extensions
       - rust-based-extensions
-      - external-extensions
+      - external-extensions1
+      - external-extensions2
     steps:
       - uses: actions/checkout@v4
         with:
@@ -258,8 +291,14 @@ jobs:
       - uses: actions/download-artifact@v4
         name: Download external extensions
         with:
-          pattern: external-extensions*
-          path: /tmp/repository_generation/external-extensions
+          pattern: external-extensions1*
+          path: /tmp/repository_generation/external-extensions1
+
+      - uses: actions/download-artifact@v4
+        name: Download external extensions (2nd batch)
+        with:
+          pattern: external-extensions2*
+          path: /tmp/repository_generation/external-extensions2
 
       - name: Print all extensions
         run: |
