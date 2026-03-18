@@ -62,11 +62,11 @@ class ColumnReader {
 	friend class RLEDecoder;
 
 public:
-	ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p);
+	ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema);
+	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
 	virtual void Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
@@ -78,7 +78,7 @@ public:
 	                        SelectionVector &sel, idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
 
-	ParquetReader &Reader();
+	const ParquetReader &Reader();
 	const LogicalType &Type() const {
 		return column_schema.type;
 	}
@@ -303,7 +303,7 @@ protected:
 protected:
 	const ParquetColumnSchema &column_schema;
 
-	ParquetReader &reader;
+	const ParquetReader &reader;
 	idx_t pending_skips = 0;
 	bool page_is_filtered_out = false;
 

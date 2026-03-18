@@ -365,7 +365,7 @@ optional_ptr<const GeoParquetColumnMetadata> GeoParquetFileMetadata::GetColumnMe
 	return &it->second;
 }
 
-unique_ptr<ColumnReader> GeometryColumnReader::Create(ParquetReader &reader, const ParquetColumnSchema &schema,
+unique_ptr<ColumnReader> GeometryColumnReader::Create(const ParquetReader &reader, const ParquetColumnSchema &schema,
                                                       ClientContext &context) {
 	D_ASSERT(schema.type.id() == LogicalTypeId::GEOMETRY);
 	D_ASSERT(schema.children.size() == 1 && schema.children[0].type.id() == LogicalTypeId::BLOB);
