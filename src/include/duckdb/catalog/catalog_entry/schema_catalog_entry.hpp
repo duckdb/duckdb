@@ -72,7 +72,9 @@ public:
 	//! Creates a sequence with the given name in the schema
 	virtual optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) = 0;
 	//! Creates a trigger with the given name in the schema
-	virtual optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
+		throw NotImplementedException("Triggers are not supported in schema '%s'", name);
+	}
 	//! Create a table function within the given schema
 	virtual optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction,
 	                                                       CreateTableFunctionInfo &info) = 0;
