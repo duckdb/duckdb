@@ -31,40 +31,27 @@ static const DefaultMacro internal_macros[] = {
 	{"pg_catalog", "current_schemas", "(include_implicit) AS system.main.current_schemas(include_implicit)"}, // names of schemas in search path
 
 	// privilege functions
-	{"pg_catalog", "has_any_column_privilege", "(\"table\", privilege) AS true"},                      //boolean  //does current user have privilege for any column of table
-	{"pg_catalog", "has_any_column_privilege", "(user, \"table\", privilege) AS true"},               //boolean  //does user have privilege for any column of table
-	{"pg_catalog", "has_column_privilege", "(\"table\", \"column\", privilege) AS true"},             //boolean  //does current user have privilege for column
-	{"pg_catalog", "has_column_privilege", "(user, \"table\", \"column\", privilege) AS true"},       //boolean  //does user have privilege for column
-	{"pg_catalog", "has_database_privilege", "(database, privilege) AS true"},                    //boolean  //does current user have privilege for database
-	{"pg_catalog", "has_database_privilege", "(user, database, privilege) AS true"},              //boolean  //does user have privilege for database
-	{"pg_catalog", "has_foreign_data_wrapper_privilege", "(fdw, privilege) AS true"},             //boolean  //does current user have privilege for foreign-data wrapper
-	{"pg_catalog", "has_foreign_data_wrapper_privilege", "(user, fdw, privilege) AS true"},       //boolean  //does user have privilege for foreign-data wrapper
-	{"pg_catalog", "has_function_privilege", "(function, privilege) AS true"},                    //boolean  //does current user have privilege for function
-	{"pg_catalog", "has_function_privilege", "(user, function, privilege) AS true"},              //boolean  //does user have privilege for function
-	{"pg_catalog", "has_language_privilege", "(language, privilege) AS true"},                    //boolean  //does current user have privilege for language
-	{"pg_catalog", "has_language_privilege", "(user, language, privilege) AS true"},              //boolean  //does user have privilege for language
-	{"pg_catalog", "has_schema_privilege", "(schema, privilege) AS true"},                        //boolean  //does current user have privilege for schema
-	{"pg_catalog", "has_schema_privilege", "(user, schema, privilege) AS true"},                  //boolean  //does user have privilege for schema
-	{"pg_catalog", "has_sequence_privilege", "(sequence, privilege) AS true"},                    //boolean  //does current user have privilege for sequence
-	{"pg_catalog", "has_sequence_privilege", "(user, sequence, privilege) AS true"},              //boolean  //does user have privilege for sequence
-	{"pg_catalog", "has_server_privilege", "(server, privilege) AS true"},                        //boolean  //does current user have privilege for foreign server
-	{"pg_catalog", "has_server_privilege", "(user, server, privilege) AS true"},                  //boolean  //does user have privilege for foreign server
-	{"pg_catalog", "has_table_privilege", "(\"table\", privilege) AS true"},                          //boolean  //does current user have privilege for table
-	{"pg_catalog", "has_table_privilege", "(user, \"table\", privilege) AS true"},                    //boolean  //does user have privilege for table
-	{"pg_catalog", "has_tablespace_privilege", "(tablespace, privilege) AS true"},                //boolean  //does current user have privilege for tablespace
-	{"pg_catalog", "has_tablespace_privilege", "(user, tablespace, privilege) AS true"},          //boolean  //does user have privilege for tablespace
+	{"pg_catalog", "has_any_column_privilege", "(\"table\", privilege) AS true, (user, \"table\", privilege) AS true"},               //boolean  //does current/named user have privilege for any column of table
+	{"pg_catalog", "has_column_privilege", "(\"table\", \"column\", privilege) AS true, (user, \"table\", \"column\", privilege) AS true"}, //boolean  //does current/named user have privilege for column
+	{"pg_catalog", "has_database_privilege", "(database, privilege) AS true, (user, database, privilege) AS true"},                   //boolean  //does current/named user have privilege for database
+	{"pg_catalog", "has_foreign_data_wrapper_privilege", "(fdw, privilege) AS true, (user, fdw, privilege) AS true"},                 //boolean  //does current/named user have privilege for foreign-data wrapper
+	{"pg_catalog", "has_function_privilege", "(function, privilege) AS true, (user, function, privilege) AS true"},                   //boolean  //does current/named user have privilege for function
+	{"pg_catalog", "has_language_privilege", "(language, privilege) AS true, (user, language, privilege) AS true"},                   //boolean  //does current/named user have privilege for language
+	{"pg_catalog", "has_schema_privilege", "(schema, privilege) AS true, (user, schema, privilege) AS true"},                         //boolean  //does current/named user have privilege for schema
+	{"pg_catalog", "has_sequence_privilege", "(sequence, privilege) AS true, (user, sequence, privilege) AS true"},                   //boolean  //does current/named user have privilege for sequence
+	{"pg_catalog", "has_server_privilege", "(server, privilege) AS true, (user, server, privilege) AS true"},                         //boolean  //does current/named user have privilege for foreign server
+	{"pg_catalog", "has_table_privilege", "(\"table\", privilege) AS true, (user, \"table\", privilege) AS true"},                    //boolean  //does current/named user have privilege for table
+	{"pg_catalog", "has_tablespace_privilege", "(tablespace, privilege) AS true, (user, tablespace, privilege) AS true"},             //boolean  //does current/named user have privilege for tablespace
 
 	// various postgres system functions
 	{"pg_catalog", "pg_get_viewdef", "(oid) AS (select sql from duckdb_views() v where v.view_oid=oid)"},
-	{"pg_catalog", "pg_get_constraintdef", "(constraint_oid) AS (select constraint_text from duckdb_constraints() d_constraint where d_constraint.table_oid=constraint_oid//1000000 and d_constraint.constraint_index=constraint_oid%1000000)"},
-	{"pg_catalog", "pg_get_constraintdef", "(constraint_oid, pretty_bool) AS pg_get_constraintdef(constraint_oid)"},
+	{"pg_catalog", "pg_get_constraintdef", "(constraint_oid) AS (select constraint_text from duckdb_constraints() d_constraint where d_constraint.table_oid=constraint_oid//1000000 and d_constraint.constraint_index=constraint_oid%1000000), (constraint_oid, pretty_bool) AS pg_get_constraintdef(constraint_oid)"},
 	{"pg_catalog", "pg_get_expr", "(pg_node_tree, relation_oid) AS pg_node_tree"},
 	{"pg_catalog", "format_pg_type", "(logical_type, type_name) AS case upper(logical_type) when 'FLOAT' then 'float4' when 'DOUBLE' then 'float8' when 'DECIMAL' then 'numeric' when 'ENUM' then lower(type_name) when 'VARCHAR' then 'varchar' when 'BLOB' then 'bytea' when 'TIMESTAMP' then 'timestamp' when 'TIME' then 'time' when 'TIMESTAMP WITH TIME ZONE' then 'timestamptz' when 'TIME WITH TIME ZONE' then 'timetz' when 'SMALLINT' then 'int2' when 'INTEGER' then 'int4' when 'BIGINT' then 'int8' when 'BOOLEAN' then 'bool' else lower(logical_type) end"},
 	{"pg_catalog", "format_type", "(type_oid, typemod) AS (select format_pg_type(logical_type, type_name) from duckdb_types() t where t.type_oid=type_oid) || case when typemod>0 then concat('(', typemod//1000, ',', typemod%1000, ')') else '' end"},
 	{"pg_catalog", "map_to_pg_oid", "(type_name) AS case type_name when 'bool' then 16 when 'int16' then 21 when 'int' then 23 when 'bigint' then 20 when 'date' then 1082 when 'time' then 1083 when 'datetime' then 1114 when 'dec' then 1700 when 'float' then 700 when 'double' then 701 when 'bpchar' then 1043 when 'binary' then 17 when 'interval' then 1186 when 'timestamptz' then 1184 when 'timestamp with time zone' then 1184 when 'timetz' then 1266 when 'time with time zone' then 1266 when 'bit' then 1560 when 'guid' then 2950 else null end"}, // map duckdb_oid to pg_oid. If no corresponding type, return null
 
-	{"pg_catalog", "pg_has_role", "(user, role, privilege) AS true"},         //boolean  //does user have privilege for role
-	{"pg_catalog", "pg_has_role", "(role, privilege) AS true"},               //boolean  //does current user have privilege for role
+	{"pg_catalog", "pg_has_role", "(user, role, privilege) AS true, (role, privilege) AS true"}, //boolean  //does current/named user have privilege for role
 
 	{"pg_catalog", "col_description", "(table_oid, column_number) AS NULL"},          // get comment for a table column
 	{"pg_catalog", "obj_description", "(object_oid, catalog_name) AS NULL"},          // get comment for a database object
@@ -179,27 +166,29 @@ static const DefaultMacro internal_macros[] = {
 	};
 
 unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(const DefaultMacro &default_macro) {
-	return CreateInternalMacroInfo(array_ptr<const DefaultMacro>(default_macro));
-}
-
-
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(array_ptr<const DefaultMacro> macros) {
 	auto bind_info = make_uniq<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
-	for (auto &default_macro : macros) {
-		// Build a full CREATE MACRO statement and let the parser handle parameters and defaults
-		auto sql = StringUtil::Format("CREATE MACRO __dummy__%s", default_macro.macro_definition);
-		Parser parser;
-		parser.ParseQuery(sql);
-		D_ASSERT(parser.statements.size() == 1);
-		D_ASSERT(parser.statements[0]->type == StatementType::CREATE_STATEMENT);
-		auto &create_stmt = parser.statements[0]->Cast<CreateStatement>();
-		D_ASSERT(create_stmt.info->type == CatalogType::MACRO_ENTRY);
-		auto &macro_info = create_stmt.info->Cast<CreateMacroInfo>();
-		D_ASSERT(macro_info.macros.size() == 1);
-		bind_info->macros.push_back(std::move(macro_info.macros[0]));
+	// Build a full CREATE MACRO statement and let the parser handle parameters, types, and defaults.
+	// macro_definition may contain multiple comma-separated overloads, e.g. "(x) AS x, (x, y) AS x+y".
+	auto sql = StringUtil::Format("CREATE MACRO __dummy__%s", default_macro.macro_definition);
+	Parser parser;
+	parser.ParseQuery(sql);
+	D_ASSERT(parser.statements.size() == 1);
+	D_ASSERT(parser.statements[0]->type == StatementType::CREATE_STATEMENT);
+	auto &create_stmt = parser.statements[0]->Cast<CreateStatement>();
+	D_ASSERT(create_stmt.info->type == CatalogType::MACRO_ENTRY);
+	auto &macro_info = create_stmt.info->Cast<CreateMacroInfo>();
+	// Default-bind any typed parameters (e.g. DATE, TIMESTAMP) so overload resolution works correctly.
+	// TryDefaultBind resolves built-in types without requiring a ClientContext.
+	for (auto &macro : macro_info.macros) {
+		for (auto &type : macro->types) {
+			if (type.IsUnbound()) {
+				type = UnboundType::TryDefaultBind(type);
+			}
+		}
 	}
-	bind_info->schema = macros[0].schema;
-	bind_info->name = macros[0].name;
+	bind_info->macros = std::move(macro_info.macros);
+	bind_info->schema = default_macro.schema;
+	bind_info->name = default_macro.name;
 	bind_info->temporary = true;
 	bind_info->internal = true;
 	return bind_info;
@@ -214,14 +203,7 @@ static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_sch
 	auto name = StringUtil::Lower(input_name);
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
 		if (DefaultFunctionMatches(internal_macros[index], schema, name)) {
-			// found the function! keep on iterating to find all overloads
-			idx_t overload_count;
-			for(overload_count = 1; internal_macros[index + overload_count].name; overload_count++) {
-				if (!DefaultFunctionMatches(internal_macros[index + overload_count], schema, name)) {
-					break;
-				}
-			}
-			return DefaultFunctionGenerator::CreateInternalMacroInfo(array_ptr<const DefaultMacro>(internal_macros + index, overload_count));
+			return DefaultFunctionGenerator::CreateInternalMacroInfo(internal_macros[index]);
 		}
 	}
 	return nullptr;
