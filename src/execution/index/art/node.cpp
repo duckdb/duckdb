@@ -60,34 +60,32 @@ void NodePointer::FreeTree(ART &art, NodePointer &node) {
 		return;
 	}
 
-	auto child_handler = [&](NodePointer &child) -> NodePointer {
+	auto child_handler = [](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
-		auto type = child.GetType();
+		return child;
+	};
+
+	auto post_handler = [&](NodePointer current) {
+		auto type = current.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			child.Clear();
-			return NodePointer();
+			break;
 		case NType::LEAF:
-			Leaf::DeprecatedFree(art, child);
-			return NodePointer();
+			Leaf::DeprecatedFree(art, current);
+			break;
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
 		case NType::NODE_256_LEAF:
-			FreeNode(art, child);
-			return NodePointer();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
 		case NType::NODE_256:
-			return child;
+			FreeNode(art, current);
+			break;
 		default:
 			throw InternalException("invalid node type for FreeTree: %d", static_cast<int>(type));
 		}
-	};
-
-	auto post_handler = [&](NodePointer current) {
-		FreeNode(art, current);
 	};
 
 	ARTScanPostOrder(art, node, child_handler, post_handler);

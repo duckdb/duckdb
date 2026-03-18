@@ -21,6 +21,8 @@ namespace duckdb {
 
 enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
 
+//! Pins the parent node and calls child_handler on all the children (which can perform in-place updates within
+//! the parent while it is pinned).
 template <class NODE_TYPE, class CHILD_HANDLER>
 static void ScanChildren(ART &art, NodePointer node, CHILD_HANDLER &&child_handler, vector<NodePointer> &stack) {
 	NodeHandle handle(art, node);
@@ -33,6 +35,13 @@ static void ScanChildren(ART &art, NodePointer node, CHILD_HANDLER &&child_handl
 	});
 }
 
+//! Pre-order scanner: the stack invariant is that any node pushed onto the stack has already been "handled" before
+//! pushing the pointer for that node. We first process the root node, then push it onto the stack to initialize the
+//! scan.
+//! When a node pointer is popped from the stack, a pre-order hook is called to determine if we skip the node or need
+//! to scan all the children.
+//! If the children need to be scanned, the parent is pinned in ScanChildren and any updates are performed in place
+//! within the pinned parent node.
 template <class PRE_HANDLER, class CHILD_HANDLER>
 void ARTScanPreOrder(ART &art, NodePointer &root, PRE_HANDLER &&pre_handler, CHILD_HANDLER &&child_handler) {
 	vector<NodePointer> stack;
@@ -113,10 +122,8 @@ template <class CHILD_HANDLER, class POST_HANDLER>
 void ARTScanPostOrder(ART &art, NodePointer &root, CHILD_HANDLER &&child_handler, POST_HANDLER &&post_handler) {
 	vector<ScanEntry> stack;
 
-	auto push_node = child_handler(root);
-	if (push_node.HasMetadata()) {
-		stack.push_back(ScanEntry {push_node, false});
-	}
+	D_ASSERT(root.HasMetadata());
+	stack.push_back(ScanEntry {root, false});
 
 	while (!stack.empty()) {
 		auto &entry = stack.back();
@@ -140,7 +147,7 @@ void ARTScanPostOrder(ART &art, NodePointer &root, CHILD_HANDLER &&child_handler
 		case NType::PREFIX: {
 			NodeHandle handle(art, current);
 			auto &child = *reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
-			push_node = child_handler(child);
+			auto push_node = child_handler(child);
 			if (push_node.HasMetadata()) {
 				stack.push_back(ScanEntry {push_node, false});
 			}
