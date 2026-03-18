@@ -43,6 +43,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Prepared Statement";
 	case CatalogType::SEQUENCE_ENTRY:
 		return "Sequence";
+	case CatalogType::TRIGGER_ENTRY:
+		return "Trigger";
 	case CatalogType::SECRET_ENTRY:
 		return "Secret";
 	case CatalogType::SECRET_TYPE_ENTRY:
@@ -109,6 +111,9 @@ CatalogType CatalogTypeFromString(const string &type) {
 	}
 	if (type == "Sequence") {
 		return CatalogType::SEQUENCE_ENTRY;
+	}
+	if (type == "Trigger") {
+		return CatalogType::TRIGGER_ENTRY;
 	}
 	if (type == "INVALID") {
 		return CatalogType::INVALID;
