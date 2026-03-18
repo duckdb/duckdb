@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification;
 
 statement ok
-SET timezone='Europe/Amsterdam';
+SET timezone='Europe/Paris';
 
 # Create a table spanning the autumn DST switch (2026-10-25, clocks go back at 3:00 -> 2:00)
 # This creates 10 hours of TIMESTAMPTZ data in 1-minute intervals around the switch
