@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
@@ -73,6 +74,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AllowPersistentSecretsSetting),
     DUCKDB_SETTING_CALLBACK(AllowUnredactedSecretsSetting),
     DUCKDB_SETTING_CALLBACK(AllowUnsignedExtensionsSetting),
+    DUCKDB_GLOBAL(AllowedConfigsSetting),
     DUCKDB_GLOBAL(AllowedDirectoriesSetting),
     DUCKDB_GLOBAL(AllowedPathsSetting),
     DUCKDB_SETTING(ArrowLargeBufferSizeSetting),
@@ -202,12 +204,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 96),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 40),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 115),
-                                                     DUCKDB_SETTING_ALIAS("user", 130),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 23),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 129),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("memory_limit", 97),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 41),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 116),
+                                                     DUCKDB_SETTING_ALIAS("user", 131),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 24),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 130),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -561,6 +563,14 @@ void DBConfig::CheckLock(const String &name) {
 		// we are always allowed to change these settings
 		return;
 	}
+	if (!options.allowed_configs.empty()) {
+		auto option = GetOptionByName(name);
+		auto canonical_name = option ? string(option->name) : name.ToStdString();
+		if (options.allowed_configs.find(canonical_name) != options.allowed_configs.end()) {
+			// settings that are allowed through allowed_configs
+			return;
+		}
+	}
 	// not allowed!
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
@@ -791,6 +801,37 @@ string DBConfig::SanitizeAllowedPath(const string &path_p) const {
 		result = StringUtil::Replace(result, path_sep, "/");
 	}
 	return result;
+}
+
+void DBConfig::AddAllowedConfig(const string &config_name) {
+	if (config_name.empty()) {
+		throw InvalidInputException("Cannot provide an empty string for allowed_configs");
+	}
+	duckdb::case_insensitive_set_t always_disallowed_config {"allowed_configs", "lock_configuration"};
+	if (always_disallowed_config.find(config_name) != always_disallowed_config.end()) {
+		throw InvalidInputException("Cannot include '%s' in allowed_configs", config_name);
+	}
+	// Validate that the config name refers to a known setting (built-in or extension)
+	// and resolve aliases to canonical names
+	auto option = GetOptionByName(config_name);
+	if (option) {
+		// Store the canonical name so alias lookups work in CheckLock
+		options.allowed_configs.insert(option->name);
+		return;
+	}
+	ExtensionOption extension_option;
+	if (TryGetExtensionOption(config_name, extension_option)) {
+		options.allowed_configs.insert(config_name);
+		return;
+	}
+	// Check if the setting belongs to a known extension (even if not yet loaded)
+	auto extension_name = ExtensionHelper::FindExtensionInEntries(config_name, EXTENSION_SETTINGS);
+	if (!extension_name.empty()) {
+		// Accept the setting - the extension may be autoloaded later when the setting is used
+		options.allowed_configs.insert(config_name);
+		return;
+	}
+	throw InvalidInputException("Unknown configuration option '%s' in allowed_configs", config_name);
 }
 
 void DBConfig::AddAllowedDirectory(const string &path) {
