@@ -681,62 +681,61 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 	if (source == target) {
 		return 0;
 	}
-	using L = LogicalTypeId;
 	switch (source) {
-	case L::TIMESTAMP:
-	case L::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		// native unit: microseconds
 		switch (target) {
-		case L::TIMESTAMP:
-		case L::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_TZ:
 			return 2LL * Interval::MICROS_PER_HOUR;
-		case L::DATE:
+		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY;
-		case L::TIMESTAMP_MS:
-		case L::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
 			return Interval::MICROS_PER_SEC;
 		default:
 			return -1;
 		}
-	case L::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_NS:
 		// native unit: nanoseconds
 		switch (target) {
-		case L::TIMESTAMP:
-		case L::TIMESTAMP_MS:
-		case L::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
 			return Interval::MICROS_PER_SEC * 1000LL;
-		case L::DATE:
+		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY * 1000LL;
 		default:
 			return -1;
 		}
-	case L::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_MS:
 		// native unit: milliseconds
 		switch (target) {
-		case L::DATE:
+		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY / Interval::MICROS_PER_MSEC;
-		case L::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_SEC:
 			return Interval::MICROS_PER_SEC / Interval::MICROS_PER_MSEC;
 		default:
 			return -1;
 		}
-	case L::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_SEC:
 		// native unit: seconds
 		switch (target) {
-		case L::DATE:
+		case LogicalTypeId::DATE:
 			return Interval::MICROS_PER_DAY / Interval::MICROS_PER_SEC;
 		default:
 			return -1;
 		}
-	case L::DATE:
+	case LogicalTypeId::DATE:
 		// native unit: days
 		switch (target) {
-		case L::TIMESTAMP:
-		case L::TIMESTAMP_MS:
-		case L::TIMESTAMP_SEC:
-		case L::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_NS:
 			return 0;
-		case L::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ:
 			return 1;
 		default:
 			return -1;
