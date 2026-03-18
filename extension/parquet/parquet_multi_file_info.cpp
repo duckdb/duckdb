@@ -342,7 +342,7 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 	}
 	auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &cached_metadata = parquet_data.TryLoadCaches(bind_data, context);
-	if (!cached_metadata.empty()) {
+	if (cached_metadata.empty()) {
 		// no cached metadata - bail
 		return result;
 	}
