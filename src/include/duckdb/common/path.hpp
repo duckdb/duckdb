@@ -97,6 +97,10 @@ public:
 		return is_absolute;
 	}
 
+	bool IsRelative() const {
+		return !is_absolute;
+	}
+
 	// true for all relative paths, /*,  c:/* (not c:foo), file:/*, \\?\C:\*
 	bool IsLocal() const {
 		// note: HasDrive() covers UNC locals too!
@@ -130,6 +134,14 @@ public:
 
 	Path Parent(int n = 1) const;
 
+	// does this have `ancestor` in its parentage?
+	// n=-1: any depth (strict — self does not count); n=0: equality; n>=1: exact depth
+	// e.g. Path("/a/b/c/d.txt").HasParentage("/a/b/c", 1) == true, HasParentage("/a/b/c", 2) == false
+	bool HasParentage(const Path &ancestor, int n = -1) const;
+
+	Path ToLocal() const;     // strip scheme/authority → local path; throws if non-local
+	Path ToFileLocal() const; // normalize to file:///... form; throws if non-local
+
 	// public convenience - string-to-string normalize
 	static string Normalize(const string &input) {
 		return FromString(input).ToString();
@@ -144,6 +156,12 @@ private:
 	char separator = '/';
 	bool has_trailing_separator = false;
 	bool is_absolute = false;
+
+	// True on Windows when path is local (case-insensitive filesystem), false everywhere else
+	bool IsLocalWindows() const;
+	// std::equal with case sensitivity matching the path's filesystem
+	bool SegmentsEqual(vector<string>::const_iterator a, vector<string>::const_iterator a_end,
+	                   vector<string>::const_iterator b) const;
 
 	void NormalizeSegments(const string &raw, size_t path_offset);
 

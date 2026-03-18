@@ -135,21 +135,10 @@ char Path::GetDriveChar() const {
 
 Path Path::Join(const Path &rhs) const {
 	Path lhs = *this;
-#if defined(_WIN32)
-	const bool win_local = (lhs.separator == '\\') || lhs.HasDrive();
 	const auto auth_is_eq =
-	    win_local ? StringUtil::CIEquals(lhs.authority, rhs.authority) : (lhs.authority == rhs.authority);
-	const auto seg_prefix =
-	    win_local ? (rhs.segments.size() >= lhs.segments.size() &&
-	                 std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin(),
-	                            [](const string &a, const string &b) { return StringUtil::CIEquals(a, b); }))
-	              : (rhs.segments.size() >= lhs.segments.size() &&
-	                 std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin()));
-#else
-	const auto auth_is_eq = (lhs.authority == rhs.authority);
-	const auto seg_prefix = (rhs.segments.size() >= lhs.segments.size() &&
-	                         std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin()));
-#endif
+	    lhs.IsLocalWindows() ? StringUtil::CIEquals(lhs.authority, rhs.authority) : (lhs.authority == rhs.authority);
+	const auto seg_prefix = rhs.segments.size() >= lhs.segments.size() &&
+	                        lhs.SegmentsEqual(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin());
 	if (!rhs.IsAbsolute() && !rhs.HasDrive()) {
 		lhs.segments.insert(lhs.segments.end(), rhs.segments.begin(), rhs.segments.end());
 		vector<string> result;
@@ -192,6 +181,61 @@ Path Path::Parent(int n) const {
 		dots += "/..";
 	}
 	return Join(dots);
+}
+
+bool Path::HasParentage(const Path &ancestor, int n) const {
+	if (scheme != ancestor.scheme || authority != ancestor.authority || anchor != ancestor.anchor) {
+		return false;
+	}
+	if (ancestor.segments.size() > segments.size()) {
+		return false;
+	}
+	idx_t depth = segments.size() - ancestor.segments.size();
+	if (n < 0 && depth == 0) {
+		return false; // n=-1 requires strict ancestry
+	}
+	if (n >= 0 && static_cast<idx_t>(n) != depth) {
+		return false;
+	}
+	return SegmentsEqual(ancestor.segments.begin(), ancestor.segments.end(), segments.begin());
+}
+
+Path Path::ToLocal() const {
+	if (!IsLocal()) {
+		throw InvalidInputException("Path: cannot convert non-local path to local: %s", ToString());
+	}
+	Path dst = *this;
+	dst.scheme.clear();
+	dst.authority.clear();
+	return dst;
+}
+
+// to file:/// form
+Path Path::ToFileLocal() const {
+	if (!IsLocal()) {
+		throw InvalidInputException("Path: cannot convert non-local path to file-local: %s", ToString());
+	}
+	Path dst = *this;
+	dst.scheme = "file://"; // reminder: "/" path slash is in anchor
+	dst.authority.clear();  // localhost be gone
+	return dst;
+}
+
+bool Path::IsLocalWindows() const {
+#if defined(_WIN32)
+	return IsLocal();
+#else
+	return false;
+#endif
+}
+
+bool Path::SegmentsEqual(vector<string>::const_iterator a, vector<string>::const_iterator a_end,
+                         vector<string>::const_iterator b) const {
+	if (IsLocalWindows()) {
+		bool (*ci_eq)(const string &, const string &) = StringUtil::CIEquals; // pins overload
+		return std::equal(a, a_end, b, ci_eq);
+	}
+	return std::equal(a, a_end, b);
 }
 
 // ---------------------------------------------------------------------------
