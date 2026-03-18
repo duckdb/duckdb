@@ -6,7 +6,6 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
-#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
@@ -95,7 +94,7 @@ void NodePointer::FreeTree(ART &art, NodePointer &node) {
 		FreeNode(art, current);
 	};
 
-	BufferManagedScan(art, node, pre_handler, child_handler, post_handler);
+	ARTScanner(art, node, pre_handler, child_handler, post_handler);
 	node.Clear();
 }
 
@@ -445,7 +444,7 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 		}
 	};
 
-	BufferManagedScan(art, node, pre_handler, child_handler);
+	ARTScanner(art, node, pre_handler, child_handler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -487,40 +486,40 @@ void NodePointer::Verify(ART &art) const {
 void NodePointer::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_counts) const {
 	D_ASSERT(HasMetadata());
 
-	auto handler = [&art, &node_counts](const NodePointer &node) {
-		ARTHandlingResult result;
-		const auto type = node.GetType();
+	auto pre_handler = [](NodePointer) -> ScanNodeResult {
+		return ScanNodeResult::SCAN_CHILDREN;
+	};
+
+	auto child_handler = [&](NodePointer &child) -> NodePointer {
+		D_ASSERT(child.HasMetadata());
+		auto type = child.GetType();
 		switch (type) {
 		case NType::LEAF_INLINED:
-			return ARTHandlingResult::SKIP;
+			return NodePointer();
 		case NType::LEAF: {
-			auto &leaf = Ref<Leaf>(art, node, type);
+			auto &leaf = Ref<Leaf>(art, child, type);
 			leaf.DeprecatedVerifyAllocations(art, node_counts);
-			return ARTHandlingResult::SKIP;
+			return NodePointer();
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF: {
-			result = ARTHandlingResult::SKIP;
-			break;
-		}
+		case NType::NODE_256_LEAF:
+			node_counts[GetAllocatorIdx(type)]++;
+			return NodePointer();
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
-		case NType::NODE_256: {
-			result = ARTHandlingResult::CONTINUE;
-			break;
-		}
+		case NType::NODE_256:
+			node_counts[GetAllocatorIdx(type)]++;
+			return child;
 		default:
-			throw InternalException("invalid node type for VerifyAllocations: %d", type);
+			throw InternalException("invalid node type for VerifyAllocations: %d", static_cast<int>(type));
 		}
-		node_counts[GetAllocatorIdx(type)]++;
-		return result;
 	};
 
-	ARTScanner<ARTScanHandling::EMPLACE, const NodePointer> scanner(art, handler, *this);
-	scanner.Scan(handler);
+	NodePointer root = *this;
+	ARTScanner(art, root, pre_handler, child_handler);
 }
 
 //===--------------------------------------------------------------------===//
