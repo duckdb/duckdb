@@ -95,6 +95,8 @@ public:
 	unique_ptr<ClientData> client_data;
 	//! Data for the currently running transaction
 	TransactionContext transaction;
+	//! Current trigger nesting depth (used to detect infinite trigger loops)
+	idx_t trigger_depth = 0;
 
 public:
 	MetaTransaction &ActiveTransaction() {

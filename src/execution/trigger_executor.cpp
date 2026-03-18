@@ -13,7 +13,15 @@ namespace duckdb {
 
 constexpr idx_t TriggerExecutor::MAX_TRIGGER_DEPTH;
 
-static thread_local idx_t trigger_depth = 0;
+struct TriggerDepthGuard {
+	explicit TriggerDepthGuard(idx_t &depth) : depth(depth) {
+		depth++;
+	}
+	~TriggerDepthGuard() {
+		depth--;
+	}
+	idx_t &depth;
+};
 
 static void ExecuteTriggerBody(ClientContext &context, const string &sql_body_text) {
 	Parser parser(context.GetParserOptions());
@@ -58,7 +66,7 @@ static void ExecuteTriggerBody(ClientContext &context, const string &sql_body_te
 }
 
 void TriggerExecutor::FireAfterInsert(ClientContext &context, TableCatalogEntry &table, idx_t row_count) {
-	if (trigger_depth >= MAX_TRIGGER_DEPTH) {
+	if (context.trigger_depth >= MAX_TRIGGER_DEPTH) {
 		throw InvalidInputException("Trigger recursion depth limit (%llu) exceeded — possible infinite trigger loop",
 		                            MAX_TRIGGER_DEPTH);
 	}
@@ -86,23 +94,17 @@ void TriggerExecutor::FireAfterInsert(ClientContext &context, TableCatalogEntry 
 		});
 	}
 
-	trigger_depth++;
-	try {
-		for (auto &trigger : triggers) {
-			if (trigger.for_each == TriggerForEach::ROW) {
-				for (idx_t i = 0; i < row_count; i++) {
-					ExecuteTriggerBody(context, trigger.body);
-				}
-			} else {
-				// FOR EACH STATEMENT: fire once regardless of row count
+	TriggerDepthGuard depth_guard(context.trigger_depth);
+	for (auto &trigger : triggers) {
+		if (trigger.for_each == TriggerForEach::ROW) {
+			for (idx_t i = 0; i < row_count; i++) {
 				ExecuteTriggerBody(context, trigger.body);
 			}
+		} else {
+			// FOR EACH STATEMENT: fire once regardless of row count
+			ExecuteTriggerBody(context, trigger.body);
 		}
-	} catch (...) {
-		trigger_depth--;
-		throw;
 	}
-	trigger_depth--;
 }
 
 } // namespace duckdb
