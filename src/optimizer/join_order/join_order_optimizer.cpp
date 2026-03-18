@@ -1,7 +1,11 @@
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
+#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -29,11 +33,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		return plan;
 	}
 
+	// make sure query graph manager has not extracted a relation graph already
 	LogicalOperator *op = plan.get();
 
 	// extract the relations that go into the hyper graph.
 	// We optimize the children of any non-reorderable operations we come across.
 	bool reorderable = query_graph_manager.Build(*this, *op);
+
 	// get relation_stats here since the reconstruction process will move all relations.
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 	unique_ptr<LogicalOperator> new_logical_plan = nullptr;
@@ -52,19 +58,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// now reconstruct a logical plan from the query graph plan
 		query_graph_manager.plans = &plan_enumerator.GetPlans();
 
-		// Verify that a complete plan was produced. In rare corner cases the optimizer
-		// may fail to find a plan even after generating cross products, in which case
-		// we fall back to the original (unreordered) plan.
-		unordered_set<RelationIndex> all_bindings;
-		for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
-			all_bindings.emplace(i);
-		}
-		auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(all_bindings);
-		if (query_graph_manager.plans->find(total_relation) != query_graph_manager.plans->end()) {
-			new_logical_plan = query_graph_manager.Reconstruct(std::move(plan));
-		} else {
-			new_logical_plan = std::move(plan);
-		}
+		new_logical_plan = query_graph_manager.Reconstruct(std::move(plan));
 	} else {
 		new_logical_plan = std::move(plan);
 		if (relation_stats.size() == 1) {

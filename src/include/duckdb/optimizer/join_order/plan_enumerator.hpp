@@ -46,8 +46,6 @@ private:
 	QueryGraphEdges const &query_graph;
 	//! The total amount of join pairs that have been considered
 	idx_t pairs = 0;
-	//! Guard to prevent infinite recursion when cross products can't connect all relations
-	bool cross_products_already_generated = false;
 	//! Grant access to the set manager and the relation manager
 	QueryGraphManager &query_graph_manager;
 	//! Cost model to evaluate cost of joins

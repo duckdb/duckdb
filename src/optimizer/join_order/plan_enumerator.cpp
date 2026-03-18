@@ -510,13 +510,6 @@ void PlanEnumerator::SolveJoinOrder() {
 			throw InvalidInputException(
 			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
 		}
-		if (cross_products_already_generated) {
-			// Cross products were already generated and the plan is still incomplete.
-			// This can happen in corner cases in the optimizer state; the caller will
-			// detect the missing plan and fall back to the original plan.
-			return;
-		}
-		cross_products_already_generated = true;
 		GenerateCrossProducts();
 		//! solve the join order again, returning the final plan
 		SolveJoinOrder();
