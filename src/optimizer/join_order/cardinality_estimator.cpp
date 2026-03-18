@@ -264,24 +264,13 @@ double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterIn
 	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
 }
 
-static double CalculateLeftJoinEffectiveD(double left_card, double right_card, double raw_d) {
-	// Compute the effective distinct count for a LEFT join condition.
-	// Caps raw_d at |RHS| so the estimate equals max(|LHS|, inner_estimate), and floors it at
-	// min(|LHS|, |RHS|) to prevent the estimate from exceeding max(|LHS|, |RHS|).
-	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
-	if (left_card > 0 && right_card > 0) {
-		effective_d = MaxValue(effective_d, MinValue(left_card, right_card));
-	}
-	return effective_d;
-}
-
 double CardinalityEstimator::CalculateLeftJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
-	// For LEFT joins, cap the effective distinct count at |RHS|
-	// This makes the denominator min(D, |RHS|), so the estimate equals:
-	//   |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate) - where inner_estimate = |LHS| * |RHS| / D
-	auto left_card = GetNumerator(*filter.filter_info->left_set);
+	// For LEFT joins, cap D at |RHS| (not min(|LHS|, |RHS|) like INNER joins).
+	// This gives estimate = |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate),
+	// ensuring the estimate is always >= |LHS| (every LHS row is preserved in a LEFT join).
 	auto right_card = GetNumerator(*filter.filter_info->right_set);
-	auto effective_d = CalculateLeftJoinEffectiveD(left_card, right_card, filter.GetDistinctCount());
+	auto raw_d = filter.GetDistinctCount();
+	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
 	auto comparison_type = GetComparisonType(filter);
 	if (comparison_type == ExpressionType::INVALID) {
 		return base_denom * effective_d;
@@ -334,10 +323,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 	// edges are guaranteed to be in order of largest tdom to smallest tdom.
 
-	// Track which INNER equality equivalence groups have been used to build the subgraph.
-	// When an edge falls into the "already connected" bucket, we check this set: if the edge's
-	// equivalence group was already applied, it is transitively implied and should not penalise
-	// the estimate via unused_edge_tdoms.
+	// Track which INNER equality equivalence groups have been used to build the subgraph
 	unordered_set<idx_t> applied_equivalence_groups;
 
 	// For multi-condition LEFT joins (e.g. A LEFT JOIN B ON k1=k1 AND k2=k2), independent
