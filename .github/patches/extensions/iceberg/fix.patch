@@ -1,4 +1,4 @@
-commit e48276625819bc201704f232ab1c7a0dfedd0fec
+commit c8cd62e3834afbe24519f5832461e416eb5bff77
 Author: dentiny <dentinyhao@gmail.com>
 Date:   Sun Mar 15 22:26:54 2026 +0000
 
@@ -195,10 +195,15 @@ index 02a3b3d3..e0d90035 100644
  				           data_file.file_path);
  				//! Skip this file
 diff --git a/src/iceberg_manifest.cpp b/src/iceberg_manifest.cpp
-index 82c0aed8..905ca1cb 100644
+index 82c0aed8..0b9ca714 100644
 --- a/src/iceberg_manifest.cpp
 +++ b/src/iceberg_manifest.cpp
-@@ -5,6 +5,7 @@
+@@ -1,10 +1,11 @@
+ #include "metadata/iceberg_manifest.hpp"
+ #include "storage/catalog/iceberg_table_set.hpp"
+ 
+-#include "duckdb/storage/caching_file_system.hpp"
++#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
  #include "catalog_utils.hpp"
  #include "iceberg_value.hpp"
  #include "storage/iceberg_table_information.hpp"
