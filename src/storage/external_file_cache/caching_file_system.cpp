@@ -257,8 +257,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	// If so, reset the blocks involved to EMPTY so stale data doesn't record in the cache.
 	if (Validate()) {
 		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-		if (!ExternalFileCache::IsValid(true, cached_file.version_tag, cached_file.last_modified,
-		                                version_tag, last_modified)) {
+		if (!ExternalFileCache::IsValid(true, cached_file.version_tag, cached_file.last_modified, version_tag,
+		                                last_modified)) {
 			for (auto &block : blocks) {
 				annotated_lock_guard<annotated_mutex> block_guard(block->mtx);
 				block->state = CacheBlockState::EMPTY;

@@ -48,7 +48,8 @@ public:
 	}
 };
 
-// A file system that blocks [Read] calls until a barrier is signaled, allowing controlled interleaving of concurrent reads.
+// A file system that blocks [Read] calls until a barrier is signaled, allowing controlled interleaving of concurrent
+// reads.
 class BarrierFileSystem : public LocalFileSystem {
 public:
 	mutable mutex mu;
