@@ -402,7 +402,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	auto result = make_shared_ptr<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
+	profiler.StartQuery(query, IsExplainAnalyze(statement.get()));
 	profiler.StartPhase(MetricType::PLANNER);
 	Planner logical_planner(*this);
 	if (parameters.parameters) {
@@ -697,15 +697,19 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 	auto lock = LockContext();
 	return ParseStatementsInternal(*lock, query);
 }
-
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
 		Parser parser(GetParserOptions());
+		auto &profiler = QueryProfiler::Get(*this);
+		profiler.StartQuery(query);
+		profiler.StartPhase(MetricType::PARSER);
 		parser.ParseQuery(query);
-
+		if (!parser.statements.empty() && IsExplainAnalyze(parser.statements[0].get())) {
+			profiler.StartExplainAnalyze();
+		}
 		PragmaHandler handler(*this);
 		handler.HandlePragmaStatements(lock, parser.statements);
-
+		profiler.EndPhase();
 		return std::move(parser.statements);
 	} catch (std::exception &ex) {
 		auto error = ErrorData(ex);
@@ -713,7 +717,6 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		error.Throw();
 	}
 }
-
 void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
 	auto lock = LockContext();
 
@@ -945,11 +948,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	unique_ptr<PendingQueryResult> pending;
-
-	// Start the profiler.
-	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
-
 	try {
 		BeginQueryInternal(lock, query);
 	} catch (std::exception &ex) {
