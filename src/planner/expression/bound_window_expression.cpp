@@ -75,8 +75,7 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	}
 
 	// check if the framing expressions are equivalent
-	if (!Expression::Equals(start_expr, other.start_expr) || !Expression::Equals(end_expr, other.end_expr) ||
-	    !Expression::Equals(offset_expr, other.offset_expr) || !Expression::Equals(default_expr, other.default_expr)) {
+	if (!Expression::Equals(start_expr, other.start_expr) || !Expression::Equals(end_expr, other.end_expr)) {
 		return false;
 	}
 
@@ -172,8 +171,6 @@ unique_ptr<Expression> BoundWindowExpression::Copy() const {
 	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
-	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
-	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
 	new_window->distinct = distinct;
 
@@ -195,6 +192,7 @@ void BoundWindowExpression::Serialize(Serializer &serializer) const {
 		D_ASSERT(aggregate);
 		FunctionSerializer::Serialize(serializer, *aggregate, bind_info.get());
 	}
+	auto null_expr = unique_ptr<Expression>();
 	serializer.WriteProperty(202, "partitions", partitions);
 	serializer.WriteProperty(203, "orders", orders);
 	serializer.WritePropertyWithDefault(204, "filters", filter_expr, unique_ptr<Expression>());
@@ -203,8 +201,9 @@ void BoundWindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(207, "end", end);
 	serializer.WritePropertyWithDefault(208, "start_expr", start_expr, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(209, "end_expr", end_expr, unique_ptr<Expression>());
-	serializer.WritePropertyWithDefault(210, "offset_expr", offset_expr, unique_ptr<Expression>());
-	serializer.WritePropertyWithDefault(211, "default_expr", default_expr, unique_ptr<Expression>());
+	// offset and default are now just children
+	serializer.WritePropertyWithDefault(210, "offset_expr", null_expr, unique_ptr<Expression>());
+	serializer.WritePropertyWithDefault(211, "default_expr", null_expr, unique_ptr<Expression>());
 	serializer.WriteProperty(212, "exclude_clause", exclude_clause);
 	serializer.WriteProperty(213, "distinct", distinct);
 	serializer.WriteProperty(214, "arg_orders", arg_orders);
@@ -224,6 +223,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	}
 	auto result =
 	    make_uniq<BoundWindowExpression>(expression_type, return_type, std::move(aggregate), std::move(bind_info));
+	unique_ptr<Expression> expr;
 	result->children = std::move(children);
 	deserializer.ReadProperty(202, "partitions", result->partitions);
 	deserializer.ReadProperty(203, "orders", result->orders);
@@ -233,8 +233,15 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	deserializer.ReadProperty(207, "end", result->end);
 	deserializer.ReadPropertyWithExplicitDefault(208, "start_expr", result->start_expr, unique_ptr<Expression>());
 	deserializer.ReadPropertyWithExplicitDefault(209, "end_expr", result->end_expr, unique_ptr<Expression>());
-	deserializer.ReadPropertyWithExplicitDefault(210, "offset_expr", result->offset_expr, unique_ptr<Expression>());
-	deserializer.ReadPropertyWithExplicitDefault(211, "default_expr", result->default_expr, unique_ptr<Expression>());
+	// offset and default are now just children
+	deserializer.ReadPropertyWithExplicitDefault(210, "offset_expr", expr, unique_ptr<Expression>());
+	if (expr) {
+		result->children.emplace_back(std::move(expr));
+	}
+	deserializer.ReadPropertyWithExplicitDefault(211, "default_expr", expr, unique_ptr<Expression>());
+	if (expr) {
+		result->children.emplace_back(std::move(expr));
+	}
 	deserializer.ReadProperty(212, "exclude_clause", result->exclude_clause);
 	deserializer.ReadProperty(213, "distinct", result->distinct);
 	deserializer.ReadPropertyWithExplicitDefault(214, "arg_orders", result->arg_orders, vector<BoundOrderByNode>());

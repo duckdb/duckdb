@@ -120,15 +120,6 @@ public:
 				return (distincts++ ? "" : "DISTINCT ") + child->ToString();
 			});
 		}
-		// Lead/Lag extra arguments
-		if (entry.offset_expr.get()) {
-			result += ", ";
-			result += entry.offset_expr->ToString();
-		}
-		if (entry.default_expr.get()) {
-			result += ", ";
-			result += entry.default_expr->ToString();
-		}
 		// ORDER BY arguments
 		if (!entry.arg_orders.empty()) {
 			result += " ORDER BY ";
