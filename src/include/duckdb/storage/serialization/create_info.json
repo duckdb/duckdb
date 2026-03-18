@@ -327,5 +327,51 @@
         "type": "bool"
       }
     ]
+  },
+  {
+    "class": "CreateTriggerInfo",
+    "base": "CreateInfo",
+    "enum": "TRIGGER_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_trigger_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "trigger_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "base_table",
+        "type": "BaseTableRef*",
+        "base": "TableRef"
+      },
+      {
+        "id": 204,
+        "name": "timing",
+        "type": "TriggerTiming"
+      },
+      {
+        "id": 205,
+        "name": "event_type",
+        "type": "TriggerEventType"
+      },
+      {
+        "id": 206,
+        "name": "columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 207,
+        "name": "for_each",
+        "type": "TriggerForEach"
+      },
+      {
+        "id": 208,
+        "name": "sql_body_text",
+        "type": "string"
+      }
+    ]
   }
 ]

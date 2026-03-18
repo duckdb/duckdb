@@ -22,6 +22,23 @@ struct DBConfig;
 struct ParserExtensionInfo {
 	virtual ~ParserExtensionInfo() {
 	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		auto result = dynamic_cast<TARGET *>(this);
+		if (!result) {
+			throw InternalException("Failed to cast ParserExtensionInfo to type");
+		}
+		return *result;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		auto result = dynamic_cast<const TARGET *>(this);
+		if (!result) {
+			throw InternalException("Failed to cast ParserExtensionInfo to type");
+		}
+		return *result;
+	}
 };
 
 //===--------------------------------------------------------------------===//

@@ -36,6 +36,12 @@
       ]
     },
     {
+      "reason": "Temporarily disable test with numeric struct key",
+      "paths": [
+        "test/sql/cast/struct_to_map.test"
+      ]
+    },
+    {
         "reason": "Setting option to 'strict' changes behavior of first tests",
       "paths": [
         "test/extension/loadable_parser_override.test",

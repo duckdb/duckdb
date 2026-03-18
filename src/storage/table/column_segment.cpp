@@ -6,7 +6,9 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -564,6 +566,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
 		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
 		return perfect_hash_join_filter.Filter(vector, sel, approved_tuple_count);
+	}
+	case duckdb::TableFilterType::PREFIX_RANGE_FILTER: {
+		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
+		return prefix_range_filter.Filter(vector, sel, approved_tuple_count);
 	}
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &state = filter_state.Cast<ExpressionFilterState>();

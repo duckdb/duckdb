@@ -583,10 +583,12 @@ void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<
 void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_t width) {
 	map<string, double> optimizer_timings;
 	map<string, double> planner_timings;
+	map<string, double> parser_timings;
 	map<string, double> physical_planner_timings;
 
 	pair<string, double> optimizer_head;
 	pair<string, double> planner_head;
+	pair<string, double> parser_head;
 	pair<string, double> physical_planner_head;
 
 	for (const auto &entry : info.metrics) {
@@ -605,6 +607,9 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 			case MetricType::PLANNER:
 				planner_head = {"Planner", entry.second.GetValue<double>()};
 				break;
+			case MetricType::PARSER:
+				parser_head = {"Parser", entry.second.GetValue<double>()};
+				break;
 			default:
 				break;
 			}
@@ -614,6 +619,8 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
 			} else if (StringUtil::StartsWith(metric, "PLANNER") && entry.first != MetricType::PLANNER) {
 				planner_timings[metric.substr(8)] = entry.second.GetValue<double>();
+			} else if (StringUtil::StartsWith(metric, "PARSER")) {
+				parser_timings[metric] = entry.second.GetValue<double>();
 			}
 		}
 	}
@@ -621,6 +628,7 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 	RenderPhaseTimings(ss, optimizer_head, optimizer_timings, width);
 	RenderPhaseTimings(ss, physical_planner_head, physical_planner_timings, width);
 	RenderPhaseTimings(ss, planner_head, planner_timings, width);
+	RenderPhaseTimings(ss, parser_head, parser_timings, width);
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
