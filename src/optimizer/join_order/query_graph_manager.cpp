@@ -20,7 +20,7 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 	});
 }
 
-void QueryGraphManager::MarkEdgeEquivalences() const {
+void QueryGraphManager::MarkEdgeEquivalences() {
 	// Assign edge_equivalence_index to INNER equality join filters using union-find over column bindings.
 	// All filters in the same transitive equality closure receive the same index, regardless of the
 	// order they appear in filters_and_bindings. This allows skipping redundant edges during

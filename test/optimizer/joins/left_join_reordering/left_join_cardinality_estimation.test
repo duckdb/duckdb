@@ -40,3 +40,44 @@ query II
 explain select * from large_mc left join medium_mc on (l_id = m_id and l_x = m_x);
 ----
 physical_plan	<REGEX>:.*~100.000 rows.*
+
+# --------------------------------------------------------------------------
+# Two independent ON predicates on the same RHS (reviewer test case #1).
+# A LEFT JOIN always preserves all LHS rows, so the estimate must be >= |LHS|
+# regardless of how many join conditions there are. The accumulated-cap logic
+# ensures that even with two conditions the product of their effective_d values
+# is capped at |RHS|, keeping the estimate at ~|LHS| = 100,000 rows.
+# --------------------------------------------------------------------------
+
+# Two conditions with independent columns — estimate must stay at ~100,000
+query II
+explain select * from large_mc left join medium_mc on (l_id = m_id and l_x = m_x);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~100.000 rows.*
+
+# Correctness: result has exactly |LHS| rows (all large_mc rows, NULLs where no match)
+query I
+select count(*) from large_mc left join medium_mc on (l_id = m_id and l_x = m_x);
+----
+100000
+
+# --------------------------------------------------------------------------
+# LEFT join with mixed predicate classes: one equality + one inequality (reviewer test case #2).
+# The inequality condition (l_x < m_x) should not crash or produce wrong estimates.
+# --------------------------------------------------------------------------
+
+statement ok
+create table medium_ineq as select range m_id, (range + 1) % 5000 m_x from range(10000);
+
+# Estimate must still be >= |LHS| (the inequality condition can only filter the inner join result,
+# not reduce the LEFT join output below |LHS|)
+query II
+explain select * from large_mc left join medium_ineq on (l_id = m_id and l_x < m_x);
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~100.000 rows.*
+
+# Correctness: all large_mc rows appear in the output
+query I
+select count(*) from large_mc left join medium_ineq on (l_id = m_id and l_x < m_x);
+----
+100000

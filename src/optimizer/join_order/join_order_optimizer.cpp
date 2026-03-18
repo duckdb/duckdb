@@ -52,7 +52,19 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// now reconstruct a logical plan from the query graph plan
 		query_graph_manager.plans = &plan_enumerator.GetPlans();
 
-		new_logical_plan = query_graph_manager.Reconstruct(std::move(plan));
+		// Verify that a complete plan was produced. In rare corner cases the optimizer
+		// may fail to find a plan even after generating cross products, in which case
+		// we fall back to the original (unreordered) plan.
+		unordered_set<RelationIndex> all_bindings;
+		for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
+			all_bindings.emplace(i);
+		}
+		auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(all_bindings);
+		if (query_graph_manager.plans->find(total_relation) != query_graph_manager.plans->end()) {
+			new_logical_plan = query_graph_manager.Reconstruct(std::move(plan));
+		} else {
+			new_logical_plan = std::move(plan);
+		}
 	} else {
 		new_logical_plan = std::move(plan);
 		if (relation_stats.size() == 1) {
