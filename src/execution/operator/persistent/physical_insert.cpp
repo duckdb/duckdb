@@ -636,11 +636,9 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 			gstate.return_collection.Append(insert_chunk);
 		}
 
-		idx_t appended_count = insert_chunk.size();
 		// When action_type is throw, we already verify constraints in `OnConflictHandling`
 		storage.LocalAppend(table, context.client, insert_chunk, bound_constraints,
 		                    action_type == OnConflictAction::THROW);
-		TriggerExecutor::FireAfterInsert(context.client, table, appended_count);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
 			(void)HandleInsertConflicts<true>(table, context, lstate, gstate, lstate.update_chunk, *this);
 			(void)HandleInsertConflicts<false>(table, context, lstate, gstate, lstate.update_chunk, *this);
@@ -727,6 +725,8 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<InsertGlobalState>();
+	TriggerExecutor::FireAfterInsert(context, gstate.table, gstate.insert_count);
 	return SinkFinalizeType::READY;
 }
 
