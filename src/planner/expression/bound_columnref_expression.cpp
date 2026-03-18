@@ -21,8 +21,8 @@ unique_ptr<Expression> BoundColumnRefExpression::Copy() const {
 
 hash_t BoundColumnRefExpression::Hash() const {
 	auto result = Expression::Hash();
-	result = CombineHash(result, duckdb::Hash<uint64_t>(binding.column_index));
-	result = CombineHash(result, duckdb::Hash<uint64_t>(binding.table_index));
+	result = CombineHash(result, duckdb::Hash<ProjectionIndex>(binding.column_index));
+	result = CombineHash(result, duckdb::Hash<TableIndex>(binding.table_index));
 	return CombineHash(result, duckdb::Hash<uint64_t>(depth));
 }
 

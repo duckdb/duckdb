@@ -602,9 +602,26 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		case VectorType::SHREDDED_VECTOR: {
 			// FIXME: this is extremely inefficient
 			Vector copy(LogicalType::VARIANT());
-			copy.Reference(*vector);
-			copy.Flatten(index + 1);
-			return copy.GetValue(index);
+			SelectionVector sel(1);
+			sel.set_index(0, index);
+			auto &shredded = ShreddedVector::GetShreddedVector(v_p);
+			auto &unshredded = ShreddedVector::GetUnshreddedVector(v_p);
+
+			Vector sliced_shredded(shredded, sel, 1);
+			Vector sliced_unshredded(unshredded, sel, 1);
+			sliced_shredded.Flatten(1);
+			sliced_unshredded.Flatten(1);
+
+			child_list_t<LogicalType> shredded_subtypes;
+			shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
+			shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
+			Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
+			StructVector::GetEntries(new_shredded)[0]->Reference(sliced_unshredded);
+			StructVector::GetEntries(new_shredded)[1]->Reference(sliced_shredded);
+
+			copy.Shred(new_shredded);
+			copy.Flatten(1);
+			return copy.GetValue(0);
 		}
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
@@ -887,9 +904,13 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
-	case VectorType::SHREDDED_VECTOR:
-		// FIXME: print shredded info
+	case VectorType::SHREDDED_VECTOR: {
+		auto &shredded_vector = ShreddedVector::GetShreddedVector(*this);
+		auto &unshredded_vector = ShreddedVector::GetUnshreddedVector(*this);
+		retval += "Shredded: " + shredded_vector.ToString(count);
+		retval += ", Unshredded: " + unshredded_vector.ToString(count);
 		break;
+	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
@@ -937,9 +958,14 @@ idx_t Vector::GetAllocationSize(idx_t cardinality) const {
 	}
 	case PhysicalType::STRUCT: {
 		idx_t total_size = 0;
-		auto &children = StructVector::GetEntries(*this);
-		for (auto &child : children) {
-			total_size += child->GetAllocationSize(cardinality);
+		if (vector_type == VectorType::SHREDDED_VECTOR) {
+			total_size += ShreddedVector::GetShreddedVector(*this).GetAllocationSize(cardinality);
+			total_size += ShreddedVector::GetUnshreddedVector(*this).GetAllocationSize(cardinality);
+		} else {
+			auto &children = StructVector::GetEntries(*this);
+			for (auto &child : children) {
+				total_size += child->GetAllocationSize(cardinality);
+			}
 		}
 		return total_size;
 	}
@@ -1394,6 +1420,10 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 	}
 	ToUnifiedFormat(count, vdata);
 
+	if (logical_type.id() == LogicalTypeId::GEOMETRY && serializer.ShouldSerialize(Geometry::VERSION_ADDED)) {
+		serializer.WriteProperty<GeometryStorageType>(99, "geometry_format", GeometryStorageType::WKB);
+	}
+
 	const bool has_validity_mask = (count > 0) && !vdata.validity.AllValid();
 	serializer.WriteProperty(100, "has_validity_mask", has_validity_mask);
 	if (has_validity_mask) {
@@ -1412,6 +1442,30 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		auto ptr = make_unsafe_uniq_array_uninitialized<data_t>(write_size);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteProperty(102, "data", ptr.get(), write_size);
+	} else if (logical_type.id() == LogicalTypeId::GEOMETRY) {
+		auto geoms = UnifiedVectorFormat::GetData<string_t>(vdata);
+
+		// Are we targeting an older serialization version?
+		if (!serializer.ShouldSerialize(7)) {
+			// Serialize data as old-style SPATIAL format
+			string blob;
+			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
+				auto idx = vdata.sel->get_index(i);
+				if (!vdata.validity.RowIsValid(idx)) {
+					list.WriteElement(NullValue<string_t>());
+				} else {
+					Geometry::ToSpatialGeometry(geoms[idx], blob);
+					list.WriteElement(blob);
+				}
+			});
+		} else {
+			// Serialize as WKB format
+			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
+				auto idx = vdata.sel->get_index(i);
+				auto wkb = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : geoms[idx];
+				list.WriteElement(wkb);
+			});
+		}
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
@@ -1525,6 +1579,7 @@ public:
 
 void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
+
 	const auto vtype = // older versions that only supported flat vectors did not serialize vector_type,
 	    deserializer.ReadPropertyWithExplicitDefault<VectorType>(90, "vector_type", VectorType::FLAT_VECTOR);
 
@@ -1547,6 +1602,14 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		return;
 	}
 
+	auto geometry_format = GeometryStorageType::WKB;
+	if (logical_type.id() == LogicalTypeId::GEOMETRY) {
+		// Try to read the geometry format, but default to the old SPATIAL format for older versions that did not
+		// serialize this property
+		geometry_format = deserializer.ReadPropertyWithExplicitDefault<GeometryStorageType>(
+		    99, "geometry_format", GeometryStorageType::SPATIAL);
+	}
+
 	auto &validity = FlatVector::Validity(*this);
 	auto validity_count = MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE);
 	validity.Reset(validity_count);
@@ -1563,6 +1626,28 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		deserializer.ReadProperty(102, "data", ptr.get(), column_size);
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
+	} else if (logical_type.id() == LogicalTypeId::GEOMETRY) {
+		auto blobs = FlatVector::GetData<string_t>(*this);
+
+		if (geometry_format == GeometryStorageType::WKB) {
+			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
+				auto geom = list.ReadElement<string>();
+				if (validity.RowIsValid(i)) {
+					blobs[i] = StringVector::AddStringOrBlob(*this, geom);
+				}
+			});
+		} else if (geometry_format == GeometryStorageType::SPATIAL) {
+			// Try to read old SPATIAL format and convert to new GEOMETRY format
+			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
+				auto blob = list.ReadElement<string>();
+				if (validity.RowIsValid(i)) {
+					Geometry::FromSpatialGeometry(blob, blobs[i], *this);
+				}
+			});
+		} else {
+			throw InternalException("Unsupported geometry format in vector serialization");
+		}
+
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
@@ -3125,6 +3210,7 @@ void ShreddedVector::Unshred(Vector &vec, idx_t count) {
 }
 
 void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t count) {
+	VerifyShreddedVector(vec);
 	// slice the underlying shredded buffer
 	auto &shredded_buffer = vec.buffer->Cast<ShreddedVectorBuffer>();
 	Vector sliced_shredded_buffer(shredded_buffer.GetChild(), sel, count);
@@ -3132,6 +3218,14 @@ void ShreddedVector::Unshred(Vector &vec, const SelectionVector &sel, idx_t coun
 	Vector unshredded_vector(LogicalType::VARIANT());
 	VariantUtils::UnshredVariantData(sliced_shredded_buffer, unshredded_vector, count);
 	vec.Reference(unshredded_vector);
+}
+
+bool ShreddedVector::IsFullyShredded(Vector &vec) {
+	auto &unshredded_vector = GetUnshreddedVector(vec);
+	if (unshredded_vector.GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(unshredded_vector)) {
+		return true;
+	}
+	return false;
 }
 
 } // namespace duckdb

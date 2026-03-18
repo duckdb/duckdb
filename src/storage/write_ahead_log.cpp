@@ -21,6 +21,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -40,6 +41,10 @@ WriteAheadLog::~WriteAheadLog() {
 
 AttachedDatabase &WriteAheadLog::GetDatabase() {
 	return storage_manager.GetAttached();
+}
+
+StorageManager &WriteAheadLog::GetStorageManager() {
+	return storage_manager;
 }
 
 BufferedFileWriter &WriteAheadLog::Initialize() {
@@ -545,6 +550,13 @@ void WriteAheadLog::Flush() {
 
 void WriteAheadLog::IncrementWALEntriesCount() {
 	storage_manager.IncrementWALEntriesCount();
+}
+
+void WriteAheadLog::MarkBlocksInUseAsModified() {
+	auto &block_manager = storage_manager.GetBlockManager();
+	for (const block_id_t block_id : blocks_in_use) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
 }
 
 } // namespace duckdb

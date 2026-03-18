@@ -88,7 +88,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	layout->Initialize(layout_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 	layout_ptr = std::move(layout);
 
-	// Initialize the row matcher that are used for filtering during the probing only if there are non-equality
+	// Initialize the row matcher that are used for filtering during the probing only if there are non-equality preds
 	if (!non_equality_predicates.empty()) {
 		row_matcher_probe = unique_ptr<RowMatcher>(new RowMatcher());
 		row_matcher_probe_no_match_sel = unique_ptr<RowMatcher>(new RowMatcher());
@@ -121,7 +121,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 		single_join_error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(context);
 	}
 
-	if (conditions.size() == 1 &&
+	if (non_equality_predicates.empty() && !residual_predicate &&
 	    (join_type == JoinType::SEMI || join_type == JoinType::ANTI || join_type == JoinType::MARK)) {
 		insert_duplicate_keys = false;
 	}
@@ -737,6 +737,25 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
 	}
 }
 
+unique_ptr<PrefixRangeFilter::BuildState> JoinHashTable::InitializePrefixRangeBuildState() {
+	D_ASSERT(prefix_range_filter);
+	return prefix_range_filter->InitializeBuildState(context);
+}
+
+void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count,
+                                           PrefixRangeFilter::BuildState &state) {
+	D_ASSERT(prefix_range_filter);
+	Vector build_keys(layout_ptr->GetTypes()[0], count);
+	auto &sel = *FlatVector::IncrementalSelectionVector();
+	data_collection->Gather(chunk_state.row_locations, sel, count, 0, build_keys, sel, nullptr);
+	prefix_range_filter->InsertKeys(build_keys, count, state);
+}
+
+void JoinHashTable::MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state) {
+	D_ASSERT(prefix_range_filter);
+	prefix_range_filter->MergeBuildState(state);
+}
+
 void JoinHashTable::AllocatePointerTable() {
 	capacity = PointerTableCapacity(Count());
 	D_ASSERT(IsPowerOfTwo(capacity));
@@ -780,7 +799,8 @@ void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx
 	std::fill_n(entries + entry_idx_from, entry_idx_to - entry_idx_from, ht_entry_t());
 }
 
-void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
+void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
+                             optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
@@ -800,6 +820,9 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
+		if (prefix_range_state) {
+			InsertPrefixRangeChunk(chunk_state, count, *prefix_range_state);
+		}
 	} while (iterator.Next());
 }
 
@@ -1224,8 +1247,6 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 }
 
 void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
-	D_ASSERT(probe_data.ColumnCount() == result.ColumnCount());
-
 	// first scan for key matches
 	ScanKeyMatches(keys, probe_data);
 
@@ -1236,8 +1257,6 @@ void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 }
 
 void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
-	D_ASSERT(probe_data.ColumnCount() == result.ColumnCount());
-
 	// first scan for key matches
 	ScanKeyMatches(keys, probe_data);
 
@@ -1253,7 +1272,7 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 		// resolve the equality_predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, probe_data, chain_match_sel_vector, nullptr);
 
-		if (ht.non_equality_predicates.empty()) {
+		if (ht.non_equality_predicates.empty() && !ht.residual_predicate) {
 			// we only have equality predicates - the match is found for the entire chain
 			for (idx_t i = 0; i < result_count; i++) {
 				const auto idx = chain_match_sel_vector.get_index(i);

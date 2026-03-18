@@ -1,0 +1,136 @@
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 8c08714..9894acf 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -856,8 +856,8 @@ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition>
+ 	visitor = (uintptr_t(*)(void *, ffi::KernelExpressionVisitorState *)) & VisitPredicate;
+ 
+ 	if (filters) {
+-		for (auto &filter : filters->filters) {
+-			column_filters[columns[filter.first].name] = filter.second.get();
++		for (auto &entry : *filters) {
++			column_filters[columns[entry.ColumnIndex()].name] = &entry.Filter();
+ 		}
+ 	}
+ }
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index 7d918bd..42a3622 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -793,14 +793,14 @@ unique_ptr<DeltaMultiFileList> DeltaMultiFileList::PushdownInternal(ClientContex
+ 	TableFilterSet result_filter_set;
+ 
+ 	// Add pre-existing filters
+-	for (auto &entry : table_filters.filters) {
+-		result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
++	for (auto &entry : table_filters) {
++		result_filter_set.PushFilter(ColumnIndex(entry.ColumnIndex()), entry.Filter().Copy());
+ 	}
+ 
+ 	// Add new filters
+-	for (auto &entry : new_filters.filters) {
+-		if (entry.first < global_columns.size()) {
+-			result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
++	for (auto &entry : new_filters) {
++		if (entry.ColumnIndex() < global_columns.size()) {
++			result_filter_set.PushFilter(ColumnIndex(entry.ColumnIndex()), entry.Filter().Copy());
+ 		}
+ 	}
+ 
+@@ -849,7 +849,7 @@ unique_ptr<MultiFileList> DeltaMultiFileList::ComplexFilterPushdown(ClientContex
+ 
+ 	vector<FilterPushdownResult> pushdown_results;
+ 	auto filter_set = combiner.GenerateTableScanFilters(info.column_indexes, pushdown_results);
+-	if (filter_set.filters.empty()) {
++	if (!filter_set.HasFilters()) {
+ 		return nullptr;
+ 	}
+ 
+@@ -916,24 +916,24 @@ void DeltaMultiFileList::ReportFilterPushdown(ClientContext &context, DeltaMulti
+ 
+ 	// Report the new filters
+ 	vector<Value> old_filters_value_list;
+-	for (auto &f : table_filters.filters) {
+-		auto &column_index = f.first;
+-		auto &filter = f.second;
++	for (auto &entry : table_filters) {
++		auto column_index = entry.ColumnIndex();
++		auto &filter = entry.Filter();
+ 		if (column_index < global_columns.size()) {
+ 			auto &col_name = global_columns[column_index].name;
+-			old_filters_value_list.push_back(filter->ToString(col_name));
++			old_filters_value_list.push_back(filter.ToString(col_name));
+ 		}
+ 	}
+ 	auto old_filters_value = Value::LIST(LogicalType::VARCHAR, old_filters_value_list);
+ 
+ 	// Report the new filters
+ 	vector<Value> filters_value_list;
+-	for (auto &f : new_list.table_filters.filters) {
+-		auto &column_index = f.first;
+-		auto &filter = f.second;
++	for (auto &entry : new_list.table_filters) {
++		auto column_index = entry.ColumnIndex();
++		auto &filter = entry.Filter();
+ 		if (column_index < global_columns.size()) {
+ 			auto &col_name = global_columns[column_index].name;
+-			filters_value_list.push_back(filter->ToString(col_name));
++			filters_value_list.push_back(filter.ToString(col_name));
+ 		}
+ 	}
+ 	auto filters_value = Value::LIST(LogicalType::VARCHAR, filters_value_list);
+@@ -970,23 +970,23 @@ DeltaMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFil
+ 		return nullptr;
+ 	}
+ 
+-	if (filters.filters.empty()) {
++	if (!filters.HasFilters()) {
+ 		return nullptr;
+ 	}
+ 
+ 	TableFilterSet filters_copy;
+-	for (auto &filter : filters.filters) {
+-		auto column_id = column_ids[filter.first];
+-		auto previously_pushed_down_filter = this->table_filters.filters.find(column_id);
+-		if (previously_pushed_down_filter != this->table_filters.filters.end() &&
+-		    filter.second->Equals(*previously_pushed_down_filter->second)) {
++	for (auto &entry : filters) {
++		auto column_id = column_ids[entry.ColumnIndex()];
++		auto &filter = entry.Filter();
++		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(column_id);
++		if (previously_pushed_down_filter && filter.Equals(*previously_pushed_down_filter)) {
+ 			// Skip filters that we already have pushed down
+ 			continue;
+ 		}
+-		filters_copy.PushFilter(ColumnIndex(column_id), filter.second->Copy());
++		filters_copy.PushFilter(ColumnIndex(column_id), filter.Copy());
+ 	}
+ 
+-	if (!filters_copy.filters.empty()) {
++	if (filters_copy.HasFilters()) {
+ 		auto new_snap = PushdownInternal(context, filters_copy);
+ 		ReportFilterPushdown(context, *new_snap, column_ids, "dynamic", nullptr);
+ 		return std::move(new_snap);
+diff --git a/src/include/delta_utils.hpp b/src/include/delta_utils.hpp
+index 3fdce7f..8ab602d 100644
+--- a/src/include/delta_utils.hpp
++++ b/src/include/delta_utils.hpp
+@@ -11,7 +11,8 @@
+ #include "duckdb/parser/expression/conjunction_expression.hpp"
+ #include "duckdb/common/error_data.hpp"
+ #include "duckdb/parser/expression/comparison_expression.hpp"
+-#include <duckdb/planner/filter/null_filter.hpp>
++#include "duckdb/planner/table_filter_set.hpp"
++#include "duckdb/planner/filter/null_filter.hpp"
+ #include <iostream>
+ 
+ #include "duckdb/planner/tableref/bound_at_clause.hpp"
+@@ -431,7 +432,7 @@ public:
+ 	ErrorData error_data;
+ 
+ private:
+-	unordered_map<string, TableFilter *> column_filters;
++	unordered_map<string, optional_ptr<const TableFilter>> column_filters;
+ 
+ 	static uintptr_t VisitPredicate(PredicateVisitor *predicate, ffi::KernelExpressionVisitorState *state);
+ 

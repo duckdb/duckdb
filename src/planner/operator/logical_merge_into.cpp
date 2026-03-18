@@ -22,15 +22,15 @@ idx_t LogicalMergeInto::EstimateCardinality(ClientContext &context) {
 	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
 }
 
-vector<idx_t> LogicalMergeInto::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalMergeInto::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 vector<ColumnBinding> LogicalMergeInto::GetColumnBindings() {
 	if (return_chunk) {
 		return GenerateColumnBindings(table_index, table.GetTypes().size() + 1);
 	}
-	return {ColumnBinding(0, 0)};
+	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
 }
 
 void LogicalMergeInto::ResolveTypes() {

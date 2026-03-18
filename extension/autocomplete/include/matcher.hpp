@@ -11,7 +11,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 #include "transformer/parse_result.hpp"
+#include <mutex>
 
 namespace duckdb {
 class ParseResultAllocator;
@@ -137,13 +139,14 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index)
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true)
 	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
-	      max_token_index(max_token_index) {
+	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator), max_token_index(state.max_token_index) {
+	      allocator(state.allocator), max_token_index(state.max_token_index),
+	      preserve_identifier_case(state.preserve_identifier_case) {
 	}
 
 	vector<MatcherToken> &tokens;
@@ -152,6 +155,7 @@ struct MatchState {
 	idx_t token_index;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
+	bool preserve_identifier_case = true;
 
 	void UpdateMaxTokenIndex() {
 		if (token_index > max_token_index) {
@@ -181,8 +185,6 @@ public:
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
 	void Print() const;
-
-	static Matcher &RootMatcher(MatcherAllocator &allocator);
 
 	MatcherType Type() const {
 		return type;
@@ -228,6 +230,28 @@ public:
 
 private:
 	vector<unique_ptr<ParseResult>> parse_results;
+};
+
+struct PEGMatcher {
+	MatcherAllocator allocator;
+
+	Matcher &Root() {
+		return *root;
+	}
+
+private:
+	friend struct PEGMatcherCache;
+	optional_ptr<Matcher> root;
+};
+
+//! Per-database cache holder for the compiled PEG root matcher.
+struct PEGMatcherCache : ParserExtensionInfo {
+	shared_ptr<PEGMatcher> GetMatcher();
+	void Invalidate();
+
+private:
+	std::mutex mutex;
+	shared_ptr<PEGMatcher> matcher;
 };
 
 } // namespace duckdb

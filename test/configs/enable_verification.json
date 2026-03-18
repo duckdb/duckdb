@@ -91,6 +91,7 @@
         "test/sql/copy/csv/rejects/test_multiple_errors_same_line.test",
         "test/sql/copy/csv/test_non_unicode_header.test",
         "test/sql/logging/file_system_logging.test",
+        "test/sql/logging/http_log_timing.test",
         "test/sql/logging/logging.test",
         "test/sql/logging/logging_buffer_size.test",
         "test/sql/logging/logging_csv.test",
@@ -123,7 +124,8 @@
         "test/sql/types/geo/geometry_shred_limit.test",
         "test/sql/types/geo/geometry_shred_checkpoint.test",
         "test/sql/window/test_window_constant_allocator.test",
-        "test/parquet/variant/variant_stats_propagation.test"
+        "test/parquet/variant/variant_stats_propagation.test",
+        "test/sql/types/geo/geometry_compatability.test"
       ]
     },
     {

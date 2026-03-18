@@ -84,7 +84,6 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 	auto base_table_cardinality = get.EstimateCardinality(context);
 	auto cardinality_after_filters = base_table_cardinality;
-	unique_ptr<BaseStatistics> column_statistics;
 
 	auto catalog_table = get.GetTable();
 	auto name = string("some table");
@@ -116,28 +115,28 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		}
 	}
 
-	if (!get.table_filters.filters.empty()) {
-		column_statistics = nullptr;
+	if (get.table_filters.HasFilters()) {
+		unique_ptr<BaseStatistics> column_statistics;
 		bool has_non_optional_filters = false;
-		for (auto &it : get.table_filters.filters) {
+		for (auto &entry : get.table_filters) {
 			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
 				if (get.function.statistics_extended) {
-					auto column_index = ColumnIndex(it.first);
+					auto column_index = ColumnIndex(entry.ColumnIndex());
 					TableFunctionGetStatisticsInput input(get.bind_data.get(), column_index);
 					column_statistics = get.function.statistics_extended(context, input);
 				} else {
 					D_ASSERT(get.function.statistics);
-					column_statistics = get.function.statistics(context, get.bind_data.get(), it.first);
+					column_statistics = get.function.statistics(context, get.bind_data.get(), entry.ColumnIndex());
 				}
 			}
 
 			if (column_statistics) {
 				idx_t cardinality_with_filter =
-				    InspectTableFilter(base_table_cardinality, it.first, *it.second, *column_statistics);
+				    InspectTableFilter(base_table_cardinality, entry.ColumnIndex(), entry.Filter(), *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
-			if (it.second->filter_type != TableFilterType::OPTIONAL_FILTER) {
+			if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
 				has_non_optional_filters = true;
 			}
 		}
@@ -171,7 +170,7 @@ RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &de
 	stats.stats_initialized = true;
 	for (auto &binding : delim_get.GetColumnBindings()) {
 		stats.column_distinct_count.push_back(DistinctCount({1, false}));
-		stats.column_names.push_back("column" + to_string(binding.column_index));
+		stats.column_names.push_back("column" + to_string(binding.column_index.index));
 	}
 	return stats;
 }
@@ -188,14 +187,15 @@ RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection
 			proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));
 		} else {
 			auto column_index = res.child_binding.column_index;
-			if (column_index >= child_stats.column_distinct_count.size() && expr->ToString() == "count_star()") {
+			if (column_index.index >= child_stats.column_distinct_count.size() && expr->ToString() == "count_star()") {
 				// only one value for a count star
 				proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));
 			} else {
 				// TODO: add this back in
 				//	D_ASSERT(column_index < stats.column_distinct_count.size());
-				if (column_index < child_stats.column_distinct_count.size()) {
-					proj_stats.column_distinct_count.push_back(child_stats.column_distinct_count.at(column_index));
+				if (column_index.index < child_stats.column_distinct_count.size()) {
+					proj_stats.column_distinct_count.push_back(
+					    child_stats.column_distinct_count.at(column_index.index));
 				} else {
 					proj_stats.column_distinct_count.push_back(DistinctCount({proj_stats.cardinality, false}));
 				}
@@ -363,19 +363,21 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	for (auto &g_set : aggr.grouping_sets) {
 		vector<double> set_distinct_counts;
 		for (auto &ind : g_set) {
-			if (aggr.groups[ind]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+			auto &group = aggr.GetGroupExpression(ind);
+			if (group.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
-			auto bound_col = &aggr.groups[ind]->Cast<BoundColumnRefExpression>();
-			auto col_index = bound_col->binding.column_index;
-			if (col_index >= child_stats.column_distinct_count.size()) {
+			auto &bound_col = group.Cast<BoundColumnRefExpression>();
+			auto col_index = bound_col.binding.column_index;
+			if (col_index.index >= child_stats.column_distinct_count.size()) {
 				// it is possible the column index of the grouping_set is not in the child stats.
 				// this can happen when delim joins are present, since delim scans are not currently
 				// reorderable. Meaning they don't add a relation or column_ids that could potentially
 				// be grouped by. Hopefully this can be fixed with duckdb-internal#606
 				continue;
 			}
-			double distinct_count = static_cast<double>(child_stats.column_distinct_count[col_index].distinct_count);
+			double distinct_count =
+			    static_cast<double>(child_stats.column_distinct_count[col_index.index].distinct_count);
 			set_distinct_counts.push_back(distinct_count == 0 ? 1 : distinct_count);
 		}
 		// We use the grouping set with the most group key columns for cardinality estimation

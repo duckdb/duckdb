@@ -5,13 +5,13 @@ namespace duckdb {
 InsertionOrderPreservingMap<string> LogicalMaterializedCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
-	result["Table Index"] = StringUtil::Format("%llu", table_index);
+	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
 	SetParamsEstimatedCardinality(result);
 	return result;
 }
 
-vector<idx_t> LogicalMaterializedCTE::GetTableIndex() const {
-	return vector<idx_t> {table_index};
+vector<TableIndex> LogicalMaterializedCTE::GetTableIndex() const {
+	return vector<TableIndex> {table_index};
 }
 
 } // namespace duckdb

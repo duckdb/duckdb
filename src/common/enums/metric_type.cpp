@@ -25,6 +25,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPERATOR_ROWS_SCANNED,
 		MetricType::OPERATOR_TIMING,
 		MetricType::OPERATOR_TYPE,
+		MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER,
 		MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
 		MetricType::OPTIMIZER_COLUMN_LIFETIME,
 		MetricType::OPTIMIZER_COMMON_AGGREGATE,
@@ -47,6 +48,7 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPTIMIZER_LATE_MATERIALIZATION,
 		MetricType::OPTIMIZER_LIMIT_PUSHDOWN,
 		MetricType::OPTIMIZER_MATERIALIZED_CTE,
+		MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION,
 		MetricType::OPTIMIZER_PARTITIONED_EXECUTION,
 		MetricType::OPTIMIZER_PROJECTION_PULLUP,
 		MetricType::OPTIMIZER_REGEX_RANGE,
@@ -54,12 +56,12 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPTIMIZER_ROW_GROUP_PRUNER,
 		MetricType::OPTIMIZER_SAMPLING_PUSHDOWN,
 		MetricType::OPTIMIZER_STATISTICS_PROPAGATION,
-		MetricType::OPTIMIZER_SUM_REWRITER,
 		MetricType::OPTIMIZER_TOP_N,
 		MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
 		MetricType::OPTIMIZER_UNNEST_REWRITER,
 		MetricType::OPTIMIZER_UNUSED_COLUMNS,
 		MetricType::OPTIMIZER_WINDOW_SELF_JOIN,
+		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,
 		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
 		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
@@ -315,6 +317,7 @@ profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 	return {
 		MetricType::ALL_OPTIMIZERS,
 		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
+		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,
 		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
 		MetricType::PHYSICAL_PLANNER_CREATE_PLAN,
@@ -328,6 +331,7 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::PARSER:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
 	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:

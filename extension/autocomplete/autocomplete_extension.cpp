@@ -21,8 +21,21 @@
 #include "parser/tokenizer/highlight_tokenizer.hpp"
 #include "parser/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 namespace duckdb {
+
+static PEGMatcherCache &GetPEGMatcherCache(DBConfig &config) {
+	for (auto &ext : config.GetCallbackManager().ParserExtensions()) {
+		if (ext.parser_info) {
+			auto *cache = dynamic_cast<PEGMatcherCache *>(ext.parser_info.get());
+			if (cache) {
+				return *cache;
+			}
+		}
+	}
+	throw InternalException("PEG autocomplete parser extension not registered");
+}
 
 struct SQLTokenizeFunctionData : public TableFunctionData {
 	explicit SQLTokenizeFunctionData(vector<MatcherToken> tokens_p) : tokens(std::move(tokens_p)) {
@@ -316,8 +329,18 @@ static vector<AutoCompleteCandidate> SuggestColumnName(ClientContext &context) {
 		} else if (entry.type == CatalogType::VIEW_ENTRY) {
 			auto &view = entry.Cast<ViewCatalogEntry>();
 			int32_t bonus = entry.internal ? 0 : 3;
-			for (auto &col : view.aliases) {
-				suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+			auto column_info = view.GetColumnInfo();
+			if (column_info) {
+				// view has names
+				for (idx_t n = 0; n < column_info->names.size(); n++) {
+					auto &name = n < view.aliases.size() ? view.aliases[n] : column_info->names[n];
+					suggestions.emplace_back(name, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+				}
+			} else {
+				// add only aliases
+				for (auto &col : view.aliases) {
+					suggestions.emplace_back(col, SuggestionState::SUGGEST_COLUMN_NAME, bonus);
+				}
 			}
 		} else {
 			if (StringUtil::CharacterIsOperator(entry.name[0])) {
@@ -629,9 +652,8 @@ static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(Clien
 	if (state.suggestions.empty()) {
 		// no suggestions found during tokenizing
 		// run the root matcher
-		MatcherAllocator allocator;
-		auto &matcher = Matcher::RootMatcher(allocator);
-		matcher.Match(state);
+		auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+		peg_matcher->Root().Match(state);
 	}
 	if (state.suggestions.empty()) {
 		// still no suggestions - return
@@ -855,9 +877,8 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		idx_t max_token_index = 0;
 		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
-		MatcherAllocator allocator;
-		auto &matcher = Matcher::RootMatcher(allocator);
-		auto match_result = matcher.Match(state);
+		auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+		auto match_result = peg_matcher->Root().Match(state);
 		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
 			string token_list;
 			for (idx_t i = 0; i < tokens.size(); i++) {
@@ -884,9 +905,14 @@ class PEGParserExtension : public ParserExtension {
 public:
 	PEGParserExtension() {
 		parser_override = PEGParser;
+		parser_info = make_shared_ptr<PEGMatcherCache>();
 	}
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
+		auto &cache = info->Cast<PEGMatcherCache>();
+		auto peg_matcher = cache.GetMatcher();
+		auto &root_matcher = peg_matcher->Root();
+
 		vector<MatcherToken> root_tokens;
 		string clean_sql;
 
@@ -900,8 +926,7 @@ public:
 				if (tokenized_statement.empty()) {
 					continue;
 				}
-				auto &transformer = PEGTransformerFactory::GetInstance();
-				auto statement = transformer.Transform(tokenized_statement, options);
+				auto statement = PEGTransformerFactory::Transform(tokenized_statement, options, root_matcher);
 				if (statement) {
 					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
 					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +

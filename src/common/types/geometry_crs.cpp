@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "yyjson.hpp"
 #include "duckdb/catalog/catalog_entry/coordinate_system_catalog_entry.hpp"

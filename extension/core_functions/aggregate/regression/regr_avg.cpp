@@ -10,7 +10,7 @@ namespace {
 
 struct RegrState {
 	double sum;
-	size_t count;
+	uint64_t count;
 };
 
 struct RegrAvgFunction {
