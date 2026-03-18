@@ -128,7 +128,7 @@ void DuckDBTriggersFunction(ClientContext &context, TableFunctionInput &data_p, 
 			col_vals.emplace_back(col_name);
 		}
 		output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(col_vals)));
-		output.SetValue(col++, count, Value::BOOLEAN(trigger.for_each_row));
+		output.SetValue(col++, count, Value::BOOLEAN(trigger.for_each == TriggerForEach::ROW));
 		output.SetValue(col++, count, Value(trigger.comment));
 		output.SetValue(col++, count, Value::MAP(trigger.tags));
 		output.SetValue(col++, count, Value::BOOLEAN(trigger.temporary));

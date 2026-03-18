@@ -10,7 +10,7 @@ namespace duckdb {
 TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTriggerInfo &info)
     : StandardEntry(CatalogType::TRIGGER_ENTRY, schema, catalog, info.trigger_name),
       base_table(unique_ptr_cast<TableRef, BaseTableRef>(info.base_table->Copy())), timing(info.timing),
-      event_type(info.event_type), columns(info.columns), for_each_row(info.for_each == TriggerForEach::ROW),
+      event_type(info.event_type), columns(info.columns), for_each(info.for_each),
       sql_body_text(info.sql_body_text) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
@@ -32,7 +32,7 @@ unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 	result->timing = timing;
 	result->event_type = event_type;
 	result->columns = columns;
-	result->for_each = for_each_row ? TriggerForEach::ROW : TriggerForEach::STATEMENT;
+	result->for_each = for_each;
 	result->sql_body_text = sql_body_text;
 	result->dependencies = dependencies;
 	result->comment = comment;
@@ -79,7 +79,7 @@ string TriggerCatalogEntry::ToSQL() const {
 	}
 	ss << " ON ";
 	ss << ParseInfo::QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
-	if (for_each_row) {
+	if (for_each == TriggerForEach::ROW) {
 		ss << " FOR EACH ROW";
 	}
 	if (!sql_body_text.empty()) {
