@@ -271,7 +271,7 @@ jobs:
            echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
 
        - name: Build Environment Check
-         shell: cmd
+         shell: bash
          run: |
            where bash
            bash --version
@@ -285,10 +285,15 @@ jobs:
            g++ --version
            echo %PATH%
 
-       - name: Build and Test
-         shell: cmd
+       - name: Build
+         shell: bash
          run: |
-           make unittest_release
+           make
+
+       - name: Test
+         shell: bash
+         run: |
+           build/release/test/unittest
 
  win-packaged-upload:
    runs-on: windows-latest
