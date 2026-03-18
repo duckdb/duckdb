@@ -1,7 +1,6 @@
 #include "capi_tester.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test C API examples from the website", "[capi]") {
 	// NOTE: if any of these break and need to be changed, the website also needs to be updated!

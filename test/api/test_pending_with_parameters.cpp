@@ -2,7 +2,6 @@
 #include "test_helpers.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 static void CreateSimpleTable(Connection &con) {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
