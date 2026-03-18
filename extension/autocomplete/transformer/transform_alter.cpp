@@ -426,4 +426,39 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetSortedBy(PEGTran
 	auto result = make_uniq<SetSortedByInfo>(AlterEntryData(), std::move(order_by_exprs));
 	return std::move(result);
 }
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetOptions(PEGTransformer &transformer,
+                                                                      optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// SetOptions <- 'SET' RelOptionList
+	// child 0: 'SET' keyword, child 1: RelOptionList
+	auto options =
+	    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	return make_uniq<SetTableOptionsInfo>(AlterEntryData(), std::move(options));
+}
+
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetOptions(PEGTransformer &transformer,
+                                                                        optional_ptr<ParseResult> parse_result) {
+	auto &list_pr = parse_result->Cast<ListParseResult>();
+	// ResetOptions <- 'RESET' RelOptionList
+	// child 0: 'RESET' keyword, child 1: RelOptionList
+	auto options_map =
+	    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(1));
+	case_insensitive_set_t option_names;
+	for (auto &opt : options_map) {
+		if (!opt.second) {
+			option_names.insert(opt.first);
+		}
+		if (opt.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
+			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
+		}
+		auto &const_expr = opt.second->Cast<ConstantExpression>();
+		if (!const_expr.value.IsNull()) {
+			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
+		}
+		option_names.insert(opt.first);
+	}
+	return make_uniq<ResetTableOptionsInfo>(AlterEntryData(), std::move(option_names));
+}
+
 } // namespace duckdb

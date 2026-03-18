@@ -40,6 +40,8 @@ class TestResult:
             return
         if isinstance(expected, list):
             expected = "\n".join(expected)
+        if self.status_code != 0:
+            print(self.stderr, file=sys.stderr)
         assert self.status_code == 0
         if not is_needle_in_haystack(expected, self.stdout):
             print(self.stdout, file=sys.stderr)
@@ -65,7 +67,9 @@ class ShellTest:
         if not shell:
             raise ValueError("Please provide a shell binary")
         self.shell = shell
-        self.arguments = [shell, "--batch", "--init", "/dev/null"] + arguments
+        self.arguments = [shell, "--batch"] + arguments
+        if "-init" not in arguments and "--init" not in arguments:
+            arguments += ["--no-init"]
         self.statements: List[str] = []
         self.input = None
         self.output = None

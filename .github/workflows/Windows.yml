@@ -274,36 +274,62 @@ jobs:
       - check-draft
      if: ${{ inputs.skip_tests != 'true' }}
      runs-on: windows-latest
+     env:
+       GEN: ninja
+       ENABLE_EXTENSION_AUTOLOADING: 1
+       ENABLE_EXTENSION_AUTOINSTALL: 1
      steps:
        - uses: actions/checkout@v4
          with:
            ref: ${{ inputs.git_ref }}
-       - uses: msys2/setup-msys2@v2
-         with:
-           msystem: MINGW64
-           update: true
-           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
-           cache: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
-       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
-       - name: Put MSYS2_MinGW64 on PATH
-         # there is not yet an environment variable for this path from msys2/setup-msys2
-         shell: msys2 {0}
-         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+       - uses: actions/setup-python@v5
+         with:
+           python-version: '3.12'
+
+       - name: Dependencies
+         shell: bash
+         run: |
+           choco install \
+             ccache \
+             make \
+             ninja \
+             --no-progress
+           choco install \
+             mingw --version 14.2.0 \
+             --no-progress
 
        - uses: ./.github/actions/ccache-action
 
-       - name: Build
-         shell: msys2 {0}
+       - name: Build Environment
+         shell: bash
          run: |
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet' -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-           cmake --build . --config Release 
+           # bash from Git
+           echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
+           # make, ninja and ccache from Chocolatey
+           echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
+           # g++ from Chocolatey
+           echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
 
-       - name: Test
-         shell: msys2 {0}
+       - name: Build Environment Check
+         shell: cmd
          run: |
-           cp src/libduckdb.dll .
-           test/unittest.exe
+           where bash
+           bash --version
+           where make
+           make --version
+           where ninja
+           ninja --version
+           where ccache
+           ccache --version
+           where g++
+           g++ --version
+           echo %PATH%
+
+       - name: Build and Test
+         shell: cmd
+         run: |
+           make unittest_release
 
  win-packaged-upload:
    runs-on: windows-latest

@@ -8,10 +8,21 @@
 
 namespace duckdb {
 
+struct ParquetMetadataCacheEntry {
+	ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata, ParquetCacheValidity validity,
+	                          bool has_deletes);
+
+	shared_ptr<ParquetFileMetadataCache> metadata;
+	ParquetCacheValidity validity;
+	bool has_deletes;
+};
+
 struct ParquetReadBindData : public TableFunctionData {
 	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
 	idx_t initial_file_cardinality;
 	idx_t initial_file_row_groups;
+	idx_t initial_file_size = 0;
+	idx_t initial_file_data_size = 0;
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	unique_ptr<ParquetFileReaderOptions> options;
 
@@ -26,10 +37,18 @@ struct ParquetReadBindData : public TableFunctionData {
 		auto result = make_uniq<ParquetReadBindData>();
 		result->initial_file_cardinality = initial_file_cardinality;
 		result->initial_file_row_groups = initial_file_row_groups;
+		result->initial_file_size = initial_file_size;
+		result->initial_file_data_size = initial_file_data_size;
 		result->explicit_cardinality = explicit_cardinality;
 		result->options = make_uniq<ParquetFileReaderOptions>(options->options);
 		return std::move(result);
 	}
+
+	const vector<ParquetMetadataCacheEntry> &TryLoadCaches(const MultiFileBindData &bind_data, ClientContext &context);
+
+private:
+	vector<ParquetMetadataCacheEntry> caches;
+	bool attempted_to_load_caches = false;
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
@@ -46,6 +65,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
 	ParquetReaderScanState scan_state;
+	vector<idx_t> group_indexes;
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
@@ -263,6 +283,54 @@ static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_
 	return result;
 }
 
+ParquetMetadataCacheEntry::ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata_p,
+                                                     ParquetCacheValidity validity_p, bool has_deletes_p)
+    : metadata(std::move(metadata_p)), validity(validity_p), has_deletes(has_deletes_p) {
+}
+
+const vector<ParquetMetadataCacheEntry> &ParquetReadBindData::TryLoadCaches(const MultiFileBindData &bind_data,
+                                                                            ClientContext &context) {
+	if (attempted_to_load_caches) {
+		return caches;
+	}
+	// only attempt to load the caches once
+	attempted_to_load_caches = true;
+	// if we are reading multiple files - we check if we have caching enabled
+	if (!ParquetReader::MetadataCacheEnabled(context)) {
+		// no caching - bail
+		return caches;
+	}
+	// caching is enabled - check if we have ALL of the metadata cached
+	vector<ParquetMetadataCacheEntry> result;
+	for (auto &file : bind_data.file_list->Files()) {
+		auto metadata_entry = ParquetReader::GetMetadataCacheEntry(context, file);
+		if (!metadata_entry) {
+			// no cache entry found for this file
+			attempted_to_load_caches = true;
+			return caches;
+		}
+		// check if the file has any deletes
+		bool has_deletes = false;
+		if (file.extended_info) {
+			auto entry = file.extended_info->options.find("has_deletes");
+			if (entry != file.extended_info->options.end()) {
+				if (BooleanValue::Get(entry->second)) {
+					// the file has deletes - skip emitting partition stats
+					// FIXME: we could emit partition stats but set count to `COUNT_APPROXIMATE` instead of
+					// `COUNT_EXACT`
+					has_deletes = true;
+				}
+			}
+		}
+
+		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
+		const auto is_valid = metadata_entry->IsValid(file, context);
+		result.emplace_back(std::move(metadata_entry), is_valid, has_deletes);
+	}
+	caches = std::move(result);
+	return caches;
+}
+
 static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 	vector<PartitionStatistics> result;
@@ -272,42 +340,28 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 		reader.GetPartitionStats(result);
 		return result;
 	}
-	// if we are reading multiple files - we check if we have caching enabled
-	if (!ParquetReader::MetadataCacheEnabled(context)) {
-		// no caching - bail
+	auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
+	auto &cached_metadata = parquet_data.TryLoadCaches(bind_data, context);
+	if (!cached_metadata.empty()) {
+		// no cached metadata - bail
 		return result;
 	}
-	// caching is enabled - check if we have ALL of the metadata cached
-	vector<shared_ptr<ParquetFileMetadataCache>> caches;
-	for (auto &file : bind_data.file_list->Files()) {
-		auto metadata_entry = ParquetReader::GetMetadataCacheEntry(context, file);
-		if (!metadata_entry) {
-			// no cache entry found
+	// first check if all caches are valid and there are no deletes
+	for (auto &cache : cached_metadata) {
+		if (cache.has_deletes) {
+			// we have deletes - don't return any partition stats
+			// FIXME: we could return with count approximate
 			return result;
 		}
-		// check if the file has any deletes
-		if (file.extended_info) {
-			auto entry = file.extended_info->options.find("has_deletes");
-			if (entry != file.extended_info->options.end()) {
-				if (BooleanValue::Get(entry->second)) {
-					// the file has deletes - skip emitting partition stats
-					// FIXME: we could emit partition stats but set count to `COUNT_APPROXIMATE` instead of
-					// `COUNT_EXACT`
-					return result;
-				}
-			}
-		}
-
-		// check if the cache is valid based ONLY on the OpenFileInfo (do not do any file system requests here)
-		const auto is_valid = metadata_entry->IsValid(file, context);
-		if (is_valid != ParquetCacheValidity::VALID) {
+		if (cache.validity != ParquetCacheValidity::VALID) {
+			// we don't know for sure if this cache entry is valid - we can't use these stats
 			return result;
 		}
-		caches.push_back(std::move(metadata_entry));
 	}
+
 	// all caches are valid! we can return the partition stats
-	for (auto &cache : caches) {
-		ParquetReader::GetPartitionStats(*cache->metadata, result);
+	for (auto &cache : cached_metadata) {
+		ParquetReader::GetPartitionStats(*cache.metadata->metadata, result);
 	}
 	return result;
 }
@@ -472,17 +526,90 @@ void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) 
 		auto &initial_reader = multi_file_data.initial_reader->Cast<ParquetReader>();
 		bind_data.initial_file_cardinality = initial_reader.NumRows();
 		bind_data.initial_file_row_groups = initial_reader.NumRowGroups();
+		bind_data.initial_file_size = initial_reader.GetFileSize();
+		bind_data.initial_file_data_size = initial_reader.GetDataSize();
+		if (bind_data.initial_file_data_size >= bind_data.initial_file_size) {
+			// this should not be possible - we need at least some metadata in the file
+			// FIXME: should this throw an error?
+			bind_data.initial_file_data_size = bind_data.initial_file_size - 1;
+		}
 		bind_data.options->options = initial_reader.parquet_options;
 	}
 }
 
-unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data_p,
-                                                                idx_t file_count) {
-	auto &bind_data = bind_data_p.bind_data->Cast<ParquetReadBindData>();
-	if (bind_data.explicit_cardinality) {
-		return make_uniq<NodeStatistics>(bind_data.explicit_cardinality);
+unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(ClientContext &context,
+                                                                const MultiFileBindData &bind_data, idx_t file_count) {
+	auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
+	if (parquet_data.explicit_cardinality) {
+		return make_uniq<NodeStatistics>(parquet_data.explicit_cardinality);
 	}
-	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) * file_count);
+	if (file_count == 1) {
+		// if we have one file we can just use the cardinality of that file
+		return make_uniq<NodeStatistics>(parquet_data.initial_file_cardinality);
+	}
+	// multiple parquet files
+	// check if we have cached Parquet metadata we can use to get the estimate
+	auto &caches = parquet_data.TryLoadCaches(bind_data, context);
+	if (!caches.empty()) {
+		// we have cached Parquet data - use it to get the cardinality estimate
+		idx_t cardinality = 0;
+		for (auto &cache : caches) {
+			// note: since this is just an estimate we don't need to look at whether or not the cache is valid
+			cardinality += cache.metadata->metadata->num_rows;
+		}
+		return make_uniq<NodeStatistics>(cardinality);
+	}
+	// we don't have any scan data - check if we can get some intel from the file list
+	// in particular - if we have file sizes, we try to estimate rows per file from the file size
+	MultiFileListScanData scan_data;
+	scan_data.scan_type = MultiFileListScanType::FETCH_IF_AVAILABLE;
+	bind_data.file_list->InitializeScan(scan_data);
+	OpenFileInfo file;
+	idx_t initial_cardinality = MaxValue<idx_t>(parquet_data.initial_file_cardinality, 1ULL);
+	idx_t estimated_bytes_per_row = parquet_data.initial_file_data_size / initial_cardinality;
+	// for very small cardinalities, compression doesn't really work well
+	// to compensate if initial_cardinality is small we decrease estimated_bytes_per_row
+	// for 1 row we divide by 10, for 2 rows we divide by 9, etc
+	if (initial_cardinality < 10) {
+		estimated_bytes_per_row /= 11 - initial_cardinality;
+	}
+	estimated_bytes_per_row = MaxValue<idx_t>(estimated_bytes_per_row, 10ULL);
+
+	idx_t files_with_sizes = 0;
+	idx_t estimated_file_row_count = 0;
+	while (bind_data.file_list->Scan(scan_data, file)) {
+		if (!file.extended_info) {
+			// no extended info
+			estimated_file_row_count = 0;
+			break;
+		}
+		auto entry = file.extended_info->options.find("file_size");
+		if (entry == file.extended_info->options.end()) {
+			// no file size available
+			estimated_file_row_count = 0;
+			break;
+		}
+		// we have the file size - estimate row count based on estimated bytes per row
+		auto current_file_size = entry->second.GetValue<uint64_t>();
+		files_with_sizes++;
+		idx_t rows_in_this_file = MaxValue<idx_t>(current_file_size / estimated_bytes_per_row, 1ULL);
+		estimated_file_row_count += rows_in_this_file;
+	}
+	idx_t per_file_cardinality;
+	if (estimated_file_row_count > 0) {
+		// use estimate based on file sizes
+		per_file_cardinality = estimated_file_row_count / files_with_sizes;
+	} else {
+		// no estimate based on file sizes - use initial file cardinality
+		per_file_cardinality = parquet_data.initial_file_cardinality;
+	}
+	// if we have several files, our cardinality estimate can be way off if our initial file is ~empty
+	// we set the minimum per file cardinality to 1000 just to avoid greatly underestimating
+	idx_t min_per_file_cardinality = 1000ULL;
+	if (per_file_cardinality < min_per_file_cardinality) {
+		per_file_cardinality = min_per_file_cardinality;
+	}
+	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
 }
 
 unique_ptr<BaseStatistics> ParquetReader::GetStatistics(ClientContext &context, const string &name) {
@@ -558,10 +685,15 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 		return false;
 	}
 	// The current reader has rowgroups left to be scanned
-	vector<idx_t> group_indexes {gstate.row_group_index};
-	InitializeScan(context, lstate.scan_state, group_indexes);
+	lstate.group_indexes = {gstate.row_group_index};
 	gstate.row_group_index++;
 	return true;
+}
+
+void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                LocalTableFunctionState &lstate_p) {
+	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	InitializeScan(context, lstate.scan_state, lstate.group_indexes);
 }
 
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
@@ -579,7 +711,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 		}
 	}
 #endif
-
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
