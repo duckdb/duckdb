@@ -1175,7 +1175,6 @@ void ART::FinalizeVacuum(const unordered_set<uint8_t> &indexes) {
 	}
 }
 
-// Assumes NodePointer& node is a reference to a parent node that is pinned in memory.
 static void VacuumPointerIfNeeded(ART &art, const unordered_set<uint8_t> &indexes, NodePointer &node) {
 	const auto type = node.GetType();
 	if (type == NType::LEAF_INLINED) {
@@ -1248,7 +1247,6 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 void ART::InitializeMerge(NodePointer &node, unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(node.HasMetadata());
 
-	// We want to scan every node.
 	auto node_handler = [](NodePointer) -> ScanNodeResult {
 		return ScanNodeResult::SCAN_CHILDREN;
 	};

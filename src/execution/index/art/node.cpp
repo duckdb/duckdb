@@ -408,9 +408,7 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 	};
 
 	auto child_handler = [&](NodePointer &child) -> NodePointer {
-		if (!child.HasMetadata()) {
-			return NodePointer();
-		}
+		D_ASSERT(child.HasMetadata());
 		if (child.GetGateStatus() == GateStatus::GATE_SET) {
 			Leaf::TransformToDeprecated(art, child);
 			return NodePointer();

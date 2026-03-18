@@ -28,7 +28,7 @@ NodePointer PrefixHandle::TransformToDeprecated(ART &art, NodePointer &node, Tra
 			NodeHandle handle(art, current);
 			auto child = reinterpret_cast<NodePointer *>(handle.GetPtr() + art.PrefixCount() + 1);
 			current = *child;
-			// Handle gated endpoints while the prefix is still pinned.
+			// Handle gated endpoints while the parent of the prefix chain is still pinned.
 			if (current.HasMetadata() && current.GetGateStatus() == GateStatus::GATE_SET) {
 				Leaf::TransformToDeprecated(art, *child);
 				return NodePointer();
