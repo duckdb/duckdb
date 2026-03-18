@@ -37,14 +37,14 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	string filters_info;
 	bool first_item = true;
 	for (auto &kv : table_filters) {
-		auto column_index = kv.ColumnIndex();
+		auto filter_idx = kv.GetIndex();
 		auto &filter = kv.Filter();
-		if (column_index.index < names.size()) {
+		if (filter_idx < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
 			first_item = false;
-			filters_info += filter.ToString(names[column_index.index]);
+			filters_info += filter.ToString(names[filter_idx]);
 		}
 	}
 	result["Filters"] = filters_info;
@@ -107,7 +107,7 @@ const ColumnIndex &LogicalGet::GetColumnIndex(ColumnBinding binding) const {
 	if (binding.table_index != table_index) {
 		throw InternalException("LogicalGet::GetColumnIndex - table index does not match LogicalGet table index");
 	}
-	return column_ids[binding.column_index.index];
+	return column_ids[binding.column_index];
 }
 
 const ColumnIndex &LogicalGet::GetColumnIndex(ProjectionIndex proj_index) const {
@@ -193,7 +193,7 @@ void LogicalGet::ResolveTypes() {
 		}
 	} else {
 		for (auto &proj_index : projection_ids) {
-			auto &index = column_ids[proj_index.index];
+			auto &index = column_ids[proj_index];
 			types.push_back(GetColumnType(index));
 		}
 	}

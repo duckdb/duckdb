@@ -1257,7 +1257,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	if (filters) {
 		state.adaptive_filter = make_uniq<AdaptiveFilter>(*filters);
 		for (auto &entry : *filters) {
-			state.scan_filters.emplace_back(context, entry.ColumnIndex(), entry.Filter());
+			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
 		}
 	}
 

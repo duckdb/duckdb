@@ -45,7 +45,7 @@ public:
 	public:
 		explicit TableFilterIteratorEntry(map<ProjectionIndex, unique_ptr<TableFilter>>::iterator);
 
-		ProjectionIndex ColumnIndex() const;
+		ProjectionIndex GetIndex() const;
 		TableFilter &Filter();
 		const TableFilter &Filter() const;
 		unique_ptr<TableFilter> TakeFilter();
@@ -58,7 +58,7 @@ public:
 	public:
 		explicit ConstTableFilterIteratorEntry(map<ProjectionIndex, unique_ptr<TableFilter>>::const_iterator);
 
-		ProjectionIndex ColumnIndex() const;
+		ProjectionIndex GetIndex() const;
 		const TableFilter &Filter() const;
 
 	public:

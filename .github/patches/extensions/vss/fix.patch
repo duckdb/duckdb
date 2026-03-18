@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index 1af2a74..18b760c 100644
+index 1af2a74..9d78cb8 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -613,7 +613,7 @@ void HNSWIndex::VerifyAllocations(IndexLock &state) {
@@ -11,16 +11,12 @@ index 1af2a74..18b760c 100644
                                             const vector<ColumnIndex> &table_columns, bool &success, bool &found) {
  
  	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-@@ -623,10 +623,10 @@ static void TryBindIndexExpressionInternal(Expression &expr, idx_t table_idx, co
- 		// Rewrite the column reference to fit in the current set of bound column ids
- 		ref.binding.table_index = table_idx;
- 
--		const auto referenced_column = index_columns[ref.binding.column_index];
-+		const auto referenced_column = index_columns[ref.binding.column_index.index];
+@@ -626,7 +626,7 @@ static void TryBindIndexExpressionInternal(Expression &expr, idx_t table_idx, co
+ 		const auto referenced_column = index_columns[ref.binding.column_index];
  		for (idx_t i = 0; i < table_columns.size(); i++) {
  			if (table_columns[i].GetPrimaryIndex() == referenced_column) {
 -				ref.binding.column_index = i;
-+				ref.binding.column_index.index = i;
++				ref.binding.column_index = ProjectionIndex(i);
  				return;
  			}
  		}
@@ -37,7 +33,7 @@ index 1af2a74..18b760c 100644
  
  unique_ptr<ExpressionMatcher> HNSWIndex::MakeFunctionMatcher() const {
 diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
-index 783db2a..3e17e93 100644
+index 783db2a..509197a 100644
 --- a/src/hnsw/hnsw_optimize_join.cpp
 +++ b/src/hnsw/hnsw_optimize_join.cpp
 @@ -17,6 +17,8 @@
@@ -84,15 +80,6 @@ index 783db2a..3e17e93 100644
  	vector<LogicalType> inner_returned_types;
  
  	idx_t outer_vector_column;
-@@ -232,7 +234,7 @@ void LogicalHNSWIndexJoin::ResolveTypes() {
- 		}
- 	} else {
- 		for (const auto &proj_index : inner_projection_ids) {
--			const auto &index = inner_column_ids[proj_index];
-+			const auto &index = inner_column_ids[proj_index.index];
- 			if (index == COLUMN_IDENTIFIER_ROW_ID) {
- 				types.emplace_back(LogicalType::ROW_TYPE);
- 			} else {
 @@ -253,7 +255,7 @@ vector<ColumnBinding> LogicalHNSWIndexJoin::GetLeftBindings() {
  	vector<ColumnBinding> result;
  	if (inner_projection_ids.empty()) {
@@ -116,34 +103,19 @@ index 783db2a..3e17e93 100644
  		return false;
  	}
 -	if (filter_ref_expr.binding.column_index != 0) {
-+	if (filter_ref_expr.binding.column_index.index != 0) {
++	if (filter_ref_expr.binding.column_index != ProjectionIndex(0)) {
  		return false;
  	}
  
-@@ -491,10 +493,10 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
- 	if (distance_ref_expr.binding.table_index != inner_proj.table_index) {
- 		return false;
- 	}
--	if (distance_ref_expr.binding.column_index >= inner_proj.expressions.size()) {
-+	if (distance_ref_expr.binding.column_index.index >= inner_proj.expressions.size()) {
+@@ -494,7 +496,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	if (distance_ref_expr.binding.column_index >= inner_proj.expressions.size()) {
  		return false;
  	}
 -	const auto &distance_expr_ptr = inner_proj.expressions[distance_ref_expr.binding.column_index];
-+	auto &distance_expr_ptr = *inner_proj.expressions[distance_ref_expr.binding.column_index.index];
++	auto &distance_expr_ptr = *inner_proj.expressions[distance_ref_expr.binding.column_index];
  
  	//------------------------------------------------------------------------------
  	// Match the index
-@@ -586,8 +588,8 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
- 	index_join->inner_returned_types = inner_get.returned_types;
- 
- 	// TODO: this is kind of unsafe, column_index != physical index
--	index_join->outer_vector_column = outer_ref_expr.binding.column_index;
--	index_join->inner_vector_column = inner_ref_expr.binding.column_index;
-+	index_join->outer_vector_column = outer_ref_expr.binding.column_index.index;
-+	index_join->inner_vector_column = inner_ref_expr.binding.column_index.index;
- 
- 	ColumnBindingReplacer replacer;
- 
 @@ -598,7 +600,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
  	auto delim_bindings = delim_join.GetColumnBindings();
  	auto delim_types = delim_join.types;
@@ -193,7 +165,7 @@ index 783db2a..3e17e93 100644
  		}
  	}
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
-index 84dbda7..d1850a8 100644
+index 84dbda7..5d47cb0 100644
 --- a/src/hnsw/hnsw_optimize_scan.cpp
 +++ b/src/hnsw/hnsw_optimize_scan.cpp
 @@ -64,8 +64,7 @@ public:
@@ -202,7 +174,7 @@ index 84dbda7..d1850a8 100644
  		// This the expression that is referenced by the order by expression
 -		const auto projection_index = bound_column_ref.binding.column_index;
 -		const auto &projection_expr = projection.expressions[projection_index];
-+		auto &projection_expr = *projection.expressions[bound_column_ref.binding.column_index.index];
++		auto &projection_expr = *projection.expressions[bound_column_ref.binding.column_index];
  
  		// The projection must sit on top of a get
  		if (projection.children.size() != 1 || projection.children.front()->type != LogicalOperatorType::LOGICAL_GET) {
@@ -236,7 +208,7 @@ index 84dbda7..d1850a8 100644
 -			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, column_id));
 -			new_filter->expressions.push_back(entry.second->ToExpression(*column));
 +		for (const auto &entry : get.table_filters) {
-+			auto filter_idx = entry.ColumnIndex();
++			auto filter_idx = entry.GetIndex();
 +			auto &column_id = get.GetColumnIndex(filter_idx);
 +			auto &type = get.returned_types[column_id.GetPrimaryIndex()];
 +			auto &filter = entry.Filter();
@@ -246,7 +218,7 @@ index 84dbda7..d1850a8 100644
  		new_filter->children.push_back(std::move(get_ptr));
  		new_filter->ResolveOperatorTypes();
 diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
-index 14f68e7..3454f7b 100644
+index 14f68e7..5e3a4b8 100644
 --- a/src/hnsw/hnsw_optimize_topk.cpp
 +++ b/src/hnsw/hnsw_optimize_topk.cpp
 @@ -91,7 +91,7 @@ public:
@@ -292,7 +264,7 @@ index 14f68e7..3454f7b 100644
 -			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, column_id));
 -			new_filter->expressions.push_back(entry.second->ToExpression(*column));
 +		for (const auto &entry : get.table_filters) {
-+			auto filter_idx = entry.ColumnIndex();
++			auto filter_idx = entry.GetIndex();
 +			auto &column_id = get.GetColumnIndex(filter_idx);
 +			auto &type = get.returned_types[column_id.GetPrimaryIndex()];
 +			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, filter_idx));

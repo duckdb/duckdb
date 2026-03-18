@@ -12,7 +12,7 @@ index c941c46..8366651 100644
  #include "duckdb/planner/filter/constant_filter.hpp"
  
 diff --git a/src/mysql_filter_pushdown.cpp b/src/mysql_filter_pushdown.cpp
-index 70ab546..3272c2f 100644
+index 70ab546..9f1d512 100644
 --- a/src/mysql_filter_pushdown.cpp
 +++ b/src/mysql_filter_pushdown.cpp
 @@ -84,14 +84,14 @@ string MySQLFilterPushdown::TransformFilter(string &column_name, TableFilter &fi
@@ -29,16 +29,16 @@ index 70ab546..3272c2f 100644
 -		auto column_name = MySQLUtils::WriteIdentifier(names[column_ids[entry.first]]);
 -		auto &filter = *entry.second;
 +	for (auto &entry : *filters) {
-+		auto column_name = MySQLUtils::WriteIdentifier(names[column_ids[entry.ColumnIndex().index]]);
++		auto column_name = MySQLUtils::WriteIdentifier(names[column_ids[entry.GetIndex()]]);
 +		auto &filter = entry.Filter();
  		auto new_filter = TransformFilter(column_name, filter);
  		if (new_filter.empty()) {
  			continue;
 diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
-index b66df5d..4712618 100644
+index b66df5d..73699f6 100644
 --- a/src/storage/mysql_execute_query.cpp
 +++ b/src/storage/mysql_execute_query.cpp
-@@ -115,12 +115,12 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
+@@ -115,9 +115,9 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
  			return string();
  		}
  		string result;
@@ -46,16 +46,11 @@ index b66df5d..4712618 100644
 -			auto column_index = entry.first;
 -			auto &filter = entry.second;
 +		for (auto &entry : *table_scan.table_filters) {
-+			auto column_index = entry.ColumnIndex();
++			auto column_index = entry.GetIndex();
 +			auto &filter = entry.Filter();
  			string column_name;
--			if (column_index < table_scan.names.size()) {
--				const auto col_id = table_scan.column_ids[column_index].GetPrimaryIndex();
-+			if (column_index.index < table_scan.names.size()) {
-+				const auto col_id = table_scan.column_ids[column_index.index].GetPrimaryIndex();
- 				if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
- 					column_name = "rowid";
- 				} else {
+ 			if (column_index < table_scan.names.size()) {
+ 				const auto col_id = table_scan.column_ids[column_index].GetPrimaryIndex();
 @@ -128,7 +128,7 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
  				}
  			}

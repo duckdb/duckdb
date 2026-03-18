@@ -18,7 +18,7 @@ unique_ptr<TableFilterSet> MoveTableFilters(TableFilterSet &table_filters) {
 	// create the table filter map
 	auto table_filter_set = make_uniq<TableFilterSet>();
 	for (auto &entry : table_filters) {
-		table_filter_set->SetFilterByColumnIndex(entry.ColumnIndex(), entry.TakeFilter());
+		table_filter_set->SetFilterByColumnIndex(entry.GetIndex(), entry.TakeFilter());
 	}
 	return table_filter_set;
 }
@@ -97,7 +97,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 			virtual_columns = op.function.get_virtual_columns(context, op.bind_data.get());
 		}
 		for (auto &entry : *table_filters) {
-			auto filter_idx = entry.ColumnIndex();
+			auto filter_idx = entry.GetIndex();
 			auto &filter_expr = entry.Filter();
 			auto &column_idx = op.GetColumnIndex(filter_idx);
 			auto column_id = column_idx.GetPrimaryIndex();
@@ -111,13 +111,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				}
 				optional_idx column_id_filter;
 				for (idx_t i = 0; i < projection_ids.size(); i++) {
-					if (column_ids[projection_ids[i].index] == column_idx) {
+					if (column_ids[projection_ids[i]] == column_idx) {
 						column_id_filter = i;
 						break;
 					}
 				}
 				if (!column_id_filter.IsValid()) {
-					projection_ids.push_back(ProjectionIndex(filter_idx));
+					projection_ids.push_back(filter_idx);
 					column_id_filter = projection_ids.size() - 1;
 				}
 				auto column = make_uniq<BoundReferenceExpression>(column_type, column_id_filter.GetIndex());
@@ -132,7 +132,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		if (!select_list.empty()) {
 			vector<LogicalType> filter_types;
 			for (auto &c : projection_ids) {
-				auto column_id = column_ids[c.index].GetPrimaryIndex();
+				auto column_id = column_ids[c].GetPrimaryIndex();
 				if (IsVirtualColumn(column_id)) {
 					auto &column = virtual_columns.at(column_id);
 					filter_types.push_back(column.type);
@@ -194,7 +194,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	}
 	vector<idx_t> projection_indices;
 	for (auto &proj_id : op.projection_ids) {
-		projection_indices.push_back(proj_id.index);
+		projection_indices.push_back(proj_id);
 	}
 
 	auto &table_scan = Make<PhysicalTableScan>(

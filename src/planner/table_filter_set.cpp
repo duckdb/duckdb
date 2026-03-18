@@ -8,7 +8,7 @@ TableFilterSet::ConstTableFilterIteratorEntry::ConstTableFilterIteratorEntry(
     : iterator(it) {
 }
 
-ProjectionIndex TableFilterSet::ConstTableFilterIteratorEntry::ColumnIndex() const {
+ProjectionIndex TableFilterSet::ConstTableFilterIteratorEntry::GetIndex() const {
 	return iterator->first;
 }
 
@@ -21,7 +21,7 @@ TableFilterSet::TableFilterIteratorEntry::TableFilterIteratorEntry(
     : iterator(it) {
 }
 
-ProjectionIndex TableFilterSet::TableFilterIteratorEntry::ColumnIndex() const {
+ProjectionIndex TableFilterSet::TableFilterIteratorEntry::GetIndex() const {
 	return iterator->first;
 }
 
@@ -50,7 +50,7 @@ bool TableFilterSet::HasFilter(ProjectionIndex col_idx) const {
 const TableFilter &TableFilterSet::GetFilterByColumnIndex(ProjectionIndex col_idx) const {
 	auto filter = TryGetFilterByColumnIndex(col_idx);
 	if (!filter) {
-		throw InternalException("Table filter set does not have a filter for column idx %d", col_idx.index);
+		throw InternalException("Table filter set does not have a filter for column idx %d", col_idx);
 	}
 	return *filter;
 }
@@ -69,7 +69,7 @@ optional_ptr<const TableFilter> TableFilterSet::TryGetFilterByColumnIndex(Projec
 TableFilter &TableFilterSet::GetFilterByColumnIndexMutable(ProjectionIndex col_idx) {
 	auto filter = TryGetFilterByColumnIndexMutable(col_idx);
 	if (!filter) {
-		throw InternalException("Table filter set does not have a filter for column idx %d", col_idx.index);
+		throw InternalException("Table filter set does not have a filter for column idx %d", col_idx);
 	}
 	return *filter;
 }
@@ -183,12 +183,12 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	auto result = make_uniq<TableFilterSet>();
 	if (existing_filters) {
 		for (auto &filter_entry : *existing_filters) {
-			result->PushFilter(filter_entry.ColumnIndex(), filter_entry.Filter().Copy());
+			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Copy());
 		}
 	}
 	for (auto &entry : filters) {
 		for (auto &filter_entry : *entry.second) {
-			result->PushFilter(filter_entry.ColumnIndex(), filter_entry.Filter().Copy());
+			result->PushFilter(filter_entry.GetIndex(), filter_entry.Filter().Copy());
 		}
 	}
 	if (!result->HasFilters()) {

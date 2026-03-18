@@ -183,17 +183,17 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				throw BinderException(func_expr.GetQueryLocation(),
 				                      "Column '%s' referenced multiple times in USING KEY clause.\n"
 				                      "Try using an alias for one of the aggregates.",
-				                      result.names[aggregate_idx.index]);
+				                      result.names[aggregate_idx]);
 			}
 
 			if (key_references.find(aggregate_idx) != key_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
 				                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
 				                      "Try using an alias for the aggregation.",
-				                      result.names[aggregate_idx.index]);
+				                      result.names[aggregate_idx]);
 			}
 
-			return_types[aggregate_idx.index] = aggregate->return_type;
+			return_types[aggregate_idx] = aggregate->return_type;
 			payload_references[aggregate_idx] = std::move(aggregate);
 		} else {
 			throw BinderException(

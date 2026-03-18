@@ -60,13 +60,13 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &entry : filters) {
-		idx_t local_index = entry.ColumnIndex().index;
-		idx_t column_idx = column_ids[local_index];
+		auto filter_idx = entry.GetIndex();
+		idx_t column_idx = column_ids[filter_idx];
 		if (IsVirtualColumn(column_idx)) {
 			continue;
 		}
-		auto column_ref = make_uniq<BoundColumnRefExpression>(
-		    types[column_idx], ColumnBinding(table_index, ProjectionIndex(entry.ColumnIndex())));
+		auto column_ref =
+		    make_uniq<BoundColumnRefExpression>(types[filter_idx], ColumnBinding(table_index, entry.GetIndex()));
 		auto filter_expr = entry.Filter().ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}

@@ -12,7 +12,7 @@ index 608c67af..9c6744a7 100644
  	auto http_headers = HTTPHeaders();
  	for (auto &header : aws_headers) {
 diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
-index 02a3b3d3..9d312ac8 100644
+index 02a3b3d3..3dbbc921 100644
 --- a/src/iceberg_functions/iceberg_multi_file_list.cpp
 +++ b/src/iceberg_functions/iceberg_multi_file_list.cpp
 @@ -19,6 +19,7 @@
@@ -66,7 +66,7 @@ index 02a3b3d3..9d312ac8 100644
 -		if (entry.first < names.size()) {
 -			result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
 +	for (auto &entry : new_filters) {
-+		auto column_idx = column_indexes[entry.ColumnIndex().index];
++		auto column_idx = column_indexes[entry.GetIndex()];
 +		if (column_idx < names.size()) {
 +			result_filter_set.PushFilter(column_idx, entry.Filter().Copy());
  		}
@@ -89,14 +89,14 @@ index 02a3b3d3..9d312ac8 100644
 -		    filter.second->Equals(*previously_pushed_down_filter->second)) {
 +	for (auto &entry : filters) {
 +		auto &filter = entry.Filter();
-+		auto column_id = column_ids[entry.ColumnIndex().index];
++		auto column_id = column_ids[entry.GetIndex()];
 +		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(column_id);
 +		if (previously_pushed_down_filter && filter.Equals(*previously_pushed_down_filter)) {
  			// Skip filters that we already have pushed down
  			continue;
  		}
 -		filters_copy.PushFilter(ColumnIndex(column_id), filter.second->Copy());
-+		filters_copy.PushFilter(entry.ColumnIndex(), filter.Copy());
++		filters_copy.PushFilter(entry.GetIndex(), filter.Copy());
  	}
  
 -	if (!filters_copy.filters.empty()) {
@@ -263,6 +263,19 @@ index 62b71d18..1d8a5e1f 100644
  
  	mutable mutex entry_lock;
  	mutable vector<IcebergManifestEntry> manifest_entries;
+diff --git a/src/storage/catalog/iceberg_schema_entry.cpp b/src/storage/catalog/iceberg_schema_entry.cpp
+index 88c7537c..c4e63923 100644
+--- a/src/storage/catalog/iceberg_schema_entry.cpp
++++ b/src/storage/catalog/iceberg_schema_entry.cpp
+@@ -153,7 +153,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateIndex(CatalogTransaction tr
+ 	throw NotImplementedException("Create Index");
+ }
+ 
+-string GetUCCreateView(CreateViewInfo &info) {
++static string GetUCCreateView(CreateViewInfo &info) {
+ 	throw NotImplementedException("Get Create View");
+ }
+ 
 diff --git a/src/storage/catalog/iceberg_table_set.cpp b/src/storage/catalog/iceberg_table_set.cpp
 index d2d8f9df..6522c068 100644
 --- a/src/storage/catalog/iceberg_table_set.cpp

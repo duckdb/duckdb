@@ -142,7 +142,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 	vector<ProjectionIndex> filter_columns;
 	filter_columns.reserve(get.table_filters.FilterCount());
 	for (auto &kv : get.table_filters) {
-		filter_columns.push_back(kv.ColumnIndex());
+		filter_columns.push_back(kv.GetIndex());
 	}
 
 	for (auto &table_filter_column : filter_columns) {

@@ -684,7 +684,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &proj = op.Cast<LogicalProjection>();
 		for (auto proj_idx : ProjectionIndex::GetIndexes(proj.expressions.size())) {
-			auto &expr = *proj.expressions[proj_idx.index];
+			auto &expr = *proj.expressions[proj_idx];
 			auto record = column_references.find(ColumnBinding(proj.table_index, proj_idx));
 			if (record == column_references.end()) {
 				//! Not referenced, skip
@@ -754,7 +754,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	//! for each filter that was pushed down - convert them into an expression
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &entry : get.table_filters) {
-		auto filter_idx = entry.ColumnIndex();
+		auto filter_idx = entry.GetIndex();
 		auto &filter = entry.Filter();
 		auto &col_id = get.GetColumnIndex(filter_idx);
 		auto column_type = get.GetColumnType(col_id);
@@ -780,7 +780,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	bool has_pushdown_extract = false;
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto &col_sel_idx : col_sel) {
-		auto &logical_column_id = old_column_ids[col_sel_idx.index];
+		auto &logical_column_id = old_column_ids[col_sel_idx];
 		auto &column_type = get.GetColumnType(logical_column_id);
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
@@ -843,7 +843,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		}
 		TableFilterSet remapped_filters;
 		for (auto &entry : get.table_filters) {
-			auto it = old_to_new_pos.find(entry.ColumnIndex());
+			auto it = old_to_new_pos.find(entry.GetIndex());
 			if (it == old_to_new_pos.end()) {
 				throw InternalException("RemoveUnusedColumns: removed a filter column");
 			}

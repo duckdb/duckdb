@@ -173,7 +173,7 @@ struct MultiFileLocalIndex {
 public:
 	explicit MultiFileLocalIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
 	}
-	explicit MultiFileLocalIndex(ProjectionIndex projection) : index(projection.index) {
+	explicit MultiFileLocalIndex(ProjectionIndex projection) : index(projection) {
 	}
 
 public:

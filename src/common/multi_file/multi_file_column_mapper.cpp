@@ -905,7 +905,7 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 	}
 	auto &global_to_local = mapping.global_to_local;
 	for (auto &it : *global_filters) {
-		MultiFileGlobalIndex global_index(it.ColumnIndex().index);
+		MultiFileGlobalIndex global_index(it.GetIndex());
 		auto &global_filter = it.Filter();
 
 		auto local_it = global_to_local.find(global_index);

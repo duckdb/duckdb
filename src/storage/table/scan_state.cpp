@@ -49,7 +49,7 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 
 ScanFilter::ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
                        TableFilter &filter)
-    : scan_column_index(index), table_column_index(column_ids[index.index]), filter(filter), always_true(false) {
+    : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
 	filter_state = TableFilterState::Initialize(context, filter);
 }
 
@@ -60,7 +60,7 @@ void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
 	filter_list.reserve(filters.FilterCount());
 	for (auto &entry : filters) {
-		filter_list.emplace_back(context, entry.ColumnIndex(), column_ids, entry.Filter());
+		filter_list.emplace_back(context, entry.GetIndex(), column_ids, entry.Filter());
 	}
 	column_has_filter.reserve(column_ids.size());
 	for (auto col_idx : ProjectionIndex::GetIndexes(column_ids.size())) {
@@ -105,7 +105,7 @@ void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
 		return;
 	}
 	filter.always_true = true;
-	column_has_filter[filter.scan_column_index.index] = false;
+	column_has_filter[filter.scan_column_index] = false;
 	always_true_filters++;
 }
 

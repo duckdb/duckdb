@@ -12,7 +12,7 @@ index 263d413..63d35f1 100644
  	// Visit the operator's expressions
  	LogicalOperatorVisitor::EnumerateExpressions(*this,
 diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
-index 3b37ca8..2138584 100644
+index 3b37ca8..fa54ae8 100644
 --- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
 @@ -27,6 +27,7 @@
@@ -23,17 +23,12 @@ index 3b37ca8..2138584 100644
  
  namespace duckdb {
  //-----------------------------------------------------------------------------
-@@ -45,11 +46,11 @@ public:
- 			bound_colref.binding.table_index = get.table_index;
- 			auto &column_ids = index.GetColumnIds();
- 			auto &get_column_ids = get.GetColumnIds();
--			column_t referenced_column = column_ids[bound_colref.binding.column_index];
-+			column_t referenced_column = column_ids[bound_colref.binding.column_index.index];
+@@ -49,7 +50,7 @@ public:
  			// search for the referenced column in the set of column_ids
  			for (idx_t i = 0; i < get_column_ids.size(); i++) {
  				if (get_column_ids[i].GetPrimaryIndex() == referenced_column) {
 -					bound_colref.binding.column_index = i;
-+					bound_colref.binding.column_index.index = i;
++					bound_colref.binding.column_index = ProjectionIndex(i);
  					return;
  				}
  			}
@@ -68,7 +63,7 @@ index 3b37ca8..2138584 100644
 -			for (auto &entry : get.table_filters.filters) {
 -				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
 +			for (auto &entry : get.table_filters) {
-+				auto proj_id = entry.ColumnIndex();
++				auto proj_id = entry.GetIndex();
 +				auto &filter = entry.Filter();
 +				if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
  					// not an expression filter
@@ -102,21 +97,13 @@ index 3b37ca8..2138584 100644
  				                                rewrite_possible);
  			} else {
  				RewriteIndexExpression(index_entry, get, *index_expr, rewrite_possible);
-@@ -281,14 +285,14 @@ public:
+@@ -281,7 +285,7 @@ public:
  		get.has_estimated_cardinality = cardinality->has_estimated_cardinality;
  		get.estimated_cardinality = cardinality->estimated_cardinality;
  		get.bind_data = std::move(bind_data);
 -		if (get.table_filters.filters.empty()) {
 +		if (!get.table_filters.HasFilters()) {
  			return true;
- 		}
- 
- 		// Before we clear projection ids, replace projection map in the filter
- 		if (!get.projection_ids.empty() && filter) {
- 			for (auto &id : filter->projection_map) {
--				id = get.projection_ids[id];
-+				id = get.projection_ids[id.index];
- 			}
  		}
  
 @@ -299,22 +303,12 @@ public:
@@ -140,7 +127,7 @@ index 3b37ca8..2138584 100644
 -			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, column_id));
 -			new_filter->expressions.push_back(entry.second->ToExpression(*column));
 +		for (const auto &entry : get.table_filters) {
-+			auto index_ref = entry.ColumnIndex();
++			auto index_ref = entry.GetIndex();
 +			auto &column_id = get.GetColumnIndex(index_ref);
 +			auto &type = get.returned_types[column_id.GetPrimaryIndex()];
 +			auto column = make_uniq<BoundColumnRefExpression>(type, ColumnBinding(get.table_index, index_ref));

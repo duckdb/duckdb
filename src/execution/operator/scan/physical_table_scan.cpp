@@ -312,15 +312,15 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 	string filters_info;
 	bool first_item = true;
 	for (auto &f : filter_set) {
-		auto filter_idx = f.ColumnIndex();
+		auto filter_idx = f.GetIndex();
 		auto &filter = f.Filter();
-		if (filter_idx.index < names.size()) {
+		if (filter_idx < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";
 			}
 			first_item = false;
 
-			const auto col_id = column_ids[filter_idx.index].GetPrimaryIndex();
+			const auto col_id = column_ids[filter_idx].GetPrimaryIndex();
 			if (IsVirtualColumn(col_id)) {
 				auto entry = virtual_columns.find(col_id);
 				if (entry == virtual_columns.end()) {

@@ -1058,7 +1058,7 @@ index 35b0518f..770ac8da 100644
  		if (snapshot_filter_min.IsValid()) {
  			auto min_constant = Value::BIGINT(NumericCast<int64_t>(snapshot_filter_min.GetIndex()));
 diff --git a/src/storage/ducklake_inlined_data_reader.cpp b/src/storage/ducklake_inlined_data_reader.cpp
-index 405a5acf..d227728b 100644
+index 405a5acf..f45dfc18 100644
 --- a/src/storage/ducklake_inlined_data_reader.cpp
 +++ b/src/storage/ducklake_inlined_data_reader.cpp
 @@ -258,17 +258,17 @@ AsyncResult DuckLakeInlinedDataReader::Scan(ClientContext &context, GlobalTableF
@@ -1073,9 +1073,8 @@ index 405a5acf..d227728b 100644
  					continue;
  				}
 -				auto column_id = entry.first;
--				auto &vec = chunk.data[column_id];
-+				auto column_id = entry.ColumnIndex();
-+				auto &vec = chunk.data[column_id.index];
++				auto column_id = entry.GetIndex();
+ 				auto &vec = chunk.data[column_id];
  
  				UnifiedVectorFormat vdata;
  				vec.ToUnifiedFormat(chunk.size(), vdata);
@@ -1388,10 +1387,10 @@ index e812cef5..6140d444 100644
  		table_size.table_uuid = row.GetValue<string>(3);
  		if (!row.IsNull(4)) {
 diff --git a/src/storage/ducklake_multi_file_list.cpp b/src/storage/ducklake_multi_file_list.cpp
-index e3ddf53b..26c14fe6 100644
+index e3ddf53b..96e99928 100644
 --- a/src/storage/ducklake_multi_file_list.cpp
 +++ b/src/storage/ducklake_multi_file_list.cpp
-@@ -51,17 +51,17 @@ unique_ptr<MultiFileList>
+@@ -51,16 +51,16 @@ unique_ptr<MultiFileList>
  DuckLakeMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFileOptions &options,
                                               const vector<string> &names, const vector<LogicalType> &types,
                                               const vector<column_t> &column_ids, TableFilterSet &filters) const {
@@ -1406,14 +1405,12 @@ index e3ddf53b..26c14fe6 100644
 -	for (auto &entry : filters.filters) {
 -		auto column_index_val = entry.first;
 -		idx_t column_idx = column_index_val;
--		auto column_id = column_ids[column_idx];
 +	for (auto &entry : filters) {
-+		auto column_index_val = entry.ColumnIndex();
++		auto column_index_val = entry.GetIndex();
 +		auto column_idx = column_index_val;
-+		auto column_id = column_ids[column_idx.index];
+ 		auto column_id = column_ids[column_idx];
  
  		if (IsVirtualColumn(column_id)) {
- 			continue;
 @@ -71,7 +71,7 @@ DuckLakeMultiFileList::DynamicFilterPushdown(ClientContext &context, const Multi
  		auto &root_id = read_info.table.GetFieldId(column_index);
  		auto field_index = root_id.GetFieldIndex().index;

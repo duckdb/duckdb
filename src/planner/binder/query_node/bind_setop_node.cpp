@@ -157,14 +157,14 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 				need_reorder = true;
 			} else {
 				auto col_idx_in_child = entry->second;
-				auto &child_col_type = child_types[col_idx_in_child.index];
+				auto &child_col_type = child_types[col_idx_in_child];
 				// the child exists in this node - compute the type
 				if (result_type.id() == LogicalTypeId::INVALID) {
 					result_type = child_col_type;
 				} else {
 					result_type = LogicalType::ForceMaxLogicalType(result_type, child_col_type);
 				}
-				if (i != col_idx_in_child.index) {
+				if (i != col_idx_in_child) {
 					// the column exists - but the children are out-of-order, so we need to re-order anyway
 					need_reorder = true;
 				}
@@ -201,7 +201,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 			} else {
 				// the column exists - reference it
 				auto col_idx_in_child = entry->second;
-				auto &child_col_type = child.types[col_idx_in_child.index];
+				auto &child_col_type = child.types[col_idx_in_child];
 				auto root_idx = child.plan->GetRootIndex();
 				expr = make_uniq<BoundColumnRefExpression>(child_col_type, ColumnBinding(root_idx, col_idx_in_child));
 			}

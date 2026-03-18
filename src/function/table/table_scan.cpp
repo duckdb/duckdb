@@ -569,13 +569,13 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 	}
 
 	// Resolve bound column references in the index_expr against the current input projection
-	column_t updated_index_column;
+	ProjectionIndex updated_index_column;
 	bool found_index_column_in_input = false;
 
 	// Find the indexed column amongst the input columns
 	for (idx_t i = 0; i < input.column_ids.size(); ++i) {
 		if (input.column_ids[i] == indexed_columns[0]) {
-			updated_index_column = i;
+			updated_index_column = ProjectionIndex(i);
 			found_index_column_in_input = true;
 			break;
 		}
@@ -591,8 +591,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
 
 			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.binding.column_index.index == indexed_columns[0]) {
-				bound_column_ref_expr.binding.column_index.index = updated_index_column;
+			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
+				bound_column_ref_expr.binding.column_index = updated_index_column;
 			}
 		});
 	}

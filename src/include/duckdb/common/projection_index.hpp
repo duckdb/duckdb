@@ -20,11 +20,9 @@ struct ProjectionIndex {
 	explicit ProjectionIndex(idx_t index) : index(index) {
 	}
 
-	idx_t index;
-
-	// operator idx_t() const { // NOLINT: allow implicit conversion
-	// 	return GetIndex();
-	// }
+	operator idx_t() const { // NOLINT: allow implicit conversion
+		return GetIndex();
+	}
 	idx_t GetIndex() const {
 		if (!IsValid()) {
 			throw InternalException("ProjectionIndex::GetIndex called on invalid index");
@@ -94,6 +92,13 @@ struct ProjectionIndex {
 	static IndexRange GetIndexes(idx_t count) {
 		return IndexRange(count);
 	}
+
+	idx_t GetIndexUnsafe() const {
+		return index;
+	}
+
+private:
+	idx_t index;
 };
 
 } // namespace duckdb
@@ -103,7 +108,7 @@ namespace std {
 template <>
 struct hash<duckdb::ProjectionIndex> {
 	size_t operator()(const duckdb::ProjectionIndex &tbl_index) const {
-		return std::hash<uint64_t> {}(tbl_index.index);
+		return std::hash<uint64_t> {}(tbl_index.GetIndexUnsafe());
 	}
 };
 } // namespace std

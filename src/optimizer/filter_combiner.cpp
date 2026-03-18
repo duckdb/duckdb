@@ -356,7 +356,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	if (!TryGetProjectionIndex(expr, proj_index)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto &column_index = column_ids[proj_index.index];
+	auto &column_index = column_ids[proj_index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't push down filters on a column that has a pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -436,7 +436,7 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		// empty prefix - skip
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto &column_index = column_ids[column_ref.binding.column_index.index];
+	auto &column_index = column_ids[column_ref.binding.column_index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -473,7 +473,7 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 	auto proj_index = column_ref.binding.column_index;
-	auto &column_index = column_ids[proj_index.index];
+	auto &column_index = column_ids[proj_index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -530,7 +530,7 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	}
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto proj_index = column_ref.binding.column_index;
-	auto &column_index = column_ids[proj_index.index];
+	auto &column_index = column_ids[proj_index];
 	if (column_index.IsPushdownExtract()) {
 		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -629,7 +629,7 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 		if (!proj_id.IsValid()) {
 			proj_id = column_ref->binding.column_index;
-			auto &col_id = column_ids[proj_id.index];
+			auto &col_id = column_ids[proj_id];
 			if (col_id.IsPushdownExtract()) {
 				//! FIXME: can't support filter pushdown on pushed down extract currently
 				return FilterPushdownResult::NO_PUSHDOWN;
