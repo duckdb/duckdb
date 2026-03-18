@@ -183,6 +183,13 @@
       "paths": [
         "test/sql/join/test_hash_join_many_columns.test"
       ]
+    },
+    {
+      "reason": "Triggers are a new catalog type not present in old storage files.",
+      "paths": [
+        "test/sql/trigger/create_trigger_catalog.test",
+        "test/sql/trigger/create_trigger_parse.test"
+      ]
     }
   ]
 }
