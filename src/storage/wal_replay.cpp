@@ -19,6 +19,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -247,6 +248,9 @@ protected:
 
 	void ReplayCreateIndex();
 	void ReplayDropIndex();
+
+	void ReplayCreateTrigger();
+	void ReplayDropTrigger();
 
 	void ReplayUseTable();
 	void ReplayInsert();
@@ -644,6 +648,12 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_TYPE:
 		ReplayDropType();
 		break;
+	case WALType::CREATE_TRIGGER:
+		ReplayCreateTrigger();
+		break;
+	case WALType::DROP_TRIGGER:
+		ReplayDropTrigger();
+		break;
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
@@ -908,6 +918,29 @@ void WriteAheadLogDeserializer::ReplayDropType() {
 		return;
 	}
 
+	catalog.DropEntry(context, info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Trigger
+//===--------------------------------------------------------------------===//
+void WriteAheadLogDeserializer::ReplayCreateTrigger() {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "trigger");
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	if (DeserializeOnly()) {
+		return;
+	}
+	catalog.CreateTrigger(context, info->Cast<CreateTriggerInfo>());
+}
+
+void WriteAheadLogDeserializer::ReplayDropTrigger() {
+	DropInfo info;
+	info.type = CatalogType::TRIGGER_ENTRY;
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
+	if (DeserializeOnly()) {
+		return;
+	}
 	catalog.DropEntry(context, info);
 }
 
