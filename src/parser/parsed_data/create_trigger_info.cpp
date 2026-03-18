@@ -34,6 +34,9 @@ string CreateTriggerInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << "IF NOT EXISTS ";
 	}
+	if (!IsInvalidSchema(schema)) {
+		ss << KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+	}
 	ss << KeywordHelper::WriteOptionallyQuoted(trigger_name);
 	ss << " ";
 	switch (timing) {
