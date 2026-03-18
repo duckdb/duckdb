@@ -60,10 +60,6 @@ void NodePointer::FreeTree(ART &art, NodePointer &node) {
 		return;
 	}
 
-	auto pre_handler = [](NodePointer) -> ScanNodeResult {
-		return ScanNodeResult::SCAN_CHILDREN;
-	};
-
 	auto child_handler = [&](NodePointer &child) -> NodePointer {
 		D_ASSERT(child.HasMetadata());
 		auto type = child.GetType();
@@ -94,7 +90,7 @@ void NodePointer::FreeTree(ART &art, NodePointer &node) {
 		FreeNode(art, current);
 	};
 
-	ARTScanner(art, node, pre_handler, child_handler, post_handler);
+	ARTScanPostOrder(art, node, child_handler, post_handler);
 	node.Clear();
 }
 
@@ -444,7 +440,7 @@ void NodePointer::TransformToDeprecated(ART &art, NodePointer &node, TransformTo
 		}
 	};
 
-	ARTScanner(art, node, pre_handler, child_handler);
+	ARTScanPreOrder(art, node, pre_handler, child_handler);
 }
 
 //===--------------------------------------------------------------------===//
@@ -519,7 +515,7 @@ void NodePointer::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &nod
 	};
 
 	NodePointer root = *this;
-	ARTScanner(art, root, pre_handler, child_handler);
+	ARTScanPreOrder(art, root, pre_handler, child_handler);
 }
 
 //===--------------------------------------------------------------------===//

@@ -16,7 +16,7 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// ARTScanner
+// ARTScanPreOrder
 //===--------------------------------------------------------------------===//
 
 enum class ScanNodeResult : uint8_t { SCAN_CHILDREN, SKIP };
@@ -34,7 +34,7 @@ static void ScanChildren(ART &art, NodePointer node, CHILD_HANDLER &&child_handl
 }
 
 template <class PRE_HANDLER, class CHILD_HANDLER>
-void ARTScanner(ART &art, NodePointer &root, PRE_HANDLER &&pre_handler, CHILD_HANDLER &&child_handler) {
+void ARTScanPreOrder(ART &art, NodePointer &root, PRE_HANDLER &&pre_handler, CHILD_HANDLER &&child_handler) {
 	vector<NodePointer> stack;
 
 	// root node is always pinned, handle it first.
@@ -86,7 +86,7 @@ void ARTScanner(ART &art, NodePointer &root, PRE_HANDLER &&pre_handler, CHILD_HA
 }
 
 //===--------------------------------------------------------------------===//
-// ARTScanner (post-order)
+// ARTScanPostOrder
 //===--------------------------------------------------------------------===//
 
 struct ScanEntry {
@@ -109,9 +109,8 @@ static void ScanChildren(ART &art, NodePointer node, CHILD_HANDLER &&child_handl
 	});
 }
 
-template <class PRE_HANDLER, class CHILD_HANDLER, class POST_HANDLER>
-void ARTScanner(ART &art, NodePointer &root, PRE_HANDLER &&pre_handler, CHILD_HANDLER &&child_handler,
-                POST_HANDLER &&post_handler) {
+template <class CHILD_HANDLER, class POST_HANDLER>
+void ARTScanPostOrder(ART &art, NodePointer &root, CHILD_HANDLER &&child_handler, POST_HANDLER &&post_handler) {
 	vector<ScanEntry> stack;
 
 	auto push_node = child_handler(root);
@@ -123,20 +122,13 @@ void ARTScanner(ART &art, NodePointer &root, PRE_HANDLER &&pre_handler, CHILD_HA
 		auto &entry = stack.back();
 
 		if (entry.children_scanned) {
-			// Post-order: children are done.
 			post_handler(entry.node);
 			stack.pop_back();
 			continue;
 		}
 
-		// First visit: mark, run pre-order hook, scan children.
 		entry.children_scanned = true;
 		auto current = entry.node;
-
-		if (pre_handler(current) == ScanNodeResult::SKIP) {
-			stack.pop_back();
-			continue;
-		}
 
 		switch (current.GetType()) {
 		case NType::LEAF_INLINED:

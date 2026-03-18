@@ -1227,7 +1227,7 @@ void ART::Vacuum(IndexLock &state) {
 		return child;
 	};
 
-	ARTScanner(art, tree, pre_handler, child_handler);
+	ARTScanPreOrder(art, tree, pre_handler, child_handler);
 
 	// Finalize the vacuum operation.
 	FinalizeVacuum(indexes);
@@ -1285,7 +1285,7 @@ void ART::InitializeMerge(NodePointer &other_tree, unsafe_vector<idx_t> &upper_b
 		}
 	};
 
-	ARTScanner(*this, other_tree, pre_handler, child_handler);
+	ARTScanPreOrder(*this, other_tree, pre_handler, child_handler);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {
