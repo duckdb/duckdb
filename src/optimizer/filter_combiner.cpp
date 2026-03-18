@@ -356,12 +356,6 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 	if (!TryGetProjectionIndex(expr, proj_index)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto &column_index = column_ids[proj_index];
-	if (column_index.IsPushdownExtract()) {
-		//! FIXME: can't push down filters on a column that has a pushed down extract currently
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
-
 	D_ASSERT(constant_values.find(equiv_set) != constant_values.end());
 	auto &constant_list = constant_values.find(equiv_set)->second;
 	for (auto &constant_cmp : constant_list) {
@@ -406,11 +400,6 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 
 	// push the expression filter
 	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
-	auto &column_index = get.GetColumnIndex(bindings[0]);
-	if (column_index.IsPushdownExtract()) {
-		//! FIXME: can't support filters on a pushed down extract currently
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
 	get.table_filters.PushFilter(bindings[0].column_index, std::move(expr_filter));
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
@@ -434,11 +423,6 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	auto prefix_string = StringValue::Get(constant_value_expr.value);
 	if (prefix_string.empty()) {
 		// empty prefix - skip
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
-	auto &column_index = column_ids[column_ref.binding.column_index];
-	if (column_index.IsPushdownExtract()) {
-		//! FIXME: can't support filter pushdown on pushed down extract currently
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto filter_idx = column_ref.binding.column_index;
@@ -473,11 +457,6 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
 	auto proj_index = column_ref.binding.column_index;
-	auto &column_index = column_ids[proj_index];
-	if (column_index.IsPushdownExtract()) {
-		//! FIXME: can't support filter pushdown on pushed down extract currently
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
 
 	// constant value expr can sometimes be null. if so, push is not null filter, which will
 	// make the filter unsatisfiable and return no results.
@@ -530,11 +509,6 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	}
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto proj_index = column_ref.binding.column_index;
-	auto &column_index = column_ids[proj_index];
-	if (column_index.IsPushdownExtract()) {
-		//! FIXME: can't support filter pushdown on pushed down extract currently
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
 
 	//! check if all children are const expr
 	bool children_constant = true;
@@ -629,11 +603,6 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 		if (!proj_id.IsValid()) {
 			proj_id = column_ref->binding.column_index;
-			auto &col_id = column_ids[proj_id];
-			if (col_id.IsPushdownExtract()) {
-				//! FIXME: can't support filter pushdown on pushed down extract currently
-				return FilterPushdownResult::NO_PUSHDOWN;
-			}
 		} else if (proj_id != column_ref->binding.column_index) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}

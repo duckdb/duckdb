@@ -860,8 +860,10 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		filter->expressions = std::move(filter_expressions);
 		filter->children.push_back(std::move(op_ref));
 		get.table_filters.ClearFilters();
-		// push the final result in the operator
-		op_ref = std::move(filter);
+
+		// try to push filters back into the table scan
+		FilterPushdown pushdown(optimizer);
+		op_ref = pushdown.Rewrite(std::move(filter));
 		return;
 	}
 

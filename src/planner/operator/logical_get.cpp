@@ -43,8 +43,9 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 			if (!first_item) {
 				filters_info += "\n";
 			}
+			auto column_name = column_ids[filter_idx].GetName(names[filter_idx]);
 			first_item = false;
-			filters_info += filter.ToString(names[filter_idx]);
+			filters_info += filter.ToString(column_name);
 		}
 	}
 	result["Filters"] = filters_info;

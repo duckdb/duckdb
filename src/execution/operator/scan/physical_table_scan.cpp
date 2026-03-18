@@ -320,7 +320,8 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 			}
 			first_item = false;
 
-			const auto col_id = column_ids[filter_idx].GetPrimaryIndex();
+			auto &column_id = column_ids[filter_idx];
+			const auto col_id = column_id.GetPrimaryIndex();
 			if (IsVirtualColumn(col_id)) {
 				auto entry = virtual_columns.find(col_id);
 				if (entry == virtual_columns.end()) {
@@ -328,7 +329,8 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 				}
 				filters_info += filter.ToString(entry->second.name);
 			} else {
-				filters_info += filter.ToString(names[col_id]);
+				auto column_name = column_id.GetName(names[filter_idx]);
+				filters_info += filter.ToString(column_name);
 			}
 		}
 	}
