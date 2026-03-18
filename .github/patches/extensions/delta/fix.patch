@@ -28,7 +28,7 @@ index 8c08714..708dd0a 100644
  	}
  }
 diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
-index 7d918bd..df9c173 100644
+index 7d918bd..06483e7 100644
 --- a/src/functions/delta_scan/delta_multi_file_list.cpp
 +++ b/src/functions/delta_scan/delta_multi_file_list.cpp
 @@ -787,20 +787,22 @@ void DeltaMultiFileList::EnsureScanInitialized() const {
@@ -55,7 +55,7 @@ index 7d918bd..df9c173 100644
 -		if (entry.first < global_columns.size()) {
 -			result_filter_set.PushFilter(ColumnIndex(entry.first), entry.second->Copy());
 +	for (auto &entry : new_filters) {
-+		auto &column_id = column_indexes[entry.ColumnIndex().index];
++		auto &column_id = column_indexes[entry.GetIndex()];
 +		if (column_id < global_columns.size()) {
 +			result_filter_set.PushFilter(column_id, entry.Filter().Copy());
  		}
@@ -128,9 +128,9 @@ index 7d918bd..df9c173 100644
 -		if (previously_pushed_down_filter != this->table_filters.filters.end() &&
 -		    filter.second->Equals(*previously_pushed_down_filter->second)) {
 +	for (auto &entry : filters) {
-+		auto proj_id = entry.ColumnIndex();
++		auto proj_id = entry.GetIndex();
 +		auto &filter = entry.Filter();
-+		auto column_id = column_ids[proj_id.index];
++		auto column_id = column_ids[proj_id];
 +		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(column_id);
 +		if (previously_pushed_down_filter && filter.Equals(*previously_pushed_down_filter)) {
  			// Skip filters that we already have pushed down
