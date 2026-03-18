@@ -1,7 +1,6 @@
 #include "capi_tester.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test logical type creation with unsupported types", "[capi]") {
 	// Test duckdb_create_logical_type with unsupported types.

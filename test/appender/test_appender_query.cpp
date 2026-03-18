@@ -6,7 +6,6 @@
 #include <vector>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test UPSERT through the query appender", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;

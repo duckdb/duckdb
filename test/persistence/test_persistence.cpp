@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test transactional integrity when facing process aborts", "[persistence][.]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();

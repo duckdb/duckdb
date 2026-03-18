@@ -4,7 +4,6 @@
 #include <cstring> // for strcmp
 
 using namespace duckdb;
-using namespace std;
 
 //----------------------------------------------------------------------------------------------------------------------
 // COPY (...) TO (...)
