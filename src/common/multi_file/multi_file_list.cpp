@@ -66,7 +66,7 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 			continue;
 		}
 		auto column_ref =
-		    make_uniq<BoundColumnRefExpression>(types[filter_idx], ColumnBinding(table_index, entry.GetIndex()));
+		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.GetIndex()));
 		auto filter_expr = entry.Filter().ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}
