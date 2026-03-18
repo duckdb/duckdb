@@ -1,0 +1,105 @@
+# name: test/optimizer/joins/semi_anti_reordering.test
+# description: SEMI and ANTI joins with multiple tables are correctly reordered
+# group: [joins]
+
+statement ok
+create table large as select range l_id from range(100000);
+
+statement ok
+create table medium as select range m_id from range(10000);
+
+statement ok
+create table small as select range s_id from range(100);
+
+# --------------------------------------------------------------------------
+# ANTI join plan shape: verify the optimizer pushes the small ANTI filter
+# below the large-medium inner join.
+# Optimized plan: ANTI(medium, small) feeds into INNER(large, ANTI_result),
+# so INNER appears at the root (top of EXPLAIN output) and ANTI is nested.
+# Without reordering: ANTI is applied last on top of the inner join result.
+# --------------------------------------------------------------------------
+
+statement ok
+set disabled_optimizers='statistics_propagation';
+
+query II
+explain select large.l_id, medium.m_id
+from large, medium
+where large.l_id = medium.m_id
+  and not exists (select 1 from small where small.s_id = medium.m_id);
+----
+physical_plan	<REGEX>:.*INNER.*ANTI.*
+
+statement ok
+set disabled_optimizers='statistics_propagation,join_order';
+
+query II
+explain select large.l_id, medium.m_id
+from large, medium
+where large.l_id = medium.m_id
+  and not exists (select 1 from small where small.s_id = medium.m_id);
+----
+physical_plan	<REGEX>:.*ANTI.*INNER.*
+
+statement ok
+reset disabled_optimizers;
+
+# --------------------------------------------------------------------------
+# Correctness: SEMI join returns exactly the rows in all three tables
+# --------------------------------------------------------------------------
+
+query I
+select count(*) from (
+    select large.l_id, medium.m_id
+    from large, medium
+    where medium.m_id in (select s_id from small)
+      and large.l_id = medium.m_id
+);
+----
+100
+
+# --------------------------------------------------------------------------
+# Correctness: ANTI join returns rows in large∩medium but NOT in small
+# --------------------------------------------------------------------------
+
+query I
+select count(*) from (
+    select large.l_id, medium.m_id
+    from large, medium
+    where large.l_id = medium.m_id
+      and not exists (select 1 from small where small.s_id = medium.m_id)
+);
+----
+9900
+
+# --------------------------------------------------------------------------
+# Correctness: chain of SEMI joins — medium filtered by small AND tiny
+# --------------------------------------------------------------------------
+
+statement ok
+create table tiny as select range t_id from range(50);
+
+query I
+select count(*) from (
+    select large.l_id
+    from large, medium
+    where large.l_id = medium.m_id
+      and medium.m_id in (select s_id from small)
+      and medium.m_id in (select t_id from tiny)
+);
+----
+50
+
+# --------------------------------------------------------------------------
+# Correctness: ANTI join with different table size ordering
+# --------------------------------------------------------------------------
+
+query I
+select count(*) from (
+    select medium.m_id
+    from medium, large
+    where medium.m_id = large.l_id
+      and not exists (select 1 from small where small.s_id = medium.m_id)
+);
+----
+9900

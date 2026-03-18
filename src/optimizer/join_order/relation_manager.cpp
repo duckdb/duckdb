@@ -154,15 +154,6 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 
-		// TODO: SEMI/ANTI joins with residual predicates are not supported
-		if (join.join_type == JoinType::SEMI || join.join_type == JoinType::ANTI) {
-			for (auto &cond : join.conditions) {
-				if (!cond.IsComparison()) {
-					return false;
-				}
-			}
-		}
-
 		switch (join.join_type) {
 		case JoinType::INNER:
 		case JoinType::SEMI:
