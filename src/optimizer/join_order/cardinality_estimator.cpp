@@ -375,11 +375,11 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// so we don't apply them more than once in cardinality estimation
 	unordered_set<idx_t> applied_equivalence_groups;
 
-	// For multi-key INNER joins (>=2 equality conditions on the same join pair), we treat the
-	// composite key as a FK/PK relationship and enforce the FK/PK floor.
-	// For multi-condition LEFT joins (e.g. A LEFT JOIN B ON k1=k1 AND k2=k2), independent
-	// conditions on the same RHS should each contribute to the denominator — but their product
-	// must not exceed |RHS|.
+	// For multi-key INNER joins (>=2 equality conditions on the same join pair),
+	// we treat the composite key as a FK/PK relationship and enforce the FK/PK floor.
+	// For multi-condition LEFT joins (e.g. A LEFT JOIN B ON k1=k1 AND k2=k2),
+	// independent conditions on the same RHS should each contribute to the denominator
+	// — but their product must not exceed |RHS|.
 	// For a single equality condition, the standard denominator-based formula is used as-is.
 	reference_map_t<JoinRelationSet, double> join_pair_accumulated;
 
@@ -403,30 +403,25 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			continue;
 		}
 
-		if (edge.IsInnerEquality()) {
-			// Record the raw D of the first (largest) equality edge for a join pair.
-			// Only insert if absent: subsequent edges for the same pair are handled by
-			// ApplyJoinIncrement (which reads this value), so overwriting it would give
-			// the wrong baseline when applying the FK/PK floor.
-			if (join_pair_accumulated.find(edge.filter_info->set.get()) == join_pair_accumulated.end()) {
-				join_pair_accumulated[edge.filter_info->set.get()] = CalculateInnerJoinDenom(1.0, edge);
-			}
-		} else if (edge.filter_info->join_type == JoinType::LEFT) {
-			// Record the ratio a LEFT join edge contributes on its own (base_denom = 1).
-			// Key is the full pair set (same as INNER) to avoid collisions with INNER join entries
-			// that share the same RHS set.
-			// Only insert if absent: subsequent conditions for the same LEFT join pair go through
-			// ApplyJoinIncrement. Overwriting here would give it the wrong accumulated baseline.
-			if (join_pair_accumulated.find(edge.filter_info->set.get()) == join_pair_accumulated.end()) {
-				const auto ratio = CalculateLeftJoinDenom(1.0, edge);
-				const auto right_card = GetNumerator(*edge.filter_info->right_set);
-				join_pair_accumulated[edge.filter_info->set.get()] =
-				    right_card > 0 ? MinValue(ratio, right_card) : ratio;
-			}
-		}
 		if (edge.filter_info->edge_equivalence_index.IsValid()) {
 			// Record edge_equivalence_index whenever an edge is actively used to build the subgraph.
 			applied_equivalence_groups.insert(edge.filter_info->edge_equivalence_index.GetIndex());
+		}
+
+		if (join_pair_accumulated.find(edge.filter_info->set.get()) == join_pair_accumulated.end()) {
+			// Only insert if absent: subsequent conditions for the same LEFT join pair go through ApplyJoinIncrement.
+			if (edge.IsInnerEquality()) {
+				// Record the raw denom of the first (largest) equality edge for a join pair
+				join_pair_accumulated[edge.filter_info->set.get()] = CalculateInnerJoinDenom(1.0, edge);
+			} else if (edge.filter_info->join_type == JoinType::LEFT) {
+				// Record the ratio a LEFT join edge contributes on its own (base_denom = 1)
+				if (join_pair_accumulated.find(edge.filter_info->set.get()) == join_pair_accumulated.end()) {
+					const auto ratio = CalculateLeftJoinDenom(1.0, edge);
+					const auto right_card = GetNumerator(*edge.filter_info->right_set);
+					join_pair_accumulated[edge.filter_info->set.get()] =
+					    right_card > 0 ? MinValue(ratio, right_card) : ratio;
+				}
+			}
 		}
 
 		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);

@@ -152,6 +152,15 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			cardinality_after_filters = 0;
 		}
 	}
+
+	for (auto &dc : return_stats.column_distinct_count) {
+		const auto abs_diff =
+		    AbsValue(static_cast<double>(dc.distinct_count) - static_cast<double>(base_table_cardinality));
+		if (abs_diff / static_cast<double>(base_table_cardinality) < 0.1) {
+			dc.distinct_count = MinValue(dc.distinct_count, cardinality_after_filters);
+		}
+	}
+
 	return_stats.cardinality = cardinality_after_filters;
 	// update the estimated cardinality of the get as well.
 	// This is not updated during plan reconstruction.
