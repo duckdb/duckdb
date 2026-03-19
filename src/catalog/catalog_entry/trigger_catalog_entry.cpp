@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 
@@ -44,43 +45,21 @@ string TriggerCatalogEntry::ToSQL() const {
 	ss << "CREATE TRIGGER ";
 	ss << KeywordHelper::WriteOptionallyQuoted(name);
 	ss << " ";
-	switch (timing) {
-	case TriggerTiming::BEFORE:
-		ss << "BEFORE";
-		break;
-	case TriggerTiming::AFTER:
-		ss << "AFTER";
-		break;
-	case TriggerTiming::INSTEAD_OF:
-		ss << "INSTEAD OF";
-		break;
-	}
+	ss << EnumUtil::ToString(timing);
 	ss << " ";
-	switch (event_type) {
-	case TriggerEventType::INSERT_EVENT:
-		ss << "INSERT";
-		break;
-	case TriggerEventType::DELETE_EVENT:
-		ss << "DELETE";
-		break;
-	case TriggerEventType::UPDATE_EVENT:
-		ss << "UPDATE";
-		if (!columns.empty()) {
-			ss << " OF ";
-			for (idx_t i = 0; i < columns.size(); i++) {
-				if (i > 0) {
-					ss << ", ";
-				}
-				ss << KeywordHelper::WriteOptionallyQuoted(columns[i]);
+	ss << EnumUtil::ToString(event_type);
+	if (event_type == TriggerEventType::UPDATE_EVENT && !columns.empty()) {
+		ss << " OF ";
+		for (idx_t i = 0; i < columns.size(); i++) {
+			if (i > 0) {
+				ss << ", ";
 			}
+			ss << KeywordHelper::WriteOptionallyQuoted(columns[i]);
 		}
-		break;
 	}
 	ss << " ON ";
 	ss << ParseInfo::QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
-	if (for_each == TriggerForEach::ROW) {
-		ss << " FOR EACH ROW";
-	}
+	ss << " FOR EACH " << EnumUtil::ToString(for_each);
 	if (!sql_body_text.empty()) {
 		ss << " " << sql_body_text;
 	}

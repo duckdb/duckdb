@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
@@ -76,32 +77,6 @@ unique_ptr<GlobalTableFunctionState> DuckDBTriggersInit(ClientContext &context, 
 	return std::move(result);
 }
 
-static string TriggerTimingToString(TriggerTiming timing) {
-	switch (timing) {
-	case TriggerTiming::BEFORE:
-		return "BEFORE";
-	case TriggerTiming::AFTER:
-		return "AFTER";
-	case TriggerTiming::INSTEAD_OF:
-		return "INSTEAD OF";
-	default:
-		return "UNKNOWN";
-	}
-}
-
-static string TriggerEventTypeToString(TriggerEventType event_type) {
-	switch (event_type) {
-	case TriggerEventType::INSERT_EVENT:
-		return "INSERT";
-	case TriggerEventType::DELETE_EVENT:
-		return "DELETE";
-	case TriggerEventType::UPDATE_EVENT:
-		return "UPDATE";
-	default:
-		return "UNKNOWN";
-	}
-}
-
 void DuckDBTriggersFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBTriggersData>();
 	if (data.offset >= data.entries.size()) {
@@ -120,8 +95,8 @@ void DuckDBTriggersFunction(ClientContext &context, TableFunctionInput &data_p, 
 		output.SetValue(col++, count, Value(trigger.name));
 		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(trigger.oid)));
 		output.SetValue(col++, count, Value(trigger.base_table->table_name));
-		output.SetValue(col++, count, Value(TriggerTimingToString(trigger.timing)));
-		output.SetValue(col++, count, Value(TriggerEventTypeToString(trigger.event_type)));
+		output.SetValue(col++, count, Value(EnumUtil::ToString(trigger.timing)));
+		output.SetValue(col++, count, Value(EnumUtil::ToString(trigger.event_type)));
 		vector<Value> col_vals;
 		col_vals.reserve(trigger.columns.size());
 		for (auto &col_name : trigger.columns) {

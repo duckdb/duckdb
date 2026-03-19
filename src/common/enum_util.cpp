@@ -5316,9 +5316,9 @@ TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTriggerEventTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(TriggerEventType::INSERT_EVENT), "INSERT_EVENT" },
-		{ static_cast<uint32_t>(TriggerEventType::DELETE_EVENT), "DELETE_EVENT" },
-		{ static_cast<uint32_t>(TriggerEventType::UPDATE_EVENT), "UPDATE_EVENT" }
+		{ static_cast<uint32_t>(TriggerEventType::INSERT_EVENT), "INSERT" },
+		{ static_cast<uint32_t>(TriggerEventType::DELETE_EVENT), "DELETE" },
+		{ static_cast<uint32_t>(TriggerEventType::UPDATE_EVENT), "UPDATE" }
 	};
 	return values;
 }
@@ -5355,7 +5355,7 @@ const StringUtil::EnumStringLiteral *GetTriggerTimingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TriggerTiming::BEFORE), "BEFORE" },
 		{ static_cast<uint32_t>(TriggerTiming::AFTER), "AFTER" },
-		{ static_cast<uint32_t>(TriggerTiming::INSTEAD_OF), "INSTEAD_OF" }
+		{ static_cast<uint32_t>(TriggerTiming::INSTEAD_OF), "INSTEAD OF" }
 	};
 	return values;
 }
