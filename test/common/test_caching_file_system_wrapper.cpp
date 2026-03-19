@@ -796,6 +796,38 @@ TEST_CASE("CachingFileHandle Read returns correct FileBufferHandleGroup", "[file
 	}
 }
 
+TEST_CASE("CachingFileHandle EOF read behavior", "[file_system][caching]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<TrackingFileSystem>();
+
+	const string content = "Hello, this is test content for EOF behavior.";
+	TestFileGuard test_file("test_eof_behavior.bin", content);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	OpenFileInfo file_info(test_file.GetPath());
+	file_info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	file_info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
+
+	FileOpenFlags flags {FileFlags::FILE_FLAGS_READ};
+	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
+
+	{
+		auto handle = cfs.OpenFile(file_info, flags);
+		REQUIRE_THROWS(handle->Read(100, content.size() - 10));
+	}
+	{
+		auto handle = cfs.OpenFile(file_info, flags);
+		idx_t requested = content.size() + 100;
+		auto group = handle->Read(requested);
+		REQUIRE(requested == content.size());
+
+		string result(requested, '\0');
+		group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), requested);
+		REQUIRE(result == content);
+	}
+}
+
 TEST_CASE("Fully cached read skips doesn't open file", "[file_system][caching]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
