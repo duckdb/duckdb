@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: ${{ fromJson(github.event_name == 'pull_request' && '[{"runner":"ubuntu-latest","arch":"amd64","image":"x86_64"}]' || '[{"runner":"ubuntu-latest","arch":"amd64","image":"x86_64"},{"runner":"ubuntu-24.04-arm","arch":"arm64","image":"aarch64"}]') }}
+        config: ${{ fromJson(github.event_name == 'pull_request' && '[{"runner":"ubuntu-latest","arch":"amd64","image":"manylinux_2_28_x86_64"}]' || '[{"runner":"ubuntu-latest","arch":"amd64","image":"manylinux_2_28_x86_64"},{"runner":"ubuntu-24.04-arm","arch":"arm64","image":"manylinux_2_28_aarch64"},{"runner":"ubuntu-24.04-riscv","arch":"riscv64","image":"manylinux_2_39_riscv64"}]') }}
 
     name: Linux CLI (${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.runner }}
@@ -68,7 +68,7 @@ jobs:
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
-        quay.io/pypa/manylinux_2_28_${{ matrix.config.image }}                 \
+        quay.io/pypa/${{ matrix.config.image }}                                \
         bash -c "
           set -e
           cat /etc/os-release
