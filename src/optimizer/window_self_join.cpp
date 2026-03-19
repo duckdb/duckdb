@@ -192,9 +192,15 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		auto &partitions = w_expr0.partitions;
 
 		// --- Transformation ---
-
+		// try to copy the LHS
+		unique_ptr<LogicalOperator> copy_child;
+		try {
+			copy_child = window.children[0]->Copy(optimizer.context);
+		} catch (...) {
+			// failed to copy the LHS - cannot run this optimizer
+			return op;
+		}
 		auto original_child = std::move(window.children[0]);
-		auto copy_child = original_child->Copy(optimizer.context);
 
 		// Rebind copy_child to avoid duplicate table indices
 		WindowSelfJoinTableRebinder rebinder(optimizer);
