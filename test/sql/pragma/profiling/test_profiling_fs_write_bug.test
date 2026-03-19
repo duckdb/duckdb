@@ -1,0 +1,49 @@
+# name: test/sql/pragma/profiling/test_profiling_fs_write_bug.test
+# description: Test that COPY TO with gzip correctly reports TOTAL_BYTES_WRITTEN, not TOTAL_BYTES_READ.
+# group: [profiling]
+
+require json
+
+require noforcestorage
+
+require skip_reload
+
+require no_alternative_verify
+
+statement ok
+SET threads = 1;
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS id FROM range(10000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profile_copy_gz.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+COPY tbl TO '__TEST_DIR__/out.csv.gz' (COMPRESSION GZIP);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profile_copy_gz.json';
+
+# The non-positioned Write path in FileHandle::Write incorrectly adds to
+# TOTAL_BYTES_READ instead of TOTAL_BYTES_WRITTEN.
+# A COPY TO should report bytes written > 0 and bytes read = 0.
+query II
+SELECT
+    CASE WHEN total_bytes_written > 0 THEN 'true' ELSE 'false' END AS has_bytes_written,
+    CASE WHEN total_bytes_read > 0 THEN 'true' ELSE 'false' END AS has_bytes_read
+FROM metrics_output;
+----
+true	false
