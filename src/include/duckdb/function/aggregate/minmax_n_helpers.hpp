@@ -238,7 +238,6 @@ public:
 private:
 	void Grow(ArenaAllocator &allocator) {
 		D_ASSERT(allocated_capacity < capacity);
-		const auto old_capacity = allocated_capacity;
 		if (allocated_capacity == 0) {
 			allocated_capacity = 1;
 		} else if (allocated_capacity > capacity / 2) {
