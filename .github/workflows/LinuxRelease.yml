@@ -54,18 +54,21 @@ jobs:
     - uses: ./.github/actions/ccache-action
       if: matrix.config.arch != 'riscv64'
 
-    - name: Install ccache for riscv64
-      if: matrix.config.arch == 'riscv64'
-      run: sudo apt-get update && sudo apt-get install -y ccache
-
     - name: Build
       run: |
         export PWD=`pwd`
+        if [ "${{ matrix.config.arch }}" = "riscv64" ]; then
+          CC_CMD="gcc"
+          CXX_CMD="g++"
+        else
+          CC_CMD="ccache gcc"
+          CXX_CMD="ccache g++"
+        fi
         docker run                                                             \
         -v$PWD:$PWD                                                            \
         -e GEN=ninja                                                           \
-        -e CC='ccache gcc'                                                     \
-        -e CXX='ccache g++'                                                    \
+        -e CC="$CC_CMD"                                                        \
+        -e CXX="$CXX_CMD"                                                     \
         -e CCACHE_DIR=$PWD/.ccache                                             \
         -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
@@ -77,10 +80,10 @@ jobs:
         bash -c "
           set -e
           cat /etc/os-release
-          dnf install -y \
-            ccache       \
-            ninja-build  \
-            perl-IPC-Cmd
+          if command -v dnf &> /dev/null; then
+            dnf install -y ninja-build perl-IPC-Cmd
+            dnf install -y ccache || true
+          fi
           git config --global --add safe.directory $PWD
           make -C $PWD
         "
