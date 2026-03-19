@@ -358,7 +358,7 @@ struct SerializationDefaultValue {
 	template <typename T = void>
 	static inline bool
 	IsDefault(const typename std::enable_if<std::is_same<T, ProjectionIndex>::value, T>::type &value) {
-		return value.index == 0;
+		return value.GetIndexUnsafe() == 0;
 	}
 };
 
