@@ -91,30 +91,26 @@ unique_ptr<QueryNode> DeleteQueryNode::Deserialize(Deserializer &deserializer) {
 
 void InsertQueryNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
-	serializer.WritePropertyWithDefault<string>(200, "table", table);
-	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<string>(202, "catalog", catalog);
-	serializer.WritePropertyWithDefault<vector<string>>(203, "columns", columns);
-	serializer.WritePropertyWithDefault<bool>(204, "default_values", default_values, false);
-	serializer.WritePropertyWithDefault<InsertColumnOrder>(205, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
-	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(206, "select_statement", select_statement);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "returning_list", returning_list);
-	serializer.WritePropertyWithDefault<unique_ptr<OnConflictInfo>>(208, "on_conflict_info", on_conflict_info);
-	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(209, "table_ref", table_ref);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "table", table);
+	serializer.WritePropertyWithDefault<vector<string>>(201, "columns", columns);
+	serializer.WritePropertyWithDefault<bool>(202, "default_values", default_values, false);
+	serializer.WritePropertyWithDefault<InsertColumnOrder>(203, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(204, "select_statement", select_statement);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", returning_list);
+	serializer.WritePropertyWithDefault<unique_ptr<OnConflictInfo>>(206, "on_conflict_info", on_conflict_info);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", table_ref);
 }
 
 unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<InsertQueryNode>(new InsertQueryNode());
-	deserializer.ReadPropertyWithDefault<string>(200, "table", result->table);
-	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<string>(202, "catalog", result->catalog);
-	deserializer.ReadPropertyWithDefault<vector<string>>(203, "columns", result->columns);
-	deserializer.ReadPropertyWithExplicitDefault<bool>(204, "default_values", result->default_values, false);
-	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(205, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
-	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(206, "select_statement", result->select_statement);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(207, "returning_list", result->returning_list);
-	deserializer.ReadPropertyWithDefault<unique_ptr<OnConflictInfo>>(208, "on_conflict_info", result->on_conflict_info);
-	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(209, "table_ref", result->table_ref);
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "table", result->table);
+	deserializer.ReadPropertyWithDefault<vector<string>>(201, "columns", result->columns);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(202, "default_values", result->default_values, false);
+	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(203, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(204, "select_statement", result->select_statement);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", result->returning_list);
+	deserializer.ReadPropertyWithDefault<unique_ptr<OnConflictInfo>>(206, "on_conflict_info", result->on_conflict_info);
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
 	return std::move(result);
 }
 

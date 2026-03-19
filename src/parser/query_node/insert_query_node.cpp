@@ -1,4 +1,5 @@
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -6,8 +7,13 @@ InsertQueryNode::InsertQueryNode() : QueryNode(QueryNodeType::INSERT_QUERY_NODE)
 }
 
 InsertQueryNode::InsertQueryNode(InsertStatement &stmt)
-    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), columns(stmt.columns), table(stmt.table), schema(stmt.schema),
-      catalog(stmt.catalog), default_values(stmt.default_values), column_order(stmt.column_order) {
+    : QueryNode(QueryNodeType::INSERT_QUERY_NODE), columns(stmt.columns), default_values(stmt.default_values),
+      column_order(stmt.column_order) {
+	auto ref = make_uniq<BaseTableRef>();
+	ref->table_name = stmt.table;
+	ref->schema_name = stmt.schema;
+	ref->catalog_name = stmt.catalog;
+	table = std::move(ref);
 	if (stmt.select_statement) {
 		select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(stmt.select_statement->Copy());
 	}
@@ -25,9 +31,12 @@ InsertQueryNode::InsertQueryNode(InsertStatement &stmt)
 string InsertQueryNode::ToString() const {
 	// Reconstruct an InsertStatement to reuse its ToString
 	InsertStatement stmt;
-	stmt.table = table;
-	stmt.schema = schema;
-	stmt.catalog = catalog;
+	if (table) {
+		auto &base = table->Cast<BaseTableRef>();
+		stmt.table = base.table_name;
+		stmt.schema = base.schema_name;
+		stmt.catalog = base.catalog_name;
+	}
 	stmt.columns = columns;
 	stmt.default_values = default_values;
 	stmt.column_order = column_order;
@@ -54,7 +63,7 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 		return true;
 	}
 	auto &other = other_p->Cast<InsertQueryNode>();
-	if (table != other.table || schema != other.schema || catalog != other.catalog) {
+	if (!TableRef::Equals(table, other.table)) {
 		return false;
 	}
 	if (columns != other.columns) {
@@ -125,9 +134,9 @@ bool InsertQueryNode::Equals(const QueryNode *other_p) const {
 
 unique_ptr<QueryNode> InsertQueryNode::Copy() const {
 	auto result = make_uniq<InsertQueryNode>();
-	result->table = table;
-	result->schema = schema;
-	result->catalog = catalog;
+	if (table) {
+		result->table = table->Copy();
+	}
 	result->columns = columns;
 	result->default_values = default_values;
 	result->column_order = column_order;

@@ -29,17 +29,13 @@ public:
 	unique_ptr<SelectStatement> select_statement;
 	//! Column names to insert into
 	vector<string> columns;
-	//! Table name to insert to
-	string table;
-	//! Schema name to insert to
-	string schema;
-	//! The catalog name to insert to
-	string catalog;
+	//! The target table reference (carries catalog, schema, table name)
+	unique_ptr<TableRef> table;
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
 	//! ON CONFLICT information
 	unique_ptr<OnConflictInfo> on_conflict_info;
-	//! Direct table ref (used when table is resolved)
+	//! Direct table ref (used when table is resolved via table_ref clause)
 	unique_ptr<TableRef> table_ref;
 	//! Whether or not this is DEFAULT VALUES
 	bool default_values = false;

@@ -7,6 +7,7 @@
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -40,7 +41,7 @@ TEST_CASE("InsertQueryNode Copy and Equals", "[dml_query_nodes]") {
 
 	InsertQueryNode node(stmt);
 	REQUIRE(node.type == QueryNodeType::INSERT_QUERY_NODE);
-	REQUIRE(node.table == "t");
+	REQUIRE(node.table->Cast<BaseTableRef>().table_name == "t");
 
 	auto copy = node.Copy();
 	REQUIRE(copy->type == QueryNodeType::INSERT_QUERY_NODE);

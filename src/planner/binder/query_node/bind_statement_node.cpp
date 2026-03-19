@@ -2,6 +2,7 @@
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
@@ -28,9 +29,12 @@ BoundStatement Binder::BindNode(StatementNode &statement) {
 
 BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	InsertStatement stmt;
-	stmt.table = node.table;
-	stmt.schema = node.schema;
-	stmt.catalog = node.catalog;
+	if (node.table) {
+		auto &base = node.table->Cast<BaseTableRef>();
+		stmt.table = base.table_name;
+		stmt.schema = base.schema_name;
+		stmt.catalog = base.catalog_name;
+	}
 	stmt.columns = node.columns;
 	stmt.default_values = node.default_values;
 	stmt.column_order = node.column_order;

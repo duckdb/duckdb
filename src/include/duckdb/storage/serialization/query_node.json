@@ -200,52 +200,42 @@
       {
         "id": 200,
         "name": "table",
-        "type": "string"
+        "type": "TableRef*"
       },
       {
         "id": 201,
-        "name": "schema",
-        "type": "string"
-      },
-      {
-        "id": 202,
-        "name": "catalog",
-        "type": "string"
-      },
-      {
-        "id": 203,
         "name": "columns",
         "type": "vector<string>"
       },
       {
-        "id": 204,
+        "id": 202,
         "name": "default_values",
         "type": "bool",
         "default": "false"
       },
       {
-        "id": 205,
+        "id": 203,
         "name": "column_order",
         "type": "InsertColumnOrder",
         "default": "InsertColumnOrder::INSERT_BY_POSITION"
       },
       {
-        "id": 206,
+        "id": 204,
         "name": "select_statement",
         "type": "SelectStatement*"
       },
       {
-        "id": 207,
+        "id": 205,
         "name": "returning_list",
         "type": "vector<ParsedExpression*>"
       },
       {
-        "id": 208,
+        "id": 206,
         "name": "on_conflict_info",
         "type": "OnConflictInfo*"
       },
       {
-        "id": 209,
+        "id": 207,
         "name": "table_ref",
         "type": "TableRef*"
       }

@@ -11,6 +11,7 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
 
 namespace duckdb {
 
