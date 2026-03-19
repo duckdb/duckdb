@@ -16,7 +16,7 @@
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
-#include "duckdb/common/enums/active_transaction_state.hpp"
+#include "duckdb/common/enums/current_transaction_state.hpp"
 
 namespace duckdb {
 
@@ -62,21 +62,21 @@ StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(c
 }
 
 PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLStatement>> &body_statements,
-                                                        ActiveTransactionState full_transaction_state,
+                                                        CurrentTransactionState full_transaction_state,
                                                         bool can_wrap = true) {
 	if (body_statements.size() <= 1) {
 		return PreprocessingTransactionHandling::NONE;
 	}
-	if (full_transaction_state == ActiveTransactionState::NO_OTHER_TRANSACTIONS && can_wrap) {
+	if (full_transaction_state == IN_ACTIVE_TRANSACTION && can_wrap) {
 		return PreprocessingTransactionHandling::WRAP_IN_TRANSACTION;
 	}
-	if (full_transaction_state == ActiveTransactionState::OTHER_TRANSACTIONS) {
+	if (full_transaction_state == NOT_IN_ACTIVE_TRANSACTION) {
 		return PreprocessingTransactionHandling::SET_INVALIDATION_POLICY;
 	}
 	return PreprocessingTransactionHandling::NONE;
 }
 
-void UnpackMultiStatement(MultiStatement &multi_statement, const ActiveTransactionState active_transaction_state,
+void UnpackMultiStatement(MultiStatement &multi_statement, const CurrentTransactionState current_transaction_state,
                           vector<unique_ptr<SQLStatement>> &new_statements) {
 #ifdef DEBUG // MultiStatement should not contain transaction statements
 	for (auto &sub_statement : multi_statement.statements) {
@@ -92,7 +92,7 @@ void UnpackMultiStatement(MultiStatement &multi_statement, const ActiveTransacti
 	}
 	bool can_wrap_in_transaction = !has_select;
 	auto handling =
-	    GetTransactionHandling(multi_statement.statements, active_transaction_state, can_wrap_in_transaction);
+	    GetTransactionHandling(multi_statement.statements, current_transaction_state, can_wrap_in_transaction);
 	AddStatements(multi_statement.statements, handling, new_statements);
 }
 
@@ -116,7 +116,7 @@ vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_
 }
 
 void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-                                       ActiveTransactionState transaction_context_state) {
+                                       CurrentTransactionState transaction_context_state) {
 	// Quick check: do we need preprocessing at all?
 	bool needs_preprocessing = false;
 	for (auto &stmt : statements) {
@@ -134,16 +134,15 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 }
 
 void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
-                                               const ActiveTransactionState transaction_context_state) {
-	ActiveTransactionState chained_transaction_state = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
+                                               const CurrentTransactionState transaction_context_state) {
+	CurrentTransactionState chained_transaction_state = NOT_IN_ACTIVE_TRANSACTION;
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto query = statements[i]->query;
-		const ActiveTransactionState full_transaction_state =
-		    (transaction_context_state == ActiveTransactionState::OTHER_TRANSACTIONS ||
-		     chained_transaction_state == ActiveTransactionState::OTHER_TRANSACTIONS)
-		        ? ActiveTransactionState::OTHER_TRANSACTIONS
-		        : ActiveTransactionState::NO_OTHER_TRANSACTIONS;
+		const CurrentTransactionState full_transaction_state =
+		    (transaction_context_state == IN_ACTIVE_TRANSACTION || chained_transaction_state == IN_ACTIVE_TRANSACTION)
+		        ? IN_ACTIVE_TRANSACTION
+		        : NOT_IN_ACTIVE_TRANSACTION;
 
 		switch (statements[i]->type) {
 		case StatementType::PRAGMA_STATEMENT: {
@@ -162,12 +161,12 @@ void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<u
 
 			if (transaction_stmt.info->type == TransactionType::BEGIN_TRANSACTION) {
 				new_statements.push_back(std::move(statements[i]));
-				chained_transaction_state = ActiveTransactionState::OTHER_TRANSACTIONS;
+				chained_transaction_state = IN_ACTIVE_TRANSACTION;
 				break;
 			}
 			if (transaction_stmt.info->type == TransactionType::COMMIT ||
 			    transaction_stmt.info->type == TransactionType::ROLLBACK) {
-				chained_transaction_state = ActiveTransactionState::NO_OTHER_TRANSACTIONS;
+				chained_transaction_state = NOT_IN_ACTIVE_TRANSACTION;
 			}
 			new_statements.push_back(std::move(statements[i]));
 			break;
