@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/common/enums/cache_validation_mode.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/open_file_info.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
@@ -76,7 +77,9 @@ private:
 	//! The associated CachedFile with cached blocks
 	CachedFile &cached_file;
 
-	//! The underlying FileHandle (optional)
+	//! Used to get file handle in thread-safe manner.
+	std::once_flag file_handle_once;
+	//! File handle for the internal filesystem.
 	unique_ptr<FileHandle> file_handle;
 	//! Last modified time and version tag (if FileHandle is opened)
 	timestamp_t last_modified;

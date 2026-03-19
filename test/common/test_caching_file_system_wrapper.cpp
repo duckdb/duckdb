@@ -85,25 +85,25 @@ public:
 		idx_t size;
 	};
 
-	mutable mutex read_calls_mutex;
+	mutable annotated_mutex read_calls_mutex;
 	vector<ReadCall> read_calls;
 
 	string GetName() const override {
 		return "TrackingFileSystem";
 	}
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		const lock_guard<mutex> lock(read_calls_mutex);
+		const annotated_lock_guard<annotated_mutex> lock(read_calls_mutex);
 		read_calls.push_back({handle.GetPath(), location, UnsafeNumericCast<idx_t>(nr_bytes)});
 		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
 	}
 
 	void Clear() {
-		const lock_guard<mutex> lock(read_calls_mutex);
+		const annotated_lock_guard<annotated_mutex> lock(read_calls_mutex);
 		read_calls.clear();
 	}
 
 	size_t GetReadCount(const string &path, idx_t location, idx_t size) const {
-		const lock_guard<mutex> lock(read_calls_mutex);
+		const annotated_lock_guard<annotated_mutex> lock(read_calls_mutex);
 		size_t count = 0;
 		for (const auto &call : read_calls) {
 			if (call.path == path && call.location == location && call.size == size) {
@@ -122,11 +122,10 @@ public:
 	}
 };
 
-// A file system that blocks Read() calls until a barrier is signaled,
-// allowing controlled interleaving of concurrent reads.
+// A file system that blocks `Read` calls until a barrier is signaled, which allows controlled interleaving of concurrent reads.
 class BarrierFileSystem : public LocalFileSystem {
 public:
-	mutable mutex mu;
+	mutable annotated_mutex mu;
 	bool block_reads DUCKDB_GUARDED_BY(mu) = false;
 	std::condition_variable cv;
 
@@ -136,19 +135,19 @@ public:
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		{
-			unique_lock<mutex> lock(mu);
+			annotated_unique_lock<annotated_mutex> lock(mu);
 			cv.wait(lock, [&]() DUCKDB_REQUIRES(mu) { return !block_reads; });
 		}
 		LocalFileSystem::Read(handle, buffer, nr_bytes, location);
 	}
 
 	void BlockReads() {
-		lock_guard<mutex> lock(mu);
+		const annotated_lock_guard<annotated_mutex> lock(mu);
 		block_reads = true;
 	}
 
 	void UnblockReads() {
-		lock_guard<mutex> lock(mu);
+		const annotated_lock_guard<annotated_mutex> lock(mu);
 		block_reads = false;
 		cv.notify_all();
 	}

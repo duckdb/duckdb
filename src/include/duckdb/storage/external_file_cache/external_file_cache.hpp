@@ -34,7 +34,6 @@ public:
 	static constexpr idx_t REMOTE_FILE_CACHE_BLOCK_SIZE = 2ULL * 1024 * 1024; // 2 MiB
 	static constexpr idx_t LOCAL_FILE_CACHE_BLOCK_SIZE = 16ULL * 1024;        // 16 KiB
 
-	//! Returns the appropriate cache block size based on whether the file is remote or local.
 	DUCKDB_API static idx_t GetCacheBlockSize(const string &path);
 
 	//! Cached files

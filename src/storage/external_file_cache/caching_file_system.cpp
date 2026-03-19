@@ -180,15 +180,11 @@ CachingFileHandle::~CachingFileHandle() {
 }
 
 FileHandle &CachingFileHandle::GetFileHandle() {
-	if (file_handle) {
-		return *file_handle;
-	}
+	std::call_once(file_handle_once, [&]() {
+		file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
+		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
+		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
-	file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
-	last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
-	version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
-
-	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
 		const bool first_access = (cached_file.file_size == 0);
 		if (first_access || Validate()) {
@@ -203,7 +199,7 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 			cached_file.can_seek = file_handle->CanSeek();
 			cached_file.on_disk_file = file_handle->OnDiskFile();
 		}
-	}
+	});
 	return *file_handle;
 }
 
